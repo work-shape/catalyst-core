@@ -170,14 +170,14 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     run: WorkflowRun,
     end: Parameters<typeof endRun>[2]
   ): Promise<void> {
-    if (!(await endRun(tx, run, end))) return;
+    const audit = { actor: principalActor(run), correlationId: run.correlationId };
+    if (!(await endRun(tx, run, end, audit))) return;
     await tx.audit.appendAuditEvent({
       clientInstanceId,
       type: "workflow_run.ended",
       status: end.status === "done" ? "success" : "failed",
-      actor: principalActor(run),
+      ...audit,
       subject: run.id,
-      correlationId: run.correlationId,
       metadata: {
         workflow: run.workflow,
         definitionRevisionId: run.definitionRevisionId,
@@ -699,21 +699,29 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         const run = await tx.workflowRuns.lockRun({ clientInstanceId, id: known.id });
         if (!run) return false;
         const { cancelledBy } = input;
-        const ended = await endRun(tx, run, {
-          status: "cancelled",
-          // The contract names a person here. A service principal that cancels is in the audit.
-          ...(isAuthenticatedServicePrincipal(cancelledBy)
-            ? {}
-            : { cancelledBy: asUserId(cancelledBy.id) })
-        });
+        const audit = {
+          actor: auditActorFromIdentity(cancelledBy),
+          correlationId: input.correlationId
+        };
+        const ended = await endRun(
+          tx,
+          run,
+          {
+            status: "cancelled",
+            // The contract names a person here. A service principal that cancels is in the audit.
+            ...(isAuthenticatedServicePrincipal(cancelledBy)
+              ? {}
+              : { cancelledBy: asUserId(cancelledBy.id) })
+          },
+          audit
+        );
         if (!ended) return true;
         await tx.audit.appendAuditEvent({
           clientInstanceId,
           type: "workflow_run.cancelled",
           status: "success",
-          actor: auditActorFromIdentity(input.cancelledBy),
+          ...audit,
           subject: run.id,
-          correlationId: input.correlationId,
           metadata: {
             workflow: run.workflow,
             definitionRevisionId: run.definitionRevisionId,

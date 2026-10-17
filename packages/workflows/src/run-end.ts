@@ -1,6 +1,7 @@
 import {
   WORKFLOW_ENDED_STATUSES,
   isWorkflowRunEnded,
+  type AuditActor,
   type ClientInstanceId,
   type JsonValue,
   type PlatformStores,
@@ -9,7 +10,6 @@ import {
 } from "@work-shape/catalyst-core";
 import { workflowStepJobKind } from "./step-job";
 import { workflowDeadlineJobKind } from "./run-deadline";
-import { principalActor } from "./run-identity";
 
 /** Parent and child ends share one transaction, including the parent's wakeup. */
 export function createRunEnd(options: {
@@ -21,7 +21,8 @@ export function createRunEnd(options: {
   /**
    * Ends a run that has not ended, with every step run that still waits for its turn. A
    * step run that is running is left to its attempt, which records how its call went and
-   * starts nothing after it. Answers whether this call ended the run.
+   * starts nothing after it. Descendant cancellations retain the initiating actor and
+   * correlation id. Answers whether this call ended the run.
    */
   async function endRun(
     tx: PlatformStores,
@@ -31,7 +32,8 @@ export function createRunEnd(options: {
       output?: JsonValue;
       error?: WorkflowRunError;
       cancelledBy?: WorkflowRun["cancelledBy"];
-    }
+    },
+    audit: { actor: AuditActor; correlationId: string }
   ): Promise<boolean> {
     const finishedAt = now().toISOString();
     const ended = await tx.workflowRuns.endRun({
@@ -51,19 +53,24 @@ export function createRunEnd(options: {
       const locked = await tx.workflowRuns.lockRun({ clientInstanceId, id: child.id });
       if (
         !locked ||
-        !(await endRun(tx, locked, {
-          status: "cancelled",
-          ...(end.cancelledBy ? { cancelledBy: end.cancelledBy } : {})
-        }))
+        !(await endRun(
+          tx,
+          locked,
+          {
+            status: "cancelled",
+            ...(end.cancelledBy ? { cancelledBy: end.cancelledBy } : {})
+          },
+          audit
+        ))
       )
         continue;
       await tx.audit.appendAuditEvent({
         clientInstanceId,
         type: "workflow_run.cancelled",
         status: "success",
-        actor: principalActor(locked),
+        actor: audit.actor,
         subject: locked.id,
-        correlationId: locked.correlationId,
+        correlationId: audit.correlationId,
         metadata: {
           workflow: locked.workflow,
           definitionRevisionId: locked.definitionRevisionId,

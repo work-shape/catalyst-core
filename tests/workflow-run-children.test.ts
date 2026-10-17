@@ -7,7 +7,11 @@ import {
   type WorkflowManifest
 } from "@work-shape/catalyst-core";
 import { ref, child, parent, start, children } from "./support/workflow-children";
-import { clientInstanceId } from "./support/access-instance";
+import {
+  clientInstanceId,
+  SERVICE_HEADER,
+  storeTestServicePrincipal
+} from "./support/access-instance";
 import {
   hangingAt,
   publishedDefinitions,
@@ -150,7 +154,11 @@ describe("Workflow child runs", () => {
     const worker = t.worker();
     for (let n = 0; n < 4; n++) await worker.runDue();
     expect(await children(t, started.id)).toHaveLength(4);
-    await t.expectOk(t.root.id, "workflows.cancel_run", { params: { runId: started.id } });
+    const correlationId = "corr_cancel_parent";
+    await t.expectOk(t.root.id, "workflows.cancel_run", {
+      params: { runId: started.id },
+      headers: { "x-correlation-id": correlationId }
+    });
     for (let n = 0; n < 3; n++) await worker.runDue();
     expect((await children(t, started.id)).map((r) => r.status)).toEqual([
       "cancelled",
@@ -160,28 +168,22 @@ describe("Workflow child runs", () => {
     ]);
     await t.expectOk(t.root.id, "workflows.cancel_run", { params: { runId: started.id } });
     const cancelledChildren = await children(t, started.id);
-    const audit: AuditEvent[] = [];
-    for (let after: StorePage["after"]; ;) {
-      const page = await t.stores.audit.listAuditEvents({
-        clientInstanceId,
-        type: "workflow_run.cancelled",
-        page: { limit: 2, ...(after ? { after } : {}) }
-      });
-      audit.push(...page);
-      const last = page.at(-1);
-      if (!last) break;
-      after = [last.createdAt, last.id];
-    }
+    const audit = await cancellationAudit(t);
+    const parentEvent = audit.find((event) => event.subject === started.id);
+    expect(parentEvent).toMatchObject({ actor: { userId: t.root.id }, correlationId });
     const childAudit = audit.filter((event) =>
       cancelledChildren.some((run) => run.id === event.subject)
     );
     expect(childAudit).toHaveLength(cancelledChildren.length);
     for (const run of cancelledChildren) {
       const events = childAudit.filter((event) => event.subject === run.id);
+      expect(run.cancelledBy).toBe(t.root.id);
+      expect(run.correlationId).not.toBe(correlationId);
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
         status: "success",
-        correlationId: run.correlationId,
+        actor: parentEvent?.actor,
+        correlationId: parentEvent?.correlationId,
         metadata: {
           workflow: run.workflow,
           definitionRevisionId: run.definitionRevisionId,
@@ -537,22 +539,66 @@ describe("test-run confirmation and independent starts", () => {
 });
 
 describe("descendant ownership and recovery", () => {
-  it("cancels a grandchild as well as its direct child", async () => {
-    const definitions = publishedDefinitions();
-    definitions.publish(child("leaf"));
-    definitions.publish({ ...parent("leaf"), id: "child" });
-    definitions.publish(parent());
-    const t = await ready(definitions);
-    const started = await start(t);
-    const worker = t.worker();
-    for (let pass = 0; pass < 4; pass++) await worker.runDue();
-    const [middle] = await children(t, started.id);
-    const [leaf] = await children(t, middle?.id ?? "missing");
-    expect(leaf?.depth).toBe(2);
-    await t.expectOk(t.root.id, "workflows.cancel_run", { params: { runId: started.id } });
-    expect((await children(t, started.id))[0]?.status).toBe("cancelled");
-    expect((await children(t, middle?.id ?? "missing"))[0]?.status).toBe("cancelled");
-  });
+  it.each(["user", "service"])(
+    "cancels a grandchild with its parent cancellation context (%s)",
+    async (kind) => {
+      const definitions = publishedDefinitions();
+      definitions.publish(child("leaf"));
+      definitions.publish({ ...parent("leaf"), id: "child" });
+      definitions.publish(parent());
+      const t = await ready(definitions);
+      const started = await start(t);
+      const worker = t.worker();
+      for (let pass = 0; pass < 4; pass++) await worker.runDue();
+      const [middle] = await children(t, started.id);
+      const [leaf] = await children(t, middle?.id ?? "missing");
+      expect(leaf?.depth).toBe(2);
+      const serviceId = "sp_canceller";
+      if (kind === "service") {
+        await storeTestServicePrincipal(serviceId);
+        await t.allow({ kind: "service_principal", id: serviceId }, "workflow.write");
+      }
+      const correlationId = "corr_cancel_descendants";
+      const cancelled = runSchema.parse(
+        (
+          await t.expectOk(t.root.id, "workflows.cancel_run", {
+            params: { runId: started.id },
+            headers: {
+              "x-correlation-id": correlationId,
+              ...(kind === "service" ? { [SERVICE_HEADER]: serviceId } : {})
+            }
+          })
+        ).json()
+      );
+      const audit = await cancellationAudit(t);
+      const parentEvent = audit.find((event) => event.subject === started.id);
+      expect(parentEvent).toMatchObject({
+        correlationId,
+        actor:
+          kind === "user"
+            ? { userId: t.root.id }
+            : { principalId: serviceId, principalKind: "service" }
+      });
+      for (const [parentId, descendantId] of [
+        [started.id, middle?.id],
+        [middle?.id, leaf?.id]
+      ]) {
+        const run = await t.stores.workflowRuns.readRun({
+          clientInstanceId,
+          id: descendantId ?? "missing"
+        });
+        expect(run).toMatchObject({ status: "cancelled" });
+        expect(run?.cancelledBy).toBe(cancelled.cancelledBy);
+        const events = audit.filter((event) => event.subject === descendantId);
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({
+          actor: parentEvent?.actor,
+          correlationId: parentEvent?.correlationId,
+          metadata: { parentRunId: parentId }
+        });
+      }
+    }
+  );
 
   it("recovers an interrupted independent start before rechecking a disabled run principal", async () => {
     const definitions = publishedDefinitions();
@@ -646,3 +692,19 @@ describe("a deadline while every step waits", () => {
     expect((await children(t, started.id))[0]?.status).toBe("cancelled");
   });
 });
+
+async function cancellationAudit(t: WorkflowFixture): Promise<AuditEvent[]> {
+  const audit: AuditEvent[] = [];
+  for (let after: StorePage["after"]; ;) {
+    const page = await t.stores.audit.listAuditEvents({
+      clientInstanceId,
+      type: "workflow_run.cancelled",
+      page: { limit: 2, ...(after ? { after } : {}) }
+    });
+    audit.push(...page);
+    const last = page.at(-1);
+    if (!last) break;
+    after = [last.createdAt, last.id];
+  }
+  return audit;
+}
