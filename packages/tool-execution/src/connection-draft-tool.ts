@@ -125,7 +125,7 @@ const parameterSchema = z.object({
   schema: z
     .record(z.string(), z.unknown())
     .describe(
-      "The JSON Schema of the value. Its 'type' is string, integer or number; a query parameter may also be boolean. No 'default', 'const', 'examples', 'example' or singleton 'enum': a draft carries no fixed value of its own."
+      "The JSON Schema of the value. Its 'type' is string, integer or number; a query parameter may also be boolean, or array with scalar 'items' of type string, integer, number or boolean. Arrays send repeated query keys in input order, at most 32 values. No 'default', 'const', 'examples', 'example' or singleton 'enum': a draft carries no fixed value of its own."
     ),
   description: z.string().optional().describe("What the value is, for whoever fills it."),
   required: z

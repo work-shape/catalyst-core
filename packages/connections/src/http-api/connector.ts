@@ -19,7 +19,12 @@ import { z } from "zod";
 import { holdsCredential } from "../connector-context";
 import { egressTargetOfUrl } from "../egress";
 import { hostHeaderOf, oneRequestAgent, sendPinnedRequest } from "../pinned-request";
-import { httpApiDeclaredOperations, isDotSegment, pathPlaceholders } from "./declaration";
+import {
+  HTTP_API_QUERY_MAX_VALUES,
+  httpApiDeclaredOperations,
+  isDotSegment,
+  pathPlaceholders
+} from "./declaration";
 
 // The Connector type `http_api`, first cut (CS-5a): a REST interface reached by GET. Each
 // Connection declares its operations itself (`./declaration`). A call sends the declared path
@@ -347,6 +352,26 @@ function callAddress(baseUrl: string, operation: ConnectionOperationConfig, inpu
   for (const name of Object.keys(queryParams)) {
     const value = values[name];
     if (value === undefined || value === null) continue;
+    if (queryParams[name]?.schema.type === "array") {
+      if (!Array.isArray(value)) throw connectionCallError("input_invalid");
+      if (value.length > HTTP_API_QUERY_MAX_VALUES) {
+        throw connectionCallError(
+          "input_invalid",
+          `the query array exceeds HTTP_API_QUERY_MAX_VALUES (${HTTP_API_QUERY_MAX_VALUES})`
+        );
+      }
+      for (const item of value) {
+        if (
+          typeof item !== "string" &&
+          typeof item !== "boolean" &&
+          !(typeof item === "number" && Number.isFinite(item))
+        ) {
+          throw connectionCallError("input_invalid");
+        }
+        query.append(name, String(item));
+      }
+      continue;
+    }
     if (typeof value === "object") throw connectionCallError("input_invalid");
     query.append(name, String(value));
   }

@@ -104,6 +104,26 @@ async function refusedPaths(input: Record<string, unknown>): Promise<string[]> {
 }
 
 describe("the agent's draft of REST API tools", () => {
+  it("accepts repeated query filters through the save validator and refuses object or nested array items", async () => {
+    const withItems = (items: Record<string, unknown>) =>
+      draft({
+        operations: [{ ...listClients, query: { filter: { schema: { type: "array", items } } } }]
+      });
+    for (const type of ["string", "integer", "number", "boolean"]) {
+      const result = await run(withItems({ type }));
+      expect(result.status).toBe("success");
+      if (result.status !== "success") throw new Error("Expected a checked draft");
+      expect(result.output).toMatchObject({
+        operations: [{ query: { filter: { schema: { type: "array", items: { type } } } } }]
+      });
+    }
+    for (const items of [{ type: "object" }, { type: "array", items: { type: "string" } }]) {
+      expect(await refusedPaths(withItems(items))).toContain(
+        "operations.0.query.filter.schema.items"
+      );
+    }
+  });
+
   it("answers the checked draft the card shows: name, address, header names, declarations", async () => {
     expect(tool.name).toBe(CONNECTION_DRAFT_TOOL_NAME);
     expect(tool.effect).toBe("reading");

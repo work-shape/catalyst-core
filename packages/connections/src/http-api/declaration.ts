@@ -1,4 +1,5 @@
 import {
+  isJsonObject,
   type AssetValidationIssue,
   type ConnectionOperationConfig,
   type ConnectorOperationDescriptor,
@@ -22,8 +23,11 @@ const HTTP_API_METHODS = ["GET"] as const;
 
 /** The JSON Schema types a path parameter may have: each is written into the path as text. */
 const PATH_PARAMETER_TYPES = ["string", "integer", "number"];
-/** The JSON Schema types a query parameter may have: each is written as one query value. */
-const QUERY_PARAMETER_TYPES = ["string", "integer", "number", "boolean"];
+/** Scalar query values, also the allowed item types of an array query parameter. */
+const QUERY_SCALAR_TYPES = ["string", "integer", "number", "boolean"];
+const QUERY_PARAMETER_TYPES = [...QUERY_SCALAR_TYPES, "array"];
+/** Bounds repeated query keys; larger arrays fail with input_invalid naming this limit. */
+export const HTTP_API_QUERY_MAX_VALUES = 32;
 
 /**
  * A path as a declaration may write it: from `/`, of the characters a path holds without
@@ -88,6 +92,19 @@ function parameterIssues(
         path: [field, name, "schema", "type"]
       });
     }
+    if (field === "query" && type === "array") {
+      const items = parameter.schema.items;
+      if (
+        !isJsonObject(items) ||
+        typeof items.type !== "string" ||
+        !QUERY_SCALAR_TYPES.includes(items.type)
+      ) {
+        issues.push({
+          message: `An array query parameter's 'items' schema names one scalar 'type': ${QUERY_SCALAR_TYPES.join(", ")}`,
+          path: [field, name, "schema", "items"]
+        });
+      }
+    }
     if (field === "pathParams" && parameter.required !== undefined) {
       issues.push({
         message: "A path parameter is always required, so it names no 'required'",
@@ -145,8 +162,17 @@ function inputSchemaOf(operation: ConnectionOperationConfig): JsonObject {
   const properties: JsonObject = {};
   const required: string[] = [];
   const add = (name: string, parameter: DeclaredOperationParameter, isRequired: boolean) => {
+    const maxItems = parameter.schema.maxItems;
     properties[name] = {
       ...parameter.schema,
+      ...(parameter.schema.type === "array"
+        ? {
+            maxItems:
+              typeof maxItems === "number"
+                ? Math.min(maxItems, HTTP_API_QUERY_MAX_VALUES)
+                : HTTP_API_QUERY_MAX_VALUES
+          }
+        : {}),
       ...(parameter.description === undefined ? {} : { description: parameter.description })
     };
     if (isRequired) required.push(name);
