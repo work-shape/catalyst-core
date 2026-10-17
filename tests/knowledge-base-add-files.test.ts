@@ -603,13 +603,17 @@ describe("adding files to a Knowledge Base", () => {
       });
 
     // The documents are locked: the call copies its file and then waits to write its document.
+    // The call starts only once the lock is held, or it could take the lock first.
     const release = gate();
+    let locked = false;
     const held = inDatabase(record.location.database, (sql) =>
       sql.begin(async (tx) => {
         await tx.unsafe("lock table catalyst_kb.documents in share row exclusive mode");
+        locked = true;
         await release.opened;
       })
     );
+    await eventually(() => expect(locked).toBe(true));
     const call = addFiles(instance, [source]);
     await waiting(1);
     // The cleanup looks while the call waits, and waits behind it.
