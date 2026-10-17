@@ -185,11 +185,14 @@ export function StagingBanner({ environment }: { environment: string }) {
 
 /**
  * The header of the chat: the button that opens the rail's drawer under 768 px and the agent
- * selector. Its solid band ends where a surface beside it begins.
+ * selector. It is a solid band, which ends where a surface beside it begins, so nothing that
+ * scrolls passes under the controls. Outside a conversation it gives way to a pinned detail head,
+ * which is a band of its own: the controls float over its start.
  */
 export function WorkspaceChrome({
   agentDisplay,
   agents,
+  conversation,
   surfaceBesideWidth,
   covered,
   selectedAgentName,
@@ -199,6 +202,11 @@ export function WorkspaceChrome({
 }: {
   agentDisplay: AgentChipDisplay;
   agents: SafeConfig["agents"];
+  /**
+   * True on a conversation: the band stands whatever a surface beside it shows. Elsewhere it
+   * gives way where the main area holds a pinned detail head.
+   */
+  conversation: boolean;
   /** What a surface takes of the main area beside the conversation, in pixels. */
   surfaceBesideWidth: number;
   /** A surface covers the main area, so the header leaves the tab order with the chat. */
@@ -217,6 +225,8 @@ export function WorkspaceChrome({
       data-beside-surface={besideSurface ? "" : undefined}
       className={cn(
         "pointer-events-none absolute top-0 left-0 z-40 flex h-(--layout-header) min-w-0 items-center gap-2 bg-background px-4 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-gradient-to-b after:from-background after:to-transparent after:content-['']",
+        !conversation &&
+          "group-has-[[data-page-head][data-variant=detail]]/workspace-content:bg-transparent group-has-[[data-page-head][data-variant=detail]]/workspace-content:after:hidden",
         // Beside a surface the header is a band like the surface's own: one line runs across
         // the window, and the thread scrolls under the band, not under the controls.
         // The fade starts below the border so it cannot paint over that line.

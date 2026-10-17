@@ -8,6 +8,7 @@ export const settings = defineTranslations({
     // navigation area once the main rail has its own file.
     "nav.build": "Studio",
     "nav.paletteGoTo": "Go to",
+    "nav.paletteInGroup": "{group} › {page}",
     "settings.you": "You",
     "settings.workspace": "Workspace",
     "settings.instance": "Instance",
@@ -244,6 +245,7 @@ export const settings = defineTranslations({
   de: {
     "nav.build": "Studio",
     "nav.paletteGoTo": "Gehe zu",
+    "nav.paletteInGroup": "{group} › {page}",
     "settings.you": "Du",
     "settings.workspace": "Arbeitsbereich",
     "settings.instance": "Instanz",

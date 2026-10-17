@@ -319,7 +319,7 @@ function frame(overrides: Partial<BuildAssetEditorProps> = {}): BuildAssetEditor
     canWrite: true,
     instanceWrite: true,
     back: null,
-    actions: null,
+    actions: {},
     notice: null,
     onUnsavedChange: () => undefined,
     save: async () => ({ ok: true }),

@@ -1,17 +1,9 @@
-import {
-  ArrowLeft,
-  Download,
-  Ellipsis,
-  Maximize2,
-  MessageSquare,
-  Minimize2,
-  Plus,
-  X
-} from "lucide-react";
+import { ArrowLeft, Download, Maximize2, MessageSquare, Minimize2, Plus, X } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { EmptyState } from "../feedback/empty-state";
+import { DropdownMenuItem } from "../overlays/dropdown-menu";
 import { Input } from "../forms/input";
 import { Badge } from "../status/badge";
 import { RegistryIcon } from "../status/registry-icon";
@@ -57,12 +49,10 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
   const actions = {
     scope: <Badge appearance="outline">{text.headerScope}</Badge>,
     state: <Badge>{text.stateDraft}</Badge>,
-    secondaryActions: <Button variant="outline">{text.headerTestRun}</Button>,
+    secondaryActions: [{ label: text.headerTestRun, onSelect: () => undefined }],
     primaryAction: <Button>{text.publish}</Button>,
-    overflow: (
-      <IconButton label={text.moreActions}>
-        <Ellipsis aria-hidden="true" />
-      </IconButton>
+    menu: (
+      <DropdownMenuItem icon={<Download aria-hidden="true" />}>{text.assetExport}</DropdownMenuItem>
     )
   };
   return (
@@ -140,6 +130,29 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
             title={text.rowAgent}
             description={text.headerListDescription}
             {...actions}
+          />
+        </div>
+      </Samples>
+      <Samples label="detail, narrow: the secondary actions in the … menu">
+        <div
+          className="w-72 max-w-full overflow-hidden rounded-lg border"
+          data-gallery-sample="header-folded"
+        >
+          <PageHeader
+            variant="detail"
+            headingLevel={2}
+            className="static border-b-0"
+            back={
+              <PageHeaderBack label={text.headerBack} onClick={() => undefined}>
+                {text.headerBreadcrumbAgents}
+              </PageHeaderBack>
+            }
+            title={text.rowAgent}
+            {...actions}
+            secondaryActions={[
+              { label: text.headerTestRun, onSelect: () => undefined },
+              { label: text.sectionHistory, onSelect: () => undefined }
+            ]}
           />
         </div>
       </Samples>

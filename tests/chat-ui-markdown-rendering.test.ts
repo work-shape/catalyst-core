@@ -19,6 +19,29 @@ describe("chat UI Markdown rendering", () => {
     expect(markup).toContain("--shiki-dark");
   });
 
+  it("puts a table in the library's box that scrolls sideways, with its copy menu", () => {
+    const markup = renderMarkdown(
+      [
+        "| Rank | Customer | Segment | Orders | Revenue |",
+        "| --- | --- | --- | --- | --- |",
+        "| 1 | Velunara Nuvarek AG | Hospitality | 128 | 412,300 EUR |"
+      ].join("\n")
+    );
+    const wrapper = markup.slice(markup.indexOf('data-streamdown="table-wrapper"'));
+
+    expect(wrapper).toMatch(/data-slot="table-box"[^>]*overflow-x-auto/u);
+    // A cell breaks between words, never inside one.
+    expect(wrapper).toMatch(/<table[^>]*class="[^"]*break-normal/u);
+    // As wide as its content wants, a cell up to 16rem, and at least the message's width.
+    expect(wrapper).toMatch(/<table[^>]*class="[^"]*w-max min-w-full/u);
+    expect(wrapper).toMatch(/<table[^>]*class="[^"]*\[&amp;_td\]:max-w-64/u);
+    expect(wrapper.indexOf('data-slot="table-box"')).toBeLessThan(
+      wrapper.indexOf('data-streamdown="table"')
+    );
+    expect(wrapper).toContain('title="Copy table"');
+    expect(markup.match(/<th[\s>]/gu)).toHaveLength(5);
+  });
+
   it("delegates Mermaid blocks to the lazy diagram renderer", () => {
     const markup = renderMarkdown("```mermaid\nflowchart TD\n  A --> B\n```");
 

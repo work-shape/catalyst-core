@@ -13,7 +13,7 @@ import {
   PageHeader,
   Section
 } from "@work-shape/catalyst-ui";
-import { CopyIdMenu } from "../copy-id-item";
+import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import { migrationNumber } from "./data-store-model";
@@ -100,7 +100,7 @@ export function DataStoreDraftPage({
               {t("dataStores.draftUnpublished")}
             </Badge>
           }
-          overflow={<CopyIdMenu id={asset.name} label={t("build.assetActions")} />}
+          menu={<CopyIdItem id={asset.name} />}
         />
       }
     >

@@ -343,6 +343,16 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The person of the phone fit spec. No other spec uses them: the spec writes a conversation.
+      - email: e2e-phone-fit@example.test
+        displayLabel: E2E Zz Phone Fit
+        passwordEnvName: E2E_PHONE_FIT_PASSWORD
+        developmentPassword: e2e-phone-fit-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900

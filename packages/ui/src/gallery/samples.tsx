@@ -124,16 +124,23 @@ function AssetMenu({ text, children }: { text: GalleryText; children?: ReactNode
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {children}
-        <DropdownMenuItem icon={<Copy aria-hidden="true" />}>{text.menuDuplicate}</DropdownMenuItem>
-        <DropdownMenuItem icon={<Download aria-hidden="true" />}>
-          {text.assetExport}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem icon={<Trash2 aria-hidden="true" />} tone="danger">
-          {text.delete}
-        </DropdownMenuItem>
+        <AssetMenuItems text={text} />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** What the "…" of an asset offers. */
+function AssetMenuItems({ text }: { text: GalleryText }) {
+  return (
+    <>
+      <DropdownMenuItem icon={<Copy aria-hidden="true" />}>{text.menuDuplicate}</DropdownMenuItem>
+      <DropdownMenuItem icon={<Download aria-hidden="true" />}>{text.assetExport}</DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem icon={<Trash2 aria-hidden="true" />} tone="danger">
+        {text.delete}
+      </DropdownMenuItem>
+    </>
   );
 }
 
@@ -382,9 +389,9 @@ function AssetPageSample({ text }: { text: GalleryText }) {
         title={text.buildHandbook}
         scope={<AssetScopeChip scope="workspace" text={text} />}
         state={<Badge>{text.stateDraft}</Badge>}
-        secondaryActions={<Button variant="ghost">{text.assetDiscardDraft}</Button>}
+        secondaryActions={[{ label: text.assetDiscardDraft, onSelect: () => undefined }]}
         primaryAction={<Button>{text.publish}</Button>}
-        overflow={<AssetMenu text={text} />}
+        menu={<AssetMenuItems text={text} />}
       />
       <Banner
         layout="page"

@@ -26,7 +26,11 @@ import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { agentKind } from "./agent-kind";
 import { usePageShown } from "./asset-editor-shell";
-import type { BuildAssetEditorProps, BuildAssetViewProps } from "./build-asset-kind";
+import type {
+  BuildAssetEditorProps,
+  BuildAssetViewProps,
+  BuildHeadActions
+} from "./build-asset-kind";
 import { useBuildNavigation } from "../../shared/build-route";
 import {
   ConnectionSecretEditor,
@@ -211,7 +215,7 @@ export function ConnectionPage({
   editing
 }: Omit<BuildAssetViewProps, "kinds"> & {
   /** The frame's actions for the head: History, and Delete where the reader may delete. */
-  actions?: ReactNode;
+  actions?: BuildHeadActions;
   /** What the frame says above the content, such as a conflict. */
   notice?: ReactNode;
   source: ConnectionSource;
@@ -405,7 +409,7 @@ export function ConnectionPage({
               {t(enabled ? "connections.enabled" : "connections.disabled")}
             </Badge>
           }
-          secondaryActions={actions}
+          {...actions}
         />
       }
       outline={

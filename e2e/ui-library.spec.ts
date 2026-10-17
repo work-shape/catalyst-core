@@ -729,7 +729,7 @@ async function signInViaApi(page: Page, user: { email: string; password: string 
   expect(response.ok()).toBe(true);
 }
 
-test("a long picker list keeps the active row in view after a typed name and on reopening", async ({
+test("a long picker list opens at its first option and keeps the active row in view", async ({
   page
 }) => {
   await signInViaApi(page, adminUser);
@@ -773,12 +773,21 @@ test("a long picker list keeps the active row in view after a typed name and on 
     (await active.getAttribute("id")) ?? ""
   );
 
-  // Enter chooses what shows as active, and the list opens on it the next time.
+  // Enter chooses what shows as active. The list opens at its first option the next time, and
+  // the keyboard is on that option while the chosen one lies further down, out of sight.
   await page.keyboard.press("Enter");
   await expect(list).toHaveCount(0);
   const chosen = entry.getByRole("button", { name: "Payroll", exact: true });
   await expect(chosen).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(list).toBeFocused();
-  await expectActiveInView("Payroll");
+  const first = (await list.getByRole("option").first().textContent()) ?? "";
+  await expectActiveInView(first);
+  expect(await active.evaluate((row) => row.parentElement?.scrollTop)).toBe(0);
+  const shotsDir = process.env.E2E_SHOTS_DIR;
+  if (shotsDir) {
+    await page.screenshot({
+      path: `${shotsDir}/picker-long-reopened-${String(page.viewportSize()?.width ?? 0)}.png`
+    });
+  }
 });

@@ -517,15 +517,16 @@ function ChatWorkspaceContent({
             tabIndex={-1}
             // Clipped, not hidden: a panel on its way in or out reaches past the edge, and
             // nothing that takes the focus there may scroll the frame sideways.
-            className="relative flex min-w-0 flex-1 overflow-clip outline-none"
+            className="group/workspace-content relative flex min-w-0 flex-1 overflow-clip outline-none"
           >
             <WorkspaceChrome
               agents={model.config.config.agents}
               agentDisplay={agentChipDisplayFor(model.config.config.ui)}
-              // An App takes the whole main area: the surface of the conversation it was opened
-              // from stands beside nothing there, so the header is no band over the App's head.
-              // The Inbox and the Agents page have a page title where the band would stand: the
-              // band would cover it.
+              // An App takes the whole main area, and so do a Workflow and a Studio page: the
+              // band gives way to the pinned head they stand under, which it would cover. A list
+              // or a Settings page scrolls under the band like a conversation.
+              conversation={onChatRoute}
+              // Only beside a conversation does a surface share the main area with the band.
               surfaceBesideWidth={onChatRoute ? chatSurface.besideWidth : 0}
               covered={headerCovered}
               selectedAgentName={model.config.activeAgentName}

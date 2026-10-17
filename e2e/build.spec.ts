@@ -708,8 +708,13 @@ for (const locale of ["en", "de"] as const) {
       await signInViaApi(page, superadminUser);
       const words =
         locale === "en"
-          ? { agents: "Agents", sections: "On this page", history: "History" }
-          : { agents: "Agenten", sections: "Auf dieser Seite", history: "Verlauf" };
+          ? { agents: "Agents", sections: "On this page", history: "History", more: "More actions" }
+          : {
+              agents: "Agenten",
+              sections: "Auf dieser Seite",
+              history: "Verlauf",
+              more: "Weitere Aktionen"
+            };
 
       for (const size of [WIDE, NARROW]) {
         await page.setViewportSize(size);
@@ -739,7 +744,16 @@ for (const locale of ["en", "de"] as const) {
         await expect(outline.getByRole("combobox")).toBeVisible({ visible: size === NARROW });
         await expectNoSidewaysScroll(page);
 
-        await page.getByRole("button", { name: words.history, exact: true }).click();
+        // Where the head has no room for History beside the rest, it stands in the "…" menu.
+        const historyButton = page
+          .locator("header[data-page-head]")
+          .getByRole("button", { name: words.history, exact: true });
+        if ((await historyButton.count()) > 0) {
+          await historyButton.click();
+        } else {
+          await page.getByRole("button", { name: words.more, exact: true }).click();
+          await page.getByRole("menuitem", { name: words.history, exact: true }).click();
+        }
         const history = page.getByRole("dialog", { name: words.history, exact: true });
         await expect(history.locator("[data-revision]").first()).toBeVisible();
         await expectNoSidewaysScroll(page);

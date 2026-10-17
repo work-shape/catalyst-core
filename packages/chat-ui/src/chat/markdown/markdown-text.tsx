@@ -8,11 +8,14 @@ import { Streamdown, type ControlsConfig, type StreamdownTranslations } from "st
 import { CODE_THEMES, codeHighlighter } from "../../shared/code-highlight";
 import { useTranslation } from "../../shared/i18n";
 import { markdownRehypePlugins, type MarkdownLinkPolicy } from "./markdown-security";
+import { MarkdownTable } from "./markdown-table";
 
 const plugins = { code: codeHighlighter, mermaid };
+// A table draws its own frame and copy menu.
+const components = { table: MarkdownTable };
 const controls: ControlsConfig = {
   code: { copy: true, download: false },
-  table: { copy: true, download: false, fullscreen: true },
+  table: false,
   mermaid: { copy: true, download: false, fullscreen: true, panZoom: true }
 };
 // The assistant-ui wrapper still exposes Streamdown's older, narrower control type,
@@ -80,6 +83,7 @@ export function MarkdownText() {
   return (
     <StreamdownTextPrimitive
       className="chat-markdown"
+      components={components}
       controls={assistantControls}
       lineNumbers={false}
       plugins={plugins}
@@ -97,6 +101,7 @@ export function MarkdownArtifact({ children }: { children: string }) {
   return (
     <Streamdown
       className="chat-markdown artifact-markdown"
+      components={components}
       controls={controls}
       lineNumbers={false}
       mode="static"

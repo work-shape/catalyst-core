@@ -62,7 +62,7 @@ function tools(input: AgentInput): string {
           canWrite: true,
           instanceWrite: true,
           back: null,
-          actions: null,
+          actions: {},
           notice: null,
           onUnsavedChange: noop,
           save: async () => ({ ok: true as const })

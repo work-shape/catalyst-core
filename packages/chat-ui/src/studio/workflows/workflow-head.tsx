@@ -1,6 +1,6 @@
 import { Bot, Play } from "lucide-react";
 import { Button, PageHeader, PageLead, TabsLink, TabsNav } from "@work-shape/catalyst-ui";
-import { CopyIdMenu } from "../copy-id-item";
+import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
 import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowView } from "./workflow-views";
@@ -67,12 +67,16 @@ export function WorkflowHead({
         // names the area, and the Workflow's id is never shown.
         title={workflow?.name ?? <TitlePlaceholder>{t("workflows.title")}</TitlePlaceholder>}
         secondaryActions={
-          edit === undefined ? undefined : (
-            <Button variant="outline" loading={edit.busy} onClick={edit.start}>
-              <Bot aria-hidden="true" />
-              {t("workflows.edit.withAgent")}
-            </Button>
-          )
+          edit === undefined
+            ? undefined
+            : [
+                {
+                  label: t("workflows.edit.withAgent"),
+                  icon: <Bot aria-hidden="true" />,
+                  loading: edit.busy,
+                  onSelect: edit.start
+                }
+              ]
         }
         primaryAction={
           canStart || startOff ? (
@@ -82,11 +86,7 @@ export function WorkflowHead({
             </Button>
           ) : undefined
         }
-        overflow={
-          edit === undefined ? undefined : (
-            <CopyIdMenu id={workflowId} label={t("workflows.moreActions")} />
-          )
-        }
+        menu={edit === undefined ? undefined : <CopyIdItem id={workflowId} />}
       />
       {runsAvailable ? (
         <TabsNav label={t("workflows.tabs")} className="shrink-0 px-(--layout-gutter)">

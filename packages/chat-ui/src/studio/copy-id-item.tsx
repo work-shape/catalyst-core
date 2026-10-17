@@ -1,11 +1,4 @@
-import { MoreHorizontal } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCopyItem,
-  DropdownMenuTrigger,
-  IconButton
-} from "@work-shape/catalyst-ui";
+import { DropdownMenuCopyItem } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../shared/i18n";
 
 /**
@@ -18,21 +11,5 @@ export function CopyIdItem({ id }: { id: string }) {
     <DropdownMenuCopyItem value={id} copiedLabel={t("idCopied")}>
       {t("copyId")}
     </DropdownMenuCopyItem>
-  );
-}
-
-/** The "…" of a head that offers nothing else: a menu with "Copy ID". */
-export function CopyIdMenu({ id, label }: { id: string; label: string }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <IconButton label={label} variant="outline" size="sm">
-          <MoreHorizontal aria-hidden="true" />
-        </IconButton>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <CopyIdItem id={id} />
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }

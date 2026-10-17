@@ -40,13 +40,15 @@ function renderHeader({
   locale = "en",
   showAgentName = true,
   showAgentSelector = true,
-  surfaceBesideWidth = 0
+  surfaceBesideWidth = 0,
+  conversation = true
 }: {
   agents?: typeof severalAgents;
   locale?: "de" | "en";
   showAgentName?: boolean;
   showAgentSelector?: boolean;
   surfaceBesideWidth?: number;
+  conversation?: boolean;
 } = {}) {
   return renderToStaticMarkup(
     createElement(
@@ -55,6 +57,7 @@ function renderHeader({
       createElement(WorkspaceChrome, {
         agentDisplay: display({ showAgentName }),
         agents,
+        conversation,
         surfaceBesideWidth,
         covered: false,
         selectedAgentName: "catalyst_assistant",
@@ -152,6 +155,23 @@ describe("agent chip in the header", () => {
     expect(header(alone)).not.toContain("border-b");
     expect(header(alone)).toContain("bg-background");
     expect(header(alone)).toContain("after:bg-gradient-to-b");
+  });
+
+  // Fails with the band on every page: at 390 px it covered the pinned head of a Studio page,
+  // an App and a Workflow, their name and their actions.
+  it("gives way to a pinned detail head outside a conversation, and stands on a conversation", () => {
+    const header = (markup: string) => /<header[^>]*>/u.exec(markup)?.[0] ?? "";
+    const givesWay =
+      "group-has-[[data-page-head][data-variant=detail]]/workspace-content:bg-transparent";
+    const elsewhere = header(renderHeader({ conversation: false, showAgentSelector: false }));
+
+    // A list or a Settings page scrolls under the band as a conversation does.
+    expect(elsewhere).toContain("bg-background");
+    expect(elsewhere).toContain(givesWay);
+    expect(elsewhere).toContain(
+      "group-has-[[data-page-head][data-variant=detail]]/workspace-content:after:hidden"
+    );
+    expect(header(renderHeader())).not.toContain(givesWay);
   });
 
   it("stays empty while the start page shows the agent", () => {

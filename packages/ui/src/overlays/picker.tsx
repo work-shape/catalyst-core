@@ -130,8 +130,9 @@ export const pickerRowClassName = cn(
 /**
  * Chooses one object or several from a list: an agent, a workspace, an asset. The arrow keys
  * move through the options, Enter chooses, typing narrows the list or moves to a name, and
- * Escape closes the picker and returns focus to its trigger. A picker for one object opens on
- * the chosen option.
+ * Escape closes the picker and returns focus to its trigger. A picker opens at its first option.
+ * The keyboard starts on the chosen option where it shows there, and on the first option where
+ * the chosen one lies further down.
  */
 export function Picker(props: PickerProps) {
   const {
@@ -167,8 +168,9 @@ export function Picker(props: PickerProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const typeAhead = useRef({ text: "", at: 0 });
-  // Set when the active row moved without cmdk's own arrow keys, which scroll by themselves.
-  const revealsActiveRow = useRef(false);
+  // Why the active row may lie outside the list's scroller: the picker just opened, or a typed
+  // name moved it. cmdk's own arrow keys scroll by themselves.
+  const revealsActiveRow = useRef<ActiveRowMove>(undefined);
   const hover = useRef<{
     /** What the mouse is over. */
     over: "trigger" | "panel" | undefined;
@@ -192,7 +194,7 @@ export function Picker(props: PickerProps) {
   const changeOpen = (next: boolean) => {
     cancelHoverClose();
     setUncontrolledOpen(next);
-    revealsActiveRow.current = next;
+    revealsActiveRow.current = next ? "opened" : undefined;
     if (!next) {
       setQuery("");
       setActiveValue(undefined);
@@ -257,7 +259,7 @@ export function Picker(props: PickerProps) {
     typeAhead.current = { text, at: event.timeStamp };
     const match = typeAheadMatch(choosable, text, shownActiveValue);
     if (match) {
-      revealsActiveRow.current = true;
+      revealsActiveRow.current = "typed";
       setActiveValue(match.value);
     }
   };
@@ -461,7 +463,9 @@ export function Picker(props: PickerProps) {
               <ActiveRowName
                 value={shownActiveValue}
                 listRef={listRef}
+                scrollerRef={fade.ref}
                 reveals={revealsActiveRow}
+                onHiddenAtOpening={() => setActiveValue(choosable[0]?.value)}
               />
             </Command>
           </PopoverPrimitive.Content>
@@ -501,21 +505,32 @@ export function PickerSearchField({
   );
 }
 
+/** What moved the active row where the list's scroller may not show it. */
+type ActiveRowMove = "opened" | "typed" | undefined;
+
 /**
  * cmdk names the active row to assistive technology only once a key or the pointer has moved
  * it. The picker also opens on the chosen option and moves to a typed name, so it names the row
  * itself, on the element that has the keyboard. It stands after the list, so the list and its
  * rows are in the document, with their values, by the time it looks for one.
+ *
+ * The list opens at its first option. A chosen option that does not show there gives the
+ * keyboard to the first option: the row the keys are on is always in sight. A typed name
+ * scrolls its row into sight.
  */
 function ActiveRowName({
   value,
   listRef,
-  reveals
+  scrollerRef,
+  reveals,
+  onHiddenAtOpening
 }: {
   value: string;
   listRef: RefObject<HTMLDivElement | null>;
-  /** True when the row may be outside the list's scroller: on opening and after a typed name. */
-  reveals: RefObject<boolean>;
+  /** The part of the list that scrolls. */
+  scrollerRef: RefObject<HTMLDivElement | null>;
+  reveals: RefObject<ActiveRowMove>;
+  onHiddenAtOpening(): void;
 }) {
   useLayoutEffect(() => {
     const list = listRef.current;
@@ -527,17 +542,30 @@ function ActiveRowName({
     }
     const searchField = list.closest("[cmdk-root]")?.querySelector("[cmdk-input]");
     (searchField ?? list).setAttribute("aria-activedescendant", row.id);
-    if (!reveals.current) {
+    const move = reveals.current;
+    if (move === undefined) {
       return undefined;
     }
     // A frame later the panel has its place and its height, so the scroller knows what it hides.
     const frame = window.requestAnimationFrame(() => {
-      reveals.current = false;
-      row.scrollIntoView({ block: "nearest" });
+      reveals.current = undefined;
+      if (move === "typed") {
+        row.scrollIntoView({ block: "nearest" });
+      } else if (scrollerRef.current && !showsWhole(row, scrollerRef.current)) {
+        onHiddenAtOpening();
+      }
     });
     return () => window.cancelAnimationFrame(frame);
   });
   return null;
+}
+
+/** Whether a row stands whole inside the part of its scroller that shows. */
+function showsWhole(row: Element, scroller: Element): boolean {
+  const shown = scroller.getBoundingClientRect();
+  const box = row.getBoundingClientRect();
+  // Half a pixel absorbs the rounding of scaled displays.
+  return box.top >= shown.top - 0.5 && box.bottom <= shown.bottom + 0.5;
 }
 
 /**

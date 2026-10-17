@@ -1,5 +1,6 @@
 import {
   createContext,
+  forwardRef,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -10,10 +11,19 @@ import {
   type ReactNode,
   type RefObject
 } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MoreHorizontal } from "lucide-react";
 import { Button } from "../actions/button";
+import { IconButton } from "../actions/icon-button";
 import { cn } from "../cn";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "../overlays/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
+import { useUiLabels } from "../ui-root";
 
 const PageHeaderShellActionContext = createContext<ReactNode>(null);
 
@@ -44,6 +54,10 @@ export function PageHeaderShellAction({
  * `PageHeaderBack`. From 768 px up the head never wraps: a name that still does not fit takes a
  * second line, is then cut, and says itself whole in a tooltip. In a narrower window the actions
  * go to a second row when they do not fit beside the whole name.
+ *
+ * Either head keeps its actions on one line. Where that line has no room for all of them, the
+ * secondary actions move into the "…" menu, first in it, and the primary action stays: a label is
+ * never cut.
  */
 export type PageHeaderVariant = "list" | "detail";
 
@@ -68,10 +82,23 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "titl
   description?: ReactNode;
   /** What the tooltip of a `detail` head's description reads, where it holds a control. */
   descriptionTooltip?: ReactNode;
-  secondaryActions?: ReactNode;
+  /** Shown as buttons before the primary action, or in the "…" menu where they do not fit. */
+  secondaryActions?: readonly PageHeaderAction[];
   primaryAction?: ReactNode;
-  /** The overflow menu's button, always last. */
-  overflow?: ReactNode;
+  /**
+   * The items of the "…" menu, such as `DropdownMenuItem`s. The head draws the menu's button,
+   * always last, also without items when the secondary actions moved into it.
+   */
+  menu?: ReactNode;
+}
+
+/** One secondary action of a head: a button in the row, an item of the "…" menu without room. */
+export interface PageHeaderAction {
+  label: string;
+  icon?: ReactNode;
+  onSelect(): void;
+  loading?: boolean;
+  disabled?: boolean;
 }
 
 // How a detail head's row shares a width that is too small. A part with the greater factor
@@ -83,6 +110,31 @@ const BACK_GIVES_WAY = "has-[[data-slot=page-header-back]]:shrink-[1000000]";
 // A box that counts as nothing in the least width of its row and may be any width up to its
 // content's.
 const NO_LEAST_WIDTH = "grid min-w-0 grid-cols-[minmax(0,max-content)]";
+
+/**
+ * Measures again a frame after any of `nodes` changed its size. The head's measures change its
+ * layout: run inside the observer's callback, the head's two observers would see each other's
+ * change in the same frame, which the browser reports as a ResizeObserver loop.
+ */
+function observeAFrameLater(
+  nodes: readonly Element[],
+  measure: () => void
+): { disconnect(): void } {
+  let frame = 0;
+  const observer = new ResizeObserver(() => {
+    window.cancelAnimationFrame(frame);
+    frame = window.requestAnimationFrame(measure);
+  });
+  for (const node of nodes) {
+    observer.observe(node);
+  }
+  return {
+    disconnect() {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    }
+  };
+}
 
 /** Whether a detail head's name no longer stands whole on one line: it wrapped or was cut. */
 function nameGaveWay(name: HTMLElement): boolean {
@@ -127,18 +179,165 @@ function useBackTextGone(): [RefObject<HTMLDivElement | null>, boolean] {
       setGone(next);
     };
     measure();
-    const observer = new ResizeObserver(measure);
-    for (const observed of [node, name, slot]) {
-      observer.observe(observed);
-    }
+    const observer = observeAFrameLater([node, name, slot], measure);
     return () => observer.disconnect();
   });
   return [row, gone];
 }
 
 /**
+ * Whether a head's actions do not fit on one line of it: the secondary actions then stand in the
+ * "…" menu. A row out of sight holds the shapes of the secondary actions as they would stand, so
+ * the answer is the same folded or not, and a change of language or of a label counts. The
+ * shell's control, the primary action and the button of a menu the head has stay in the row
+ * either way; they are measured where they stand. The row holds no button, so nothing a reader
+ * or a test looks for in the head is in it twice.
+ */
+function useActionsFolded(): {
+  head: RefObject<HTMLElement | null>;
+  unfolded: RefObject<HTMLDivElement | null>;
+  shell: RefObject<HTMLSpanElement | null>;
+  primary: RefObject<HTMLSpanElement | null>;
+  menu: RefObject<HTMLSpanElement | null>;
+  folded: boolean;
+} {
+  const head = useRef<HTMLElement>(null);
+  const unfolded = useRef<HTMLDivElement>(null);
+  const shell = useRef<HTMLSpanElement>(null);
+  const primary = useRef<HTMLSpanElement>(null);
+  const menu = useRef<HTMLSpanElement>(null);
+  const [folded, setFolded] = useState(false);
+  useLayoutEffect(() => {
+    const headNode = head.current;
+    const row = unfolded.current;
+    if (!headNode || !row || typeof ResizeObserver === "undefined") {
+      setFolded(false);
+      return undefined;
+    }
+    const kept = [shell.current, primary.current, menu.current].filter((node) => node !== null);
+    const measure = () => {
+      const style = getComputedStyle(headNode);
+      const room =
+        headNode.clientWidth - pixels(style.paddingInlineStart) - pixels(style.paddingInlineEnd);
+      const gap = pixels(getComputedStyle(row).columnGap);
+      const needed = kept.reduce(
+        (width, node) => width + gap + node.getBoundingClientRect().width,
+        row.getBoundingClientRect().width + nameReserve(headNode, style)
+      );
+      // Half a pixel absorbs the rounding of scaled displays.
+      setFolded(needed > room + 0.5);
+    };
+    measure();
+    const observer = observeAFrameLater([headNode, row, ...kept], measure);
+    return () => observer.disconnect();
+  });
+  return { head, unfolded, shell, primary, menu, folded };
+}
+
+// The width a detail head keeps for its name beside the actions, or the whole name where it is
+// shorter: the actions fold before the name is cut to a few letters.
+const NAME_LEAST = 160;
+
+/**
+ * The room a detail head's name needs beside the actions on one line: what stands before the
+ * name, the way back without its text that gives way first, the name up to its least width,
+ * and the gap to the actions. Where the head wraps, the actions take a line of their own and
+ * the name needs none of theirs.
+ */
+function nameReserve(headNode: HTMLElement, style: CSSStyleDeclaration): number {
+  const measure = headNode.querySelector<HTMLElement>("[data-name]");
+  const name = measure?.parentElement;
+  if (!measure || !name || style.flexWrap === "wrap") {
+    return 0;
+  }
+  // The box of the way back's text: as wide as the text shows, nothing where it is gone.
+  const backText = headNode.querySelector("[data-slot=page-header-back-text]")?.parentElement;
+  const before =
+    name.getBoundingClientRect().left -
+    headNode.getBoundingClientRect().left -
+    pixels(style.paddingInlineStart) -
+    (backText?.getBoundingClientRect().width ?? 0);
+  return Math.max(0, before) + Math.min(measure.scrollWidth, NAME_LEAST) + pixels(style.columnGap);
+}
+
+/** A length in pixels of a computed style, `0` where the style gives none. */
+function pixels(value: string): number {
+  return Number.parseFloat(value) || 0;
+}
+
+function ActionButton({ action }: { action: PageHeaderAction }) {
+  return (
+    <Button
+      variant="outline"
+      loading={action.loading}
+      disabled={action.disabled}
+      onClick={action.onSelect}
+    >
+      {action.icon}
+      {action.label}
+    </Button>
+  );
+}
+
+/** A secondary action's button in the measuring row: its shape and width, and no button. */
+function ActionShape({ action }: { action: PageHeaderAction }) {
+  return (
+    <Button asChild variant="outline">
+      <span>
+        {action.icon}
+        {action.label}
+      </span>
+    </Button>
+  );
+}
+
+/** The head's "…": its menu's items, after the secondary actions that had no room in the row. */
+function HeadMenu({
+  folded,
+  children
+}: {
+  folded: readonly PageHeaderAction[];
+  children: ReactNode;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <HeadMenuButton />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {folded.map((action) => (
+          <DropdownMenuItem
+            key={action.label}
+            icon={action.icon}
+            disabled={action.disabled === true || action.loading === true}
+            onSelect={action.onSelect}
+          >
+            {action.label}
+          </DropdownMenuItem>
+        ))}
+        {folded.length > 0 && children !== undefined && children !== null ? (
+          <DropdownMenuSeparator />
+        ) : null}
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+const HeadMenuButton = forwardRef<HTMLButtonElement, HTMLAttributes<HTMLButtonElement>>(
+  function HeadMenuButton(props, ref) {
+    const labels = useUiLabels("PageHeader");
+    return (
+      <IconButton ref={ref} label={labels.moreActions} variant="outline" {...props}>
+        <MoreHorizontal aria-hidden="true" />
+      </IconButton>
+    );
+  }
+);
+
+/**
  * The head of a page. Its slots have one order on every page: back or breadcrumb, name, scope
- * chip, state, secondary actions, primary action, overflow.
+ * chip, state, secondary actions, primary action, the "…" menu.
  */
 export function PageHeader({
   className,
@@ -150,9 +349,9 @@ export function PageHeader({
   state,
   description,
   descriptionTooltip,
-  secondaryActions,
+  secondaryActions = [],
   primaryAction,
-  overflow,
+  menu,
   ...props
 }: PageHeaderProps) {
   const Heading = headingLevel === 1 ? "h1" : "h2";
@@ -160,30 +359,59 @@ export function PageHeader({
   const [row, backTextGone] = useBackTextGone();
   const shellAction = useContext(PageHeaderShellActionContext);
   const ownShellAction = headingLevel === 1 ? shellAction : null;
+  const fold = useActionsFolded();
+  const folded = fold.folded ? secondaryActions : [];
+  const hasMenu = menu !== undefined && menu !== null;
   const hasActions =
     (ownShellAction !== null && ownShellAction !== undefined) ||
-    secondaryActions !== undefined ||
+    secondaryActions.length > 0 ||
     primaryAction !== undefined ||
-    overflow !== undefined;
+    hasMenu;
   const actions = hasActions ? (
-    <div
-      className={cn(
-        "flex max-w-full shrink-0 flex-wrap items-center gap-2",
-        detail && "md:flex-nowrap"
+    <div className="flex max-w-full shrink-0 items-center gap-2">
+      {ownShellAction === null || ownShellAction === undefined ? null : (
+        <span ref={fold.shell} className="flex shrink-0">
+          {ownShellAction}
+        </span>
       )}
-    >
-      {ownShellAction}
-      {secondaryActions}
-      {primaryAction}
-      {overflow}
+      {fold.folded
+        ? null
+        : secondaryActions.map((action) => <ActionButton key={action.label} action={action} />)}
+      {primaryAction === undefined ? null : (
+        <span ref={fold.primary} className="flex shrink-0">
+          {primaryAction}
+        </span>
+      )}
+      {hasMenu || folded.length > 0 ? (
+        // Where the head has a menu, its button stands in every state and counts as kept.
+        <span ref={hasMenu ? fold.menu : undefined} className="flex shrink-0">
+          <HeadMenu folded={folded}>{menu}</HeadMenu>
+        </span>
+      ) : null}
     </div>
   ) : null;
+  // The secondary actions and the menu's button as the row would hold them, out of sight. The
+  // box around them clips them, so they never widen the page.
+  const unfoldedRow =
+    secondaryActions.length === 0 ? null : (
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-0 overflow-hidden"
+      >
+        <div ref={fold.unfolded} inert className="invisible flex w-max items-center gap-2">
+          {secondaryActions.map((action) => (
+            <ActionShape key={action.label} action={action} />
+          ))}
+        </div>
+      </div>
+    );
   if (detail) {
     return (
       <header
         data-variant={variant}
         // A `PageOutline` measures the pinned head: what it scrolls to rests below it.
         data-page-head=""
+        ref={fold.head}
         className={cn(
           "sticky top-0 z-(--layer-sticky-header) flex min-h-(--layout-header) min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b bg-background px-(--layout-gutter) py-1 md:flex-nowrap",
           className
@@ -259,14 +487,16 @@ export function PageHeader({
           )}
         </div>
         {actions}
+        {unfoldedRow}
       </header>
     );
   }
   return (
     <header
       data-variant={variant}
+      ref={fold.head}
       className={cn(
-        "flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-6",
+        "relative flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-6",
         className
       )}
       {...props}
@@ -292,6 +522,7 @@ export function PageHeader({
         </div>
       </div>
       {actions}
+      {unfoldedRow}
     </header>
   );
 }

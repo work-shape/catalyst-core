@@ -469,11 +469,7 @@ function PageOutlineSample({
               variant="detail"
               headingLevel={2}
               title={text.pageOutlineHeaderTitle}
-              secondaryActions={
-                <Button variant="outline" size="sm">
-                  {text.sectionHistory}
-                </Button>
-              }
+              secondaryActions={[{ label: text.sectionHistory, onSelect: () => undefined }]}
             />
           ) : undefined
         }

@@ -172,6 +172,21 @@ describe("Settings catalog", () => {
     );
   });
 
+  it("names the group of each Settings page it offers to go to", () => {
+    // The palette names a page with its group: "Instance › Users", not a second "Users".
+    const admin = viewer({ roles: ["admin"], permissions: ["users.manage"] });
+    const targets = settingsGoToTargets(catalog, buildOn, admin);
+
+    expect(targets.find((target) => target.id === "settings/instance/users")).toMatchObject({
+      labelKey: "settings.users",
+      groupLabelKey: "settings.instance"
+    });
+    expect(targets.find((target) => target.id === "settings/you/profile")).toMatchObject({
+      groupLabelKey: "settings.you"
+    });
+    expect(targets.find((target) => target.id === "build")?.groupLabelKey).toBeUndefined();
+  });
+
   it("shows Studio to a holder of a Namespace who has no permission on the instance", () => {
     const targets = (build: BuildAccess, of: SettingsViewer) =>
       settingsGoToTargets(catalog, build, of).map((target) => target.id);

@@ -6,7 +6,6 @@ import type {
 } from "@work-shape/catalyst-api-client";
 import {
   Badge,
-  Button,
   Checkbox,
   Chip,
   Field,
@@ -548,25 +547,22 @@ export function AgentEditor({
               unsaved={changedFields > 0 || availabilityChanged}
             />
           ) : null}
+          {defaultError ? <FormNotice tone="error">{defaultError}</FormNotice> : null}
           <AgentUnavailableNotices status={unavailable} />
         </>
       }
       headActions={
-        <>
-          {defaultError ? <FormNotice tone="error">{defaultError}</FormNotice> : null}
-          {onMakeDefault ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                onMakeDefault().then(setDefaultError, () => undefined);
-              }}
-            >
-              <Star aria-hidden="true" />
-              {t("configMakeDefault")}
-            </Button>
-          ) : null}
-        </>
+        onMakeDefault
+          ? [
+              {
+                label: t("configMakeDefault"),
+                icon: <Star aria-hidden="true" />,
+                onSelect: () => {
+                  onMakeDefault().then(setDefaultError, () => undefined);
+                }
+              }
+            ]
+          : undefined
       }
       sections={sections.map((section) => ({
         ...section,

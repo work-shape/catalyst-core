@@ -1,14 +1,7 @@
-import { MoreHorizontal, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
 import type { AppPreviewResponse } from "@work-shape/catalyst-api-client";
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  IconButton
-} from "@work-shape/catalyst-ui";
+import { Button, DropdownMenuItem } from "@work-shape/catalyst-ui";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
 import { workspaceRouteFromPath, workspaceRoutePath } from "../../shared/routes";
@@ -31,7 +24,7 @@ import {
   type AppRights
 } from "./app-model";
 import { AppPreview } from "./app-preview";
-import { AppEditWithAgentAction } from "./app-edit-with-agent";
+import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 
 /**
@@ -177,6 +170,20 @@ export function AppViewFrame({
   dataSources?: readonly string[] | undefined;
 }) {
   const { t } = useTranslation();
+  const editWithAgent = useAppEditWithAgent(app);
+  const hasSources = dataSources !== undefined && dataSources.length > 0;
+  // What stays in the head beside where the data comes from: Edit is the builder's next step,
+  // and Edit with the agent folds first. Copying the link is all a reader without the read
+  // right is offered: a menu of one item would hide it behind a second press.
+  const lead =
+    rights.write && draftShown ? (
+      <Button variant="outline" onClick={onEdit}>
+        <Pencil aria-hidden="true" />
+        {t("apps.edit")}
+      </Button>
+    ) : rights.read ? null : (
+      <CopyAppLinkButton workspaceId={workspace.id} app={app} />
+    );
   return (
     <AppFrame
       label={name}
@@ -196,44 +203,33 @@ export function AppViewFrame({
           backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
           onBack={onBack}
           secondaryActions={
-            rights.write && draftShown ? (
+            rights.write && draftShown && editWithAgent.action !== undefined
+              ? [editWithAgent.action]
+              : undefined
+          }
+          menu={
+            rights.read ? (
               <>
-                <AppEditWithAgentAction app={app} />
-                <Button variant="outline" onClick={onEdit}>
-                  <Pencil aria-hidden="true" />
-                  {t("apps.edit")}
-                </Button>
+                <DropdownMenuItem onSelect={onDetails}>{t("apps.details")}</DropdownMenuItem>
+                <CopyAppLinkItem workspaceId={workspace.id} app={app} />
+                {/* The id is a builder's, as the number of a revision is. */}
+                {appBuilder(rights) ? <CopyIdItem id={app} /> : null}
               </>
             ) : undefined
           }
-          overflow={
-            <>
-              {dataSources && dataSources.length > 0 ? (
-                <AppDataSourcesButton lines={dataSources} />
-              ) : null}
-              {rights.read ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <IconButton label={t("apps.moreActions")} variant="outline">
-                      <MoreHorizontal aria-hidden="true" />
-                    </IconButton>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={onDetails}>{t("apps.details")}</DropdownMenuItem>
-                    <CopyAppLinkItem workspaceId={workspace.id} app={app} />
-                    {/* The id is a builder's, as the number of a revision is. */}
-                    {appBuilder(rights) ? <CopyIdItem id={app} /> : null}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <CopyAppLinkButton workspaceId={workspace.id} app={app} />
-              )}
-            </>
+          primaryAction={
+            hasSources || lead !== null ? (
+              <span className="flex items-center gap-2">
+                {hasSources ? <AppDataSourcesButton lines={dataSources} /> : null}
+                {lead}
+              </span>
+            ) : undefined
           }
         />
       }
     >
       {children}
+      {editWithAgent.dialog}
     </AppFrame>
   );
 }

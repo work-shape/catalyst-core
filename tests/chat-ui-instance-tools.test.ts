@@ -411,7 +411,7 @@ describe("the Tools section of the agent page", () => {
       canWrite: true,
       instanceWrite: true,
       back: null,
-      actions: null,
+      actions: {},
       notice: null,
       onUnsavedChange: noop,
       save: async () => ({ ok: true })

@@ -9,7 +9,8 @@ import {
   SaveBar,
   Section,
   SegmentedControl,
-  SegmentedControlItem
+  SegmentedControlItem,
+  type PageHeaderAction
 } from "@work-shape/catalyst-ui";
 import { DocsReference } from "../../shared/docs-links";
 import { useTranslation } from "../../shared/i18n";
@@ -126,7 +127,7 @@ export function AssetEditorShell({
   description?: string;
   badges?: ReactNode;
   /** Actions of the kind before the frame's own, such as making an agent the default. */
-  headActions?: ReactNode;
+  headActions?: readonly PageHeaderAction[];
   /** What the kind tells of the asset before its sections, such as what of it cannot run. */
   notices?: ReactNode;
   sections: readonly AssetSection[];
@@ -199,12 +200,9 @@ export function AssetEditorShell({
               badges
             )
           }
-          secondaryActions={
-            <>
-              {headActions}
-              {actions}
-            </>
-          }
+          primaryAction={actions.primaryAction}
+          secondaryActions={[...(headActions ?? []), ...(actions.secondaryActions ?? [])]}
+          menu={actions.menu}
         />
       }
       outline={

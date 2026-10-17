@@ -114,7 +114,6 @@ export const workflows = defineTranslations({
     "workflows.edit.failed": "The conversation could not be started.",
     "workflows.edit.refused": "This workflow is not available to you for editing with the agent.",
     "workflows.edit.withAgent": "Edit with the agent",
-    "workflows.moreActions": "More actions",
     "workflows.emptyReadOnly":
       "No workflows yet. A workflow, for example, sends a summary every Monday or reminds clients of overdue invoices.",
     "workflows.empty":
@@ -427,7 +426,6 @@ export const workflows = defineTranslations({
     "workflows.edit.refused":
       "Dieser Workflow steht dir für die Bearbeitung mit dem Agenten nicht zur Verfügung.",
     "workflows.edit.withAgent": "Mit dem Agenten bearbeiten",
-    "workflows.moreActions": "Weitere Aktionen",
     "workflows.emptyReadOnly":
       "Noch keine Workflows. Ein Workflow schickt zum Beispiel jeden Montag eine Zusammenfassung oder erinnert Kunden an überfällige Rechnungen.",
     "workflows.empty":

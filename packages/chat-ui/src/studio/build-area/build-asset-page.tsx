@@ -1,18 +1,14 @@
-import { Copy, History, Lock, MoreHorizontal, SearchX, Send, Trash2 } from "lucide-react";
+import { Copy, History, Lock, SearchX, Send, Trash2 } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
 import {
   Badge,
   Banner,
   Button,
   ConfirmDialog,
-  DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
   EmptyState,
   FormNotice,
-  IconButton,
   InlineError,
   NotFound,
   Page,
@@ -64,7 +60,7 @@ export function NewAssetPage({
     <Editor
       page={page.page}
       back={page.back}
-      actions={null}
+      actions={{}}
       notice={null}
       asset={undefined}
       start={start}
@@ -540,60 +536,54 @@ function LoadedAssetPage({
             </Badge>
           ) : undefined
         }
-        actions={
-          <>
-            {canPublish ? (
-              <Button
-                size="sm"
-                data-build-publish=""
-                disabled={unsaved}
-                title={unsaved ? t("build.publishSaveFirst") : undefined}
-                onClick={() => setPublishOpen(true)}
-              >
-                <Send aria-hidden="true" />
-                {t("build.publish")}
-              </Button>
-            ) : null}
-            {shipped && state.canCreate ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onCopy({ title: shippedTitle, config: stored.config })}
-              >
-                <Copy aria-hidden="true" />
-                {t("build.copyToEdit")}
-              </Button>
-            ) : null}
-            <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
-              <History aria-hidden="true" />
-              {t("build.history")}
+        actions={{
+          primaryAction: canPublish ? (
+            <Button
+              data-build-publish=""
+              disabled={unsaved}
+              title={unsaved ? t("build.publishSaveFirst") : undefined}
+              onClick={() => setPublishOpen(true)}
+            >
+              <Send aria-hidden="true" />
+              {t("build.publish")}
             </Button>
-            {conflict === "deleted" ? null : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <IconButton label={t("build.assetActions")} variant="outline" size="sm">
-                    <MoreHorizontal aria-hidden="true" />
-                  </IconButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <CopyIdItem id={stored.name} />
-                  {canDelete ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        tone="danger"
-                        icon={<Trash2 aria-hidden="true" />}
-                        onSelect={() => setDeleteOpen(true)}
-                      >
-                        {t("configDelete")}
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </>
-        }
+          ) : shipped && state.canCreate ? (
+            // A shipped asset is changed in a copy, the step its notice names: it stays in the
+            // head where the other actions fold.
+            <Button
+              variant="outline"
+              onClick={() => onCopy({ title: shippedTitle, config: stored.config })}
+            >
+              <Copy aria-hidden="true" />
+              {t("build.copyToEdit")}
+            </Button>
+          ) : undefined,
+          secondaryActions: [
+            {
+              label: t("build.history"),
+              icon: <History aria-hidden="true" />,
+              onSelect: () => setHistoryOpen(true)
+            }
+          ],
+          menu:
+            conflict === "deleted" ? undefined : (
+              <>
+                <CopyIdItem id={stored.name} />
+                {canDelete ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      tone="danger"
+                      icon={<Trash2 aria-hidden="true" />}
+                      onSelect={() => setDeleteOpen(true)}
+                    >
+                      {t("configDelete")}
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </>
+            )
+        }}
         notice={
           conflict === "deleted" ? (
             <Banner

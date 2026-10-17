@@ -654,6 +654,25 @@ describe("Studio asset page", () => {
     expect(markup).not.toContain("Save changes");
   });
 
+  // Fails with the copy among the secondary actions: on a phone it folded into "…" with History,
+  // and the head offered nothing while the notice under it said to copy the skill.
+  it("keeps Copy to edit of a shipped skill in the head as its leading action", () => {
+    const shippedSkill = asset("skill", "tax-review", {
+      config: { ...taxSkill.config, origin: "release" }
+    });
+    const markup = page(
+      source({
+        permissions: ["config_assets.read", "config_assets.write"],
+        assets: { "skill/tax-review": ready(shippedSkill) }
+      })
+    );
+    const unfolded = /<div[^>]*inert[^>]*>(.*?)<\/div>/u.exec(markup)?.[1] ?? "";
+
+    expect(markup).toMatch(/<button[^>]*>(?:(?!<\/button>).)*Copy to edit<\/button>/u);
+    expect(unfolded).toContain("History");
+    expect(unfolded).not.toContain("Copy to edit");
+  });
+
   it("reads only an asset outside the Namespaces the reader writes", () => {
     const elsewhere = asset("skill", "tax-review", {
       namespace: "legal-",

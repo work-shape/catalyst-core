@@ -58,6 +58,8 @@ export interface UiLabels {
   onThisPage: string;
   /** Said of a section a `PageOutline` marks because a field in it has an error. */
   sectionHasError: string;
+  /** Names the "…" button of a `PageHeader`, whose menu holds the actions the row has no room for. */
+  moreActions: string;
 }
 
 export const uiLabelsEn: UiLabels = {
@@ -101,7 +103,8 @@ export const uiLabelsEn: UiLabels = {
   chartTruncated: "Only part of the data is shown.",
   chartLoadFailed: "The chart could not be loaded.",
   onThisPage: "On this page",
-  sectionHasError: "Has an error"
+  sectionHasError: "Has an error",
+  moreActions: "More actions"
 };
 
 export const uiLabelsDe: UiLabels = {
@@ -145,5 +148,6 @@ export const uiLabelsDe: UiLabels = {
   chartTruncated: "Nur ein Teil der Daten wird angezeigt.",
   chartLoadFailed: "Das Diagramm konnte nicht geladen werden.",
   onThisPage: "Auf dieser Seite",
-  sectionHasError: "Enthält einen Fehler"
+  sectionHasError: "Enthält einen Fehler",
+  moreActions: "Weitere Aktionen"
 };

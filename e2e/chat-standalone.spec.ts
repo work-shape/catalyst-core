@@ -4242,9 +4242,10 @@ test("the command palette opens from the rail and the keyboard, searches titles 
   await expect(palette.getByRole("option", { name: betaTitle })).toBeVisible();
   // "Go to" lists the Settings pages this user may open and nothing of the instance.
   await expect(palette.getByText("Go to", { exact: true })).toBeVisible();
-  await expect(palette.getByRole("option", { name: "Profile", exact: true })).toBeVisible();
-  await expect(palette.getByRole("option", { name: "Security", exact: true })).toBeVisible();
-  await expect(palette.getByRole("option", { name: "Users", exact: true })).toHaveCount(0);
+  // Each Settings page is named with its group.
+  await expect(palette.getByRole("option", { name: "You › Profile", exact: true })).toBeVisible();
+  await expect(palette.getByRole("option", { name: "You › Security", exact: true })).toBeVisible();
+  await expect(palette.getByRole("option", { name: /Users/u })).toHaveCount(0);
   await expect(palette.getByRole("option", { name: "Studio", exact: true })).toHaveCount(0);
   expect(searches).toBe(0);
   // Escape closes it and the focus is back on what opened it.
@@ -4302,7 +4303,7 @@ test("the command palette opens from the rail and the keyboard, searches titles 
   // A typed text narrows the places too, and Enter goes there.
   await page.keyboard.press("ControlOrMeta+k");
   await field.fill("langu");
-  await expect(palette.getByRole("option")).toHaveText(["Language and appearance"]);
+  await expect(palette.getByRole("option")).toHaveText(["You › Language and appearance"]);
   await page.keyboard.press("Enter");
   await expect(palette).toBeHidden();
   await expect(page).toHaveURL(/\/settings\/you\/language-appearance$/u);
@@ -4341,10 +4342,16 @@ test("the palette's Go to group offers an administrator the instance pages and S
   await signInViaUi(page, superadminUser);
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const palette = page.getByRole("dialog", { name: "Search" });
-  for (const name of ["Profile", "Users", "Usage", "Audit", "Studio"]) {
+  for (const name of [
+    "You › Profile",
+    "Instance › Users",
+    "Instance › Usage",
+    "Instance › Audit",
+    "Studio"
+  ]) {
     await expect(palette.getByRole("option", { name, exact: true })).toBeVisible();
   }
-  await palette.getByRole("option", { name: "Usage", exact: true }).click();
+  await palette.getByRole("option", { name: "Instance › Usage", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/instance\/usage$/u);
   await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toBeVisible();
 });

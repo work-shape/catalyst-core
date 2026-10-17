@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode, Ref } from "react";
 import type { Asset, AssetSummary } from "@work-shape/catalyst-api-client";
-import type { AvatarKind, GenericIconKey } from "@work-shape/catalyst-ui";
+import type { AvatarKind, GenericIconKey, PageHeaderProps } from "@work-shape/catalyst-ui";
 import type {
   AssetFileEntry,
   AssetFileRead,
@@ -12,6 +12,9 @@ import type { TranslationKey } from "../../shared/i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
 import type { BuildWithAgentCopy } from "../build-with-agent-empty";
 import type { BuildNamespace, BuildScope } from "../../shared/build-rights";
+
+/** What a page puts at the end of its head: Publish, History and the "…" menu with Delete. */
+export type BuildHeadActions = Pick<PageHeaderProps, "primaryAction" | "secondaryActions" | "menu">;
 
 /** One asset as a list shows it: what the instance says of it without its content. */
 export type BuildAssetRow = AssetSummary;
@@ -65,7 +68,7 @@ export interface BuildAssetEditorProps {
   /** The way back to the kind's list, for the start of the page head. */
   back: ReactNode;
   /** The page's own actions, for the end of the page head: History and the menu with Delete. */
-  actions: ReactNode;
+  actions: BuildHeadActions;
   /**
    * What the frame says beside the name of an asset whose kind has a draft and a published
    * revision: that the saved draft is ahead of what is published, or that nothing is.

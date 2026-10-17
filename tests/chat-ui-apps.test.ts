@@ -311,6 +311,16 @@ describe("an open App (layout 2)", () => {
     expect(frame(WRITER, { revision: 2 }, false)).not.toContain("Edit</button>");
   });
 
+  // Fails with Edit among the secondary actions: at 390 in German both folded and the head
+  // showed only "…". Edit is the head's primary action, which never folds.
+  it("keeps Edit as the head's primary action, so only the agent's action folds", () => {
+    const markup = frame(WRITER);
+    const measured = /<div[^>]*inert[^>]*>(.*?)<\/div>/u.exec(markup)?.[1] ?? "";
+
+    expect(markup).toMatch(/<button[^>]*>(?:<svg.*?<\/svg>)?Edit<\/button>/u);
+    expect(measured).not.toContain("Edit<");
+  });
+
   it("shows no number before the instance said which revision is served", () => {
     expect(frame(WRITER, {})).not.toContain("Published");
   });

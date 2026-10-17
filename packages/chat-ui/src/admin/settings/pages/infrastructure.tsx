@@ -9,7 +9,6 @@ import type {
 import {
   Badge,
   Banner,
-  Button,
   PageHeader,
   SkeletonList,
   Table,
@@ -103,17 +102,14 @@ export function InfrastructurePage() {
               })
             : undefined
         }
-        secondaryActions={
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={check.isPending}
-            disabled={!infrastructure || waitUntil !== undefined}
-            onClick={() => check.mutate()}
-          >
-            {t("infrastructure.checkNow")}
-          </Button>
-        }
+        secondaryActions={[
+          {
+            label: t("infrastructure.checkNow"),
+            loading: check.isPending,
+            disabled: !infrastructure || waitUntil !== undefined,
+            onSelect: () => check.mutate()
+          }
+        ]}
       />
       <div className="grid gap-4">
         <OperatorManaged>{t("infrastructure.operatorManaged")}</OperatorManaged>

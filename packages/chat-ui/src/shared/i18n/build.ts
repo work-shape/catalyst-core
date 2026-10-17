@@ -2,7 +2,6 @@ import { defineTranslations } from "./translation-area";
 
 export const build = defineTranslations({
   en: {
-    "build.assetActions": "More actions",
     "build.examples": "Examples to start with",
     "build.changeCount": "{count} change",
     "build.changesCount": "{count} changes",
@@ -118,7 +117,6 @@ export const build = defineTranslations({
     "build.kindAgents": "Agents",
     "build.kindSkills": "Skills",
     "build.kinds": "Kinds in Studio",
-    "build.listActions": "More actions",
     "build.loadFailed": "Studio could not be loaded.",
     "build.leaveConfirm": "Discard changes",
     "build.leaveDescription":
@@ -138,7 +136,6 @@ export const build = defineTranslations({
     "build.skillsSearch": "Search skills"
   },
   de: {
-    "build.assetActions": "Weitere Aktionen",
     "build.examples": "Beispiele für den Einstieg",
     "build.changeCount": "{count} Änderung",
     "build.changesCount": "{count} Änderungen",
@@ -222,7 +219,7 @@ export const build = defineTranslations({
     "build.readOnlyWorkspace":
       "Gehört zum Arbeitsbereich {workspace}. Ändern kann es nur, wer in diesem Arbeitsbereich bearbeiten darf.",
     "build.readOnlyPlatform":
-      "Kommt mit der Plattform und wird mit jedem Release aktualisiert. Um es zu ändern, kopieren Sie es und bearbeiten die Kopie.",
+      "Kommt mit der Plattform und wird mit jedem Release aktualisiert. Um es zu ändern, kopiere es und bearbeite die Kopie.",
     "build.restored": "Version {number} wiederhergestellt.",
     "build.refusedModel": "Das Modell {model} ist im Namespace {namespace} nicht erlaubt.",
     "build.refusedModelRequired":
@@ -257,7 +254,6 @@ export const build = defineTranslations({
     "build.kindAgents": "Agenten",
     "build.kindSkills": "Skills",
     "build.kinds": "Arten im Studio",
-    "build.listActions": "Weitere Aktionen",
     "build.loadFailed": "Studio konnte nicht geladen werden.",
     "build.leaveConfirm": "Änderungen verwerfen",
     "build.leaveDescription":

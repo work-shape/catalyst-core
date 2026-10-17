@@ -1,4 +1,4 @@
-import { MoreHorizontal, Plus, Search, SearchX, Terminal } from "lucide-react";
+import { Plus, Search, SearchX, Terminal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   Avatar,
@@ -6,13 +6,9 @@ import {
   Chip,
   ConfirmDialog,
   Dialog,
-  DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
   EmptyState,
   FilterBar,
-  IconButton,
   InlineError,
   Input,
   List,
@@ -733,23 +729,14 @@ function BuildList({
         title={t(entry.label)}
         description={entry.description ? t(entry.description) : undefined}
         primaryAction={headNew}
-        overflow={
+        menu={
           editable && !editable.withoutCli ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <IconButton label={t("build.listActions")} variant="outline">
-                  <MoreHorizontal aria-hidden="true" />
-                </IconButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  icon={<Terminal aria-hidden="true" />}
-                  onSelect={() => setCliOpen(true)}
-                >
-                  {t("build.cliTitle")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <DropdownMenuItem
+              icon={<Terminal aria-hidden="true" />}
+              onSelect={() => setCliOpen(true)}
+            >
+              {t("build.cliTitle")}
+            </DropdownMenuItem>
           ) : undefined
         }
       />

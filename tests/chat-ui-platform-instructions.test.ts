@@ -49,7 +49,7 @@ function instructionsSection(toolNames: string[], withInstructions = true): stri
         canWrite: true,
         instanceWrite: true,
         back: null,
-        actions: null,
+        actions: {},
         notice: null,
         onUnsavedChange: noop,
         save: async () => ({ ok: true as const })

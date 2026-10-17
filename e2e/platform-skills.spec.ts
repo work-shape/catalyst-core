@@ -127,7 +127,13 @@ test("the label and the copy speak German", async ({ page }) => {
   await expect(page.locator("[data-build-read-only]")).toContainText(
     "Kommt mit der Plattform und wird mit jedem Release aktualisiert."
   );
-  await expect(page.getByRole("button", { name: "Zum Bearbeiten kopieren" })).toBeVisible();
+  await expect(page.locator("[data-build-read-only]")).toContainText(
+    "kopiere es und bearbeite die Kopie"
+  );
+  // The step the notice names stands in the head at 390, where History folds into "…".
+  await expect(
+    page.locator("header[data-page-head]").getByRole("button", { name: "Zum Bearbeiten kopieren" })
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth

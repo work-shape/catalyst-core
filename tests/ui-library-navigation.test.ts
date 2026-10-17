@@ -463,14 +463,23 @@ describe("navigation, page structure and data components", () => {
         back: "BACK",
         scope: "SCOPE",
         state: "STATE",
-        secondaryActions: "SECOND",
+        secondaryActions: [{ label: "SECOND", onSelect: () => undefined }],
         primaryAction: "PRIMARY",
-        overflow: "OVERFLOW"
+        menu: "MENU"
       })
     );
-    const order = ["BACK", "NAME", "SCOPE", "STATE", "SECOND", "PRIMARY", "OVERFLOW"].map((slot) =>
-      markup.indexOf(slot)
-    );
+    // The "…" menu's button stands last; the menu's items show only once it opens. What follows
+    // the `inert` mark only measures the row and shows nothing.
+    const shown = markup.slice(0, markup.indexOf("inert"));
+    const order = [
+      "BACK",
+      "NAME",
+      "SCOPE",
+      "STATE",
+      "SECOND",
+      "PRIMARY",
+      'aria-label="More actions"'
+    ].map((slot) => shown.indexOf(slot));
 
     expect(order.every((position) => position >= 0)).toBe(true);
     expect([...order].sort((left, right) => left - right)).toEqual(order);

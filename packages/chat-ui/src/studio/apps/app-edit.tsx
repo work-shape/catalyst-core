@@ -1,4 +1,4 @@
-import { History, MoreHorizontal, Trash2 } from "lucide-react";
+import { History, Trash2 } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import type { ConfigAssetRevision } from "@work-shape/catalyst-api-client";
 import {
@@ -7,12 +7,8 @@ import {
   Button,
   ConfirmDialog,
   Dialog,
-  DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  IconButton,
   InlineError,
   KeyValue,
   KeyValueList,
@@ -42,7 +38,7 @@ import {
   type AppManifestSummary,
   type AppRights
 } from "./app-model";
-import { AppEditWithAgentAction } from "./app-edit-with-agent";
+import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { AppPreview, AppPreviewNotice } from "./app-preview";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { RevisionsDrawer } from "./revisions-drawer";
@@ -418,6 +414,7 @@ export function AppEditFrame({
   const known = rights.write && draftRevision !== undefined;
   const ahead = appDraftIsAhead(draftRevision, publishedRevision);
   const missingRight = known && !rights.publish;
+  const editWithAgent = useAppEditWithAgent(app);
   const shownView = view ?? "preview";
   // Preview, Files and Actions are views of the one App: tabs under its head. Files and Actions
   // fold under "Technical details" until a developer role is named (UX audit ruling 3).
@@ -468,16 +465,14 @@ export function AppEditFrame({
             backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
             onBack={onBack}
             secondaryActions={
-              known ? (
-                <>
-                  {app === undefined ? null : <AppEditWithAgentAction app={app} />}
-                  {ahead && publishedRevision !== undefined ? (
-                    <Button variant="outline" onClick={onDiscard}>
-                      {t("apps.discard")}
-                    </Button>
-                  ) : null}
-                </>
-              ) : undefined
+              known
+                ? [
+                    ...(editWithAgent.action === undefined ? [] : [editWithAgent.action]),
+                    ...(ahead && publishedRevision !== undefined
+                      ? [{ label: t("apps.discard"), onSelect: () => onDiscard?.() }]
+                      : [])
+                  ]
+                : undefined
             }
             tabs={tabs}
             primaryAction={
@@ -491,33 +486,26 @@ export function AppEditFrame({
                 </Button>
               ) : undefined
             }
-            overflow={
+            menu={
               known ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <IconButton label={t("apps.moreActions")} variant="outline">
-                      <MoreHorizontal aria-hidden="true" />
-                    </IconButton>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {app === undefined ? null : <CopyIdItem id={app} />}
-                    <DropdownMenuItem icon={<History aria-hidden="true" />} onSelect={onRevisions}>
-                      {t("apps.revisions")}
-                    </DropdownMenuItem>
-                    {rights.delete ? (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          tone="danger"
-                          icon={<Trash2 aria-hidden="true" />}
-                          onSelect={onDelete}
-                        >
-                          {t("apps.delete")}
-                        </DropdownMenuItem>
-                      </>
-                    ) : null}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <>
+                  {app === undefined ? null : <CopyIdItem id={app} />}
+                  <DropdownMenuItem icon={<History aria-hidden="true" />} onSelect={onRevisions}>
+                    {t("apps.revisions")}
+                  </DropdownMenuItem>
+                  {rights.delete ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        tone="danger"
+                        icon={<Trash2 aria-hidden="true" />}
+                        onSelect={onDelete}
+                      >
+                        {t("apps.delete")}
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                </>
               ) : undefined
             }
           />
@@ -552,6 +540,7 @@ export function AppEditFrame({
       className="contents"
     >
       {frame}
+      {editWithAgent.dialog}
     </Tabs>
   );
 }

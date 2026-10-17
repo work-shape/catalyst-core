@@ -17,7 +17,8 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  SkeletonList
+  SkeletonList,
+  type PageHeaderAction
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { workspaceRoutePath } from "../../shared/routes";
@@ -121,7 +122,7 @@ export function AppHeader({
   keepState = false,
   secondaryActions,
   primaryAction,
-  overflow,
+  menu,
   tabs,
   backHref,
   onBack
@@ -136,9 +137,10 @@ export function AppHeader({
    * stands at the end of their row, which has room whatever the actions take.
    */
   keepState?: boolean;
-  secondaryActions?: ReactNode;
+  secondaryActions?: readonly PageHeaderAction[];
   primaryAction?: ReactNode;
-  overflow?: ReactNode;
+  /** The items of the head's "…" menu. */
+  menu?: ReactNode;
   /** The views of the App, as a `TabsList`: a row under the head, whose line ends the head. */
   tabs?: ReactNode;
   backHref: string;
@@ -169,7 +171,7 @@ export function AppHeader({
       state={stateUnderHead ? undefined : state}
       secondaryActions={secondaryActions}
       primaryAction={primaryAction}
-      overflow={overflow}
+      menu={menu}
     />
   );
   return tabs === undefined ? (

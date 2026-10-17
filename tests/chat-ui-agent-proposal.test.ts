@@ -46,7 +46,7 @@ function frame(canWrite: boolean): BuildAssetEditorProps {
     canWrite,
     instanceWrite: false,
     back: null,
-    actions: null,
+    actions: {},
     notice: null,
     onUnsavedChange: noop,
     save: async () => ({ ok: true })

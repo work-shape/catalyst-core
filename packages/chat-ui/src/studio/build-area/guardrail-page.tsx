@@ -21,7 +21,7 @@ import type { GuardrailHitView } from "@work-shape/catalyst-api-client";
 import { formatMomentShort } from "../../shared/locale-format";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { useInboxItemKindLookup } from "../../chat/inbox/inbox-item-kinds";
-import { CopyIdMenu } from "../copy-id-item";
+import { CopyIdItem } from "../copy-id-item";
 import { usePageShown } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import { opensHere } from "../apps/app-header";
@@ -185,7 +185,7 @@ export function GuardrailPage({
                 {t(outcome.label)}
               </Badge>
             }
-            overflow={<CopyIdMenu id={asset.name} label={t("build.assetActions")} />}
+            menu={<CopyIdItem id={asset.name} />}
           />
         }
         outline={

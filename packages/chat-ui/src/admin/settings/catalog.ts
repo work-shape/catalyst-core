@@ -240,6 +240,8 @@ export function resolveSettingsRoute(input: {
 export interface SettingsGoToTarget {
   id: string;
   labelKey: TranslationKey;
+  /** The Settings group of a page, which the palette names before it: "Instance › Users". */
+  groupLabelKey?: TranslationKey;
   route: WorkspaceRoute;
 }
 
@@ -252,6 +254,7 @@ export function settingsGoToTargets(
   const targets: SettingsGoToTarget[] = visibleSettingsPages(catalog, viewer).map((page) => ({
     id: `settings/${page.group}/${page.id}`,
     labelKey: page.labelKey,
+    groupLabelKey: settingsGroups.find((group) => group.id === page.group)?.labelKey,
     route: settingsPageRoute(page)
   }));
   const buildPage = visibleBuildPage(build, viewer);

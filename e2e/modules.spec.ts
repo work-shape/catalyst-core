@@ -391,9 +391,10 @@ test.describe("with the resources module off", () => {
     // The palette leads to the pages of this instance and to nothing of the module.
     await page.getByRole("button", { name: "Search", exact: true }).click();
     const palette = page.getByRole("dialog", { name: "Search" });
-    await expect(palette.getByRole("option", { name: "Modules", exact: true })).toBeVisible();
+    const modules = palette.getByRole("option", { name: "Instance › Modules", exact: true });
+    await expect(modules).toBeVisible();
     await expect(palette.getByRole("option", { name: /Resources/u })).toHaveCount(0);
-    await palette.getByRole("option", { name: "Modules", exact: true }).click();
+    await modules.click();
 
     // And the Modules page says which module is off.
     await expect(page).toHaveURL(/\/settings\/instance\/modules$/u);

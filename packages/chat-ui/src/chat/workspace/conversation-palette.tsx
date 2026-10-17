@@ -27,6 +27,8 @@ const GO_TO_PREFIX = "go-to:";
 interface PaletteGoToTarget {
   id: string;
   labelKey: TranslationKey;
+  /** The group a Settings page stands in: the name of a page alone does not say where it is. */
+  groupLabelKey?: TranslationKey;
 }
 
 /**
@@ -93,7 +95,13 @@ export function ConversationPalette({
   const goTo: CommandPaletteGroup = {
     heading: t("nav.paletteGoTo"),
     items: goToTargets
-      .map((target) => ({ value: `${GO_TO_PREFIX}${target.id}`, label: t(target.labelKey) }))
+      .map((target) => ({
+        value: `${GO_TO_PREFIX}${target.id}`,
+        label:
+          target.groupLabelKey === undefined
+            ? t(target.labelKey)
+            : t("nav.paletteInGroup", { group: t(target.groupLabelKey), page: t(target.labelKey) })
+      }))
       .filter((item) => item.label.toLocaleLowerCase().includes(needle))
   };
   let groups: CommandPaletteGroup[];

@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow
 } from "@work-shape/catalyst-ui";
-import { CopyIdMenu } from "../copy-id-item";
+import { CopyIdItem } from "../copy-id-item";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import { usePageShown } from "./asset-editor-shell";
@@ -205,7 +205,7 @@ function PublishedDataStorePage({
               </Badge>
             ) : undefined
           }
-          overflow={<CopyIdMenu id={asset.name} label={t("build.assetActions")} />}
+          menu={<CopyIdItem id={asset.name} />}
         />
       }
       outline={
