@@ -1,28 +1,19 @@
 import {
-  WORKFLOW_RUN_JOB_KINDS,
   defineJobKind,
   defineSchedule,
-  scheduledJobPayloadSchema
+  scheduledJobPayloadSchema,
+  workflowStepJobKind
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
   WORKFLOW_STEP_JOB_BACKOFF_MAX_MS,
-  WORKFLOW_STEP_JOB_HEARTBEAT_MS,
-  WORKFLOW_STEP_JOB_LEASE_MS,
   WORKFLOW_STEP_JOB_MAX_ATTEMPTS
 } from "./limits";
 
-/** The job that executes one step run. Its payload names the step run and nothing else. */
-export const workflowStepJobKind = defineJobKind({
-  kind: WORKFLOW_RUN_JOB_KINDS.executeStep,
-  payloadSchema: z.strictObject({ stepRunId: z.string().min(1) }),
-  maxAttempts: WORKFLOW_STEP_JOB_MAX_ATTEMPTS,
-  backoff: { baseMs: WORKFLOW_STEP_JOB_BACKOFF_BASE_MS, maxMs: WORKFLOW_STEP_JOB_BACKOFF_MAX_MS },
-  leaseMs: WORKFLOW_STEP_JOB_LEASE_MS,
-  heartbeatMs: WORKFLOW_STEP_JOB_HEARTBEAT_MS,
-  concurrency: {}
-});
+// The job that executes one step run is defined in core: the store queues it too, when an
+// Operation Run that a step waits for ends.
+export { workflowStepJobKind };
 
 /**
  * The job kind of the script of one code step. It is served by the command worker, the one

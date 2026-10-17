@@ -158,7 +158,7 @@ function bindStores(
     executionWorkspaces: createPostgresExecutionWorkspacesStore(db),
     structuredData: createPostgresStructuredDataStore(db),
     jobs: createPostgresJobsStore(db, enqueued),
-    operationRuns: createPostgresOperationRunsStore(db),
+    operationRuns: createPostgresOperationRunsStore(db, enqueued),
     liveOnceSwitches: createPostgresLiveOnceSwitchesStore(db),
     infrastructureChecks: createPostgresInfrastructureChecksStore(db),
     pages: createPostgresPagesStore(db),

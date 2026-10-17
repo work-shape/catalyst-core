@@ -255,6 +255,8 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
           }
           return result.output;
         case "pending_approval":
+        // The operation's work goes on after the call: the run says when it ended.
+        case "running":
           void reply.status(202).header("location", operationRunHref(run));
           return toOperationRunResource(run);
         case "denied":

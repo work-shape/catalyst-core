@@ -164,6 +164,8 @@ export type WorkflowFailureReason =
   | "tooMuchData"
   | "notSupported"
   | "interrupted"
+  /** The step stopped waiting for work that ends later, at its timeout; the work goes on. */
+  | "stillRunning"
   | "crashed"
   | "loopEntry"
   | "stepLimit"

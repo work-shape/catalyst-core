@@ -1,6 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { WorkflowRunsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
+import { operationRuns } from "./schema/operationRuns";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 import {
   runColumns,
@@ -11,7 +12,10 @@ import {
   stepRunIs
 } from "./postgres-workflow-run-mapping";
 
-/** Child lineage, output, and waiting transitions used by the Workflow Runs store. */
+/**
+ * Child lineage, output, and the waiting transitions of `workflow` steps and of `operation`
+ * steps on an operation that ends later, used by the Workflow Runs store.
+ */
 export function childWorkflowRuns(
   db: PostgresConnection
 ): Pick<
@@ -22,6 +26,7 @@ export function childWorkflowRuns(
   | "listChildRuns"
   | "readRunOutput"
   | "markChildWaiting"
+  | "waitForOperation"
 > {
   return {
     async lockDefinitionGraph(input) {
@@ -83,6 +88,33 @@ export function childWorkflowRuns(
           target: ref.call?.target
         })
         .where(and(stepRunIs(ref), eq(workflowStepRuns.status, "running")));
+    },
+    async waitForOperation(ref) {
+      // The share lock waits for an end that is being written and holds off one that has
+      // not started: the end then reads this step as waiting and wakes it.
+      const [call] = await db
+        .select({ status: operationRuns.status })
+        .from(operationRuns)
+        .where(
+          and(
+            eq(operationRuns.clientInstanceId, ref.clientInstanceId),
+            eq(operationRuns.id, ref.operationRunId)
+          )
+        )
+        .for("share");
+      if (call?.status !== "running") return false;
+      const waiting = await db
+        .update(workflowStepRuns)
+        .set({
+          status: "waiting",
+          operationRunId: ref.operationRunId,
+          effect: ref.call?.effect,
+          source: ref.call?.source,
+          target: ref.call?.target
+        })
+        .where(and(stepRunIs(ref), eq(workflowStepRuns.status, "running")))
+        .returning({ id: workflowStepRuns.id });
+      return waiting.length > 0;
     }
   };
 }

@@ -43,6 +43,7 @@ export * from "./origins";
 export * from "./pages";
 export * from "./workflow-blocks";
 export * from "./workflow-runs";
+export * from "./workflow-step-job";
 export * from "./workflows";
 
 export type { HttpListenInput, HttpRuntime } from "./http-runtime";

@@ -56,7 +56,9 @@ const STEP_REFERENCE: {
       input:
         "The mapping onto the operation's input: one entry per field of its input schema. See 'Mappings and references'.",
       dataset: "Not run yet. Leave it out.",
-      paginate: "Not run yet. Leave it out."
+      paginate: "Not run yet. Leave it out.",
+      timeout:
+        "Only for an operation whose work ends after the call, such as the sync of a Knowledge Base: how long the step waits for it, such as `30m` or `6h`; 6h when left out, at most 12h. At it the step fails with `operation_still_running` and the work goes on."
     }
   },
   workflow: {

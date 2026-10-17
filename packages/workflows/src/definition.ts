@@ -22,6 +22,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { codeFileIssue } from "./code-step";
 import { parseCron } from "./cron";
+import { workflowOperationTimeoutSchema } from "./operation-wait";
 import {
   holdsBrokenDatasetReference,
   jsonObjectSchema,
@@ -102,7 +103,8 @@ const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
       operation: z.string().min(1),
       input: inputMappingSchema,
       dataset: workflowStepDatasetSchema.optional(),
-      paginate: workflowPaginateSchema.optional()
+      paginate: workflowPaginateSchema.optional(),
+      timeout: workflowOperationTimeoutSchema.optional()
     }),
     z.strictObject({
       ...named,

@@ -275,6 +275,15 @@ export interface WorkflowRunsStore {
   markChildWaiting(
     ref: WorkflowStepRunRef & { operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
   ): Promise<void>;
+  /**
+   * Moves a running `operation` step run to `waiting` for an Operation Run of an operation
+   * with `completion: async`, unless that Operation Run has ended. It holds the Operation Run
+   * while it decides, so the end of that run either sees the step waiting and wakes it, or
+   * ended before and the step is answered from it. Answers whether the step run waits.
+   */
+  waitForOperation(
+    ref: WorkflowStepRunRef & { operationRunId: OperationRunId; call?: WorkflowStepRunCall }
+  ): Promise<boolean>;
 
   /**
    * Writes a run as `queued`. Answers nothing, and writes nothing, where the run names a due

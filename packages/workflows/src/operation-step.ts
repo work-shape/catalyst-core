@@ -53,6 +53,14 @@ export interface OperationStepResult extends OperationStepTrace {
   output: JsonValue;
 }
 
+/**
+ * A call of an operation with `completion: async` that started its work: the step waits for
+ * this Operation Run to end, which may be another call's run that this one joined.
+ */
+export interface OperationStepWait extends OperationStepTrace {
+  waitFor: OperationRunId;
+}
+
 /** A step failure that names the Operation Run it came from and what was called. */
 export class OperationStepFailure extends WorkflowStepFailure {
   readonly trace: OperationStepTrace;
@@ -235,7 +243,7 @@ export async function callStepOperation(input: {
   wait: OperationOutcomeWait;
   /** Keeps the id of the Operation Run of the step's call on its step run. */
   noteOperationRun(id: OperationRunId): Promise<void>;
-}): Promise<OperationStepResult> {
+}): Promise<OperationStepResult | OperationStepWait> {
   const { calls, run, stepRun, operation } = input;
   // A save refuses such a step. A definition stored before it did is refused here, by the
   // name alone and before anything is resolved or called.
@@ -274,6 +282,8 @@ export async function callStepOperation(input: {
     );
   }
   const changing = definition.effect === "changing";
+  // Its run goes on after the call, so a run of it that is still going is no cut-off call.
+  const endsLater = definition.completion !== undefined;
   const idempotencyKey = workflowStepIdempotencyKey(stepRun.id);
   const call: OperationCall = {
     operation,
@@ -287,7 +297,7 @@ export async function callStepOperation(input: {
     ...(input.workflowDeleted ? { workflowDeleted: input.workflowDeleted } : {})
   };
   const refused = refusedRight(run.principal.name, operation, source, input.draft !== undefined);
-  if (changing) {
+  if (changing && !endsLater) {
     await awaitFirstCall({ ...input, definition, idempotencyKey, made });
   }
   const { approvals: _notHeld, ...deps } = calls.deps;
@@ -394,6 +404,9 @@ export async function callStepOperation(input: {
         trace
       );
     }
+    // The work goes on after the call: the step waits for the run the call answered.
+    case "running":
+      return { waitFor: result.runId, ...trace };
     // A run of a published revision is no call of a draft and is never simulated. A step of a
     // test run that was simulated is done: its output says what it would have done.
     case "dry_run": {
@@ -404,6 +417,8 @@ export async function callStepOperation(input: {
           trace
         );
       }
+      // The result of work that ends later is the example its operation declares.
+      if (definition.completion) return { output: definition.completion.example, ...trace };
       const wouldHaveDone = jsonValueSchema.safeParse(result.input ?? null);
       const output: JsonObject = {
         wouldHaveDone: {

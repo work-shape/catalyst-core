@@ -367,6 +367,7 @@ describe("operation contracts", () => {
           input?: unknown;
           wouldAsk?: "confirmation" | "approval";
         }
+      | { status: "running"; runId: OperationRunId }
     >();
   });
 
@@ -381,6 +382,7 @@ describe("operation contracts", () => {
       | "failed"
       | "expired"
       | "dry_run"
+      | "running"
     >();
     expectTypeOf<OperationScope>().toEqualTypeOf<Exclude<FirstPartyAuthScope, "*">>();
     expectTypeOf<Authorizer["forActor"]>().parameter(0).toEqualTypeOf<AuthenticatedIdentity>();

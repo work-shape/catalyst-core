@@ -520,6 +520,9 @@ export class AppActionCalls {
         );
       case "pending_confirmation":
         throw new AppError("INTERNAL", "A call of a frame cannot wait for a confirmation");
+      case "running":
+        // No App action calls an operation whose work ends after the call yet.
+        throw new AppError("INTERNAL", "A call of a frame cannot answer work that goes on");
       case "dry_run":
         if (!simulation) throw new AppError("INTERNAL", "Only a call of a draft is simulated");
         return simulation.answer(result);

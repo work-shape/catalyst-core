@@ -1,4 +1,6 @@
 import {
+  operationTimeoutKey,
+  operationWakeKey,
   subjectDedupeKey,
   type ClientInstanceId,
   type PlatformStores,
@@ -35,6 +37,12 @@ export function createBlockEnds(options: { clientInstanceId: ClientInstanceId; n
         clientInstanceId,
         dedupeKey: subjectDedupeKey(workflowStepJobKind.kind, open.id)
       });
+      if (open.stepType === "operation") {
+        // A step that waits for work that ends later leaves that work going: only its jobs go.
+        for (const dedupeKey of [operationWakeKey(open.id), operationTimeoutKey(open.id)]) {
+          await tx.jobs.withdraw(workflowStepJobKind, { clientInstanceId, dedupeKey });
+        }
+      }
       if (open.stepType !== "code") continue;
       // A code step that waits has a job with the command worker. One that is queued goes;
       // one that runs finds its step run ended within a second and stops its container.

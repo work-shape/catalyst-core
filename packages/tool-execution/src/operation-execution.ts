@@ -542,6 +542,10 @@ export async function executeAdmitted(
     // With `begin` the call is said to have started once it has: nothing may be awaited before.
     if (begin) await context.emit("operation.started", "after", { status: "success" });
     const answer = await executing;
+    if (definition.completion) {
+      // The work goes on after the call. Whoever carries it out ends the run with its result.
+      return { result: { status: "running", runId: run.id }, run };
+    }
     if (isToolOperationAnswer(answer) && answer.result.status !== "success") {
       return await endToolFailure(context, answer.result);
     }

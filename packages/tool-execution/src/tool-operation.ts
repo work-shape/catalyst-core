@@ -303,6 +303,9 @@ export function toolResultFromOperationResult(
         ...(result.structuredResult ? { structuredResult: result.structuredResult } : {}),
         ...(result.artifacts ? { artifacts: result.artifacts } : {})
       };
+    case "running":
+      // The operation's work goes on after the call; its run says when it ended.
+      return { status: "success", output: { status: "running", operationRunId: result.runId } };
     case "denied":
       return result.reason.kind === "policy" && result.reason.reason === "confirmation_required"
         ? failed("confirmation_required", confirmationRequiredMessage(result.reason.operation), {

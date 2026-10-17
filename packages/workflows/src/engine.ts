@@ -6,11 +6,13 @@ import {
   defineJobHandler,
   isAuthenticatedServicePrincipal,
   isWorkflowRunEnded,
+  operationTimeoutKey,
   subjectDedupeKey,
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type JobControl,
   type JobSchedule,
+  type OperationRun,
   type PlatformStores,
   type RegisteredJobHandler,
   type StorePage,
@@ -41,6 +43,7 @@ import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
 import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
 import { WORKFLOW_RUN_LIMITS, type WorkflowRunLimits } from "./limits";
 import type { WorkflowOperationCalls } from "./operation-step";
+import { operationWaitMs } from "./operation-wait";
 import { itemLabelOf } from "./references";
 import { createBlockEnds } from "./run-blocks";
 import { principalActor } from "./run-identity";
@@ -139,6 +142,13 @@ export interface WorkflowEngine {
   jobSchedules: readonly JobSchedule[];
   /** Removes the values of the runs that are due, as the daily job does. */
   pruneRunData: WorkflowDataPruning["prune"];
+}
+
+/** Why a step that waits for an Operation Run is taken up again. */
+interface OperationWake {
+  waited: OperationRun;
+  /** The step's `timeout` passed while the Operation Run goes on. */
+  timedOut: boolean;
 }
 
 /** Where a new step run stands in its run: its path, and its place in the tree of the run. */
@@ -392,9 +402,16 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
    */
   async function claim(
     control: JobControl,
-    ref: WorkflowStepRunRef
+    ref: WorkflowStepRunRef,
+    byTimeout: boolean
   ): Promise<
-    { run: WorkflowRun; stepRun: WorkflowStepRun; afterCode?: WorkflowCodeOutcome } | undefined
+    | {
+        run: WorkflowRun;
+        stepRun: WorkflowStepRun;
+        afterCode?: WorkflowCodeOutcome;
+        afterOperation?: OperationWake;
+      }
+    | undefined
   > {
     return control.transaction(async (tx) => {
       const found = await tx.workflowRuns.getStepRun(ref);
@@ -413,11 +430,19 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         stepRun.status === "waiting" && stepRun.stepType === "code"
           ? await tx.workflowRuns.readCodeOutcome(ref)
           : undefined;
+      // The timeout job again after its worker died with the step taken up: the step ends
+      // the wait from when it began, and does not wait again on the timer of this very job.
+      const afterOperation =
+        stepRun.stepType === "operation" &&
+        (stepRun.status === "waiting" || (stepRun.status === "running" && byTimeout))
+          ? await operationWake(tx, run, stepRun)
+          : undefined;
       if (
         stepRun.status !== "queued" &&
         stepRun.status !== "running" &&
         !afterCode &&
-        !afterChild
+        !afterChild &&
+        !afterOperation
       ) {
         return undefined;
       }
@@ -457,9 +482,34 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return {
         run: { ...run, startedAt: run.startedAt ?? finishedAt },
         stepRun,
-        ...(afterCode ? { afterCode } : {})
+        ...(afterCode ? { afterCode } : {}),
+        ...(afterOperation ? { afterOperation } : {})
       };
     });
+  }
+
+  /**
+   * Why a step that waits for an Operation Run is taken up: the run ended, or the step's
+   * `timeout` passed while it goes on. Nothing while the step has more time: a job that comes
+   * early leaves the step waiting.
+   */
+  async function operationWake(
+    tx: PlatformStores,
+    run: WorkflowRun,
+    stepRun: WorkflowStepRun
+  ): Promise<OperationWake | undefined> {
+    if (stepRun.operationRunId === undefined) return undefined;
+    const waited = await tx.operationRuns.get({ clientInstanceId, id: stepRun.operationRunId });
+    if (!waited) return undefined;
+    if (waited.status !== "running") return { waited, timedOut: false };
+    const definition = await tx.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id });
+    const step = definition ? indexWorkflowSteps(definition).get(stepRun.stepId)?.step : undefined;
+    const waitMs = operationWaitMs(
+      step?.type === "operation" ? step.timeout : undefined,
+      limits.maxDurationMs
+    );
+    const since = Date.parse(stepRun.startedAt ?? stepRun.createdAt);
+    return now().getTime() >= since + waitMs ? { waited, timedOut: true } : undefined;
   }
 
   /** Writes how the attempt of a step went and, in the same transaction, what follows it. */
@@ -505,6 +555,53 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         ...(end.operationRunId ? { operationRunId: end.operationRunId } : {}),
         ...(end.call ? { call: end.call } : {})
       });
+      return;
+    }
+    if (end.kind === "operation_wait") {
+      if (!live) {
+        await tx.workflowRuns.endStepRun({ ...ref, status: "cancelled", finishedAt });
+        return;
+      }
+      const waits = await tx.workflowRuns.waitForOperation({
+        ...ref,
+        operationRunId: end.operationRunId,
+        ...(end.call ? { call: end.call } : {})
+      });
+      if (!waits) {
+        // The work ended before the step began to wait: the step is answered from it.
+        const waited = await tx.operationRuns.get({ clientInstanceId, id: end.operationRunId });
+        await settle(
+          tx,
+          ref,
+          index,
+          waited
+            ? await executor.finishOperation(waited, false)
+            : {
+                kind: "failed",
+                error: {
+                  code: "operation_not_found",
+                  message: "The call the step waited for is not recorded"
+                },
+                systemic: false
+              }
+        );
+        return;
+      }
+      // The step holds no job while it waits: the end of the Operation Run queues one, and
+      // this one ends the wait at the step's timeout.
+      const since = Date.parse(stepRun.startedAt ?? finishedAt);
+      await tx.jobs.enqueue(
+        workflowStepJobKind,
+        { stepRunId: stepRun.id },
+        {
+          clientInstanceId,
+          subject: stepRun.id,
+          dedupeKey: operationTimeoutKey(stepRun.id),
+          runAfter: new Date(since + end.timeoutMs),
+          concurrencyKey: run.id,
+          correlationId: run.correlationId
+        }
+      );
       return;
     }
     if (end.kind === "code") {
@@ -559,7 +656,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     slots: options.stepSlots,
     async run(job, control) {
       const ref: WorkflowStepRunRef = { clientInstanceId, id: job.payload.stepRunId };
-      const claimed = await claim(control, ref);
+      const claimed = await claim(control, ref, job.dedupeKey === operationTimeoutKey(ref.id));
       if (!claimed) return;
       const definition = await stores.workflowRuns.readRunDefinition({
         clientInstanceId,
@@ -579,7 +676,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       // other step, and a code step before its script ran, is executed.
       const end = claimed.afterCode
         ? executor.finishCode(attempt, claimed.afterCode)
-        : await executor.execute(attempt);
+        : claimed.afterOperation
+          ? await executor.finishOperation(
+              claimed.afterOperation.waited,
+              claimed.afterOperation.timedOut
+            )
+          : await executor.execute(attempt);
       // A worker that stops, or that lost its lease, ends no step: what its cut attempt
       // answered is no outcome of the step. The step run stays as it is and the next attempt
       // takes it up, which reads again or is answered what a changing call answered.
@@ -588,7 +690,16 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           ? control.signal.reason
           : new Error("The attempt was stopped");
       }
-      await control.transaction((tx) => settle(tx, ref, index, end));
+      await control.transaction(async (tx) => {
+        await settle(tx, ref, index, end);
+        // The step stopped waiting: its timeout has nothing left to end.
+        if (claimed.afterOperation) {
+          await tx.jobs.withdraw(workflowStepJobKind, {
+            clientInstanceId,
+            dedupeKey: operationTimeoutKey(ref.id)
+          });
+        }
+      });
     },
     // Every attempt of the step crashed. The run does not go on from a step nobody ended.
     async onExhausted(job, tx) {

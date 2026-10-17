@@ -227,6 +227,8 @@ export interface OperationRunStore {
    * Ends a run that is still `running`. `undefined` when it is not running any more, or when
    * it is on another attempt than `attempt`: a later call took the run under its key, and
    * only the writer of that attempt ends it. A writer names the attempt its call was given.
+   * The transaction that ends a run also queues the job of every Workflow step that waits
+   * for it (`completion: async` of its operation), so no end is lost to a step.
    */
   finish(input: {
     clientInstanceId: ClientInstanceId;
@@ -302,7 +304,10 @@ export interface OperationRunStore {
     days: number;
     limit: number;
   }): Promise<number>;
-  /** Fails a run that is still `running` with the code `interrupted`. */
+  /**
+   * Fails a run that is still `running` with the code `interrupted`, and wakes the Workflow
+   * steps that wait for it as `finish` does.
+   */
   markInterrupted(input: {
     clientInstanceId: ClientInstanceId;
     id: OperationRunId;

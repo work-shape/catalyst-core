@@ -43,29 +43,15 @@ export const WORKFLOW_DEFINITION_MAX_STEPS = 200;
  */
 export const WORKFLOW_ITERATION_LABEL_MAX_CHARS = 120;
 
-/**
- * How often the job of one step is attempted. A step whose process died is run again; a
- * changing call it made answers its first result, by the step run's idempotency key.
- */
-export const WORKFLOW_STEP_JOB_MAX_ATTEMPTS = 3;
-
-/** The wait before the second attempt of a step. It doubles up to the maximum. */
-export const WORKFLOW_STEP_JOB_BACKOFF_BASE_MS = 2_000;
-export const WORKFLOW_STEP_JOB_BACKOFF_MAX_MS = 60_000;
-
-/**
- * After this long without a heartbeat a running step counts as abandoned and is attempted
- * again: a step whose process was killed is taken up within about this time. The lengths are
- * those of an Agent Run's job (`AGENT_RUN_LEASE_MS`, `AGENT_RUN_HEARTBEAT_MS`), and like them
- * no setting of a release changes them.
- */
-export const WORKFLOW_STEP_JOB_LEASE_MS = 90 * 1_000;
-
-/**
- * How often the process that holds a step's job renews its lease while the step runs, however
- * long that is. Five heartbeats may be lost before the lease ends.
- */
-export const WORKFLOW_STEP_JOB_HEARTBEAT_MS = 15 * 1_000;
+// The attempts, backoff and lease of a step's job are the job kind's, which the store queues
+// too (`workflowStepJobKind`).
+export {
+  WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
+  WORKFLOW_STEP_JOB_BACKOFF_MAX_MS,
+  WORKFLOW_STEP_JOB_HEARTBEAT_MS,
+  WORKFLOW_STEP_JOB_LEASE_MS,
+  WORKFLOW_STEP_JOB_MAX_ATTEMPTS
+} from "@work-shape/catalyst-core";
 
 /**
  * The longest a step waits for a changing call that an earlier attempt of it started and that

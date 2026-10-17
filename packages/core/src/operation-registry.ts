@@ -10,7 +10,7 @@ import type { PlatformEventName } from "./events";
 import type { OperationBeforeEvent } from "./guardrail-events";
 import type { AuthenticatedIdentity, OperationScope } from "./identity";
 import type { CollaborationWorkspaceId, OperationRunId } from "./ids";
-import type { JsonObject } from "./json";
+import type { JsonObject, JsonValue } from "./json";
 import type { PolicyTarget } from "./operation-policy";
 import type {
   OperationCallRuntime,
@@ -22,6 +22,25 @@ import type { OperationRunUsage } from "./operation-runs";
 import type { AccessResource, ActorAccess } from "./permissions";
 import type { ToolHandlerResult } from "./tool-execution";
 import { WORKFLOW_OPERATION_PREFIX } from "./workflows";
+
+/**
+ * How an operation whose work outlives its call ends (`completion` of the definition). The
+ * call starts the work and answers its Operation Run at once, in status `running`; whoever
+ * carries the work out ends that run later, with the result as its output, through
+ * `OperationRunStore.finish`. A Workflow step that calls such an operation waits for that end
+ * holding no step slot. The work belongs to its owner, not to the caller: a step that stops
+ * waiting leaves it running.
+ */
+export interface OperationAsyncCompletion {
+  mode: "async";
+  /**
+   * The sentence a run page shows where a step stopped waiting while the work goes on, in
+   * the words of the operation's owner, such as "Abgleich läuft weiter".
+   */
+  stillRunning: string;
+  /** The result a simulated call of a test run answers in place of the real one. */
+  example: JsonValue;
+}
 
 /** How far a changing operation reaches. One that declares none counts as `irreversible`. */
 export type OperationChangeClass = "reversible" | "irreversible" | "outward";
@@ -200,6 +219,13 @@ interface OperationDefinitionBase<Input, Output> {
    * system.
    */
   repeatsUnderKey?: true;
+  /**
+   * Set on a changing operation that starts work which ends after the call, such as the sync
+   * of a Knowledge Base's source. Its `execute` starts the work and answers once it is
+   * started; what it answers is not kept. Its run stays `running` until the work ends, so its
+   * `timeoutMs` is how long the work may take before the run counts as interrupted.
+   */
+  completion?: OperationAsyncCompletion;
   /** A Workflow start called by a draft starts a test run of its published revision. */
   draftTarget?: "test";
   /** The release's own policy value. Without one the instance default of the effect applies. */

@@ -54,6 +54,7 @@ const FAILURE_REASONS: Readonly<Record<string, WorkflowFailureReason>> = {
   step_type_not_executed: "notSupported",
   not_supported_yet: "notSupported",
   operation_interrupted: "interrupted",
+  operation_still_running: "stillRunning",
   step_crashed: "crashed",
   loop_step_failed: "loopEntry",
   step_limit: "stepLimit",

@@ -79,6 +79,10 @@ export async function runOperation(
   }
   let definition = registered;
   assertOperationChecksRights(definition);
+  if (definition.completion && definition.effect !== "changing") {
+    // Its run stays open after the call, which only a recorded call under a key has.
+    throw new AppError("INTERNAL", `Operation '${call.operation}' ends later, so it is changing`);
+  }
   if (definition.effect !== call.effect) {
     throw new AppError("INTERNAL", `Operation '${call.operation}' is ${definition.effect}`);
   }
@@ -396,6 +400,11 @@ function recordedResult(
     case "expired":
       return { status: "expired", runId };
     case "running":
+      // The work of an operation that ends later goes on: the same call answers the same run.
+      if (definition.completion) return { status: "running", runId };
+      throw new AppError("OPERATION_IN_PROGRESS", "The first call with this key has not ended", {
+        operationRunId: runId
+      });
     case "pending_confirmation":
       throw new AppError("OPERATION_IN_PROGRESS", "The first call with this key has not ended", {
         operationRunId: runId

@@ -192,7 +192,12 @@ export type OperationResult<TOutput = unknown> =
       runId: OperationRunId;
       error: { code: string; message: string; details?: Record<string, unknown> };
     }
-  | { status: "expired"; runId: OperationRunId };
+  | { status: "expired"; runId: OperationRunId }
+  /**
+   * The call of an operation with `completion: async` started its work, which goes on after
+   * the call. The run ends later. A call made again under the same key answers the same run.
+   */
+  | { status: "running"; runId: OperationRunId };
 
 /**
  * Whether the caller of this origin is present and the call is its own, so that the call

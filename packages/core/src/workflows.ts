@@ -214,6 +214,12 @@ export type WorkflowStep =
        * operation's Connection entry declares; an object overrides fields of it.
        */
       paginate?: WorkflowPaginate;
+      /**
+       * How long the step waits for an operation with `completion: async` to end, such as
+       * `6h` or `30m`: six hours unless set, and at most the twelve hours a run may take. At it the step fails with `operation_still_running` and the
+       * operation goes on.
+       */
+      timeout?: string;
     })
   /**
    * Starts a run of another published Workflow as a child run, waits for it and returns its

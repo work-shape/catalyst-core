@@ -1,0 +1,1 @@
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "workflow_step_runs_waiting_operation_idx" ON "workflow_step_runs" USING btree ("operation_run_id") WHERE "workflow_step_runs"."status" = 'waiting';

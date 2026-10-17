@@ -9,6 +9,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { resumeAgentRunAfterApproval } from "./postgres-agent-run-approval-resume";
+import { wakeStepsWaitingFor } from "./postgres-workflow-operation-wake";
 import { keysetFilter } from "./paging";
 import { type PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";
@@ -431,12 +432,20 @@ export function mapOperationRun(row: OperationRunRow): OperationRun {
   };
 }
 
-export function createPostgresOperationRunsStore(db: PostgresConnection): OperationRunStore {
-  const settle = (
+/**
+ * `enqueued` hears of every job the store queues: the job of a Workflow step that waited for a
+ * run that ended.
+ */
+export function createPostgresOperationRunsStore(
+  db: PostgresConnection,
+  enqueued: () => void = () => undefined
+): OperationRunStore {
+  const settle = async (
     input: { clientInstanceId: OperationRun["clientInstanceId"]; id: string },
     write: (tx: PostgresConnection) => Promise<OperationRun | undefined>
-  ) =>
-    db.transaction(async (tx) => {
+  ) => {
+    let woke = false;
+    const settled = await db.transaction(async (tx) => {
       const seen = await getOperationRun(tx, input);
       // Queue changes, decisions and Stop all take conversation -> run -> call.
       if (seen?.approvalRequestId && seen.origin.kind === "agent") {
@@ -454,8 +463,12 @@ export function createPostgresOperationRunsStore(db: PostgresConnection): Operat
       }
       const run = await write(tx);
       if (run) await resumeApproval(tx, run);
+      if (run) woke = await wakeStepsWaitingFor(tx, run);
       return run;
     });
+    if (woke) enqueued();
+    return settled;
+  };
   return {
     create: (run) => createOperationRun(db, run),
     recordEnded: (run) => recordEndedOperationRun(db, run),

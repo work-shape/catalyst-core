@@ -56,6 +56,8 @@ export const workflows = defineTranslations({
       "An administrator can say which rule it was and whether it should apply here.",
     "workflows.advice.interrupted":
       "Look at what the step writes to before you run the workflow again, so nothing is done twice.",
+    "workflows.advice.stillRunning":
+      "Nothing needs undoing: the work ends by itself. Run the workflow again once it has, or give the step a longer timeout.",
     "workflows.advice.loopEntry": "Open a failed entry to read why, then run the workflow again.",
     "workflows.advice.missingRight":
       "Ask an administrator to give the workflow that right, then run it again.",
@@ -183,6 +185,9 @@ export const workflows = defineTranslations({
     "workflows.reason.guardrail": "A safety rule of the instance stopped this step.",
     "workflows.reason.interrupted":
       "The run was interrupted while this step was changing data. The change may or may not have happened, and the step was not repeated.",
+    "workflows.reason.stillRunning":
+      "The step stopped waiting at its time limit. The work it started goes on by itself.",
+    "workflows.reason.stillRunningNamed": "The step stopped waiting at its time limit: {sentence}",
     "workflows.reason.loopEntry": "A step failed for one of the entries.",
     "workflows.reason.missingRight": "The workflow may not do this: it lacks a right.",
     "workflows.reason.missingRightNamed":
@@ -371,6 +376,8 @@ export const workflows = defineTranslations({
       "Ein Administrator kann sagen, welche Regel es war und ob sie hier gelten soll.",
     "workflows.advice.interrupted":
       "Sieh dir an, wohin der Schritt schreibt, bevor du den Workflow erneut startest, damit nichts doppelt geschieht.",
+    "workflows.advice.stillRunning":
+      "Rückgängig machen musst du nichts: Die Arbeit endet von selbst. Starte den Workflow erneut, wenn sie fertig ist, oder gib dem Schritt mehr Zeit.",
     "workflows.advice.loopEntry":
       "Öffne einen fehlgeschlagenen Eintrag, um den Grund zu lesen, und starte den Workflow dann erneut.",
     "workflows.advice.missingRight":
@@ -502,6 +509,10 @@ export const workflows = defineTranslations({
     "workflows.reason.guardrail": "Eine Schutzregel der Instanz hat diesen Schritt gestoppt.",
     "workflows.reason.interrupted":
       "Der Lauf wurde unterbrochen, während dieser Schritt Daten änderte. Die Änderung kann geschehen sein oder nicht, und der Schritt wurde nicht wiederholt.",
+    "workflows.reason.stillRunning":
+      "Der Schritt hat nach seiner Zeitgrenze aufgehört zu warten. Die Arbeit, die er gestartet hat, läuft von selbst weiter.",
+    "workflows.reason.stillRunningNamed":
+      "Der Schritt hat nach seiner Zeitgrenze aufgehört zu warten: {sentence}",
     "workflows.reason.loopEntry": "Bei einem der Einträge ist ein Schritt fehlgeschlagen.",
     "workflows.reason.missingRight": "Der Workflow darf das nicht: Ihm fehlt ein Recht.",
     "workflows.reason.missingRightNamed":

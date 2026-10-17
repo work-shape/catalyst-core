@@ -196,6 +196,10 @@ export const workflowStepRuns = pgTable(
     // refers to.
     index("workflow_step_runs_container_idx")
       .on(table.containerStepRunId, table.stepId, table.iteration)
-      .where(sql`${table.containerStepRunId} is not null`)
+      .where(sql`${table.containerStepRunId} is not null`),
+    // The steps that wait for an Operation Run, which its end wakes (EW-ASYNC).
+    index("workflow_step_runs_waiting_operation_idx")
+      .on(table.operationRunId)
+      .where(sql`${table.status} = 'waiting'`)
   ]
 );

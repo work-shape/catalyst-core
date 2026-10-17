@@ -222,7 +222,7 @@ export function runStatePresentation(
  * action the account of the Workflow does not hold.
  */
 export function failureHappened(
-  failure: Pick<WorkflowFailure, "reason" | "action">,
+  failure: Pick<WorkflowFailure, "reason" | "action"> & { detail?: string },
   t: (key: TranslationKey, values?: Record<string, string>) => string
 ): string {
   if (failure.action !== undefined && failure.reason === "missingRight") {
@@ -230,6 +230,10 @@ export function failureHappened(
   }
   if (failure.action !== undefined && failure.reason === "testerMissingRight") {
     return t("workflows.reason.testerMissingRightNamed", { right: failure.action });
+  }
+  // The work goes on, and its owner's sentence says so, such as "Abgleich läuft weiter".
+  if (failure.reason === "stillRunning" && failure.detail) {
+    return t("workflows.reason.stillRunningNamed", { sentence: failure.detail });
   }
   return t(failureSentences(failure.reason).happened);
 }

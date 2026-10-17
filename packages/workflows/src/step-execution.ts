@@ -12,6 +12,7 @@ import {
   type JsonObject,
   type JsonValue,
   type OperationDraftContext,
+  type OperationRun,
   type OperationRunId,
   type PlatformStores,
   type WorkflowCodeOutcome,
@@ -52,6 +53,7 @@ import {
   notSupportedFailure,
   type WorkflowOperationCalls
 } from "./operation-step";
+import { operationWaitMs, operationWaitOutcome, stillRunningError } from "./operation-wait";
 import { resolveInput, resolveReference } from "./references";
 import { workflowRunActor } from "./run-identity";
 import { WorkflowStepFailure } from "./step-failure";
@@ -74,6 +76,16 @@ export type StepEnd =
   /** A loop read its list. Its items are run by step runs of their own. */
   | { kind: "loop"; items: JsonValue[] }
   | { kind: "child"; operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
+  /**
+   * An operation step started work that ends later (`completion: async`). The step waits for
+   * the Operation Run, holding no slot, at most `timeoutMs` from its start.
+   */
+  | {
+      kind: "operation_wait";
+      operationRunId: OperationRunId;
+      call?: WorkflowStepRunCall;
+      timeoutMs: number;
+    }
   /** A code step has its script and its input. The command worker runs it in the sandbox. */
   | { kind: "code"; staged: WorkflowStagedCode };
 
@@ -279,7 +291,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           withinStepData(input, "The child input");
           if (holdsDatasetReference(input)) throw notSupportedFailure("a dataset in a child input");
           const caller = await callerOf(run, stepRun);
-          const { output: _output, ...trace } = await callStepOperation({
+          const { operationRunId, call } = await callStepOperation({
             calls: operationCalls,
             run,
             stepRun,
@@ -300,7 +312,11 @@ export function createStepExecutor(options: StepExecutorOptions) {
                 operationRunId
               })
           });
-          return { kind: "child", ...trace };
+          return {
+            kind: "child",
+            ...(operationRunId ? { operationRunId } : {}),
+            ...(call ? { call } : {})
+          };
         }
         case "operation": {
           for (const field of ["dataset", "paginate"] as const) {
@@ -334,6 +350,14 @@ export function createStepExecutor(options: StepExecutorOptions) {
                 operationRunId
               })
           });
+          if ("waitFor" in result) {
+            return {
+              kind: "operation_wait",
+              operationRunId: result.waitFor,
+              ...(result.call ? { call: result.call } : {}),
+              timeoutMs: operationWaitMs(step.timeout, limits.maxDurationMs)
+            };
+          }
           const { output, ...trace } = result;
           try {
             withinStepData(output, "The output of the step");
@@ -453,5 +477,33 @@ export function createStepExecutor(options: StepExecutorOptions) {
     }
   }
 
-  return { execute, finishCode, knownCallEnd };
+  /**
+   * How an operation step that waited ends: from the Operation Run it waited for once that run
+   * has ended, or at its `timeout` while the operation goes on.
+   */
+  async function finishOperation(waited: OperationRun, timedOut: boolean): Promise<StepEnd> {
+    const definition = await operationCalls.registry.resolve(waited.operation);
+    const kept = { operationRunId: waited.id };
+    const outcome = timedOut ? undefined : await operationWaitOutcome(waited, definition);
+    if (!outcome) {
+      return {
+        kind: "failed",
+        error: stillRunningError(waited.operation, definition),
+        systemic: false,
+        ...kept
+      };
+    }
+    if (outcome.kind === "failed") {
+      return { kind: "failed", error: outcome.error, systemic: false, ...kept };
+    }
+    try {
+      withinStepData(outcome.output, "The output of the step");
+    } catch (error) {
+      if (!(error instanceof WorkflowStepFailure)) throw error;
+      return { kind: "failed", error: error.toRunError(), systemic: false, ...kept };
+    }
+    return { kind: "done", output: outcome.output, ...kept };
+  }
+
+  return { execute, finishCode, finishOperation, knownCallEnd };
 }
