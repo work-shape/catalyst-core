@@ -359,10 +359,14 @@ print(json.dumps({"count": len(data["numbers"])}))
     expect(ended.error?.code).toBe("code_runner_unavailable");
   });
 
-  it("refuses a dataset an earlier step handed on as its input", async () => {
-    const { run } = await ready({ script: SUM });
-    const ended = await run({ numbers: { $dataset: "ds_1", rowCount: 3, bytes: 64 } });
-    expect(ended.error?.code).toBe("not_supported_yet");
+  it("refuses an unowned dataset at start before a code step can see it", async () => {
+    const { t } = await ready({ script: SUM });
+    const response = await t.call(t.root.id, "workflows.start", {
+      params: { workflow: "compute" },
+      payload: { input: { numbers: { $dataset: "ds_1", rowCount: 3, bytes: 64 } } }
+    });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ error: { details: { reason: "dataset_expired" } } });
   });
 });
 

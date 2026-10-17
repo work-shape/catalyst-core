@@ -56,8 +56,9 @@ const STEP_REFERENCE: {
         "The full name of the operation, such as `connection.<connection>.<operation>`. Ask the tool that lists the callable operations for the names and their input schemas; do not guess one.",
       input:
         "The mapping onto the operation's input: one entry per field of its input schema. See 'Mappings and references'.",
-      dataset: "Not run yet. Leave it out.",
-      paginate: "Not run yet. Leave it out.",
+      dataset:
+        "Use { at: <dotted path> } to replace an object-row list in the answer with a dataset reference at the same path. Rows are streamed into the files store; the step record holds only the reference. See Datasets.",
+      paginate: "Reserved for EW-13. Leave it out.",
       timeout:
         "Only for an operation whose work ends after the call, such as the sync of a Knowledge Base: how long the step waits for it, such as `30m` or `6h`; 6h when left out, at most 12h. At it the step fails with `operation_still_running` and the work goes on."
     }
@@ -71,10 +72,10 @@ const STEP_REFERENCE: {
     }
   },
   loop: {
-    does: `Runs its \`steps\` in order once for each item of a list of at most ${WORKFLOW_LOOP_MAX_ITEMS} items. Its output is the counts { total, done, failed } and never the results of its items: what an item produces is kept by a step inside the loop, such as a changing operation.`,
+    does: `Runs its \`steps\` in order once for each item of a list or dataset of at most ${WORKFLOW_LOOP_MAX_ITEMS} items. Its output is the counts { total, done, failed } and never the results of its items: what an item produces is kept by a step inside the loop, such as a changing operation.`,
     fields: {
       items:
-        "A reference to the list: { step, path }, without `ref:` around it. The list is a field of the output of an earlier step.",
+        "A reference to the list or dataset: { step, path }, without `ref:` around it. The list is a field of the output of an earlier step.",
       steps:
         "The steps of one item, at least one. Inside them the id of the loop names the current item: { ref: { step: <loop id>, path: <field of the item> } }.",
       itemName: "What one item is called in a sentence, such as `client`. Optional.",
@@ -82,7 +83,7 @@ const STEP_REFERENCE: {
         "The dotted path of the field of an item that names it for a person on the run's page. Optional.",
       onItemFailure: `What a failed item does: ${WORKFLOW_LOOP_ITEM_FAILURE_MODES.map((mode) => `\`${mode}\``).join(" or ")}. \`stop\`, the default, fails the loop and the run at the first failed item; \`continue\` goes on and counts it under \`failed\`.`,
       concurrency: `How many items run at once, from 1 to ${WORKFLOW_LOOP_MAX_CONCURRENCY}. 1 when left out. It is an upper bound.`,
-      collect: "Not run yet. Leave it out."
+      collect: "Reserved for EW-13. Leave it out."
     }
   },
   code: {
@@ -410,7 +411,21 @@ the operation a step calls.
 - What an operation answers decides the path into its output. Where you do not know the shape,
   say so to the person instead of guessing a path: a wrong path fails the run, not the save.
 
-The input and the output of one step may each be at most ${WORKFLOW_STEP_DATA_MAX_BYTES} bytes as JSON.
+The input and the output of one step may each be at most ${WORKFLOW_STEP_DATA_MAX_BYTES} bytes as JSON. Dataset references count toward this bound; their rows do not.
+
+## Datasets
+
+For bulk object rows, set \`dataset: { at: rows }\` on an operation step when its answer has a list at \`rows\`. The step replaces that list with \`{ $dataset, rowCount, bytes }\`. Later mappings reference the same path. Never invent a dataset id or put its rows into a step record.
+
+Declare a dataset field as \`{ type: dataset, row: <JSON Schema of one object row> }\`. A manifest may declare reusable row schemas under \`types\` and use \`row: { $ref: "#/types/<name>" }\`. A producer must guarantee the fields and types the consumer requires; extra fields fit. Each row is checked as it is written. A schema error names the line and field, never the value.
+
+A loop may read a dataset as \`items\`, under the loop's item limit. With \`onItemFailure: continue\`, it returns counts and a \`failures\` dataset of index, optional label and error code. A loop does not return its item results inline. Keep bulk processing in operations rather than making a step run per data row.
+
+Workflow inputs and outputs, including child inputs and results, may contain dataset references. A run reads only datasets it wrote, received as input or got from a child. A person passing a dataset into a root run needs \`workflow.read_run_data\` on its source Workflow. Dataset rows are never a code or agent input in this release (EW-14).
+
+Successful runs release intermediates. Failed runs retain datasets for their resume window; root output datasets default to seven days, or \`retention: { datasets: <days> }\`, bounded by step-data retention. Test roots keep no output datasets. Operator ceilings live under \`workflows.datasets\`; they are settings, not fixed customer limits. A producing step that reaches one fails with \`dataset_limit\` and its name. Deleted or unavailable parts answer \`dataset_expired\`.
+
+Download, Data Store load and streamed query are EW-12b. Paging and collection are EW-13. Do not offer those operations before the instance supports them.
 
 ## What this engine does not run yet
 
@@ -420,9 +435,9 @@ A definition that holds one of these is refused when it is saved, with the code
 - the step types ${workflowStepTypesNotRun()
     .map((type) => `\`${type}\``)
     .join(", ")};
-- \`labels\`, \`onFailure\`, \`retention\` and \`types\` on the manifest;
-- \`dataset\` and \`paginate\` on an operation step, and \`collect\` on a loop;
-- child dataset inputs and outputs.
+- \`labels\` and \`onFailure\` on the manifest;
+- \`paginate\` on an operation step and \`collect\` on a loop (EW-13);
+- datasets in code or agent inputs (EW-14).
 
 Where the person asks for one of them, say that this release does not run it yet, and offer
 what does: a loop for a list, a changing operation to keep what an item produces, one

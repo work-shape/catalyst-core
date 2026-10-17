@@ -26,9 +26,11 @@ import { formatMoment } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import { FailureBanner } from "./failure-banner";
 import type { LiveOnceControl } from "./test-run";
-import { simulatedCall, stepOutputRows } from "./step-output";
+import { StepDatasets } from "./step-datasets";
+import { simulatedCall, stepDatasets, stepOutputRows } from "./step-output";
 import { countsLine } from "./workflow-canvas-model";
 import type {
+  WorkflowDatasetView,
   WorkflowLoopCounts,
   WorkflowOutputPreview,
   WorkflowStepRunView,
@@ -55,6 +57,8 @@ export interface StepPanelRun {
   passesOn?: { count: number; step: string };
   /** In a test run, on a step that changes something: "Run live once" for the next test run. */
   liveOnce?: LiveOnceControl;
+  /** The run's datasets: what an output names that an earlier step wrote. */
+  runDatasets?: readonly WorkflowDatasetView[];
   now: Date;
 }
 
@@ -92,13 +96,43 @@ function OutputText({ output, label }: { output: WorkflowOutputPreview; label: s
   );
 }
 
+/** The output as text behind a fold, below what the panel made of it. */
+function OutputDetails({ output }: { output: WorkflowOutputPreview }) {
+  const { t } = useTranslation();
+  return (
+    <Disclosure>
+      <DisclosureTrigger>{t("workflows.technicalDetails")}</DisclosureTrigger>
+      <DisclosureContent>
+        <OutputText output={output} label={t("workflows.run.outputText")} />
+      </DisclosureContent>
+    </Disclosure>
+  );
+}
+
 /**
- * What a step returned. A list of records is a table of its first rows, with the text behind a
- * fold; anything else is the text. A step run carries the start of its output and no count, so
- * the number of rows is said only where the whole list arrived.
+ * What a step returned. Datasets it names say their counts, size and columns; a list of records
+ * is a table of its first rows. Either has the text behind a fold; anything else is the text. A
+ * step run carries the start of its output and no count, so the number of rows of a list is
+ * said only where the whole list arrived.
  */
-function OutputPreview({ output }: { output: WorkflowOutputPreview }) {
+function OutputPreview({
+  output,
+  datasets
+}: {
+  output: WorkflowOutputPreview;
+  /** The records of the datasets the step and the run wrote. */
+  datasets: readonly WorkflowDatasetView[];
+}) {
   const { locale, t } = useTranslation();
+  const named = stepDatasets(output, datasets);
+  if (named.length > 0) {
+    return (
+      <>
+        <StepDatasets datasets={named} />
+        <OutputDetails output={output} />
+      </>
+    );
+  }
   const table = stepOutputRows(output);
   if (table === undefined) {
     return <OutputText output={output} label={t("workflows.run.output")} />;
@@ -137,12 +171,7 @@ function OutputPreview({ output }: { output: WorkflowOutputPreview }) {
             ? t("workflows.run.rowsOf", { shown, total: table.total.toLocaleString(locale) })
             : t("workflows.run.rowsAll", { shown })}
       </p>
-      <Disclosure>
-        <DisclosureTrigger>{t("workflows.technicalDetails")}</DisclosureTrigger>
-        <DisclosureContent>
-          <OutputText output={output} label={t("workflows.run.outputText")} />
-        </DisclosureContent>
-      </Disclosure>
+      <OutputDetails output={output} />
     </section>
   );
 }
@@ -408,7 +437,10 @@ function StepRunDetails({
       {stepRun.target === "dry_run" ? (
         <SimulatedOutput output={stepRun.output} />
       ) : stepRun.output ? (
-        <OutputPreview output={stepRun.output} />
+        <OutputPreview
+          output={stepRun.output}
+          datasets={[...(stepRun.datasets ?? []), ...(run.runDatasets ?? [])]}
+        />
       ) : null}
       {onOpenChild !== undefined && stepRun.childRunId !== undefined ? (
         <Button variant="outline" size="sm" className="justify-self-start" onClick={onOpenChild}>

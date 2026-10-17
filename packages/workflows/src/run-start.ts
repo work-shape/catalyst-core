@@ -1,3 +1,5 @@
+import { checkDatasetContracts } from "./dataset-contracts";
+import { workflowValueSchema } from "./dataset-schema";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   AppError,
@@ -19,6 +21,7 @@ interface StartCheckOptions {
   stores: PlatformStores;
   operationCalls: WorkflowOperationCalls;
   limits: WorkflowRunLimits;
+  definitions: import("./definition-source").WorkflowDefinitionSource;
 }
 
 /** A start that passed its check: what the run is written from. */
@@ -41,13 +44,14 @@ export function createStartCheck(options: StartCheckOptions) {
     given: unknown
   ): Promise<PreparedStart> {
     const { manifest } = published;
+    await checkDatasetContracts(manifest, options.definitions, operationCalls.registry);
     const [trigger] = manifest.steps;
     if (trigger?.type !== "trigger") {
       throw new AppError("CONFLICT", `The Workflow '${manifest.id}' has no trigger`, {
         reason: "no_trigger"
       });
     }
-    const schema = compileJsonSchema(manifest.inputs);
+    const schema = compileJsonSchema(workflowValueSchema(manifest.inputs, manifest.types));
     if (!schema.ok) {
       throw new AppError("CONFLICT", "The Workflow's inputs are a schema that cannot be checked", {
         reason: "inputs_unreadable"

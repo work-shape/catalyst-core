@@ -1,0 +1,99 @@
+import type { WorkflowDatasetState } from "@work-shape/catalyst-asset-schemas";
+import type { ClientInstanceId, WorkflowRunId, WorkflowStepRunId } from "./ids";
+import type { JsonObject } from "./json";
+
+/** Operator ceilings; a Workflow may lower them. Bytes count uncompressed JSON Lines. */
+export interface WorkflowDatasetLimits {
+  rows: number;
+  bytes: number;
+  rowBytes: number;
+  runBytes: number;
+  instanceBytes: number;
+}
+
+export interface WorkflowDatasetPart {
+  key: string;
+  rows: number;
+  bytes: number;
+  hash: string;
+}
+
+export interface WorkflowRunDataset {
+  id: string;
+  clientInstanceId: ClientInstanceId;
+  runId: WorkflowRunId;
+  stepRunId: WorkflowStepRunId;
+  field: string;
+  rowSchema: JsonObject;
+  rowCount: number;
+  bytes: number;
+  parts: WorkflowDatasetPart[];
+  pendingPart?: WorkflowDatasetPart;
+  state: WorkflowDatasetState;
+  expiresAt?: string;
+  deletedAt?: string;
+  cleanedAt?: string;
+}
+
+export interface WorkflowDatasetRef {
+  clientInstanceId: ClientInstanceId;
+  id: string;
+}
+
+/** Transaction-bound methods share the step/run end's transaction. No customer rows here. */
+export interface WorkflowRunDatasetsStore {
+  create(
+    input: Pick<
+      WorkflowRunDataset,
+      "id" | "clientInstanceId" | "runId" | "stepRunId" | "field" | "rowSchema"
+    >
+  ): Promise<WorkflowRunDataset>;
+  listForSteps(input: {
+    clientInstanceId: ClientInstanceId;
+    stepRunIds: WorkflowStepRunId[];
+  }): Promise<WorkflowRunDataset[]>;
+  getMany(input: {
+    clientInstanceId: ClientInstanceId;
+    ids: string[];
+  }): Promise<WorkflowRunDataset[]>;
+  lock(ref: WorkflowDatasetRef): Promise<WorkflowRunDataset | undefined>;
+  get(ref: WorkflowDatasetRef): Promise<WorkflowRunDataset | undefined>;
+  listForRun(input: {
+    clientInstanceId: ClientInstanceId;
+    runId: WorkflowRunId;
+    after?: string;
+    limit: number;
+  }): Promise<WorkflowRunDataset[]>;
+  /** Reserves before uploading. Retries reuse the same pending part without charging twice. */
+  reservePart(
+    input: WorkflowDatasetRef & {
+      index: number;
+      part: WorkflowDatasetPart;
+      limits: WorkflowDatasetLimits;
+    }
+  ): Promise<void>;
+  commitPart(input: WorkflowDatasetRef & { index: number }): Promise<void>;
+  completeStep(input: {
+    clientInstanceId: ClientInstanceId;
+    stepRunId: WorkflowStepRunId;
+  }): Promise<WorkflowRunDataset[]>;
+  allowRun(input: WorkflowDatasetRef & { runId: WorkflowRunId }): Promise<void>;
+  canRead(input: WorkflowDatasetRef & { runId: WorkflowRunId }): Promise<boolean>;
+  /** A hold lasts while its reader is open, or until the reader's recorded expiry. */
+  finishRun(input: {
+    clientInstanceId: ClientInstanceId;
+    runId: WorkflowRunId;
+    keep: string[];
+    expiresAt: string;
+    resume: boolean;
+    test: boolean;
+  }): Promise<void>;
+  claimExpired(input: {
+    clientInstanceId: ClientInstanceId;
+    now: string;
+    limit: number;
+  }): Promise<WorkflowRunDataset[]>;
+  claimRun(input: { clientInstanceId: ClientInstanceId; runId: WorkflowRunId }): Promise<void>;
+  claimWorkflow(input: { clientInstanceId: ClientInstanceId; workflow: string }): Promise<void>;
+  markCleaned(ref: WorkflowDatasetRef & { at: string }): Promise<void>;
+}

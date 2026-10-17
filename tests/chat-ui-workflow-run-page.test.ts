@@ -124,7 +124,12 @@ function panel(
     createElement(StepPanel, {
       step,
       part,
-      run: { stepRun: held.find((entry) => entry.stepId === stepId), counts: undefined, now },
+      run: {
+        stepRun: held.find((entry) => entry.stepId === stepId),
+        counts: undefined,
+        runDatasets: toWorkflowRun(resource).datasets,
+        now
+      },
       tab: options.tab ?? "run",
       onTabChange: noop,
       entries: null,
@@ -269,6 +274,101 @@ describe("the panel of a step that failed", () => {
     expect(markup).toContain("&quot;sent&quot;:2");
     expect(markup).toContain(t("workflows.run.shortened"));
     expect(markup).toContain(t("workflows.run.done"));
+  });
+});
+
+describe("the datasets a step's output names", () => {
+  const clients = {
+    id: "ds_clients",
+    rowSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        since: { type: ["integer", "null"] },
+        active: { type: "boolean" },
+        tags: { anyOf: [{ type: "string" }, { type: "number" }] }
+      }
+    },
+    rowCount: 5000,
+    bytes: 1_258_291,
+    state: "complete" as const
+  };
+  const reference = { $dataset: "ds_clients", rowCount: 5000, bytes: 1_258_291 };
+
+  it("says its rows, its size and its columns, and shows no row and no id", () => {
+    const returned = stepRun({
+      id: "sr_clients",
+      stepId: "clients",
+      outputPreview: {
+        text: JSON.stringify({ summary: "loaded", result: { clients: reference } }),
+        truncated: false
+      },
+      datasets: [clients]
+    });
+    const markup = panel("clients", run(), [returned]);
+    expect(markup).toContain("data-step-datasets");
+    expect(markup).toContain(t("workflows.dataset.heading"));
+    expect(markup).toContain("Clients");
+    expect(markup).toContain(t("workflows.dataset.size", { rows: "5,000", size: "1.2 MB" }));
+    for (const [field, kind] of [
+      ["name", "text"],
+      ["since", "wholeNumber"],
+      ["active", "yesNo"],
+      ["tags", "value"]
+    ] as const) {
+      expect(markup).toContain(`>${field}<`);
+      expect(markup).toContain(t(`workflows.dataset.kind.${kind}`));
+    }
+    expect(markup).not.toContain(t("workflows.dataset.writing"));
+    expect(markup).not.toContain("<table");
+    // The output as text, which names the dataset by its id, stays behind the fold.
+    expect(markup).not.toContain("ds_clients");
+    expect(markup).toContain(t("workflows.technicalDetails"));
+  });
+
+  it("finds a dataset in a cut preview and in a list, by the run's record, in German", () => {
+    const cut = `{"batches":[${JSON.stringify({ ...reference, rowCount: 12, bytes: 900 })}],"note":"${"x".repeat(80)}`;
+    const returned = stepRun({
+      id: "sr_clients",
+      stepId: "clients",
+      outputPreview: { text: cut, truncated: true }
+    });
+    const markup = panel(
+      "clients",
+      run({ datasets: [{ ...clients, rowCount: 12, bytes: 900, state: "writing" }] }),
+      [returned],
+      { locale: "de" }
+    );
+    expect(markup).toContain(de("workflows.dataset.unnamed"));
+    expect(markup).toContain(de("workflows.dataset.size", { rows: "12", size: "900 Byte" }));
+    expect(markup).toContain(de("workflows.dataset.writing"));
+    expect(markup).toContain(de("workflows.dataset.kind.wholeNumber"));
+  });
+
+  it("says the counts of a reference the instance names no record for, and once only", () => {
+    const returned = stepRun({
+      id: "sr_clients",
+      stepId: "clients",
+      outputPreview: {
+        text: JSON.stringify({ first: reference, again: reference }),
+        truncated: false
+      }
+    });
+    const markup = panel("clients", run(), [returned]);
+    expect(markup).toContain("First");
+    expect(markup).not.toContain("Again");
+    expect(markup).toContain(t("workflows.dataset.size", { rows: "5,000", size: "1.2 MB" }));
+    const section = markup.slice(markup.indexOf("data-step-datasets"));
+    expect(section.slice(0, section.indexOf("</section>"))).not.toContain("<dl");
+  });
+
+  it("leaves an object that only looks like a reference as the output it is", () => {
+    const returned = stepRun({
+      id: "sr_clients",
+      stepId: "clients",
+      outputPreview: { text: '{"$dataset":"ds_1","rowCount":"many","bytes":3}', truncated: false }
+    });
+    expect(panel("clients", run(), [returned])).not.toContain("data-step-datasets");
   });
 });
 

@@ -1,3 +1,8 @@
+import { createLoopProgress } from "./loop-progress";
+import { datasetReferences } from "./dataset-schema";
+import { createStepClaim } from "./step-claim";
+import { createWorkflowDatasets } from "./datasets";
+import { createDatasetLifetime } from "./dataset-lifetime";
 import {
   AppError,
   asUserId,
@@ -10,15 +15,11 @@ import {
   subjectDedupeKey,
   type AuthenticatedIdentity,
   type ClientInstanceId,
-  type JobControl,
   type JobSchedule,
-  type OperationRun,
   type PlatformStores,
   type RegisteredJobHandler,
   type StorePage,
-  type WorkflowCodeOutcome,
   type WorkflowLastRun,
-  type WorkflowLoopOutput,
   type WorkflowRun,
   type WorkflowRunError,
   type WorkflowRunKeyFilter,
@@ -44,8 +45,6 @@ import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
 import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
 import { WORKFLOW_RUN_LIMITS, type WorkflowRunLimits } from "./limits";
 import type { WorkflowOperationCalls } from "./operation-step";
-import { operationWaitMs } from "./operation-wait";
-import { itemLabelOf } from "./references";
 import { createBlockEnds } from "./run-blocks";
 import { principalActor } from "./run-identity";
 import {
@@ -54,7 +53,7 @@ import {
   type TestWorkflowRunInput
 } from "./run-open";
 import { createStartCheck } from "./run-start";
-import { loopConcurrencyOf, withEveryBodyStep } from "./run-view";
+import { withEveryBodyStep, datasetMetadata } from "./run-view";
 import { createScheduleTrigger } from "./schedule-trigger";
 import { createScheduledStart } from "./scheduled-start";
 import { createStepExecutor, type StepEnd, type WorkflowCodeRunner } from "./step-execution";
@@ -73,6 +72,8 @@ import { workflowCodeJobKind, workflowStepJobKind } from "./step-job";
 export interface WorkflowEngineOptions {
   /** The validated release setting: jobs of the step kind served by one process. */
   stepSlots: number;
+  datasetObjects?: import("@work-shape/catalyst-core").ObjectStorage;
+  datasetLimits?: import("@work-shape/catalyst-core").WorkflowDatasetLimits;
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
   /** Where the published definition of a Workflow is read when a run is started. */
@@ -150,13 +151,6 @@ export interface WorkflowEngine {
   pruneRunData: WorkflowDataPruning["prune"];
 }
 
-/** Why a step that waits for an Operation Run is taken up again. */
-interface OperationWake {
-  waited: OperationRun;
-  /** The step's `timeout` passed while the Operation Run goes on. */
-  timedOut: boolean;
-}
-
 /** Where a new step run stands in its run: its path, and its place in the tree of the run. */
 interface StepPlace extends WorkflowStepRunPlacement {
   key: string;
@@ -167,6 +161,22 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   const limits: WorkflowRunLimits = { ...WORKFLOW_RUN_LIMITS, ...options.limits };
   const now = options.now ?? (() => new Date());
 
+  const datasets =
+    options.datasetObjects && options.datasetLimits
+      ? createWorkflowDatasets({
+          clientInstanceId,
+          stores,
+          objects: options.datasetObjects,
+          limits: options.datasetLimits
+        })
+      : undefined;
+  const datasetLifetime = createDatasetLifetime({
+    clientInstanceId,
+    stores,
+    objects: options.datasetObjects,
+    stepDataDays: options.stepDataDays ?? WORKFLOW_STEP_DATA_DAYS,
+    now
+  });
   const { cancelWaiting, insideEndedBlock } = createBlockEnds({ clientInstanceId, now });
   const stepFiles = options.stepFiles ?? noWorkflowStepFiles;
   const executor = createStepExecutor({
@@ -177,10 +187,16 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     limits,
     now,
     stepFiles,
+    ...(datasets ? { datasets } : {}),
     ...(options.codeRunner ? { codeRunner: options.codeRunner } : {})
   });
 
-  const endRun = createRunEnd({ clientInstanceId, now, cancelWaiting });
+  const endRun = createRunEnd({
+    clientInstanceId,
+    now,
+    cancelWaiting,
+    datasetEnd: datasetLifetime.end
+  });
 
   /** Ends a run the engine ends itself, and writes that it ended. Never a value of the run. */
   async function finishRun(
@@ -301,73 +317,46 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     return true;
   }
 
-  /** Where the first step of one item of a loop stands, with what labels the item. */
-  async function itemPlace(
-    tx: PlatformStores,
-    index: WorkflowStepIndex,
-    loopRun: WorkflowStepRun,
-    first: WorkflowStep,
-    iteration: number
-  ): Promise<StepPlace> {
-    const loop = index.get(loopRun.stepId)?.step;
-    const item =
-      loop?.type === "loop" && loop.itemLabel !== undefined
-        ? await tx.workflowRuns.readLoopItem({ clientInstanceId, id: loopRun.id, index: iteration })
-        : undefined;
-    const label =
-      item && loop?.type === "loop" && loop.itemLabel !== undefined
-        ? itemLabelOf(item.value, loop.itemLabel)
-        : undefined;
-    return {
-      key: `${loopRun.key}[${iteration}].${first.id}`,
-      containerStepRunId: loopRun.id,
-      iteration: { index: iteration, ...(label === undefined ? {} : { label }) }
-    };
-  }
-
-  /**
-   * Carries a loop on after it read its list and after each item that ended: starts the next
-   * items in the order of the list while fewer than the loop's `concurrency` are going, and
-   * ends the loop when none is going and none is left. It runs behind the lock of the run, so
-   * two items that end at the same moment start two different next items. The loop's output
-   * is its counts as they then stand, the failed items it continued past among them, and
-   * never a result of an item.
-   */
-  async function fillLoop(
-    tx: PlatformStores,
-    run: WorkflowRun,
-    index: WorkflowStepIndex,
-    loopRun: WorkflowStepRun
-  ): Promise<void> {
-    const loopRef: WorkflowStepRunRef = { clientInstanceId, id: loopRun.id };
-    const loop = index.get(loopRun.stepId)?.step;
-    const first = loop?.type === "loop" ? loop.steps[0] : undefined;
-    // A definition nothing checked may name more than a loop may run at once.
-    const width = loop?.type === "loop" ? loopConcurrencyOf(loop) : 1;
-    const total = (await tx.workflowRuns.countLoopItems(loopRef)) ?? 0;
-    let started = await tx.workflowRuns.countLoopItemsStarted(loopRef);
-    let going = (await tx.workflowRuns.readLoopCounts(loopRef))?.running ?? 0;
-    while (first && started < total && going < width) {
-      const place = await itemPlace(tx, index, loopRun, first, started);
-      // The run ended at its limit of step runs: no further item starts.
-      if (!(await beginStep(tx, run, first, place))) return;
-      started += 1;
-      going += 1;
+  const fillLoop = createLoopProgress({
+    clientInstanceId,
+    now,
+    datasets,
+    beginStep,
+    advance,
+    completeDatasets,
+    async failLoop(tx, run, loop, error) {
+      await tx.workflowRuns.endStepRun({
+        clientInstanceId,
+        id: loop.id,
+        status: "failed",
+        finishedAt: now().toISOString(),
+        error
+      });
+      await finishRun(tx, run, { status: "failed", error: { ...error, stepRunId: loop.id } });
     }
-    if (going > 0) return;
-    const counts = await tx.workflowRuns.readLoopCounts(loopRef);
-    const output: WorkflowLoopOutput = {
-      total: counts?.total ?? 0,
-      done: counts?.done ?? 0,
-      failed: counts?.failed ?? 0
-    };
-    await tx.workflowRuns.endStepRun({
-      ...loopRef,
-      status: "done",
-      finishedAt: now().toISOString(),
-      output: { ...output }
-    });
-    await advance(tx, run, index, loopRun);
+  });
+
+  async function completeDatasets(tx: PlatformStores, run: WorkflowRun, stepRun: WorkflowStepRun) {
+    for (const row of await tx.workflowRunDatasets.completeStep({
+      clientInstanceId,
+      stepRunId: stepRun.id
+    })) {
+      await tx.audit.appendAuditEvent({
+        clientInstanceId,
+        type: "workflow_run.dataset_created",
+        status: "success",
+        actor: principalActor(run),
+        subject: row.id,
+        correlationId: run.correlationId,
+        metadata: {
+          runId: run.id,
+          stepRunId: stepRun.id,
+          datasetId: row.id,
+          rowCount: row.rowCount,
+          bytes: row.bytes
+        }
+      });
+    }
   }
 
   /** Starts what follows a step run that ended as `done`. */
@@ -402,121 +391,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     await fillLoop(tx, run, index, loopRun);
   }
 
-  /**
-   * Takes a step run up for one attempt. Answers nothing where there is nothing to execute:
-   * the step run has ended, its run has ended, or the run is past its time.
-   */
-  async function claim(
-    control: JobControl,
-    ref: WorkflowStepRunRef,
-    byTimeout: boolean
-  ): Promise<
-    | {
-        run: WorkflowRun;
-        stepRun: WorkflowStepRun;
-        afterCode?: WorkflowCodeOutcome;
-        afterOperation?: OperationWake;
-      }
-    | undefined
-  > {
-    return control.transaction(async (tx) => {
-      const found = await tx.workflowRuns.getStepRun(ref);
-      if (!found) return undefined;
-      const run = await tx.workflowRuns.lockRun({ clientInstanceId, id: found.runId });
-      // Read again behind the lock: a cancel may have ended it in between.
-      const stepRun = await tx.workflowRuns.getStepRun(ref);
-      if (!run || !stepRun) return undefined;
-      // A code step waits while the command worker runs its script, and is taken up again
-      // when the script has ended. Nothing else that waits is executed by a step job.
-      const afterChild =
-        stepRun.status === "waiting" && stepRun.stepType === "workflow"
-          ? await childStepOutcome(tx, run, stepRun)
-          : undefined;
-      const afterCode =
-        stepRun.status === "waiting" && stepRun.stepType === "code"
-          ? await tx.workflowRuns.readCodeOutcome(ref)
-          : undefined;
-      // The timeout job again after its worker died with the step taken up: the step ends
-      // the wait from when it began, and does not wait again on the timer of this very job.
-      const afterOperation =
-        stepRun.stepType === "operation" &&
-        (stepRun.status === "waiting" || (stepRun.status === "running" && byTimeout))
-          ? await operationWake(tx, run, stepRun)
-          : undefined;
-      if (
-        stepRun.status !== "queued" &&
-        stepRun.status !== "running" &&
-        !afterCode &&
-        !afterChild &&
-        !afterOperation
-      ) {
-        return undefined;
-      }
-      const moment = now();
-      const finishedAt = moment.toISOString();
-      const ended = isWorkflowRunEnded(run.status);
-      if (ended || moment.getTime() >= Date.parse(run.deadlineAt)) {
-        // The step does not run: its run was cancelled or ended, or is past its time. An
-        // attempt nobody ended may have made its call before its worker was gone, and then
-        // the step run says what the call did and not that nothing happened.
-        const known =
-          stepRun.status === "running"
-            ? await executor.knownCallEnd(tx, run, stepRun, finishedAt)
-            : undefined;
-        await tx.workflowRuns.endStepRun({
-          ...ref,
-          ...(known ?? { status: "cancelled", finishedAt })
-        });
-        if (ended) return undefined;
-        await finishRun(tx, run, {
-          status: "limit_reached",
-          error: {
-            code: "duration_limit",
-            message: `The run did not end within ${limits.maxDurationMs} milliseconds`,
-            stepRunId: stepRun.id
-          }
-        });
-        return undefined;
-      }
-      await tx.workflowRuns.markRunRunning({ clientInstanceId, id: run.id, startedAt: finishedAt });
-      await tx.workflowRuns.markStepRunRunning({
-        ...ref,
-        attempt: control.attempt,
-        startedAt: finishedAt
-      });
-      // The first step of a run starts it: the trigger step hands that moment on.
-      return {
-        run: { ...run, startedAt: run.startedAt ?? finishedAt },
-        stepRun,
-        ...(afterCode ? { afterCode } : {}),
-        ...(afterOperation ? { afterOperation } : {})
-      };
-    });
-  }
-
-  /**
-   * Why a step that waits for an Operation Run is taken up: the run ended, or the step's
-   * `timeout` passed while it goes on. Nothing while the step has more time: a job that comes
-   * early leaves the step waiting.
-   */
-  async function operationWake(
-    tx: PlatformStores,
-    run: WorkflowRun,
-    stepRun: WorkflowStepRun
-  ): Promise<OperationWake | undefined> {
-    if (stepRun.operationRunId === undefined) return undefined;
-    const waited = await tx.operationRuns.get({ clientInstanceId, id: stepRun.operationRunId });
-    if (!waited) return undefined;
-    if (waited.status !== "running") return { waited, timedOut: false };
-    const definition = await tx.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id });
-    const step = definition ? indexWorkflowSteps(definition).get(stepRun.stepId)?.step : undefined;
-    const waitMs = operationWaitMs(
-      step?.type === "operation" ? step.timeout : undefined,
-      limits.maxDurationMs
-    );
-    const since = Date.parse(stepRun.startedAt ?? stepRun.createdAt);
-    return now().getTime() >= since + waitMs ? { waited, timedOut: true } : undefined;
-  }
+  const claim = createStepClaim({ clientInstanceId, stores, limits, now, executor, finishRun });
 
   /** Writes how the attempt of a step went and, in the same transaction, what follows it. */
   async function settle(
@@ -649,6 +524,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     }
     const { kind: _kind, ...done } = end;
     await tx.workflowRuns.endStepRun({ ...ref, status: "done", finishedAt, ...done });
+    if (live) await completeDatasets(tx, run, stepRun);
     if (!live) return;
     if (stepRun.stepType === "output") {
       await finishRun(tx, run, { status: "done", output: end.output });
@@ -732,11 +608,18 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     }
   });
 
-  const prepareStart = createStartCheck({ clientInstanceId, stores, operationCalls, limits });
+  const prepareStart = createStartCheck({
+    clientInstanceId,
+    stores,
+    operationCalls,
+    limits,
+    definitions
+  });
 
   const { openRun, startByHand } = createRunOpening({
     clientInstanceId,
     stores,
+    authorizer: operationCalls.deps.authorizer,
     limits,
     now,
     stepFiles,
@@ -782,11 +665,18 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     stores,
     stepDataDays: options.stepDataDays ?? WORKFLOW_STEP_DATA_DAYS,
     ...(options.pruneBatch ? { batch: options.pruneBatch } : {}),
+    pruneDatasets: datasetLifetime.prune,
     now
   });
 
   return {
-    jobHandlers: [stepHandler, deadlineHandler, schedule.handler, pruning.handler],
+    jobHandlers: [
+      ...datasetLifetime.handlers,
+      stepHandler,
+      deadlineHandler,
+      schedule.handler,
+      pruning.handler
+    ],
     jobSchedules: [pruning.schedule],
     pruneRunData: pruning.prune,
     planSchedules: schedule.plan,
@@ -853,7 +743,16 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return stores.workflowRuns.readRun({ clientInstanceId, id: input.runId });
     },
 
-    readRun: (runId) => stores.workflowRuns.readRun({ clientInstanceId, id: runId }),
+    async readRun(runId) {
+      const run = await stores.workflowRuns.readRun({ clientInstanceId, id: runId });
+      if (!run) return undefined;
+      const output = await stores.workflowRuns.readRunOutput({ clientInstanceId, id: run.id });
+      const rows = await stores.workflowRunDatasets.getMany({
+        clientInstanceId,
+        ids: output ? datasetReferences(output.value).map((ref) => ref.$dataset) : []
+      });
+      return { ...run, ...(rows.length ? { datasets: rows.map(datasetMetadata) } : {}) };
+    },
 
     listRuns: ({ workflow, key, page }) =>
       stores.workflowRuns.listRuns({
@@ -866,11 +765,19 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     async listStepRuns({ runId, filter, page }) {
       const run = await stores.workflowRuns.readRun({ clientInstanceId, id: runId });
       if (!run) return [];
-      const stepRuns = await stores.workflowRuns.listStepRuns({
+      let stepRuns = await stores.workflowRuns.listStepRuns({
         clientInstanceId,
         runId: run.id,
         ...(filter ? { filter } : {}),
         ...(page ? { page } : {})
+      });
+      const rows = await stores.workflowRunDatasets.listForSteps({
+        clientInstanceId,
+        stepRunIds: stepRuns.map((step) => step.id)
+      });
+      stepRuns = stepRuns.map((step) => {
+        const datasets = rows.filter((row) => row.stepRunId === step.id).map(datasetMetadata);
+        return datasets.length ? { ...step, datasets } : step;
       });
       if (!stepRuns.some((stepRun) => stepRun.bodyCounts)) return stepRuns;
       const definition = await stores.workflowRuns.readRunDefinition({

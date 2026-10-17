@@ -3,6 +3,7 @@ import {
   OPERATION_TARGETS,
   PRINCIPAL_HOLDER_KINDS,
   WORKFLOW_RESERVED_STEP_TYPES,
+  WORKFLOW_DATASET_STATES,
   WORKFLOW_RUN_MODES,
   WORKFLOW_RUN_STATUSES,
   WORKFLOW_STEP_RUN_STATUSES,
@@ -56,6 +57,14 @@ const workflowOutputPreviewSchema = z.object({
   truncated: z.boolean()
 });
 
+const datasetMetadataSchema = z.object({
+  id: z.string(),
+  rowSchema: z.record(z.string(), z.unknown()),
+  rowCount: z.number().int().min(0),
+  bytes: z.number().int().min(0),
+  state: z.enum(WORKFLOW_DATASET_STATES)
+});
+
 export const workflowRunSchema = z.object({
   id: z.string(),
   workflow: z.string(),
@@ -94,6 +103,7 @@ export const workflowRunSchema = z.object({
   deadlineAt: timestampSchema,
   error: workflowRunErrorSchema.optional(),
   outputPreview: workflowOutputPreviewSchema.optional(),
+  datasets: z.array(datasetMetadataSchema).optional(),
   createdAt: timestampSchema,
   startedAt: timestampSchema.optional(),
   finishedAt: timestampSchema.optional(),
@@ -162,6 +172,7 @@ export const workflowStepRunSchema = z.object({
   linkedRunId: z.string().optional(),
   error: workflowRunErrorSchema.optional(),
   outputPreview: workflowOutputPreviewSchema.optional(),
+  datasets: z.array(datasetMetadataSchema).optional(),
   createdAt: timestampSchema,
   startedAt: timestampSchema.optional(),
   finishedAt: timestampSchema.optional()

@@ -7,6 +7,7 @@ import {
   WORKFLOW_TRIGGER_KINDS,
   type WorkflowBlockStepRunView,
   type WorkflowLoopCounts,
+  type WorkflowRunDataset,
   type WorkflowRunLineage,
   type WorkflowRunStatus,
   type WorkflowStepRunCall,
@@ -17,6 +18,9 @@ import {
 import { NO_START_FORM, nameFromId, startFormOf, type StartForm } from "./start-form";
 import type {
   WorkflowBranchView,
+  WorkflowDatasetColumn,
+  WorkflowDatasetColumnKind,
+  WorkflowDatasetView,
   WorkflowFailureReason,
   WorkflowListItem,
   WorkflowOutputPreview,
@@ -85,6 +89,15 @@ interface TimesResource {
   finishedAt?: string;
 }
 
+/** A dataset as a run or a step run names it: what the screens show of its record. */
+interface WorkflowDatasetResource extends Pick<
+  WorkflowRunDataset,
+  "id" | "rowCount" | "bytes" | "state"
+> {
+  /** A JSON Schema of one row; the contract carries it as an open object. */
+  rowSchema: Readonly<Record<string, unknown>>;
+}
+
 /**
  * A run as the engine's read answers it: the fields the screens read, with the names of the
  * run view of the contract. The engine's slice maps its resource onto this.
@@ -105,6 +118,7 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   definitionRevisionId?: string;
   error?: ErrorResource;
   outputPreview?: WorkflowOutputPreview;
+  datasets?: readonly WorkflowDatasetResource[];
   /** When someone asked to cancel the run. It ends when the call that is going has ended. */
   cancelledAt?: string;
 }
@@ -130,6 +144,7 @@ export interface WorkflowStepRunResource
   taken?: string;
   error?: ErrorResource;
   outputPreview?: WorkflowOutputPreview;
+  datasets?: readonly WorkflowDatasetResource[];
 }
 
 function toFailure(error: ErrorResource | undefined) {
@@ -148,6 +163,50 @@ function toOutput(preview: WorkflowOutputPreview | undefined) {
   return preview === undefined
     ? {}
     : { output: { text: preview.text, truncated: preview.truncated } };
+}
+
+/** JSON Schema's `type` of a column, by what the screens call it. */
+const COLUMN_KINDS: Readonly<Record<string, WorkflowDatasetColumnKind>> = {
+  string: "text",
+  number: "number",
+  integer: "wholeNumber",
+  boolean: "yesNo",
+  object: "record",
+  array: "list"
+};
+
+function columnKind(schema: unknown): WorkflowDatasetColumnKind {
+  if (typeof schema !== "object" || schema === null || !("type" in schema)) {
+    return "value";
+  }
+  const types: unknown[] = Array.isArray(schema.type) ? schema.type : [schema.type];
+  // A column that may be empty is of the type it holds where it is not.
+  const named = types.filter((type) => typeof type === "string" && type !== "null");
+  const only = named.length === 1 ? named[0] : undefined;
+  return typeof only === "string" ? (COLUMN_KINDS[only] ?? "value") : "value";
+}
+
+/** The columns a dataset's row schema names, in the order of its `properties`. */
+function datasetColumns(rowSchema: WorkflowDatasetResource["rowSchema"]): WorkflowDatasetColumn[] {
+  const properties = rowSchema.properties;
+  if (typeof properties !== "object" || properties === null || Array.isArray(properties)) {
+    return [];
+  }
+  return Object.entries(properties).map(([field, schema]) => ({ field, kind: columnKind(schema) }));
+}
+
+function toDatasets(datasets: readonly WorkflowDatasetResource[] | undefined) {
+  return datasets === undefined
+    ? {}
+    : {
+        datasets: datasets.map((dataset): WorkflowDatasetView => ({
+          id: dataset.id,
+          rowCount: dataset.rowCount,
+          bytes: dataset.bytes,
+          state: dataset.state,
+          columns: datasetColumns(dataset.rowSchema)
+        }))
+      };
 }
 
 function times(resource: TimesResource) {
@@ -177,6 +236,7 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     ...times(run),
     ...toFailure(run.error),
     ...toOutput(run.outputPreview),
+    ...toDatasets(run.datasets),
     ...(run.definitionRevisionId === undefined ? {} : { revisionId: run.definitionRevisionId }),
     test: run.mode === "test",
     ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
@@ -229,7 +289,8 @@ export function toWorkflowStepRun(stepRun: WorkflowStepRunResource): WorkflowSte
     ...(childRunId === undefined ? {} : { childRunId }),
     ...times(stepRun),
     ...toFailure(stepRun.error),
-    ...toOutput(stepRun.outputPreview)
+    ...toOutput(stepRun.outputPreview),
+    ...toDatasets(stepRun.datasets)
   };
 }
 

@@ -1,3 +1,4 @@
+import { WORKFLOW_DATASET_EVENTS } from "./events-workflow-datasets";
 import { GUARDRAIL_OUTCOMES } from "@work-shape/catalyst-asset-schemas";
 import type { GuardrailAnswer, GuardrailFields } from "./guardrails";
 import type { JsonObject } from "./json";
@@ -54,6 +55,7 @@ const KNOWLEDGE_PURGE_AUDIT: Omit<PlatformEventDefinition, "name"> = {
 
 // Run observations remain a separate stream from platform events and audit.
 export const EVENTS = {
+  ...WORKFLOW_DATASET_EVENTS,
   "agent_run.recovered": { ...LEGACY_AUDIT, name: "agent_run.recovered", subject: "agent_run" },
   "api_access.connect_code_confirmed": {
     ...LEGACY_AUDIT,
@@ -720,6 +722,7 @@ export const EVENTS = {
     name: "workflow_run.cancelled",
     subject: "workflow_run"
   },
+
   "workflow_run.ended": { ...LEGACY_AUDIT, name: "workflow_run.ended", subject: "workflow_run" },
   "workflow_run.started": {
     ...LEGACY_AUDIT,

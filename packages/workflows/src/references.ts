@@ -1,3 +1,4 @@
+import type { WorkflowDatasets } from "./datasets";
 import {
   WORKFLOW_RUN_KEY_MAX_LENGTH,
   WORKFLOW_RUN_KEY_SEPARATOR,
@@ -58,6 +59,7 @@ function unresolved(reference: WorkflowReference, why: string): WorkflowStepFail
 
 export interface ReferenceScope {
   store: WorkflowRunsStore;
+  datasets?: WorkflowDatasets;
   index: WorkflowStepIndex;
   run: WorkflowRun;
   /** The step run that reads. A reference is resolved from its place in the run. */
@@ -95,11 +97,23 @@ export async function resolveReference(
     }
     if (containerStepRunId === undefined) break;
     if (sequence.loop === reference.step) {
-      const item = await store.readLoopItem({
+      let item = await store.readLoopItem({
         clientInstanceId,
         id: containerStepRunId,
         index: iteration ?? 0
       });
+      if (!item && scope.datasets) {
+        const dataset = await store.readLoopDataset({ clientInstanceId, id: containerStepRunId });
+        if (dataset) {
+          const reader = await scope.datasets.reader({
+            id: dataset.$dataset,
+            runId: run.id,
+            offset: iteration ?? 0,
+            limit: 1
+          });
+          for await (const row of reader.rows) item = { value: row };
+        }
+      }
       if (!item) throw unresolved(reference, "the loop has no such item");
       const field = fieldAt(item.value, reference.path);
       if (!field.found) throw unresolved(reference, "the item has no such field");

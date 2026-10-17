@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { removeServicePrincipal } from "./connection-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
-import type { Locator, Page } from "@playwright/test";
+import type { Locator, Page, Route } from "@playwright/test";
 import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -383,6 +383,254 @@ test("on a phone the Workflow runs top to bottom and a step opens as a sheet", a
     true
   );
 });
+
+// A run whose step wrote a dataset (EW-12a). The Workflow is one of this test's own; the run and
+// its step runs are answered by routes, since a run that writes a dataset needs a step that
+// streams rows, which the suite's instance has no connector for. The answers are of the
+// contract's shape, so the page maps and shows them as it would the instance's own.
+test("a step that wrote a dataset says its rows, size and columns, and shows none of its rows", async ({
+  page,
+  accessState: _accessState
+}) => {
+  const id = `e2e-dataset-${randomUUID().slice(0, 8)}`;
+  const runId = `wr_${id}`;
+  const assetUrl = `${apiBaseUrl}/api/v1/assets/workflow/${id}`;
+  const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+    data: {
+      email: "e2e-superadmin@example.test",
+      password: "e2e-superadmin-password",
+      rememberMe: true
+    }
+  });
+  expect(signedIn.ok()).toBe(true);
+  const created = await requestWithOrigin(
+    page,
+    "post",
+    `${apiBaseUrl}/api/v1/instance/service-principals`,
+    { data: { displayLabel: "Dataset automation", permissions: ["config_assets.read"] } }
+  );
+  expect(created.ok()).toBe(true);
+  const { principal }: { principal: { id: string; name: string } } = await created.json();
+  const times = {
+    createdAt: "2026-10-12T09:00:00.000Z",
+    startedAt: "2026-10-12T09:00:01.000Z",
+    finishedAt: "2026-10-12T09:00:09.000Z"
+  };
+  const dataset = {
+    id: "wds_e2e_clients",
+    rowSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        since: { type: ["integer", "null"] },
+        active: { type: "boolean" }
+      },
+      required: ["name"]
+    },
+    rowCount: 12_480,
+    bytes: 3_355_443,
+    state: "complete"
+  };
+  const reference = { $dataset: dataset.id, rowCount: dataset.rowCount, bytes: dataset.bytes };
+  const output = JSON.stringify({ clients: reference });
+  try {
+    const saved = await requestWithOrigin(page, "put", assetUrl, {
+      data: {
+        expectedRevision: null,
+        config: {
+          name: id,
+          manifest: {
+            id,
+            name: "Dataset export",
+            runAs: principal.name,
+            inputs: { type: "object", additionalProperties: false },
+            outputs: { type: "object" },
+            steps: [
+              { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+              { id: "result", name: "Result", type: "output", input: { done: { value: 1 } } }
+            ]
+          }
+        }
+      }
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    const workspace = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/v1/workspaces/personal`,
+      {}
+    );
+    expect(workspace.ok()).toBe(true);
+    const personal: { id: string } = await workspace.json();
+
+    // The API stands on another origin than the page, so an answer made here carries the CORS
+    // headers the instance would send, or the browser refuses it and the page never draws.
+    const answer = (route: Route, json: unknown) =>
+      route.fulfill({
+        json,
+        headers: {
+          "access-control-allow-origin": new URL(page.url()).origin,
+          "access-control-allow-credentials": "true"
+        }
+      });
+    // The client checks every answer against its operation's schema and reads a mismatch as a
+    // server of another release, so each answer carries every field the contract requires.
+    const stepRun = (stepId: string, stepType: string) => ({
+      id: `wsr_${stepId}`,
+      runId,
+      stepId,
+      stepType,
+      key: stepId,
+      status: "done",
+      attempt: 1,
+      ...times
+    });
+    await page.route(`**/api/v1/workflow-runs/${runId}`, (route) =>
+      answer(route, {
+        id: runId,
+        workflow: id,
+        definitionRevisionId: `${id}-revision`,
+        mode: "live",
+        trigger: "manual",
+        status: "done",
+        principal: { id: principal.id, name: principal.name, displayLabel: "Dataset automation" },
+        startedBy: { kind: "user", id: "user_e2e", label: "Superadmin" },
+        rootRunId: runId,
+        depth: 0,
+        stepRunCount: 2,
+        deadlineAt: "2026-10-12T10:00:00.000Z",
+        ...times,
+        outputPreview: { text: output, truncated: false },
+        datasets: [dataset]
+      })
+    );
+    await page.route(`**/api/v1/workflow-runs/${runId}/steps?*`, (route) =>
+      answer(route, {
+        items: [
+          stepRun("start", "trigger"),
+          {
+            ...stepRun("result", "output"),
+            outputPreview: { text: output, truncated: false },
+            datasets: [dataset]
+          }
+        ]
+      })
+    );
+
+    const canvas = page.getByTestId("workflow-canvas");
+    const panel = canvas.locator('[data-slot="side-panel"]');
+    const result = canvas.locator('[data-flow-id="result"]');
+    const datasets = panel.locator("[data-step-datasets]");
+    const open = async () => {
+      await page.goto(`/w/${personal.id}/workflows/${id}/runs/${runId}`);
+      await expect(canvas.locator('[data-slot="flow-engine"][data-ready]')).toBeVisible();
+      // A run that ended without a failure opens on no step.
+      await expect(panel).toHaveCount(0);
+    };
+    /** Opens the result step on what the run made of it, and reads its datasets. */
+    const showDatasets = async () => {
+      await result.click();
+      await expect(canvas.locator('[data-step-panel="result"]')).toBeVisible();
+      await panel.getByRole("tab", { name: "This run", exact: true }).click();
+      await expect(datasets).toBeVisible();
+      await expect(datasets.getByRole("heading", { name: "Datasets" })).toBeVisible();
+      await expect(datasets).toContainText("Clients");
+      await expect(datasets).toContainText("12,480 rows, 3.2 MB");
+      const columns = datasets.getByRole("definition");
+      await expect(datasets.getByRole("term")).toHaveText(["name", "since", "active"]);
+      await expect(columns).toHaveText(["Text", "Whole number", "Yes or no"]);
+      // The rows stay with the run: no table, no row, no download, and no internal id.
+      await expect(panel.getByRole("table")).toHaveCount(0);
+      await expect(panel.getByRole("row")).toHaveCount(0);
+      await expect(panel.getByRole("button", { name: /download/iu })).toHaveCount(0);
+      await expect(panel.getByText(dataset.id)).toHaveCount(0);
+      await expect(
+        panel.getByRole("button", { name: "Technical details", exact: true })
+      ).toHaveAttribute("aria-expanded", "false");
+    };
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open();
+    await showDatasets();
+    await expect(result).toHaveAttribute("aria-current", "true");
+    // Another step of the run says nothing of the dataset; coming back shows it again.
+    await canvas.locator('[data-flow-id="start"]').click();
+    await expect(canvas.locator('[data-step-panel="start"]')).toBeVisible();
+    await expect(result).not.toHaveAttribute("aria-current", "true");
+    await expect(datasets).toHaveCount(0);
+    await showDatasets();
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+    await expect(result).not.toHaveAttribute("aria-current", "true");
+
+    // On a phone the step opens as a sheet, and the dataset fits inside it.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open();
+    await showDatasets();
+    await expect(panel).toHaveAttribute("data-placement", "sheet");
+    await datasets.scrollIntoViewIfNeeded();
+    const sheet = await boxOf(panel);
+    const section = await boxOf(datasets);
+    expect(section.left).toBeGreaterThanOrEqual(sheet.left);
+    expect(section.right).toBeLessThanOrEqual(sheet.right + 1);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+    ).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+
+    // In dark mode the panel is dark and the counts read on it at the contrast of body text.
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open();
+    await expect
+      .poll(() =>
+        page
+          .locator("main")
+          .first()
+          .evaluate((element) => element.classList.contains("dark"))
+      )
+      .toBe(true);
+    await showDatasets();
+    const [background, text] = await Promise.all([
+      luminanceOf(panel, "backgroundColor"),
+      luminanceOf(datasets.getByText("12,480 rows, 3.2 MB"), "color")
+    ]);
+    expect(background).toBeLessThan(0.2);
+    expect((text + 0.05) / (background + 0.05)).toBeGreaterThanOrEqual(4.5);
+  } finally {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await requestWithOrigin(page, "post", `${assetUrl}/delete`, { data: { expectedRevision: 1 } });
+    await removeServicePrincipal(principal.id);
+  }
+});
+
+/**
+ * The relative luminance (0 dark to 1 light) of an element's computed colour. The colour is
+ * painted on a canvas and read back, so any CSS colour form (`oklch`, `rgb`) is read alike.
+ */
+async function luminanceOf(
+  locator: Locator,
+  property: "color" | "backgroundColor"
+): Promise<number> {
+  return locator.evaluate((element, which) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const context = canvas.getContext("2d");
+    if (context === null) {
+      return Number.NaN;
+    }
+    context.fillStyle = getComputedStyle(element)[which];
+    context.fillRect(0, 0, 1, 1);
+    const [red = 0, green = 0, blue = 0] = context.getImageData(0, 0, 1, 1).data;
+    const linear = (channel: number) => {
+      const value = channel / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue);
+  }, property);
+}
 
 async function boxOf(locator: Locator): Promise<Box> {
   return locator.evaluate((element) => {

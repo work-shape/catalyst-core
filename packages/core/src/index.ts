@@ -185,3 +185,15 @@ export {
   WORKSPACE_VISIBILITIES,
   localeCodes
 } from "@work-shape/catalyst-asset-schemas";
+
+export type {
+  WorkflowDatasetLimits,
+  WorkflowDatasetPart,
+  WorkflowRunDataset,
+  WorkflowDatasetRef
+} from "./workflow-datasets";
+
+export {
+  WORKFLOW_DATASET_STATES,
+  type WorkflowDatasetState
+} from "@work-shape/catalyst-asset-schemas";

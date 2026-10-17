@@ -1,3 +1,5 @@
+import type { WorkflowDatasetReference } from "./workflows";
+import type { WorkflowRunDataset } from "./workflow-datasets";
 import { WORKFLOW_ENDED_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { ServicePrincipalRecord } from "./api-access";
 import type { ClientInstanceId, OperationRunId, WorkflowRunId, WorkflowStepRunId } from "./ids";
@@ -149,6 +151,7 @@ export interface WorkflowOutputPreview {
 /** A run as a read shows it: no definition and no input, and the result as a preview. */
 export type WorkflowRunView = WorkflowRun & {
   outputPreview?: WorkflowOutputPreview;
+  datasets?: Pick<WorkflowRunDataset, "id" | "rowSchema" | "rowCount" | "bytes" | "state">[];
 };
 
 /**
@@ -204,6 +207,7 @@ export type NewWorkflowStepRun = Pick<
 export type WorkflowStepRunView = WorkflowStepRun &
   WorkflowBlockStepRunView & {
     outputPreview?: WorkflowOutputPreview;
+    datasets?: Pick<WorkflowRunDataset, "id" | "rowSchema" | "rowCount" | "bytes" | "state">[];
     /** On the step run of a loop step alone. */
     loop?: WorkflowLoopCounts;
     /** On the step run of a loop step alone. */
@@ -400,9 +404,10 @@ export interface WorkflowRunsStore {
    * Moves a running loop step run to `waiting` and keeps the list it runs over. From then on
    * the step runs of its items carry the loop on, and its own job has nothing left to do.
    */
+  readLoopDataset(ref: WorkflowStepRunRef): Promise<WorkflowDatasetReference | undefined>;
   markLoopWaiting(
     ref: WorkflowStepRunRef & {
-      items: readonly JsonValue[];
+      items: readonly JsonValue[] | WorkflowDatasetReference;
       /** The id of the loop's last step. An item is done when the step run of that step is. */
       lastStepId?: string;
     }

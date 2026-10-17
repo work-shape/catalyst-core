@@ -231,10 +231,6 @@ describe("the definitions a folder holds", () => {
     const cases: [Record<string, unknown>, string][] = [
       [{ steps: [trigger, code, output()] }, "steps[1].type"],
       [
-        { steps: [trigger, { ...operation("rows"), dataset: { at: "rows" } }, output()] },
-        "steps[1].dataset"
-      ],
-      [
         { steps: [trigger, { ...operation("rows"), paginate: true }, output()] },
         "steps[1].paginate"
       ],
@@ -242,8 +238,6 @@ describe("the definitions a folder holds", () => {
         { steps: [trigger, loop("each", inner, { collect: ref("inner").ref }), output()] },
         "steps[1].collect"
       ],
-      [{ steps: [trigger, output()], retention: { datasets: 30 } }, "retention"],
-      [{ steps: [trigger, output()], types: { row: { type: "object" } } }, "types"],
       [{ steps: [trigger, output()], labels: { month: { value: "2026-10" } } }, "labels"],
       [{ steps: [trigger, output()], onFailure: "notify" }, "onFailure"]
     ];
@@ -356,5 +350,109 @@ describe("the definitions a folder holds", () => {
       code: "CONFLICT",
       details: { reason: "definition_invalid" }
     });
+  });
+});
+
+it("checks dataset row compatibility structurally across named child contracts", async () => {
+  const { checkChildContracts } = await import("@work-shape/catalyst-workflows");
+  const named = (type: string | string[], required: string[]) => ({
+    type: "object",
+    properties: { id: { type }, extra: { type: "string" } },
+    required
+  });
+  const child = parseWorkflowManifest({
+    id: "row-child",
+    name: "Child",
+    runAs: "runner",
+    types: { expected: named("string", ["id"]) },
+    inputs: {
+      type: "object",
+      properties: { rows: { type: "dataset", row: { $ref: "#/types/expected" } } },
+      required: ["rows"]
+    },
+    outputs: { type: "object" },
+    steps: [{ ...trigger, triggers: [{ kind: "parent" }] }, output()]
+  });
+  if (!child.ok) throw new Error("Invalid child fixture");
+  const source = { read: async () => ({ revisionId: "r1", manifest: child.manifest }) };
+  const parent = (row: Record<string, unknown>) =>
+    parseWorkflowManifest({
+      id: "row-parent",
+      name: "Parent",
+      runAs: "runner",
+      types: { actual: row },
+      inputs: {
+        type: "object",
+        properties: { rows: { type: "dataset", row: { $ref: "#/types/actual" } } }
+      },
+      outputs: { type: "object" },
+      steps: [
+        trigger,
+        {
+          id: "child",
+          name: "Child",
+          type: "workflow",
+          workflow: "row-child",
+          input: { rows: ref("start", "input.rows") }
+        },
+        output()
+      ]
+    });
+  for (const row of [named("integer", ["id"]), named("string", [])]) {
+    const parsed = parent(row);
+    if (!parsed.ok) throw new Error("Invalid parent fixture");
+    await expect(checkChildContracts(parsed.manifest, source)).rejects.toMatchObject({
+      details: { reason: "dataset_schema_invalid" }
+    });
+  }
+  const wider = parent(named("string", ["id", "extra"]));
+  if (!wider.ok) throw new Error("Invalid wider fixture");
+  await expect(checkChildContracts(wider.manifest, source)).resolves.toBeUndefined();
+  const nullableSource = {
+    read: async () => ({
+      revisionId: "r2",
+      manifest: { ...child.manifest, types: { expected: named(["string", "null"], ["id"]) } }
+    })
+  };
+  const nullable = parent(named(["string", "null"], ["id"]));
+  if (!nullable.ok) throw new Error("Invalid nullable fixture");
+  await expect(checkChildContracts(nullable.manifest, nullableSource)).resolves.toBeUndefined();
+  const tooWide = parent(named(["string", "null", "integer"], ["id"]));
+  if (!tooWide.ok) throw new Error("Invalid union fixture");
+  await expect(checkChildContracts(tooWide.manifest, nullableSource)).rejects.toMatchObject({
+    details: { reason: "dataset_schema_invalid" }
+  });
+  const dottedRow = {
+    type: "object",
+    properties: { "client.id": { type: "string" } },
+    required: ["client.id"]
+  };
+  const dottedSource = {
+    read: async () => ({
+      revisionId: "r3",
+      manifest: { ...child.manifest, types: { expected: dottedRow } }
+    })
+  };
+  const dotted = parent(dottedRow);
+  if (!dotted.ok) throw new Error("Invalid dotted fixture");
+  await expect(checkChildContracts(dotted.manifest, dottedSource)).resolves.toBeUndefined();
+  const arrays = {
+    type: "object",
+    properties: { id: { type: ["array", "null"], items: { type: "string" } } },
+    required: ["id"]
+  };
+  const arraySource = {
+    read: async () => ({
+      revisionId: "r4",
+      manifest: { ...child.manifest, types: { expected: arrays } }
+    })
+  };
+  const wrongItems = parent({
+    ...arrays,
+    properties: { id: { type: ["array", "null"], items: { type: "integer" } } }
+  });
+  if (!wrongItems.ok) throw new Error("Invalid array fixture");
+  await expect(checkChildContracts(wrongItems.manifest, arraySource)).rejects.toMatchObject({
+    details: { reason: "dataset_schema_invalid" }
   });
 });

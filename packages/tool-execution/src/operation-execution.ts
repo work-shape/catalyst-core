@@ -592,7 +592,10 @@ export async function executeAdmitted(
       return await endToolFailure(context, answer.result);
     }
     const tool = isToolOperationAnswer(answer) ? answer : undefined;
-    const output: unknown = tool ? toolOutput(tool.result) : answer;
+    const answered: unknown = tool ? toolOutput(tool.result) : answer;
+    const output = context.runtime.captureOutput
+      ? await context.runtime.captureOutput(answered)
+      : answered;
     // From here on the call has happened. Whatever fails below is a failure to record it, and
     // the caller is still told the outcome with the run: an error would make it call again.
     completed = {

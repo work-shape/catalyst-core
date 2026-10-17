@@ -146,6 +146,8 @@ export type OperationCallRuntime = Pick<
    * invalid input with this text, after the surface's own check and before anything runs.
    */
   unreadableInput?: { code: string; message: string };
+  /** Workflow dataset capture, before an outcome can retain bulk rows. Never persisted. */
+  captureOutput?(output: unknown): Promise<unknown>;
 };
 
 /**

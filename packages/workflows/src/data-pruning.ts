@@ -54,6 +54,8 @@ export interface WorkflowDataPruningOptions {
   /** Batch sizes below the release's own, for a test. */
   batch?: { stepRuns?: number; runs?: number };
   now(): Date;
+  /** Dataset retention is swept on this same daily tick. */
+  pruneDatasets?(signal?: AbortSignal): Promise<void>;
 }
 
 export interface WorkflowDataPruning {
@@ -77,6 +79,7 @@ export function createWorkflowDataPruning(
 
   async function prune(signal?: AbortSignal) {
     const endedBefore = new Date(now().getTime() - options.stepDataDays * DAY_MS).toISOString();
+    await options.pruneDatasets?.(signal);
     const done = { runs: 0, stepRuns: 0, batches: 0 };
     for (;;) {
       const due = await stores.workflowRuns.listRunsWithDataEndedBefore({

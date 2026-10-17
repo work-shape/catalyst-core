@@ -70,7 +70,16 @@ import { knowledgeBaseStates } from "./schema/knowledgeBases";
 
 import { conversationFollowUps } from "./schema/followUps";
 
+import {
+  workflowRunDatasets,
+  workflowDatasetUsage,
+  workflowDatasetReaders
+} from "./schema/workflowDatasets";
+
 export const schema = {
+  workflowRunDatasets,
+  workflowDatasetUsage,
+  workflowDatasetReaders,
   conversationFollowUps,
   approvalRequests,
   productUsers,
@@ -124,3 +133,4 @@ export const schema = {
   knowledgeBaseStates,
   guardrailHits
 };
+export * from "./schema/workflowDatasets";

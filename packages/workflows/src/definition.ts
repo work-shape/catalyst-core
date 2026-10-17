@@ -21,6 +21,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { workflowValueSchema } from "./dataset-schema";
 import { codeFileIssue } from "./code-step";
 import { parseCron } from "./cron";
 import { workflowOperationTimeoutSchema } from "./operation-wait";
@@ -218,11 +219,7 @@ export function stepOperationRefusal(
  */
 function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
   const issues: WorkflowDefinitionIssue[] = [];
-  for (const field of ["inputs", "outputs"] as const) {
-    if (namesDatasetType(manifest[field]))
-      issues.push(notSupported(field, "a dataset in a Workflow contract"));
-  }
-  for (const field of ["labels", "onFailure", "retention", "types"] as const) {
+  for (const field of ["labels", "onFailure"] as const) {
     if (manifest[field] !== undefined) issues.push(notSupported(field, `'${field}'`));
   }
   const known: readonly string[] = WORKFLOW_STEP_TYPES;
@@ -249,22 +246,28 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
         });
       }
       if (step.type === "operation") {
-        for (const field of ["dataset", "paginate"] as const) {
-          if (step[field] !== undefined) issues.push(notSupported(`${at}.${field}`, `'${field}'`));
+        for (const field of ["paginate"] as const) {
+          if (step[field] !== undefined)
+            issues.push(notSupported(`${at}.${field}`, `'${field}' (EW-13)`));
         }
       }
+      if (step.type === "agent" && namesDatasetType(step.inputSchema))
+        issues.push(notSupported(`${at}.inputSchema`, "a dataset in an agent input (EW-14)"));
       if (step.type === "code") {
         // A code step is handed JSON and returns JSON. Datasets come with the slice that
         // keeps them, and a script is not handed one before.
         for (const field of ["inputSchema", "outputSchema"] as const) {
           if (namesDatasetType(step[field])) {
-            issues.push(notSupported(`${at}.${field}`, "a dataset in the schema of a code step"));
+            issues.push(
+              notSupported(`${at}.${field}`, "a dataset in the schema of a code step (EW-14)")
+            );
           }
         }
       }
       if (step.type === "loop") {
-        // `collect` returns a dataset, and this engine keeps none.
-        if (step.collect !== undefined) issues.push(notSupported(`${at}.collect`, "'collect'"));
+        // Collection is the paging slice, separate from the loop's failures dataset.
+        if (step.collect !== undefined)
+          issues.push(notSupported(`${at}.collect`, "'collect' (EW-13)"));
         walk(step.steps, `${at}.steps`);
       }
     });
@@ -469,6 +472,17 @@ export function parseWorkflowManifest(value: unknown): WorkflowDefinitionResult 
     return { ok: false, issues: [...blocks, ...unsupported] };
   }
   const issues = structuralIssues(parsed.data);
+  try {
+    workflowValueSchema(parsed.data.inputs, parsed.data.types);
+    workflowValueSchema(parsed.data.outputs, parsed.data.types);
+    for (const row of Object.values(parsed.data.types ?? {}))
+      workflowValueSchema({ type: "dataset", row }, parsed.data.types);
+  } catch {
+    issues.push({
+      path: "types",
+      message: "A dataset row schema cannot be checked or names no declared type"
+    });
+  }
   return issues.length > 0 ? { ok: false, issues } : { ok: true, manifest: parsed.data };
 }
 

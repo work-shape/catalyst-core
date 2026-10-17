@@ -102,6 +102,7 @@ export function WorkflowCanvas({
         : { passesOn: { count: passed, step: taker.step.name } }),
       stepRun,
       ...(liveOnce === undefined ? {} : { liveOnce }),
+      ...(run.run.datasets === undefined ? {} : { runDatasets: run.run.datasets }),
       counts: block?.bodyCounts?.[id],
       countsEnded: block?.finishedAt !== undefined,
       now: run.now

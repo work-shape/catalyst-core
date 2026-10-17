@@ -26,6 +26,8 @@ import {
   WORKFLOW_MANIFEST_MAX_BYTES,
   assertWorkflowPackages,
   checkChildContracts,
+  checkDatasetContracts,
+  enqueueDatasetCleanup,
   checkChildCycles,
   indexWorkflowSteps,
   parseWorkflowManifest,
@@ -110,6 +112,8 @@ export function createWorkflowAssetKind(
     timeZone?: string;
     /** The installed distributions of the release runner. Empty when its manifest is missing. */
     runnerPackages?: readonly WorkflowRunnerPackage[];
+    registry?: () =>
+      Pick<import("@work-shape/catalyst-core").OperationRegistry, "resolve"> | undefined;
     /** The clock of the engine, for a test of due times. */
     now?: () => Date;
   }
@@ -207,20 +211,41 @@ export function createWorkflowAssetKind(
       // The pointer has moved in this transaction, but is not visible outside it yet.
       // Serializing graph reads here prevents two individually safe publishes forming a cycle.
       await stores.workflowRuns.lockDefinitionGraph({ clientInstanceId });
+      await checkDatasetContracts(
+        result.manifest,
+        createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets }),
+        options.registry?.()
+      );
       await checkChildCycles(
         result.manifest,
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
       );
       await reschedule(stores, replaced, config);
     },
-    onRemove: ({ stores, published }) => reschedule(stores, published, undefined),
+    async onRemove({ stores, published, name }) {
+      const parsed = workflowConfigSchema.safeParse(published);
+      const workflow = name ?? (parsed.success ? parsed.data.name : undefined);
+      if (workflow !== undefined) {
+        await stores.workflowRunDatasets.claimWorkflow({
+          clientInstanceId,
+          workflow
+        });
+        await enqueueDatasetCleanup(
+          stores,
+          clientInstanceId,
+          (options.now?.() ?? new Date()).toISOString()
+        );
+      }
+      await reschedule(stores, published, undefined);
+    },
     assertScopedWrite: async ({ definition, stores }) => {
       const parsed = workflowConfigSchema.parse(definition);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
       await checkChildContracts(
         result.manifest,
-        createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
+        createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets }),
+        options.registry?.()
       );
     },
     publishReach: workflowPublishReach,

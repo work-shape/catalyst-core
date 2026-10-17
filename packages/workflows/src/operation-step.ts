@@ -243,6 +243,7 @@ export async function callStepOperation(input: {
   wait: OperationOutcomeWait;
   /** Keeps the id of the Operation Run of the step's call on its step run. */
   noteOperationRun(id: OperationRunId): Promise<void>;
+  captureOutput?(output: unknown): Promise<unknown>;
 }): Promise<OperationStepResult | OperationStepWait> {
   const { calls, run, stepRun, operation } = input;
   // A save refuses such a step. A definition stored before it did is refused here, by the
@@ -302,11 +303,27 @@ export async function callStepOperation(input: {
   }
   const { approvals: _notHeld, ...deps } = calls.deps;
   let outcome;
+  let captureFailure: unknown;
+  const captureOutput = input.captureOutput;
+  const capture = captureOutput
+    ? async (output: unknown) => {
+        try {
+          return await captureOutput(output);
+        } catch (error) {
+          captureFailure = error;
+          throw error;
+        }
+      }
+    : undefined;
   try {
-    outcome = await runOperation(call, deps, changing ? {} : { signal: input.signal });
+    outcome = await runOperation(call, deps, {
+      ...(changing ? {} : { signal: input.signal }),
+      ...(capture ? { captureOutput: capture } : {})
+    });
   } catch (error) {
     throw refusalOf(error, operation, made, refused) ?? error;
   }
+  if (captureFailure) throw captureFailure;
   const { result } = outcome;
   const trace = traceOf(
     outcome.publishedWouldAsk ? { ...made, publishedWouldAsk: outcome.publishedWouldAsk } : made,

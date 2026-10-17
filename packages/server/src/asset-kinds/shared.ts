@@ -326,6 +326,7 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   onRemove?(input: {
     clientInstanceId: ClientInstanceId;
     assetId: string;
+    name?: string;
     /** The config that was published until the delete, where one was. */
     published?: JsonObject;
     stores: PlatformStores;

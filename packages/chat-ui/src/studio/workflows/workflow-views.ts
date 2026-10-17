@@ -3,6 +3,7 @@ import {
   OPERATION_EFFECTS,
   OPERATION_TARGETS,
   WORKFLOW_RESERVED_STEP_TYPES,
+  type WorkflowDatasetState,
   WORKFLOW_RUN_STATUSES,
   WORKFLOW_STEP_TYPES
 } from "@work-shape/catalyst-core";
@@ -186,6 +187,29 @@ export interface WorkflowOutputPreview {
   truncated: boolean;
 }
 
+/** What a column of a dataset holds, as its row schema says it. */
+export type WorkflowDatasetColumnKind =
+  "text" | "number" | "wholeNumber" | "yesNo" | "record" | "list" | "value";
+
+/** One column of a dataset's rows, by the field name its row schema gives. */
+export interface WorkflowDatasetColumn {
+  field: string;
+  kind: WorkflowDatasetColumnKind;
+}
+
+/**
+ * A dataset a step wrote: rows kept beside the run, which its output names by a reference
+ * (`{ $dataset, rowCount, bytes }`) instead of carrying them.
+ */
+export interface WorkflowDatasetView {
+  id: string;
+  rowCount: number;
+  bytes: number;
+  /** `writing` until its step ended; `deleted` once the run's data was removed. */
+  state: WorkflowDatasetState;
+  columns: readonly WorkflowDatasetColumn[];
+}
+
 /** One run of a Workflow. */
 export interface WorkflowRunView {
   id: string;
@@ -202,6 +226,8 @@ export interface WorkflowRunView {
   finishedAt?: string;
   failure?: WorkflowFailure;
   output?: WorkflowOutputPreview;
+  /** The datasets of the run's steps, where the instance names them. */
+  datasets?: readonly WorkflowDatasetView[];
   /** The id of the revision of the definition the run started on. */
   revisionId?: string;
   /**
@@ -257,6 +283,8 @@ export interface WorkflowStepRunView {
   childRunId?: string;
   failure?: WorkflowFailure;
   output?: WorkflowOutputPreview;
+  /** The datasets the step wrote, where the instance names them. */
+  datasets?: readonly WorkflowDatasetView[];
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;

@@ -116,6 +116,31 @@ export const workflowsConfigSchema = z
   .strictObject({
     /** Caps Workflow step jobs in each serving process; invalid values stop startup. */
     stepSlots: z.number().int().min(1).max(64).default(4),
+    datasets: z
+      .strictObject({
+        rows: z.number().int().positive().default(5_000_000),
+        bytes: z
+          .number()
+          .int()
+          .positive()
+          .default(2 * 1024 ** 3),
+        rowBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(256 * 1024),
+        runBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(10 * 1024 ** 3),
+        instanceBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(50 * 1024 ** 3)
+      })
+      .prefault({}),
     codeSteps: z
       .strictObject({
         /** How many code steps one command worker runs at once. */

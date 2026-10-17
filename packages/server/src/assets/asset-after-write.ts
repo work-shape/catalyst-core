@@ -44,6 +44,7 @@ export async function afterRemove(
     await kind.onRemove({
       clientInstanceId: options.clientInstanceId,
       assetId: asset.id,
+      name: asset.name,
       ...(asset.publishedConfig === undefined ? {} : { published: asset.publishedConfig }),
       stores: options.stores
     });

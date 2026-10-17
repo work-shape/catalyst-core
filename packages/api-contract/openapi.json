@@ -19090,6 +19090,49 @@
                         "truncated"
                       ]
                     },
+                    "datasets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "rowSchema": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "rowCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "bytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "writing",
+                              "complete",
+                              "deleted"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "rowSchema",
+                          "rowCount",
+                          "bytes",
+                          "state"
+                        ]
+                      }
+                    },
                     "createdAt": {
                       "$ref": "#/components/schemas/Timestamp"
                     },
@@ -19376,6 +19419,49 @@
                         "text",
                         "truncated"
                       ]
+                    },
+                    "datasets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "rowSchema": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "rowCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "bytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "writing",
+                              "complete",
+                              "deleted"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "rowSchema",
+                          "rowCount",
+                          "bytes",
+                          "state"
+                        ]
+                      }
                     },
                     "createdAt": {
                       "$ref": "#/components/schemas/Timestamp"
@@ -19824,6 +19910,49 @@
                               "text",
                               "truncated"
                             ]
+                          },
+                          "datasets": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "rowSchema": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                },
+                                "rowCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "writing",
+                                    "complete",
+                                    "deleted"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "rowSchema",
+                                "rowCount",
+                                "bytes",
+                                "state"
+                              ]
+                            }
                           },
                           "createdAt": {
                             "$ref": "#/components/schemas/Timestamp"
@@ -20300,6 +20429,49 @@
                               "truncated"
                             ]
                           },
+                          "datasets": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "rowSchema": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                },
+                                "rowCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "writing",
+                                    "complete",
+                                    "deleted"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "rowSchema",
+                                "rowCount",
+                                "bytes",
+                                "state"
+                              ]
+                            }
+                          },
                           "createdAt": {
                             "$ref": "#/components/schemas/Timestamp"
                           },
@@ -20614,6 +20786,49 @@
                         "text",
                         "truncated"
                       ]
+                    },
+                    "datasets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "rowSchema": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "rowCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "bytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "writing",
+                              "complete",
+                              "deleted"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "rowSchema",
+                          "rowCount",
+                          "bytes",
+                          "state"
+                        ]
+                      }
                     },
                     "createdAt": {
                       "$ref": "#/components/schemas/Timestamp"
@@ -20952,6 +21167,49 @@
                         "text",
                         "truncated"
                       ]
+                    },
+                    "datasets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "rowSchema": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "rowCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "bytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "writing",
+                              "complete",
+                              "deleted"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "rowSchema",
+                          "rowCount",
+                          "bytes",
+                          "state"
+                        ]
+                      }
                     },
                     "createdAt": {
                       "$ref": "#/components/schemas/Timestamp"

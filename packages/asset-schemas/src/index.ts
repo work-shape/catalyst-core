@@ -6,3 +6,5 @@ export * from "./yaml-bounds";
 export * from "./yaml-data";
 
 export * from "./knowledge-sources";
+
+export * from "./workflow-datasets";

@@ -703,6 +703,7 @@ export class AssetDraftWorkflow {
             await onRemove({
               clientInstanceId: this.options.clientInstanceId,
               assetId: gone.assetId,
+              name,
               ...(published === undefined ? {} : { published }),
               stores
             });

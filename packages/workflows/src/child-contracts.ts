@@ -1,3 +1,5 @@
+import { checkDatasetContracts } from "./dataset-contracts";
+import { workflowValueSchema } from "./dataset-schema";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import { AppError, type JsonObject, type WorkflowManifest } from "@work-shape/catalyst-core";
 import { z } from "zod";
@@ -14,8 +16,10 @@ const fieldsSchema = z.object({
 /** Read the published child's contract at save; no schema is copied into a step. */
 export async function checkChildContracts(
   manifest: WorkflowManifest,
-  definitions: Pick<WorkflowDefinitionSource, "read">
+  definitions: Pick<WorkflowDefinitionSource, "read">,
+  registry?: Pick<import("@work-shape/catalyst-core").OperationRegistry, "resolve">
 ): Promise<void> {
+  await checkDatasetContracts(manifest, definitions, registry);
   const outputs = new Map<string, JsonObject>();
   const inputs = new Map<string, JsonObject>();
   const steps = indexWorkflowSteps(manifest);
@@ -39,9 +43,13 @@ export async function checkChildContracts(
     }
     for (const [field, source] of Object.entries(step.input)) {
       if (source.value !== undefined && holdsDatasetReference(source.value))
-        throw new AppError("VALIDATION_FAILED", "Child datasets are not supported yet", {
-          reason: "not_supported_yet"
-        });
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "A child input must reference a dataset, not supply its id as a literal",
+          {
+            reason: "not_supported_yet"
+          }
+        );
       if (fields.additionalProperties === false && !Object.hasOwn(fields.properties ?? {}, field))
         throw new AppError("VALIDATION_FAILED", `The child input does not declare '${field}'`, {
           reason: "child_input_invalid"
@@ -49,7 +57,7 @@ export async function checkChildContracts(
       const property = fields.properties?.[field];
       const schema = jsonObjectSchema.safeParse(property);
       if (source.value !== undefined && schema.success) {
-        const compiled = compileJsonSchema(schema.data);
+        const compiled = compileJsonSchema(workflowValueSchema(schema.data, child.manifest.types));
         if (!compiled.ok || compiled.validate(source.value).length)
           throw new AppError(
             "VALIDATION_FAILED",
@@ -59,8 +67,8 @@ export async function checkChildContracts(
       }
     }
     if (
-      !compileJsonSchema(child.manifest.inputs).ok ||
-      !compileJsonSchema(child.manifest.outputs).ok
+      !compileJsonSchema(workflowValueSchema(child.manifest.inputs, child.manifest.types)).ok ||
+      !compileJsonSchema(workflowValueSchema(child.manifest.outputs, child.manifest.types)).ok
     )
       throw new AppError("VALIDATION_FAILED", "The child contract cannot be checked", {
         reason: "child_schema_invalid"

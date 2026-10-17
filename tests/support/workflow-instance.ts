@@ -216,6 +216,8 @@ export async function workflowFixture(
   options: {
     runnerPackages?: Parameters<typeof createWorkflowAssetKind>[0]["runnerPackages"];
     moduleOn?: boolean;
+    datasetObjects?: InstanceWorkflowsParts["datasetObjects"];
+    datasetLimits?: InstanceWorkflowsParts["datasetLimits"];
     stepSlots?: number;
     limits?: InstanceWorkflowsParts["limits"];
     /**
@@ -287,6 +289,8 @@ export async function workflowFixture(
           instanceStores = stores;
           workflows = createInstanceWorkflows({
             modules,
+            ...(options.datasetObjects ? { datasetObjects: options.datasetObjects } : {}),
+            ...(options.datasetLimits ? { datasetLimits: options.datasetLimits } : {}),
             clientInstanceId,
             stores,
             operationCalls: server.operationCalls,

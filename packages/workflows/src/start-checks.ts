@@ -1,3 +1,4 @@
+import { workflowValueSchema } from "./dataset-schema";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import type {
   ApiAccessStore,
@@ -68,7 +69,7 @@ export async function workflowStartIssues(
       message: `The Workflow '${manifest.id}' is not started by hand`
     });
   }
-  if (!compileJsonSchema(manifest.inputs).ok) {
+  if (!compileJsonSchema(workflowValueSchema(manifest.inputs, manifest.types)).ok) {
     issues.push({
       code: "inputs_unreadable",
       message: "The Workflow's inputs are a schema that cannot be checked",

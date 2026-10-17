@@ -650,7 +650,8 @@ describe("the modules workflows and dataStores", () => {
         WORKFLOW_RUN_JOB_KINDS.fireSchedule,
         "workflow_run.run_code",
         "workflow_run.sweep_code",
-        WORKFLOW_RUN_JOB_KINDS.pruneData
+        WORKFLOW_RUN_JOB_KINDS.pruneData,
+        WORKFLOW_RUN_JOB_KINDS.deleteDatasets
       ],
       // The script of a code step runs in the sandbox, which the command worker reaches.
       commandWorkerJobKinds: ["workflow_run.run_code", "workflow_run.sweep_code"]

@@ -1,4 +1,4 @@
-import type { WorkflowOutputPreview } from "./workflow-views";
+import type { WorkflowDatasetView, WorkflowOutputPreview } from "./workflow-views";
 
 /** How many rows of a step's output the panel shows. */
 const OUTPUT_ROWS = 8;
@@ -96,6 +96,58 @@ export function stepOutputRows(output: WorkflowOutputPreview): StepOutputRows | 
     rows: records.slice(0, OUTPUT_ROWS).map((record) => fields.map((field) => cell(record[field]))),
     total: output.truncated || whole === undefined ? undefined : records.length
   };
+}
+
+/** A dataset an output names, with what the run says of it where it says it. */
+export interface StepDataset {
+  id: string;
+  /** The field of the output that names it, as a heading. Absent for an entry of a list. */
+  name?: string;
+  rowCount: number;
+  bytes: number;
+  /** The dataset's record, where the step run or the run carries it. */
+  record?: WorkflowDatasetView;
+}
+
+/**
+ * An object that holds no other object, with the field name before it where it has one. A
+ * dataset reference is such an object, and a cut preview still holds the ones before the cut.
+ */
+const FLAT_OBJECT = /(?:"((?:[^"\\]|\\.)*)"\s*:\s*)?(\{[^{}]*\})/g;
+
+function datasetReference(text: string) {
+  const value = parsed(text);
+  return isRecord(value) &&
+    typeof value.$dataset === "string" &&
+    typeof value.rowCount === "number" &&
+    typeof value.bytes === "number"
+    ? { id: value.$dataset, rowCount: value.rowCount, bytes: value.bytes }
+    : undefined;
+}
+
+/**
+ * The datasets an output names, wherever in it they stand, once each and in their order. A
+ * step's own records come first; a dataset it passed on from an earlier step is the run's.
+ */
+export function stepDatasets(
+  output: WorkflowOutputPreview,
+  records: readonly WorkflowDatasetView[]
+): StepDataset[] {
+  const found = new Map<string, StepDataset>();
+  for (const [, key, object] of output.text.matchAll(FLAT_OBJECT)) {
+    const reference = object === undefined ? undefined : datasetReference(object);
+    if (reference === undefined || found.has(reference.id)) {
+      continue;
+    }
+    const field = key === undefined ? undefined : parsed(`"${key}"`);
+    const record = records.find((candidate) => candidate.id === reference.id);
+    found.set(reference.id, {
+      ...reference,
+      ...(typeof field === "string" && field !== "" ? { name: columnName(field) } : {}),
+      ...(record === undefined ? {} : { record })
+    });
+  }
+  return [...found.values()];
 }
 
 /** What a simulated step of a test run would have done, as the panel says it in sentences. */

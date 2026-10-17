@@ -279,7 +279,7 @@ async function publish(t: WorkflowFixture, workflow: string, revision = 1) {
 }
 
 describe("child Workflow contracts and publish checks", () => {
-  it("refuses an unpublished child, bad mapped input, and dataset contracts at save", async () => {
+  it("refuses an unpublished child, bad mapped input, and a dataset without its row schema at save", async () => {
     const t = await assets();
     const save = (manifest: WorkflowManifest) =>
       t.call(t.root.id, "assets.put", {
@@ -324,7 +324,7 @@ describe("child Workflow contracts and publish checks", () => {
           outputs: { type: "object", properties: { rows: { type: "dataset" } } }
         })
       ).json()
-    ).toMatchObject({ error: { details: { reason: "not_supported_yet" } } });
+    ).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
   });
 
   it("refuses a missing parent trigger and missing workflow.use, and refuses a cycle through published revisions", async () => {

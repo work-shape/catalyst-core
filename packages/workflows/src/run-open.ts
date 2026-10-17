@@ -1,3 +1,6 @@
+import { checkDatasetSchemas } from "./dataset-values";
+import { WorkflowStepFailure } from "./step-failure";
+import { datasetReferences } from "./dataset-schema";
 import {
   AppError,
   WORKFLOW_RUN_KEY_MAX_LENGTH,
@@ -6,6 +9,9 @@ import {
   isAuthenticatedServicePrincipal,
   workflowRunKeySchema,
   type AuthenticatedIdentity,
+  type ActorAccess,
+  type Authorizer,
+  type WorkflowRunId,
   type AuthenticatedUser,
   type ClientInstanceId,
   type OperationRunId,
@@ -45,6 +51,8 @@ export interface StartWorkflowRunInput {
   /** The Operation Run of the call that starts the run. */
   operationRunId?: OperationRunId;
   correlationId: string;
+  /** Trusted Workflow call origin, never read from a start request body. */
+  datasetInputRunId?: WorkflowRunId;
 }
 
 /**
@@ -68,6 +76,7 @@ export function runKeyRefusal(): AppError {
 export function createRunOpening(options: {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
+  authorizer: Authorizer;
   limits: WorkflowRunLimits;
   now(): Date;
   stepFiles: WorkflowStepFiles;
@@ -88,11 +97,12 @@ export function createRunOpening(options: {
     tx: PlatformStores,
     prepared: PreparedStart,
     started: RunOrigin,
-    mode: WorkflowRunMode = "live"
+    mode: WorkflowRunMode = "live",
+    datasetAccess?: { access?: ActorAccess; sourceRunId?: WorkflowRunId }
   ): Promise<WorkflowRun | undefined> {
     const { runKey } = started;
     for (let attempt = 1; attempt <= KEYED_START_ATTEMPTS; attempt += 1) {
-      const run = await writeRun(tx, prepared, started, mode);
+      const run = await writeRun(tx, prepared, started, mode, datasetAccess);
       if (run || runKey === undefined) return run;
       const holder = await tx.workflowRuns.lockRunByKey({
         clientInstanceId,
@@ -109,7 +119,8 @@ export function createRunOpening(options: {
     tx: PlatformStores,
     prepared: PreparedStart,
     started: RunOrigin,
-    mode: WorkflowRunMode
+    mode: WorkflowRunMode,
+    datasetAccess?: { access?: ActorAccess; sourceRunId?: WorkflowRunId }
   ): Promise<WorkflowRun | undefined> {
     const { published, trigger, input, principal } = prepared;
     const { actor, ...origin } = started;
@@ -134,6 +145,70 @@ export function createRunOpening(options: {
       ).toISOString()
     });
     if (!run) return undefined;
+    const references = datasetReferences(input);
+    for (const ref of references) {
+      const row = await tx.workflowRunDatasets.get({ clientInstanceId, id: ref.$dataset });
+      if (!row || row.state !== "complete")
+        throw new AppError("NOT_FOUND", "The dataset has expired", { reason: "dataset_expired" });
+      const sourceRunId = run.parentRunId ?? datasetAccess?.sourceRunId;
+      if (sourceRunId) {
+        if (
+          !(await tx.workflowRunDatasets.canRead({
+            clientInstanceId,
+            id: ref.$dataset,
+            runId: sourceRunId
+          }))
+        )
+          throw new AppError("FORBIDDEN", "This run cannot pass the dataset");
+      } else {
+        if (!datasetAccess?.access)
+          throw new AppError(
+            "FORBIDDEN",
+            "Dataset inputs need workflow.read_run_data on their source Workflow"
+          );
+        const source = await tx.workflowRuns.readRun({ clientInstanceId, id: row.runId });
+        if (!source)
+          throw new AppError("NOT_FOUND", "The dataset has expired", { reason: "dataset_expired" });
+        const asset = await tx.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "workflow",
+          name: source.workflow
+        });
+        datasetAccess.access.require("workflow.read_run_data", {
+          kind: "workflow",
+          name: source.workflow,
+          ...(asset ? { assetId: asset.id } : {})
+        });
+      }
+      if (ref.rowCount !== row.rowCount || ref.bytes !== row.bytes)
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "The dataset reference does not match its stored counts",
+          { reason: "dataset_reference_invalid" }
+        );
+      await tx.workflowRunDatasets.allowRun({ clientInstanceId, id: ref.$dataset, runId: run.id });
+    }
+    if (references.length) {
+      try {
+        await checkDatasetSchemas(
+          input,
+          published.manifest.inputs,
+          published.manifest,
+          async (id) => {
+            const row = await tx.workflowRunDatasets.get({ clientInstanceId, id });
+            if (!row || row.state !== "complete")
+              throw new AppError("NOT_FOUND", "The dataset has expired", {
+                reason: "dataset_expired"
+              });
+            return row.rowSchema;
+          }
+        );
+      } catch (error) {
+        if (error instanceof WorkflowStepFailure)
+          throw new AppError("VALIDATION_FAILED", error.message, { reason: error.code });
+        throw error;
+      }
+    }
     await options.beginTrigger(tx, run, trigger);
     await tx.jobs.enqueue(
       workflowDeadlineJobKind,
@@ -185,6 +260,10 @@ export function createRunOpening(options: {
     const scripts = await codeStepIssues(revision, options.stepFiles);
     if (scripts.length > 0) throw workflowStepFilesRefusal(revision.manifest.id, scripts);
     const { startedBy } = input;
+    const access =
+      datasetReferences(prepared.input).length && !input.datasetInputRunId
+        ? await options.authorizer.forActor(startedBy)
+        : undefined;
     const run = await stores.transaction(
       async (tx) =>
         (await openRun(
@@ -202,7 +281,11 @@ export function createRunOpening(options: {
             actor: auditActorFromIdentity(startedBy),
             correlationId: input.correlationId
           },
-          mode
+          mode,
+          {
+            ...(access ? { access } : {}),
+            ...(input.datasetInputRunId ? { sourceRunId: input.datasetInputRunId } : {})
+          }
         )) ??
         (input.operationRunId
           ? await tx.workflowRuns.findRunByOperation({

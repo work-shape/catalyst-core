@@ -142,7 +142,10 @@ export function createWorkflowStartSource(options: {
               ...(key === undefined ? {} : { key }),
               startedBy: context.actor,
               operationRunId: context.runId,
-              correlationId: context.correlationId
+              correlationId: context.correlationId,
+              ...(origin.kind === "workflow" && step?.runId === origin.workflowRunId
+                ? { datasetInputRunId: step.runId }
+                : {})
             },
             call?.target === "test" ? "test" : "live"
           );

@@ -38,6 +38,8 @@ export interface InstanceWorkflowsParts extends Pick<
   operationCalls: Pick<OperationCalls, "registry" | "deps">;
   /** Validated at startup, with the release schema's default for direct assembly callers. */
   stepSlots?: number;
+  datasetObjects?: WorkflowEngineOptions["datasetObjects"];
+  datasetLimits?: WorkflowEngineOptions["datasetLimits"];
   /**
    * Where the published definition of a Workflow is read, in place of the instance's own
    * source: the published revisions of its Workflow assets. For a test of the engine.
@@ -125,6 +127,12 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     stepSlots: parts.stepSlots ?? workflowsConfigSchema.parse({}).stepSlots,
     clientInstanceId,
     stores,
+    ...(parts.datasetObjects
+      ? {
+          datasetObjects: parts.datasetObjects,
+          datasetLimits: parts.datasetLimits ?? workflowsConfigSchema.parse({}).datasets
+        }
+      : {}),
     definitions: given ?? assets,
     operationCalls,
     ...(parts.limits ? { limits: parts.limits } : {}),
@@ -225,6 +233,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
   // The instance's time zone: the schedules of its Workflows are read on its clock, by the
   // engine and by the kind that queues the job of a schedule when its definition is published.
   const { timeZone } = config.clientInstance;
+  let registry: InstanceWorkflowsParts["operationCalls"]["registry"] | undefined;
   const zone = timeZone === undefined ? {} : { timeZone };
   return {
     ...(modules.isEnabled(workflowsModule.name)
@@ -235,18 +244,23 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
               apiAccess: stores.apiAccess,
               configAssets: stores.configAssets,
               access: stores.access,
-              ...zone
+              ...zone,
+              registry: () => registry
             })
           ]
         }
       : {}),
-    async start({ operationCalls }) {
+    async start({ operationCalls, files }) {
+      registry = operationCalls.registry;
       const workflows = createInstanceWorkflows({
         modules,
         clientInstanceId,
         stores,
         operationCalls,
         stepSlots: config.workflows.stepSlots,
+        ...(files
+          ? { datasetObjects: files.objects, datasetLimits: config.workflows.datasets }
+          : {}),
         ...zone,
         // The command worker runs the scripts of code steps. An instance without Execution
         // Workspaces or without a sandbox has no such worker, and its engine knows.

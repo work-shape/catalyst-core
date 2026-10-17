@@ -702,7 +702,7 @@ export const WORKFLOW_ERROR_CODES = {
  * record per dataset with its run, step run, row schema, counts, parts and state. It holds
  * nothing until the slice that brings datasets gives it its methods.
  */
-export interface WorkflowRunDatasetsStore {}
+export type { WorkflowRunDatasetsStore } from "./workflow-datasets";
 
 /** Where the parts of a run's datasets lie in the instance's `files` object store. */
 export const WORKFLOW_RUN_OBJECT_PREFIX = "workflow-runs/";

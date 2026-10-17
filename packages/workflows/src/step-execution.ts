@@ -1,3 +1,8 @@
+import { checkDatasetValues, loopFailureRowSchema } from "./dataset-values";
+import { datasetReference } from "./datasets";
+import { workflowValueSchema, datasetReferences } from "./dataset-schema";
+import type { WorkflowDatasets } from "./datasets";
+import { operationDatasetCapture } from "./operation-dataset";
 import { childStepOutcome } from "./child-runs";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
@@ -75,7 +80,10 @@ export type StepEnd =
       systemic: boolean;
     }
   /** A loop read its list. Its items are run by step runs of their own. */
-  | { kind: "loop"; items: JsonValue[] }
+  | {
+      kind: "loop";
+      items: JsonValue[] | import("@work-shape/catalyst-core").WorkflowDatasetReference;
+    }
   | { kind: "child"; operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
   /**
    * An operation step started work that ends later (`completion: async`). The step waits for
@@ -103,6 +111,7 @@ export interface StepExecutorOptions {
   /** Where a step of a published run reads whether its Workflow is still published. */
   definitions: Pick<WorkflowDefinitionSource, "read">;
   limits: WorkflowRunLimits;
+  datasets?: WorkflowDatasets;
   now(): Date;
   /** Where the script of a code step is read. */
   stepFiles: WorkflowStepFiles;
@@ -209,6 +218,12 @@ export function createStepExecutor(options: StepExecutorOptions) {
         );
       }
     } catch (error) {
+      if (isAppError(error) && error.code === "FORBIDDEN")
+        return {
+          kind: "failed",
+          error: { code: "FORBIDDEN", message: "This run cannot read the dataset" },
+          systemic: false
+        };
       if (!(error instanceof WorkflowStepFailure)) throw error;
       return { kind: "failed", error: error.toRunError(), systemic: false, call };
     }
@@ -270,7 +285,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
   async function execute(attempt: StepAttempt): Promise<StepEnd> {
     const { run, stepRun, index, signal } = attempt;
     const step = index.get(stepRun.stepId)?.step;
-    const scope = { store: stores.workflowRuns, index, run, stepRun };
+    const scope = { store: stores.workflowRuns, index, run, stepRun, datasets: options.datasets };
     try {
       switch (step?.type) {
         case "trigger": {
@@ -290,7 +305,18 @@ export function createStepExecutor(options: StepExecutorOptions) {
           if (stepRun.status === "waiting" && ended) return ended;
           const input = await resolveInput(scope, step.input);
           withinStepData(input, "The child input");
-          if (holdsDatasetReference(input)) throw notSupportedFailure("a dataset in a child input");
+          const child = await definitions.read(step.workflow);
+          if (child && options.datasets)
+            await checkDatasetValues(
+              input,
+              child.manifest.inputs,
+              child.manifest,
+              run.id,
+              options.datasets
+            );
+          if (options.datasets)
+            for (const ref of datasetReferences(input))
+              await options.datasets.reader({ id: ref.$dataset, runId: run.id });
           // The key goes beside the child's inputs, as the start operation takes it.
           if (step.key !== undefined) {
             input[WORKFLOW_START_KEY_INPUT] = await resolveRunKey(scope, step.key);
@@ -324,13 +350,35 @@ export function createStepExecutor(options: StepExecutorOptions) {
           };
         }
         case "operation": {
-          for (const field of ["dataset", "paginate"] as const) {
+          for (const field of ["paginate"] as const) {
             if (step[field] !== undefined) throw notSupportedFailure(`'${field}' on a step`);
           }
           const input = await resolveInput(scope, step.input);
           withinStepData(input, "The input of the step");
+          if (options.datasets)
+            for (const ref of datasetReferences(input))
+              await options.datasets.reader({ id: ref.$dataset, runId: run.id });
           const caller = await callerOf(run, stepRun);
+          const captureOutput =
+            step.dataset && options.datasets
+              ? await operationDatasetCapture({
+                  datasets: options.datasets,
+                  registry: operationCalls.registry,
+                  operation: step.operation,
+                  at: step.dataset.at,
+                  run,
+                  stepRun,
+                  manifest: attempt.definition,
+                  signal
+                })
+              : undefined;
+          if (step.dataset && !captureOutput)
+            throw new WorkflowStepFailure(
+              "dataset_storage_unavailable",
+              "This instance has no files object store"
+            );
           const result = await callStepOperation({
+            ...(captureOutput ? { captureOutput } : {}),
             calls: operationCalls,
             run,
             stepRun,
@@ -375,8 +423,34 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "loop": {
           if (step.collect !== undefined) throw notSupportedFailure("'collect' on a loop");
           const items = await resolveReference(scope, step.items);
+          // Allocate the checkpoint before the settling transaction. If writing its parts
+          // is interrupted later, cleanup still owns the prefix even if that end rolls back.
+          if (step.onItemFailure === "continue" && options.datasets) {
+            async function* empty(): AsyncIterable<unknown> {}
+            await options.datasets.write({
+              run,
+              stepRun,
+              field: "failures",
+              rowSchema: loopFailureRowSchema,
+              rows: empty(),
+              signal
+            });
+          }
           if (workflowDatasetReferenceSchema.safeParse(items).success) {
-            throw notSupportedFailure("a loop over a dataset");
+            const dataset = workflowDatasetReferenceSchema.parse(items);
+            if (!options.datasets)
+              throw new WorkflowStepFailure(
+                "dataset_storage_unavailable",
+                "This instance has no files object store"
+              );
+            await options.datasets.reader({ id: dataset.$dataset, runId: run.id });
+            const record = await options.datasets.metadata(dataset.$dataset);
+            if (record.rowCount > limits.loopMaxItems)
+              throw new WorkflowStepFailure(
+                "loop_too_long",
+                `A loop runs over at most ${limits.loopMaxItems} items`
+              );
+            return { kind: "loop", items: datasetReference(record) };
           }
           if (!Array.isArray(items)) {
             throw new WorkflowStepFailure("loop_items_not_a_list", "A loop runs over a list");
@@ -395,7 +469,9 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "output": {
           const output = await resolveInput(scope, step.input);
           withinStepData(output, "The result of the run");
-          const schema = compileJsonSchema(attempt.definition.outputs);
+          const schema = compileJsonSchema(
+            workflowValueSchema(attempt.definition.outputs, attempt.definition.types)
+          );
           const [issue] = schema.ok ? schema.validate(output) : [];
           if (!schema.ok || issue) {
             throw new WorkflowStepFailure(
@@ -403,6 +479,17 @@ export function createStepExecutor(options: StepExecutorOptions) {
               issue
                 ? `The result does not fit the Workflow's outputs at '/${issue.path.join("/")}': ${issue.message}`
                 : "The Workflow's outputs are a schema that cannot be checked"
+            );
+          }
+          if (options.datasets) {
+            for (const ref of datasetReferences(output))
+              await options.datasets.reader({ id: ref.$dataset, runId: run.id });
+            await checkDatasetValues(
+              output,
+              attempt.definition.outputs,
+              attempt.definition,
+              run.id,
+              options.datasets
             );
           }
           return { kind: "done", output };

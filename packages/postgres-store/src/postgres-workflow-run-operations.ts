@@ -29,8 +29,7 @@ import {
   type WorkflowStagedCode,
   type WorkflowStepRun,
   type WorkflowStepRunId,
-  type WorkflowStepRunView,
-  type WorkflowRunDatasetsStore
+  type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
 import { type PostgresConnection } from "./postgres-database";
@@ -355,7 +354,9 @@ async function markWorkflowLoopWaiting(
     .set({
       status: "waiting",
       input: {
-        items: [...ref.items],
+        ...("$dataset" in ref.items
+          ? { dataset: ref.items, total: ref.items.rowCount }
+          : { items: [...ref.items] }),
         ...(ref.lastStepId === undefined ? {} : { last: ref.lastStepId })
       }
     })
@@ -615,10 +616,12 @@ async function countWorkflowLoopItems(
 ): Promise<number | undefined> {
   const [row] = await db
     .select({
-      count: sql<number | null>`jsonb_array_length(${workflowStepRuns.input}->'items')`
+      count: sql<
+        number | null
+      >`coalesce((${workflowStepRuns.input}->>'total')::int, jsonb_array_length(${workflowStepRuns.input}->'items'))`
     })
     .from(workflowStepRuns)
-    .where(and(stepRunIs(ref), sql`jsonb_typeof(${workflowStepRuns.input}->'items') = 'array'`));
+    .where(stepRunIs(ref));
   return row?.count ?? undefined;
 }
 
@@ -750,6 +753,13 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
     getStepRun: (ref) => getWorkflowStepRun(db, ref),
     markStepRunRunning: (ref) => markWorkflowStepRunRunning(db, ref),
     endStepRun: (ref) => endWorkflowStepRun(db, ref),
+    async readLoopDataset(ref) {
+      const [row] = await db
+        .select({ input: workflowStepRuns.input })
+        .from(workflowStepRuns)
+        .where(stepRunIs(ref));
+      return row?.input?.dataset;
+    },
     markLoopWaiting: (ref) => markWorkflowLoopWaiting(db, ref),
     noteStepRunOperation: (ref) => noteWorkflowStepRunOperation(db, ref),
     listOpenStepRuns: (ref) => listOpenWorkflowStepRuns(db, ref),
@@ -764,9 +774,4 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
   };
 }
 
-/** The datasets of Workflow Runs. It holds nothing until the slice that brings datasets. */
-export function createPostgresWorkflowRunDatasetsStore(
-  _db: PostgresConnection
-): WorkflowRunDatasetsStore {
-  return {};
-}
+export { createPostgresWorkflowRunDatasetsStore } from "./postgres-workflow-datasets";

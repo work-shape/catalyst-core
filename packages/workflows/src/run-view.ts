@@ -46,3 +46,14 @@ export function withEveryBodyStep(
     };
   });
 }
+
+/** Adds only schemas, counts and sizes to a visible page. Never reads a part. */
+export function datasetMetadata(row: import("@work-shape/catalyst-core").WorkflowRunDataset) {
+  return {
+    id: row.id,
+    rowSchema: row.rowSchema,
+    rowCount: row.rowCount,
+    bytes: row.bytes,
+    state: row.state
+  };
+}

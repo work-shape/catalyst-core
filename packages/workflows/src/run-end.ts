@@ -15,6 +15,7 @@ import { workflowDeadlineJobKind } from "./run-deadline";
 export function createRunEnd(options: {
   clientInstanceId: ClientInstanceId;
   now(): Date;
+  datasetEnd(tx: PlatformStores, run: WorkflowRun, output: JsonValue | undefined): Promise<void>;
   cancelWaiting(tx: PlatformStores, run: WorkflowRun): Promise<void>;
 }) {
   const { clientInstanceId, now, cancelWaiting } = options;
@@ -43,6 +44,7 @@ export function createRunEnd(options: {
       ...end
     });
     if (!ended) return false;
+    await options.datasetEnd(tx, { ...run, status: end.status }, end.output);
     await cancelWaiting(tx, run);
     await tx.jobs.withdraw(workflowDeadlineJobKind, {
       clientInstanceId,
