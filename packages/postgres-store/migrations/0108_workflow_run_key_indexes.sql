@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "workflow_runs_run_key_idx" ON "workflow_runs" USING btree ("client_instance_id","workflow","mode","run_key") WHERE "workflow_runs"."run_key" is not null and "workflow_runs"."status" not in ('failed', 'cancelled', 'limit_reached');--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "workflow_step_runs_linked_run_idx" ON "workflow_step_runs" USING btree ("linked_run_id") WHERE "workflow_step_runs"."linked_run_id" is not null;--> statement-breakpoint

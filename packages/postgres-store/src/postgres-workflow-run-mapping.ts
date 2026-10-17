@@ -83,6 +83,7 @@ function mapRun(row: Omit<RunRow, "input" | "output" | "definition">): WorkflowR
     ...(row.cancelledBy === null ? {} : { cancelledBy: row.cancelledBy }),
     ...(row.cancelledAt === null ? {} : { cancelledAt: row.cancelledAt.toISOString() }),
     ...(row.scheduledFor === null ? {} : { scheduledFor: row.scheduledFor.toISOString() }),
+    ...(row.runKey === null ? {} : { runKey: row.runKey }),
     ...(row.dataPrunedAt === null ? {} : { dataPrunedAt: row.dataPrunedAt.toISOString() })
   };
 }
@@ -110,6 +111,7 @@ function mapStepRun(
     status: row.status,
     attempt: row.attempt,
     ...(row.operationRunId === null ? {} : { operationRunId: row.operationRunId }),
+    ...(row.linkedRunId === null ? {} : { linkedRunId: row.linkedRunId }),
     ...(row.effect === null ? {} : { effect: row.effect }),
     ...(row.source === null ? {} : { source: row.source }),
     ...(row.target === null ? {} : { target: row.target }),

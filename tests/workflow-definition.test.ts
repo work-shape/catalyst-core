@@ -227,11 +227,9 @@ describe("the definitions a folder holds", () => {
       inputSchema: { type: "object" },
       outputSchema: { type: "object" }
     };
-    const child = { id: "child", name: "Child", type: "workflow", workflow: "other", input: {} };
     const inner = [operation("inner")];
     const cases: [Record<string, unknown>, string][] = [
       [{ steps: [trigger, code, output()] }, "steps[1].type"],
-      [{ steps: [trigger, { ...child, key: [{ value: "x" }] }, output()] }, "steps[1].key"],
       [
         { steps: [trigger, { ...operation("rows"), dataset: { at: "rows" } }, output()] },
         "steps[1].dataset"

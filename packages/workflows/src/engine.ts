@@ -21,6 +21,7 @@ import {
   type WorkflowLoopOutput,
   type WorkflowRun,
   type WorkflowRunError,
+  type WorkflowRunKeyFilter,
   type WorkflowRunView,
   type WorkflowStep,
   type WorkflowStepRun,
@@ -117,7 +118,12 @@ export interface WorkflowEngine {
     correlationId: string;
   }): Promise<WorkflowRunView | undefined>;
   readRun(runId: string): Promise<WorkflowRunView | undefined>;
-  listRuns(input: { workflow: string; page?: StorePage }): Promise<WorkflowRunView[]>;
+  /** The runs of a Workflow, newest first: all of them, or those of one key or key prefix. */
+  listRuns(input: {
+    workflow: string;
+    key?: WorkflowRunKeyFilter;
+    page?: StorePage;
+  }): Promise<WorkflowRunView[]>;
   /** The step runs of a run: all of them, or those of one block, status or item of a loop. */
   listStepRuns(input: {
     runId: string;
@@ -849,8 +855,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
     readRun: (runId) => stores.workflowRuns.readRun({ clientInstanceId, id: runId }),
 
-    listRuns: ({ workflow, page }) =>
-      stores.workflowRuns.listRuns({ clientInstanceId, workflow, ...(page ? { page } : {}) }),
+    listRuns: ({ workflow, key, page }) =>
+      stores.workflowRuns.listRuns({
+        clientInstanceId,
+        workflow,
+        ...(key ? { key } : {}),
+        ...(page ? { page } : {})
+      }),
 
     async listStepRuns({ runId, filter, page }) {
       const run = await stores.workflowRuns.readRun({ clientInstanceId, id: runId });

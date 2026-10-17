@@ -11,9 +11,10 @@ import {
   stepRunIs,
   notEnded
 } from "./postgres-workflow-run-mapping";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, notInArray, sql } from "drizzle-orm";
 import {
   WORKFLOW_ENDED_STATUSES,
+  WORKFLOW_KEY_RELEASING_STATUSES,
   type JsonObject,
   type JsonValue,
   type WorkflowBodyCounts,
@@ -67,12 +68,64 @@ async function createWorkflowRun(
       deadlineAt: new Date(run.deadlineAt),
       correlationId: run.correlationId,
       createdAt: new Date(run.createdAt),
-      scheduledFor: run.scheduledFor === undefined ? null : new Date(run.scheduledFor)
+      scheduledFor: run.scheduledFor === undefined ? null : new Date(run.scheduledFor),
+      runKey: run.runKey ?? null
     })
-    // The one conflict a new id can meet is the due time of a schedule that has its run.
+    // The conflicts a new id can meet: the due time of a schedule that has its run, the run
+    // key of an open or done run, and the Operation Run of a start that wrote its run. An
+    // insert that meets a key another start has written and not committed waits for it.
     .onConflictDoNothing()
     .returning(runColumns);
   return row ? mapRun(row) : undefined;
+}
+
+async function lockWorkflowRunByKey(
+  db: PostgresConnection,
+  input: Input<"lockRunByKey">
+): Promise<WorkflowRun | undefined> {
+  // The predicate of `workflow_runs_run_key_idx`: the run that holds the key, read again
+  // behind its lock, so one that ended `failed` while this waited is no longer it.
+  const [row] = await db
+    .select(runColumns)
+    .from(workflowRuns)
+    .where(
+      and(
+        eq(workflowRuns.clientInstanceId, input.clientInstanceId),
+        eq(workflowRuns.workflow, input.workflow),
+        eq(workflowRuns.mode, input.mode),
+        eq(workflowRuns.runKey, input.runKey),
+        notInArray(workflowRuns.status, [...WORKFLOW_KEY_RELEASING_STATUSES])
+      )
+    )
+    .for("update");
+  return row ? mapRun(row) : undefined;
+}
+
+async function linkWorkflowStepRun(
+  db: PostgresConnection,
+  ref: Input<"linkStepRun">
+): Promise<void> {
+  await db
+    .update(workflowStepRuns)
+    .set({ linkedRunId: ref.linkedRunId })
+    .where(and(stepRunIs(ref), notEnded(workflowStepRuns.status)));
+}
+
+async function listLinkedWorkflowStepRuns(
+  db: PostgresConnection,
+  ref: Input<"listLinkedStepRuns">
+): Promise<WorkflowStepRunId[]> {
+  const rows = await db
+    .select({ id: workflowStepRuns.id })
+    .from(workflowStepRuns)
+    .where(
+      and(
+        eq(workflowStepRuns.clientInstanceId, ref.clientInstanceId),
+        eq(workflowStepRuns.linkedRunId, ref.id),
+        notEnded(workflowStepRuns.status)
+      )
+    );
+  return rows.map((row) => row.id);
 }
 
 async function readWorkflowScheduleState(
@@ -125,6 +178,12 @@ async function listWorkflowRuns(
       and(
         eq(workflowRuns.clientInstanceId, input.clientInstanceId),
         eq(workflowRuns.workflow, input.workflow),
+        input.key === undefined
+          ? undefined
+          : "exact" in input.key
+            ? eq(workflowRuns.runKey, input.key.exact)
+            : // `starts_with` takes the prefix as it is written: `_` and `%` are no patterns.
+              sql`starts_with(${workflowRuns.runKey}, ${input.key.prefix})`,
         keysetFilter(input.page, [workflowRuns.createdAt, workflowRuns.id], true)
       )
     )
@@ -670,6 +729,9 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
   return {
     ...childWorkflowRuns(db),
     createRun: (run) => createWorkflowRun(db, run),
+    lockRunByKey: (input) => lockWorkflowRunByKey(db, input),
+    linkStepRun: (ref) => linkWorkflowStepRun(db, ref),
+    listLinkedStepRuns: (ref) => listLinkedWorkflowStepRuns(db, ref),
     readScheduleState: (input) => readWorkflowScheduleState(db, input),
     countLoopItemsStarted: (ref) => countWorkflowLoopItemsStarted(db, ref),
     stageCodeStep: (ref) => stageWorkflowCodeStep(db, ref),

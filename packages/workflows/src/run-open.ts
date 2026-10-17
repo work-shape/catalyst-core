@@ -1,8 +1,10 @@
 import {
   AppError,
+  WORKFLOW_RUN_KEY_MAX_LENGTH,
   auditActorFromIdentity,
   createPlatformId,
   isAuthenticatedServicePrincipal,
+  workflowRunKeySchema,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type ClientInstanceId,
@@ -24,9 +26,20 @@ import type { RunOrigin } from "./scheduled-start";
 // in one transaction. A start by hand, a test run of a draft and a due time of a schedule all
 // open their run here.
 
+/**
+ * How often a start with a key writes its run again where the run that held the key ended
+ * `failed`, `cancelled` or `limit_reached` between the insert and the read of it.
+ */
+const KEYED_START_ATTEMPTS = 3;
+
 export interface StartWorkflowRunInput {
   workflow: string;
   input: unknown;
+  /**
+   * The run key (`workflowRunKeySchema`). Where a run of the Workflow that is open or `done`
+   * holds it, the start starts nothing and answers that run.
+   */
+  key?: string;
   /** Who starts the run. Its right opened the start; the run acts as its own principal. */
   startedBy: AuthenticatedIdentity;
   /** The Operation Run of the call that starts the run. */
@@ -43,6 +56,15 @@ export interface TestWorkflowRunInput extends Omit<StartWorkflowRunInput, "workf
   startedBy: AuthenticatedUser;
 }
 
+/** The refusal of a start whose key is empty, too long, or no text. */
+export function runKeyRefusal(): AppError {
+  return new AppError(
+    "VALIDATION_FAILED",
+    `A run key is text of 1 to ${WORKFLOW_RUN_KEY_MAX_LENGTH} characters`,
+    { reason: "run_key_invalid" }
+  );
+}
+
 export function createRunOpening(options: {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
@@ -57,13 +79,37 @@ export function createRunOpening(options: {
 
   /**
    * Writes a run with the step run of its trigger and the audit of its start. Answers
-   * nothing where the run names a due time of a schedule that has its run.
+   * nothing where the run names a due time of a schedule that has its run. Where it names a
+   * run key that a run of the Workflow and mode holds, it starts nothing and answers that
+   * run, held until the transaction ends: the insert meets the key's unique index, and the
+   * holder is read behind it in the same transaction, never checked before.
    */
   async function openRun(
     tx: PlatformStores,
     prepared: PreparedStart,
     started: RunOrigin,
     mode: WorkflowRunMode = "live"
+  ): Promise<WorkflowRun | undefined> {
+    const { runKey } = started;
+    for (let attempt = 1; attempt <= KEYED_START_ATTEMPTS; attempt += 1) {
+      const run = await writeRun(tx, prepared, started, mode);
+      if (run || runKey === undefined) return run;
+      const holder = await tx.workflowRuns.lockRunByKey({
+        clientInstanceId,
+        workflow: prepared.published.manifest.id,
+        mode,
+        runKey
+      });
+      if (holder) return holder;
+    }
+    return undefined;
+  }
+
+  async function writeRun(
+    tx: PlatformStores,
+    prepared: PreparedStart,
+    started: RunOrigin,
+    mode: WorkflowRunMode
   ): Promise<WorkflowRun | undefined> {
     const { published, trigger, input, principal } = prepared;
     const { actor, ...origin } = started;
@@ -132,6 +178,9 @@ export function createRunOpening(options: {
       });
       if (existing) return existing;
     }
+    if (input.key !== undefined && !workflowRunKeySchema.safeParse(input.key).success) {
+      throw runKeyRefusal();
+    }
     const prepared = await options.prepareStart(revision, input.input);
     const scripts = await codeStepIssues(revision, options.stepFiles);
     if (scripts.length > 0) throw workflowStepFilesRefusal(revision.manifest.id, scripts);
@@ -149,6 +198,7 @@ export function createRunOpening(options: {
               label: startedBy.displayLabel
             },
             ...(input.operationRunId ? { operationRunId: input.operationRunId } : {}),
+            ...(input.key === undefined ? {} : { runKey: input.key }),
             actor: auditActorFromIdentity(startedBy),
             correlationId: input.correlationId
           },

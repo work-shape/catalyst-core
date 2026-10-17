@@ -5,6 +5,7 @@ import type {
   OperationRunId,
   StorePage,
   WorkflowLastRun,
+  WorkflowRunKeyFilter,
   WorkflowRunView,
   WorkflowStepRunFilter,
   WorkflowStepRunView
@@ -19,6 +20,8 @@ export interface WorkflowRunsPort {
   start(input: {
     workflow: string;
     input: unknown;
+    /** The run key: a run of the Workflow that is open or done and holds it answers the start. */
+    key?: string;
     startedBy: AuthenticatedIdentity;
     operationRunId?: OperationRunId;
     correlationId: string;
@@ -31,6 +34,8 @@ export interface WorkflowRunsPort {
   test(input: {
     workflow: string;
     input: unknown;
+    /** The run key: a run of the Workflow that is open or done and holds it answers the start. */
+    key?: string;
     startedBy: AuthenticatedUser;
     operationRunId?: OperationRunId;
     correlationId: string;
@@ -42,7 +47,12 @@ export interface WorkflowRunsPort {
     correlationId: string;
   }): Promise<WorkflowRunView | undefined>;
   readRun(runId: string): Promise<WorkflowRunView | undefined>;
-  listRuns(input: { workflow: string; page?: StorePage }): Promise<WorkflowRunView[]>;
+  /** The runs of a Workflow, newest first: all of them, or those of one key or key prefix. */
+  listRuns(input: {
+    workflow: string;
+    key?: WorkflowRunKeyFilter;
+    page?: StorePage;
+  }): Promise<WorkflowRunView[]>;
   listStepRuns(input: {
     runId: string;
     filter?: WorkflowStepRunFilter;

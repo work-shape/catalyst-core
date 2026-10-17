@@ -66,7 +66,7 @@ const STEP_REFERENCE: {
     fields: {
       workflow: "The child Workflow id; it lists the parent trigger.",
       input: "A mapping onto the child's inputs; its inputs and outputs supply the schemas.",
-      key: "Reserved until run keys are supported."
+      key: "The child's run key: a list of literals and references, each a text or a number, which the engine joins with '/', such as [\"2026-09\", the client's number]. A run of the child that is open or done and has the key answers the step, which waits for it and does not own it; one that ended failed, cancelled or limit_reached gives its key up to a new run."
     }
   },
   loop: {
@@ -347,7 +347,7 @@ until they publish it.
 Follow the build rules for data scope in the platform docs: \`references/configure/release-config.md\` in \`platform-docs\`.
 
 - Write the Mandant key on every copied row and keep it in aggregates and run history.
-- Design per-Mandant work as child runs keyed by the Mandant. Child runs are not available yet; do not replace them with an unkeyed cross-Mandant run.
+- Design per-Mandant work as child runs keyed by the Mandant and the period, such as \`key: ["2026-09", <the Mandant's number>]\`. Starting the parent again for that period then runs only the children that did not end done. Do not replace them with an unkeyed cross-Mandant run.
 - Say who a Workflow is for when it serves only part of the firm. Everyone in that audience must be allowed to see every Mandant the shared source credential can read.
 
 ## What a manifest is
@@ -410,7 +410,7 @@ A definition that holds one of these is refused when it is saved, with the code
     .join(", ")};
 - \`labels\`, \`onFailure\`, \`retention\` and \`types\` on the manifest;
 - \`dataset\` and \`paginate\` on an operation step, and \`collect\` on a loop;
-- child dataset inputs and outputs, and child run keys.
+- child dataset inputs and outputs.
 
 Where the person asks for one of them, say that this release does not run it yet, and offer
 what does: a loop for a list, a changing operation to keep what an item produces, one

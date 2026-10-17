@@ -2,6 +2,7 @@ import { childStepOutcome } from "./child-runs";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   WORKFLOW_DATASET_KEY,
+  WORKFLOW_START_KEY_INPUT,
   isAppError,
   operationDenialError,
   workflowDatasetReferenceSchema,
@@ -54,7 +55,7 @@ import {
   type WorkflowOperationCalls
 } from "./operation-step";
 import { operationWaitMs, operationWaitOutcome, stillRunningError } from "./operation-wait";
-import { resolveInput, resolveReference } from "./references";
+import { resolveInput, resolveReference, resolveRunKey } from "./references";
 import { workflowRunActor } from "./run-identity";
 import { WorkflowStepFailure } from "./step-failure";
 import { testRunCall } from "./test-run";
@@ -290,6 +291,10 @@ export function createStepExecutor(options: StepExecutorOptions) {
           const input = await resolveInput(scope, step.input);
           withinStepData(input, "The child input");
           if (holdsDatasetReference(input)) throw notSupportedFailure("a dataset in a child input");
+          // The key goes beside the child's inputs, as the start operation takes it.
+          if (step.key !== undefined) {
+            input[WORKFLOW_START_KEY_INPUT] = await resolveRunKey(scope, step.key);
+          }
           const caller = await callerOf(run, stepRun);
           const { operationRunId, call } = await callStepOperation({
             calls: operationCalls,

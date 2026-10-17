@@ -19009,6 +19009,9 @@
                     "scheduledFor": {
                       "$ref": "#/components/schemas/Timestamp"
                     },
+                    "runKey": {
+                      "type": "string"
+                    },
                     "operationRunId": {
                       "type": "string"
                     },
@@ -19292,6 +19295,9 @@
                     },
                     "scheduledFor": {
                       "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "runKey": {
+                      "type": "string"
                     },
                     "operationRunId": {
                       "type": "string"
@@ -19771,6 +19777,9 @@
                           "operationRunId": {
                             "type": "string"
                           },
+                          "linkedRunId": {
+                            "type": "string"
+                          },
                           "error": {
                             "type": "object",
                             "properties": {
@@ -20045,7 +20054,7 @@
     "/api/v1/workflows/{workflow}/runs": {
       "get": {
         "operationId": "workflows.list_runs",
-        "summary": "List the runs of one Workflow with their status, newest first",
+        "summary": "List the runs of one Workflow with their status, newest first: all of them, or those of one run key or key prefix",
         "tags": [
           "Workflows"
         ],
@@ -20093,6 +20102,26 @@
             "schema": {
               "type": "string",
               "minLength": 1
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "keyPrefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -20189,6 +20218,9 @@
                           },
                           "scheduledFor": {
                             "$ref": "#/components/schemas/Timestamp"
+                          },
+                          "runKey": {
+                            "type": "string"
                           },
                           "operationRunId": {
                             "type": "string"
@@ -20402,6 +20434,11 @@
                       "type": "string"
                     },
                     "additionalProperties": {}
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
                   }
                 }
               }
@@ -20496,6 +20533,9 @@
                     },
                     "scheduledFor": {
                       "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "runKey": {
+                      "type": "string"
                     },
                     "operationRunId": {
                       "type": "string"
@@ -20732,6 +20772,11 @@
                       "type": "string"
                     },
                     "additionalProperties": {}
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
                   }
                 }
               }
@@ -20826,6 +20871,9 @@
                     },
                     "scheduledFor": {
                       "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "runKey": {
+                      "type": "string"
                     },
                     "operationRunId": {
                       "type": "string"

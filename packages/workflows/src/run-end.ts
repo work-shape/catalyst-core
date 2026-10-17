@@ -79,14 +79,20 @@ export function createRunEnd(options: {
         }
       });
     }
-    if (run.parentStepRunId) {
+    // The step that owns the run, and every step a run key linked to it, wake to its end. A
+    // link is written behind this run's lock, so this read sees every link made before.
+    const waiting = [
+      ...(run.parentStepRunId ? [run.parentStepRunId] : []),
+      ...(await tx.workflowRuns.listLinkedStepRuns({ clientInstanceId, id: run.id }))
+    ];
+    for (const stepRunId of waiting) {
       await tx.jobs.enqueue(
         workflowStepJobKind,
-        { stepRunId: run.parentStepRunId },
+        { stepRunId },
         {
           clientInstanceId,
-          subject: run.parentStepRunId,
-          dedupeKey: `${workflowStepJobKind.kind}:${run.parentStepRunId}:after_child`,
+          subject: stepRunId,
+          dedupeKey: `${workflowStepJobKind.kind}:${stepRunId}:after_child`,
           correlationId: run.correlationId
         }
       );

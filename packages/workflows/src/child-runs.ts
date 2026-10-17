@@ -1,10 +1,14 @@
 import {
   AppError,
+  WORKFLOW_RUN_KEY_MAX_LENGTH,
   WORKFLOW_RUN_MAX_DEPTH,
+  WORKFLOW_START_KEY_INPUT,
   auditActorFromIdentity,
   isWorkflowRunEnded,
+  workflowRunKeySchema,
   workflowStartOperationName,
   type ClientInstanceId,
+  type JsonObject,
   type OperationSource,
   type PlatformStores,
   type WorkflowRun,
@@ -13,12 +17,46 @@ import {
 import { z } from "zod";
 import { jsonObjectSchema } from "./json";
 import type { WorkflowDefinitionSource } from "./definition-source";
-import type { StartWorkflowRunInput } from "./run-open";
+import { runKeyRefusal, type StartWorkflowRunInput } from "./run-open";
 import type { PreparedStart } from "./run-start";
 import type { RunOrigin } from "./scheduled-start";
 
 /** A start must record its durable run promptly; overdue Operation Runs can be recovered. */
 const WORKFLOW_START_OPERATION_TIMEOUT_MS = 30_000;
+
+/**
+ * The input of `workflow.<id>.start`: the Workflow's inputs, and beside them the run key under
+ * `WORKFLOW_START_KEY_INPUT`, which no Workflow declares as an input.
+ */
+function splitStartInput(input: unknown): { inputs: unknown; key?: string } {
+  const object = jsonObjectSchema.safeParse(input);
+  if (!object.success || !Object.hasOwn(object.data, WORKFLOW_START_KEY_INPUT)) {
+    return { inputs: input };
+  }
+  const { [WORKFLOW_START_KEY_INPUT]: given, ...inputs } = object.data;
+  const key = workflowRunKeySchema.safeParse(given);
+  if (!key.success) throw runKeyRefusal();
+  return { inputs, key: key.data };
+}
+
+/** The schema of the start's input as callers read it: the Workflow's inputs and the key. */
+function startInputJsonSchema(inputs: JsonObject | undefined): JsonObject {
+  const base = inputs ?? { type: "object" };
+  const properties = jsonObjectSchema.safeParse(base.properties);
+  return {
+    ...base,
+    properties: {
+      ...(properties.success ? properties.data : {}),
+      [WORKFLOW_START_KEY_INPUT]: {
+        type: "string",
+        minLength: 1,
+        maxLength: WORKFLOW_RUN_KEY_MAX_LENGTH,
+        description:
+          "The run key. A run of this Workflow that is open or done and holds it answers the start, which then starts nothing."
+      }
+    }
+  };
+}
 
 /** Starts go through the operation path; only a workflow step owns the run it starts. */
 export function createWorkflowStartSource(options: {
@@ -60,7 +98,7 @@ export function createWorkflowStartSource(options: {
       action: "workflow.use",
       module: "workflows",
       timeoutMs: WORKFLOW_START_OPERATION_TIMEOUT_MS,
-      inputJsonSchema: published?.manifest.inputs ?? { type: "object" },
+      inputJsonSchema: startInputJsonSchema(published?.manifest.inputs),
       outputJsonSchema: {
         type: "object",
         properties: { id: { type: "string" } },
@@ -85,6 +123,7 @@ export function createWorkflowStartSource(options: {
           operationRunId: context.runId
         });
         if (first) return { id: first.id };
+        const { inputs, key } = splitStartInput(input);
         const origin = context.origin;
         const step =
           origin.kind === "workflow"
@@ -99,7 +138,8 @@ export function createWorkflowStartSource(options: {
           const run = await options.start(
             {
               workflow,
-              input,
+              input: inputs,
+              ...(key === undefined ? {} : { key }),
               startedBy: context.actor,
               operationRunId: context.runId,
               correlationId: context.correlationId
@@ -110,6 +150,8 @@ export function createWorkflowStartSource(options: {
         }
         const existing = await stores.workflowRuns.findChildRun({ clientInstanceId, id: step.id });
         if (existing) return { id: existing.id };
+        // A retried attempt of a step whose start a key answered: the run it links to.
+        if (step.linkedRunId) return { id: step.linkedRunId };
         if (!published) throw new AppError("NOT_FOUND", "There is no published child Workflow");
         const [trigger] = published.manifest.steps;
         if (trigger?.type !== "trigger" || !trigger.triggers.some((t) => t.kind === "parent")) {
@@ -117,7 +159,7 @@ export function createWorkflowStartSource(options: {
             reason: "no_parent_trigger"
           });
         }
-        const prepared = await options.prepare(published, input);
+        const prepared = await options.prepare(published, inputs);
         const run = await stores.transaction(async (tx) => {
           // The parent lock serializes starts with cancellation and competing attempts.
           const parent = await tx.workflowRuns.lockRun({ clientInstanceId, id: step.runId });
@@ -130,15 +172,19 @@ export function createWorkflowStartSource(options: {
           }
           const first = await tx.workflowRuns.findChildRun({ clientInstanceId, id: step.id });
           if (first) return first;
+          const linked = (await tx.workflowRuns.getStepRun({ clientInstanceId, id: step.id }))
+            ?.linkedRunId;
+          if (linked) return { id: linked };
           if (parent.depth >= WORKFLOW_RUN_MAX_DEPTH) {
             throw new AppError("CONFLICT", "A child run cannot start below three levels", {
               reason: "depth_limit"
             });
           }
-          return options.open(
+          const run = await options.open(
             tx,
             prepared,
             {
+              ...(key === undefined ? {} : { runKey: key }),
               trigger: "parent",
               startedBy: parent.startedBy,
               operationRunId: context.runId,
@@ -160,6 +206,16 @@ export function createWorkflowStartSource(options: {
             },
             parent.mode
           );
+          // A run of another step or start holds the key: the step links to it and does not
+          // own it. The holder is locked, so its end comes after this link and wakes the step.
+          if (run && run.parentStepRunId !== step.id) {
+            await tx.workflowRuns.linkStepRun({
+              clientInstanceId,
+              id: step.id,
+              linkedRunId: run.id
+            });
+          }
+          return run;
         });
         if (!run) throw new AppError("INTERNAL", "The child run could not be opened");
         return { id: run.id };
@@ -185,10 +241,18 @@ export async function childStepOutcome(
   run: WorkflowRun,
   step: WorkflowStepRun
 ) {
-  const child = await stores.workflowRuns.findChildRun({
-    clientInstanceId: run.clientInstanceId,
-    id: step.id
-  });
+  // The run the step owns, or the run a key answered its start with and it links to.
+  const child =
+    (await stores.workflowRuns.findChildRun({
+      clientInstanceId: run.clientInstanceId,
+      id: step.id
+    })) ??
+    (step.linkedRunId === undefined
+      ? undefined
+      : await stores.workflowRuns.readRun({
+          clientInstanceId: run.clientInstanceId,
+          id: step.linkedRunId
+        }));
   if (!child || !isWorkflowRunEnded(child.status)) return undefined;
   if (child.status !== "done")
     return {

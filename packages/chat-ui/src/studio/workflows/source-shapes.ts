@@ -30,7 +30,12 @@ export type WorkflowStepRunStatusFilter = WorkflowStepRunView["status"];
 export interface WorkflowRunsSource {
   listRuns(
     workflow: string,
-    query: { limit: number; cursor: string | undefined },
+    query: {
+      limit: number;
+      cursor: string | undefined;
+      /** Only the runs whose run key starts with it. */
+      keyPrefix?: string;
+    },
     signal: AbortSignal
   ): Promise<SourcePage<WorkflowRunView>>;
   getRun(runId: string, signal: AbortSignal): Promise<WorkflowRunView>;

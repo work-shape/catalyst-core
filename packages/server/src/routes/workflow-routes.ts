@@ -142,6 +142,7 @@ function registerWorkflowRoutes(
         await required().start({
           workflow: input.workflow,
           input: input.input,
+          ...(input.key === undefined ? {} : { key: input.key }),
           startedBy: context.actor,
           operationRunId: context.runId,
           correlationId: context.correlationId
@@ -211,6 +212,7 @@ function registerWorkflowRoutes(
         await required().test({
           workflow: input.workflow,
           input: input.input,
+          ...(input.key === undefined ? {} : { key: input.key }),
           startedBy: actor,
           operationRunId: context.runId,
           correlationId: context.correlationId
@@ -224,13 +226,27 @@ function registerWorkflowRoutes(
       decide(access, WORKFLOW_ACTIONS.read, await resourceOf(input.workflow)),
     resource: workflowResource,
     module: WORKFLOWS_MODULE,
-    execute: async (input, context) =>
-      (
+    execute: async (input, context) => {
+      if (input.key !== undefined && input.keyPrefix !== undefined) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "'key' answers one run key and 'keyPrefix' the keys under a prefix: give one of them"
+        );
+      }
+      const key =
+        input.key !== undefined
+          ? { exact: input.key }
+          : input.keyPrefix !== undefined
+            ? { prefix: input.keyPrefix }
+            : undefined;
+      return (
         await required().listRuns({
           workflow: input.workflow,
+          ...(key ? { key } : {}),
           ...(context.paging ? { page: context.paging } : {})
         })
-      ).map(toRunResource)
+      ).map(toRunResource);
+    }
   });
 
   route.operation(apiOperations["workflows.get_run"], {

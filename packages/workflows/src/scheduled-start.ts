@@ -27,6 +27,7 @@ export type RunOrigin = Pick<WorkflowRun, "trigger" | "startedBy" | "correlation
     | "depth"
     | "itemIndex"
     | "itemLabel"
+    | "runKey"
   > & { actor: AuditActor };
 
 interface ScheduledStartOptions {

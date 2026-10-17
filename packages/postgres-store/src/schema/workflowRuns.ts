@@ -79,6 +79,8 @@ export const workflowRuns = pgTable(
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     // The due time of the schedule that started the run. Null on every other run.
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    // The run key a start gave the run (EW-13k). Text of a person or a step, never in an audit.
+    runKey: text("run_key"),
     // When the run's values and those of its step runs were removed. Null while it has them.
     dataPrunedAt: timestamp("data_pruned_at", { withTimezone: true })
   },
@@ -111,6 +113,14 @@ export const workflowRuns = pgTable(
     uniqueIndex("workflow_runs_scheduled_for_idx")
       .on(table.clientInstanceId, table.workflow, table.scheduledFor)
       .where(sql`${table.scheduledFor} is not null`),
+    // A run key exists once per Workflow and mode among the runs that are open or `done`: a
+    // start that meets it starts nothing and is answered that run. A run that ended `failed`,
+    // `cancelled` or `limit_reached` leaves the index and so gives its key up.
+    uniqueIndex("workflow_runs_run_key_idx")
+      .on(table.clientInstanceId, table.workflow, table.mode, table.runKey)
+      .where(
+        sql`${table.runKey} is not null and ${table.status} not in ('failed', 'cancelled', 'limit_reached')`
+      ),
     // The ended runs that still have their values, oldest first: what the prune job asks for.
     index("workflow_runs_data_prune_idx")
       .on(table.clientInstanceId, table.finishedAt)
@@ -147,6 +157,8 @@ export const workflowStepRuns = pgTable(
     operationRunId: text("operation_run_id").$type<OperationRunId>(),
     // Of an `agent` step: the Agent Run the step waits for.
     agentRunId: text("agent_run_id"),
+    // Of a `workflow` step whose start a run key answered: the run it waits for and does not own.
+    linkedRunId: text("linked_run_id").$type<WorkflowRunId>(),
     // Of an operation step: what its operation does and the name of what it belongs to.
     effect: text("effect").$type<OperationEffect>(),
     source: text("source"),
@@ -200,6 +212,10 @@ export const workflowStepRuns = pgTable(
     // The steps that wait for an Operation Run, which its end wakes (EW-ASYNC).
     index("workflow_step_runs_waiting_operation_idx")
       .on(table.operationRunId)
-      .where(sql`${table.status} = 'waiting'`)
+      .where(sql`${table.status} = 'waiting'`),
+    // The steps linked to a run, which its end wakes (EW-13k).
+    index("workflow_step_runs_linked_run_idx")
+      .on(table.linkedRunId)
+      .where(sql`${table.linkedRunId} is not null`)
   ]
 );

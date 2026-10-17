@@ -211,6 +211,8 @@ export interface WorkflowRunView {
   test: boolean;
   /** The run whose step started this one, where it is a child run. */
   parent?: { runId: string; workflowId: string };
+  /** The run key its start gave it, such as `2026-09/1402`. */
+  runKey?: string;
 }
 
 /** How far a loop is, as the instance counts it. */

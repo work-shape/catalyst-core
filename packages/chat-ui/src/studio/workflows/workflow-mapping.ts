@@ -46,6 +46,7 @@ const FAILURE_REASONS: Readonly<Record<string, WorkflowFailureReason>> = {
   operation_input_invalid: "dataMismatch",
   reference_unresolved: "dataMismatch",
   loop_items_not_a_list: "dataMismatch",
+  run_key_invalid: "dataMismatch",
   output_not_json: "dataMismatch",
   output_invalid: "outputInvalid",
   step_data_too_large: "tooMuchData",
@@ -98,6 +99,8 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   startedBy: { id: string; label: string };
   /** On a child run: the id of the Workflow of the run that started it. */
   parentWorkflow?: string;
+  /** The run key its start gave the run. */
+  runKey?: string;
   /** The revision of the definition the run started on. */
   definitionRevisionId?: string;
   error?: ErrorResource;
@@ -176,6 +179,7 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     ...toOutput(run.outputPreview),
     ...(run.definitionRevisionId === undefined ? {} : { revisionId: run.definitionRevisionId }),
     test: run.mode === "test",
+    ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
     ...(run.parentRunId === undefined || run.parentWorkflow === undefined
       ? {}
       : { parent: { runId: run.parentRunId, workflowId: run.parentWorkflow } })

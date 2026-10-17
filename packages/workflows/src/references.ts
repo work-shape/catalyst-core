@@ -1,11 +1,15 @@
-import type {
-  JsonObject,
-  JsonValue,
-  WorkflowInputMapping,
-  WorkflowReference,
-  WorkflowRun,
-  WorkflowRunsStore,
-  WorkflowStepRun
+import {
+  WORKFLOW_RUN_KEY_MAX_LENGTH,
+  WORKFLOW_RUN_KEY_SEPARATOR,
+  workflowRunKeySchema,
+  type JsonObject,
+  type JsonValue,
+  type WorkflowInputMapping,
+  type WorkflowInputValue,
+  type WorkflowReference,
+  type WorkflowRun,
+  type WorkflowRunsStore,
+  type WorkflowStepRun
 } from "@work-shape/catalyst-core";
 import type { WorkflowStepIndex } from "./definition";
 import { WORKFLOW_ITERATION_LABEL_MAX_CHARS } from "./limits";
@@ -119,4 +123,35 @@ export async function resolveInput(
     input[field] = source.ref ? await resolveReference(scope, source.ref) : source.value;
   }
   return input;
+}
+
+/**
+ * The run key of a `workflow` step: its literals and what its references name, each a text or
+ * a number, joined with `WORKFLOW_RUN_KEY_SEPARATOR`. A part of another kind, and a key that is
+ * empty or longer than `WORKFLOW_RUN_KEY_MAX_LENGTH`, fail the step with `run_key_invalid`;
+ * the message names neither the key nor a part of it.
+ */
+export async function resolveRunKey(
+  scope: ReferenceScope,
+  parts: readonly WorkflowInputValue[]
+): Promise<string> {
+  const values: string[] = [];
+  for (const [position, part] of parts.entries()) {
+    const value = part.ref ? await resolveReference(scope, part.ref) : part.value;
+    if (typeof value !== "string" && !(typeof value === "number" && Number.isFinite(value))) {
+      throw new WorkflowStepFailure(
+        "run_key_invalid",
+        `Part ${position + 1} of the run key is no text and no number`
+      );
+    }
+    values.push(String(value));
+  }
+  const key = values.join(WORKFLOW_RUN_KEY_SEPARATOR);
+  if (!workflowRunKeySchema.safeParse(key).success) {
+    throw new WorkflowStepFailure(
+      "run_key_invalid",
+      `The run key is text of 1 to ${WORKFLOW_RUN_KEY_MAX_LENGTH} characters`
+    );
+  }
+  return key;
 }

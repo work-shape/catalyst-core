@@ -74,7 +74,12 @@ export function createSampleSource(
 
   const runs: WorkflowRunsSource = {
     listRuns: (workflow, query) => {
-      const rows = held.filter((entry) => entry.run.workflow === workflow);
+      const { keyPrefix } = query;
+      const rows = held.filter(
+        (entry) =>
+          entry.run.workflow === workflow &&
+          (keyPrefix === undefined || (entry.run.runKey?.startsWith(keyPrefix) ?? false))
+      );
       const from = query.cursor === undefined ? 0 : Number(query.cursor);
       const next = from + query.limit;
       return Promise.resolve({

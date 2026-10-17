@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { Input } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { RunsList } from "./runs-list";
 import { useStartRun } from "./start-run";
@@ -22,7 +23,10 @@ export function WorkflowRunsPage({ workflow }: { workflow: string }) {
   const host = useWorkflowsHost();
   const workspaceId = host?.workspace?.id;
   const read = useWorkflow(workspaceId, workflow);
-  const runs = useWorkflowRuns(workflow, RUNS_PAGE_SIZE);
+  const [keyFilter, setKeyFilter] = useState("");
+  // The list is asked again once typing pauses, not on every key.
+  const keyPrefix = useDeferredValue(keyFilter.trim());
+  const runs = useWorkflowRuns(workflow, RUNS_PAGE_SIZE, keyPrefix === "" ? undefined : keyPrefix);
   const runsAvailable = useRunsAvailable();
   const start = useStartRun({
     workflow,
@@ -43,6 +47,7 @@ export function WorkflowRunsPage({ workflow }: { workflow: string }) {
         workflow={read.workflow}
         runs={runs}
         runsAvailable={runsAvailable}
+        keyFilter={{ value: keyFilter, onChange: setKeyFilter }}
         now={now}
         onStart={start.open}
         onOpenRoute={host.showRoute}
@@ -59,6 +64,7 @@ export function WorkflowRunsPageView({
   workflow,
   runs,
   runsAvailable,
+  keyFilter,
   now,
   onStart,
   onOpenRoute
@@ -70,12 +76,21 @@ export function WorkflowRunsPageView({
   runs: WorkflowRunList;
   /** The instance runs Workflows. Without that there is nothing to list. */
   runsAvailable: boolean;
+  /**
+   * The start of the run keys the list shows. The field is offered once a run has a key or a
+   * filter is set: a Workflow started without keys has nothing to filter by.
+   */
+  keyFilter?: { value: string; onChange(value: string): void };
   now: Date;
   onStart(): void;
   onOpenRoute: OpenRoute;
 }) {
   const { t } = useTranslation();
   const canStart = runsAvailable && workflow !== undefined && startOffered(workflow);
+  const filtering = keyFilter !== undefined && keyFilter.value.trim() !== "";
+  const offerKeyFilter =
+    keyFilter !== undefined &&
+    (filtering || (runs.rows ?? []).some((run) => run.runKey !== undefined));
   const title =
     workflow === undefined
       ? t("workflows.sectionRuns")
@@ -93,11 +108,26 @@ export function WorkflowRunsPageView({
         onOpenRoute={onOpenRoute}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-(--layout-gutter) pt-5 pb-(--layout-page-end)">
+        {runsAvailable && offerKeyFilter ? (
+          <Input
+            type="search"
+            size="sm"
+            className="mb-3 max-w-sm"
+            aria-label={t("workflows.runs.keyFilter")}
+            placeholder={t("workflows.runs.keyFilterPlaceholder")}
+            value={keyFilter.value}
+            onChange={(event) => keyFilter.onChange(event.target.value)}
+          />
+        ) : null}
         {runsAvailable ? (
           <RunsList
             workspaceId={workspaceId}
             runs={runs}
-            empty={t(canStart ? "workflows.noRuns" : "workflows.noRunsPlain")}
+            empty={
+              filtering
+                ? t("workflows.runs.noKeyMatch", { prefix: keyFilter.value.trim() })
+                : t(canStart ? "workflows.noRuns" : "workflows.noRunsPlain")
+            }
             loadingRows={6}
             now={now}
             onOpenRoute={onOpenRoute}

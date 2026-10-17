@@ -22,6 +22,14 @@ export function startedByText(
     : t("workflows.run.startedByPerson", { person: run.startedBy.name });
 }
 
+/** The run key of a run, as a part of a sentence. Nothing on a run started without one. */
+export function runKeyText(
+  run: Pick<WorkflowRunView, "runKey">,
+  t: ReturnType<typeof useTranslation>["t"]
+): string | undefined {
+  return run.runKey === undefined ? undefined : t("workflows.run.keyLine", { key: run.runKey });
+}
+
 /**
  * Runs of one Workflow, newest first: when each started, who started it, how long it took and
  * how it ended, and for a failed run why, in the sentence its page says. Each row opens its run.
@@ -63,7 +71,7 @@ export function RunsList({
         <List aria-label={t("workflows.sectionRuns")}>
           {rows.map((run) => {
             const duration = durationText(run, now, translation);
-            const startedLine = [startedByText(run, t), duration]
+            const startedLine = [runKeyText(run, t), startedByText(run, t), duration]
               .filter((part) => part !== undefined)
               .join(" · ");
             const failedBecause = runFailedBecause(run, t);

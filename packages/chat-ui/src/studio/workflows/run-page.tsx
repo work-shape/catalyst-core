@@ -18,7 +18,7 @@ import { workspaceRoutePath } from "../../shared/routes";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { FailureBanner } from "./failure-banner";
 import { fixWithAgentPrompt } from "./fix-with-agent";
-import { startedByText } from "./runs-list";
+import { runKeyText, startedByText } from "./runs-list";
 import { useStartRun } from "./start-run";
 import { useRunLiveOnce, useTestRun, type LiveOnceControl } from "./test-run";
 import { WorkflowCanvas } from "./workflow-canvas";
@@ -210,7 +210,9 @@ export function WorkflowRunPageView({
   const secondary =
     run === undefined
       ? undefined
-      : [startedByText(run, t), duration].filter((part) => part !== undefined).join(" · ");
+      : [runKeyText(run, t), startedByText(run, t), duration]
+          .filter((part) => part !== undefined)
+          .join(" · ");
   // A step that failed says why itself. Until the page holds that step, the run says it.
   const failedStepHeld = (read.stepRuns ?? []).some((stepRun) => stepRun.failure !== undefined);
   const parent = run?.parent;

@@ -33,7 +33,11 @@ function runsSource(client: WorkflowsClient): WorkflowRunsSource {
     listRuns: async (workflow, query, signal) => {
       const page = await client.workflows.list_runs({
         params: { workflow },
-        query: { limit: query.limit, cursor: query.cursor },
+        query: {
+          limit: query.limit,
+          cursor: query.cursor,
+          ...(query.keyPrefix === undefined ? {} : { keyPrefix: query.keyPrefix })
+        },
         signal
       });
       return { items: page.items.map(toWorkflowRun), nextCursor: page.nextCursor };

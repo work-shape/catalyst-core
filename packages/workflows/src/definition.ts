@@ -1,6 +1,7 @@
 import {
   NOTIFY_CHANNELS,
   WORKFLOW_DATASET_KEY,
+  WORKFLOW_START_KEY_INPUT,
   WORKFLOW_ERROR_CODES,
   WORKFLOW_STEP_TYPES,
   readYamlData,
@@ -251,9 +252,6 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
           if (step[field] !== undefined) issues.push(notSupported(`${at}.${field}`, `'${field}'`));
         }
       }
-      if (step.type === "workflow" && step.key !== undefined) {
-        issues.push(notSupported(`${at}.key`, "a child run key"));
-      }
       if (step.type === "code") {
         // A code step is handed JSON and returns JSON. Datasets come with the slice that
         // keeps them, and a script is not handed one before.
@@ -317,12 +315,21 @@ export function indexWorkflowSteps(manifest: Pick<WorkflowManifest, "steps">): W
 /** The schema's properties that are named like the key that marks a dataset in step data. */
 function datasetKeyIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
   const properties = z.object({ properties: z.record(z.string(), z.unknown()) });
-  return (["inputs", "outputs"] as const).flatMap((field) => {
+  const issues: WorkflowDefinitionIssue[] = (["inputs", "outputs"] as const).flatMap((field) => {
     const read = properties.safeParse(manifest[field]);
     return read.success && Object.hasOwn(read.data.properties, WORKFLOW_DATASET_KEY)
       ? [{ path: field, message: `No field of '${field}' is named '${WORKFLOW_DATASET_KEY}'` }]
       : [];
   });
+  // The start takes the run key beside the inputs under this name, so no input has it.
+  const inputs = properties.safeParse(manifest.inputs);
+  if (inputs.success && Object.hasOwn(inputs.data.properties, WORKFLOW_START_KEY_INPUT)) {
+    issues.push({
+      path: `inputs.properties.${WORKFLOW_START_KEY_INPUT}`,
+      message: `No input is named '${WORKFLOW_START_KEY_INPUT}': a start takes the run key under that name`
+    });
+  }
+  return issues;
 }
 
 /**
@@ -380,10 +387,19 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
         });
       }
     }
+    if (step.type === "workflow" && Object.hasOwn(step.input, WORKFLOW_START_KEY_INPUT)) {
+      issues.push({
+        path: `steps.${id}.input.${WORKFLOW_START_KEY_INPUT}`,
+        message: `The child's run key is set with the step's 'key', not as an input`
+      });
+    }
+    const keyParts = step.type === "workflow" ? (step.key ?? []) : [];
     const references =
       step.type === "loop"
         ? [step.items]
-        : mapped.flatMap(([, source]) => (source.ref ? [source.ref] : []));
+        : [...mapped.map(([, source]) => source), ...keyParts].flatMap((source) =>
+            source.ref ? [source.ref] : []
+          );
     for (const reference of references) {
       if (!index.has(reference.step)) {
         issues.push({

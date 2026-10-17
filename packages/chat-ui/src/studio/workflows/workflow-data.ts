@@ -178,16 +178,29 @@ function runsOf(runs: WorkflowRunsSource | undefined): WorkflowRunsSource {
 }
 
 /**
- * The runs of a Workflow, `pageSize` at a time. While one of them is going the list is read
- * again at an interval; the query pauses that by itself while the page is hidden.
+ * The runs of a Workflow, `pageSize` at a time, all of them or those whose run key starts with
+ * `keyPrefix`. While one of them is going the list is read again at an interval; the query
+ * pauses that by itself while the page is hidden.
  */
-export function useWorkflowRuns(workflow: string, pageSize: number): WorkflowRunList {
+export function useWorkflowRuns(
+  workflow: string,
+  pageSize: number,
+  keyPrefix?: string
+): WorkflowRunList {
   const { runs } = useWorkflowsSource();
   const keys = useWorkflowKeys();
   const query = useInfiniteQuery({
-    queryKey: [...keys.runs, "list", workflow, pageSize],
+    queryKey: [...keys.runs, "list", workflow, pageSize, keyPrefix ?? null],
     queryFn: ({ pageParam, signal }) =>
-      runsOf(runs).listRuns(workflow, { limit: pageSize, cursor: pageParam }, signal),
+      runsOf(runs).listRuns(
+        workflow,
+        {
+          limit: pageSize,
+          cursor: pageParam,
+          ...(keyPrefix === undefined ? {} : { keyPrefix })
+        },
+        signal
+      ),
     enabled: runs !== undefined,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor,

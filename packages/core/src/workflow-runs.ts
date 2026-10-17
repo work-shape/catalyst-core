@@ -11,12 +11,14 @@ import type {
   WorkflowLoopCounts,
   WorkflowManifest,
   WorkflowRunMode,
+  WorkflowRunIdentity,
   WorkflowRunLineage,
   WorkflowRunRecordView,
   WorkflowRunStatus,
   WorkflowStep,
   WorkflowStepRunCall,
   WorkflowStepRunFilter,
+  WorkflowStepRunLink,
   WorkflowStepRunPlacement,
   WorkflowStepRunStatus,
   WorkflowTriggerKind
@@ -33,6 +35,16 @@ export const WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS = 2_000;
 
 /** The statuses a run or a step run does not leave. */
 export { WORKFLOW_ENDED_STATUSES } from "@work-shape/catalyst-asset-schemas";
+
+/**
+ * The ends of a run that give its run key up: a start with the key after one of them is a new
+ * run. A run that is open or `done` holds its key (`workflow_runs_run_key_idx`).
+ */
+export const WORKFLOW_KEY_RELEASING_STATUSES = [
+  "failed",
+  "cancelled",
+  "limit_reached"
+] as const satisfies readonly WorkflowRunStatus[];
 
 export function isWorkflowRunEnded(status: WorkflowRunStatus): boolean {
   return WORKFLOW_ENDED_STATUSES.some((ended) => ended === status);
@@ -56,7 +68,8 @@ export interface WorkflowRunError {
  * `WorkflowRunRecordView` it has the revision it started on, and who cancelled it and when:
  * `cancelledBy` is there where a person did, and `cancelledAt` whoever did.
  */
-export interface WorkflowRun extends WorkflowRunRecordView, WorkflowRunLineage {
+export interface WorkflowRun
+  extends WorkflowRunRecordView, WorkflowRunLineage, Pick<WorkflowRunIdentity, "runKey"> {
   id: WorkflowRunId;
   clientInstanceId: ClientInstanceId;
   /** The id of the Workflow. */
@@ -112,6 +125,7 @@ export type NewWorkflowRun = Pick<
   | "startedBy"
   | "scheduledFor"
   | "operationRunId"
+  | "runKey"
   | "deadlineAt"
   | "correlationId"
   | "createdAt"
@@ -143,7 +157,8 @@ export type WorkflowRunView = WorkflowRun & {
  * `branch` is there once an engine runs a block that has branches. On the step run of an
  * operation step, `effect` and `source` say what was called, once the operation is known.
  */
-export interface WorkflowStepRun extends WorkflowStepRunPlacement, WorkflowStepRunCall {
+export interface WorkflowStepRun
+  extends WorkflowStepRunPlacement, WorkflowStepRunCall, WorkflowStepRunLink {
   id: WorkflowStepRunId;
   clientInstanceId: ClientInstanceId;
   runId: WorkflowRunId;
@@ -238,6 +253,9 @@ export interface WorkflowLoopConcurrency {
   ranWith: number;
 }
 
+/** Which runs of a Workflow a list answers by their run key: one key, or the keys under a prefix. */
+export type WorkflowRunKeyFilter = { exact: string } | { prefix: string };
+
 /** Names one run of one instance. */
 export interface WorkflowRunRef {
   clientInstanceId: ClientInstanceId;
@@ -287,9 +305,31 @@ export interface WorkflowRunsStore {
 
   /**
    * Writes a run as `queued`. Answers nothing, and writes nothing, where the run names a due
-   * time of a schedule that a run of the same Workflow already has: a due time starts once.
+   * time of a schedule that a run of the same Workflow already has (a due time starts once),
+   * or a run key that a run of the same Workflow and mode holds. The insert meets the key's
+   * unique index: a start that holds the same key and has not committed is waited for.
    */
   createRun(run: NewWorkflowRun): Promise<WorkflowRun | undefined>;
+  /**
+   * The run of a Workflow and mode that holds a key: open or `done`, as the key's index has it.
+   * Read after `createRun` answered nothing, in the same transaction, and held until it ends,
+   * so its end either comes before (and is read) or after this transaction (and sees a step
+   * that links to it). Nothing where the holder ended `failed`, `cancelled` or `limit_reached`
+   * in between.
+   */
+  lockRunByKey(input: {
+    clientInstanceId: ClientInstanceId;
+    workflow: string;
+    mode: WorkflowRunMode;
+    runKey: string;
+  }): Promise<WorkflowRun | undefined>;
+  /**
+   * Keeps on the step run of a `workflow` step the run its start was answered by key, which
+   * the step waits for and does not own.
+   */
+  linkStepRun(ref: WorkflowStepRunRef & { linkedRunId: WorkflowRunId }): Promise<void>;
+  /** The step runs that have not ended and wait for a run they are linked to. */
+  listLinkedStepRuns(ref: WorkflowRunRef): Promise<WorkflowStepRunId[]>;
   /**
    * What a due time of a Workflow's schedule meets: whether a run for it exists, and whether
    * a run an earlier due time started has not ended.
@@ -309,10 +349,14 @@ export interface WorkflowRunsStore {
     clientInstanceId: ClientInstanceId;
     id: string;
   }): Promise<WorkflowRunView | undefined>;
-  /** The runs of one Workflow, newest first, by creation time and id. */
+  /**
+   * The runs of one Workflow, newest first, by creation time and id: all of them, or those
+   * whose run key is `key`, or starts with `keyPrefix` taken as it is written.
+   */
   listRuns(input: {
     clientInstanceId: ClientInstanceId;
     workflow: string;
+    key?: WorkflowRunKeyFilter;
     page?: StorePage;
   }): Promise<WorkflowRunView[]>;
   /**
