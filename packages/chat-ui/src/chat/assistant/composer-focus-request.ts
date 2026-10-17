@@ -23,7 +23,8 @@ export function useComposerFocusRequest(
         return;
       }
       const input = inputRef.current;
-      if (!input || input.disabled) {
+      // Recovery must preserve the caret or selection once this input has focus.
+      if (!input || input.disabled || document.activeElement === input) {
         return;
       }
       input.focus({ preventScroll: true });

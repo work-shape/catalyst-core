@@ -123,6 +123,7 @@ export {
   createVisibleFinalAssistantPartIndices,
   findFinalAssistantTextPartIndex
 } from "../../packages/chat-ui/src/chat/assistant/assistant-work-grouping";
+export { useComposerFocusRequest } from "../../packages/chat-ui/src/chat/assistant/composer-focus-request";
 export { ContextIndicator } from "../../packages/chat-ui/src/chat/assistant/context-indicator";
 export { resolveContextUsage } from "../../packages/chat-ui/src/chat/assistant/context-usage";
 export { ModelCard, ModelPicker } from "../../packages/chat-ui/src/chat/assistant/model-picker";
