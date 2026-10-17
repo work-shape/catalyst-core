@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { isAppError } from "@work-shape/catalyst-core";
-import { clientInstanceConfigSchema } from "@work-shape/catalyst-config-schema";
+import {
+  clientInstanceConfigSchema,
+  parseClientInstanceConfig,
+  workflowsConfigSchema
+} from "@work-shape/catalyst-config-schema";
 import {
   assertSandboxMemoryFitsHost,
   sandboxMemoryNeeded,
@@ -18,6 +22,7 @@ const config = (fields: {
   sandbox?: Record<string, unknown>;
   commandSlots?: number;
   codeSteps?: Record<string, unknown>;
+  stepSlots?: number;
 }) =>
   clientInstanceConfigSchema.parse({
     clientInstance: { id: "demo", displayName: "Demo" },
@@ -29,7 +34,10 @@ const config = (fields: {
       enabled: true,
       ...(fields.commandSlots === undefined ? {} : { worker: { concurrency: fields.commandSlots } })
     },
-    ...(fields.codeSteps ? { workflows: { codeSteps: fields.codeSteps } } : {})
+    workflows: {
+      ...(fields.codeSteps ? { codeSteps: fields.codeSteps } : {}),
+      ...(fields.stepSlots === undefined ? {} : { stepSlots: fields.stepSlots })
+    }
   });
 
 const modules = (...on: string[]) => ({ isEnabled: (name: string) => on.includes(name) });
@@ -138,13 +146,25 @@ describe("the memory the sandboxes of a config can need at once", () => {
     expect(terms({}, []).map((term) => term.kind)).not.toContain("page builds");
   });
 
+  it("uses stepSlots for the sandbox reservation, with an explicit lower code cap", () => {
+    expect(terms({ stepSlots: 2, codeSteps: { slots: 8 } }, ["workflows"])).toContainEqual(
+      expect.objectContaining({ kind: "code steps", slots: 2 })
+    );
+    expect(terms({ stepSlots: 8 }, ["workflows"])).toContainEqual(
+      expect.objectContaining({ kind: "code steps", slots: 8 })
+    );
+    expect(terms({ stepSlots: 8, codeSteps: { slots: 2 } }, ["workflows"])).toContainEqual(
+      expect.objectContaining({ kind: "code steps", slots: 2 })
+    );
+  });
+
   it("counts the code steps where the module workflows is on: their slots times their own memory", () => {
     expect(terms({}, ["workflows"])).toContainEqual(
       expect.objectContaining({ kind: "code steps", slots: 4, memoryBytes: 512 * MIB })
     );
-    expect(terms({ codeSteps: { slots: 8, memoryBytes: GIB } }, ["workflows"])).toContainEqual(
-      expect.objectContaining({ kind: "code steps", slots: 8, memoryBytes: GIB })
-    );
+    expect(
+      terms({ stepSlots: 8, codeSteps: { slots: 8, memoryBytes: GIB } }, ["workflows"])
+    ).toContainEqual(expect.objectContaining({ kind: "code steps", slots: 8, memoryBytes: GIB }));
     expect(terms({}, []).map((term) => term.kind)).not.toContain("code steps");
     // All three together: 1 x 4 GiB, 2 x 4 GiB and 4 x 512 MiB.
     expect(sandboxMemoryNeeded(terms({}, ["apps", "workflows"]))).toBe(14 * GIB);
@@ -191,7 +211,7 @@ describe("a command worker that starts", () => {
       "page builds: 2 x 4.00 GiB = 8.00 GiB (PAGE_BUILD_CONCURRENCY x infrastructure.sandbox.memoryBytes)"
     );
     expect(message).toContain(
-      "code steps: 4 x 0.50 GiB = 2.00 GiB (workflows.codeSteps.slots x workflows.codeSteps.memoryBytes)"
+      "code steps: 4 x 0.50 GiB = 2.00 GiB (min(workflows.stepSlots, workflows.codeSteps.slots) x workflows.codeSteps.memoryBytes)"
     );
   });
 
@@ -203,10 +223,12 @@ describe("a command worker that starts", () => {
     expect(check({ on: ["apps"], host })).toMatchObject({ started: false });
     expect(check({ on: ["apps"], pageBuilds: "1", host })).toMatchObject({ started: true });
     const codeSteps = { slots: 16 };
-    expect(check({ fields: { codeSteps }, on: ["workflows"], host })).toMatchObject({
+    expect(check({ fields: { codeSteps, stepSlots: 16 }, on: ["workflows"], host })).toMatchObject({
       started: false
     });
-    expect(check({ fields: { codeSteps: { slots: 8 } }, on: ["workflows"], host })).toMatchObject({
+    expect(
+      check({ fields: { stepSlots: 8, codeSteps: { slots: 8 } }, on: ["workflows"], host })
+    ).toMatchObject({
       started: true
     });
     expect(
@@ -235,4 +257,38 @@ describe("a command worker that starts", () => {
     // A host that holds its sandboxes starts without a word.
     expect(check({ host: 64 * GIB })).toEqual({ started: true, warnings: [] });
   });
+});
+
+describe("Workflow step slots at startup", () => {
+  it("defaults to 4 and uses the configured count for code slots unless capped", () => {
+    expect(workflowsConfigSchema.parse({}).stepSlots).toBe(4);
+    expect(workflowsConfigSchema.parse({ stepSlots: 8 })).toMatchObject({
+      stepSlots: 8,
+      codeSteps: { slots: 8 }
+    });
+    expect(
+      workflowsConfigSchema.parse({ stepSlots: 8, codeSteps: { slots: 2 } }).codeSteps.slots
+    ).toBe(2);
+  });
+  it.each([1, 64])("accepts the boundary %s", (stepSlots) => {
+    expect(workflowsConfigSchema.parse({ stepSlots }).stepSlots).toBe(stepSlots);
+  });
+  it.each([0, 65, -1, 1.5, "8", null, Infinity])(
+    "refuses %s at startup with the setting named",
+    (stepSlots) => {
+      try {
+        parseClientInstanceConfig({ ...config({}), workflows: { stepSlots } });
+        throw new Error("The invalid setting was accepted");
+      } catch (error) {
+        expect(error).toMatchObject({
+          code: "VALIDATION_FAILED",
+          details: {
+            issues: expect.arrayContaining([
+              expect.objectContaining({ path: ["workflows", "stepSlots"] })
+            ])
+          }
+        });
+      }
+    }
+  );
 });

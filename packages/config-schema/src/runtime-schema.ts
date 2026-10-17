@@ -114,10 +114,12 @@ export const webAccessConfigSchema = z
  */
 export const workflowsConfigSchema = z
   .strictObject({
+    /** Caps Workflow step jobs in each serving process; invalid values stop startup. */
+    stepSlots: z.number().int().min(1).max(64).default(4),
     codeSteps: z
       .strictObject({
         /** How many code steps one command worker runs at once. */
-        slots: z.number().int().positive().max(64).default(4),
+        slots: z.number().int().positive().max(64).optional(),
         /** The memory of one code step's container, with no swap beyond it. */
         memoryBytes: z
           .number()
@@ -149,7 +151,11 @@ export const workflowsConfigSchema = z
           "scratchBytes is memory of the code step and at most half of memoryBytes: the script itself needs the rest"
       })
   })
-  .prefault({});
+  .prefault({})
+  .transform((config) => ({
+    ...config,
+    codeSteps: { ...config.codeSteps, slots: config.codeSteps.slots ?? config.stepSlots }
+  }));
 
 export const executionWorkspacesConfigSchema = z
   .object({

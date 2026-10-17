@@ -39,7 +39,7 @@ import {
 } from "./data-pruning";
 import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
 import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
-import { WORKFLOW_RUN_LIMITS, WORKFLOW_STEP_JOB_SLOTS, type WorkflowRunLimits } from "./limits";
+import { WORKFLOW_RUN_LIMITS, type WorkflowRunLimits } from "./limits";
 import type { WorkflowOperationCalls } from "./operation-step";
 import { itemLabelOf } from "./references";
 import { createBlockEnds } from "./run-blocks";
@@ -67,6 +67,8 @@ import { workflowCodeJobKind, workflowStepJobKind } from "./step-job";
 // in a process: the wait before another attempt and the run's own deadline are stored times.
 
 export interface WorkflowEngineOptions {
+  /** The validated release setting: jobs of the step kind served by one process. */
+  stepSlots: number;
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
   /** Where the published definition of a Workflow is read when a run is started. */
@@ -554,7 +556,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
   const stepHandler = defineJobHandler({
     kind: workflowStepJobKind,
-    slots: WORKFLOW_STEP_JOB_SLOTS,
+    slots: options.stepSlots,
     async run(job, control) {
       const ref: WorkflowStepRunRef = { clientInstanceId, id: job.payload.stepRunId };
       const claimed = await claim(control, ref);
@@ -753,7 +755,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         clientInstanceId,
         id: run.id
       });
-      return definition ? withEveryBodyStep(stepRuns, definition) : stepRuns;
+      return definition ? withEveryBodyStep(stepRuns, definition, options.stepSlots) : stepRuns;
     },
 
     async listWorkflows() {

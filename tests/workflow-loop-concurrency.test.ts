@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { JsonValue } from "@work-shape/catalyst-core";
-import { WORKFLOW_STEP_JOB_SLOTS, parseWorkflowManifest } from "@work-shape/catalyst-workflows";
+import { workflowsConfigSchema } from "@work-shape/catalyst-config-schema";
+import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import {
   publishedDefinitions,
   type workflowFixture,
@@ -91,6 +92,26 @@ describe("a loop with concurrency above 1", () => {
     expect(codes(0)).toBe("steps.2.concurrency");
   });
 
+  it.each([2, 8])(
+    "uses %s configured step slots, including the loop's reported concurrency",
+    async (stepSlots) => {
+      const t = await ready({ concurrency: 8 }, { stepSlots });
+      expect(
+        t.workflows.jobHandlers.find((handler) => handler.kind.kind === "workflow_run.execute_step")
+          ?.slots
+      ).toBe(stepSlots);
+      const seen = countingCalls(t, stepSlots);
+      const run = await t.finish((await start(t)).id);
+      expect(run.status).toBe("done");
+      expect(seen.most).toBe(stepSlots);
+      const steps = await stepRunsOf(t, run.id);
+      expect(steps.find((step) => step.key === "each_client")?.concurrency).toEqual({
+        asked: 8,
+        ranWith: stepSlots
+      });
+    }
+  );
+
   it("runs that many items at once, each item once, and counts them all", async () => {
     const t = await ready({ concurrency: 3 });
     const seen = countingCalls(t, 3);
@@ -126,9 +147,9 @@ describe("a loop with concurrency above 1", () => {
     const stepRuns = await stepRunsOf(t, run.id);
     expect(stepRuns.find((stepRun) => stepRun.key === "each_client")?.concurrency).toEqual({
       asked: 8,
-      ranWith: WORKFLOW_STEP_JOB_SLOTS
+      ranWith: workflowsConfigSchema.parse({}).stepSlots
     });
-    expect(WORKFLOW_STEP_JOB_SLOTS).toBeLessThan(8);
+    expect(workflowsConfigSchema.parse({}).stepSlots).toBeLessThan(8);
     // No other step run says anything of it.
     expect(
       stepRuns.filter((stepRun) => stepRun.key !== "each_client" && stepRun.concurrency)

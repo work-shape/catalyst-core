@@ -215,6 +215,7 @@ export interface WorkflowFixture extends ConnectionOperationsFixture {
 export async function workflowFixture(
   options: {
     moduleOn?: boolean;
+    stepSlots?: number;
     limits?: InstanceWorkflowsParts["limits"];
     /**
      * In place of the fixture folders. `assets` is what an instance has: the kind `workflow`
@@ -287,6 +288,7 @@ export async function workflowFixture(
             clientInstanceId,
             stores,
             operationCalls: server.operationCalls,
+            ...(options.stepSlots === undefined ? {} : { stepSlots: options.stepSlots }),
             ...(fromAssets ? {} : { definitions: given ?? fixtureDefinitions() }),
             ...(options.limits ? { limits: options.limits } : {}),
             ...(options.now ? { now: options.now } : {}),

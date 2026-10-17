@@ -1,9 +1,9 @@
+import { workflowsConfigSchema } from "@work-shape/catalyst-config-schema";
 import { afterEach, describe, expect, it } from "vitest";
 import { WORKFLOW_LOOP_MAX_CONCURRENCY } from "@work-shape/catalyst-core";
 import {
   WORKFLOW_LOOP_MAX_ITEMS,
-  WORKFLOW_STEP_DATA_MAX_BYTES,
-  WORKFLOW_STEP_JOB_SLOTS
+  WORKFLOW_STEP_DATA_MAX_BYTES
 } from "@work-shape/catalyst-workflows";
 import { stepRunsSchema } from "../support/workflow-instance";
 import {
@@ -293,7 +293,7 @@ describe(`a Workflow Run with a loop over ${ITEMS} items`, () => {
         bounds: {
           loopMaxItems: WORKFLOW_LOOP_MAX_ITEMS,
           loopConcurrency: WORKFLOW_LOOP_MAX_CONCURRENCY,
-          stepJobSlots: WORKFLOW_STEP_JOB_SLOTS,
+          stepJobSlots: workflowsConfigSchema.parse({}).stepSlots,
           stepDataMaxBytes: WORKFLOW_STEP_DATA_MAX_BYTES,
           readWithinMs: READ_WITHIN_MS
         },
@@ -322,7 +322,7 @@ describe(`a Workflow Run with a loop over ${ITEMS} items`, () => {
       expect(loop?.loop).toMatchObject({ total: ITEMS, done: ITEMS, failed: 0 });
       // Each item was read once.
       expect(t.arrivals("echo")).toBe(ITEMS);
-      expect(mostRunningJobs).toBeLessThanOrEqual(WORKFLOW_STEP_JOB_SLOTS);
+      expect(mostRunningJobs).toBeLessThanOrEqual(workflowsConfigSchema.parse({}).stepSlots);
       for (const [name, read] of Object.entries(reads)) {
         expect(read.medianMs, name).toBeLessThan(READ_WITHIN_MS);
       }

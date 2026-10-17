@@ -66,9 +66,12 @@ export function sandboxMemoryTerms(input: {
   if (modules.isEnabled("workflows")) {
     terms.push({
       kind: "code steps",
-      slots: config.workflows.codeSteps.slots,
+      slots: Math.min(config.workflows.codeSteps.slots, config.workflows.stepSlots),
       memoryBytes: config.workflows.codeSteps.memoryBytes,
-      settings: ["workflows.codeSteps.slots", "workflows.codeSteps.memoryBytes"]
+      settings: [
+        "min(workflows.stepSlots, workflows.codeSteps.slots)",
+        "workflows.codeSteps.memoryBytes"
+      ]
     });
   }
   return terms;

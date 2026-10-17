@@ -188,7 +188,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
         stores: store,
         sandbox: processExecutor,
         tempRoot: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
-        slots: codeSteps.slots,
+        slots: Math.min(codeSteps.slots, config.workflows.stepSlots),
         timeoutSeconds: codeSteps.timeoutSeconds,
         limits: {
           cpuCount: codeSteps.cpuCount,

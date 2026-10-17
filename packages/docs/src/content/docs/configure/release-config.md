@@ -1244,3 +1244,21 @@ edit static release config and/or agent working copy
 ```
 
 Interactive administration changes apply to new conversations immediately. Pull and commit those changes when the repository should retain them. Static tool availability, model providers and bindings, capabilities, retention, and security policy still require the normal release/deploy flow.
+
+## Workflow step concurrency
+
+`workflows.stepSlots` caps the Workflow step jobs that each serving process runs at
+once across all Workflows. It defaults to **4** and accepts whole numbers from **1
+to 64**; startup refuses values outside that range. Waiting steps release their slot.
+Set this in release config and restart the workers to apply it:
+
+```yaml
+workflows:
+  stepSlots: 8
+```
+
+Code sandbox jobs also respect `workflows.codeSteps.slots` (defaults to `stepSlots`). Their effective
+concurrency is the smaller of the two settings. The startup sandbox memory check
+multiplies that effective count by `workflows.codeSteps.memoryBytes`, alongside
+workspace commands and Page builds. Raise `stepSlots` (and any explicitly lower code slot setting) to run more code
+sandboxes concurrently; the host must have enough memory for them.

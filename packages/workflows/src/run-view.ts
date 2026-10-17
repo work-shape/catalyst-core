@@ -5,7 +5,6 @@ import {
   type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
 import { indexWorkflowSteps } from "./definition";
-import { WORKFLOW_STEP_JOB_SLOTS } from "./limits";
 
 /** How many items of a loop are going at once at most: its `concurrency`, within the bounds. */
 export function loopConcurrencyOf(loop: Extract<WorkflowStep, { type: "loop" }>): number {
@@ -21,7 +20,8 @@ export function loopConcurrencyOf(loop: Extract<WorkflowStep, { type: "loop" }>)
  */
 export function withEveryBodyStep(
   stepRuns: WorkflowStepRunView[],
-  definition: WorkflowManifest
+  definition: WorkflowManifest,
+  stepSlots: number
 ): WorkflowStepRunView[] {
   const index = indexWorkflowSteps(definition);
   return stepRuns.map((stepRun) => {
@@ -30,7 +30,7 @@ export function withEveryBodyStep(
     const asked = loopConcurrencyOf(loop);
     const shown: WorkflowStepRunView = {
       ...stepRun,
-      concurrency: { asked, ranWith: Math.min(asked, WORKFLOW_STEP_JOB_SLOTS) }
+      concurrency: { asked, ranWith: Math.min(asked, stepSlots) }
     };
     if (!stepRun.bodyCounts) return shown;
     const total = stepRun.loop?.total ?? 0;

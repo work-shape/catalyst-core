@@ -1,3 +1,4 @@
+import { workflowsConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   createWorkflowRoutes,
   workflowRunAsPrincipal,
@@ -35,6 +36,8 @@ export interface InstanceWorkflowsParts extends Pick<
 > {
   /** The call path of the process. An operation step calls through it and nothing else. */
   operationCalls: Pick<OperationCalls, "registry" | "deps">;
+  /** Validated at startup, with the release schema's default for direct assembly callers. */
+  stepSlots?: number;
   /**
    * Where the published definition of a Workflow is read, in place of the instance's own
    * source: the published revisions of its Workflow assets. For a test of the engine.
@@ -119,6 +122,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       ? noWorkflowStepFiles
       : createWorkflowAssetStepFiles({ clientInstanceId, configAssets: stores.configAssets }));
   const engine = createWorkflowEngine({
+    stepSlots: parts.stepSlots ?? workflowsConfigSchema.parse({}).stepSlots,
     clientInstanceId,
     stores,
     definitions: given ?? assets,
@@ -242,6 +246,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
         clientInstanceId,
         stores,
         operationCalls,
+        stepSlots: config.workflows.stepSlots,
         ...zone,
         // The command worker runs the scripts of code steps. An instance without Execution
         // Workspaces or without a sandbox has no such worker, and its engine knows.

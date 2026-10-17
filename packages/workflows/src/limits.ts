@@ -43,9 +43,6 @@ export const WORKFLOW_DEFINITION_MAX_STEPS = 200;
  */
 export const WORKFLOW_ITERATION_LABEL_MAX_CHARS = 120;
 
-/** How many jobs of the step kind one process runs at once. */
-export const WORKFLOW_STEP_JOB_SLOTS = 4;
-
 /**
  * How often the job of one step is attempted. A step whose process died is run again; a
  * changing call it made answers its first result, by the step run's idempotency key.
