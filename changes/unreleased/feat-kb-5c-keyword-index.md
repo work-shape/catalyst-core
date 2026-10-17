@@ -1,8 +1,0 @@
----
-section: Added
----
-
-- Knowledge Bases on the built-in backend index their TXT and Markdown documents for keyword search in German and English (KB-5c). The job `knowledge_base.index` cuts the text by page and Markdown heading into passages of about 512 tokens with a title, path and heading prefix, and replaces a content's passages on every run. It skips a content already indexed at the current chunking revision. A document is `pending`, `indexed` or `failed` with one of the failure codes in `KNOWLEDGE_DOCUMENT_FAILURE_CODES`.
-- `knowledge.<id>.list_documents` (right `knowledge_base.use`, `GET /api/v1/knowledge-bases/:knowledgeBase/documents`) pages the documents of a Knowledge Base with their state and failure code. `knowledge.<id>.retry` (right `knowledge_base.write`, `POST /api/v1/knowledge-bases/:knowledgeBase/documents/retry`) indexes failed documents again.
-- PDF and DOCX are indexed through a durable extraction handoff. The index job queues `knowledge_base.extract`, and the handler from `defineKnowledgeExtractHandler` stores its result at `knowledge-bases/<kbId>/extracted/<sha256>.json` in the files store, then queues the index job again. Without an extractor the document fails with `knowledge_file_format_unavailable`. `verifyKnowledgeExtractor` is the contract test for an extractor. A stored text is used again when the chunking revision changes. A stored failure or a result without text is deleted before its document is marked failed, and Retry deletes any left behind, so Retry always extracts afresh.
-- The audit event `knowledge_base.content_indexed` records file id, chunk and page counts or the failure code, without names or text.

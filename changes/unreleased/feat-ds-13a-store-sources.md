@@ -1,8 +1,0 @@
----
-section: Added
----
-
-- A Data Store's page says where its rows come from and who reads them (DS-13a), right after its status. "Filled by" lists each published Workflow or App that adds rows to the store, with every Connection it calls and the account a Workflow runs as. "Read by" lists the published Apps with the workspace that opens them, the Knowledge Bases on the store, and who has direct access by a grant; instance admins always see everything, which the section says once. A caller who does not administer users is told how many hold a right and that a Workflow runs as a technical account, never who or which. What the caller may not see is counted in the section where it would stand. Everything is read from the published definitions at each look, so what was published before this release is shown the same way; no migration.
-- An App says where its data comes from, one sentence per Workflow or App that fills a store it reads: "Shows data from “Clients”, which the Workflow “Nightly import” copies from CRM." Whoever uses the App reads it from a button beside the App's name; builders also find it first in the App's details. It never names an account.
-- `GET /api/v1/app-data-sources?app=` (`data_stores.app_sources`) answers where the data of one published App comes from, to whoever may use or read the App.
-- `GET /api/v1/data-stores/:store/used-by` (`data_stores.used_by`, `catalyst data-store used-by`) answers, for each App and Workflow, whether it reads or adds rows, the Connections its rows come from, an App's audience and a Workflow's account, and newly the Knowledge Bases on the store, the store's readers, `hidden.knowledgeBases`, `hidden.fills` and `hidden.reads`. The fields it answered before are unchanged.

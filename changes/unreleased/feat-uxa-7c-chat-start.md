@@ -1,6 +1,0 @@
----
-section: Changed
----
-
-- The chat start shows one style of suggestion: the prompts an agent's author wrote stand as the same cards as its skills' starters, in one list before them, with a prompt icon on the same tile and the request under its title. They no longer show as pills of their own. The list holds four at most: the author's prompts first, the skills' starters fill the rest. Every starter of a `StarterList` now stands as high as the highest, so one without a hint looks like the others. The icon registry gains `prompt`.
-- A member sees the composer's model control only where the agent's author offered a choice: more than one model, or a reasoning effort left open. Where the author set the effort, the efforts the model binding allows are no choice by themselves, so the instance offers that model with no other effort to a person who may not write the agent (`config.get` and `workspaces.agents.list`). Whoever may write the agent is offered what the binding allows, as before. A member's earlier effort pick for such a model no longer applies; the run uses the author's effort. Starting a run holds to the same rule: `conversations.runs.create` and `conversations.runs.start` refuse such a person another effort (`effort_not_offered`), and refuse a model the agent does not offer (`model_not_offered`).

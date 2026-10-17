@@ -1,6 +1,0 @@
----
-section: Added
----
-
-- An agent's page shows the change the agent in the dock proposes for it. Each section with a proposed change carries a "Proposed change" mark, and under each changed field the proposed value stands beside the live one: the text in each language, the instructions, the model settings, and the skills, tools, Knowledge Bases and starters it adds or removes. A person who may change the agent gets Apply and Discard. Apply sends the proposal revision they read and makes it the live agent, and the marks go. When the agent changed its proposal in the meantime, the page reads it again and says so. When the agent was saved since the proposal was made, the page says the proposal can no longer be applied and to ask the agent in the chat again, and offers no Apply; a newer proposal shows again as usual. Apply waits, and says so, while the person has unsaved changes of their own, and the fields stay locked while Apply or Discard is on its way. A person without the right to change the agent sees the marks, no Apply or Discard, and who can apply it.
-- The UI library has `ProposedValue`, the proposed value of a field shown under it, and `Section` takes a `state` after its title.

@@ -1,9 +1,0 @@
----
-section: Added
----
-
-- **Agents:** An agent's save of an agent that exists is now a pending change proposal of its Build conversation, not a refusal with `no_draft`. The live agent stays as it is; a read in that conversation answers the proposal, and each save advances it. `agents.proposal.get`, `agents.proposal.apply` and `agents.proposal.discard` let the conversation's creator read, apply or drop it. Apply needs the rights of a save of the agent, `agent.write` among them, and writes one live revision through the write rules, `asset.before_write` guardrails, revision and audit. Apply names the proposal revision the person read (`REVISION_CONFLICT`, reason `proposal_changed`, otherwise) and refuses a proposal whose base is no longer the live revision with `CONFLICT`, reason `stale_base`; the agent's next save bases it on the live revision again. A proposal's revisions count on across an Apply or a Discard, so a revision the person read names one proposal's content only. A proposal is checked as an agent definition and against the instance's editable agent fields when it is saved, and the agent is told which field it may not change. Deleting a conversation removes its proposals.
-
-- **Editable agent fields:** A save of an agent stored without a field at its default, such as `skillNames`, no longer counts that field as changed, so a save of the instructions alone is allowed where only `instructions` is editable.
-
-- **Database:** Migration `0091_agent_change_proposals` adds the tables `agent_change_proposals` and `agent_change_proposal_revisions`. Apply it before starting API and worker processes. It only creates tables, so the previous release keeps running on it; rolling back leaves pending proposals stored and unused. Proposals hold agent definitions, are kept only until Apply, Discard or the conversation's deletion, and never enter audit.
