@@ -436,14 +436,13 @@ describe("adding files to a Knowledge Base", () => {
     expect(error.details).toEqual({ reason: "knowledge_documents_limit" });
     expect(error.message).toContain("knowledge.maxDocuments");
 
-    // The copy of the refused file holds no document: its row is marked deleted and its object
-    // is gone. The copies that hold documents keep theirs, the one of the same bytes included.
+    // The copy of the refused file holds no document: its row and its object are gone. The
+    // copies that hold documents keep theirs, the one of the same bytes included.
     const copies = await ownedCopies(instance);
-    expect(copies.map((copy) => copy.status)).toEqual(["available", "available", "deleted"]);
+    expect(copies.map((copy) => copy.status)).toEqual(["available", "available"]);
     expect(await Promise.all(copies.map((copy) => stored(instance, copy.object_key)))).toEqual([
       true,
-      true,
-      false
+      true
     ]);
     expect(await storedCopies(instance)).toHaveLength(2);
     const added = addedSchema.parse(first.json()).documents.map((document) => document.fileId);
@@ -476,7 +475,7 @@ describe("adding files to a Knowledge Base", () => {
 
     const failed = await addFiles(instance, sources);
     expect(failed.statusCode, failed.body).toBeGreaterThanOrEqual(400);
-    expect((await ownedCopies(instance)).map((copy) => copy.status)).toEqual(["deleted"]);
+    expect(await ownedCopies(instance)).toEqual([]);
     expect(await storedCopies(instance)).toEqual([]);
     expect(await documentRows(record)).toEqual([]);
   });
@@ -518,8 +517,7 @@ describe("adding files to a Knowledge Base", () => {
 
     const copies = await ownedCopies(instance);
     expect(copies.map(({ id, status }) => ({ id, status }))).toEqual([
-      { id: kept, status: "available" },
-      { id: leftover.id, status: "deleted" }
+      { id: kept, status: "available" }
     ]);
     expect(await stored(instance, leftover.objectKey)).toBe(false);
     expect(await stored(instance, required(copies[0]).object_key)).toBe(true);
@@ -569,7 +567,7 @@ describe("adding files to a Knowledge Base", () => {
     // The cleanup looks while the call stalls: the copy holds no document, so it goes.
     await cleanupDue();
     await getTestJobs(instance.api).runDue();
-    expect((await ownedCopies(instance)).map((copy) => copy.status)).toEqual(["deleted"]);
+    expect(await ownedCopies(instance)).toEqual([]);
 
     stall.open();
     const refused = await call;
@@ -578,10 +576,7 @@ describe("adding files to a Knowledge Base", () => {
       reason: "knowledge_files_released"
     });
     expect(await documentRows(record)).toEqual([]);
-    expect((await ownedCopies(instance)).map((copy) => copy.status)).toEqual([
-      "deleted",
-      "deleted"
-    ]);
+    expect(await ownedCopies(instance)).toEqual([]);
     expect(await storedCopies(instance)).toEqual([]);
   });
 

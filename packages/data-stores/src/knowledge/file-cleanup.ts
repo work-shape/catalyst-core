@@ -148,6 +148,12 @@ export async function removeUnusedKnowledgeCopies(
   });
   const unused = candidates.filter((copy) => !named.has(copy.id));
   for (const copy of unused) await files.objects.delete(copy.objectKey);
+  // With its object gone the row goes too: no file name or checksum of a removed copy stays.
+  await runtime.stores.files.deleteOwnedManagedFiles({
+    clientInstanceId: runtime.clientInstanceId,
+    owner,
+    fileIds: unused.map((copy) => copy.id)
+  });
   return unused.length;
 }
 

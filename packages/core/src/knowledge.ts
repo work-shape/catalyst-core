@@ -549,6 +549,19 @@ export interface KnowledgeRetriedDocument {
   state: KnowledgeDocumentState;
 }
 
+/** Where the next page of a purge starts: after a document, or among the unheld contents. */
+export type KnowledgePurgeCursor =
+  { phase: "documents"; after: string } | { phase: "contents"; after?: string };
+
+/** What one page of a purge deleted, and where the next one starts. */
+export interface KnowledgePurgePage {
+  documents: number;
+  chunks: number;
+  contents: number;
+  /** Missing after the last page. */
+  next?: KnowledgePurgeCursor;
+}
+
 /**
  * The documents and contents of a Knowledge Base that keeps documents, as its index job and
  * its operations reach them. Index writes lock one content. Removal shares the documents
@@ -562,19 +575,30 @@ export interface KnowledgeDocumentStore {
     queue: () => Promise<void>,
     signal?: AbortSignal
   ): Promise<number>;
-  /** Deletes withdrawn documents (all documents on retirement). The callback removes their
-   * files and unshared extraction results before the rows go, under the documents lock.
-   * A failed callback rolls back the rows, so interrupted deletion can repeat safely. */
-  purgeDocuments(
-    input: { documentIds?: readonly string[] },
-    remove: (plan: {
-      fileIds: string[];
-      contentSha256s: string[];
-      documents: number;
-      chunks: number;
-    }) => Promise<void>,
+  /**
+   * Deletes one page of withdrawn documents among `documentIds` (of every document, then of
+   * every content no document holds, on retirement), at most `limit`, after `after`, in a
+   * transaction of its own under the documents lock. Pages are committed one by one, so a
+   * purge cut short continues where it stopped, and a page that fails rolls back its rows.
+   *
+   * `remove.files` deletes the copies no document outside the page names, with their objects,
+   * and answers the ids whose object stayed; the documents naming those stay as their record.
+   * `remove.extractions` then deletes the extraction results of the contents no remaining
+   * document holds, and answers the hashes whose object stayed; those contents and their
+   * documents stay. What stays is tried again by the next purge, not by the next page.
+   */
+  purgeDocumentPage(
+    input: {
+      documentIds?: readonly string[];
+      after?: KnowledgePurgeCursor;
+      limit: number;
+    },
+    remove: {
+      files(fileIds: string[]): Promise<string[]>;
+      extractions(contentSha256s: string[]): Promise<string[]>;
+    },
     signal?: AbortSignal
-  ): Promise<void>;
+  ): Promise<KnowledgePurgePage>;
   readContent(
     contentSha256: string,
     signal?: AbortSignal

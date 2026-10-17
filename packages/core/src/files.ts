@@ -546,6 +546,8 @@ export interface ManagedFileStore {
     clientInstanceId: ClientInstanceId;
     owner: ManagedFileOwner;
     fileIds: readonly string[];
+    /** Holds the rows until the surrounding transaction ends, for extraction versus deletion. */
+    lock?: boolean;
   }): Promise<ManagedFileRecord[]>;
   /** Lists orphaned managed files created before `createdBefore`, ordered by id. */
   listOrphanedManagedFiles(input: {
@@ -573,6 +575,16 @@ export interface ManagedFileStore {
     owner: ManagedFileOwner;
     fileIds: readonly ManagedFileId[];
     deletedAt: ISODateString;
+  }): Promise<number>;
+  /**
+   * Deletes the rows of files `owner` owns, marked deleted or not, and returns how many. For an
+   * owner whose objects are gone: no file name or checksum of a removed copy stays behind. A
+   * file another owner, or no owner, holds is left alone.
+   */
+  deleteOwnedManagedFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    fileIds: readonly ManagedFileId[];
   }): Promise<number>;
   /**
    * Marks files `owner` owns and marked deleted available again, and returns how many. For an

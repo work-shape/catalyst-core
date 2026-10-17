@@ -159,9 +159,10 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     clientInstanceId: ClientInstanceId;
     owner: ManagedFileOwner;
     fileIds: readonly string[];
+    lock?: boolean;
   }): Promise<ManagedFileRecord[]> {
     if (input.fileIds.length === 0) return [];
-    const rows = await this.db
+    const query = this.db
       .select()
       .from(managedFiles)
       .where(
@@ -172,7 +173,9 @@ class PostgresPlatformFileStore implements PlatformFileStore {
           inArray(managedFiles.id, [...input.fileIds]),
           ne(managedFiles.status, "deleted")
         )
-      );
+      )
+      .orderBy(asc(managedFiles.id));
+    const rows = await (input.lock ? query.for("update") : query);
     return rows.map(mapManagedFile);
   }
 
@@ -266,6 +269,28 @@ class PostgresPlatformFileStore implements PlatformFileStore {
           eq(managedFiles.ownerKind, input.owner.kind),
           eq(managedFiles.ownerId, input.owner.id),
           ne(managedFiles.status, "deleted"),
+          inArray(managedFiles.id, [...input.fileIds])
+        )
+      )
+      .returning({ id: managedFiles.id });
+    return rows.length;
+  }
+
+  async deleteOwnedManagedFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    fileIds: readonly ManagedFileId[];
+  }): Promise<number> {
+    if (input.fileIds.length === 0) {
+      return 0;
+    }
+    const rows = await this.db
+      .delete(managedFiles)
+      .where(
+        and(
+          eq(managedFiles.clientInstanceId, input.clientInstanceId),
+          eq(managedFiles.ownerKind, input.owner.kind),
+          eq(managedFiles.ownerId, input.owner.id),
           inArray(managedFiles.id, [...input.fileIds])
         )
       )

@@ -2,14 +2,19 @@ import { z } from "zod";
 import {
   AppError,
   type BuiltinKnowledgeTarget,
-  type KnowledgeDocumentStore
+  type KnowledgeDocumentStore,
+  type KnowledgePurgeCursor,
+  type KnowledgePurgePage
 } from "@work-shape/catalyst-core";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import { databaseFailureError } from "../../failures";
 import type { DataStoreRuntime } from "../../runtime";
 
-/** Bounds one removal transaction, including its object deletions. A timeout retries the job. */
-const REMOVE_TIMEOUT_MS = 300_000;
+/**
+ * Bounds one transaction: a withdrawal, or one page of a purge with its object deletions (at
+ * most three object calls per document). A timeout rolls the page back and retries the job.
+ */
+const REMOVE_TIMEOUT_MS = 120_000;
 const removedRow = z.object({
   id: z.string(),
   managed_file_id: z.string(),
@@ -24,7 +29,7 @@ const countRow = z.object({ count: z.number().int() });
 export function createDocumentRemoval(
   runtime: DataStoreRuntime,
   target: BuiltinKnowledgeTarget
-): Pick<KnowledgeDocumentStore, "withdrawDocuments" | "purgeDocuments"> {
+): Pick<KnowledgeDocumentStore, "withdrawDocuments" | "purgeDocumentPage"> {
   async function change<T>(
     signal: AbortSignal | undefined,
     work: (sql: PostgresChangeStatements) => Promise<T>
@@ -85,60 +90,121 @@ export function createDocumentRemoval(
         return rows.length;
       });
     },
-    purgeDocuments(input, remove, signal) {
-      return change(signal, async (sql) => {
+    purgeDocumentPage(input, remove, signal) {
+      return change(signal, async (sql): Promise<KnowledgePurgePage> => {
         const all = input.documentIds === undefined;
+        if (input.after?.phase === "contents") {
+          if (!all) return { documents: 0, chunks: 0, contents: 0 };
+          return purgeUnheldContents(sql, input.after.after, input.limit, remove);
+        }
         const rows = z.array(removedRow).parse(
           await sql.run(
             `select id, managed_file_id, content_sha256 from catalyst_kb.documents
           where ($1::pg_catalog.bool or (withdrawn_at is not null and id = any($2::pg_catalog.text[])))
-          order by id`,
-            [all, [...(input.documentIds ?? [])]]
+            and id > $3::pg_catalog.text
+          order by id limit $4::pg_catalog.int4`,
+            [all, [...(input.documentIds ?? [])], input.after?.after ?? "", input.limit]
           )
         );
-        const ids = rows.map((row) => row.id);
-        // On retirement include orphan contents too. Otherwise visit only this batch's hashes.
-        const contents = z.array(contentRow).parse(
-          await sql.run(
-            `select sha256 from catalyst_kb.contents c
-          where ($1::pg_catalog.bool or sha256 = any($2::pg_catalog.text[]))
-            and not exists (select 1 from catalyst_kb.documents d where d.content_sha256 = c.sha256
-              and not (d.id = any($3::pg_catalog.text[])))
-          order by sha256 for update`,
-            [all, [...new Set(rows.map((row) => row.content_sha256))], ids]
-          )
-        );
-        const hashes = contents.map((row) => row.sha256);
-        const [count] = z.array(countRow).parse(
-          await sql.run(
-            `select count(*)::pg_catalog.int4 as count
-          from catalyst_kb.chunks where content_sha256 = any($1::pg_catalog.text[])`,
-            [hashes]
-          )
-        );
+        const last = rows.at(-1)?.id;
+        const next: KnowledgePurgeCursor | undefined =
+          rows.length === input.limit && last !== undefined
+            ? { phase: "documents", after: last }
+            : all
+              ? { phase: "contents" }
+              : undefined;
+        if (rows.length === 0)
+          return { documents: 0, chunks: 0, contents: 0, ...(next ? { next } : {}) };
+        const pageIds = rows.map((row) => row.id);
+        // A copy another document still names goes with that document's page.
         const fileRows = z.array(z.object({ managed_file_id: z.string() })).parse(
           await sql.run(
             `select distinct managed_file_id from catalyst_kb.documents d
           where id = any($1::pg_catalog.text[]) and not exists (
             select 1 from catalyst_kb.documents kept where kept.managed_file_id = d.managed_file_id
-              and not (kept.id = any($1::pg_catalog.text[])))`,
-            [ids]
+              and not (kept.id = any($1::pg_catalog.text[])))
+          order by managed_file_id`,
+            [pageIds]
           )
         );
-        await remove({
-          fileIds: fileRows.map((row) => row.managed_file_id),
-          contentSha256s: hashes,
-          documents: rows.length,
-          chunks: count?.count ?? 0
-        });
-        await sql.run("delete from catalyst_kb.documents where id = any($1::pg_catalog.text[])", [
-          ids
-        ]);
-        await sql.run(
-          "delete from catalyst_kb.contents where sha256 = any($1::pg_catalog.text[])",
-          [hashes]
+        const keptFiles = new Set(await remove.files(fileRows.map((row) => row.managed_file_id)));
+        let purged = rows.filter((row) => !keptFiles.has(row.managed_file_id));
+        // The contents only purged documents hold. Index writes lock their content; this waits.
+        const contents = z.array(contentRow).parse(
+          await sql.run(
+            `select sha256 from catalyst_kb.contents c
+          where sha256 = any($1::pg_catalog.text[])
+            and not exists (select 1 from catalyst_kb.documents d where d.content_sha256 = c.sha256
+              and not (d.id = any($2::pg_catalog.text[])))
+          order by sha256 for update`,
+            [[...new Set(purged.map((row) => row.content_sha256))], purged.map((row) => row.id)]
+          )
         );
+        const keptContents = new Set(await remove.extractions(contents.map((row) => row.sha256)));
+        purged = purged.filter((row) => !keptContents.has(row.content_sha256));
+        const hashes = contents.map((row) => row.sha256).filter((sha) => !keptContents.has(sha));
+        await sql.run("delete from catalyst_kb.documents where id = any($1::pg_catalog.text[])", [
+          purged.map((row) => row.id)
+        ]);
+        const chunks = await deleteContents(sql, hashes);
+        return {
+          documents: purged.length,
+          chunks,
+          contents: hashes.length,
+          ...(next ? { next } : {})
+        };
       });
     }
   };
+}
+
+/**
+ * Deletes contents no document holds, such as those of a deletion cut short between its two
+ * stores, at most `limit` after `after`. Retirement only: no add can take a content then.
+ */
+async function purgeUnheldContents(
+  sql: PostgresChangeStatements,
+  after: string | undefined,
+  limit: number,
+  remove: { extractions(contentSha256s: string[]): Promise<string[]> }
+): Promise<KnowledgePurgePage> {
+  const contents = z.array(contentRow).parse(
+    await sql.run(
+      `select sha256 from catalyst_kb.contents c
+      where sha256 > $1::pg_catalog.text
+        and not exists (select 1 from catalyst_kb.documents d where d.content_sha256 = c.sha256)
+      order by sha256 limit $2::pg_catalog.int4 for update`,
+      [after ?? "", limit]
+    )
+  );
+  const last = contents.at(-1)?.sha256;
+  const kept = new Set(await remove.extractions(contents.map((row) => row.sha256)));
+  const hashes = contents.map((row) => row.sha256).filter((sha) => !kept.has(sha));
+  const chunks = await deleteContents(sql, hashes);
+  return {
+    documents: 0,
+    chunks,
+    contents: hashes.length,
+    ...(contents.length === limit && last !== undefined
+      ? { next: { phase: "contents", after: last } }
+      : {})
+  };
+}
+
+/** Deletes contents no document names, with their chunks, and answers how many chunks went. */
+async function deleteContents(
+  sql: PostgresChangeStatements,
+  hashes: readonly string[]
+): Promise<number> {
+  const [count] = z.array(countRow).parse(
+    await sql.run(
+      `select count(*)::pg_catalog.int4 as count
+      from catalyst_kb.chunks where content_sha256 = any($1::pg_catalog.text[])`,
+      [[...hashes]]
+    )
+  );
+  await sql.run("delete from catalyst_kb.contents where sha256 = any($1::pg_catalog.text[])", [
+    [...hashes]
+  ]);
+  return count?.count ?? 0;
 }
