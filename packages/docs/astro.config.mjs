@@ -81,7 +81,7 @@ export default defineConfig({
         },
         {
           label: "Build agents and Apps",
-          items: ["configure/build", "automate/apps", "apps/build"]
+          items: ["configure/build", "automate/apps", "apps/build", "apps/app-or-workflow"]
         },
         {
           label: "Automate",

@@ -10,7 +10,13 @@ import {
   platformModules
 } from "@work-shape/catalyst-client-assembly";
 import { createModuleRegistry } from "@work-shape/catalyst-core";
+import {
+  createWorkspaceOpenTool,
+  showViewTool,
+  WorkspaceCommandService
+} from "@work-shape/catalyst-tool-execution";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
+import { workflowAuthoringSkill } from "@work-shape/catalyst-workflows";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
 // What an agent knows of the platform comes in three layers: the rules every agent gets, and,
@@ -188,5 +194,77 @@ describe("connecting a local agent, as an agent knows it", () => {
     expect(
       offer.toolNames.filter((name) => keyTool.test(name) || keyOperations.includes(name))
     ).toEqual([]);
+  });
+});
+
+// Platform Access acceptance check 59 (PG-2a): one page of platform-docs holds the decision
+// table with the ruled sentence word for word and the Buchhaltungscheck as its worked row;
+// show_view, workspace.open, app.save, platform.assets.put and the workflow-authoring skill
+// each name that page in one sentence and copy none of it. Fails without the change: the docs
+// had no such page and nothing pointed to one.
+describe("the decision table between a View, an App and a Workflow", () => {
+  const PAGE = "references/apps/app-or-workflow.md";
+  const SENTENCE =
+    "An App shows data and lets the person using it do one thing at a time. Anything that is a process (several steps, a schedule, history, notifications, rules business users change) is a Workflow the App starts with a button. A read that must respect the viewer's rights stays in the App.";
+
+  it("is one page of platform-docs with the sentence, the table and the Buchhaltungscheck row", () => {
+    const pages = (platformDocsSkill.resources ?? []).filter((resource) =>
+      resource.content.includes(SENTENCE)
+    );
+    expect(pages.map((page) => page.path)).toEqual([PAGE]);
+    const content = pages[0]?.content ?? "";
+    expect(content).toContain(
+      "| What | Use when | Not when | Runs as | Who sees the result | The sign to switch |"
+    );
+    for (const row of [
+      "View (`show_view`)",
+      "App (`workspace.open`",
+      "App action (`sql`, `connection`, `decision`, `workflow`)",
+      "`code` action |",
+      "Workflow |"
+    ]) {
+      expect(content).toContain(`| ${row}`);
+    }
+    expect(content).toContain("| Worked row: the Buchhaltungscheck |");
+    expect(content).toContain("A `code` action that needs a dependent call becomes a Workflow");
+    expect(content).toContain("`http_api` Connection");
+    expect(content).toContain("`externalHosts`");
+    expect(content).toContain("the App last, and the agent says what it creates before it does");
+  });
+
+  it("is named in one sentence by each tool that builds and by workflow-authoring, which copy none of it", async () => {
+    const harness = await createWorkspaceHarness();
+    const workspaceOpen = createWorkspaceOpenTool({
+      workspace: new WorkspaceCommandService({
+        store: harness.store,
+        objectStore: harness.objectStore,
+        fileStore: harness.objectStore
+      }).dependencies,
+      builds: {
+        build: async () => {
+          throw new Error("Description only");
+        }
+      }
+    });
+    const modules = createModuleRegistry(platformModules).snapshot({
+      apps: { enabled: true },
+      workflows: { enabled: true },
+      assetManagement: { enabled: true }
+    });
+    const platform = createPlatformTools({ stores: harness.store, modules });
+    const byName = new Map(
+      [showViewTool, workspaceOpen, ...platform.tools].map((tool) => [tool.name, tool.description])
+    );
+    const texts = [
+      ...["show_view", "workspace.open", "app.save", "platform.assets.put"].map(
+        (name) => byName.get(name) ?? `missing ${name}`
+      ),
+      workflowAuthoringSkill.content
+    ];
+    for (const text of texts) {
+      expect(text.split(PAGE.replace("references/", "")).length - 1, text.slice(0, 60)).toBe(1);
+      expect(text).not.toContain("one thing at a time");
+      expect(text).not.toContain("Buchhaltungscheck");
+    }
   });
 });

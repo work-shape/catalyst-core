@@ -313,6 +313,9 @@ function content(): string {
 Read this before you change the definition of a Workflow. It says what a definition holds, what
 the engine of this release runs, and how to save a change safely.
 
+Whether the work is a Workflow at all, or an App or a View: \`references/apps/app-or-workflow.md\`
+in \`platform-docs\`.
+
 ## How you work on a definition
 
 You are given tools that are bound to the Workflow this conversation is about.

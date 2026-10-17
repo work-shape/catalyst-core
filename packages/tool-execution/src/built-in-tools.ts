@@ -90,7 +90,7 @@ export function createShowViewTool(
     icon: "app",
     effect: "reading",
     description: [
-      "Show a small HTML widget inline in your answer: a table, chart, or compact visual that belongs to this one reply. For a standalone visualization, dashboard, or tool, write its files and show them with workspace.open instead when you have that tool.",
+      "Show a small HTML widget inline in your answer: a table, chart, or compact visual that belongs to this one reply. For a standalone visualization, dashboard, or tool, write its files and show them with workspace.open instead when you have that tool. Choosing a View, an App or a Workflow: references/apps/app-or-workflow.md in 'platform-docs'.",
       showViewLayoutGuidance,
       showViewColorGuidance,
       showViewIconGuidance,
