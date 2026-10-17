@@ -223,9 +223,10 @@ function inputSchemaOf(
  * them in two reads. Neither contacts an outside system.
  */
 export function createConnectionOperationSource(
-  deps: ConnectionOperationSourceDeps
+  deps: ConnectionOperationSourceDeps,
+  sharedSlots?: ConnectionCallSlots
 ): OperationSource {
-  const slots = new ConnectionCallSlots();
+  const slots = sharedSlots ?? new ConnectionCallSlots();
   return {
     async resolve(name) {
       const parsed = parseConnectionOperationName(name);

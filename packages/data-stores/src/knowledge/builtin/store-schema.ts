@@ -167,7 +167,14 @@ const SOURCES = `
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
-  { number: 2, name: "sources", sql: SOURCES }
+  { number: 2, name: "sources", sql: SOURCES },
+  {
+    number: 3,
+    name: "source_fetch_claims",
+    sql: `alter table catalyst_kb.source_items
+      add column enqueued_run_id text,
+      add column fetch_job_id text;`
+  }
 ];
 
 /** The level the store of a built-in Knowledge Base is at when its tables are this release's. */

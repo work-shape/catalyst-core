@@ -5,6 +5,7 @@ import {
   type BuiltinKnowledgeTarget,
   type JobRetry,
   type KnowledgeFiles,
+  type KnowledgeBackend,
   type ManagedFileId,
   type ManagedFileOwner,
   type OwnedManagedFile,
@@ -85,7 +86,7 @@ const ownerOf = (knowledgeBaseId: string): ManagedFileOwner => ({
  * could have made a copy in the window.
  */
 export async function enqueueKnowledgeFileCleanup(
-  runtime: KnowledgeRuntime,
+  runtime: Pick<KnowledgeRuntime, "clientInstanceId" | "stores" | "now">,
   target: BuiltinKnowledgeTarget
 ): Promise<void> {
   const now = runtime.now().getTime();
@@ -113,7 +114,9 @@ export async function enqueueKnowledgeFileCleanup(
  * deleted; the marks it made wait for the job.
  */
 export async function removeUnusedKnowledgeCopies(
-  runtime: KnowledgeRuntime,
+  runtime: Pick<KnowledgeRuntime, "clientInstanceId" | "stores" | "now"> & {
+    backend: Pick<KnowledgeBackend, "documentFileIds">;
+  },
   files: KnowledgeFiles,
   target: BuiltinKnowledgeTarget,
   copies: readonly OwnedManagedFile[],

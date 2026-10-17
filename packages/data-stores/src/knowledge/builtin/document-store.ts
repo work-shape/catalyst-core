@@ -107,6 +107,7 @@ async function liveGenerations(
 }
 
 const contentRow = z.object({
+  synced: z.boolean(),
   format: z.enum(KNOWLEDGE_DOCUMENT_FORMATS),
   state: z.enum(KNOWLEDGE_CONTENT_STATES),
   chunking_revision: z.number().int().nullable(),
@@ -194,6 +195,7 @@ export function createBuiltinDocumentStore(
         const [row] = z.array(contentRow).parse(
           await sql.run(
             `select c.format, c.state, c.chunking_revision,
+               exists (select 1 from catalyst_kb.documents s where s.content_sha256=c.sha256 and s.source_item_id is not null and s.withdrawn_at is null) as synced,
                d.managed_file_id as file_id, d.title, d.file_name
              from catalyst_kb.contents c
              left join lateral (
@@ -208,6 +210,7 @@ export function createBuiltinDocumentStore(
         if (!row) return undefined;
         return {
           contentSha256,
+          synced: row.synced,
           format: row.format,
           state: row.state,
           ...(row.chunking_revision === null ? {} : { chunkingRevision: row.chunking_revision }),

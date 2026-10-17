@@ -147,8 +147,8 @@ export function createKnowledgeBases(input: {
     }),
     async publish(stores, { access, assetId, revision, config, replaced }) {
       const definition = knowledgeBaseDefinitionSchema.parse(config);
-      // The sources entry is frozen (SRC-0) and saved with a draft; syncing it arrives with
-      // SRC-1a, so publishing a source is refused until then.
+      // SRC-1a serves the source jobs. SRC-1b installs the ingestion principal and starts
+      // imports at publish; keep this gate until that authorization path is available.
       if (definition.sources?.length) {
         throw new AppError(
           "VALIDATION_FAILED",

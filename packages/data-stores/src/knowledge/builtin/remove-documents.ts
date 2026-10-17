@@ -77,8 +77,16 @@ export function createDocumentRemoval(
     }
   }
   return {
-    withdrawDocuments(documentIds, queue, signal) {
-      return change(signal, async (sql) => {
+    async withdrawDocuments(documentIds, queue, signal) {
+      const removed = await change(signal, async (sql) => {
+        // A local removal has no durable exclusion in the source definition. Refuse the
+        // whole batch: otherwise the next full pass either resurrects it or leaves a
+        // fetched item pointing at a purged document. Source withdrawal owns this path.
+        const synced = await sql.run(
+          "select id from catalyst_kb.documents where id=any($1::text[]) and source_item_id is not null limit 1",
+          [[...documentIds]]
+        );
+        if (synced.length) return undefined;
         const rows = await sql.run(
           `update catalyst_kb.documents set withdrawn_at = now()
           where id = any($1::pg_catalog.text[]) and withdrawn_at is null returning id`,
@@ -89,6 +97,14 @@ export function createDocumentRemoval(
         if (rows.length > 0) await queue();
         return rows.length;
       });
+      if (removed === undefined)
+        throw new AppError(
+          "CONFLICT",
+          "Synced documents cannot be removed locally. Remove them in the source or change the published source boundary.",
+          { reason: "knowledge_synced_document_remove_refused" },
+          { exposeMessage: true }
+        );
+      return removed;
     },
     purgeDocumentPage(input, remove, signal) {
       return change(signal, async (sql): Promise<KnowledgePurgePage> => {

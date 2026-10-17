@@ -642,6 +642,8 @@ export function knowledgeDocumentStateOf(state: KnowledgeContentState): Knowledg
 /** One content as the index job reads it, with one document that holds it. */
 export interface KnowledgeContentToIndex {
   contentSha256: string;
+  /** At least one active document of this content came from a synced source. */
+  synced?: boolean;
   format: KnowledgeDocumentFormat;
   state: KnowledgeContentState;
   /** The chunking revision its chunks were written with, once they were. */

@@ -1,5 +1,7 @@
 import {
   createConnectionCredentialResolver,
+  createDocumentSourceOpener,
+  ConnectionCallSlots,
   createConnectionManagement,
   createConnectionOperationSource,
   createConnectionToolSource,
@@ -42,6 +44,7 @@ import { PLATFORM_SECRET_NAMES } from "./infrastructure";
 /** What an instance with the module `connections` on has for its Connections. */
 export interface InstanceConnections {
   readonly connectorTypes: ConnectorTypeRegistry;
+  readonly openDocumentSource: ReturnType<typeof createDocumentSourceOpener>;
   /** The one egress checker of this process. */
   readonly egress: EgressChecker;
   /** Missing while release config names no Connection: nothing can be opened then. */
@@ -203,11 +206,13 @@ async function buildInstanceConnections(
     ? createConnectionCredentialResolver({ clientInstanceId, keyring, store: stores.connections })
     : undefined;
   const operations = { clientInstanceId, stores, connectorTypes, egress, credentials, logger };
+  const slots = new ConnectionCallSlots();
   return {
     connectorTypes,
+    openDocumentSource: createDocumentSourceOpener(operations, slots),
     egress,
     ...(credentials ? { credentials } : {}),
-    operationSource: createConnectionOperationSource(operations),
+    operationSource: createConnectionOperationSource(operations, slots),
     toolSource: createConnectionToolSource(operations),
     management: {
       ...createConnectionManagement({
