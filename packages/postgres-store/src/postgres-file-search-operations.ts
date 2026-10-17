@@ -2,7 +2,7 @@ import { sql as drizzleSql, type SQL } from "drizzle-orm";
 import { asConversationId, type FileSearchStore, type FoundFile } from "@work-shape/catalyst-core";
 import { containsPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
-import { listedConversations } from "./postgres-conversation-operations";
+import { listedConversations } from "./postgres-conversation-list-operations";
 import type { PostgresConnection } from "./postgres-database";
 import {
   conversationAttachments,

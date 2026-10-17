@@ -1,5 +1,6 @@
 import {
   AppError,
+  isAppError,
   type AuditActor,
   type CollaborationWorkspaceId,
   type ConversationId,
@@ -134,7 +135,14 @@ export async function cleanupProductUserData(input: {
 
   for (const conversation of conversations) {
     const deletedAt = new Date().toISOString();
-    const deletion = await deleteConversationAggregate(options, conversation.id, deletedAt);
+    // A Try conversation listed after its Build conversation went with it.
+    const deletion = await deleteConversationAggregate(options, conversation.id, deletedAt).catch(
+      (error: unknown) => {
+        if (isAppError(error) && error.code === "NOT_FOUND") return undefined;
+        throw error;
+      }
+    );
+    if (!deletion) continue;
     totals.conversationCount += 1;
     // A cleanup that is still pending is retried by the next pass and by the retention job.
     if (deletion.cleanup === "complete") {

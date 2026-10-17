@@ -1,5 +1,6 @@
 import type { ConversationFollowUpStore } from "./follow-up-store";
 import type { AgentProposalStore } from "./agent-proposals";
+import type { AgentTryConversationStore } from "./agent-try-conversations";
 import type { AgentRunDecisionStore } from "./agent-run-decision";
 import type { AgentRunStore, RunObservationStore } from "./agent-runtime";
 import type { AuditEventStore } from "./audit";
@@ -81,6 +82,7 @@ export interface PlatformStores {
   access: AccessAdministrationStore;
   configAssets: ConfigAssetStore;
   agentProposals: AgentProposalStore;
+  agentTryConversations: AgentTryConversationStore;
   approvals: ApprovalsStore;
   executionWorkspaces: ExecutionWorkspacesStore;
   structuredData: StructuredDataStore;

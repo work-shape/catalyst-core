@@ -48,6 +48,8 @@ export const modelUsageEvents = pgTable(
     webSearchCallCount: integer("web_search_call_count").notNull().default(0),
     fastMode: boolean("fast_mode").notNull().default(false),
     providerServiceTier: text("provider_service_tier"),
+    // A call in a Try conversation (TRY-1b). The insert reads it from the conversation's link.
+    preview: boolean("preview").notNull().default(false),
     source: text("source").$type<ModelUsageEvent["source"]>().notNull(),
     customerBillableCost:
       jsonb("customer_billable_cost").$type<ModelUsageEvent["customerBillableCost"]>(),

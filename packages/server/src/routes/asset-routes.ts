@@ -20,6 +20,7 @@ import {
 import { AssetWorkflow } from "../assets/asset-service";
 import { AgentProposals, PROPOSED_KIND } from "../assets/agent-proposals";
 import { ConfigAssetWorkflow } from "../config-assets/config-asset-service";
+import { TryConversations } from "../conversations/try-conversations";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
@@ -195,8 +196,9 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   // The pending change proposal of an agent: the person reads it, applies it as their own save
-  // of the agent, or drops it.
-  const proposals = new AgentProposals(options);
+  // of the agent, or drops it. Either ends the Try conversation beside it.
+  const tries = new TryConversations(options);
+  const proposals = new AgentProposals(options, tries.settled);
   const proposalResource = ({ name }: { name: string }) =>
     assetResource({ kind: PROPOSED_KIND, name });
 
@@ -226,6 +228,18 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     execute: (input, context) => proposals.discard(context, input)
+  });
+
+  route.operation(apiOperations["agents.try.open"], {
+    authorize: (input, { actor, access }) => proposals.authorizeChange(actor, access, input, "try"),
+    resource: proposalResource,
+    policyTargets: (input) => proposals.policyTargets(input),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    execute: async (input, context) => ({
+      conversation: await tries.open(context, input),
+      preview: true as const
+    })
   });
 
   const overview = new ConfigAssetWorkflow({ options });

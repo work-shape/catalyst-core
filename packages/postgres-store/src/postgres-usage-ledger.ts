@@ -106,7 +106,8 @@ function attribution(event: ModelUsageEventRecordInput): SQL {
  * for a user keeps what leads back to them, its conversation, run, operation and correlation
  * id, only while that user's row exists and is open. Where the account is being deleted or
  * the row is gone, the deletion has been through the user's events and does not come back
- * for this one, so the event is written without them.
+ * for this one, so the event is written without them. A call in a Try conversation is marked
+ * `preview` from the conversation's link, whatever made it.
  */
 function insertEvent(input: {
   id: string;
@@ -124,9 +125,9 @@ function insertEvent(input: {
     insert into model_usage_events (
       id, client_instance_id, conversation_id, agent_run_id, agent_name, purpose, provider_id,
       model, region, binding_id, input_tokens, cached_input_tokens, output_tokens, total_tokens,
-      web_search_call_count, fast_mode, provider_service_tier, source, customer_billable_cost,
-      user_id, collaboration_workspace_id, operation_run_id, correlation_id, status,
-      counted_tokens, counted_cost_micros, created_at
+      web_search_call_count, fast_mode, provider_service_tier, preview, source,
+      customer_billable_cost, user_id, collaboration_workspace_id, operation_run_id,
+      correlation_id, status, counted_tokens, counted_cost_micros, created_at
     )
     select
       ${input.id}, ${event.clientInstanceId}, ${personal(event.conversationId)},
@@ -134,7 +135,12 @@ function insertEvent(input: {
       ${event.providerId}, ${event.model}, ${event.region ?? null}, ${event.bindingId ?? null},
       ${event.inputTokens}::int, ${event.cachedInputTokens ?? null}::int,
       ${event.outputTokens}::int, ${event.totalTokens}::int, ${event.webSearchCallCount}::int,
-      ${event.fastMode}::boolean, ${event.providerServiceTier ?? null}, ${event.source},
+      ${event.fastMode}::boolean, ${event.providerServiceTier ?? null},
+      exists (
+        select 1 from agent_try_conversations
+        where conversation_id = ${event.conversationId ?? null}
+      ),
+      ${event.source},
       ${JSON.stringify(event.customerBillableCost)}::jsonb,
       (select id from attributed_user where open), (select id from attributed_workspace),
       ${personal(event.operationRunId)}, ${personal(event.correlationId, drizzleSql`''`)},

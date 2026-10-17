@@ -1,6 +1,7 @@
 import {
   createPlatformId,
   isAppError,
+  type AuditActor,
   type CollaborationWorkspaceId,
   type ConversationId,
   type UserId
@@ -26,16 +27,26 @@ export type ConversationDataCleanupOutcome =
   ({ cleanup: "complete" } & ConversationDataDeletionTotals) | { cleanup: "pending" };
 
 /**
- * Removes the stored objects, file and artifact records, preview state, execution workspace,
- * Pages, Operation Runs and agent proposals of a Conversation that is already deleted or
- * expired. Call it only after the claim: it does not check that the Conversation may be
- * deleted. Safe to repeat.
+ * Removes the Try conversations, stored objects, file and artifact records, preview state,
+ * execution workspace, Pages, Operation Runs and agent proposals of a Conversation that is
+ * already deleted or expired. Call it only after the claim: it does not check that the
+ * Conversation may be deleted. Safe to repeat.
  */
 async function cleanUpConversationData(
   options: ChatServerOptions,
   conversationId: ConversationId,
   deletedAt: string
 ): Promise<ConversationDataDeletionTotals> {
+  // A Build conversation's Try conversations go with it.
+  await deleteTryConversations(
+    options,
+    { buildConversationId: conversationId },
+    {
+      deletedAt,
+      requestedBy: "build_conversation_deleted",
+      correlationId: createPlatformId("corr")
+    }
+  );
   const objects = options.attachments
     ? await options.attachments.deleteConversationAttachments({ conversationId, deletedAt })
     : undefined;
@@ -49,6 +60,11 @@ async function cleanUpConversationData(
   await options.stores.agentProposals.removeOfConversations({
     clientInstanceId: options.clientInstanceId,
     conversationIds: [conversationId]
+  });
+  // Last, because it hides a Try conversation and leads the retry of its cleanup to it.
+  await options.stores.agentTryConversations.remove({
+    clientInstanceId: options.clientInstanceId,
+    conversationId
   });
   return {
     attachmentCount: objects?.attachmentCount ?? 0,
@@ -116,6 +132,55 @@ export async function attemptConversationDataCleanup(
       }
     });
     return { cleanup: "pending" };
+  }
+}
+
+/** Why a Try conversation was deleted: its proposal was settled, or its Build conversation went. */
+type TryConversationDeletionReason =
+  "proposal_applied" | "proposal_discarded" | "build_conversation_deleted";
+
+/**
+ * Deletes the Try conversations of a Build conversation, or the one of an agent: claims each
+ * that is still active and cleans it up. A cleanup that fails is left to the retention job,
+ * which the link of the Try conversation leads to it. Each claim is audited.
+ */
+export async function deleteTryConversations(
+  options: ChatServerOptions,
+  of: { buildConversationId: ConversationId; agentId?: string },
+  deletion: {
+    deletedAt: string;
+    requestedBy: TryConversationDeletionReason;
+    correlationId: string;
+    actor?: AuditActor;
+  }
+): Promise<void> {
+  const { clientInstanceId } = options;
+  const tries = await options.stores.agentTryConversations.list({ clientInstanceId, ...of });
+  for (const conversationId of tries) {
+    // One that is gone already was claimed by an earlier pass; its cleanup is repeated.
+    const claimed = await options.stores.conversations
+      .deleteConversation({ clientInstanceId, conversationId, deletedAt: deletion.deletedAt })
+      .then(
+        () => true,
+        (error: unknown) => {
+          if (isAppError(error) && error.code === "NOT_FOUND") return false;
+          throw error;
+        }
+      );
+    const cleanup = await attemptConversationDataCleanup(
+      options,
+      conversationId,
+      deletion.deletedAt
+    );
+    if (!claimed) continue;
+    await options.auditRecorder.record({
+      type: "conversation.deleted",
+      status: "success",
+      ...(deletion.actor ? { actor: deletion.actor } : {}),
+      subject: conversationId,
+      correlationId: deletion.correlationId,
+      metadata: { requestedBy: deletion.requestedBy, ...cleanup }
+    });
   }
 }
 

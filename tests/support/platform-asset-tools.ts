@@ -129,10 +129,13 @@ interface AssetToolsFixture {
  * The instance. With `separate` its agent runs execute in an agent-run worker that is a
  * process of its own, started from the same config as an operated instance starts one.
  * `editableAgentFields` are the fields of an agent a person may change outside a release.
+ * `filesStore` gives the instance a store of files, as an operated instance has, without which
+ * the retention job does not retry unfinished cleanups.
  */
 export async function createAssetToolsFixture(
   agentRuns: "in_process" | "separate" = "in_process",
-  editableAgentFields: AgentEditableField[] = []
+  editableAgentFields: AgentEditableField[] = [],
+  { filesStore = false }: { filesStore?: boolean } = {}
 ): Promise<AssetToolsFixture> {
   // No release names `read_skill` here: the skill of a subject is readable all the same.
   const config = createTestConfig({
@@ -155,6 +158,11 @@ export async function createAssetToolsFixture(
   config.modules = { assetManagement: { enabled: true }, workflows: { enabled: true } };
   config.administration.agentConfiguration.enabled = true;
   config.administration.agentConfiguration.editableAgentFields = editableAgentFields;
+  if (filesStore) {
+    const root = await mkdtemp(join(tmpdir(), "catalyst-asset-tools-files-"));
+    directories.push(root);
+    config.infrastructure.objectStorage.files = { provider: "filesystem", root };
+  }
   const app = await createTestInstance({
     config,
     env: {},

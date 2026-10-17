@@ -125,6 +125,16 @@ export function conversationsPendingCleanup(input: {
     where acp.client_instance_id = ${input.clientInstanceId}
       and acp.source_kind = 'conversation'
       and ${notActive}
+    union
+    -- A Try conversation's link outlives its deletion until its cleanup is through, and a
+    -- Build conversation's cleanup deletes its Try conversations.
+    select c.id, c.deleted_at
+    from agent_try_conversations atc
+    join conversations c
+      on c.id in (atc.conversation_id, atc.build_conversation_id)
+     and c.client_instance_id = atc.client_instance_id
+    where atc.client_instance_id = ${input.clientInstanceId}
+      and ${notActive}
     ${executionWorkspaces}
   `;
 }

@@ -11,7 +11,6 @@ import {
   type Conversation,
   type ConversationId,
   type ConversationListItem,
-  type ConversationListScope,
   type ConversationRetentionStore,
   type ConversationsStore,
   type ConversationStore,
@@ -23,7 +22,6 @@ import {
   type ModelProviderContinuationStore,
   type MoveConversationInput,
   type SetConversationSubjectInput,
-  type StorePage,
   type UserId
 } from "@work-shape/catalyst-core";
 import {
@@ -31,8 +29,6 @@ import {
   asc,
   desc,
   eq,
-  exists,
-  ilike,
   inArray,
   isNull,
   lt,
@@ -42,8 +38,6 @@ import {
   or,
   type SQL
 } from "drizzle-orm";
-import { containsPattern } from "./like-pattern";
-import { keysetFilter } from "./paging";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
@@ -58,7 +52,7 @@ import {
   structuredDataResources
 } from "./schema";
 
-async function createConversation(
+export async function createConversation(
   db: PostgresConnection,
   input: CreateConversationInput
 ): Promise<Conversation> {
@@ -102,59 +96,8 @@ async function getConversation(
   return row ? mapConversation(row) : undefined;
 }
 
-export type ListConversationsInput = {
-  clientInstanceId: ClientInstanceId;
-  collaborationWorkspaceId: Conversation["collaborationWorkspaceId"];
-  scope: ConversationListScope;
-  titleQuery?: string;
-  page?: StorePage;
-};
-
-async function listConversationsForWorkspace(
-  db: PostgresConnection,
-  input: ListConversationsInput
-): Promise<Conversation[]> {
-  const rows = await db
-    .select()
-    .from(conversations)
-    .where(listedConversations(db, input))
-    .orderBy(desc(conversations.updatedAt), desc(conversations.id))
-    .limit(input.page?.limit ?? 2147483647);
-  return rows.map(mapConversation);
-}
-
-/** What a list of a workspace holds for its reader, as one condition. */
-export function listedConversations(db: PostgresConnection, input: ListConversationsInput) {
-  const { scope } = input;
-  return and(
-    eq(conversations.clientInstanceId, input.clientInstanceId),
-    eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
-    eq(conversations.status, "active"),
-    input.titleQuery === undefined
-      ? undefined
-      : ilike(conversations.title, containsPattern(input.titleQuery)),
-    keysetFilter(input.page, [conversations.updatedAt, conversations.id], true),
-    ...(scope.kind === "lifecycle"
-      ? []
-      : [
-          or(
-            eq(conversations.visibility, "workspace"),
-            eq(conversations.createdByUserId, scope.userId)
-          ),
-          // A Conversation without messages is an unsent draft: only its creator sees it,
-          // and only while it still holds draft attachments.
-          or(
-            exists(conversationMessages(db)),
-            and(
-              eq(conversations.createdByUserId, scope.userId),
-              exists(conversationDraftAttachments(db))
-            )
-          )
-        ])
-  );
-}
-
-function conversationMessages(db: PostgresConnection) {
+/** The messages of the Conversation of the enclosing statement. */
+export function conversationMessages(db: PostgresConnection) {
   return db
     .select({ id: messages.id })
     .from(messages)
@@ -166,7 +109,8 @@ function conversationMessages(db: PostgresConnection) {
     );
 }
 
-function conversationDraftAttachments(db: PostgresConnection) {
+/** The unsent draft attachments of the Conversation of the enclosing statement. */
+export function conversationDraftAttachments(db: PostgresConnection) {
   return db
     .select({ id: conversationAttachments.id })
     .from(conversationAttachments)
@@ -818,6 +762,7 @@ export function createPostgresConversationsStore(
   db: PostgresConnection,
   deps: Pick<
     ConversationsStore,
+    | "listConversationsForWorkspace"
     | "listConversationsWithActiveRun"
     | "searchWorkspaceFiles"
     | "deleteModelProviderContinuation"
@@ -837,7 +782,7 @@ export function createPostgresConversationsStore(
     async listConversationsForWorkspace(
       input: Parameters<ConversationStore["listConversationsForWorkspace"]>[0]
     ): Promise<Conversation[]> {
-      return listConversationsForWorkspace(db, input);
+      return deps.listConversationsForWorkspace(input);
     },
     async listConversationsWithActiveRun(
       input: Parameters<ConversationStore["listConversationsWithActiveRun"]>[0]

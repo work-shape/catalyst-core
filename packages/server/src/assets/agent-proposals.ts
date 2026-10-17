@@ -10,6 +10,7 @@ import {
   type AuthenticatedIdentity,
   type ConfigAssetRecord,
   type Conversation,
+  type ConversationId,
   type ConversationSubject,
   type OperationAuthorization,
   type OperationBeforeEvent
@@ -59,6 +60,15 @@ export interface AgentProposalView {
   updatedAt: string;
 }
 
+/**
+ * What follows a person's Apply or Discard of a Build conversation's proposal for an agent: the
+ * Try conversation beside it goes (TRY-1b). An Apply refused on a stale base settles nothing.
+ */
+export type ProposalSettled = (
+  call: AssetCall,
+  settled: { agentId: string; conversationId: ConversationId; outcome: "applied" | "discarded" }
+) => Promise<void>;
+
 const sourceOf = (conversationId: string): AgentProposalSource => ({
   kind: "conversation",
   conversationId: asConversationId(conversationId)
@@ -95,10 +105,16 @@ const staleBase = () =>
 export class AgentProposals {
   private readonly options: AssetWorkflowOptions;
   private readonly workflow: AssetWorkflow;
+  private readonly settled: ProposalSettled | undefined;
 
-  constructor(options: AssetWorkflowOptions) {
+  /**
+   * `settled` is given where a person applies and discards proposals, the routes; the agent's
+   * own tools only save and read them.
+   */
+  constructor(options: AssetWorkflowOptions, settled?: ProposalSettled) {
     this.options = options;
     this.workflow = new AssetWorkflow(options);
+    this.settled = settled;
   }
 
   /**
@@ -200,16 +216,17 @@ export class AgentProposals {
 
   /**
    * The rights to apply or discard a proposal: those of a save of the agent with the proposed
-   * definition, the write right among them. A discard asks the write right alone.
+   * definition, the write right among them. A discard asks the write right alone, and so does
+   * opening the Try conversation beside it: whoever may decide on the proposal may try it.
    */
   async authorizeChange(
     actor: AuthenticatedIdentity,
     access: ActorAccess,
     input: ProposalAddress,
-    change: "apply" | "discard"
+    change: "apply" | "discard" | "try"
   ): Promise<OperationAuthorization> {
     const { address, proposal } = await this.locate(actor, input);
-    if (change === "discard" || !proposal) return this.workflow.authorizeWrite(access, address);
+    if (change !== "apply" || !proposal) return this.workflow.authorizeWrite(access, address);
     return this.workflow.authorizeRevisionWrite(
       access,
       { ...address, config: proposal.config, expectedRevision: proposal.baseRevision },
@@ -294,6 +311,11 @@ export class AgentProposals {
       source: proposal.source,
       revision: proposal.revision
     });
+    await this.settled?.(call, {
+      agentId: live.id,
+      conversationId: asConversationId(input.conversationId),
+      outcome: "applied"
+    });
     return written;
   }
 
@@ -307,6 +329,11 @@ export class AgentProposals {
       source: sourceOf(input.conversationId)
     });
     if (!removed) throw noProposal();
+    await this.settled?.(call, {
+      agentId: live.id,
+      conversationId: asConversationId(input.conversationId),
+      outcome: "discarded"
+    });
     return { discarded: true };
   }
 

@@ -18,7 +18,10 @@ import {
   getModelProviderContinuation as getPostgresModelProviderContinuation
 } from "./postgres-model-provider-continuation-operations";
 import { searchWorkspaceFiles as searchPostgresWorkspaceFiles } from "./postgres-file-search-operations";
-import { listConversationsWithActiveRun as listPostgresConversationsWithActiveRun } from "./postgres-conversation-list-operations";
+import {
+  listConversationsForWorkspace as listPostgresConversationsForWorkspace,
+  listConversationsWithActiveRun as listPostgresConversationsWithActiveRun
+} from "./postgres-conversation-list-operations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres, { type Notice } from "postgres";
 import type { DatabaseReadiness, Logger, PlatformStores } from "@work-shape/catalyst-core";
@@ -47,6 +50,7 @@ import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 import { createPostgresOperationRunsStore } from "./postgres-operation-run-operations";
 import { createPostgresLiveOnceSwitchesStore } from "./postgres-live-once-switch-operations";
 import { createPostgresAgentProposalStore } from "./postgres-agent-proposal-operations";
+import { createPostgresAgentTryConversationStore } from "./postgres-agent-try-conversation-operations";
 import { createPostgresInfrastructureChecksStore } from "./postgres-infrastructure-check-operations";
 import { createPostgresPagesStore } from "./postgres-page-operations";
 import { createPostgresConnectionsStore } from "./postgres-connection-operations";
@@ -110,6 +114,7 @@ function bindStores(
   };
   return {
     conversations: createPostgresConversationsStore(db, {
+      listConversationsForWorkspace: (input) => listPostgresConversationsForWorkspace(db, input),
       listConversationsWithActiveRun: (input) => listPostgresConversationsWithActiveRun(db, input),
       searchWorkspaceFiles: (input) => searchPostgresWorkspaceFiles(db, input),
       deleteModelProviderContinuation: (input) =>
@@ -143,6 +148,7 @@ function bindStores(
       inTransaction
     ),
     agentProposals: createPostgresAgentProposalStore(db),
+    agentTryConversations: createPostgresAgentTryConversationStore(db),
     approvals: createPostgresApprovalsStore(db, transact),
     executionWorkspaces: createPostgresExecutionWorkspacesStore(db),
     structuredData: createPostgresStructuredDataStore(db),

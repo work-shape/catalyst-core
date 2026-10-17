@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { configAssetConfigSchema } from "./configuration";
+import { conversationSchema } from "./conversations";
 import { timestampSchema } from "./shared";
 
 // The pending change proposal of an agent (TRY-1a): what the agent of a Build conversation saved
@@ -38,3 +39,11 @@ export const applyAgentProposalRequestSchema = z.object({
 });
 
 export const discardAgentProposalResponseSchema = z.object({ discarded: z.literal(true) });
+
+// The Try conversation beside a Build conversation (TRY-1b): the person tries the agent under
+// construction there. No conversation list shows it, and its usage is marked `preview`.
+export const agentTryConversationResponseSchema = z.object({
+  conversation: conversationSchema,
+  /** A Try conversation is a preview: its head says so. */
+  preview: z.literal(true)
+});

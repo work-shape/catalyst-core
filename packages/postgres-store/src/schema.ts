@@ -11,6 +11,7 @@ export * from "./schema/audit";
 export * from "./schema/usage";
 export * from "./schema/configAssets";
 export * from "./schema/agentProposals";
+export * from "./schema/agentTryConversations";
 export * from "./schema/assetRepos";
 export * from "./schema/approvals";
 export * from "./schema/jobs";
@@ -45,6 +46,7 @@ import { auditEvents } from "./schema/audit";
 import { modelUsageEvents } from "./schema/usage";
 import { configAssetState, configAssets, configAssetRevisions } from "./schema/configAssets";
 import { agentProposals, agentProposalRevisions } from "./schema/agentProposals";
+import { agentTryConversations } from "./schema/agentTryConversations";
 import { assetCheckouts, assetRepoBundles } from "./schema/assetRepos";
 import { approvalRequests } from "./schema/approvals";
 import { platformJobs } from "./schema/jobs";
@@ -91,6 +93,7 @@ export const schema = {
   configAssetRevisions,
   agentProposals,
   agentProposalRevisions,
+  agentTryConversations,
   assetRepoBundles,
   assetCheckouts,
   platformJobs,

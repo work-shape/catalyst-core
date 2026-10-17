@@ -531,6 +531,7 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
     webSearchCallCount: row.webSearchCallCount,
     fastMode: row.fastMode,
     ...(row.providerServiceTier === null ? {} : { providerServiceTier: row.providerServiceTier }),
+    preview: row.preview,
     source: row.source,
     customerBillableCost:
       row.customerBillableCost ??

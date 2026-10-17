@@ -63,6 +63,7 @@ describe("the operation catalog", () => {
         "agents.proposal.apply  POST /api/v1/agents/:name/proposals/:conversationId/apply",
         "agents.proposal.discard  POST /api/v1/agents/:name/proposals/:conversationId/discard",
         "agents.proposal.get  GET /api/v1/agents/:name/proposals/:conversationId",
+        "agents.try.open  POST /api/v1/agents/:name/try/:conversationId",
         "api_credentials.create  POST /api/v1/instance/service-principals/:servicePrincipalId/credentials",
         "api_credentials.revoke  POST /api/v1/instance/api-credentials/:credentialId/revoke",
         "app_content.files.get  GET /app-content/*",
@@ -436,7 +437,8 @@ describe("a running instance", () => {
     // Then personal API keys and the connect code of the CLI, and the search of the Pages and
     // files of a workspace. Then the check of a new asset's name and the switch of a
     // guardrail the release ships. Then a person's decision on a call their Agent Run waits on.
-    // Then the queued follow-ups of a conversation, and the change proposal of an agent.
+    // Then the queued follow-ups of a conversation, the change proposal of an agent and the
+    // Try conversation beside it.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
@@ -527,7 +529,8 @@ describe("a running instance", () => {
       "conversations.follow_ups.dispatch",
       "agents.proposal.get",
       "agents.proposal.apply",
-      "agents.proposal.discard"
+      "agents.proposal.discard",
+      "agents.try.open"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

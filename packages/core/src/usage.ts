@@ -107,6 +107,11 @@ export interface ModelUsageEvent extends ModelTokenUsage {
   fastMode: boolean;
   /** Service tier the provider reported for the call, where it reports one. */
   providerServiceTier?: string;
+  /**
+   * The call was made in a Try conversation, where a person tries an agent under construction.
+   * The store marks it from the conversation, so every call there carries the mark.
+   */
+  preview: boolean;
   customerBillableCost: UsageCostRecord;
   correlationId: string;
   createdAt: ISODateString;
