@@ -2,6 +2,7 @@ import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { type ReactNode } from "react";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
+import { connectionOperationOfTool } from "../../shared/connection-facts";
 import { useTranslation } from "../../shared/i18n";
 import {
   isFailedWorkspaceExecResult,
@@ -121,10 +122,10 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "platform.assets.get": "Read the asset",
     "platform.assets.validate": "Check the draft",
     "platform.assets.put": "Save the draft",
-    "platform.assets.operations": "Look up operations",
-    "platform.connections.draft_tools": "Draft REST API tools",
+    "platform.assets.operations": "Look up what a step may call",
+    "platform.connections.draft_tools": "Draft access to an API",
     read_skill: "Read instructions",
-    show_view: "Widget",
+    show_view: "Show an overview",
     "structured_data.publish": "Update the fact sheet",
     "structured_data.read": "Read the fact sheet",
     "structured_result.read": "Reopen an earlier result",
@@ -144,10 +145,10 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "platform.assets.get": "Asset lesen",
     "platform.assets.validate": "Entwurf prüfen",
     "platform.assets.put": "Entwurf speichern",
-    "platform.assets.operations": "Operationen nachschlagen",
-    "platform.connections.draft_tools": "REST-API-Tools entwerfen",
+    "platform.assets.operations": "Nachschlagen, was ein Schritt aufrufen darf",
+    "platform.connections.draft_tools": "Zugriff auf eine API entwerfen",
     read_skill: "Anleitung lesen",
-    show_view: "Widget",
+    show_view: "Übersicht zeigen",
     "structured_data.publish": "Faktenblatt aktualisieren",
     "structured_data.read": "Faktenblatt lesen",
     "structured_result.read": "Früheres Ergebnis öffnen",
@@ -221,6 +222,98 @@ function readRecordString(value: unknown, key: string): string | undefined {
 
 function readTrimmedString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/** Words that only say a call reads; "Read list customers" reads as "Read customers". */
+const READING_VERBS = new Set(["fetch", "find", "get", "list", "load", "query", "read", "search"]);
+
+/** What is left of "get_me" or "read_all": no object a sentence can name. */
+const PRONOUN_WORDS = new Set(["all", "any", "it", "me", "mine", "my", "myself", "self", "them"]);
+
+/**
+ * The operation of a Connection's tool call as it stands inside a sentence: "top customers"
+ * for `connection.sample-business.top_customers`. Never the raw key: the name is turned into
+ * words, and a version segment such as `v1` is left out. A reading operation drops the verbs
+ * that only say it reads ("v1.orders.list" reads "orders"). Where nothing is left to name, or
+ * only a word such as "me", a read has no operation and its sentence names the Connection alone.
+ */
+export function readConnectionOperationLabel(
+  toolName: string,
+  effect: "reading" | "changing" | undefined
+): string | undefined {
+  const operation = connectionOperationOfTool(toolName);
+  if (operation === undefined) {
+    return undefined;
+  }
+  const words = operationWords(operation);
+  if (effect !== "reading") {
+    return words.length > 0 ? words.join(" ") : operation.replace(/[._-]+/gu, " ");
+  }
+  if (words[0] !== undefined && READING_VERBS.has(words[0])) {
+    words.shift();
+  }
+  const last = words.at(-1);
+  if (words.length > 1 && last !== undefined && READING_VERBS.has(last)) {
+    words.pop();
+  }
+  return words.length === 0 || words.every((word) => PRONOUN_WORDS.has(word))
+    ? undefined
+    : words.join(" ");
+}
+
+/** "ZRFC_GET_OPEN_ITEMS", "getCustomerByID" and "v1.orders.list" as words in lower case. */
+function operationWords(operation: string): string[] {
+  return operation
+    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1 $2")
+    .split(/[\s._-]+/u)
+    .filter((word) => word.length > 0 && !/^v\d+$/iu.test(word))
+    .map((word) =>
+      TOOL_NAME_ACRONYMS.has(word.toLowerCase()) ? word.toUpperCase() : word.toLowerCase()
+    );
+}
+
+/**
+ * How many rows the result of a call holds, where it has rows: an array `rows` of records in the
+ * result, in its `output` or in its `structuredContent` (a Connection's answer). Nothing
+ * otherwise, also for an array that holds anything but records.
+ */
+export function readResultRowCount(result: unknown): number | undefined {
+  const output = isRecord(result) ? result.output : undefined;
+  const candidates = [
+    result,
+    output,
+    isRecord(result) ? result.structuredContent : undefined,
+    isRecord(output) ? output.structuredContent : undefined
+  ];
+  for (const candidate of candidates) {
+    // Rows are records; an array of anything else is not counted as rows.
+    if (isRecord(candidate) && Array.isArray(candidate.rows) && candidate.rows.every(isRecord)) {
+      return candidate.rows.length;
+    }
+  }
+  return undefined;
+}
+
+/** What a finished `show_view` showed, read from its view: a table, a chart or an overview. */
+export function readShownViewKind(result: unknown): "table" | "chart" | "view" {
+  const display = readToolDisplayPayloadFromToolResult(result);
+  const html = isRecord(display?.data) ? display.data.html : undefined;
+  if (typeof html !== "string") {
+    return "view";
+  }
+  if (/<table[\s>]/iu.test(html)) {
+    return "table";
+  }
+  return /<(svg|canvas)[\s>]/iu.test(html) ? "chart" : "view";
+}
+
+/**
+ * The sentence of an output that is an error and nothing else, for the opened row of a failed
+ * call. The technical details keep the output as it came.
+ */
+export function readToolErrorSentence(result: unknown): string | undefined {
+  return readErrorSentence(result);
 }
 
 function humanizeToolName(toolName: string): string {

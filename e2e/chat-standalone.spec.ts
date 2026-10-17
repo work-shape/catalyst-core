@@ -256,12 +256,13 @@ test("the work history of a run that just ended folds itself and opens on the fi
   // folds itself after its delay.
   const workHistory = chatRegion.getByRole("button", { name: /^Work history/u });
   await expect(workHistory).toHaveAttribute("aria-expanded", "false");
-  await expect(chatRegion.getByRole("button", { name: "1 tool call", exact: true })).toBeHidden();
+  // The fold of the one step says what it did, in words (UXA-7b).
+  await expect(weatherStepFold(chatRegion)).toBeHidden();
 
   // One click opens it.
   await workHistory.click();
   await expect(workHistory).toHaveAttribute("aria-expanded", "true");
-  await expect(chatRegion.getByRole("button", { name: "1 tool call", exact: true })).toBeVisible();
+  await expect(weatherStepFold(chatRegion)).toBeVisible();
 });
 
 test("a message sent directly after switching lands in the conversation switched to", async ({
@@ -3818,7 +3819,10 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   // The tool call itself is kept in the work history of the finished run.
   const toolCallCard = await openWorkHistoryToolCard(chatRegion);
   await expect(toolCallCard).toContainText("Weather Forecast");
-  await expect(toolCallCard).toContainText("Completed");
+  // The row says what happened and no status word; the input and output stay out of the page
+  // until "Technical details" is opened (UXA-7b).
+  await expect(toolCallCard).not.toContainText("Completed");
+  await expect(toolCallCard.locator("pre")).toHaveCount(0);
 
   await settingsGear(page).click();
   await expect(settingsPages(page)).toBeVisible();
@@ -5233,10 +5237,17 @@ async function expandDisclosure(trigger: Locator): Promise<void> {
  */
 async function openWorkHistoryToolCard(chatRegion: Locator): Promise<Locator> {
   await expandDisclosure(chatRegion.getByRole("button", { name: /^Work history/u }));
-  await expandDisclosure(chatRegion.getByRole("button", { name: "1 tool call", exact: true }));
+  await expandDisclosure(weatherStepFold(chatRegion));
   const toolCallCard = chatRegion.getByTestId("tool-call-card").last();
   await expect(toolCallCard).toBeVisible();
   return toolCallCard;
+}
+
+/** The fold of a group that holds the one weather forecast step, named by what it did. */
+function weatherStepFold(chatRegion: Locator): Locator {
+  return chatRegion
+    .getByTestId("assistant-work-group-trigger")
+    .filter({ hasText: /^Weather Forecast$/u });
 }
 
 async function stopActiveRun(page: Page): Promise<void> {

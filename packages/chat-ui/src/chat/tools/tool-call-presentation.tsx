@@ -1,5 +1,12 @@
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
-import { cn, ConnectionIcon, Spinner } from "@work-shape/catalyst-ui";
+import {
+  cn,
+  ConnectionIcon,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
+  Spinner
+} from "@work-shape/catalyst-ui";
 import { CheckCircle2, ChevronRight, CircleAlert, Wrench } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
@@ -8,7 +15,13 @@ import { useConnectionToolSubject, type ConnectionToolSubject } from "../assista
 import { assetToolSentence, type AssetToolCall } from "../conversation/asset-tool-lines";
 import { ToolArtifactList } from "../files/artifact-download-card";
 import { type ToolArtifactDownloadRef } from "./tool-artifacts";
-import { toolUiState } from "./tool-call-projection";
+import {
+  readConnectionOperationLabel,
+  readResultRowCount,
+  readShownViewKind,
+  readToolDisplayProjection,
+  toolUiState
+} from "./tool-call-projection";
 import { useToolDisplayPanel } from "./tool-display-panel";
 import { displayPanelKey, displayPanelTitle } from "./tool-display-rendering";
 import { type ToolDetailSection } from "./workspace-tool-display";
@@ -23,7 +36,9 @@ export function SidePanelToolCall({
   artifacts,
   toolCallId,
   toolTitle,
-  subject
+  subject,
+  toolName,
+  result
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
@@ -35,6 +50,9 @@ export function SidePanelToolCall({
   toolCallId: string;
   toolTitle: string;
   subject?: ConnectionToolSubject;
+  /** The name the agent called, for the words of the row. */
+  toolName: string;
+  result: unknown;
 }) {
   const { t } = useTranslation();
   const panel = useToolDisplayPanel();
@@ -71,6 +89,8 @@ export function SidePanelToolCall({
       >
         <ToolCallHead
           state={state}
+          toolName={toolName}
+          result={result}
           toolTitle={toolTitle}
           actionLabel={actionLabel}
           statusLabel={statusLabel}
@@ -80,11 +100,7 @@ export function SidePanelToolCall({
           {t(panelActive ? "shownInSidePanel" : "openDisplayPanel")}
         </span>
       </button>
-      <ToolDetailDisclosure
-        sections={detailSections}
-        defaultOpen={state === "failed"}
-        className="border-t px-2.5 py-1"
-      />
+      <ToolDetailDisclosure sections={detailSections} className="border-t px-2.5 py-1" />
       <ToolArtifactList artifacts={artifacts} className="border-t px-2.5 py-2" />
     </div>
   );
@@ -155,7 +171,9 @@ export function DisplayToolCall({
   artifacts,
   surfacedArtifacts,
   toolTitle,
-  subject
+  subject,
+  toolName,
+  result
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
@@ -166,6 +184,9 @@ export function DisplayToolCall({
   surfacedArtifacts: ToolArtifactDownloadRef[];
   toolTitle: string;
   subject?: ConnectionToolSubject;
+  /** The name the agent called, for the words of the row. */
+  toolName: string;
+  result: unknown;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
@@ -190,6 +211,8 @@ export function DisplayToolCall({
         >
           <ToolCallHead
             state={state}
+            toolName={toolName}
+            result={result}
             toolTitle={toolTitle}
             actionLabel={actionLabel}
             statusLabel={statusLabel}
@@ -206,11 +229,7 @@ export function DisplayToolCall({
       {/* Tool cards never open the panel themselves; only the promoted result
           cards do, once the run has finished. */}
       <ToolArtifactList artifacts={surfacedArtifacts} className="mt-2" />
-      <ToolDetailDisclosure
-        sections={detailSections}
-        defaultOpen={state === "failed"}
-        className="mt-2"
-      />
+      <ToolDetailDisclosure sections={detailSections} className="mt-2" />
     </div>
   );
 }
@@ -267,35 +286,66 @@ const CONNECTION_SENTENCES = {
   }
 } as const;
 
+/** The sentence of a read whose operation names nothing: "Read Notion". */
+const PLAIN_READ_SENTENCES = {
+  running: "toolConnectionReadingPlain",
+  completed: "toolConnectionReadPlain",
+  failed: "toolConnectionReadPlainFailed"
+} as const;
+
 /**
- * The first line of a tool call. A call of a Connection says what was touched in words, beside
- * the Connection's icon: "Read Bookings". Every other call says its tool and how it stands.
+ * The row of a tool call in the work history: what happened, in words. A call of a Connection
+ * names the operation and the Connection beside its icon, with the rows it read: "Read top
+ * customers from Sample business · 5 rows". Every other call says its title, "Showed a table"
+ * for a view; a failed one says so. The name the agent called stays in the technical details.
  */
 export function ToolCallHead({
   state,
+  toolName,
+  result,
   toolTitle,
   actionLabel,
   statusLabel,
   subject
 }: {
   state: ToolUiState;
+  toolName: string;
+  result: unknown;
   toolTitle: string;
   actionLabel?: string;
   statusLabel: string;
   subject?: ConnectionToolSubject;
 }) {
-  if (!subject) {
+  const { t } = useTranslation();
+  if (subject) {
     return (
-      <>
-        <ToolStatusIcon state={state} />
-        <span className="truncate font-medium text-foreground">{toolTitle}</span>
-        {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
-        <span className="shrink-0">{statusLabel}</span>
-      </>
+      <ConnectionCallLine subject={subject} state={state} toolName={toolName} result={result} />
     );
   }
-  return <ConnectionCallLine subject={subject} state={state} />;
+  const title =
+    toolName === "show_view" && state === "completed"
+      ? t(SHOWN_VIEW_SENTENCES[readShownViewKind(result)])
+      : toolTitle;
+  return (
+    <>
+      <ToolStatusIcon state={state} />
+      <span
+        className="line-clamp-2 min-w-0 font-medium text-foreground"
+        data-testid="tool-call-row"
+      >
+        {state === "failed" ? t("toolStepFailed", { title }) : title}
+      </span>
+      {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
+      {state === "running" ? <span className="shrink-0">{statusLabel}</span> : null}
+    </>
+  );
 }
+
+const SHOWN_VIEW_SENTENCES = {
+  table: "toolShowedTable",
+  chart: "toolShowedChart",
+  view: "toolShowedView"
+} as const;
 
 /**
  * What a call of a Connection did, in words beside the Connection's icon. The line of the
@@ -303,24 +353,51 @@ export function ToolCallHead({
  */
 function ConnectionCallLine({
   subject,
-  state
+  state,
+  toolName,
+  result
 }: {
   subject: ConnectionToolSubject;
   state: ToolUiState;
+  toolName: string;
+  result: unknown;
 }) {
   const { t } = useTranslation();
   const { connection, effect } = subject;
+  const operation = readConnectionOperationLabel(toolName, effect);
+  // A read whose operation names nothing ("search", "get_me") names the Connection alone.
+  const sentences =
+    operation === undefined && effect === "reading"
+      ? PLAIN_READ_SENTENCES
+      : CONNECTION_SENTENCES[effect ?? "unknown"];
   // The name is set apart in the sentence, wherever the language puts it.
-  const [before, after = ""] = t(CONNECTION_SENTENCES[effect ?? "unknown"][state], {
-    name: NAME_MARK
+  const [rawBefore = "", after = ""] = t(sentences[state], {
+    name: NAME_MARK,
+    operation: operation ?? ""
   }).split(NAME_MARK);
+  // A sentence that starts with the operation starts with a capital, as German puts it first.
+  const before = `${rawBefore.slice(0, 1).toUpperCase()}${rawBefore.slice(1)}`;
+  // A read says how many rows it brought back; a change says what it changed and no count.
+  const count =
+    state === "completed" && effect !== "changing" ? readResultRowCount(result) : undefined;
   return (
     <>
       <ConnectionIcon size="sm" service={connection.service} category={connection.category} />
-      <span className="min-w-0 truncate" data-testid="tool-call-sentence">
+      {/* The sentence wraps as far as it needs and is never cut, so a long name never hides
+          the end of it ("gelesen", "nicht lesen"). The count follows the words and keeps
+          itself together, so it never breaks or starts a line with a lone "·". */}
+      <span className="min-w-0 [overflow-wrap:anywhere]" data-testid="tool-call-sentence">
         {before}
         <span className="font-medium text-foreground">{connection.title}</span>
         {after}
+        {count === undefined ? null : (
+          <>
+            {" "}
+            <span className="whitespace-nowrap" data-testid="tool-call-count">
+              {`· ${t(count === 1 ? "toolRowCountSingular" : "toolRowCount", { count })}`}
+            </span>
+          </>
+        )}
       </span>
       {state === "completed" ? null : <ToolStatusIcon state={state} />}
     </>
@@ -340,6 +417,7 @@ export function ToolCallFoldLabel({
   /** The group's one tool call, where it holds a single call. */
   only?: {
     toolName: string;
+    args?: unknown;
     result?: unknown;
     isError?: boolean;
     status?: ToolCallMessagePartProps["status"];
@@ -348,7 +426,7 @@ export function ToolCallFoldLabel({
   last?: AssetToolCall;
   count: number;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const subject = useConnectionToolSubject(only?.toolName ?? "");
   const assetSentence = last === undefined ? undefined : assetToolSentence(last, t);
   if (assetSentence !== undefined) {
@@ -360,19 +438,31 @@ export function ToolCallFoldLabel({
       </span>
     );
   }
-  if (!only || !subject) {
+  if (!only) {
     return <>{t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count })}</>;
   }
+  const state = toolUiState({
+    isError: only.isError,
+    result: only.result,
+    status: only.status,
+    toolName: only.toolName
+  });
+  const display = readToolDisplayProjection({
+    args: only.args,
+    result: only.result,
+    toolName: only.toolName,
+    locale
+  });
   return (
     <span className="inline-flex min-w-0 items-center gap-2" data-testid="tool-call-fold-line">
-      <ConnectionCallLine
+      <ToolCallHead
+        state={state}
+        toolName={only.toolName}
+        result={only.result}
+        toolTitle={display.title}
+        actionLabel={display.actionLabel}
+        statusLabel={t(state === "running" ? "toolRunning" : "toolCompleted")}
         subject={subject}
-        state={toolUiState({
-          isError: only.isError,
-          result: only.result,
-          status: only.status,
-          toolName: only.toolName
-        })}
       />
     </span>
   );
@@ -402,7 +492,9 @@ export function CompactToolCall({
   summary,
   surfacedArtifacts,
   toolTitle,
-  subject
+  subject,
+  toolName,
+  result
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
@@ -412,8 +504,10 @@ export function CompactToolCall({
   surfacedArtifacts: ToolArtifactDownloadRef[];
   toolTitle: string;
   subject?: ConnectionToolSubject;
+  /** The name the agent called, for the words of the row. */
+  toolName: string;
+  result: unknown;
 }) {
-  const { t } = useTranslation();
   const [open, setOpen] = useState(state === "failed");
 
   return (
@@ -432,6 +526,8 @@ export function CompactToolCall({
       >
         <ToolCallHead
           state={state}
+          toolName={toolName}
+          result={result}
           toolTitle={toolTitle}
           actionLabel={actionLabel}
           statusLabel={statusLabel}
@@ -455,53 +551,39 @@ export function CompactToolCall({
               {summary}
             </p>
           ) : null}
-          {subject && detailSections.length > 0 ? (
-            <p className="text-muted-foreground">{t("toolDetails")}</p>
-          ) : null}
-          <ToolDetails sections={detailSections} />
+          <ToolDetailDisclosure sections={detailSections} />
         </div>
       ) : null}
     </div>
   );
 }
 
+/**
+ * The input and output of a call, closed under "Technical details" until the person opens it.
+ * Nothing of them is in the page before that.
+ */
 function ToolDetailDisclosure({
   className,
-  defaultOpen,
   sections
 }: {
   className?: string;
-  defaultOpen?: boolean;
   sections: ToolDetailSection[];
 }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(Boolean(defaultOpen));
 
   if (sections.length === 0) {
     return null;
   }
 
   return (
-    <div className={cn("text-xs", className)}>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-        className="flex w-fit items-center gap-1 px-1 py-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-      >
-        <span>{t("toolDetails")}</span>
-        <ChevronRight
-          size={13}
-          className={cn("transition-transform", open && "rotate-90")}
-          aria-hidden="true"
-        />
-      </button>
-      {open ? (
-        <div className="mt-1 rounded-md border bg-muted/40 p-2">
+    <Disclosure className={className} data-testid="tool-technical-details">
+      <DisclosureTrigger className="text-caption">{t("toolDetails")}</DisclosureTrigger>
+      <DisclosureContent className="text-caption">
+        <div className="rounded-md border bg-muted/40 p-2">
           <ToolDetails sections={sections} />
         </div>
-      ) : null}
-    </div>
+      </DisclosureContent>
+    </Disclosure>
   );
 }
 

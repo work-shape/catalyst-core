@@ -42,6 +42,7 @@ import {
   getToolSummary,
   hasRenderedNode,
   readToolDisplayProjection,
+  readToolErrorSentence,
   toolDetailSections,
   toolStatusLabel,
   toolUiState
@@ -135,7 +136,12 @@ export function ToolCallPart({
   ];
   const artifacts = readToolArtifactRefs(result);
   const surfacedArtifacts = readSurfacedToolArtifactRefs(result, toolName);
-  const summary = workspaceProjection?.summary ?? getToolSummary(result, t);
+  // A failed call says why in its own sentence, where the output is one; the output itself
+  // stays under the technical details.
+  const summary =
+    workspaceProjection?.summary ??
+    getToolSummary(result, t) ??
+    (state === "failed" ? readToolErrorSentence(result) : undefined);
   const statusLabel = toolStatusLabel(state, t);
   const actionLabel = workspaceProjection?.actionLabel ?? toolDisplay.actionLabel;
 
@@ -188,6 +194,8 @@ export function ToolCallPart({
           toolCallId={toolCallId}
           toolTitle={toolDisplay.title}
           subject={subject}
+          toolName={toolName}
+          result={result}
         />
       );
     }
@@ -203,6 +211,8 @@ export function ToolCallPart({
         surfacedArtifacts={surfacedArtifacts}
         toolTitle={toolDisplay.title}
         subject={subject}
+        toolName={toolName}
+        result={result}
       />
     );
   }
@@ -221,6 +231,8 @@ export function ToolCallPart({
       >
         <ToolCallHead
           state={state}
+          toolName={toolName}
+          result={result}
           toolTitle={toolDisplay.title}
           actionLabel={actionLabel}
           statusLabel={statusLabel}
@@ -240,6 +252,8 @@ export function ToolCallPart({
       surfacedArtifacts={surfacedArtifacts}
       toolTitle={toolDisplay.title}
       subject={subject}
+      toolName={toolName}
+      result={result}
     />
   );
 }

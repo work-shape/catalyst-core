@@ -621,7 +621,7 @@
       "target": "ui-guard",
       "rule": "elements",
       "scope": "packages/chat-ui",
-      "count": 32,
+      "count": 31,
       "owner": "UI library migration (S9)"
     },
     {

@@ -84,8 +84,8 @@ export const assistant = defineTranslations({
     runningTool: "Working on {tool}…",
     waitingForApproval: "Waiting for approval…",
     waitingForDecision: "Waiting for a decision…",
-    toolCallCount: "{count} tool calls",
-    toolCallCountSingular: "1 tool call",
+    toolCallCount: "{count} steps",
+    toolCallCountSingular: "1 step",
     workHistory: "Work history",
     workspaceNoAgents:
       "No agent is available in this workspace yet. An administrator can make one available here."
@@ -175,8 +175,8 @@ export const assistant = defineTranslations({
     runningTool: "Bearbeite {tool}…",
     waitingForApproval: "Ich warte auf die Freigabe…",
     waitingForDecision: "Ich warte auf eine Entscheidung…",
-    toolCallCount: "{count} Tool-Aufrufe",
-    toolCallCountSingular: "1 Tool-Aufruf",
+    toolCallCount: "{count} Schritte",
+    toolCallCountSingular: "1 Schritt",
     workHistory: "Arbeitsverlauf",
     workspaceNoAgents:
       "In diesem Arbeitsbereich ist noch kein Agent verfügbar. Ein Administrator kann hier einen freigeben."

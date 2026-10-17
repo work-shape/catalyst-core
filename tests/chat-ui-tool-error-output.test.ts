@@ -38,15 +38,16 @@ function render(props: { result: unknown; isError?: boolean }): string {
 
 describe("the output of a tool call in the work history", () => {
   it("shows an output that is only an error as wrapped text, the whole sentence", () => {
-    // A failed call opens by itself.
+    // A failed call opens by itself and says why; its input and output stay under the closed
+    // technical details (UXA-7b).
     const markup = render({ result: { error: SENTENCE }, isError: true });
-    const text = /<p[^>]*data-testid="tool-detail-text"[^>]*>([^<]*)<\/p>/u.exec(markup);
+    const text = /<p[^>]*>([^<]*)<\/p>/u.exec(markup);
     expect(text?.[1]).toBe(SENTENCE.replace(">", "&gt;"));
     expect(text?.[0]).toContain("[overflow-wrap:anywhere]");
-    // Not as JSON, and not in a code box: the input is the one code box left.
+    // Not as JSON, and no code box until the technical details are opened.
     expect(markup).not.toContain("&quot;error&quot;");
-    expect(markup.match(/<pre/gu)).toHaveLength(1);
-    expect(markup).toContain("Output");
+    expect(markup).not.toContain("<pre");
+    expect(markup).toContain("Technical details");
   });
 
   it("keeps every other output as data in a code box", () => {

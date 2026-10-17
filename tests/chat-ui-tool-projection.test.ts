@@ -749,8 +749,11 @@ describe("chat UI message history projection", () => {
       title: "Anleitung lesen"
     });
 
-    // The tool keeps its name `show_view`; a person reads "Widget" in both languages.
-    for (const locale of ["en", "de"] as const) {
+    // The tool keeps its name `show_view`; a person reads what it does, never "Widget".
+    for (const [locale, title] of [
+      ["en", "Show an overview"],
+      ["de", "Übersicht zeigen"]
+    ] as const) {
       expect(
         readToolDisplayProjection({
           args: { title: "Open tasks" },
@@ -758,7 +761,7 @@ describe("chat UI message history projection", () => {
           result: undefined,
           toolName: "show_view"
         })
-      ).toEqual({ actionLabel: "Open tasks", technicalName: "show_view", title: "Widget" });
+      ).toEqual({ actionLabel: "Open tasks", technicalName: "show_view", title });
     }
 
     // The fact sheet steps say what happens, in both languages.

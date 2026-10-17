@@ -73,15 +73,23 @@ const sentence = (markup: string) =>
 
 describe("a tool call of a Connection in a conversation", () => {
   it("says what was done with the Connection, by the name people read", () => {
-    expect(sentence(render(READ))).toBe("Read Sample business");
-    expect(sentence(render(CHANGE))).toBe("Changed Sample business");
-    expect(sentence(render(READ, { running: true }))).toBe("Reading Sample business");
-    expect(sentence(render(CHANGE, { running: true }))).toBe("Changing Sample business");
+    expect(sentence(render(READ))).toBe("Read revenue by month from Sample business · 0 rows");
+    expect(sentence(render(CHANGE))).toBe("Changed Sample business: create offer");
+    expect(sentence(render(READ, { running: true }))).toBe(
+      "Reading revenue by month from Sample business"
+    );
+    expect(sentence(render(CHANGE, { running: true }))).toBe(
+      "Changing Sample business: create offer"
+    );
   });
 
   it("says it in German, the name where German puts it", () => {
-    expect(sentence(render(READ, {}, "de"))).toBe("Sample business gelesen");
-    expect(sentence(render(CHANGE, { running: true }, "de"))).toBe("Ändert Sample business");
+    expect(sentence(render(READ, {}, "de"))).toBe(
+      "Revenue by month aus Sample business gelesen · 0 Zeilen"
+    );
+    expect(sentence(render(CHANGE, { running: true }, "de"))).toBe(
+      "Ändert Sample business: create offer"
+    );
   });
 
   it("shows the Connection's icon on its tile, and no technical name in the line", () => {
@@ -92,21 +100,21 @@ describe("a tool call of a Connection in a conversation", () => {
     expect(head).not.toContain("Revenue By Month");
   });
 
-  it("keeps the name the agent called under the technical details", () => {
-    // A failed call opens by itself.
+  it("keeps the name the agent called under the closed technical details", () => {
+    // A failed call opens by itself, with its technical details closed.
     const markup = render(READ, { result: { error: "It failed." }, isError: true });
-    expect(sentence(markup)).toBe("Could not read Sample business");
+    expect(sentence(markup)).toBe("Could not read revenue by month from Sample business");
     expect(markup).toContain("Technical details");
-    expect(markup).toMatch(new RegExp(`data-testid="tool-technical-name"[^>]*>${READ}<`, "u"));
+    expect(markup).not.toContain("tool-technical-name");
   });
 
   it("names a Connection nobody lists any more by its id, with the generic icon", () => {
     const markup = render(READ, { known: false });
-    expect(sentence(markup)).toBe("Used sample-business");
+    expect(sentence(markup)).toBe("Used sample-business: revenue by month · 0 rows");
     expect(markup).toContain('data-connection-icon="generic"');
   });
 
-  it("leaves every other tool call as it was", () => {
+  it("gives every other tool call its title and no Connection icon", () => {
     const markup = render("demo.workflow_summary");
     expect(markup).not.toContain("tool-call-sentence");
     expect(markup).not.toContain("data-connection-icon");
@@ -133,23 +141,29 @@ describe("the fold of a group of tool calls", () => {
   const done = { toolName: READ, result: { rows: [] } };
 
   it("says what its one call of a Connection did, beside the Connection's tile", () => {
-    expect(sentence(fold({ only: done, count: 1 }))).toBe("Read Sample business");
-    expect(sentence(fold({ only: done, count: 1 }, "de"))).toBe("Sample business gelesen");
+    expect(sentence(fold({ only: done, count: 1 }))).toBe(
+      "Read revenue by month from Sample business · 0 rows"
+    );
+    expect(sentence(fold({ only: done, count: 1 }, "de"))).toBe(
+      "Revenue by month aus Sample business gelesen · 0 Zeilen"
+    );
     expect(sentence(fold({ only: { toolName: READ }, count: 1 }, "de"))).toBe(
-      "Liest Sample business"
+      "Liest revenue by month aus Sample business"
     );
     expect(fold({ only: done, count: 1 })).toContain('data-connection-icon="database"');
     expect(fold({ only: done, count: 1 })).not.toContain("tool call");
   });
 
-  it("counts several calls, and one call that has no sentence", () => {
-    expect(fold({ count: 3 })).toBe("3 tool calls");
-    expect(fold({ count: 3 }, "de")).toBe("3 Tool-Aufrufe");
-    expect(fold({ only: { toolName: "demo.workflow_summary", result: {} }, count: 1 })).toBe(
-      "1 tool call"
+  it("counts several calls as steps, and says what its one other call did", () => {
+    const row = (markup: string) =>
+      /data-testid="tool-call-row"[^>]*>([^<]*)<\/span>/u.exec(markup)?.[1];
+    expect(fold({ count: 3 })).toBe("3 steps");
+    expect(fold({ count: 3 }, "de")).toBe("3 Schritte");
+    expect(row(fold({ only: { toolName: "demo.workflow_summary", result: {} }, count: 1 }))).toBe(
+      "Workflow Summary"
     );
-    expect(fold({ only: { toolName: "read_skill", result: {} }, count: 1 }, "de")).toBe(
-      "1 Tool-Aufruf"
+    expect(row(fold({ only: { toolName: "read_skill", result: {} }, count: 1 }, "de"))).toBe(
+      "Anleitung lesen"
     );
   });
 });

@@ -34,3 +34,11 @@ export function connectionNameOfTool(toolName: string): string | undefined {
   const dot = rest.indexOf(".");
   return dot > 0 && dot < rest.length - 1 ? rest.slice(0, dot) : undefined;
 }
+
+/** The operation a tool name of a Connection stands for, by its form `connection.<name>.<operation>`. */
+export function connectionOperationOfTool(toolName: string): string | undefined {
+  const name = connectionNameOfTool(toolName);
+  return name === undefined
+    ? undefined
+    : toolName.slice(CONNECTION_TOOL_PREFIX.length + name.length + 1);
+}
