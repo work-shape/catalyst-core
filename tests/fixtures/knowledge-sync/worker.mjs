@@ -56,7 +56,7 @@ const worker = createJobWorker({
   logger,
   handlers: dataStores.knowledgeSourceJobs({
     files: {
-      objects: createFilesystemObjectStorage({ root: process.env.SRC1A_FILES_ROOT }),
+      objects: createFilesystemObjectStorage(process.env.SRC1A_FILES_ROOT),
       open: async () => undefined
     },
     documentFormats: ["txt", "markdown"],

@@ -134,7 +134,7 @@ describe("initial and full source import (KB 72, 73)", () => {
     });
     const fixture = createFixtureDocumentSource({ secret: "test", pageSize: 100 });
     const capability = wrap(fixture.capability);
-    const objects = createFilesystemObjectStorage({ root: instance.filesRoot });
+    const objects = createFilesystemObjectStorage(instance.filesRoot);
     const files: KnowledgeFiles = { objects, open: async () => undefined };
     const dataStores = createDataStores({
       clientInstanceId,
