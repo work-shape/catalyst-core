@@ -95,6 +95,7 @@ describe("initial and full source import (KB 72, 73)", () => {
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
+      expect(row?.level).toBe(2);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());
