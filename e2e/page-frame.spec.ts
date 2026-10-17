@@ -344,6 +344,7 @@ test("a narrowing head gives the chips, then the text of the way back, and the n
       await page.setViewportSize({ width, height: 800 });
       seen.push(await read());
     }
+    let wrappedRowRecovered = false;
     for (const [index, now] of seen.entries()) {
       const before = seen[Math.max(0, index - 1)] ?? now;
       const where = `step ${index}: ${JSON.stringify(now)}`;
@@ -355,9 +356,15 @@ test("a narrowing head gives the chips, then the text of the way back, and the n
       if (wrapsNow) {
         expect(before, where).toMatchObject({ cut: false, text: false, chips: 0 });
       }
-      expect(wrapsNow || now.chips <= before.chips, where).toBe(true);
+      // CSS wraps the actions immediately; the deferred back-text measure can restore the
+      // first row on a later frame. Allow that one recovery independently of the wrap sample.
+      const recoversRow: boolean = now.wrapped && now.text && !before.text && !wrappedRowRecovered;
+      if (recoversRow) {
+        wrappedRowRecovered = true;
+      }
+      expect(wrapsNow || recoversRow || now.chips <= before.chips, where).toBe(true);
       // The text stays while a chip could still go, and the name is whole while the text shows.
-      expect(!wrapsNow && now.text && before.text === false, where).toBe(false);
+      expect(!wrapsNow && !recoversRow && now.text && before.text === false, where).toBe(false);
       expect(now.text && now.cut, where).toBe(false);
       expect(!now.text && now.chips > 0, where).toBe(false);
     }
@@ -365,6 +372,7 @@ test("a narrowing head gives the chips, then the text of the way back, and the n
     expect(seen.some((now) => now.text && now.chips === 0)).toBe(true);
     expect(seen.some((now) => !now.text && !now.cut)).toBe(true);
     expect(seen.some((now) => now.wrapped)).toBe(true);
+    expect(wrappedRowRecovered).toBe(true);
     expect(seen.at(-1)).toMatchObject({ cut: true, text: false, chips: 0 });
   } finally {
     await removeConnection(connection.id);
