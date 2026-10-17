@@ -7,9 +7,9 @@ export const accessKinds = defineTranslations({
   en: {
     "access.actionReadRunData": "Read run data",
     "access.actionReadRunDataWorkflowDescription":
-      "Read the data the Workflow's runs read and wrote, such as the rows of their datasets.",
+      "Reserved for downloading run datasets. Today this right gives no access beyond View.",
     "access.actionReadRunDataWorkflowNote":
-      "Giving it also needs every right of the service principal the Workflow runs as, because the data is what that principal reads.",
+      "Giving this reserved right already requires every right of the service principals named in the Workflow's draft and published versions.",
     "access.actionDeleteWorkflowDescription": "Delete the Workflow. Its runs stay readable.",
     "access.actionDeleteKnowledgeBaseDescription":
       "Delete the Knowledge Base. Documents it keeps itself are deleted with it; a Data Store it describes stays as it is.",
@@ -33,9 +33,9 @@ export const accessKinds = defineTranslations({
   de: {
     "access.actionReadRunData": "Laufdaten lesen",
     "access.actionReadRunDataWorkflowDescription":
-      "Die Daten lesen, die die Läufe des Workflows gelesen und geschrieben haben, etwa die Zeilen ihrer Datensätze.",
+      "Für den Download von Laufdatensätzen vorgesehen. Heute gibt dieses Recht keinen zusätzlichen Zugriff über Ansehen hinaus.",
     "access.actionReadRunDataWorkflowNote":
-      "Zum Vergeben braucht die Person außerdem jedes Recht des Service Principals, als der der Workflow läuft, denn die Daten sind das, was er liest.",
+      "Zum Vergeben brauchst du bereits jedes Recht der technischen Konten des Workflow-Entwurfs und der veröffentlichten Version.",
     "access.actionDeleteWorkflowDescription": "Den Workflow löschen. Seine Läufe bleiben lesbar.",
     "access.actionDeleteKnowledgeBaseDescription":
       "Die Wissensbasis löschen. Dokumente, die sie selbst hält, werden mit ihr gelöscht; ein Datenspeicher, den sie beschreibt, bleibt, wie er ist.",

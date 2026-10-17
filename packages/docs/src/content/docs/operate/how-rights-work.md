@@ -47,7 +47,60 @@ Three words come up on every screen, so here they are once.
 
 - A **right** is the permission to do one kind of thing, such as "write agents". In the API a right has a short name like `agent.write`.
 - A **grant** is one row that gives or refuses one person one right in one place. A Service Principal can hold a grant too, see [API keys and Service Principals](#api-keys-and-service-principals). You write grants on the Access page.
-- The **owner** of an agent or a skill is the instance or the one Collaboration Workspace it was made in, a Personal or a Shared Workspace. It is set when the asset is made. A right in a Shared Workspace covers everything that workspace owns. See [What a workspace owns](#what-a-workspace-owns).
+- The **owner** of an agent or a skill is the instance or the one Collaboration Workspace it was made in, a Personal or a Shared Workspace. It is set when the asset is made. A right in a Shared Workspace covers every asset of the chosen kind that workspace owns, including assets made later. See [What a workspace owns](#what-a-workspace-owns).
+
+## What a workspace owns
+
+An asset belongs to the instance or to one Collaboration Workspace, a Personal or a Shared Workspace. The owner is set when the asset is made; its name does not decide the owner. Agents, skills, Data Stores and Knowledge Bases accept either owner. Apps belong to a workspace. Connections and Workflows are still instance-owned.
+
+- An agent made in Studio or by the Build Agent while you work in a workspace belongs to that workspace, your Personal Workspace included.
+- An agent pushed with `catalyst config push` from a working copy bound to a workspace with `catalyst config pull --workspace <workspace-id>` belongs to that workspace. See [the CLI](/configure/cli/).
+- An agent pushed from a working copy bound to no workspace, or written through the API without a workspace, belongs to the instance.
+
+A grant can name a Shared Workspace, not a Personal one. A grant "write agents in Tax team" covers every agent Tax team owns, also the ones somebody makes next month. You never have to list them.
+
+<figure class="docs-diagram docs-diagram-wide">
+<svg viewBox="0 0 660 430" role="img" aria-labelledby="rights-fig-3-title rights-fig-3-desc">
+<title id="rights-fig-3-title">Where a right can sit</title>
+<desc id="rights-fig-3-desc">The Client Instance contains the agents and skills the instance owns and the Shared Workspaces. The workspace Tax team owns three assets, and one agent right covers both agents, including later ones. Among the assets of the instance, a grant sits on the single asset hr-onboarding. The asset helpdesk is covered by no grant. Access to the conversations of a workspace comes from membership.</desc>
+<rect class="frame" x="8" y="8" width="644" height="414" rx="12"/>
+<text x="24" y="34" class="strong">Client Instance</text>
+<text x="24" y="54" class="small">Roles and the single rights of the Users page apply to everything in here.</text>
+<rect class="box" x="24" y="72" width="250" height="330" rx="10"/>
+<text x="40" y="98" class="strong">Owned by the instance</text>
+<rect class="box-accent" x="40" y="114" width="218" height="110" rx="8"/>
+<text x="149" y="160" class="small" text-anchor="middle">hr-onboarding</text>
+<text x="149" y="180" class="small" text-anchor="middle">a grant on this one asset</text>
+<rect class="box" x="40" y="240" width="218" height="110" rx="8"/>
+<text x="149" y="298" class="small" text-anchor="middle">helpdesk</text>
+<rect class="box-accent" x="290" y="72" width="346" height="330" rx="10"/>
+<text x="306" y="98" class="strong">Shared Workspace Tax team</text>
+<text x="306" y="118" class="small">Covers its assets of the chosen kind.</text>
+<rect class="box" x="306" y="134" width="96" height="56" rx="6"/>
+<text x="354" y="167" class="small" text-anchor="middle">tax-vat-helper</text>
+<rect class="box" x="410" y="134" width="104" height="56" rx="6"/>
+<text x="462" y="167" class="small" text-anchor="middle">tax-year-end</text>
+<rect class="box" x="522" y="134" width="98" height="56" rx="6"/>
+<text x="571" y="167" class="small" text-anchor="middle">later ones too</text>
+<text x="306" y="240" class="small">Its conversations and their files.</text>
+<text x="306" y="260" class="small">Access to them comes from</text>
+<text x="306" y="280" class="small">Workspace Membership, not from a grant.</text>
+</svg>
+<figcaption>The tinted boxes show a right on one asset and a right covering the assets of one kind a Shared Workspace owns. Some actions also support whole-instance grants; see the table under Grants. Workspace membership separately gives access to conversations.</figcaption>
+</figure>
+
+### An example
+
+A company has a tax team with the Shared Workspace Tax team. Its agents `tax-vat-helper` and `tax-year-end` and its skill `tax-audit-notes` were made there, so Tax team owns them.
+
+1. Mara holds read and write on agents in Tax team.
+2. Mara opens **Studio**. She sees the two tax agents and can change them. She does not see `hr-onboarding` or `helpdesk`, which the instance owns.
+3. Mara creates `tax-travel-costs` while she works in Tax team. Tax team owns it, so her grant covers it at once.
+4. Jonas from the same team gets a grant on one asset instead, read on `tax-year-end`. He sees **Studio** with a list of agents that holds this one agent and nothing else. It opens read-only.
+
+### Offering is not owning
+
+An agent can be offered in further workspaces with **Available in**. Their members can then choose it in the chat. That gives them no right to read or change its definition: those stay with the workspace that owns it. A grant in a workspace also gives no access to any conversation.
 
 ## Building and using
 
@@ -100,7 +153,7 @@ Two exceptions. The default agent of the instance is always available everywhere
 
 Offering an agent in further workspaces lets their members use it. It never lets them edit it: the agent still belongs to the workspace it was made in, and only a right there, or on the instance, lets somebody change it. Only a person with the instance-wide right sets **Available in**.
 
-A grant on agents or skills can name a Shared Workspace. It covers everything of that kind the workspace owns, also what is made later, and gives no access to its conversations. A grant to read or use Connections is written on one Connection: the instance owns every Connection, so a grant on a workspace would cover nothing, and the instance refuses one. A Connection grant written on a workspace before keeps applying until it is revoked. It says nothing about agents, skills or conversations.
+A workspace right follows ownership. It does not cover an instance-owned agent offered in that workspace, or an asset another workspace owns. Connections belong to the instance, so new Connection rights name one Connection or the whole instance; the server refuses workspace scope.
 
 ## The four questions
 
@@ -135,7 +188,7 @@ The instance collects everything that speaks about you:
 
 1. Your **role** gives you a fixed set of rights on the whole instance.
 2. A **single right** on the Users page adds one right to that set or takes one away, also for the whole instance.
-3. A **grant** on the Access page allows or denies one action in one place. A new grant names one asset, a supported Shared Workspace scope, or the whole instance where that action allows it. Grants written before in a Namespace, and Connection grants written before on a Shared Workspace, keep applying until they are revoked.
+3. A **grant** on the Access page allows or denies one action in one place. A new grant names one asset, a supported Shared Workspace scope, or the whole instance where that action allows it.
 
 Then it decides:
 
@@ -151,12 +204,12 @@ Example: Mara has the role User, which carries no administrative right. A grant 
 
 A caller who holds the right can still be held back. This question is asked for the actions on the [full path](#which-actions-take-the-whole-path). Each of them is either **reading** or **changing**, and a **policy** gives it one of four values:
 
-| Value | What happens |
-| --- | --- |
-| `allow` | The action runs. |
-| `confirm` | The caller has to confirm. When you click a button or call the API or the CLI yourself, that call is the confirmation, and the action runs. |
-| `approval` | The action waits. A person with the right to approve decides it in the [Inbox](/operate/governance/#inbox). |
-| `deny` | The action is refused with `403 POLICY_DENIED`. |
+| Value      | What happens                                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allow`    | The action runs.                                                                                                                            |
+| `confirm`  | The caller has to confirm. When you click a button or call the API or the CLI yourself, that call is the confirmation, and the action runs. |
+| `approval` | The action waits. A person with the right to approve decides it in the [Inbox](/operate/governance/#inbox).                                 |
+| `deny`     | The action is refused with `403 POLICY_DENIED`.                                                                                             |
 
 A reading action only knows `allow` and `deny`. Nobody approves a read.
 
@@ -168,11 +221,11 @@ Example: an instance sets changing actions to `approval`. Mara saves `tax-vat-he
 
 Catalyst has three roles. You set the **Role** of a person on **Settings > Instance > Users**.
 
-| Role | What it carries |
-| --- | --- |
-| User | Chat, and nothing administrative. |
-| Admin | Read and change agents and skills, approve changes, manage users, see usage and the audit log. Every right on Connections, where the module is on. |
-| Superadmin | Everything an Admin has, plus managing API access and the model settings of agents. |
+| Role       | What it carries                                                                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User       | Chat, and nothing administrative.                                                                                                                  |
+| Admin      | Read and change agents and skills, approve changes, manage users, see usage and the audit log. Every right on Connections, where the module is on. |
+| Superadmin | Everything an Admin has, plus managing API access and the model settings of agents.                                                                |
 
 The three roles are fixed. You cannot change what a role carries, and you cannot create a role of your own.
 
@@ -180,16 +233,16 @@ Below the Role, the same page has a card named **Rights** with one switch per ri
 
 A switch is stored as grants for the whole instance, one per action the right stands for, and each records who set it and when. These grants are changed on the Users page and on the API access page for a Service Principal, not in the Grants list of the Access page, which leaves them out.
 
-| Switch on the Users page | Name in the API | Carried by |
-| --- | --- | --- |
-| View agent configuration | `config_assets.read` | Admin, Superadmin |
-| Edit agent configuration | `config_assets.write` | Admin, Superadmin |
-| Approve skill changes | `agent_skills.approve` | Admin, Superadmin |
-| Manage users | `users.manage` | Admin, Superadmin |
-| View usage | `usage.view` | Admin, Superadmin |
-| View audit log | `audit.view` | Admin, Superadmin |
-| Manage API access | `api_access.manage` | Superadmin |
-| Manage agent model settings | `agent_models.manage` | Superadmin |
+| Switch on the Users page    | Name in the API        | Carried by        |
+| --------------------------- | ---------------------- | ----------------- |
+| View agent configuration    | `config_assets.read`   | Admin, Superadmin |
+| Edit agent configuration    | `config_assets.write`  | Admin, Superadmin |
+| Approve skill changes       | `agent_skills.approve` | Admin, Superadmin |
+| Manage users                | `users.manage`         | Admin, Superadmin |
+| View usage                  | `usage.view`           | Admin, Superadmin |
+| View audit log              | `audit.view`           | Admin, Superadmin |
+| Manage API access           | `api_access.manage`    | Superadmin        |
+| Manage agent model settings | `agent_models.manage`  | Superadmin        |
 
 Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin role, changes another Superadmin, deletes a user, or switches "Manage API access" and "Manage agent model settings" on or off.
 
@@ -213,78 +266,39 @@ The Users page has one more field, **Tool rights**. A tool written for one custo
 
 A role and a single right always apply to the whole instance. A grant is for everything narrower, and for a right no switch carries it can be the whole instance too. It says five things:
 
-| Part | Choices |
-| --- | --- |
-| Who | One person. A Service Principal gets its grants on the API access page. |
-| Kind | Agents, or skills. Connections, Apps, Data Stores, Knowledge Bases and Workflows too, where their modules are on. |
-| Action | Read, write, delete for agents and skills. Read and use for Connections. Read, write, publish and delete for Apps and Data Stores. Read, use, write, publish and delete for Knowledge Bases and Workflows, and for a Workflow also reading the data of its runs. |
-| Where | For agents, skills, Apps and Data Stores: what one Shared Workspace owns, or one existing asset. For Connections, Knowledge Bases and Workflows: one existing item, or the whole instance where the action allows it. Reading run data stays on one Workflow. A right that no switch on the Users page carries, so not those of agents and skills, can also be given for the whole instance. Reading the data of a Workflow's runs is given on one Workflow only. Rows written before in a Namespace stay until they are revoked. |
-| Effect | Allow, or deny. |
+| Part   | Choices                                                                                                                                                                                                                                                              |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who    | One person. A Service Principal gets its grants on the API access page.                                                                                                                                                                                              |
+| Kind   | Agents, or skills. Connections, Apps, Data Stores, Knowledge Bases and Workflows too, where their modules are on.                                                                                                                                                    |
+| Action | Read, write, delete for agents and skills. Read and use for Connections. Read, write, publish and delete for Apps and Data Stores. Read, use, write, publish and delete for Knowledge Bases and Workflows. Workflow run-data access is reserved, as explained below. |
+| Where  | One Shared Workspace, one existing asset, or the whole instance, only where the action supports it. The table below lists the choices.                                                                                                                               |
+| Effect | Allow, or deny.                                                                                                                                                                                                                                                      |
 
-Reading the data of a Workflow's runs shows the rows its Service Principal read. Giving it, or lifting a deny of it, therefore needs every right that Service Principal holds, as publishing the Workflow does.
+The places supported for new rights are:
+
+| Kind and actions                                   | Where the right can be given                                                                                                                                                         |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Agents and skills: read, write, delete             | One Shared Workspace or one asset. Instance-wide rights stay on the Users page.                                                                                                      |
+| Apps and Data Stores: read, write, publish, delete | One Shared Workspace, one asset or the whole instance. Using an App comes from workspace membership. These Data Store rights concern its definition; access to its rows is separate. |
+| Connections: read, use                             | One asset or the whole instance. Writing, deleting and approving stay with the administrator role.                                                                                   |
+| Knowledge Bases: read, use, write, publish, delete | One asset or the whole instance.                                                                                                                                                     |
+| Workflows: read, use, write, publish, delete       | One asset or the whole instance. Workflows are still instance-owned.                                                                                                                 |
+| Workflows: read run data                           | One Workflow only. Reserved for downloading run datasets; today it gives no access beyond View.                                                                                      |
+| Guardrails: publish                                | One Shared Workspace or the whole instance, separately from other kinds.                                                                                                             |
+
+The New right dialog offers only rights and places the giver holds. Its places narrow to those supported by every selected action. Selecting run-data access therefore limits a Workflow right to one asset; without it, the other Workflow rights can also be given for the whole instance.
+
+Giving the reserved run-data right, or lifting a deny of it, already needs every right held by the service principals named in the Workflow's draft and published versions. No operation checks this right yet, so granting it does not unlock a dataset download or change what View shows.
 
 So the answer to "can rights only be given to single people" is yes. A grant names one person or one Service Principal. There are no groups, and a role cannot hold a grant.
 
-The New right dialog offers only actions and places the giver holds. A right on one asset never offers the whole workspace or instance. New Namespace rows are refused by the server for every action; existing Namespace rows still apply and can be listed and revoked.
+A giver who holds a right on one asset cannot give it for the whole workspace or instance.
 
 **Deny wins.** A deny on an asset beats every allow, including the one from the Admin role. Use it for the one agent that even administrators should not change by accident. A deny has limits of its own, which [Rights for one person or asset](/operate/rights-for-one-person/#grants) lists.
 
 **Read and write are separate.** A person who should edit agents needs both. With write alone they cannot open the agent they are meant to change.
 
 **Check before you guess.** The tab **Check** on the Access page takes a person and a name and says for each action whether it is allowed and what decided. The name does not have to exist yet. The tab covers agents and skills. To get a result you need "View agent configuration" beside "Manage users", because the tab looks up the assets.
-
-## What a workspace owns
-
-Every agent and skill has an owner: the instance, or the one Collaboration Workspace it was made in, a Personal or a Shared Workspace. The owner is set when the asset is made and does not change.
-
-- An agent made in Studio or by the Build Agent while you work in a workspace belongs to that workspace, your Personal Workspace included.
-- An agent pushed with `catalyst config push` from a working copy bound to a workspace with `catalyst config pull --workspace <workspace-id>` belongs to that workspace. See [the CLI](/configure/cli/).
-- An agent pushed from a working copy bound to no workspace, or written through the API without a workspace, belongs to the instance.
-
-A grant can name a Shared Workspace, not a Personal one. A grant "write agents in Tax team" covers every agent Tax team owns, also the ones somebody makes next month. You never have to list them.
-
-<figure class="docs-diagram docs-diagram-wide">
-<svg viewBox="0 0 660 430" role="img" aria-labelledby="rights-fig-3-title rights-fig-3-desc">
-<title id="rights-fig-3-title">Where a right can sit</title>
-<desc id="rights-fig-3-desc">The Client Instance contains the agents and skills the instance owns and the Shared Workspaces. The workspace Tax team owns three assets, and one grant covers all of them. Among the assets of the instance, a grant sits on the single asset hr-onboarding. The asset helpdesk is covered by no grant. Access to the conversations of a workspace comes from membership.</desc>
-<rect class="frame" x="8" y="8" width="644" height="414" rx="12"/>
-<text x="24" y="34" class="strong">Client Instance</text>
-<text x="24" y="54" class="small">Roles and the single rights of the Users page apply to everything in here.</text>
-<rect class="box" x="24" y="72" width="250" height="330" rx="10"/>
-<text x="40" y="98" class="strong">Owned by the instance</text>
-<rect class="box-accent" x="40" y="114" width="218" height="110" rx="8"/>
-<text x="149" y="160" class="small" text-anchor="middle">hr-onboarding</text>
-<text x="149" y="180" class="small" text-anchor="middle">a grant on this one asset</text>
-<rect class="box" x="40" y="240" width="218" height="110" rx="8"/>
-<text x="149" y="298" class="small" text-anchor="middle">helpdesk</text>
-<rect class="box-accent" x="290" y="72" width="346" height="330" rx="10"/>
-<text x="306" y="98" class="strong">Shared Workspace Tax team</text>
-<text x="306" y="118" class="small">A grant here covers everything Tax team owns.</text>
-<rect class="box" x="306" y="134" width="96" height="56" rx="6"/>
-<text x="354" y="167" class="small" text-anchor="middle">tax-vat-helper</text>
-<rect class="box" x="410" y="134" width="104" height="56" rx="6"/>
-<text x="462" y="167" class="small" text-anchor="middle">tax-audit-notes</text>
-<rect class="box" x="522" y="134" width="98" height="56" rx="6"/>
-<text x="571" y="167" class="small" text-anchor="middle">later ones too</text>
-<text x="306" y="240" class="small">Its conversations and their files.</text>
-<text x="306" y="260" class="small">Access to them comes from</text>
-<text x="306" y="280" class="small">Workspace Membership, not from a grant.</text>
-</svg>
-<figcaption>The tinted boxes show where a grant can sit: one asset, or everything a Shared Workspace owns. Everything wider is a role or a single right on the Users page.</figcaption>
-</figure>
-
-### An example
-
-A company has a tax team with the Shared Workspace Tax team. Its agents `tax-vat-helper` and `tax-year-end` and its skill `tax-audit-notes` were made there, so Tax team owns them.
-
-1. Mara holds read and write on agents in Tax team.
-2. Mara opens **Studio**. She sees the two tax agents and can change them. She does not see `hr-onboarding` or `helpdesk`, which the instance owns.
-3. Mara creates `tax-travel-costs` while she works in Tax team. Tax team owns it, so her grant covers it at once.
-4. Jonas from the same team gets a grant on one asset instead, read on `tax-year-end`. He sees **Studio** with a list of agents that holds this one agent and nothing else. It opens read-only.
-
-### Offering is not owning
-
-An agent can be offered in further workspaces with **Available in**. Their members can then choose it in the chat. That gives them no right to read or change its definition: those stay with the workspace that owns it. A grant in a workspace also gives no access to any conversation.
 
 ## The path of one action
 
@@ -378,18 +392,18 @@ Here is the whole way, in order. The table below the chart says who sets each st
 <figcaption>The left column is the way through. Each exit on the right is what the caller receives when that step stops the action. The Operation Run of step 12 is opened once the input is valid, so a refusal from the right onwards is on record too.</figcaption>
 </figure>
 
-| Step | Set by | Where |
-| --- | --- | --- |
-| 1 Sign-in or key | Administrator, Superadmin | Users for people, API access for keys |
-| 2 Module | Operator | `modules` in [release config](/configure/modules/) |
-| 3 Rate limit | Operator | `rateLimits` in release config |
-| 4 Key scope | Superadmin | API access, when the key is created |
-| 5 Tool list of the agent | Whoever may write the agent | The list of tools in the agent's definition |
-| 6 Input | Nobody. The action defines its input. | |
-| 7 Right | Administrator | Users for role and single rights, Access for grants |
-| 8 and 10 Policy | Operator, and the author of a tool | `policy.defaults` in release config, `permission.mode` on a tool |
-| 9 Guardrails | Operator (the floor), and whoever may publish a guardrail | `guardrails` in release config; Studio > Guardrails. See [Guardrails](#guardrails) |
-| 11 and 12 Run and record | Nobody. It is part of every action on the full path. | Read it on Operations and Audit |
+| Step                     | Set by                                                    | Where                                                                              |
+| ------------------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 1 Sign-in or key         | Administrator, Superadmin                                 | Users for people, API access for keys                                              |
+| 2 Module                 | Operator                                                  | `modules` in [release config](/configure/modules/)                                 |
+| 3 Rate limit             | Operator                                                  | `rateLimits` in release config                                                     |
+| 4 Key scope              | Superadmin                                                | API access, when the key is created                                                |
+| 5 Tool list of the agent | Whoever may write the agent                               | The list of tools in the agent's definition                                        |
+| 6 Input                  | Nobody. The action defines its input.                     |                                                                                    |
+| 7 Right                  | Administrator                                             | Users for role and single rights, Access for grants                                |
+| 8 and 10 Policy          | Operator, and the author of a tool                        | `policy.defaults` in release config, `permission.mode` on a tool                   |
+| 9 Guardrails             | Operator (the floor), and whoever may publish a guardrail | `guardrails` in release config; Studio > Guardrails. See [Guardrails](#guardrails) |
+| 11 and 12 Run and record | Nobody. It is part of every action on the full path.      | Read it on Operations and Audit                                                    |
 
 The chart shows the common exits. A few rarer ones exist.
 
@@ -453,12 +467,12 @@ There are two sources of guardrails. The operator's floor is set in [release con
 
 Beside guardrails, fixed limits protect an instance:
 
-| Limit | What it stops | Set in |
-| --- | --- | --- |
-| Module switches | A whole feature, for everybody | [release config](/configure/modules/) |
+| Limit                       | What it stops                                         | Set in                                                                              |
+| --------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Module switches             | A whole feature, for everybody                        | [release config](/configure/modules/)                                               |
 | Editable fields of an agent | A change in the interface to a field the release owns | [release config](/configure/config-assets/#interactive-editing-and-field-ownership) |
-| Usage limits and budgets | Model calls beyond a daily or monthly amount | [Capacity and limits](/operate/capacity-and-limits/) |
-| Rate limits | Too many requests in a short time | release config |
+| Usage limits and budgets    | Model calls beyond a daily or monthly amount          | [Capacity and limits](/operate/capacity-and-limits/)                                |
+| Rate limits                 | Too many requests in a short time                     | release config                                                                      |
 
 ### What the record shows
 
@@ -520,15 +534,15 @@ Now she tries the same on `hr-onboarding`, which a colleague sent her as a link.
 
 You need "Manage users" yourself. Open **Settings > Instance > Access**, the tab **Rights**, and choose **New right**. In the German interface the button is "Neues Recht". The dialog has five fields.
 
-| Field | What you choose | What it means |
-| --- | --- | --- |
-| Person | One person from the list | The right is for this person alone. To give it to three colleagues, send the dialog three times. |
-| Kind | Agents or Skills | One kind per dialog. A colleague who edits both needs the dialog twice. With the modules `connections` and `workflows` on, the dialog offers Connections and Workflows too. |
-| Actions | Read, Write, Delete | Tick Read and Write for somebody who should edit. Tick Delete only if they should remove the agent too. The dialog writes one row per tick. |
+| Field           | What you choose                                         | What it means                                                                                                                                                                       |
+| --------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Person          | One person from the list                                | The right is for this person alone. To give it to three colleagues, send the dialog three times.                                                                                    |
+| Kind            | Agents                                                  | One kind per dialog. A colleague who edits skills too needs another right for Skills. Other kinds appear where their modules are on; see the table under Grants.                    |
+| Actions         | Read, Write, Delete                                     | Tick Read and Write for somebody who should edit. Tick Delete only if they should remove the agent too. The dialog writes one row per tick.                                         |
 | Where and asset | **On one asset** ("An einem Asset"), then the one agent | The right covers this agent, which exists now. **In a shared workspace** ("In einem geteilten Arbeitsbereich") would cover every agent the workspace owns instead, also later ones. |
-| Effect | Allow or Deny | Allow gives the ticked actions there. Deny refuses them there and beats every allow and every role. For this task choose Allow. |
+| Effect          | Allow or Deny                                           | Allow gives the ticked actions there. Deny refuses them there and beats every allow and every role. For this task choose Allow.                                                     |
 
-Press **Create right**. Under the default policy the right works at once. On an instance that sends changes to an approval, it works once the approval is given. Your colleague sees **Studio** in the main rail the next time the interface loads, with the agent. If these rights are all they hold, they see nothing else. For a team with several agents, send the dialog once per agent.
+Press **Create right**. Under the default policy the right works at once. On an instance that sends changes to an approval, it works once the approval is given. Your colleague sees **Studio** in the main rail the next time the interface loads, with the agent. If these rights are all they hold, they see nothing else. For a team with several agents, choose the Shared Workspace instead of repeating this for each agent.
 
 Three things to know afterwards.
 
@@ -555,20 +569,20 @@ A release push reaches every agent and skill of the instance and is not held bac
 
 ## Which screen for what
 
-| You want to | Screen | You need |
-| --- | --- | --- |
-| Make somebody an Admin or a Superadmin | Settings > Instance > Users, Role | Manage users. Superadmin for the Superadmin role. |
-| Give or take one right for the whole instance | Settings > Instance > Users, Rights | Manage users |
-| Let somebody edit an agent | Settings > Instance > Access, Rights | Manage users |
-| Find out why somebody can or cannot do something | Settings > Instance > Access, Check | Manage users and View agent configuration |
-| Create a key of your own for the CLI | Settings > You > API keys, or `catalyst login` | The module `personalApiKeys` on |
-| Create a Service Principal or give it a right | Settings > Instance > API access | Manage Service Principals, and the right you give |
-| Create a key for a script or CI | Settings > Instance > API access | Manage API access, and every right of the Service Principal |
-| Decide a call or a skill change that waits | Inbox | Approve skill changes |
-| See what was called, by whom, and what was refused | Settings > Instance > Operations | View audit log |
-| See who changed which right | Settings > Instance > Audit | View audit log |
-| Switch a feature on or off, set the policy | Release config, then a deploy | The operator |
+| You want to                                        | Screen                                         | You need                                                    |
+| -------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
+| Make somebody an Admin or a Superadmin             | Settings > Instance > Users, Role              | Manage users. Superadmin for the Superadmin role.           |
+| Give or take one right for the whole instance      | Settings > Instance > Users, Rights            | Manage users                                                |
+| Let somebody edit an agent                         | Settings > Instance > Access, Rights           | Manage users                                                |
+| Find out why somebody can or cannot do something   | Settings > Instance > Access, Check            | Manage users and View agent configuration                   |
+| Create a key of your own for the CLI               | Settings > You > API keys, or `catalyst login` | The module `personalApiKeys` on                             |
+| Create a Service Principal or give it a right      | Settings > Instance > API access               | Manage Service Principals, and the right you give           |
+| Create a key for a script or CI                    | Settings > Instance > API access               | Manage API access, and every right of the Service Principal |
+| Decide a call or a skill change that waits         | Inbox                                          | Approve skill changes                                       |
+| See what was called, by whom, and what was refused | Settings > Instance > Operations               | View audit log                                              |
+| See who changed which right                        | Settings > Instance > Audit                    | View audit log                                              |
+| Switch a feature on or off, set the policy         | Release config, then a deploy                  | The operator                                                |
 
 ## Namespaces registered earlier
 
-Rights were once scoped by a Namespace, a registered name prefix such as `tax-`. Namespaces are retired, and a later release removes what is left of them. Until then the Access page still has a tab **Namespaces**. A row written in a Namespace keeps applying, and a Namespace's tool and model lists still bind every save of an agent whose name starts with the prefix, a release push included. [Rights for one person or asset](/operate/rights-for-one-person/#namespaces-registered-earlier) has the details. Give new rights in a workspace or on one asset.
+Rights were once scoped by a Namespace, a registered name prefix such as `tax-`. The server now refuses new Namespace grant rows for every right, through the API as well as the dialog. Existing rows keep their allow or deny effect on matching instance-owned assets and can still be listed and revoked. The **Namespaces** tab and its tool and model limits remain until retirement is complete; those limits still bind agent saves, including release pushes. A Namespace never covers a workspace-owned asset. [Rights for one person or asset](/operate/rights-for-one-person/#namespaces-registered-earlier) has the remaining maintenance steps. Give new rights in a workspace, on one asset or for the whole instance where the action supports it.

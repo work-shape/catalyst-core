@@ -9,11 +9,19 @@ Every agent and skill belongs to the instance or to the one Collaboration Worksp
 
 ## Grants
 
-A grant gives one person one action in one place. A Service Principal's grants are written on **Settings > Instance > API access**, not here. The **New right** form takes a person, a kind, the actions, the place and the effect, and writes one row per action. For agents and skills the actions are read, write and delete. The places are a shared workspace, one existing asset and the whole instance, in this order, and the form offers only the places where every action of the kind can be written. Today, for agents and skills, that is **In a shared workspace** ("In einem geteilten Arbeitsbereich"), which covers everything of the kind the workspace owns, also what is made later, and gives no access to its conversations; and **On one asset** ("An einem Asset"). For Connections and Workflows it is one existing item, so the form asks for no place and goes straight to the item. No action is offered for the whole instance.
+A grant gives one person one action in one place. A Service Principal's grants are written on **Settings > Instance > API access**, not here. The **New right** form takes a person, a kind, the actions, the place and the effect, and writes one row per action. It offers only rights and places the giver holds. Giving a right or lifting a deny also checks that the giver holds what it would give; nobody changes their own grants.
 
-On an instance with the module `connections` on, the form also offers the kind Connections, with the actions read and use. Using a Connection is a right of its own: a person who may read a Connection may not use it, and a person who may use it is shown nothing of it. The place is one existing Connection. The instance owns every Connection, so a right on a workspace would cover nothing: a grant of `connection.read` or `connection.use` on a workspace is refused with `422` and the reason `invalid_scope`. Rows written on a workspace before keep applying until they are revoked. Writing, deleting and approving a Connection belong to the administrator role and are not granted. A Connection that release config no longer names, or names differently, is removed at the next start together with the allow rows written on it; grants on a renamed Connection have to be written again.
+For agents and skills, the actions are read, write and delete. **In a shared workspace** ("In einem geteilten Arbeitsbereich") covers every asset of that kind the workspace owns, including later ones, and gives no access to its conversations. **On one asset** ("An einem Asset") covers one existing asset. Instance-wide rights for agents and skills stay on the Users page.
 
-On an instance with the module `workflows` on, a grant can also name a Workflow, with the actions read, use, write and publish. Reading shows the Workflow in the list and its runs, using starts it, writing edits its draft, and publishing makes a revision live. The place is one existing Workflow; the instance owns every Workflow, so no grant on a workspace covers one. Publishing a Workflow that runs as a service principal also needs every right that service principal holds: nobody makes a Workflow lend more than they hold themselves. A Workflow that runs as a service principal holding `config_assets.release` is published by nobody. Deleting a Workflow and reading the rows of a run's datasets belong to the administrator role and are not granted.
+Other kinds appear where their modules are on:
+
+- **Connections:** read and use, separately. Reading shows configuration; using permits calls without showing configuration. Both support one Connection or the whole instance. The instance owns every Connection, so the server refuses new workspace grants with `invalid_scope`. Old workspace rows remain recorded until revoked, but cover no instance-owned Connection. Writing, deleting and approving stay with the administrator role. Removing or renaming a release-config Connection removes its allow rows at the next start; write the grants again for a renamed Connection.
+- **Apps and Data Stores:** read, write, publish and delete, in one Shared Workspace, on one asset or for the whole instance. A workspace right covers what it owns. Using an App comes from workspace membership. These Data Store rights govern its definition, not access to its rows.
+- **Knowledge Bases:** read, use, write, publish and delete, on one asset or for the whole instance.
+- **Workflows:** read, use, write, publish and delete, on one asset or for the whole instance. Reading shows the Workflow and its runs; using starts it; writing edits its draft; publishing makes a revision live. Workflows are still instance-owned. Publishing also checks every right of the service principal the revision runs as. A Workflow whose principal holds `config_assets.release` cannot be published. **Read run data** is reserved for downloading run datasets, supports one Workflow only, and today adds no access beyond View. Giving it or lifting a deny already checks every right of the principals named by both the draft and published versions.
+- **Guardrails:** publish, in one Shared Workspace or for the whole instance, separately from other kinds.
+
+The dialog offers only places supported by every selected action; it hides the place step where only one is supported. Selecting run-data access limits a Workflow right to one asset. Without it, the other Workflow rights can also be given for the whole instance. See [How rights work](/operate/how-rights-work/#grants) for the scope table.
 
 A row the person already has is left as it is, so the same form can be sent again after it stopped half way: it adds what is missing and says how many rows it added and how many were there already.
 
@@ -34,13 +42,13 @@ A row on one asset names the asset only for a reader who may read that kind of a
 
 Choose a person and enter the name of an agent or a skill. The name does not have to exist yet, which answers "could this person create `sales-helper`?". For each action the tab says whether it is allowed and what decided:
 
-| Reason | Meaning |
-| --- | --- |
-| Role | The person's instance role allows it everywhere. |
+| Reason           | Meaning                                           |
+| ---------------- | ------------------------------------------------- |
+| Role             | The person's instance role allows it everywhere.  |
 | Individual right | A right set or revoked on the Users page decides. |
-| Given right | A row in a workspace or on the asset allows it. |
-| Deny | A deny row refuses it. |
-| No right | Nothing covers it. |
+| Given right      | A row in a workspace or on the asset allows it.   |
+| Deny             | A deny row refuses it.                            |
+| No right         | Nothing covers it.                                |
 
 An account that is not active has no rights, whatever its rows say.
 
@@ -58,11 +66,11 @@ The tab gives a result only when it has everything it decides from: the person's
 
 Rights were once scoped by a Namespace, a registered name prefix such as `sales-`. Namespaces are retired. The page still has a tab **Namespaces**, and a later release removes it. Until then:
 
-- A row written in a Namespace keeps applying and is revoked like any other row.
+- The server refuses new Namespace grant rows for every right. Existing allow and deny rows still apply to matching instance-owned assets and are listed and revoked like other rows. They never cover workspace-owned assets.
 - A Namespace's tool and model lists still bind every save of an agent whose name starts with the prefix, a release push included. The Check tab names these lists under its result.
 - A Namespace is deleted only when no row names it. Deleting it leaves the agents and skills as they are.
 
-Give new rights in a workspace or on one asset.
+Give new rights in a workspace, on one asset or for the whole instance where the action supports it.
 
 ## API
 

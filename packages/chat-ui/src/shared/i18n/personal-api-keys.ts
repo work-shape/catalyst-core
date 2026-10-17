@@ -88,7 +88,7 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.startsWith": "Beginnt mit {prefix}",
     "personalApiKeys.useLevel": "Verwenden",
     "personalApiKeys.useLevelHint":
-      "Verbindungen, Datenspeicher, Wissensdatenbanken und Workflows verwenden, die du verwenden darfst. Nötig, um einen Workflow zu veröffentlichen, dessen technisches Konto sie verwendet.",
+      "Verbindungen, Datenspeicher, Wissensbasen und Workflows verwenden, die du verwenden darfst. Nötig, um einen Workflow zu veröffentlichen, dessen technisches Konto sie verwendet.",
     "personalApiKeys.namespace": "Auf einen Namespace begrenzen",
     "personalApiKeys.namespaceHint":
       "Ein Namespace-Präfix wie tax-. Leer: überall, wo du die gewählten Berechtigungen hast.",

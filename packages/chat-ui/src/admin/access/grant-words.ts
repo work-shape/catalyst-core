@@ -144,9 +144,9 @@ export const rightSentenceKeys: Partial<Record<GrantableAction, TranslationKey>>
 };
 
 /**
- * What else a right needs before it does anything, said beside it where the page offers it
- * all the same: an allow of such a right alone changes nothing for the person. A deny of it
- * holds as any deny does, so the note shows for an allow only.
+ * Extra requirements for giving an allow, shown beside the action. Publishing checks the
+ * principal's rights; reserved run-data access already checks the draft and published
+ * principals when granted, although no operation uses it yet. The note shows for an allow only.
  */
 export const rightAllowNoteKeys: Partial<Record<GrantableAction, TranslationKey>> = {
   "workflow.publish": "access.actionPublishWorkflowNote",
