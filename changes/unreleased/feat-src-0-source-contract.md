@@ -1,9 +1,0 @@
----
-section: Added
----
-
-- The contract of synced sources of a Knowledge Base, as types and SQL with no behaviour yet (SRC-0). A Connector type may declare `documentSource` (`DocumentSourceCapability`: `list`, `changes` answering `not_offered` or a feed, `fetch` streamed under a size cap) with the item shape `documentSourceItemSchema` and `DocumentSourceError` for `unauthorized`, `forbidden`, `not_found`, `rate_limited`, `unavailable`, `cursor_expired` and `over_limit`. `verifyDocumentSource` in `@work-shape/catalyst-connections` is the contract test kit a type runs in its own tests; `createFixtureDocumentSource` is the in-process `fixture` source it is proven against.
-- The job kinds `knowledge_base.sync` (one per source at a time) and `knowledge_base.fetch` with payloads of ids only, the handoff of a fetched item into the index job (`knowledgeIndexPayloadOfFetch`), the input and output of `knowledge.<id>.sync`, `.sources`, `.source_items`, `.locate` and the widened `.retry`, and the failure codes `KNOWLEDGE_SOURCE_FAILURE_CODES`.
-- The store of a built-in Knowledge Base gets `catalyst_kb` migration 2 (`sources`): the tables `source_items`, `sync_runs` and `source_cursors`, and `documents.source_item_id`. A store an earlier release left at level 1 reaches level 2 with its rows unchanged at the next start, without a publish: the new job kind `data_store.upgrade_owned`, due at each start and once a day, queues the migration of every store a Knowledge Base owns whose level is behind the release.
-- A Knowledge Base definition reads `sources` (`id`, `connection`, `folders`, `include`, `exclude`). A draft with a source is saved; publishing it is refused with `not_supported_yet` until SRC-1a syncs sources.
-- A Knowledge Base definition with `schedule` is refused on push with the reason: the field is withdrawn, because a synced source is kept current by its daily Workflow and background updates.
