@@ -26,8 +26,6 @@ const PATH_PARAMETER_TYPES = ["string", "integer", "number"];
 /** Scalar query values, also the allowed item types of an array query parameter. */
 const QUERY_SCALAR_TYPES = ["string", "integer", "number", "boolean"];
 const QUERY_PARAMETER_TYPES = [...QUERY_SCALAR_TYPES, "array"];
-/** Bounds repeated query keys; larger arrays fail with input_invalid naming this limit. */
-export const HTTP_API_QUERY_MAX_VALUES = 32;
 
 /**
  * A path as a declaration may write it: from `/`, of the characters a path holds without
@@ -162,17 +160,8 @@ function inputSchemaOf(operation: ConnectionOperationConfig): JsonObject {
   const properties: JsonObject = {};
   const required: string[] = [];
   const add = (name: string, parameter: DeclaredOperationParameter, isRequired: boolean) => {
-    const maxItems = parameter.schema.maxItems;
     properties[name] = {
       ...parameter.schema,
-      ...(parameter.schema.type === "array"
-        ? {
-            maxItems:
-              typeof maxItems === "number"
-                ? Math.min(maxItems, HTTP_API_QUERY_MAX_VALUES)
-                : HTTP_API_QUERY_MAX_VALUES
-          }
-        : {}),
       ...(parameter.description === undefined ? {} : { description: parameter.description })
     };
     if (isRequired) required.push(name);

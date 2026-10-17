@@ -19,12 +19,7 @@ import { z } from "zod";
 import { holdsCredential } from "../connector-context";
 import { egressTargetOfUrl } from "../egress";
 import { hostHeaderOf, oneRequestAgent, sendPinnedRequest } from "../pinned-request";
-import {
-  HTTP_API_QUERY_MAX_VALUES,
-  httpApiDeclaredOperations,
-  isDotSegment,
-  pathPlaceholders
-} from "./declaration";
+import { httpApiDeclaredOperations, isDotSegment, pathPlaceholders } from "./declaration";
 
 // The Connector type `http_api`, first cut (CS-5a): a REST interface reached by GET. Each
 // Connection declares its operations itself (`./declaration`). A call sends the declared path
@@ -45,6 +40,8 @@ export const HTTP_API_RESULT_MAX_BYTES = 2 * 1024 * 1024;
 export const HTTP_API_MAX_PARALLEL_CALLS = 8;
 /** The longest base address and test path. */
 const HTTP_API_URL_MAX_CHARS = 2_048;
+/** Keeps encoded requests within common server URL bounds; reached: `input_invalid`, naming the byte limit. */
+const HTTP_API_REQUEST_URL_MAX_BYTES = 8_000;
 /** How many fixed headers a Connection sends, and how long one value is. */
 const FIXED_HEADERS_MAX = 16;
 const FIXED_HEADER_VALUE_MAX_CHARS = 1_024;
@@ -214,6 +211,12 @@ function addressOf(baseUrl: string, path: string, query?: URLSearchParams): URL 
   const base = url.pathname.replace(/\/+$/u, "");
   url.pathname = `${base}${path}` || "/";
   if (query !== undefined) url.search = query.toString();
+  if (Buffer.byteLength(url.href, "utf8") > HTTP_API_REQUEST_URL_MAX_BYTES) {
+    throw connectionCallError(
+      "input_invalid",
+      `the request URL exceeds HTTP_API_REQUEST_URL_MAX_BYTES (${HTTP_API_REQUEST_URL_MAX_BYTES} bytes)`
+    );
+  }
   return url;
 }
 
@@ -354,12 +357,6 @@ function callAddress(baseUrl: string, operation: ConnectionOperationConfig, inpu
     if (value === undefined || value === null) continue;
     if (queryParams[name]?.schema.type === "array") {
       if (!Array.isArray(value)) throw connectionCallError("input_invalid");
-      if (value.length > HTTP_API_QUERY_MAX_VALUES) {
-        throw connectionCallError(
-          "input_invalid",
-          `the query array exceeds HTTP_API_QUERY_MAX_VALUES (${HTTP_API_QUERY_MAX_VALUES})`
-        );
-      }
       for (const item of value) {
         if (
           typeof item !== "string" &&

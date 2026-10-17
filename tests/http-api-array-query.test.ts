@@ -37,12 +37,13 @@ async function setup(schema?: JsonObject) {
   const server = await startRestTestServer(json([]));
   servers.push(server);
   const declared = schema ? { ...operation, query: { filter: { schema } } } : operation;
+  const baseUrl = `http://127.0.0.1:${server.port}/rest`;
   const context: ConnectorContext = {
     connection: {
       id: "array-query",
       name: "array-query",
       revision: 1,
-      settings: { baseUrl: `http://127.0.0.1:${server.port}/rest` },
+      settings: { baseUrl },
       authScheme: "none",
       operations: [declared]
     },
@@ -60,6 +61,7 @@ async function setup(schema?: JsonObject) {
   };
   return {
     server,
+    baseUrl,
     execute: (input: JsonValue) => connector.execute(declared.name, input, context)
   };
 }
@@ -87,18 +89,42 @@ describe("http_api array query parameters", () => {
     ]);
   });
 
-  it("omits absent, null and empty arrays, and accepts exactly 32 values", async () => {
+  it("omits absent, null and empty arrays, and accepts more than 32 short values", async () => {
     const w = await setup();
     const omitted: JsonValue[] = [{}, { filter: null }, { filter: [] }];
     for (const input of omitted) await w.execute(input);
-    await w.execute({ filter: Array.from({ length: 32 }, (_, i) => String(i)) });
+    await w.execute({ filter: Array.from({ length: 100 }, (_, i) => String(i)) });
     expect(w.server.requests.slice(0, 3).map(({ url }) => url)).toEqual(
       Array.from({ length: 3 }, () => "/rest/accounting/postings")
     );
     expect(
       new URL(w.server.requests[3]?.url ?? "", "http://test").searchParams.getAll("filter")
-    ).toEqual(Array.from({ length: 32 }, (_, i) => String(i)));
+    ).toEqual(Array.from({ length: 100 }, (_, i) => String(i)));
   });
+
+  it.each(["array", "scalar"])(
+    "bounds the final encoded URL at 8000 bytes for %s values before sending",
+    async (kind) => {
+      const w = await setup(
+        kind === "array" ? { type: "array", items: { type: "string" } } : { type: "string" }
+      );
+      const preceding = kind === "array" ? Array.from({ length: 40 }, () => "é&") : [];
+      const url = new URL(`${w.baseUrl}${operation.path}`);
+      for (const value of [...preceding, "é&"]) url.searchParams.append("filter", value);
+      const value = "é&" + "x".repeat(8_000 - Buffer.byteLength(url.href, "utf8"));
+      const input = (last: string) => ({ filter: kind === "array" ? [...preceding, last] : last });
+
+      expect(await w.execute(input(value))).toEqual({ items: [] });
+      expect(w.server.requests).toHaveLength(1);
+      const sentUrl = new URL(w.server.requests[0]?.url ?? "", w.baseUrl);
+      expect(Buffer.byteLength(sentUrl.href, "utf8")).toBe(8_000);
+      await expect(w.execute(input(value + "x"))).rejects.toMatchObject({
+        message: expect.stringContaining("HTTP_API_REQUEST_URL_MAX_BYTES (8000 bytes)"),
+        details: { reason: "input_invalid" }
+      });
+      expect(w.server.requests).toHaveLength(1);
+    }
+  );
 
   it.each(["integer", "number", "boolean"])(
     "serializes %s items as repeated values",
@@ -113,7 +139,7 @@ describe("http_api array query parameters", () => {
     }
   );
 
-  it("refuses objects, nested arrays, null items, non-finite items and over 32 values before sending", async () => {
+  it("refuses objects, nested arrays, null items and non-finite items before sending", async () => {
     const w = await setup();
     const invalid: JsonValue[] = [
       {},
@@ -122,7 +148,6 @@ describe("http_api array query parameters", () => {
       [null],
       [Number.NaN],
       [Number.POSITIVE_INFINITY],
-      Array.from({ length: 33 }, () => "value"),
       "scalar"
     ];
     for (const filter of invalid) {
@@ -141,7 +166,7 @@ describe("http_api array query parameters", () => {
     expect(w.server.requests).toEqual([]);
   });
 
-  it("accepts scalar item declarations and exposes the cap in the operation's input schema", () => {
+  it("accepts scalar item declarations without adding a cap to the input schema", () => {
     const declared = connector.declared;
     if (!declared) throw new Error("http_api declares its operations");
     for (const type of ["string", "integer", "number", "boolean"]) {
@@ -150,16 +175,18 @@ describe("http_api array query parameters", () => {
         query: { filter: { schema: { type: "array", items: { type } } } }
       };
       expect(declared.issues(candidate)).toEqual([]);
-      expect(declared.describe(candidate).inputSchema).toMatchObject({
-        properties: { filter: { type: "array", items: { type }, maxItems: 32 } }
+      expect(declared.describe(candidate).inputSchema.properties).toEqual({
+        filter: { type: "array", items: { type } }
       });
     }
-    expect(
-      declared.describe({
-        ...operation,
-        query: { filter: { schema: { type: "array", items: { type: "string" }, maxItems: 2 } } }
-      }).inputSchema
-    ).toMatchObject({ properties: { filter: { maxItems: 2 } } });
+    for (const maxItems of [2, 64]) {
+      expect(
+        declared.describe({
+          ...operation,
+          query: { filter: { schema: { type: "array", items: { type: "string" }, maxItems } } }
+        }).inputSchema
+      ).toMatchObject({ properties: { filter: { maxItems } } });
+    }
   });
 
   it("refuses non-scalar or missing items at save and keeps arrays out of path parameters", () => {
