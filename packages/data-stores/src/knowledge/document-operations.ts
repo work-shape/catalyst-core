@@ -6,6 +6,7 @@ import {
   KNOWLEDGE_DOCUMENT_FAILURE_CODES,
   KNOWLEDGE_DOCUMENT_FORMATS,
   KNOWLEDGE_DOCUMENT_STATES,
+  KNOWLEDGE_DOCUMENT_WAIT_CODES,
   KNOWLEDGE_EXTRACTED_FORMATS,
   KNOWLEDGE_OPERATION_PREFIX,
   type KnowledgeDocumentStore,
@@ -55,6 +56,8 @@ const documentSchema = z.object({
   bytes: z.number().int(),
   state: z.enum(KNOWLEDGE_DOCUMENT_STATES),
   failureCode: z.enum(KNOWLEDGE_DOCUMENT_FAILURE_CODES).optional(),
+  /** Why a `pending` document waits, such as a usage limit that refuses its embedding. */
+  waitCode: z.enum(KNOWLEDGE_DOCUMENT_WAIT_CODES).optional(),
   addedAt: z.string(),
   updatedAt: z.string()
 });

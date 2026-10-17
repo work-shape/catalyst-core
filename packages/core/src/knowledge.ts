@@ -2,12 +2,14 @@ import type { AgentConfig } from "@work-shape/catalyst-asset-schemas";
 
 export type {
   KnowledgeDocumentFailureCode,
-  KnowledgeDocumentState
+  KnowledgeDocumentState,
+  KnowledgeDocumentWaitCode
 } from "@work-shape/catalyst-asset-schemas";
 import {
   KNOWLEDGE_CHECK_STATUSES,
   type KnowledgeDocumentFailureCode,
-  type KnowledgeDocumentState
+  type KnowledgeDocumentState,
+  type KnowledgeDocumentWaitCode
 } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindActions } from "./asset-kinds";
 import type { ConnectionsStore } from "./connections";
@@ -400,17 +402,19 @@ export const knowledgeExtractJob = defineJobKind({
  * Queues the index job of one content. With `dedupe` a job of the same content that is still
  * queued takes it instead; without, a second job is queued, which finds the work done or does
  * it again to the same result. A job that hands work back to the index job queues without
- * `dedupe`, because the index job that asked may not have ended yet.
+ * `dedupe`, because the index job that asked may not have ended yet; so does an index job that
+ * waits, with `runAfter`.
  */
 export function enqueueKnowledgeIndex(
   jobs: Pick<JobsStore, "enqueue">,
   payload: KnowledgeContentJobPayload,
-  options: { clientInstanceId: ClientInstanceId; dedupe?: boolean }
+  options: { clientInstanceId: ClientInstanceId; dedupe?: boolean; runAfter?: Date }
 ): Promise<unknown> {
   return jobs.enqueue(knowledgeIndexJob, payload, {
     clientInstanceId: options.clientInstanceId,
     subject: payload.knowledgeBaseId,
     concurrencyKey: payload.knowledgeBaseId,
+    ...(options.runAfter ? { runAfter: options.runAfter } : {}),
     ...(options.dedupe
       ? {
           dedupeKey: subjectDedupeKey(
@@ -487,6 +491,38 @@ export interface KnowledgeChunkInput {
   tokenCount: number;
 }
 
+/**
+ * An embedding model as a Knowledge Base embeds with it: the binding of release config, the
+ * model behind it and the length of its vectors.
+ */
+export interface KnowledgeEmbeddingModel {
+  bindingId: string;
+  model: string;
+  dimensions: number;
+}
+
+/**
+ * The states of a generation of embeddings that holds vectors search uses or will use: the one
+ * search answers from, and one built beside it. A `retired` one is dropped.
+ */
+export const KNOWLEDGE_LIVE_GENERATION_STATES = ["building", "active"] as const;
+
+/**
+ * The embedding of a whole Knowledge Base with one model. Its vectors are in a table of their
+ * own, `catalyst_kb.embeddings_<generation>`. Spec: The store of a built-in Knowledge Base.
+ */
+export interface KnowledgeEmbeddingGeneration extends KnowledgeEmbeddingModel {
+  generation: number;
+  state: (typeof KNOWLEDGE_LIVE_GENERATION_STATES)[number];
+}
+
+/** A passage as the index job embeds it: the text of the chunk and what its prefix is made of. */
+export interface KnowledgePassageToEmbed {
+  chunkId: string;
+  heading?: string;
+  text: string;
+}
+
 /** A document of a Knowledge Base as its page lists it. */
 export interface KnowledgeDocumentEntry {
   id: string;
@@ -497,6 +533,8 @@ export interface KnowledgeDocumentEntry {
   format: KnowledgeDocumentFormat;
   state: KnowledgeDocumentState;
   failureCode?: KnowledgeDocumentFailureCode;
+  /** Why a `pending` document waits, where it waits for more than its turn. */
+  waitCode?: KnowledgeDocumentWaitCode;
   addedAt: ISODateString;
   /** When its content last changed state. */
   updatedAt: ISODateString;
@@ -542,8 +580,9 @@ export interface KnowledgeDocumentStore {
     signal?: AbortSignal
   ): Promise<KnowledgeContentToIndex | undefined>;
   /**
-   * Replaces the content's chunks with `chunks` and marks it `extracted` at the revisions, in
-   * one transaction. Nothing where the content is gone.
+   * Replaces the content's chunks with `chunks` at the revisions, in one transaction, and marks
+   * it `extracted` where `complete`; otherwise it stays `pending` until `completeContent`, as a
+   * content whose chunks are still to be embedded does. Nothing where the content is gone.
    */
   writeChunks(
     input: {
@@ -552,9 +591,55 @@ export interface KnowledgeDocumentStore {
       extractionRevision: number;
       pageCount: number;
       chunks: readonly KnowledgeChunkInput[];
+      complete: boolean;
     },
     signal?: AbortSignal
   ): Promise<void>;
+  /**
+   * Marks a `pending` content whose chunks are written at `chunkingRevision` `extracted`: it is
+   * indexed. Nothing where it is gone, failed or chunked at another revision meanwhile.
+   */
+  completeContent(
+    input: { contentSha256: string; chunkingRevision: number },
+    signal?: AbortSignal
+  ): Promise<void>;
+  /** Notes on a `pending` content why it waits, until it is completed, failed or retried. */
+  waitContent(
+    input: { contentSha256: string; code: KnowledgeDocumentWaitCode },
+    signal?: AbortSignal
+  ): Promise<void>;
+  /** The generations of embeddings being served or built, by generation. */
+  embeddingGenerations(signal?: AbortSignal): Promise<KnowledgeEmbeddingGeneration[]>;
+  /**
+   * Starts generation 1 with `model` where the Knowledge Base has no generation yet: its row,
+   * `active` at once because there is no older one to answer meanwhile, and its table of
+   * vectors typed by the model's dimensions. Answers the generations being served or built
+   * after, which are the existing ones where another call started one first.
+   */
+  startFirstGeneration(
+    model: KnowledgeEmbeddingModel,
+    signal?: AbortSignal
+  ): Promise<KnowledgeEmbeddingGeneration[]>;
+  /**
+   * Up to `limit` passages of the content at the chunking revision that have no vector in the
+   * generation, in order.
+   */
+  passagesToEmbed(
+    input: { contentSha256: string; chunkingRevision: number; generation: number; limit: number },
+    signal?: AbortSignal
+  ): Promise<KnowledgePassageToEmbed[]>;
+  /**
+   * Writes one vector per passage into the generation. A passage that has one keeps it, and one
+   * removed meanwhile gets none. Answers how many were written.
+   */
+  writeEmbeddings(
+    input: {
+      contentSha256: string;
+      generation: KnowledgeEmbeddingGeneration;
+      vectors: readonly { chunkId: string; vector: readonly number[] }[];
+    },
+    signal?: AbortSignal
+  ): Promise<number>;
   /** Removes the content's chunks and marks it `failed` with `code`. */
   failContent(
     input: { contentSha256: string; code: KnowledgeDocumentFailureCode },

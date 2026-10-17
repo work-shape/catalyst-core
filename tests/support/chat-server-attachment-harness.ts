@@ -40,7 +40,9 @@ export function createMultipartFilePayload(input: {
   };
 }
 
-export function createManagedObjectTestAttachmentCapability(): {
+export function createManagedObjectTestAttachmentCapability(
+  options: { maxFileBytes?: number } = {}
+): {
   capability: ClientInstanceCapability;
   objects: MemoryObjectStorage;
   deletedObjectKeys: string[];
@@ -73,7 +75,7 @@ export function createManagedObjectTestAttachmentCapability(): {
           attachments: [
             {
               name: "managed-object-test-attachments",
-              maxFileBytes: 1024 * 1024,
+              maxFileBytes: options.maxFileBytes ?? 1024 * 1024,
               acceptedFileTypes: ["text/plain"],
               acceptsFile() {
                 return true;

@@ -2,7 +2,8 @@ import {
   DATA_STORE_SCALAR_TYPES,
   KNOWLEDGE_BASE_STATUSES,
   KNOWLEDGE_DOCUMENT_FAILURE_CODES,
-  KNOWLEDGE_DOCUMENT_STATES
+  KNOWLEDGE_DOCUMENT_STATES,
+  KNOWLEDGE_DOCUMENT_WAIT_CODES
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { defineRegisteredOperation, json } from "./define-operation";
@@ -100,6 +101,11 @@ const knowledgeListDocumentsResponseSchema = z.object({
       /** `pending` until it is searchable, then `indexed`; `failed` with `failureCode`. */
       state: z.enum(KNOWLEDGE_DOCUMENT_STATES),
       failureCode: z.enum(KNOWLEDGE_DOCUMENT_FAILURE_CODES).optional(),
+      /**
+       * Why a `pending` document waits, where it waits for more than its turn: a usage limit
+       * that refuses its embedding. It goes on by itself once the limit resets or is raised.
+       */
+      waitCode: z.enum(KNOWLEDGE_DOCUMENT_WAIT_CODES).optional(),
       addedAt: z.string(),
       /** When its state last changed. */
       updatedAt: z.string()

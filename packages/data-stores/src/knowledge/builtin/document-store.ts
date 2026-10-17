@@ -3,6 +3,8 @@ import {
   AppError,
   KNOWLEDGE_CONTENT_STATES,
   KNOWLEDGE_DOCUMENT_FORMATS,
+  KNOWLEDGE_DOCUMENT_WAIT_CODES,
+  KNOWLEDGE_LIVE_GENERATION_STATES,
   knowledgeDocumentFailureCodeSchema,
   knowledgeDocumentStateOf,
   type BuiltinKnowledgeTarget,
@@ -10,10 +12,12 @@ import {
   type KnowledgeChunkInput,
   type KnowledgeDocumentEntry,
   type KnowledgeDocumentStore,
+  type KnowledgeEmbeddingGeneration,
   type KnowledgeRetriedDocument
 } from "@work-shape/catalyst-core";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import { databaseFailureError } from "../../failures";
+import { ensureVectorExtension } from "../../provisioning";
 import type { DataStoreRuntime } from "../../runtime";
 import { createDocumentRemoval } from "./remove-documents";
 
@@ -25,7 +29,15 @@ import { createDocumentRemoval } from "./remove-documents";
 //
 // Sensitive data. Chunks hold the document's text; file names and titles are on `documents`.
 // None of it leaves this module but through the list, which the page shows to holders of
-// `knowledge_base.use`, and the index job, which writes it here.
+// `knowledge_base.use`, and the index job, which writes it here and sends the passages of a
+// Knowledge Base that searches by meaning to its embedding model.
+//
+// Embeddings (KB-5d). Each generation has its table `catalyst_kb.embeddings_<generation>`, one
+// `halfvec(<dimensions>)` per chunk, dropped with its chunk. The vector type comes from
+// pgvector, which only a store whose Knowledge Base searches by meaning has: provisioning makes
+// it there, and starting the first generation makes sure of it once more. A `pending` content
+// keeps why it waits (`KNOWLEDGE_DOCUMENT_WAIT_CODES`) in `failure_code`, which holds a
+// failure code only while it is `failed`: the store's tables need no new column for it.
 
 /** How long one write of chunks may take, a large text included. */
 const KNOWLEDGE_INDEX_WRITE_TIMEOUT_MS = 300_000;
@@ -35,6 +47,60 @@ const KNOWLEDGE_DOCUMENTS_TIMEOUT_MS = 30_000;
 
 /** How many chunks one insert statement writes. */
 const CHUNK_INSERT_BATCH = 500;
+
+/** How long a write of one batch of vectors may take. */
+const KNOWLEDGE_EMBEDDINGS_WRITE_TIMEOUT_MS = 120_000;
+
+const generationRow = z.object({
+  generation: z.number().int().min(1),
+  binding_id: z.string(),
+  model: z.string(),
+  dimensions: z.number().int().min(1),
+  state: z.enum(KNOWLEDGE_LIVE_GENERATION_STATES)
+});
+
+const passageRow = z.object({ id: z.string(), heading: z.string().nullable(), text: z.string() });
+
+const countRow = z.object({ count: z.number().int() });
+
+/** The table of a generation's vectors. The generation is a whole number the store gave out. */
+function embeddingsTable(generation: number): string {
+  if (!Number.isSafeInteger(generation) || generation < 1) {
+    throw new AppError("INTERNAL", "A generation of embeddings is a whole number from 1");
+  }
+  return `catalyst_kb.embeddings_${generation}`;
+}
+
+/** A vector in pgvector's text form. Only finite numbers reach a store. */
+function vectorText(vector: readonly number[]): string {
+  if (!vector.every((value) => Number.isFinite(value))) {
+    throw new AppError("INTERNAL", "An embedding holds a value that is not a finite number");
+  }
+  return `[${vector.join(",")}]`;
+}
+
+function generationOf(row: z.infer<typeof generationRow>): KnowledgeEmbeddingGeneration {
+  return {
+    generation: row.generation,
+    bindingId: row.binding_id,
+    model: row.model,
+    dimensions: row.dimensions,
+    state: row.state
+  };
+}
+
+/** The generations being served or built, as the transaction sees them. */
+async function liveGenerations(
+  sql: PostgresChangeStatements
+): Promise<KnowledgeEmbeddingGeneration[]> {
+  const rows = z.array(generationRow).parse(
+    await sql.run(
+      `select generation, binding_id, model, dimensions, state from catalyst_kb.index_generations
+       where state in ('building', 'active') order by generation`
+    )
+  );
+  return rows.map(generationOf);
+}
 
 const contentRow = z.object({
   format: z.enum(KNOWLEDGE_DOCUMENT_FORMATS),
@@ -169,11 +235,17 @@ export function createBuiltinDocumentStore(
           }
           await sql.run(
             `update catalyst_kb.contents
-           set state = 'extracted', failure_code = null, chunking_revision = $2::pg_catalog.int4,
-             extraction_revision = $3::pg_catalog.int4, page_count = $4::pg_catalog.int4,
-             updated_at = now()
+           set state = $5::pg_catalog.text, failure_code = null,
+             chunking_revision = $2::pg_catalog.int4, extraction_revision = $3::pg_catalog.int4,
+             page_count = $4::pg_catalog.int4, updated_at = now()
            where sha256 = $1::pg_catalog.text`,
-            [input.contentSha256, input.chunkingRevision, input.extractionRevision, input.pageCount]
+            [
+              input.contentSha256,
+              input.chunkingRevision,
+              input.extractionRevision,
+              input.pageCount,
+              input.complete ? "extracted" : "pending"
+            ]
           );
         }
       );
@@ -190,12 +262,187 @@ export function createBuiltinDocumentStore(
             "delete from catalyst_kb.chunks where content_sha256 = $1::pg_catalog.text",
             [input.contentSha256]
           );
+          // Its chunks are gone, so it is chunked afresh when it is retried.
           await sql.run(
             `update catalyst_kb.contents
-           set state = 'failed', failure_code = $2::pg_catalog.text, updated_at = now()
+           set state = 'failed', failure_code = $2::pg_catalog.text, chunking_revision = null,
+             updated_at = now()
            where sha256 = $1::pg_catalog.text`,
             [input.contentSha256, input.code]
           );
+        }
+      );
+    },
+
+    completeContent(input, signal) {
+      return inStore(
+        "Marking the content indexed",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          await sql.run(
+            `update catalyst_kb.contents
+           set state = 'extracted', failure_code = null, updated_at = now()
+           where sha256 = $1::pg_catalog.text and state = 'pending'
+             and chunking_revision = $2::pg_catalog.int4`,
+            [input.contentSha256, input.chunkingRevision]
+          );
+        }
+      );
+    },
+
+    waitContent(input, signal) {
+      return inStore(
+        "Noting why the content waits",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          await sql.run(
+            `update catalyst_kb.contents
+           set failure_code = $2::pg_catalog.text, updated_at = now()
+           where sha256 = $1::pg_catalog.text and state = 'pending'
+             and failure_code is distinct from $2::pg_catalog.text`,
+            [input.contentSha256, input.code]
+          );
+        }
+      );
+    },
+
+    embeddingGenerations(signal) {
+      return inStore(
+        "Reading the generations of embeddings",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        liveGenerations
+      );
+    },
+
+    async startFirstGeneration(model, signal) {
+      const record = await storeOf(runtime, target);
+      // The type of the vectors. Outside the transaction below, which takes no time with it.
+      try {
+        await ensureVectorExtension(
+          runtime.server,
+          record,
+          signal ?? AbortSignal.timeout(KNOWLEDGE_DOCUMENTS_TIMEOUT_MS)
+        );
+      } catch (error) {
+        throw databaseFailureError(error, "Making pgvector in the store");
+      }
+      return inStore(
+        "Starting the first generation of embeddings",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          // One caller starts it; one waiting here finds it started.
+          await sql.run("lock table catalyst_kb.index_generations in exclusive mode");
+          const [any] = await sql.run(
+            "select 1 as held from catalyst_kb.index_generations limit 1"
+          );
+          if (any) return liveGenerations(sql);
+          if (!Number.isSafeInteger(model.dimensions) || model.dimensions < 1) {
+            throw new AppError(
+              "INTERNAL",
+              "The dimensions of an embedding model are a whole number"
+            );
+          }
+          await sql.run(
+            `insert into catalyst_kb.index_generations
+             (generation, binding_id, model, dimensions, state, switched_at)
+           values (1, $1::pg_catalog.text, $2::pg_catalog.text, $3::pg_catalog.int4, 'active', now())`,
+            [model.bindingId, model.model, model.dimensions]
+          );
+          await sql.script(
+            `create table ${embeddingsTable(1)} (
+             chunk_id text primary key references catalyst_kb.chunks (id) on delete cascade,
+             embedding public.halfvec(${model.dimensions}) not null,
+             created_at timestamp with time zone not null default now()
+           );`
+          );
+          return liveGenerations(sql);
+        }
+      );
+    },
+
+    passagesToEmbed(input, signal) {
+      return inStore(
+        "Reading the passages to embed",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          const rows = z.array(passageRow).parse(
+            await sql.run(
+              `select c.id, c.heading, c.text from catalyst_kb.chunks c
+             where c.content_sha256 = $1::pg_catalog.text
+               and c.chunking_revision = $2::pg_catalog.int4
+               and not exists (
+                 select 1 from ${embeddingsTable(input.generation)} e where e.chunk_id = c.id
+               )
+             order by c.position
+             limit $3::pg_catalog.int4`,
+              [input.contentSha256, input.chunkingRevision, input.limit]
+            )
+          );
+          return rows.map((row) => ({
+            chunkId: row.id,
+            ...(row.heading === null ? {} : { heading: row.heading }),
+            text: row.text
+          }));
+        }
+      );
+    },
+
+    writeEmbeddings(input, signal) {
+      if (input.vectors.length === 0) return Promise.resolve(0);
+      const { generation, dimensions } = input.generation;
+      for (const { vector } of input.vectors) {
+        if (vector.length !== dimensions) {
+          throw new AppError(
+            "INTERNAL",
+            `An embedding of generation ${generation} has ${vector.length} values, not ${dimensions}`
+          );
+        }
+      }
+      const table = embeddingsTable(generation);
+      return inStore(
+        "Writing the embeddings",
+        KNOWLEDGE_EMBEDDINGS_WRITE_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          // Held against a rewrite of the content's chunks, which locks the row for update, so
+          // a passage found here is not removed before its vector is in.
+          const held = await sql.run(
+            "select 1 as held from catalyst_kb.contents where sha256 = $1::pg_catalog.text for share",
+            [input.contentSha256]
+          );
+          if (held.length === 0) return 0;
+          // One writer per generation at a time keeps its count exact.
+          await sql.run(
+            `select 1 as held from catalyst_kb.index_generations
+           where generation = $1::pg_catalog.int4 for update`,
+            [generation]
+          );
+          const written = await sql.run(
+            `insert into ${table} (chunk_id, embedding)
+           select v.chunk_id, v.embedding::public.halfvec(${dimensions})
+           from unnest($1::pg_catalog.text[], $2::pg_catalog.text[]) as v (chunk_id, embedding)
+           where exists (select 1 from catalyst_kb.chunks c where c.id = v.chunk_id)
+           on conflict (chunk_id) do nothing
+           returning chunk_id`,
+            [
+              { type: "text[]", value: input.vectors.map((each) => each.chunkId) },
+              { type: "text[]", value: input.vectors.map((each) => vectorText(each.vector)) }
+            ]
+          );
+          const [count] = z
+            .array(countRow)
+            .parse(await sql.run(`select count(*)::pg_catalog.int4 as count from ${table}`));
+          await sql.run(
+            `update catalyst_kb.index_generations set embedded_count = $2::pg_catalog.int4
+           where generation = $1::pg_catalog.int4`,
+            [generation, count?.count ?? 0]
+          );
+          return written.length;
         }
       );
     },
@@ -267,7 +514,7 @@ export function createBuiltinDocumentStore(
         async (sql) => {
           await sql.run(
             `update catalyst_kb.contents c
-           set state = 'pending', failure_code = null, updated_at = now()
+           set state = 'pending', failure_code = null, chunking_revision = null, updated_at = now()
            where c.state = 'failed' and c.sha256 in (
              select content_sha256 from catalyst_kb.documents
              where id = any($1::pg_catalog.text[]) and withdrawn_at is null
@@ -303,8 +550,11 @@ export function createBuiltinDocumentStore(
   };
 }
 
+const waitCodeSchema = z.enum(KNOWLEDGE_DOCUMENT_WAIT_CODES);
+
 function entryOf(row: z.infer<typeof documentRow>): KnowledgeDocumentEntry {
   const code = knowledgeDocumentFailureCodeSchema.safeParse(row.failure_code);
+  const waitCode = waitCodeSchema.safeParse(row.failure_code);
   return {
     id: row.id,
     fileId: row.managed_file_id,
@@ -313,6 +563,7 @@ function entryOf(row: z.infer<typeof documentRow>): KnowledgeDocumentEntry {
     format: row.format,
     state: knowledgeDocumentStateOf(row.state),
     ...(row.state === "failed" && code.success ? { failureCode: code.data } : {}),
+    ...(row.state === "pending" && waitCode.success ? { waitCode: waitCode.data } : {}),
     addedAt: row.added_at,
     updatedAt: row.updated_at
   };

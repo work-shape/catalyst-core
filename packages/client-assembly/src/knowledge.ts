@@ -6,7 +6,10 @@ import {
   KNOWLEDGE_DOCUMENT_FORMATS,
   KNOWLEDGE_TEXT_FORMATS
 } from "@work-shape/catalyst-core";
-import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import {
+  getModelProviderConfigs,
+  type ClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 import {
   createKnowledgeBases,
   knowledgeModule,
@@ -18,12 +21,23 @@ import type { ModuleSeam } from "./module-assembly";
 
 export { knowledgeModule };
 
-/** The embedding model release config approves for Knowledge Bases, as both seams are given it. */
+/**
+ * The embedding models release config approves for Knowledge Bases, every binding of kind
+ * `embedding` with the model behind it, and the default, as both seams are given them.
+ */
 export function knowledgeEmbedding(
-  config: Pick<ClientInstanceConfig, "knowledge">
+  config: Pick<ClientInstanceConfig, "knowledge" | "modelBindings" | "infrastructure">
 ): KnowledgeEmbedding {
   const defaultBinding = config.knowledge.defaultEmbeddingBinding;
-  return defaultBinding === undefined ? {} : { defaultBinding };
+  const providers = getModelProviderConfigs(config);
+  const models = config.modelBindings.flatMap((binding) => {
+    const model =
+      binding.model ?? providers.find((provider) => provider.id === binding.providerId)?.model;
+    return binding.kind === "embedding" && binding.dimensions !== undefined && model
+      ? [{ bindingId: binding.id, model, dimensions: binding.dimensions }]
+      : [];
+  });
+  return { ...(defaultBinding === undefined ? {} : { defaultBinding }), models };
 }
 
 /** The kind `knowledge_base` as the asset workflow of the API registers it. */
@@ -127,7 +141,9 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
     assetKinds: [workflowAssetKind(knowledgeBases)],
     operationSources: (runtime) => [knowledgeBases.operationSource(runtime.files)],
     start: (runtime) => {
-      const fileJobs = knowledgeBases.fileJobs(runtime.files, runtime.auditRecorder);
+      const fileJobs = knowledgeBases.fileJobs(runtime.files, runtime.auditRecorder, (call) =>
+        runtime.modelGateway.embed(call)
+      );
       return {
         routes: [knowledgeRoutes],
         dataToolSources: [knowledgeBases.toolSource],

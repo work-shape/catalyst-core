@@ -29,7 +29,7 @@ import {
 } from "./definition";
 import { createKnowledgeRemovalJobs, enqueueKnowledgeRemoval } from "./removal";
 import { createKnowledgeFileCleanupJobs } from "./file-cleanup";
-import { createKnowledgeIndexJobHandler } from "./index-job";
+import { createKnowledgeIndexJobHandler, type KnowledgeEmbed } from "./index-job";
 import { createKnowledgeOperationSource, createKnowledgeToolSource } from "./operations";
 import { keepKnowledgeCheck, type KnowledgeRuntime } from "./runtime";
 
@@ -74,11 +74,13 @@ export interface KnowledgeBases {
   /**
    * The jobs of the documents of Knowledge Bases, where the process keeps files: the one that
    * removes the copies a call of `add_files` left without documents, and the index job
-   * (`knowledge_base.index`). The extract job is the document worker's.
+   * (`knowledge_base.index`), which embeds through `embed`. The extract job is the document
+   * worker's.
    */
   fileJobs(
     files: KnowledgeFiles | undefined,
-    auditRecorder: AuditRecorder
+    auditRecorder: AuditRecorder,
+    embed: KnowledgeEmbed
   ): {
     handlers: RegisteredJobHandler[];
     retries: JobRetry[];
@@ -170,14 +172,23 @@ export function createKnowledgeBases(input: {
     },
     operationSource: (files) =>
       createKnowledgeOperationSource(files ? { ...runtime, files } : runtime),
-    fileJobs: (files, auditRecorder) => {
+    fileJobs: (files, auditRecorder, embed) => {
       const cleanup = createKnowledgeFileCleanupJobs(runtime, files);
       const removal = createKnowledgeRemovalJobs(runtime, files, auditRecorder);
       return {
         handlers: [
           ...cleanup.handlers,
           ...removal.handlers,
-          ...(files ? [createKnowledgeIndexJobHandler(runtime, { files, auditRecorder })] : [])
+          ...(files
+            ? [
+                createKnowledgeIndexJobHandler(runtime, {
+                  files,
+                  auditRecorder,
+                  embedding: input.embedding,
+                  embed
+                })
+              ]
+            : [])
         ],
         retries: [...cleanup.retries, ...removal.retries]
       };

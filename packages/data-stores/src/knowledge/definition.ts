@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   KNOWLEDGE_SEARCH_METHODS,
   type KnowledgeBaseTarget,
+  type KnowledgeEmbeddingModel,
   type KnowledgeSearchMethod
 } from "@work-shape/catalyst-core";
 import { DATA_STORE_NAME_PATTERN } from "../definition";
@@ -172,6 +173,21 @@ export function knowledgeTargetOf(
 export interface KnowledgeEmbedding {
   /** The embedding binding a Knowledge Base uses. Without one there is no search by meaning. */
   defaultBinding?: string;
+  /**
+   * Every binding of kind `embedding`, the approved list, with the model behind it and the
+   * length of its vectors. Left out where the process embeds nothing.
+   */
+  models?: readonly KnowledgeEmbeddingModel[];
+}
+
+/** The approved embedding model of a binding, or nothing where release config has none. */
+export function approvedEmbeddingModel(
+  embedding: KnowledgeEmbedding,
+  bindingId: string | undefined
+): KnowledgeEmbeddingModel | undefined {
+  return bindingId === undefined
+    ? undefined
+    : embedding.models?.find((model) => model.bindingId === bindingId);
 }
 
 /**

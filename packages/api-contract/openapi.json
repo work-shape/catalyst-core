@@ -15275,6 +15275,12 @@
                               "knowledge_index_failed"
                             ]
                           },
+                          "waitCode": {
+                            "type": "string",
+                            "enum": [
+                              "knowledge_usage_limit_reached"
+                            ]
+                          },
                           "addedAt": {
                             "type": "string"
                           },

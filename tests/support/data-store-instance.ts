@@ -31,6 +31,10 @@ import {
 // operations, the HTTP routes and the call path.
 
 const KEY_VARIABLE = "DATA_STORE_TEST_KEY";
+const EMBEDDING_KEY_VARIABLE = "EMBEDDING_TEST_KEY";
+
+/** The model of the embedding binding on the OpenAI-compatible provider of a test. */
+export const TEST_EMBEDDING_MODEL = "text-embedding-test";
 export const clientInstanceId = asClientInstanceId("demo-local");
 
 const files = [
@@ -74,6 +78,14 @@ type StoreFiles = readonly { path: string; text: string }[];
 
 interface KnowledgeOptions {
   embedding?: true;
+  /**
+   * With `embedding`: the binding is on an OpenAI-compatible provider in region `eu` at this
+   * base URL instead of the deterministic adapter, at 8 dimensions with the model
+   * `TEST_EMBEDDING_MODEL`. The test answers its `/embeddings` by stubbing `fetch`.
+   */
+  embeddingBaseUrl?: string;
+  /** `usage.safeguards` of release config. */
+  usageSafeguards?: { modelCallsPerDay?: number };
   attachments?: ClientInstanceCapability;
   /** `knowledge.maxDocuments` of release config. */
   maxDocuments?: number;
@@ -168,7 +180,26 @@ export function useDataStoreInstance(): {
   ): Promise<DataStoreInstance> {
     const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
     roots.push(root);
-    const base = createTestConfig(developmentAuth === undefined ? {} : { developmentAuth });
+    const options = typeof knowledge === "object" ? knowledge : {};
+    const base = createTestConfig({
+      ...(developmentAuth === undefined ? {} : { developmentAuth }),
+      ...(options.embeddingBaseUrl === undefined
+        ? {}
+        : {
+            modelProviders: [
+              { id: "local", type: "deterministic", model: "local" },
+              {
+                id: "azure-eu",
+                type: "openai-compatible",
+                model: TEST_EMBEDDING_MODEL,
+                baseUrl: options.embeddingBaseUrl,
+                credentialSecret: EMBEDDING_KEY_VARIABLE,
+                region: "eu"
+              }
+            ]
+          }),
+      ...(options.usageSafeguards ? { usageSafeguards: options.usageSafeguards } : {})
+    });
     const settings = {
       ...base,
       modules: {
@@ -201,7 +232,12 @@ export function useDataStoreInstance(): {
         ? {
             // The deterministic adapter, which keeps every text inside the instance.
             modelBindings: [
-              { id: "embedding", providerId: "local", kind: "embedding", dimensions: 8 }
+              {
+                id: "embedding",
+                providerId: knowledge.embeddingBaseUrl === undefined ? "local" : "azure-eu",
+                kind: "embedding",
+                dimensions: 8
+              }
             ]
           }
         : {}),
@@ -224,7 +260,10 @@ export function useDataStoreInstance(): {
         }
       }
     };
-    const env = { [KEY_VARIABLE]: randomBytes(32).toString("base64") };
+    const env = {
+      [KEY_VARIABLE]: randomBytes(32).toString("base64"),
+      [EMBEDDING_KEY_VARIABLE]: "embedding-test-key"
+    };
     const api = await createTestInstance({
       config: parseClientInstanceConfig({ ...settings, ...(guardrails ? { guardrails } : {}) }),
       env,

@@ -47,6 +47,12 @@ export { sizeLimitBytes } from "./definition";
 export { createKnowledgeBases, knowledgeOperationName, type KnowledgeBases } from "./knowledge";
 export type { KnowledgeEmbedding } from "./knowledge/definition";
 export {
+  KNOWLEDGE_EMBEDDING_BATCH,
+  KNOWLEDGE_USAGE_LIMIT_WAIT_MS,
+  type KnowledgeEmbed,
+  type KnowledgeEmbedCall
+} from "./knowledge/index-job";
+export {
   chunkKnowledgeText,
   estimateKnowledgeTokens,
   KNOWLEDGE_CHUNK_MAX_TOKENS,

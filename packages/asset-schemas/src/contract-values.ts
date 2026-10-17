@@ -714,6 +714,17 @@ export const KNOWLEDGE_DOCUMENT_FAILURE_CODES = [
 ] as const;
 export type KnowledgeDocumentFailureCode = (typeof KNOWLEDGE_DOCUMENT_FAILURE_CODES)[number];
 
+/**
+ * Why a `pending` document waits, where it waits for something other than its turn. It goes on
+ * by itself once the cause is gone.
+ */
+export const KNOWLEDGE_DOCUMENT_WAIT_CODES = [
+  // A usage limit of the instance or the workspace refuses the embedding calls. Indexing goes
+  // on when the limit resets or is raised.
+  "knowledge_usage_limit_reached"
+] as const;
+export type KnowledgeDocumentWaitCode = (typeof KNOWLEDGE_DOCUMENT_WAIT_CODES)[number];
+
 export const DATABASE_RELATION_TYPES = [
   "table",
   "view",
