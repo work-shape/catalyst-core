@@ -237,8 +237,9 @@ jobs:
   # Locally it is `pnpm check:images`.
   #
   # The runner image it builds is kept, and the tests that need a Docker engine and that image
-  # run against it: a command and a Page build in the container are not root, and the worker
-  # reads and removes what they wrote. They run twice. As the runner's own user, a worker that
+  # run against it: a command and a Page build in the container are not root, the worker
+  # reads and removes what they wrote, and nothing a code step's script started outlives the
+  # step, not even a process in a session of its own. They run twice. As the runner's own user, a worker that
   # is not root runs commands as itself. Under sudo the worker is root, as in a deployment: it
   # gives the workspace to the runner's fixed user and commands run as that user.
   images:
@@ -282,7 +283,8 @@ jobs:
         run: >-
           pnpm exec vitest run
           tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts
-          -t "in the runner image|gives the workspace"
+          tests/workflow-code-step.test.ts
+          -t "in the runner image|gives the workspace|through the job ends"
       - name: Commands in the runner image, worker root
         timeout-minutes: 5 # check-limit
         run: >-
@@ -292,7 +294,8 @@ jobs:
           "CATALYST_PAGE_BUILD_RUNNER_IMAGE=$RUNNER_IMAGE_TAG"
           pnpm exec vitest run
           tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts
-          -t "in the runner image|gives the workspace"
+          tests/workflow-code-step.test.ts
+          -t "in the runner image|gives the workspace|through the job ends"
   browser-shard:
     name: browser ${{ matrix.shard }}/14
     needs: [paths, build]

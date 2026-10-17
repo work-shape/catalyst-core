@@ -1,6 +1,9 @@
+import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readdir, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { JsonValue } from "@work-shape/catalyst-core";
@@ -462,6 +465,132 @@ print(json.dumps({"sum": sum(data["numbers"])}))
   }, 60_000);
 });
 
+// What a script starts and leaves running. Every process it starts carries a mark of this
+// file on its command line: a test looks for it on the host after the step, and the file
+// kills every process with the mark after each test, whatever the test found, so a test that
+// fails leaves nothing running. A process that left its session is no child of anything the
+// test knows, and only the mark finds it.
+const MARK = `catalyst-writer-${randomUUID()}`;
+let marks = 0;
+/** A mark of its own for one test, which the file's mark finds too. */
+const nextMark = () => `${MARK}-${String((marks += 1))}`;
+afterEach(async () => {
+  await promisify(execFile)("pkill", ["-KILL", "-f", MARK]).catch(() => undefined);
+});
+
+/** How a script starts a process that outlives it, unless the sandbox ends it. */
+const WAYS = [
+  "a child",
+  "a child in a session of its own",
+  "a grandchild of a double fork"
+] as const;
+type Way = (typeof WAYS)[number];
+
+/** Python that appends to `output.json` without end, as one line of a string literal. */
+const WRITE =
+  "import time\\nwith open('output.json', 'a') as out:\\n    while True:\\n        out.write('1,' * 4096)\\n        out.flush()\\n        time.sleep(0.001)";
+
+/**
+ * A script that starts a process that keeps appending to `output.json`, waits until it
+ * wrote, and ends `seconds` later. The writer is started by name: the sandbox of these tests
+ * hands a script no PATH, and without one Python on Linux does not know its own path
+ * (`sys.executable` is empty). A writer that `holdsStreams` keeps the script's output and
+ * error streams open; any other has none of them.
+ */
+function startsWriter(
+  way: Way,
+  mark: string,
+  options: { seconds?: number; holdsStreams?: boolean } = {}
+): string {
+  const start = {
+    "a child": ["subprocess.Popen(argv, **quiet)"],
+    "a child in a session of its own": ["subprocess.Popen(argv, start_new_session=True, **quiet)"],
+    "a grandchild of a double fork": [
+      "first = os.fork()",
+      "if first == 0:",
+      "    os.setsid()",
+      "    if os.fork() == 0:",
+      ...(options.holdsStreams
+        ? []
+        : [
+            "        null = os.open(os.devnull, os.O_RDWR)",
+            "        for fd in (0, 1, 2): os.dup2(null, fd)"
+          ]),
+      "        os.execvp('python3', argv)",
+      "    os._exit(0)",
+      "os.waitpid(first, 0)"
+    ]
+  }[way];
+  return [
+    "import os, subprocess, sys, time",
+    `argv = ["python3", "-c", "${WRITE}", "${mark}"]`,
+    options.holdsStreams
+      ? "quiet = {}"
+      : "quiet = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)",
+    ...start,
+    // The writer wrote before the script goes on: what a test finds afterwards is no accident.
+    // The error stream reaches the log at once, also from a script that is stopped.
+    "while not os.path.isfile('output.json') or os.path.getsize('output.json') < 65536:",
+    "    time.sleep(0.01)",
+    "print('the writer writes', file=sys.stderr, flush=True)",
+    `time.sleep(${String(options.seconds ?? 1.5)})`
+  ].join("\n");
+}
+
+/**
+ * The processes on the host with the mark. With an image, the host is the one the engine
+ * runs containers on, seen from a container in its process namespace. The first letter is a
+ * class of its own, so the pattern does not find the command that carries it.
+ */
+async function marked(mark: string, image?: string): Promise<string[]> {
+  const pattern = `[${mark.slice(0, 1)}]${mark.slice(1)}`;
+  const [command, args] = image
+    ? ["docker", ["run", "--rm", "--pid=host", "--entrypoint", "pgrep", image, "-f", pattern]]
+    : ["pgrep", ["-f", pattern]];
+  try {
+    const { stdout } = await promisify(execFile)(command, args);
+    return stdout.split("\n").filter((line) => line.trim() !== "");
+  } catch (error) {
+    // pgrep ends with 1 where it found nothing.
+    if (error instanceof Error && "code" in error && error.code === 1) return [];
+    throw error;
+  }
+}
+
+/** What has the mark once a kill had a moment to arrive: nothing, where the sandbox ended it. */
+async function survivorsOf(mark: string, image?: string): Promise<string[]> {
+  let left = await marked(mark, image);
+  for (let pass = 0; pass < 20 && left.length > 0; pass++) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    left = await marked(mark, image);
+  }
+  return left;
+}
+
+/** Cancels the run once the writer of its script runs. Answers what had the mark by then. */
+async function cancelOnceWriting(
+  prepared: Awaited<ReturnType<typeof ready>>,
+  mark: string,
+  image?: string
+): Promise<string[]> {
+  const { t, worker, begin, step } = prepared;
+  const started = await begin();
+  // The trigger, and the code step, which the engine stages.
+  await worker.runDue();
+  await worker.runDue();
+  expect(await step(started.id)).toMatchObject({ status: "waiting" });
+  const job = worker.runDue();
+  let running: string[] = [];
+  for (let pass = 0; pass < 100 && running.length === 0; pass++) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    running = await marked(mark, image);
+  }
+  await t.expectOk(t.root.id, "workflows.cancel_run", { params: { runId: started.id } });
+  await job;
+  expect(await step(started.id)).toMatchObject({ status: "cancelled" });
+  return running;
+}
+
 // What a script may leave in the place of its result. The worker never opens it: the command
 // that ran the script reads a regular file and nothing else, inside the sandbox and within
 // the script's time limit. Each case names how its step ends.
@@ -488,19 +617,9 @@ const LEFT_BEHIND: [string, string, string][] = [
     `import os\nwith open("output.json", "w") as out:\n    out.write("[")\nos.truncate("output.json", 10 * 1024 * 1024 * 1024)`,
     "code_output_too_large"
   ],
-  // The writer is started by name: the sandbox of these tests hands a script no PATH, and
-  // without one Python on Linux does not know its own path (`sys.executable` is empty).
   [
     "a file another process keeps writing to",
-    `
-import subprocess
-subprocess.Popen(
-    ["python3", "-c", "import time\\nwith open('output.json', 'a') as out:\\n    while True:\\n        out.write('1,' * 4096)\\n        out.flush()\\n        time.sleep(0.001)"],
-    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-)
-import time
-time.sleep(1.5)
-`,
+    startsWriter("a child", `${MARK}-left-behind`),
     "code_output_too_large"
   ]
 ];
@@ -517,6 +636,8 @@ describe("what a script leaves in the place of its result", () => {
       expect(ended.status).toBe("failed");
       expect(ended.error?.code).toBe(code);
       expect(await step(ended.id)).toMatchObject({ status: "failed", attempt: 1 });
+      // Nothing the script started is left running.
+      expect(await survivorsOf(MARK)).toEqual([]);
     },
     60_000
   );
@@ -538,13 +659,69 @@ describe("what a script leaves in the place of its result", () => {
   }, 120_000);
 });
 
+// How a step ends: by itself, at its time limit, or at a cancel. After each, nothing the
+// script started is left running. The local sandbox ends the process group of the script: a
+// process that left it, with a session of its own or a double fork, is out of its reach, and
+// the step does not wait for it. Only a container ends that one too, as tested below with the
+// runner image. The local sandbox is for development only.
+describe("what a script starts in the local sandbox", () => {
+  it("is ended with the script when the script ends", async () => {
+    const mark = nextMark();
+    const { run } = await ready({ script: startsWriter("a child", mark) });
+    // The writer wrote more than a result may be.
+    expect((await run()).error?.code).toBe("code_output_too_large");
+    expect(await survivorsOf(mark)).toEqual([]);
+  }, 30_000);
+
+  it("is ended at the script's time limit", async () => {
+    const mark = nextMark();
+    const { t, run } = await ready({
+      script: startsWriter("a child", mark, { seconds: 60 }),
+      timeoutSeconds: 3
+    });
+    const ended = await run();
+    expect(ended.error?.code).toBe("code_timeout");
+    expect(await stderrOf(t, ended.id)).toContain("the writer writes");
+    expect(await survivorsOf(mark)).toEqual([]);
+  }, 30_000);
+
+  it("is ended when the run is cancelled", async () => {
+    const mark = nextMark();
+    const prepared = await ready({
+      script: startsWriter("a child", mark, { seconds: 60 }),
+      timeoutSeconds: 120
+    });
+    expect(await cancelOnceWriting(prepared, mark)).not.toEqual([]);
+    expect(await survivorsOf(mark)).toEqual([]);
+  }, 60_000);
+
+  it("does not hold the step where it left the script's process group and keeps its streams", async () => {
+    const mark = nextMark();
+    const { run } = await ready({
+      script: startsWriter("a grandchild of a double fork", mark, { holdsStreams: true }),
+      timeoutSeconds: 3
+    });
+    const before = Date.now();
+    // The writer keeps the script's output open, so the script's command never ends by itself.
+    expect((await run()).error?.code).toBe("code_timeout");
+    expect(Date.now() - before).toBeLessThan(15_000);
+  }, 30_000);
+});
+
 const runnerImage = process.env.CATALYST_RUNNER_IMAGE;
 
 // The same through the job, in a container of the runner image, with what only a container
 // has: a working directory of a stated size, and the engine's own word on memory.
 //   CATALYST_RUNNER_IMAGE=<image> pnpm exec vitest run tests/workflow-code-step.test.ts
 describe.skipIf(!runnerImage)("a code step in a container, through the job", () => {
-  const docker = () => new DockerWorkspaceCommandProcessExecutor({ image: runnerImage ?? "" });
+  // The containers of this file have a name of their own, so that each test removes what it
+  // left without touching another file's.
+  const containerNamePrefix = `catalyst-test-${randomUUID().slice(0, 8)}`;
+  const docker = () =>
+    new DockerWorkspaceCommandProcessExecutor({ image: runnerImage ?? "", containerNamePrefix });
+  afterEach(async () => {
+    await docker().removeLeftovers({ idPrefix: "", olderThanMs: 0 });
+  });
 
   it.each([
     ...LEFT_BEHIND,
@@ -561,6 +738,53 @@ describe.skipIf(!runnerImage)("a code step in a container, through the job", () 
       const ended = await run();
       expect(Date.now() - before).toBeLessThan(15_000);
       expect(ended.error?.code).toBe(code);
+      expect(await survivorsOf(MARK, runnerImage)).toEqual([]);
+    },
+    60_000
+  );
+
+  // The script is the first process of its container. When it ends, or the worker removes
+  // the container at its time limit or a cancel, the kernel ends every process of the
+  // container's process namespace: one that left its session as well.
+  it.each(WAYS)(
+    "ends %s when the script ends",
+    async (way) => {
+      const mark = nextMark();
+      const { run } = await ready({ sandbox: docker(), script: startsWriter(way, mark) });
+      expect((await run()).error?.code).toBe("code_output_too_large");
+      expect(await survivorsOf(mark, runnerImage)).toEqual([]);
+    },
+    60_000
+  );
+
+  it.each(WAYS)(
+    "ends %s at the script's time limit",
+    async (way) => {
+      const mark = nextMark();
+      const { t, run } = await ready({
+        sandbox: docker(),
+        script: startsWriter(way, mark, { seconds: 60 }),
+        timeoutSeconds: 5
+      });
+      const ended = await run();
+      expect(ended.error?.code).toBe("code_timeout");
+      expect(await stderrOf(t, ended.id)).toContain("the writer writes");
+      expect(await survivorsOf(mark, runnerImage)).toEqual([]);
+    },
+    60_000
+  );
+
+  it.each(WAYS)(
+    "ends %s when the run is cancelled",
+    async (way) => {
+      const mark = nextMark();
+      const prepared = await ready({
+        sandbox: docker(),
+        script: startsWriter(way, mark, { seconds: 60 }),
+        timeoutSeconds: 120
+      });
+      expect(await cancelOnceWriting(prepared, mark, runnerImage)).not.toEqual([]);
+      expect(await survivorsOf(mark, runnerImage)).toEqual([]);
     },
     60_000
   );
@@ -709,6 +933,17 @@ describe("what a killed command worker left of code steps", () => {
     expect(queued).toHaveLength(1);
   }, 60_000);
 });
+
+/** What the failed code step of a run printed to its error stream, as its log keeps it. */
+async function stderrOf(t: Awaited<ReturnType<typeof ready>>["t"], runId: string) {
+  const [log] = logsOf(
+    await t.call(t.root.id, "workflows.list_step_runs", {
+      params: { runId },
+      query: { status: "failed" }
+    })
+  );
+  return log?.stderr ?? "";
+}
 
 /** The logs of the step runs a list answered. */
 function logsOf(response: { json(): unknown }) {

@@ -103,6 +103,18 @@ export class LocalWorkspaceCommandProcessExecutor implements WorkspaceCommandPro
   }
 }
 
+/**
+ * How long the streams of a process may stay open after the process ended. Only a process it
+ * started that left its process group can hold them longer; the result does not wait for it.
+ */
+const STREAMS_AFTER_EXIT_MS = 1_000;
+
+/**
+ * Runs one process in a process group of its own. When the process ends, for any reason,
+ * every process still in its group is killed: nothing it started in the background outlives
+ * it there. A process that left the group, with `setsid` or a double fork, is out of reach of
+ * this; only a sandbox of its own, such as the PID namespace of a container, ends that one.
+ */
 export async function runSpawnedProcess(input: {
   executable: string;
   args: string[];
@@ -131,6 +143,7 @@ export async function runSpawnedProcess(input: {
     let cancellationReason: string | undefined;
     let killTimer: NodeJS.Timeout | undefined;
     let idleTimer: NodeJS.Timeout | undefined;
+    let streamsTimer: NodeJS.Timeout | undefined;
     const child = spawn(input.executable, input.args, {
       cwd: input.cwd,
       detached: true,
@@ -150,6 +163,7 @@ export async function runSpawnedProcess(input: {
       clearTimeout(wallTimer);
       clearTimeout(idleTimer);
       clearTimeout(killTimer);
+      clearTimeout(streamsTimer);
       resolvePromise({
         exitCode: cancelled ? 130 : timeoutKind ? 124 : exitCodeFromProcess(exitCode, signal),
         stdoutPreview: stdout.text(),
@@ -205,6 +219,19 @@ export async function runSpawnedProcess(input: {
     child.on("error", (error) => {
       spawnError = error;
       finish(127);
+    });
+    child.on("exit", (code, signal) => {
+      // What the process left running in its group ends with it, whether it ended by itself,
+      // at a timeout or at a cancel.
+      clearTimeout(wallTimer);
+      clearTimeout(idleTimer);
+      clearTimeout(killTimer);
+      terminateProcessGroup(child, "SIGKILL");
+      streamsTimer = setTimeout(() => {
+        child.stdout.destroy();
+        child.stderr.destroy();
+        finish(code ?? 1, signal);
+      }, STREAMS_AFTER_EXIT_MS);
     });
     child.on("close", (code, signal) => {
       finish(code ?? 1, signal);
