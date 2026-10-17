@@ -22,7 +22,8 @@ import {
   documentFailureText,
   KNOWLEDGE_ADD_LIMITS,
   KNOWLEDGE_ADD_REFUSALS,
-  KNOWLEDGE_DOCUMENT_STATE_VIEWS
+  KNOWLEDGE_DOCUMENT_STATE_VIEWS,
+  KNOWLEDGE_REMOVE_REFUSALS
 } from "./knowledge-base-model";
 import type {
   KnowledgeBaseSource,
@@ -42,7 +43,8 @@ const FORMAT_NAMES: Record<string, string> = {
 /**
  * The documents of a published Knowledge Base that keeps documents, each with its state: being
  * indexed, searchable, or failed with the reason. Whoever may change the Knowledge Base adds
- * documents, retries a failed one and removes one; whoever may use it sees the list.
+ * documents, retries a failed one and removes one they added; a document synced from a source
+ * leaves only when the source withdraws it. Whoever may use the Knowledge Base sees the list.
  */
 export function KnowledgeDocuments({
   source,
@@ -75,8 +77,14 @@ export function KnowledgeDocuments({
       setRemoved(nameOf(document));
       return;
     }
+    const known =
+      answer.reason === undefined ? undefined : KNOWLEDGE_REMOVE_REFUSALS[answer.reason];
     setRemoveFailure(
-      answer.refused ? t("knowledge.retryRefused") : (answer.message ?? t("knowledge.removeFailed"))
+      answer.refused
+        ? t("knowledge.retryRefused")
+        : known
+          ? t(known)
+          : (answer.message ?? t("knowledge.removeFailed"))
     );
   };
   const retry = async (document: KnowledgeDocument) => {
@@ -149,7 +157,8 @@ export function KnowledgeDocuments({
                         : undefined
                     }
                     onRemove={
-                      canWrite
+                      // A synced document leaves when its source withdraws it, not by hand.
+                      canWrite && document.sourceId === undefined
                         ? () => {
                             setRemoved(undefined);
                             setRemoveFailure(undefined);
@@ -214,7 +223,7 @@ function DocumentRow({
   retrying: boolean;
   /** Present where the reader may retry the document: a failed one, for whoever may change. */
   onRetry: (() => void) | undefined;
-  /** Present where the reader may remove the document: whoever may change. */
+  /** Present where the reader may remove the document: whoever may change, unless it is synced. */
   onRemove: (() => void) | undefined;
 }) {
   const { locale, t } = useTranslation();

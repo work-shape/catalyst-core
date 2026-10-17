@@ -124,6 +124,7 @@ const documentRow = z.object({
   format: z.enum(KNOWLEDGE_DOCUMENT_FORMATS),
   state: z.enum(KNOWLEDGE_CONTENT_STATES),
   failure_code: z.string().nullable(),
+  source_id: z.string().nullable(),
   added_at: z.string(),
   updated_at: z.string(),
   cursor_at: z.string()
@@ -464,12 +465,13 @@ export function createBuiltinDocumentStore(
           const rows = z.array(documentRow).parse(
             await sql.run(
               `select d.id, d.managed_file_id, d.file_name, d.title, c.format, c.state,
-               c.failure_code,
+               c.failure_code, s.source_id,
                to_char(d.added_at at time zone 'UTC', ${ISO_UTC}) as added_at,
                to_char(c.updated_at at time zone 'UTC', ${ISO_UTC}) as updated_at,
                d.added_at::pg_catalog.text as cursor_at
              from catalyst_kb.documents d
              join catalyst_kb.contents c on c.sha256 = d.content_sha256
+             left join catalyst_kb.source_items s on s.id = d.source_item_id
              where d.withdrawn_at is null
                and ($1::pg_catalog.text is null
                  or (d.added_at, d.id) < ($1::pg_catalog.timestamptz, $2::pg_catalog.text))
@@ -583,6 +585,7 @@ function entryOf(row: z.infer<typeof documentRow>): KnowledgeDocumentEntry {
     state: knowledgeDocumentStateOf(row.state),
     ...(row.state === "failed" && code.success ? { failureCode: code.data } : {}),
     ...(row.state === "pending" && waitCode.success ? { waitCode: waitCode.data } : {}),
+    ...(row.source_id === null ? {} : { sourceId: row.source_id }),
     addedAt: row.added_at,
     updatedAt: row.updated_at
   };

@@ -107,6 +107,11 @@ const knowledgeListDocumentsResponseSchema = z.object({
        * that refuses its embedding. It goes on by itself once the limit resets or is raised.
        */
       waitCode: z.enum(KNOWLEDGE_DOCUMENT_WAIT_CODES).optional(),
+      /**
+       * The source the document was synced from. Source withdrawal removes it; a manual
+       * remove is refused with `knowledge_synced_document_remove_refused`.
+       */
+      sourceId: z.string().optional(),
       addedAt: z.string(),
       /** When its state last changed. */
       updatedAt: z.string()

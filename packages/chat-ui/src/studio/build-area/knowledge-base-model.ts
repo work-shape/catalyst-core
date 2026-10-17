@@ -226,3 +226,11 @@ export const KNOWLEDGE_ADD_REFUSALS: Partial<Record<string, TranslationKey>> = {
   knowledge_store_not_ready: "knowledge.addRefusedStoreNotReady",
   knowledge_files_unavailable: "knowledge.addRefusedFilesUnavailable"
 };
+
+/**
+ * What a refused removal says, by the reason the instance named. A reason the page does not
+ * know shows the instance's own sentence.
+ */
+export const KNOWLEDGE_REMOVE_REFUSALS: Partial<Record<string, TranslationKey>> = {
+  knowledge_synced_document_remove_refused: "knowledge.removeSyncedRefused"
+};

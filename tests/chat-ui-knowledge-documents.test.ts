@@ -338,6 +338,50 @@ describe("the Documents section", () => {
     expect(document.body.textContent).not.toContain("wurde entfernt");
   });
 
+  it("offers no Remove for a document synced from a source, which its source removes", () => {
+    const synced = document_("preisliste", "indexed", { sourceId: "sharepoint" });
+    show(
+      createElement(KnowledgeDocuments, {
+        source: plantedSource({ useDocuments: () => ready({ documents: [synced, ...documents] }) }),
+        knowledgeBase: "objektunterlagen",
+        canWrite: true
+      })
+    );
+
+    expect(row("preisliste")).toBeDefined();
+    expect(removeButton("preisliste")).toBeNull();
+    expect(removeButton("vertrag")).not.toBeNull();
+  });
+
+  it("says in German why a synced document was refused, not the instance's English", async () => {
+    const source = plantedSource({
+      remove: async () => ({
+        ok: false,
+        refused: false,
+        message: "Synced documents cannot be removed locally.",
+        reason: "knowledge_synced_document_remove_refused"
+      })
+    });
+    show(
+      createElement(KnowledgeDocuments, {
+        source,
+        knowledgeBase: "objektunterlagen",
+        canWrite: true
+      }),
+      "de"
+    );
+
+    await act(async () => removeButton("vertrag")?.click());
+    const dialog = removeDialog();
+    if (!dialog) throw new Error("no confirmation");
+    await act(async () => button("Entfernen", dialog)?.click());
+
+    expect(removeDialog()?.textContent).toContain(
+      "Dieses Dokument kommt aus einer Quelle und lässt sich hier nicht entfernen."
+    );
+    expect(document.body.textContent).not.toContain("cannot be removed locally");
+  });
+
   it("shows whoever may only use the Knowledge Base the list, without Add, Retry or Remove", () => {
     show(
       createElement(KnowledgeDocuments, {

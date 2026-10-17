@@ -15283,6 +15283,9 @@
                               "knowledge_usage_limit_reached"
                             ]
                           },
+                          "sourceId": {
+                            "type": "string"
+                          },
                           "addedAt": {
                             "type": "string"
                           },

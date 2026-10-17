@@ -707,6 +707,11 @@ export interface KnowledgeDocumentEntry {
   failureCode?: KnowledgeDocumentFailureCode;
   /** Why a `pending` document waits, where it waits for more than its turn. */
   waitCode?: KnowledgeDocumentWaitCode;
+  /**
+   * The source the document was synced from. Source withdrawal removes a synced document; a
+   * manual remove refuses it.
+   */
+  sourceId?: string;
   addedAt: ISODateString;
   /** When its content last changed state. */
   updatedAt: ISODateString;

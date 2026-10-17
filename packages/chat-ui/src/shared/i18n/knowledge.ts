@@ -126,6 +126,8 @@ export const knowledge = defineTranslations({
     "knowledge.removeDescription":
       "Nobody finds it in this knowledge base any more, and its copy is deleted. The file stays in its conversation.",
     "knowledge.removeFailed": "The document could not be removed.",
+    "knowledge.removeSyncedRefused":
+      "This document comes from a source and cannot be removed here. Remove it in the source, or narrow what the source brings in.",
     "knowledge.removed": "The document {name} was removed.",
     "knowledge.failureFormatUnsupported":
       "A knowledge base cannot read this format. It reads PDF, DOCX, TXT and Markdown.",
@@ -296,6 +298,8 @@ export const knowledge = defineTranslations({
     "knowledge.removeDescription":
       "Niemand findet es danach mehr in dieser Wissensbasis, und ihre Kopie wird gelöscht. Die Datei bleibt in ihrer Unterhaltung.",
     "knowledge.removeFailed": "Das Dokument konnte nicht entfernt werden.",
+    "knowledge.removeSyncedRefused":
+      "Dieses Dokument kommt aus einer Quelle und lässt sich hier nicht entfernen. Entferne es in der Quelle, oder grenze ein, was die Quelle übernimmt.",
     "knowledge.removed": "Das Dokument {name} wurde entfernt.",
     "knowledge.failureFormatUnsupported":
       "Dieses Format kann eine Wissensbasis nicht lesen. Sie liest PDF, DOCX, TXT und Markdown.",

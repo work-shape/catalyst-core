@@ -287,6 +287,14 @@ describe("initial and full source import (KB 72, 73)", () => {
     });
     await world.drain(await world.sync());
     const [document] = await world.sql`select id from catalyst_kb.documents`;
+    // The list names the source, so the documents page offers no Remove for it.
+    const listed = await world.instance.api.call("knowledge_bases.list_documents", {
+      params: { knowledgeBase: KB }
+    });
+    expect(listed.statusCode, listed.body).toBe(200);
+    expect(JSON.parse(listed.body)).toMatchObject({
+      documents: [{ id: String(required(document).id), sourceId: SOURCE }]
+    });
     const response = await world.instance.api.call("knowledge_bases.remove_documents", {
       params: { knowledgeBase: KB },
       payload: { documentIds: [String(required(document).id)] }
@@ -435,10 +443,19 @@ describe("initial and full source import (KB 72, 73)", () => {
     ]);
   });
 
-  it("imports 10,000 items, isolates three failed fetches, and makes zero fetch or embedding calls on the second full pass", async () => {
+  it("imports a source of many pages and batches, isolates three failed fetches, and makes zero fetch or embedding calls on the second full pass", async () => {
+    // 1,250 items cross 13 listing pages of 100, the last one short, and queue 13 fetch
+    // batches of 100: every paging and batching path a 10,000-item source takes. Fetching runs
+    // at some 65 items a second, so 10,000 items took about 176 seconds, at the drain limit.
+    const items = 1250;
     let fetches = 0;
+    let pages = 0;
     const world = await setup((source) => ({
       ...source,
+      list(input, ctx) {
+        pages++;
+        return source.list(input, ctx);
+      },
       async *fetch(input, ctx) {
         fetches++;
         if (input.itemId === "f1")
@@ -446,7 +463,7 @@ describe("initial and full source import (KB 72, 73)", () => {
         yield* source.fetch(input, ctx);
       }
     }));
-    for (let i = 0; i < 10000; i++)
+    for (let i = 0; i < items; i++)
       world.world.put({
         folderId: "folder",
         name: `${i}.txt`,
@@ -458,10 +475,10 @@ describe("initial and full source import (KB 72, 73)", () => {
       await world.sql`select state, attempts, failure_code from catalyst_kb.source_items where item_id = 'f1'`
     ).toMatchObject([{ state: "failed", attempts: 3, failure_code: "knowledge_fetch_failed" }]);
     expect(await world.sql`select count(*)::int as n from catalyst_kb.source_items`).toMatchObject([
-      { n: 10000 }
+      { n: items }
     ]);
     expect(await world.sql`select count(*)::int as n from catalyst_kb.documents`).toMatchObject([
-      { n: 9999 }
+      { n: items - 1 }
     ]);
     expect(
       await world.sql`select count(*)::int as n from catalyst_kb.contents where state = 'extracted'`
@@ -469,7 +486,8 @@ describe("initial and full source import (KB 72, 73)", () => {
     expect(await world.sql`select count(*)::int as n from catalyst_kb.chunks`).toMatchObject([
       { n: 1 }
     ]);
-    expect(fetches).toBe(10002);
+    expect(pages).toBe(13);
+    expect(fetches).toBe(items + 2);
     expect(world.embed).toHaveBeenCalledTimes(1);
     expect(await world.sql`select count(*)::int as n from catalyst_kb.embeddings_1`).toEqual([
       { n: 1 }

@@ -58,6 +58,8 @@ const documentSchema = z.object({
   failureCode: z.enum(KNOWLEDGE_DOCUMENT_FAILURE_CODES).optional(),
   /** Why a `pending` document waits, such as a usage limit that refuses its embedding. */
   waitCode: z.enum(KNOWLEDGE_DOCUMENT_WAIT_CODES).optional(),
+  /** The source the document was synced from: only source withdrawal removes it. */
+  sourceId: z.string().optional(),
   addedAt: z.string(),
   updatedAt: z.string()
 });
