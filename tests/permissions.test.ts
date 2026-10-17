@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveEffectivePermissions } from "./support/ap4-verify/pre-ap4-permissions";
 import {
   type PlatformAction,
   type Permission,
@@ -6,10 +7,7 @@ import {
   LEGACY_PERMISSION_ACTIONS,
   PERMISSIONS,
   ROLE_DEFAULT_ACTIONS,
-  ROLE_DEFAULT_PERMISSIONS,
-  hasPermission,
-  legacyPermissionFor,
-  resolveEffectivePermissions
+  legacyPermissionFor
 } from "@work-shape/catalyst-core";
 
 describe("permissions", () => {
@@ -169,106 +167,14 @@ describe("permissions", () => {
     expect(ROLE_DEFAULT_ACTIONS.superadmin).toEqual(
       ACTIONS.filter((action) => action !== "assets.release")
     );
-    expect(ROLE_DEFAULT_PERMISSIONS.user).toEqual([]);
-    expect(ROLE_DEFAULT_PERMISSIONS.admin).toEqual([
-      "agent_skills.approve",
-      "config_assets.read",
-      "config_assets.write",
-      "usage.view",
-      "users.manage",
-      "audit.view"
-    ]);
-    expect(ROLE_DEFAULT_PERMISSIONS.superadmin).toEqual(
-      PERMISSIONS.filter((permission) => permission !== "config_assets.release")
-    );
     for (const role of ["user", "admin", "superadmin"] as const) {
-      // The legacy keys of a role name what they named: a right of a later kind has no key.
       expect(
-        new Set(
-          ROLE_DEFAULT_ACTIONS[role]
-            .filter(
-              (action) =>
-                !/^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(
-                  action
-                ) && action !== "service_principals.manage"
-            )
-            .map(legacyPermissionFor)
+        PERMISSIONS.filter((permission) =>
+          LEGACY_PERMISSION_ACTIONS[permission].every((action) =>
+            ROLE_DEFAULT_ACTIONS[role].includes(action)
+          )
         )
-      ).toEqual(new Set(ROLE_DEFAULT_PERMISSIONS[role]));
+      ).toEqual([...resolveEffectivePermissions({ roles: [role], permissions: [] })]);
     }
-  });
-
-  it("unions defaults across known roles and ignores unknown roles", () => {
-    const effective = resolveEffectivePermissions({
-      roles: ["user", "custom-role", "admin", "superadmin"],
-      permissions: []
-    });
-
-    expect(effective).toEqual(
-      new Set(PERMISSIONS.filter((permission) => permission !== "config_assets.release"))
-    );
-  });
-
-  it("applies grants and revocations while ignoring unknown permission entries", () => {
-    const effective = resolveEffectivePermissions({
-      roles: ["user", "admin"],
-      permissions: [
-        "usage.view",
-        "!audit.view",
-        "!usage.view",
-        "unknown.permission",
-        "!unknown.permission"
-      ]
-    });
-
-    expect(effective.has("config_assets.read")).toBe(true);
-    expect(effective.has("audit.view")).toBe(false);
-    expect(effective.has("usage.view")).toBe(false);
-    expect(effective.has("config_assets.release")).toBe(false);
-    expect(effective.has("api_access.manage")).toBe(false);
-    expect(effective.has("agent_models.manage")).toBe(false);
-    expect(effective.size).toBe(PERMISSIONS.length - 5);
-  });
-
-  it("gives agent model settings to superadmins by default and to others only by grant", () => {
-    expect(hasPermission({ roles: ["superadmin"], permissions: [] }, "agent_models.manage")).toBe(
-      true
-    );
-    expect(hasPermission({ roles: ["admin"], permissions: [] }, "agent_models.manage")).toBe(false);
-    expect(
-      hasPermission(
-        { roles: ["admin"], permissions: ["agent_models.manage"] },
-        "agent_models.manage"
-      )
-    ).toBe(true);
-  });
-
-  it("allows per-user grants for roles without defaults", () => {
-    const effective = resolveEffectivePermissions({
-      roles: ["user", "external-reviewer"],
-      permissions: ["usage.view"]
-    });
-
-    expect([...effective]).toEqual(["usage.view"]);
-  });
-
-  it("requires an explicit grant for release synchronization", () => {
-    const effective = resolveEffectivePermissions({
-      roles: ["superadmin"],
-      permissions: ["config_assets.release"]
-    });
-
-    expect(effective.has("config_assets.release")).toBe(true);
-    expect(effective.has("api_access.manage")).toBe(true);
-  });
-
-  it("checks permissions", () => {
-    const subject = {
-      roles: ["user"],
-      permissions: ["usage.view"]
-    };
-
-    expect(hasPermission(subject, "usage.view")).toBe(true);
-    expect(hasPermission(subject, "audit.view")).toBe(false);
   });
 });

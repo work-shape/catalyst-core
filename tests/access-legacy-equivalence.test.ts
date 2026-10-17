@@ -15,7 +15,6 @@ import {
   asUserId,
   createAuthorizer,
   evaluateAccess,
-  hasPermission,
   legacyGrantRows,
   type AuthenticatedServicePrincipal,
   type PermissionGrant
@@ -115,9 +114,6 @@ describe("legacy equivalence: service tokens", () => {
           const access = await authorizer.forActor(actor);
           for (const key of LEGACY_KEYS) {
             const before = frozenHasPermission({ permissions: actor.permissions }, key);
-            expect(hasPermission(actor, key), `${credentialState} ${key} product copy`).toBe(
-              before
-            );
             expect(access.authorize(key).allowed, `${credentialState} ${key}`).toBe(before);
             // A credential can only narrow what its principal holds.
             if (before) expect(principalPermissions).toContain(key);

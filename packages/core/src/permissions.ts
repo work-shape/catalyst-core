@@ -13,12 +13,7 @@ import {
 } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
 import { GRANTABLE_ACTION_SCOPES } from "./grantable-action-scopes";
-import {
-  isAuthenticatedServicePrincipal,
-  type AuthenticatedIdentity,
-  type AuthenticatedServicePrincipal,
-  type AuthenticatedUser
-} from "./identity";
+import { isAuthenticatedServicePrincipal, type AuthenticatedIdentity } from "./identity";
 import type { ClientInstanceId, UserId } from "./ids";
 import { operationDenialError } from "./operation-denial";
 import type { StorePage } from "./paging";
@@ -106,21 +101,6 @@ export const ROLE_DEFAULT_ACTIONS: Record<
       action !== "agent_models.manage"
   ),
   superadmin: ACTIONS.filter((action) => action !== "assets.release")
-};
-
-function legacyPermissionsFor(actions: readonly PlatformAction[]): Permission[] {
-  return PERMISSIONS.filter((permission) =>
-    LEGACY_PERMISSION_ACTIONS[permission].every((action) => actions.includes(action))
-  );
-}
-
-export const ROLE_DEFAULT_PERMISSIONS: Record<
-  "user" | "admin" | "superadmin",
-  readonly Permission[]
-> = {
-  user: legacyPermissionsFor(ROLE_DEFAULT_ACTIONS.user),
-  admin: legacyPermissionsFor(ROLE_DEFAULT_ACTIONS.admin),
-  superadmin: legacyPermissionsFor(ROLE_DEFAULT_ACTIONS.superadmin)
 };
 
 export interface PermissionGrant {
@@ -309,7 +289,7 @@ export function accessHolderFromIdentity(actor: AuthenticatedIdentity): AccessHo
 export function listAccessEntries(holder: AccessHolder, persisted: PersistedAccess): AccessEntry[] {
   const entries: AccessEntry[] = [];
   for (const role of holder.roles) {
-    if (isDefaultPermissionRole(role)) {
+    if (isDefaultActionRole(role)) {
       for (const action of ROLE_DEFAULT_ACTIONS[role]) {
         entries.push({ action, effect: "allow", scopeKind: "instance", source: "role" });
       }
@@ -711,53 +691,8 @@ export interface AccessAdministrationStore extends AccessStore, RightsLock {
   }): Promise<GrantScopeAsset[]>;
 }
 
-export function resolveEffectivePermissions(
-  subject:
-    | Pick<AuthenticatedUser, "roles" | "permissions">
-    | Pick<AuthenticatedServicePrincipal, "permissions">
-): ReadonlySet<Permission> {
-  const effective = new Set<Permission>();
-  const revocations = new Set<Permission>();
-
-  for (const role of "roles" in subject ? subject.roles : []) {
-    if (isDefaultPermissionRole(role)) {
-      for (const permission of ROLE_DEFAULT_PERMISSIONS[role]) {
-        effective.add(permission);
-      }
-    }
-  }
-
-  for (const entry of subject.permissions ?? []) {
-    const revoked = entry.startsWith("!");
-    const permission = revoked ? entry.slice(1) : entry;
-    if (!isPermission(permission)) {
-      continue;
-    }
-    if (revoked) {
-      revocations.add(permission);
-    } else {
-      effective.add(permission);
-    }
-  }
-
-  for (const permission of revocations) {
-    effective.delete(permission);
-  }
-
-  return effective;
-}
-
-export function hasPermission(
-  subject:
-    | Pick<AuthenticatedUser, "roles" | "permissions">
-    | Pick<AuthenticatedServicePrincipal, "permissions">,
-  permission: Permission
-): boolean {
-  return resolveEffectivePermissions(subject).has(permission);
-}
-
-function isDefaultPermissionRole(role: string): role is keyof typeof ROLE_DEFAULT_PERMISSIONS {
-  return role === "user" || role === "admin" || role === "superadmin";
+function isDefaultActionRole(role: string): role is keyof typeof ROLE_DEFAULT_ACTIONS {
+  return Object.hasOwn(ROLE_DEFAULT_ACTIONS, role);
 }
 
 export function isPermission(permission: string): permission is Permission {

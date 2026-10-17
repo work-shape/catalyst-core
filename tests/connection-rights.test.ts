@@ -5,13 +5,13 @@ import {
   GRANTABLE_ACTIONS,
   LEGACY_PERMISSION_ACTIONS,
   ROLE_DEFAULT_ACTIONS,
-  ROLE_DEFAULT_PERMISSIONS,
   createAuthorizer,
   isAppError,
   type AccessResource,
   type ActorAccess,
   type UserRecord
 } from "@work-shape/catalyst-core";
+import { resolveEffectivePermissions } from "./support/ap4-verify/pre-ap4-permissions";
 import { SCOPES_HEADER, clientInstanceId, type AccessInstance } from "./support/access-instance";
 import { assetPageSchema } from "./support/asset-operations";
 import { connection, setupConnectionInstance } from "./support/connections";
@@ -77,8 +77,13 @@ describe("the vocabulary of Connection rights", () => {
     ).toEqual([]);
     // Snapshot the historical role vocabulary; keep the no-Connection-right invariant above.
     await expect(
-      Object.entries(ROLE_DEFAULT_PERMISSIONS)
-        .map(([role, permissions]) => JSON.stringify({ role, permissions }))
+      ["user", "admin", "superadmin"]
+        .map((role) =>
+          JSON.stringify({
+            role,
+            permissions: [...resolveEffectivePermissions({ roles: [role], permissions: [] })]
+          })
+        )
         .join("\n") +
         "\n" +
         JSON.stringify({

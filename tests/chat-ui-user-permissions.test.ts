@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { AdministeredUser } from "@work-shape/catalyst-api-client";
-import { resolveEffectivePermissions, type Permission } from "@work-shape/catalyst-core";
+import { type Permission } from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import {
   USER_PERMISSIONS,
@@ -12,6 +12,7 @@ import {
   UserPermissionOverview,
   UserPermissionsCard
 } from "./support/chat-ui";
+import { resolveEffectivePermissions } from "./support/ap4-verify/pre-ap4-permissions";
 import { TranslationProvider } from "./chat-ui-render-harness";
 
 function user(overrides: Partial<AdministeredUser> = {}): AdministeredUser {
@@ -56,7 +57,7 @@ describe("user permission model", () => {
     });
   });
 
-  it("agrees with the effective permissions the server resolves", () => {
+  it("keeps the legacy permission display equal to the frozen pre-AP4 resolver", () => {
     const subjects = [
       user(),
       user({ permissions: ["agent_skills.approve", "!usage.view"] }),

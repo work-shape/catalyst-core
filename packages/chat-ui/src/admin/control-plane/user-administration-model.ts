@@ -4,7 +4,12 @@ import type {
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest
 } from "@work-shape/catalyst-api-client";
-import { PERMISSIONS, ROLE_DEFAULT_PERMISSIONS, type Permission } from "@work-shape/catalyst-core";
+import {
+  LEGACY_PERMISSION_ACTIONS,
+  PERMISSIONS,
+  ROLE_DEFAULT_ACTIONS,
+  type Permission
+} from "@work-shape/catalyst-core";
 import type { TranslationKey } from "../../shared/i18n";
 
 /** Auth source id of the standalone Better Auth adapter; only those identities have passwords. */
@@ -290,7 +295,7 @@ export interface UserPermissionState {
 type PermissionSubject = Pick<AdministeredUser, "roles" | "permissions">;
 
 /**
- * Mirrors `resolveEffectivePermissions` in core, but keeps the reason: role
+ * Projects the canonical role actions onto legacy keys, keeping the reason: role
  * defaults, plus individual grants, minus `!permission` revocations, which win.
  */
 export function userPermissionStates(user: PermissionSubject): UserPermissionState[] {
@@ -385,10 +390,14 @@ function userPermissionSource(
 
 function isRoleDefaultPermission(roles: string[], permission: Permission): boolean {
   return roles.some(
-    (role) => isDefaultPermissionRole(role) && ROLE_DEFAULT_PERMISSIONS[role].includes(permission)
+    (role) =>
+      isDefaultPermissionRole(role) &&
+      LEGACY_PERMISSION_ACTIONS[permission].every((action) =>
+        ROLE_DEFAULT_ACTIONS[role].includes(action)
+      )
   );
 }
 
-function isDefaultPermissionRole(role: string): role is keyof typeof ROLE_DEFAULT_PERMISSIONS {
-  return Object.hasOwn(ROLE_DEFAULT_PERMISSIONS, role);
+function isDefaultPermissionRole(role: string): role is keyof typeof ROLE_DEFAULT_ACTIONS {
+  return Object.hasOwn(ROLE_DEFAULT_ACTIONS, role);
 }
