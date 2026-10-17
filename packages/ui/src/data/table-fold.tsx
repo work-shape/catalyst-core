@@ -228,8 +228,10 @@ function FoldedValue({
   setSlot(index: number, node: HTMLElement | null): void;
 }) {
   const slot = useCallback((node: HTMLElement | null) => setSlot(index, node), [index, setSlot]);
+  // A value wider than the room beside its label wraps under it, so a column narrowed to a
+  // phone's width never spills a folded value over the next column.
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
       <dt className="text-muted-foreground">{label}</dt>
       <dd ref={slot} className="min-w-0" />
     </div>

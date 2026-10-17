@@ -15,10 +15,12 @@ import {
   initialPersonalKeyDraft,
   instanceUrl,
   isCompleteConnectCode,
+  keysSharingAName,
   personalKeyActionOffer,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
   personalKeyRequest,
+  personalKeyScopeParts,
   personalKeyState,
   settingsCatalog,
   visibleSettingsPages,
@@ -52,7 +54,7 @@ function key(overrides: Partial<PersonalApiKey> = {}): PersonalApiKey {
     ownerUserId: "user_1",
     ownerDisplayLabel: "Fabian Kai",
     name: "fabian-mbp",
-    keyPrefix: "cat_live_ab12",
+    keyPrefix: "cat.apic_1f0c2a9e-7b6d-4c3a-9e8f-0a1b2c3d4e5f.",
     scopes: ["agent.write:kai-", "skill.read"],
     createdAt: "2026-10-01T10:00:00.000Z",
     expiresAt: "2027-01-01T10:00:00.000Z",
@@ -152,6 +154,24 @@ describe("personal API key model", () => {
     expect(connectCodeOfSearch("")).toBe("");
   });
 
+  it("reads a scope back as its action and the prefix it is limited to", () => {
+    expect(personalKeyScopeParts("agent.write:kai-")).toEqual({
+      action: "agent.write",
+      prefix: "kai-"
+    });
+    expect(personalKeyScopeParts("skill.read")).toEqual({ action: "skill.read" });
+  });
+
+  it("tells a key by how it starts only where its owner holds another of the same name", () => {
+    const keys = [
+      key({ id: "laptop", name: "Laptop" }),
+      key({ id: "laptop-again", name: " laptop " }),
+      key({ id: "script", name: "script" }),
+      key({ id: "other-owner", name: "script", ownerUserId: "user_2" })
+    ];
+    expect([...keysSharingAName(keys)].sort()).toEqual(["laptop", "laptop-again"]);
+  });
+
   it("tells active, revoked and expired keys apart", () => {
     expect(personalKeyState(key(), now)).toBe("active");
     expect(personalKeyState(key({ revokedAt: "2026-10-02T10:00:00.000Z" }), now)).toBe("revoked");
@@ -204,7 +224,6 @@ describe("You > API keys", () => {
     expect(english).toContain("catalyst CLI on fabian-mbp");
     expect(english).toContain("Only confirm a code your own terminal shows you");
     expect(english).toContain("BCDF-GHJK");
-    expect(english).toContain("agent.write");
     expect(english).toContain("90 days");
     expect(render("de")).toContain("Bestätige nur einen Code, den dir dein eigenes Terminal zeigt");
   });
@@ -225,11 +244,166 @@ describe("You > API keys", () => {
     );
     expect(markup).toContain("Owner");
     expect(markup).toContain("Fabian Kai");
-    expect(markup).toContain("cat_live_ab12");
-    expect(markup).toContain("agent.write:kai-");
     expect(markup).toContain("Revoked");
     // Only the active key offers Revoke.
     expect(markup.match(/>Revoke</gu)?.length).toBe(1);
+  });
+});
+
+/** The keys table as static markup, in one language. */
+function keysTable(locale: "en" | "de", keys: PersonalApiKey[], showOwner = false): string {
+  return renderToStaticMarkup(
+    createElement(
+      TranslationProvider,
+      { children: null, locale },
+      createElement(PersonalApiKeysTable, {
+        keys,
+        loading: false,
+        showOwner,
+        revoking: false,
+        onRevoke: async () => undefined
+      })
+    )
+  );
+}
+
+/** The element of `tag` in the markup whose text is exactly `text`. */
+function elementSaying(markup: string, tag: string, text: string): HTMLElement {
+  const root = document.createElement("div");
+  root.innerHTML = markup;
+  return required(
+    [...root.querySelectorAll<HTMLElement>(tag)].find((element) => element.textContent === text)
+  );
+}
+
+/**
+ * The text of each head of a table's markup, whether it folds, and whether it takes only its
+ * content's width.
+ */
+function heads(markup: string): { text: string; folds: boolean; narrowest: boolean }[] {
+  const table = document.createElement("div");
+  table.innerHTML = markup;
+  return [...table.querySelectorAll("th")].map((head) => ({
+    text: head.textContent ?? "",
+    folds: head.hasAttribute("data-column"),
+    narrowest: head.classList.contains("w-0")
+  }));
+}
+
+// UI-KEYS, from the design reviews of 2026-10-17: the table showed raw scope ids and key
+// prefixes, times with seconds, and at 1280 Status and Revoke sat behind a sideways scroll.
+describe("You > API keys in plain words", () => {
+  it("names each scope as the rights screens do, with its prefix, in English and German", () => {
+    const english = keysTable("en", [key()]);
+    expect(english).toContain("Edit agents in kai-");
+    expect(english).toContain("View skills");
+    expect(english).not.toContain("agent.write");
+    expect(english).not.toContain("skill.read");
+    const german = keysTable("de", [key()]);
+    expect(german).toContain("Agenten bearbeiten in kai-");
+    expect(german).toContain("Skills ansehen");
+    expect(german).toContain("Was der Schlüssel darf");
+  });
+
+  // Badges of rights stacked and were cut at 390; one muted line breaks between words instead.
+  it("lists what a key may do as one muted line, comma-separated", () => {
+    // The span carries the muted tone, since a folded cell moves only its children.
+    const rights = elementSaying(
+      keysTable("en", [key()]),
+      "span",
+      "Edit agents in kai-, View skills"
+    );
+    expect(rights.classList.contains("text-muted-foreground")).toBe(true);
+  });
+
+  it("says how a key starts only where its owner holds another of the same name", () => {
+    expect(keysTable("en", [key()])).not.toContain("cat.apic_");
+    const twins = [
+      key(),
+      key({ id: "cred_2", keyPrefix: "cat.apic_8d7e6f5a-1b2c-4d3e-8f9a-0b1c2d3e4f5a." })
+    ];
+    const english = keysTable("en", twins);
+    // The id's first eight letters tell the two apart; the rest and the stored dot are left out.
+    expect(english).toContain("Starts with cat.apic_1f0c2a9e…");
+    expect(english).toContain("Starts with cat.apic_8d7e6f5a…");
+    expect(english).not.toContain("1f0c2a9e-7b6d");
+    expect(keysTable("de", twins)).toContain("Beginnt mit cat.apic_1f0c2a9e…");
+    // Wrapped anywhere at a phone's width, never cut.
+    const start = elementSaying(english, "span", "Starts with cat.apic_1f0c2a9e…");
+    expect(start.classList.contains("wrap-anywhere")).toBe(true);
+    expect(start.classList.contains("truncate")).toBe(false);
+  });
+
+  it("shows an active key in the success tone and Revoke as an outline button", () => {
+    const markup = keysTable("en", [key()]);
+    expect(elementSaying(markup, "span", "Active").classList.contains("bg-success-soft")).toBe(
+      true
+    );
+    expect(elementSaying(markup, "button", "Revoke").classList.contains("border-input")).toBe(true);
+  });
+
+  it("shows created, expires and last used without seconds", () => {
+    const markup = keysTable("de", [
+      key({
+        createdAt: "2026-10-01T10:00:37.000Z",
+        expiresAt: "2027-01-01T10:00:41.000Z",
+        lastUsedAt: "2026-10-12T08:15:53.000Z"
+      })
+    ]);
+    expect(markup).not.toMatch(/:(37|41|53)\b/u);
+    expect(markup).toContain("01.10.2026");
+  });
+
+  // At 390 Status and Revoke took the room the name's details needed, which then spilled over.
+  it("folds every column but name, status and Revoke, which leave the name the room", () => {
+    expect(heads(keysTable("en", [key()], true))).toEqual([
+      { text: "Name", folds: false, narrowest: false },
+      { text: "Owner", folds: true, narrowest: false },
+      { text: "What the key may do", folds: true, narrowest: false },
+      { text: "Expires", folds: true, narrowest: false },
+      { text: "Last used", folds: true, narrowest: false },
+      { text: "Created", folds: true, narrowest: false },
+      { text: "Status", folds: false, narrowest: true },
+      { text: "", folds: false, narrowest: true }
+    ]);
+  });
+
+  it("offers each scope of a new key by its title alone, one under the other", () => {
+    const render = (locale: "en" | "de") =>
+      renderToStaticMarkup(
+        createElement(
+          TranslationProvider,
+          { children: null, locale },
+          createElement(ConnectCodeConfirm, {
+            code: "BCDF-GHJK",
+            request: {
+              createdAt: "2026-10-13T11:58:00.000Z",
+              expiresAt: "2026-10-13T12:13:00.000Z"
+            },
+            offer: { ...cliOffer, actions: ["agent.write", "workflow.publish"] },
+            pending: false,
+            onConfirm: async () => undefined
+          })
+        )
+      );
+    const english = render("en");
+    expect(english).toContain("Edit agents");
+    expect(english).toContain("Publish workflows");
+    expect(english).not.toContain("Make a draft the version that runs.");
+    expect(english).not.toContain("agent.write");
+    expect(english).not.toContain("workflow.publish");
+    // One right under the other at every width.
+    expect(english).not.toContain("sm:grid-cols-2");
+    expect(english).toContain("Where you use the key, such as your laptop or a script.");
+    expect(english).toContain("If you lose a right later, the key loses it too.");
+    const german = render("de");
+    expect(german).toContain("Agenten bearbeiten");
+    expect(german).toContain("Workflows veröffentlichen");
+    // Ends without a full stop, as the hint was approved.
+    expect(german).toContain(
+      "Wo du den Schlüssel verwendest, etwa auf dem Laptop oder in einem Skript</"
+    );
+    expect(german).toContain("Verlierst du später ein Recht, verliert es auch der Schlüssel.");
   });
 });
 

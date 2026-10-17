@@ -5,7 +5,7 @@ export const personalApiKeys = defineTranslations({
   en: {
     "settings.apiKeys": "API keys",
     "personalApiKeys.description":
-      "Keys for the catalyst CLI and your scripts. A key acts as you, limited to its scopes, until it expires or you revoke it.",
+      "Keys for the catalyst CLI and your scripts. A key acts as you, limited to what you let it do, until it expires or you revoke it.",
     "personalApiKeys.new": "New key",
     "personalApiKeys.newDescription":
       "Choose what the key may do. You can only give it what you may do yourself.",
@@ -21,13 +21,14 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.owner": "Owner",
     "personalApiKeys.revokeTitle": "Revoke {name}?",
     "personalApiKeys.name": "Name",
-    "personalApiKeys.nameHint": "Where the key is used, such as the laptop or the script.",
-    "personalApiKeys.actions": "Scopes",
-    "personalApiKeys.actionsHint":
-      "What the key may do. It never does more than you may do at the time of the call.",
+    "personalApiKeys.nameHint": "Where you use the key, such as your laptop or a script.",
+    "personalApiKeys.actions": "What the key may do",
+    "personalApiKeys.actionsHint": "If you lose a right later, the key loses it too.",
+    "personalApiKeys.scopeLimited": "{right} in {prefix}",
+    "personalApiKeys.startsWith": "Starts with {prefix}",
     "personalApiKeys.namespace": "Limit to a Namespace",
     "personalApiKeys.namespaceHint":
-      "A Namespace prefix such as tax-. Empty: wherever you hold the chosen scopes.",
+      "A Namespace prefix such as tax-. Empty: wherever you hold the chosen rights.",
     "personalApiKeys.namespaceInvalid":
       "A Namespace prefix is lowercase words joined by hyphens and ends in a hyphen, such as tax-.",
     "personalApiKeys.namespacePlaceholder": "tax-",
@@ -35,7 +36,7 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.expiryDays": "{days} days",
     "personalApiKeys.connectTitle": "Connect the CLI",
     "personalApiKeys.connectDescription":
-      "Run catalyst login in your terminal and enter the code it shows. The CLI then receives a key with the scopes you choose here.",
+      "Run catalyst login in your terminal and enter the code it shows. The CLI then receives a key that may do what you choose here.",
     "personalApiKeys.code": "Connect code",
     "personalApiKeys.codeHint": "The code your terminal shows, such as ABCD-EFGH.",
     "personalApiKeys.codePlaceholder": "ABCD-EFGH",
@@ -55,7 +56,7 @@ export const personalApiKeys = defineTranslations({
       "Return to your terminal. The key is listed under Your keys, where you can revoke it.",
     "personalApiKeys.instanceTitle": "Personal keys",
     "personalApiKeys.instanceDescription":
-      "The keys people issued for themselves. Each acts as its owner within its scopes."
+      "The keys people issued for themselves. Each acts as its owner, limited to what it may do."
   },
   de: {
     "settings.apiKeys": "API-Schlüssel",
@@ -76,10 +77,12 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.owner": "Inhaber",
     "personalApiKeys.revokeTitle": "{name} widerrufen?",
     "personalApiKeys.name": "Name",
-    "personalApiKeys.nameHint": "Wo der Schlüssel verwendet wird, etwa der Laptop oder das Skript.",
-    "personalApiKeys.actions": "Berechtigungen",
-    "personalApiKeys.actionsHint":
-      "Was der Schlüssel darf. Er darf nie mehr, als du zum Zeitpunkt des Aufrufs darfst.",
+    "personalApiKeys.nameHint":
+      "Wo du den Schlüssel verwendest, etwa auf dem Laptop oder in einem Skript",
+    "personalApiKeys.actions": "Was der Schlüssel darf",
+    "personalApiKeys.actionsHint": "Verlierst du später ein Recht, verliert es auch der Schlüssel.",
+    "personalApiKeys.scopeLimited": "{right} in {prefix}",
+    "personalApiKeys.startsWith": "Beginnt mit {prefix}",
     "personalApiKeys.namespace": "Auf einen Namespace begrenzen",
     "personalApiKeys.namespaceHint":
       "Ein Namespace-Präfix wie tax-. Leer: überall, wo du die gewählten Berechtigungen hast.",

@@ -152,6 +152,17 @@ describe("Table columns with a priority", () => {
     expect(cells[0]?.querySelector("dl")).not.toBeNull();
   });
 
+  // UI-KEYS: at 390 a folded value stood beside its label however wide it was, and spilled
+  // over the next column.
+  it("lets a folded value wrap under its label where the room beside it is too narrow", () => {
+    render(220);
+
+    for (const pair of container.querySelectorAll('[data-slot="table-row-detail"] > div')) {
+      expect(pair.className.split(" ")).toContain("flex-wrap");
+    }
+    expect(details()).not.toEqual([]);
+  });
+
   it("unfolds the columns again once the room returns", () => {
     render(220);
     render(1000);

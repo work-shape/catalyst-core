@@ -67,6 +67,38 @@ export function buildPersonalKeyScopes(actions: readonly string[], namespace: st
   return actions.map((action) => (prefix ? `${action}:${prefix}` : action));
 }
 
+/** A scope of an issued key, read back: its action, and the prefix it is limited to. */
+export function personalKeyScopeParts(scope: string): { action: string; prefix?: string } {
+  const colon = scope.indexOf(":");
+  return colon < 0
+    ? { action: scope }
+    : { action: scope.slice(0, colon), prefix: scope.slice(colon + 1) };
+}
+
+/**
+ * The keys a person tells apart only by how they start: those whose owner holds another key of
+ * the same name. Every other key is told by its name.
+ */
+export function keysSharingAName(keys: readonly PersonalApiKey[]): Set<string> {
+  const nameOf = (key: PersonalApiKey) => `${key.ownerUserId}\n${key.name.trim().toLowerCase()}`;
+  const counts = new Map<string, number>();
+  for (const key of keys) counts.set(nameOf(key), (counts.get(nameOf(key)) ?? 0) + 1);
+  return new Set(keys.filter((key) => (counts.get(nameOf(key)) ?? 0) > 1).map((key) => key.id));
+}
+
+/** How many letters of a key's id tell it apart from the person's other keys of that name. */
+const KEY_START_ID_LETTERS = 8;
+
+/**
+ * How a key starts, as a person tells it apart: the instance stores `cat.apic_<id>.`, shown as
+ * `cat.apic_` with the first letters of the id, `cat.apic_1f0c2a9e…`.
+ */
+export function personalKeyStart(keyPrefix: string): string {
+  const prefix = keyPrefix.replace(/\.$/u, "");
+  const end = prefix.indexOf("_") + 1 + KEY_START_ID_LETTERS;
+  return prefix.length > end ? `${prefix.slice(0, end)}…` : prefix;
+}
+
 export type PersonalKeyState = "active" | "revoked" | "expired";
 
 export function personalKeyState(key: PersonalApiKey, now = new Date()): PersonalKeyState {

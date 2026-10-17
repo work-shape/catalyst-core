@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { Checkbox, Field, Input, Select } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
+import { actionLabel } from "../access/right-words";
 import {
   PERSONAL_KEY_EXPIRY_DAYS,
   personalKeyDraftProblem,
@@ -10,7 +11,8 @@ import {
 
 /**
  * The name, the scopes and the end of a personal key: the same fields for a new key and for a
- * CLI's connect code. The scopes are actions, all limited to one Namespace where one is given.
+ * CLI's connect code. The scopes are actions, all limited to one Namespace where one is given,
+ * each named as the rights screens name it.
  */
 export function PersonalKeyFields({
   draft,
@@ -19,7 +21,7 @@ export function PersonalKeyFields({
   onChange
 }: {
   draft: PersonalKeyDraft;
-  /** The actions offered, in order. */
+  /** The actions offered, in order, by their ids. */
   actions: readonly string[];
   /** The Namespace prefixes the person holds a right in, offered while typing. */
   namespaces: readonly string[];
@@ -43,11 +45,11 @@ export function PersonalKeyFields({
       <fieldset className="grid gap-2">
         <legend className="text-label">{t("personalApiKeys.actions")}</legend>
         <p className="text-caption text-muted-foreground">{t("personalApiKeys.actionsHint")}</p>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2">
           {actions.map((action) => (
             <Checkbox
               key={action}
-              label={<code>{action}</code>}
+              label={actionLabel(action, t)}
               checked={draft.actions.includes(action)}
               onCheckedChange={(checked) =>
                 onChange({

@@ -4,8 +4,9 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 // You > API keys: a new key starts with no scope ticked and gets exactly the boxes the person
-// ticks, by the box or by its label, in the dialog and for a CLI's connect code alike. Ticked in
-// advance, a click on the scope a person wanted took it away, and the key got everything else.
+// ticks, by the box or by its label, in the dialog and for a CLI's connect code alike. Each box
+// is named as the rights screens name its action. Ticked in advance, a click on the scope a
+// person wanted took it away, and the key got everything else.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
@@ -23,16 +24,16 @@ async function chooseScopes(form: Locator): Promise<void> {
   const checked = form.locator('[role="checkbox"][aria-checked="true"]');
   await expect(checked).toHaveCount(0);
 
-  await form.getByRole("checkbox", { name: "agent.read", exact: true }).click();
-  await form.getByText("skill.write", { exact: true }).click();
-  await form.getByRole("checkbox", { name: "agent.write", exact: true }).click();
+  await form.getByRole("checkbox", { name: "View agents", exact: true }).click();
+  await form.getByText("Edit skills", { exact: true }).click();
+  await form.getByRole("checkbox", { name: "Edit agents", exact: true }).click();
   await expect(checked).toHaveCount(3);
   // A second click unticks that one box and no other.
-  await form.getByText("agent.read", { exact: true }).click();
+  await form.getByText("View agents", { exact: true }).click();
   await expect(checked).toHaveCount(2);
-  await expect(form.getByRole("checkbox", { name: "agent.write", exact: true })).toBeChecked();
-  await expect(form.getByRole("checkbox", { name: "skill.write", exact: true })).toBeChecked();
-  await expect(form.getByRole("checkbox", { name: "agent.read", exact: true })).not.toBeChecked();
+  await expect(form.getByRole("checkbox", { name: "Edit agents", exact: true })).toBeChecked();
+  await expect(form.getByRole("checkbox", { name: "Edit skills", exact: true })).toBeChecked();
+  await expect(form.getByRole("checkbox", { name: "View agents", exact: true })).not.toBeChecked();
 }
 
 test("a new key starts with no scope ticked and gets exactly the scopes ticked", async ({

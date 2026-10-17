@@ -25,7 +25,7 @@ import {
 } from "../../../shared/api/personal-api-keys";
 import { usePlatformContextQuery } from "../../../shared/api/workspace-queries";
 import type { RevealedSecret } from "../../control-plane/api-access-secret-fields";
-import { formatDateTime } from "../../../shared/locale-format";
+import { formatMomentShort } from "../../../shared/locale-format";
 import { PersonalKeyFields } from "../../control-plane/personal-api-key-fields";
 import {
   KeyProblemNotice,
@@ -342,10 +342,10 @@ export function ConnectCodeConfirm({
           {request.clientLabel ?? t("personalApiKeys.unnamedClient")}
         </KeyValue>
         <KeyValue label={t("personalApiKeys.codeStarted")}>
-          {formatDateTime(request.createdAt, locale)}
+          {formatMomentShort(request.createdAt, locale)}
         </KeyValue>
         <KeyValue label={t("personalApiKeys.codeExpires")}>
-          {formatDateTime(request.expiresAt, locale)}
+          {formatMomentShort(request.expiresAt, locale)}
         </KeyValue>
       </KeyValueList>
       <Banner tone="warning" title={t("personalApiKeys.ownTerminalOnly")}>

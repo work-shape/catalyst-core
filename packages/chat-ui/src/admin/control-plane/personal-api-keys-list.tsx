@@ -15,14 +15,31 @@ import {
   TableHeader,
   TableRow
 } from "@work-shape/catalyst-ui";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { apiErrorMessage } from "../../shared/workspace-utils";
 import { copyStateFor, type RecordedSecretCopy } from "./api-access-model";
 import { copySecretField, SecretFields, type RevealedSecret } from "./api-access-secret-fields";
-import { formatDateTime } from "../../shared/locale-format";
-import { personalKeyState, type PersonalKeyState } from "./personal-api-keys-model";
+import { formatMomentShort } from "../../shared/locale-format";
+import { actionLabel } from "../access/right-words";
+import {
+  keysSharingAName,
+  personalKeyScopeParts,
+  personalKeyStart,
+  personalKeyState,
+  type PersonalKeyState
+} from "./personal-api-keys-model";
 
-const stateTone = { active: "accent", revoked: "neutral", expired: "neutral" } as const;
+const stateTone = { active: "success", revoked: "neutral", expired: "neutral" } as const;
+
+/**
+ * What a scope of a key allows, as the rights screens name its action, with the prefix of the
+ * assets it is limited to: "Agenten bearbeiten in kai-".
+ */
+function scopeLabel(scope: string, t: TranslationContextValue["t"]): string {
+  const { action, prefix } = personalKeyScopeParts(scope);
+  const right = actionLabel(action, t);
+  return prefix ? t("personalApiKeys.scopeLimited", { right, prefix }) : right;
+}
 
 /** Why a key could not be read, issued or revoked. A refusal needs somebody with more rights. */
 export interface KeyProblem {
@@ -43,7 +60,8 @@ export function KeyProblemNotice({ problem }: { problem: KeyProblem }) {
 
 /**
  * Personal API keys as a table, with Revoke behind one question. The owner's column is shown
- * on the instance's list of every person's keys.
+ * on the instance's list of every person's keys. A key is named by its name; how it starts is
+ * said only where its owner holds another key of the same name.
  */
 export function PersonalApiKeysTable({
   keys,
@@ -76,6 +94,7 @@ export function PersonalApiKeysTable({
     return <EmptyState layout="inline">{t("personalApiKeys.empty")}</EmptyState>;
   }
 
+  const sharingAName = keysSharingAName(keys);
   const close = () => {
     setToRevoke(undefined);
     setRevokeError(undefined);
@@ -83,18 +102,20 @@ export function PersonalApiKeysTable({
 
   return (
     <>
+      {/* Name, status and Revoke never fold: Created folds first, then Last used, Expires,
+          what the key may do and the owner, each into the details under the name. Status and
+          Revoke take only their content's width, so the name and its details get the rest. */}
       <Table>
         <TableHeader>
           <TableRow>
-            {showOwner ? <TableHead>{t("personalApiKeys.owner")}</TableHead> : null}
             <TableHead>{t("apiAccessName")}</TableHead>
-            <TableHead>{t("apiAccessKeyPrefix")}</TableHead>
-            <TableHead>{t("apiAccessScopes")}</TableHead>
-            <TableHead>{t("apiAccessCreatedAt")}</TableHead>
-            <TableHead>{t("apiAccessExpires")}</TableHead>
-            <TableHead>{t("apiAccessLastUsed")}</TableHead>
-            <TableHead>{t("apiAccessStatus")}</TableHead>
-            {onRevoke ? <TableHead /> : null}
+            {showOwner ? <TableHead priority={1}>{t("personalApiKeys.owner")}</TableHead> : null}
+            <TableHead priority={2}>{t("personalApiKeys.actions")}</TableHead>
+            <TableHead priority={3}>{t("apiAccessExpires")}</TableHead>
+            <TableHead priority={4}>{t("apiAccessLastUsed")}</TableHead>
+            <TableHead priority={5}>{t("apiAccessCreatedAt")}</TableHead>
+            <TableHead className="w-0">{t("apiAccessStatus")}</TableHead>
+            {onRevoke ? <TableHead className="w-0" /> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -102,28 +123,32 @@ export function PersonalApiKeysTable({
             const state = personalKeyState(key);
             return (
               <TableRow key={key.id}>
+                <TableCell rowDetail>
+                  <span className="block font-medium wrap-anywhere">{key.name}</span>
+                  {sharingAName.has(key.id) ? (
+                    // A start has no spaces; it wraps anywhere rather than widen the column.
+                    <span className="block text-caption text-muted-foreground wrap-anywhere">
+                      {t("personalApiKeys.startsWith", { prefix: personalKeyStart(key.keyPrefix) })}
+                    </span>
+                  ) : null}
+                </TableCell>
                 {showOwner ? (
                   <TableCell>{key.ownerDisplayLabel ?? key.ownerUserId}</TableCell>
                 ) : null}
-                <TableCell className="font-medium">{key.name}</TableCell>
                 <TableCell>
-                  <code className="text-caption">{key.keyPrefix}…</code>
+                  {/* Muted on the span: a folded cell moves only its children under the name. */}
+                  <span className="text-muted-foreground">
+                    {key.scopes.map((scope) => scopeLabel(scope, t)).join(", ")}
+                  </span>
                 </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {key.scopes.map((scope) => (
-                      <Badge key={scope}>{scope}</Badge>
-                    ))}
-                  </div>
+                <TableCell className="whitespace-nowrap text-muted-foreground">
+                  {formatMomentShort(key.expiresAt, locale)}
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatDateTime(key.createdAt, locale)}
+                <TableCell className="whitespace-nowrap text-muted-foreground">
+                  {key.lastUsedAt ? formatMomentShort(key.lastUsedAt, locale) : t("apiAccessNever")}
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatDateTime(key.expiresAt, locale)}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {key.lastUsedAt ? formatDateTime(key.lastUsedAt, locale) : t("apiAccessNever")}
+                <TableCell className="whitespace-nowrap text-muted-foreground">
+                  {formatMomentShort(key.createdAt, locale)}
                 </TableCell>
                 <TableCell>
                   <Badge tone={stateTone[state]}>{stateLabel[state]}</Badge>
@@ -132,7 +157,7 @@ export function PersonalApiKeysTable({
                   <TableCell className="text-right">
                     {state === "active" ? (
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         disabled={revoking}
                         onClick={() => setToRevoke(key)}

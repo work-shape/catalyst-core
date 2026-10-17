@@ -22,10 +22,12 @@ export {
   initialPersonalKeyDraft,
   instanceUrl,
   isCompleteConnectCode,
+  keysSharingAName,
   personalKeyActionOffer,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
   personalKeyRequest,
+  personalKeyScopeParts,
   personalKeyState
 } from "../../packages/chat-ui/src/admin/control-plane/personal-api-keys-model";
 export {
