@@ -789,6 +789,13 @@ export const KNOWLEDGE_SYNC_COUNTS = [
 ] as const;
 export type KnowledgeSyncCount = (typeof KNOWLEDGE_SYNC_COUNTS)[number];
 
+/**
+ * The ranked lists a search on the built-in backend fuses: cosine distance to the query's
+ * embedding, German and English full text, and the words of a document's title and file name.
+ */
+export const KNOWLEDGE_SEARCH_SIGNALS = ["semantic", "keyword", "title"] as const;
+export type KnowledgeSearchSignal = (typeof KNOWLEDGE_SEARCH_SIGNALS)[number];
+
 export const DATABASE_RELATION_TYPES = [
   "table",
   "view",

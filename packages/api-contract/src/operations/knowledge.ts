@@ -3,7 +3,8 @@ import {
   KNOWLEDGE_BASE_STATUSES,
   KNOWLEDGE_DOCUMENT_FAILURE_CODES,
   KNOWLEDGE_DOCUMENT_STATES,
-  KNOWLEDGE_DOCUMENT_WAIT_CODES
+  KNOWLEDGE_DOCUMENT_WAIT_CODES,
+  KNOWLEDGE_SEARCH_SIGNALS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { defineRegisteredOperation, json } from "./define-operation";
@@ -127,6 +128,38 @@ const knowledgeRetryDocumentsResponseSchema = z.object({
   queued: z.number().int()
 });
 
+const knowledgeSearchRequestSchema = z.strictObject({
+  /** Words or a question. Quoted words are a phrase, and a word after `-` is left out. */
+  query: z.string().trim().min(1).max(1_000),
+  /** Passages to answer at most: 20 by default, at most 50. */
+  limit: z.number().int().min(1).max(50).optional()
+});
+
+const knowledgeSearchResponseSchema = z.object({
+  /** The passages that answer the query best, best first. */
+  passages: z.array(
+    z.object({
+      /** `K1`, `K2` and so on, in the order of the answer. */
+      ref: z.string(),
+      knowledgeBase: z.string(),
+      documentId: z.string(),
+      /** The copy of the file the Knowledge Base owns. */
+      fileId: z.string(),
+      fileName: z.string(),
+      title: z.string(),
+      /** The page, from 1. None for a text file. */
+      page: z.number().int().optional(),
+      heading: z.string().optional(),
+      text: z.string(),
+      /** Reciprocal rank fusion of the lists in `signals`: compare it only within one Knowledge Base. */
+      score: z.number(),
+      originLink: z.string().optional()
+    })
+  ),
+  /** The ranked lists fused: `semantic`, `keyword` and `title`. */
+  signals: z.array(z.enum(KNOWLEDGE_SEARCH_SIGNALS))
+});
+
 const BASE = {
   tag: "Knowledge Bases",
   auth: "principal",
@@ -229,5 +262,19 @@ export const knowledgeOperations = {
     response: json(knowledgeRetryDocumentsResponseSchema),
     errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
     rateClass: "write"
+  }),
+  "knowledge_bases.search": defineRegisteredOperation({
+    ...BASE,
+    id: "knowledge_bases.search",
+    method: "POST",
+    path: "/api/v1/knowledge-bases/:knowledgeBase/search",
+    summary:
+      "Search the documents of a Knowledge Base: the passages that answer a query best, by meaning, by words and by title, with file and page",
+    scope: "data_store_rows:read",
+    effect: "reading",
+    body: knowledgeSearchRequestSchema,
+    response: json(knowledgeSearchResponseSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
+    rateClass: "read"
   })
 };

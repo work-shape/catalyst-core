@@ -1,7 +1,9 @@
 import {
   isDataToolName,
   knowledgeOperationNamesOf,
+  KNOWLEDGE_OPERATION_PREFIX,
   KNOWLEDGE_QUERY_TOOL_NAME,
+  KNOWLEDGE_SEARCH_TOOL_NAME,
   type AgentConfig,
   type DataToolDescriptor,
   type DataToolSource,
@@ -41,9 +43,10 @@ export interface AgentDataTools {
  * on without it. Without a source every data tool the agent lists is missing, and so it is
  * when the source fails or does not answer within `timeoutMs`. It never throws.
  *
- * The Knowledge Bases an agent lists are read in the same call, as the query operation of
- * each. Where one of them is described, so is the one tool over them, `knowledge.query`,
- * which the agent is offered in their place.
+ * The Knowledge Bases an agent lists are read in the same call, as the query and the search
+ * operation of each, of which a Knowledge Base answers the one its backend offers. Where one
+ * of them is described, so is the one tool over them, `knowledge.query` or `knowledge.search`,
+ * which the agent is offered in their place. A Knowledge Base is missing when neither is.
  */
 export async function describeAgentDataTools(
   agent: Pick<AgentConfig, "toolNames" | "knowledgeBases">,
@@ -53,7 +56,7 @@ export async function describeAgentDataTools(
   const knowledge = knowledgeOperationNamesOf(agent);
   const listed = [...new Set([...agent.toolNames.filter(isDataToolName), ...knowledge])];
   const accepted = (name: string) =>
-    listed.includes(name) || (name === KNOWLEDGE_QUERY_TOOL_NAME && knowledge.length > 0);
+    listed.includes(name) || (KNOWLEDGE_TOOL_NAMES.includes(name) && knowledge.length > 0);
   if (listed.length === 0 || !source) {
     return { described: [], missing: listed };
   }
@@ -68,11 +71,26 @@ export async function describeAgentDataTools(
       byName.set(descriptor.name, descriptor);
     }
   }
+  // A Knowledge Base answers its query or its search: it is missing where it answers neither.
+  const knowledgeBaseOf = (name: string) => {
+    const parts = name.startsWith(KNOWLEDGE_OPERATION_PREFIX) ? name.split(".") : [];
+    return parts.length === 3 ? parts[1] : undefined;
+  };
+  const answered = new Set([...byName.keys()].flatMap((name) => knowledgeBaseOf(name) ?? []));
   return {
-    described: [...listed, KNOWLEDGE_QUERY_TOOL_NAME].flatMap((name) => byName.get(name) ?? []),
-    missing: listed.filter((name) => !byName.has(name))
+    described: [...listed, ...KNOWLEDGE_TOOL_NAMES].flatMap((name) => byName.get(name) ?? []),
+    missing: listed.filter((name) => {
+      const knowledgeBase = knowledgeBaseOf(name);
+      return knowledgeBase === undefined ? !byName.has(name) : !answered.has(knowledgeBase);
+    })
   };
 }
+
+/** The tools an agent reaches its Knowledge Bases with, one per method kind. */
+const KNOWLEDGE_TOOL_NAMES: readonly string[] = [
+  KNOWLEDGE_QUERY_TOOL_NAME,
+  KNOWLEDGE_SEARCH_TOOL_NAME
+];
 
 /** The source's answer, or how it failed. The read itself cannot be stopped, only left. */
 async function describeWithin(
@@ -104,7 +122,7 @@ async function describeWithin(
  */
 export function isUnofferedDataToolCall(toolName: string, offered: ReadonlySet<string>): boolean {
   return (
-    (isDataToolName(toolName) || toolName === KNOWLEDGE_QUERY_TOOL_NAME) && !offered.has(toolName)
+    (isDataToolName(toolName) || KNOWLEDGE_TOOL_NAMES.includes(toolName)) && !offered.has(toolName)
   );
 }
 
@@ -130,12 +148,12 @@ export function materializeModelTools(input: ModelToolMaterializationInput): Mod
   );
   const releaseTools = input.toolRegistry.listDescriptorsForAgent(functionToolNames);
   const releaseNames = new Set(releaseTools.map((tool) => tool.name));
-  // The operations of the agent's Knowledge Bases are no tools of their own: the one
-  // knowledge tool stands for them.
+  // The operations of the agent's Knowledge Bases are no tools of their own: the knowledge
+  // tools stand for them.
   const dataTools = (input.dataTools ?? []).filter(
     (tool) =>
       ((isDataToolName(tool.name) && functionToolNames.includes(tool.name)) ||
-        tool.name === KNOWLEDGE_QUERY_TOOL_NAME) &&
+        KNOWLEDGE_TOOL_NAMES.includes(tool.name)) &&
       !releaseNames.has(tool.name)
   );
   const functionTools = [...releaseTools, ...dataTools].map((tool): ModelTool => ({

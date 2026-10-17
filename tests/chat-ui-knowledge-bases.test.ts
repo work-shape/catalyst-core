@@ -102,6 +102,7 @@ const source: KnowledgeBaseSource = {
   useState: () => ready(needsAttention),
   check: async () => ({ ok: true, data: needsAttention }),
   query: async () => ({ ok: false, refused: false, message: undefined }),
+  search: async () => ({ ok: false, refused: false, message: undefined }),
   useDataStores: () => ready([{ name: "findings", title: "Findings store" }]),
   useStoreTables: () => ready(["findings", "runs"]),
   useKnowledgeBases: () => ready([]),
@@ -235,6 +236,9 @@ describe("Knowledge Bases of documents", () => {
     expect(page).not.toContain('role="radiogroup"');
     expect(page).not.toContain("Choose a data store");
     expect(page).not.toContain("Test query");
+    // Instead a search to try, as an agent searches.
+    expect(page).toContain("Test search");
+    expect(page).toContain("data-knowledge-test-search");
   });
 
   it("is being set up while its store is made, and needs no attention for that", () => {
@@ -271,6 +275,7 @@ describe("Knowledge Bases of documents", () => {
       expect(page).toContain("Tables of a data store");
       expect(page).not.toContain("Choose a data store");
       expect(page).toContain("Publish the knowledge base to see its status and to add documents.");
+      expect(page).toContain("Publish the knowledge base to try a search.");
     } finally {
       clearBuildStartRequest();
     }

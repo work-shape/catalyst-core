@@ -11,6 +11,7 @@ import {
   type KnowledgeBackend,
   type KnowledgeDocumentFormat,
   type KnowledgeFiles,
+  type KnowledgeQueryEmbedder,
   type Logger,
   type OperationSource,
   type PlatformStores,
@@ -68,9 +69,13 @@ export interface KnowledgeBases {
   retire(stores: PlatformStores, assetId: string, published: unknown): Promise<void>;
   /**
    * The operations of every Knowledge Base, with where added files come from and their copies
-   * go: what the process has once its call path is built.
+   * go, and how the query of a search is embedded: what the process has once its call path is
+   * built.
    */
-  operationSource(files: KnowledgeFiles | undefined): OperationSource;
+  operationSource(
+    files: KnowledgeFiles | undefined,
+    embedQuery?: KnowledgeQueryEmbedder
+  ): OperationSource;
   /**
    * The jobs of the documents of Knowledge Bases, where the process keeps files: the one that
    * removes the copies a call of `add_files` left without documents, and the index job
@@ -181,8 +186,12 @@ export function createKnowledgeBases(input: {
         if (target.backend === "builtin") await enqueueKnowledgeRemoval(stores, runtime, target);
       }
     },
-    operationSource: (files) =>
-      createKnowledgeOperationSource(files ? { ...runtime, files } : runtime),
+    operationSource: (files, embedQuery) =>
+      createKnowledgeOperationSource({
+        ...runtime,
+        ...(files ? { files } : {}),
+        ...(embedQuery ? { embedQuery } : {})
+      }),
     fileJobs: (files, auditRecorder, embed) => {
       const cleanup = createKnowledgeFileCleanupJobs(runtime, files);
       const removal = createKnowledgeRemovalJobs(runtime, files, auditRecorder);

@@ -79,6 +79,7 @@
 {"name":"knowledge_base.documents_purged","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.documents_removed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.files_added","legacy":false,"audited":true,"phases":["after"]}
+{"name":"knowledge_base.searched","legacy":false,"audited":true,"phases":["after"]}
 {"name":"live_once.cleared","legacy":false,"audited":true,"phases":["after"]}
 {"name":"live_once.switched_on","legacy":false,"audited":true,"phases":["after"]}
 {"name":"live_once.used","legacy":false,"audited":true,"phases":["after"]}

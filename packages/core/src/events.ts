@@ -534,6 +534,28 @@ export const EVENTS = {
       }
     }
   },
+  // One search of a Knowledge Base's documents. The subject is the Knowledge Base's asset. It
+  // keeps a SHA-256 of the query, never the query, and no passage or file name: how many
+  // passages it answered, the ranked lists it fused and how long it took.
+  "knowledge_base.searched": {
+    name: "knowledge_base.searched",
+    subject: "config_asset",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["knowledgeBase", "queryHash", "results", "signals", "durationMs"],
+      properties: {
+        knowledgeBase: { type: "string" },
+        queryHash: { type: "string" },
+        results: { type: "integer", minimum: 0 },
+        signals: { type: "array", items: { type: "string" } },
+        durationMs: { type: "integer", minimum: 0 }
+      }
+    }
+  },
   // "Run live once" on an action or a step of a draft (ADR-0031). The subject is the App or
   // the Workflow; the metadata names its draft revision, the action or step and who set it.
   // A guardrail made to enforce at its scope, or taken back: who, which revision and where.

@@ -50,7 +50,8 @@ export interface AgentConfig {
   skillNames: string[];
   /**
    * The Knowledge Bases the agent answers from, by id. However many it lists, the agent has one
-   * tool over all of them, `knowledge.query`. Missing means none.
+   * tool over those of tables, `knowledge.query`, and one over those of documents,
+   * `knowledge.search`. Missing means none.
    */
   knowledgeBases?: string[];
   initialPrompts: AgentInitialPromptConfig[];

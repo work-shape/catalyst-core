@@ -71,6 +71,7 @@ export { appDataLines, audienceLine, fillerLine } from "./data-store-provenance-
 export type { AppDataSources } from "./data-store-provenance-model";
 export { knowledgeBaseKindOn } from "./knowledge-base-kind";
 export { KnowledgeAddDialog, KnowledgeDocuments } from "./knowledge-base-documents";
+export { KnowledgeTestSearch } from "./knowledge-base-test-search";
 export {
   KNOWLEDGE_DOCUMENT_FAILURES,
   knowledgeBaseConfigToForm,
@@ -83,7 +84,8 @@ export type {
   KnowledgeBaseState,
   KnowledgeDocument,
   KnowledgeOpenableFile,
-  KnowledgeRead
+  KnowledgeRead,
+  KnowledgeSearchAnswer
 } from "./knowledge-base-source";
 export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";
 export { toggleToolName } from "./tool-group";

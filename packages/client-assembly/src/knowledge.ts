@@ -4,8 +4,11 @@ import {
   AppError,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_DOCUMENT_FORMATS,
-  KNOWLEDGE_TEXT_FORMATS
+  KNOWLEDGE_TEXT_FORMATS,
+  type ClientInstanceId,
+  type KnowledgeQueryEmbedder
 } from "@work-shape/catalyst-core";
+import type { ModelGateway } from "@work-shape/catalyst-model-provider";
 import {
   getModelProviderConfigs,
   type ClientInstanceConfig
@@ -40,6 +43,31 @@ export function knowledgeEmbedding(
   return { ...(defaultBinding === undefined ? {} : { defaultBinding }), models };
 }
 
+/**
+ * How a search embeds its query: one text through the gateway with the purpose
+ * `knowledge_query`, with a binding of kind `embedding` that release config has now. A binding
+ * it no longer has answers nothing, and the search answers from full text and titles.
+ */
+function queryEmbedder(
+  config: Pick<ClientInstanceConfig, "modelBindings">,
+  clientInstanceId: ClientInstanceId,
+  gateway: Pick<ModelGateway, "embed">
+): KnowledgeQueryEmbedder {
+  return async ({ bindingId, text, attribution, correlationId, signal }) => {
+    const binding = config.modelBindings.find((candidate) => candidate.id === bindingId);
+    if (binding?.kind !== "embedding") return undefined;
+    const answer = await gateway.embed({
+      binding: { bindingId },
+      texts: [text],
+      attribution: { kind: "system", purpose: "knowledge_query", ...attribution },
+      clientInstanceId,
+      correlationId,
+      ...(signal ? { signal } : {})
+    });
+    return answer.vectors[0];
+  };
+}
+
 /** The kind `knowledge_base` as the asset workflow of the API registers it. */
 function workflowAssetKind(knowledgeBases: KnowledgeBases): WorkflowAssetKind {
   return {
@@ -72,7 +100,14 @@ const KNOWLEDGE_BASE_NOT_AVAILABLE = "Knowledge Base is not available";
 const knowledgeRoutes: RouteRegistration = (routes) => {
   const bind = (
     part:
-      "query" | "state" | "check" | "add_files" | "list_documents" | "retry" | "remove_documents",
+      | "query"
+      | "state"
+      | "check"
+      | "add_files"
+      | "list_documents"
+      | "retry"
+      | "remove_documents"
+      | "search",
     right: string
   ) => ({
     target: ({ knowledgeBase, ...input }: { knowledgeBase: string }) => ({
@@ -110,6 +145,10 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
     apiOperations["knowledge_bases.retry_documents"],
     bind("retry", KNOWLEDGE_BASE_ACTIONS.write)
   );
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.search"],
+    bind("search", KNOWLEDGE_BASE_ACTIONS.use)
+  );
 };
 
 /**
@@ -139,7 +178,12 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
   });
   return {
     assetKinds: [workflowAssetKind(knowledgeBases)],
-    operationSources: (runtime) => [knowledgeBases.operationSource(runtime.files)],
+    operationSources: (runtime) => [
+      knowledgeBases.operationSource(
+        runtime.files,
+        queryEmbedder(parts.config, parts.clientInstanceId, runtime.modelGateway)
+      )
+    ],
     start: (runtime) => {
       const fileJobs = knowledgeBases.fileJobs(runtime.files, runtime.auditRecorder, (call) =>
         runtime.modelGateway.embed(call)

@@ -93,6 +93,7 @@ function plantedSource(overrides: Partial<KnowledgeBaseSource> = {}) {
     useState: () => ({ status: "loading" }),
     check: unused,
     query: unused,
+    search: unused,
     useDataStores: () => ready([]),
     useStoreTables: () => ready([]),
     useKnowledgeBases: () => ready([]),

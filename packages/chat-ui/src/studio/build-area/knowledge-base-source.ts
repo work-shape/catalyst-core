@@ -14,6 +14,10 @@ export type KnowledgeBaseState = Awaited<ReturnType<ApiClient["knowledge_bases"]
 /** The rows a query answers, with the Knowledge Base and its tables as their source. */
 export type KnowledgeQueryAnswer = Awaited<ReturnType<ApiClient["knowledge_bases"]["query"]>>;
 
+/** The passages a search of a Knowledge Base that keeps documents answers, best first. */
+export type KnowledgeSearchAnswer = Awaited<ReturnType<ApiClient["knowledge_bases"]["search"]>>;
+export type KnowledgeSearchPassage = KnowledgeSearchAnswer["passages"][number];
+
 /** One document of a Knowledge Base that keeps documents, as `knowledge_bases.list_documents` answers it. */
 export type KnowledgeDocument = Awaited<
   ReturnType<ApiClient["knowledge_bases"]["list_documents"]>
@@ -96,6 +100,8 @@ export interface KnowledgeBaseSource {
   check(knowledgeBase: string): Promise<KnowledgeCall<KnowledgeBaseState>>;
   /** Runs one read-only statement on the published revision. */
   query(knowledgeBase: string, sql: string): Promise<KnowledgeCall<KnowledgeQueryAnswer>>;
+  /** Searches the documents of the published revision, as an agent does. */
+  search(knowledgeBase: string, query: string): Promise<KnowledgeCall<KnowledgeSearchAnswer>>;
   /** A hook: the Data Stores the reader may read whose name or id holds `search`. */
   useDataStores(search: string): KnowledgeRead<readonly KnowledgeChoice[]>;
   /** A hook: the tables of one Data Store. Without a store it reads nothing and stays loading. */
@@ -161,6 +167,8 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
       }),
     query: (knowledgeBase, sql) =>
       called(() => client.knowledge_bases.query({ params: { knowledgeBase }, body: { sql } })),
+    search: (knowledgeBase, query) =>
+      called(() => client.knowledge_bases.search({ params: { knowledgeBase }, body: { query } })),
     useDataStores: (search) =>
       useChoices(client, key("choice", "data_store", search), {
         kind: "data_store",

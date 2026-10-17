@@ -5,6 +5,7 @@ import type {
   KnowledgeCheckResult,
   KnowledgeDocumentFormat,
   KnowledgeFiles,
+  KnowledgeQueryEmbedder,
   Logger,
   PlatformStores
 } from "@work-shape/catalyst-core";
@@ -18,6 +19,11 @@ export interface KnowledgeRuntime {
   backend: KnowledgeBackend;
   /** Where added files come from and their copies go. Absent where the process has none. */
   files?: KnowledgeFiles;
+  /**
+   * How the query of a search is embedded. Absent where the process has no model gateway: a
+   * search there answers from full text and titles.
+   */
+  embedQuery?: KnowledgeQueryEmbedder;
   /** The formats a file added here may be in: text, and PDF and DOCX with document processing. */
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */

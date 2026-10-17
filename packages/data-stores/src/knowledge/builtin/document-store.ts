@@ -20,6 +20,7 @@ import { databaseFailureError } from "../../failures";
 import { ensureVectorExtension } from "../../provisioning";
 import type { DataStoreRuntime } from "../../runtime";
 import { createDocumentRemoval } from "./remove-documents";
+import { searchKnowledgeStore } from "./search";
 
 // The documents and contents of a Knowledge Base on the built-in backend, as its index job and
 // its page reach them, in the store it owns, as the platform's role. A write locks the one
@@ -28,7 +29,7 @@ import { createDocumentRemoval } from "./remove-documents";
 // not held up by indexing.
 //
 // Sensitive data. Chunks hold the document's text; file names and titles are on `documents`.
-// None of it leaves this module but through the list, which the page shows to holders of
+// None of it leaves this module but through the list and the search, which answer holders of
 // `knowledge_base.use`, and the index job, which writes it here and sends the passages of a
 // Knowledge Base that searches by meaning to its embedding model.
 //
@@ -44,6 +45,9 @@ const KNOWLEDGE_INDEX_WRITE_TIMEOUT_MS = 300_000;
 
 /** How long a read, a failure mark or a retry may take. */
 const KNOWLEDGE_DOCUMENTS_TIMEOUT_MS = 30_000;
+
+/** How long one search of the store may take: each of its two reads, not the embedding. */
+const KNOWLEDGE_SEARCH_TIMEOUT_MS = 15_000;
 
 /** How many chunks one insert statement writes. */
 const CHUNK_INSERT_BATCH = 500;
@@ -545,6 +549,18 @@ export function createBuiltinDocumentStore(
               : [];
           });
         }
+      );
+    },
+
+    search(input, signal) {
+      return searchKnowledgeStore(
+        (work) =>
+          inStore("Searching the documents", KNOWLEDGE_SEARCH_TIMEOUT_MS, signal, async (sql) => {
+            await sql.script("set transaction read only");
+            return work(sql);
+          }),
+        target,
+        input
       );
     }
   };

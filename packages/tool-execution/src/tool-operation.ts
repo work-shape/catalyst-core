@@ -4,6 +4,7 @@ import {
   AppError,
   KNOWLEDGE_OPERATION_PREFIX,
   KNOWLEDGE_QUERY_TOOL_NAME,
+  KNOWLEDGE_SEARCH_TOOL_NAME,
   OPERATION_DENIAL_REASONS,
   OPERATION_EFFECTS,
   PERMISSION_REF_ACTION_PREFIX,
@@ -39,6 +40,7 @@ import {
 } from "@work-shape/catalyst-core";
 import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import { ZodError, z } from "zod";
+import { createKnowledgeRefCounter, runKnowledgeSearch } from "./knowledge-search-tool";
 import type { OperationOutcome, RunOperationDeps } from "./operation-execution";
 import { runOperation } from "./run-operation";
 import { toolFailureLogRecord } from "./tool-failure-log";
@@ -449,7 +451,12 @@ export function createToolOperationRunner(
   tools: ToolRegistry,
   dataTools?: DataToolRunnerOptions
 ): ToolOperationRunner {
-  return async (toolRequest, context, options = {}) => {
+  const takeKnowledgeRefs = createKnowledgeRefCounter();
+  const runner: ToolOperationRunner = async (toolRequest, context, options = {}) => {
+    // One call of each Knowledge Base's search, merged: each call takes this runner's path.
+    if (toolRequest.toolName === KNOWLEDGE_SEARCH_TOOL_NAME) {
+      return runKnowledgeSearch(toolRequest, context, options, deps, runner, takeKnowledgeRefs);
+    }
     const projected:
       | { request: ToolExecutionRequest; idempotencyKey?: string }
       | { refusal: ToolHandlerFailureResult } =
@@ -531,6 +538,7 @@ export function createToolOperationRunner(
       return refused;
     }
   };
+  return runner;
 }
 
 /**

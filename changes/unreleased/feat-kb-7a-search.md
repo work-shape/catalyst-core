@@ -1,0 +1,8 @@
+---
+section: Added
+---
+
+- `knowledge.<id>.search` (right `knowledge_base.use`, `POST /api/v1/knowledge-bases/:knowledgeBase/search`) answers the passages of a built-in Knowledge Base's documents that match a query best (KB-7a). One statement fuses up to three ranked lists by reciprocal rank (k = 60): German and English full text, the words of each document's title and file name, and exact cosine over the active generation of embeddings (`catalyst_kb.embeddings_<generation>`, `chunk_id` and `embedding halfvec(<dimensions>)`) where the Knowledge Base searches by meaning. Without an active generation the search answers by words and titles. Withdrawn documents are left out in the same statement. The answer names the lists it fused under `signals`.
+- With search by meaning the query is embedded once per call as model usage with the purpose `knowledge_query`, tied to the call's Operation Run. Every search is recorded: its run keeps a hash of the input, and the audit event `knowledge_base.searched` records a SHA-256 of the query, the result count, the lists fused and the duration. No query text, passage or file name is logged.
+- The agent tool `knowledge.search` searches every Knowledge Base with documents assigned to the agent, or the ones named under `knowledgeBases`, as one recorded call of `knowledge.<id>.search` per Knowledge Base. It merges the lists by rank, numbers the passages `K1`, `K2` and so on uniquely within an Agent Run, and names under `skipped` each Knowledge Base the person may not use or that failed. Naming a Knowledge Base not assigned to the agent is refused.
+- The page of a Knowledge Base with documents has a test search.

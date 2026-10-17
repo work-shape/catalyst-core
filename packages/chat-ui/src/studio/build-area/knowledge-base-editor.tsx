@@ -22,6 +22,7 @@ import { refusalsOf } from "./build-refusals";
 import { ReadState } from "./data-store-read-state";
 import { KnowledgeStatus, KnowledgeTestQuery } from "./knowledge-base-checks";
 import { KnowledgeDocuments } from "./knowledge-base-documents";
+import { KnowledgeTestSearch } from "./knowledge-base-test-search";
 import {
   knowledgeBaseFormToConfig,
   knowledgeTableRows,
@@ -34,9 +35,9 @@ import type { KnowledgeBaseSource } from "./knowledge-base-source";
 /**
  * The page of one Knowledge Base: what it holds and what it answers from. A new one is chosen
  * to answer from documents or from tables of a Data Store; that stays once it is created. With
- * documents, the published Knowledge Base lists them with their state and takes more; with
- * tables, it names the Data Store with a sentence per table, and once published whether it can
- * read them and a query to try. The frame saves the form as a draft and publishes it.
+ * documents, the published Knowledge Base lists them with their state, takes more and has a
+ * search to try; with tables, it names the Data Store with a sentence per table, and once
+ * published whether it can read them and a query to try. The frame saves the form as a draft and publishes it.
  */
 export function KnowledgeBaseEditor({
   frame,
@@ -186,7 +187,19 @@ export function KnowledgeBaseEditor({
         )
     },
     ...(documents
-      ? []
+      ? [
+          {
+            id: "test",
+            label: t("knowledge.searchTitle"),
+            description: t("knowledge.searchDescription"),
+            body:
+              asset && published !== undefined ? (
+                <KnowledgeTestSearch source={source} knowledgeBase={asset.name} />
+              ) : (
+                <EmptyState layout="inline">{t("knowledge.notPublishedSearch")}</EmptyState>
+              )
+          }
+        ]
       : [
           {
             id: "test",

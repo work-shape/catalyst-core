@@ -3,20 +3,22 @@ import type { AgentConfig } from "@work-shape/catalyst-asset-schemas";
 export type {
   KnowledgeDocumentFailureCode,
   KnowledgeDocumentState,
-  KnowledgeDocumentWaitCode
+  KnowledgeDocumentWaitCode,
+  KnowledgeSearchSignal
 } from "@work-shape/catalyst-asset-schemas";
 import {
   KNOWLEDGE_CHECK_STATUSES,
   type KnowledgeDocumentFailureCode,
   type KnowledgeDocumentState,
-  type KnowledgeDocumentWaitCode
+  type KnowledgeDocumentWaitCode,
+  type KnowledgeSearchSignal
 } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindActions } from "./asset-kinds";
 import type { ConnectionsStore } from "./connections";
 import type { DataStoreRecordsStore, DataStoreRows, DataStoreStatement } from "./data-stores";
 import { z } from "zod";
 import type { AuthenticatedIdentity } from "./identity";
-import type { ClientInstanceId } from "./ids";
+import type { ClientInstanceId, ConversationId } from "./ids";
 import { defineJobKind, subjectDedupeKey, type JobsStore } from "./jobs";
 import type { ObjectStorage } from "./object-storage";
 import type { ActorAccess } from "./permissions";
@@ -44,9 +46,16 @@ import type { ISODateString } from "./time";
 // which lives as long as the document and no longer follows the Conversation it came from, and
 // writes the document's row into the store. The index job then writes the document's text as
 // passages into that store; a PDF or DOCX is extracted first by the document worker, which
-// leaves the text in the instance's store of files (`knowledge-extraction.ts`). Nothing is sent
-// to an embedding provider and nothing is searched yet. Runs and audit rows name file ids,
-// counts, bytes and failure codes, never a file name or text. Spec: Embeddings
+// leaves the text in the instance's store of files (`knowledge-extraction.ts`). Runs and audit
+// rows name file ids, counts, bytes and failure codes, never a file name or text.
+//
+// `knowledge.<id>.search` answers passages (text, file name, page) to its caller, which for an
+// agent puts them into its conversation and sends them to the agent's model. Where the
+// Knowledge Base searches by meaning and has embeddings, the query goes to the embedding
+// provider of the binding its active generation names, as a `knowledge_query` usage event. The
+// run keeps a hash of its input and no output; the audit row `knowledge_base.searched` keeps a
+// hash of the query, the count, the lists fused and the duration. No log line holds the query,
+// a passage or a file name. Spec: Embeddings
 // and documents on the built-in backend, "Documents in a Knowledge Base: retention, audit,
 // authorization and provider region".
 
@@ -83,14 +92,123 @@ export function knowledgeQueryOperationName(knowledgeBase: string): string {
  */
 export const KNOWLEDGE_QUERY_TOOL_NAME = "knowledge.query";
 
+/** The operation that searches the documents of one Knowledge Base. Spec: P38, KB-7a. */
+export function knowledgeSearchOperationName(knowledgeBase: string): string {
+  return `${KNOWLEDGE_OPERATION_PREFIX}${knowledgeBase}.search`;
+}
+
 /**
- * The operations an agent reaches through its one knowledge tool: the query of each
- * Knowledge Base its definition lists. An agent calls these and no other Knowledge Base.
+ * The one tool an agent searches the documents of its Knowledge Bases with, however many it
+ * has. A call is one call of `knowledge.<id>.search` per Knowledge Base it searches, each
+ * through `runOperation` with its own right, run and audit. Spec: P40, "Search, the agent
+ * tool and citations".
+ */
+export const KNOWLEDGE_SEARCH_TOOL_NAME = "knowledge.search";
+
+/**
+ * The operations an agent reaches through its knowledge tools: the query and the search of
+ * each Knowledge Base its definition lists. Which of the two a Knowledge Base answers follows
+ * its backend. An agent calls these and no other Knowledge Base.
  */
 export function knowledgeOperationNamesOf(
   agent: Pick<AgentConfig, "knowledgeBases">
 ): readonly string[] {
-  return (agent.knowledgeBases ?? []).map(knowledgeQueryOperationName);
+  return (agent.knowledgeBases ?? []).flatMap((knowledgeBase) => [
+    knowledgeQueryOperationName(knowledgeBase),
+    knowledgeSearchOperationName(knowledgeBase)
+  ]);
+}
+
+/** How many passages a search answers when the caller names no limit, and at most. */
+export const KNOWLEDGE_SEARCH_LIMIT_DEFAULT = 20;
+export const KNOWLEDGE_SEARCH_LIMIT_MAX = 50;
+
+/** How many places each ranked list of a search takes before the lists are fused. */
+export const KNOWLEDGE_SEARCH_LIST_DEPTH = 50;
+
+/** The constant of reciprocal rank fusion: a place `r` scores `1 / (k + r)`. */
+export const KNOWLEDGE_RRF_K = 60;
+
+/** The longest query a search takes, in characters. */
+export const KNOWLEDGE_SEARCH_QUERY_MAX_CHARS = 1_000;
+
+/**
+ * One passage a search found: where it is (the document, its copy, the page and heading), its
+ * text and its fused score, which is compared only within one Knowledge Base.
+ */
+export interface KnowledgeSearchHit {
+  documentId: string;
+  /** The Managed File the Knowledge Base owns that holds the document's bytes. */
+  fileId: string;
+  fileName: string;
+  title: string;
+  /** The page it is on, from 1. None for a text file, which has no pages. */
+  page?: number;
+  heading?: string;
+  text: string;
+  score: number;
+  originLink?: string;
+}
+
+/** What a search of one Knowledge Base's documents answers, and the lists it fused. */
+export interface KnowledgeSearchAnswer {
+  hits: KnowledgeSearchHit[];
+  signals: KnowledgeSearchSignal[];
+}
+
+/**
+ * The embedding of a search's query with the model a Knowledge Base's active generation was
+ * embedded with. Nothing where that model is not one the instance has now: the search then
+ * answers from full text and titles alone. Spec: "Changing the embedding model".
+ */
+export type KnowledgeQueryEmbedding = (generation: {
+  bindingId: string;
+  dimensions: number;
+}) => Promise<number[] | undefined>;
+
+/**
+ * How a process embeds the query of a search: through the model gateway with the purpose
+ * `knowledge_query`, attributed to the person, the workspace and the run of the search.
+ * Nothing where the binding is not one of kind `embedding` in the release config now.
+ */
+export type KnowledgeQueryEmbedder = (call: {
+  bindingId: string;
+  text: string;
+  attribution: {
+    userId?: string;
+    workspaceId?: string;
+    conversationId?: ConversationId;
+    operationRunId: string;
+  };
+  correlationId: string;
+  signal?: AbortSignal;
+}) => Promise<number[] | undefined>;
+
+/**
+ * Fuses ranked lists by reciprocal rank: an entry at place `r` (from 1) of a list scores
+ * `1 / (k + r)`, and its scores of every list are summed. Ties keep the order of the lists
+ * and of the places. Raw scores of different lists are never compared. Spec: P40.
+ */
+export function fuseByReciprocalRank<T>(
+  lists: readonly (readonly T[])[],
+  keyOf: (entry: T) => string,
+  k: number = KNOWLEDGE_RRF_K
+): { entry: T; score: number }[] {
+  const fused = new Map<string, { entry: T; score: number; first: number }>();
+  let seen = 0;
+  for (const list of lists) {
+    list.forEach((entry, index) => {
+      const key = keyOf(entry);
+      const score = 1 / (k + index + 1);
+      const held = fused.get(key);
+      if (held) held.score += score;
+      else fused.set(key, { entry, score, first: (seen += 1) });
+    });
+  }
+  // Where an entry was first seen breaks a tie: by list order, then by place.
+  return [...fused.values()]
+    .sort((a, b) => b.score - a.score || a.first - b.first)
+    .map(({ entry, score }) => ({ entry, score }));
 }
 
 /**
@@ -742,4 +860,13 @@ export interface KnowledgeDocumentStore {
     documentIds: readonly string[],
     signal?: AbortSignal
   ): Promise<KnowledgeRetriedDocument[]>;
+  /**
+   * The passages that answer `query` best, at most `limit`, from documents not withdrawn, in
+   * one read of the store. With `embed` and an active generation of embeddings, the query's
+   * embedding is one of the lists fused; without, full text and titles alone.
+   */
+  search(
+    input: { query: string; limit: number; embed?: KnowledgeQueryEmbedding },
+    signal?: AbortSignal
+  ): Promise<KnowledgeSearchAnswer>;
 }
