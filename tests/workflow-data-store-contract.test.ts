@@ -613,7 +613,9 @@ describe("the modules workflows and dataStores", () => {
         "knowledge_bases.get",
         "knowledge_bases.check",
         "knowledge_bases.query",
-        "knowledge_bases.add_files"
+        "knowledge_bases.add_files",
+        "knowledge_bases.list_documents",
+        "knowledge_bases.retry_documents"
       ]
     });
     // The kind of a Workflow, its runs and the job that executes their steps.

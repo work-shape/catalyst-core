@@ -536,6 +536,15 @@ export interface ManagedFileStore {
     clientInstanceId: ClientInstanceId;
     fileId: ManagedFileId;
   }): Promise<ManagedFileRecord | undefined>;
+  /**
+   * The files an owner holds among `fileIds`, deleted ones left out, in one read. For a list
+   * that shows each document's size.
+   */
+  listOwnedManagedFilesById(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    fileIds: readonly string[];
+  }): Promise<ManagedFileRecord[]>;
   /** Lists orphaned managed files created before `createdBefore`, ordered by id. */
   listOrphanedManagedFiles(input: {
     clientInstanceId: ClientInstanceId;

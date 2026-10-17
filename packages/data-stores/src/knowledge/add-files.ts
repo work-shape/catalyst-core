@@ -5,6 +5,7 @@ import {
   AppError,
   auditActorFromIdentity,
   createPlatformId,
+  enqueueKnowledgeIndex,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   KNOWLEDGE_BASE_ACTIONS,
@@ -297,6 +298,9 @@ async function addFiles(
     await removeCopiesOfFailedCall(runtime, files, target, copies);
     throw error;
   }
+  if (target.backend === "builtin") {
+    await queueIndexJobs(runtime, knowledgeBase.assetId, documents, context.runId);
+  }
   const fileIds = copies.map((copy) => copy.id);
   await context.audit.record({
     type: "knowledge_base.files_added",
@@ -316,4 +320,31 @@ async function addFiles(
     count: documents.length,
     bytes: bytesAdded
   };
+}
+
+/**
+ * Queues the index job of each content the call added. The documents are added already, so a
+ * failure here is logged and not the call's: their contents stay `pending` until Retry.
+ */
+async function queueIndexJobs(
+  runtime: KnowledgeRuntime,
+  knowledgeBaseId: string,
+  documents: readonly KnowledgeDocumentInput[],
+  operationRunId: string
+): Promise<void> {
+  const contents = new Map(documents.map((document) => [document.contentSha256, document.fileId]));
+  try {
+    for (const [contentSha256, fileId] of contents) {
+      await enqueueKnowledgeIndex(
+        runtime.stores.jobs,
+        { knowledgeBaseId, contentSha256, fileId, operationRunId },
+        { clientInstanceId: runtime.clientInstanceId, dedupe: true }
+      );
+    }
+  } catch (error) {
+    runtime.logger.warn(
+      { error, knowledgeBaseId, contentCount: contents.size },
+      "Queueing the index jobs of added documents failed; Retry queues them"
+    );
+  }
 }

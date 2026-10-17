@@ -1,12 +1,21 @@
 import type { AgentConfig } from "@work-shape/catalyst-asset-schemas";
-import { KNOWLEDGE_CHECK_STATUSES } from "@work-shape/catalyst-asset-schemas";
+
+export type {
+  KnowledgeDocumentFailureCode,
+  KnowledgeDocumentState
+} from "@work-shape/catalyst-asset-schemas";
+import {
+  KNOWLEDGE_CHECK_STATUSES,
+  type KnowledgeDocumentFailureCode,
+  type KnowledgeDocumentState
+} from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindActions } from "./asset-kinds";
 import type { ConnectionsStore } from "./connections";
 import type { DataStoreRecordsStore, DataStoreRows, DataStoreStatement } from "./data-stores";
 import { z } from "zod";
 import type { AuthenticatedIdentity } from "./identity";
 import type { ClientInstanceId } from "./ids";
-import type { JobsStore } from "./jobs";
+import { defineJobKind, subjectDedupeKey, type JobsStore } from "./jobs";
 import type { ObjectStorage } from "./object-storage";
 import type { ActorAccess } from "./permissions";
 import type { ISODateString } from "./time";
@@ -31,8 +40,11 @@ import type { ISODateString } from "./time";
 // backend). A holder of `knowledge_base.write` adds a file a person can open with
 // `knowledge.<id>.add_files`: the platform copies it into a Managed File the Knowledge Base owns,
 // which lives as long as the document and no longer follows the Conversation it came from, and
-// writes the document's row into the store. Nothing is sent anywhere and nothing is searched
-// yet. Runs and audit rows name file ids, counts and bytes, never a file name. Spec: Embeddings
+// writes the document's row into the store. The index job then writes the document's text as
+// passages into that store; a PDF or DOCX is extracted first by the document worker, which
+// leaves the text in the instance's store of files (`knowledge-extraction.ts`). Nothing is sent
+// to an embedding provider and nothing is searched yet. Runs and audit rows name file ids,
+// counts, bytes and failure codes, never a file name or text. Spec: Embeddings
 // and documents on the built-in backend, "Documents in a Knowledge Base: retention, audit,
 // authorization and provider region".
 
@@ -219,6 +231,11 @@ export interface KnowledgeBackend<Target extends KnowledgeBaseTarget = Knowledge
     fileIds: readonly string[],
     signal?: AbortSignal
   ): Promise<string[]>;
+  /**
+   * The documents and contents of the Knowledge Base, for its index job and its operations.
+   * None for a backend that keeps no documents.
+   */
+  documentStore(target: Target): KnowledgeDocumentStore | undefined;
 }
 
 /** A document as it is added to a Knowledge Base that keeps documents. */
@@ -310,28 +327,116 @@ export interface KnowledgeFiles {
 
 /**
  * The job that turns one content of a Knowledge Base's store into text by page: PDF and DOCX,
- * served by the document-processing capability in its worker, which calls no model.
+ * served by the document-processing capability in its worker, which calls no model. Its
+ * handler is made with `defineKnowledgeExtractHandler` (`knowledge-extraction.ts`), which
+ * holds the handoff to the index job.
  */
 export const KNOWLEDGE_BASE_EXTRACT_JOB_KIND = "knowledge_base.extract";
 
 /**
  * The job that chunks one content's text, writes its chunks and, where the Knowledge Base
- * searches by meaning, embeds them.
+ * searches by meaning, embeds them. It runs in the API process.
  */
 export const KNOWLEDGE_BASE_INDEX_JOB_KIND = "knowledge_base.index";
 
+const jobIdSchema = z.string().min(1).max(200);
+
 /**
  * What a job of either kind carries: ids only, never a file name or text. The run is the one of
- * `knowledge.<id>.add_files` whose files caused the work, for the usage it causes.
+ * `knowledge.<id>.add_files` or `knowledge.<id>.retry` whose call caused the work, for the
+ * usage it causes.
  */
-export interface KnowledgeContentJobPayload {
+export const knowledgeContentJobPayloadSchema = z.strictObject({
   /** The id of the Knowledge Base's asset, which is also the id of the store it owns. */
-  knowledgeBaseId: string;
+  knowledgeBaseId: jobIdSchema,
   /** The content: the SHA-256 of the file's bytes, in hex. */
-  contentSha256: string;
-  /** The Managed File the Knowledge Base owns that holds the bytes. */
-  fileId: string;
-  operationRunId: string;
+  contentSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  /** A Managed File the Knowledge Base owns that holds the bytes. */
+  fileId: jobIdSchema,
+  operationRunId: jobIdSchema
+});
+
+export type KnowledgeContentJobPayload = z.infer<typeof knowledgeContentJobPayloadSchema>;
+
+/** The formats only extraction reads. */
+export const KNOWLEDGE_EXTRACTED_FORMATS = [
+  "pdf",
+  "docx"
+] as const satisfies readonly KnowledgeDocumentFormat[];
+
+export type KnowledgeExtractedFormat = (typeof KNOWLEDGE_EXTRACTED_FORMATS)[number];
+
+/** What an extract job carries: the ids of an index job and the format to read the bytes as. */
+export const knowledgeExtractJobPayloadSchema = knowledgeContentJobPayloadSchema.extend({
+  format: z.enum(KNOWLEDGE_EXTRACTED_FORMATS)
+});
+
+export type KnowledgeExtractJobPayload = z.infer<typeof knowledgeExtractJobPayloadSchema>;
+
+/**
+ * The index job. Every write it makes is idempotent: a rerun replaces the content's chunks.
+ * No limit per Knowledge Base, so many contents of one are indexed side by side.
+ */
+export const knowledgeIndexJob = defineJobKind({
+  kind: KNOWLEDGE_BASE_INDEX_JOB_KIND,
+  payloadSchema: knowledgeContentJobPayloadSchema,
+  maxAttempts: 5,
+  backoff: { baseMs: 10_000, maxMs: 10 * 60_000 },
+  leaseMs: 2 * 60_000,
+  concurrency: { global: 4 }
+});
+
+/** The extract job. Its worker's slots bound how many convert at once. */
+export const knowledgeExtractJob = defineJobKind({
+  kind: KNOWLEDGE_BASE_EXTRACT_JOB_KIND,
+  payloadSchema: knowledgeExtractJobPayloadSchema,
+  maxAttempts: 3,
+  backoff: { baseMs: 30_000, maxMs: 10 * 60_000 },
+  leaseMs: 5 * 60_000,
+  concurrency: { global: 2 }
+});
+
+/**
+ * Queues the index job of one content. With `dedupe` a job of the same content that is still
+ * queued takes it instead; without, a second job is queued, which finds the work done or does
+ * it again to the same result. A job that hands work back to the index job queues without
+ * `dedupe`, because the index job that asked may not have ended yet.
+ */
+export function enqueueKnowledgeIndex(
+  jobs: Pick<JobsStore, "enqueue">,
+  payload: KnowledgeContentJobPayload,
+  options: { clientInstanceId: ClientInstanceId; dedupe?: boolean }
+): Promise<unknown> {
+  return jobs.enqueue(knowledgeIndexJob, payload, {
+    clientInstanceId: options.clientInstanceId,
+    subject: payload.knowledgeBaseId,
+    concurrencyKey: payload.knowledgeBaseId,
+    ...(options.dedupe
+      ? {
+          dedupeKey: subjectDedupeKey(
+            KNOWLEDGE_BASE_INDEX_JOB_KIND,
+            `${payload.knowledgeBaseId}:${payload.contentSha256}`
+          )
+        }
+      : {})
+  });
+}
+
+/** Queues the extraction of one content, once while one is queued or running. */
+export function enqueueKnowledgeExtract(
+  jobs: Pick<JobsStore, "enqueue">,
+  payload: KnowledgeExtractJobPayload,
+  options: { clientInstanceId: ClientInstanceId }
+): Promise<unknown> {
+  return jobs.enqueue(knowledgeExtractJob, payload, {
+    clientInstanceId: options.clientInstanceId,
+    subject: payload.knowledgeBaseId,
+    concurrencyKey: payload.knowledgeBaseId,
+    dedupeKey: subjectDedupeKey(
+      KNOWLEDGE_BASE_EXTRACT_JOB_KIND,
+      `${payload.knowledgeBaseId}:${payload.contentSha256}`
+    )
+  });
 }
 
 /**
@@ -344,3 +449,115 @@ export const knowledgeExtractedPagesSchema = z.strictObject({
 });
 
 export type KnowledgeExtractedPages = z.infer<typeof knowledgeExtractedPagesSchema>;
+
+/**
+ * The state of one content in the store: `pending` until its chunks are written, then
+ * `extracted` (its text is extracted and chunked at `chunking_revision`: the document is
+ * indexed), or `failed` with a code. Spec: The store of a built-in Knowledge Base.
+ */
+export const KNOWLEDGE_CONTENT_STATES = ["pending", "extracted", "failed"] as const;
+
+export type KnowledgeContentState = (typeof KNOWLEDGE_CONTENT_STATES)[number];
+
+/** The state a document shows, from the state of its content. */
+export function knowledgeDocumentStateOf(state: KnowledgeContentState): KnowledgeDocumentState {
+  return state === "extracted" ? "indexed" : state;
+}
+
+/** One content as the index job reads it, with one document that holds it. */
+export interface KnowledgeContentToIndex {
+  contentSha256: string;
+  format: KnowledgeDocumentFormat;
+  state: KnowledgeContentState;
+  /** The chunking revision its chunks were written with, once they were. */
+  chunkingRevision?: number;
+  /** A document that holds the content and is not withdrawn. None when every one is. */
+  document?: { fileId: string; title: string; fileName: string };
+}
+
+/** One passage as the index job writes it. Its id is its content, revision and position. */
+export interface KnowledgeChunkInput {
+  position: number;
+  /** The page it is on, from 1. None for a text file, which has no pages. */
+  page?: number;
+  /** The heading it is under, where the text has headings. */
+  heading?: string;
+  text: string;
+  tokenCount: number;
+}
+
+/** A document of a Knowledge Base as its page lists it. */
+export interface KnowledgeDocumentEntry {
+  id: string;
+  /** The Managed File the Knowledge Base owns that holds the bytes. */
+  fileId: string;
+  fileName: string;
+  title: string;
+  format: KnowledgeDocumentFormat;
+  state: KnowledgeDocumentState;
+  failureCode?: KnowledgeDocumentFailureCode;
+  addedAt: ISODateString;
+  /** When its content last changed state. */
+  updatedAt: ISODateString;
+}
+
+/** A document a retry looked at, with what it needs to queue the content's index job. */
+export interface KnowledgeRetriedDocument {
+  id: string;
+  fileId: string;
+  contentSha256: string;
+  /** The state after the retry: a failed content is `pending` again. */
+  state: KnowledgeDocumentState;
+}
+
+/**
+ * The documents and contents of a Knowledge Base that keeps documents, as its index job and
+ * its operations reach them. No call locks the whole Knowledge Base: each locks at most the
+ * content it writes.
+ */
+export interface KnowledgeDocumentStore {
+  readContent(
+    contentSha256: string,
+    signal?: AbortSignal
+  ): Promise<KnowledgeContentToIndex | undefined>;
+  /**
+   * Replaces the content's chunks with `chunks` and marks it `extracted` at the revisions, in
+   * one transaction. Nothing where the content is gone.
+   */
+  writeChunks(
+    input: {
+      contentSha256: string;
+      chunkingRevision: number;
+      extractionRevision: number;
+      pageCount: number;
+      chunks: readonly KnowledgeChunkInput[];
+    },
+    signal?: AbortSignal
+  ): Promise<void>;
+  /** Removes the content's chunks and marks it `failed` with `code`. */
+  failContent(
+    input: { contentSha256: string; code: KnowledgeDocumentFailureCode },
+    signal?: AbortSignal
+  ): Promise<void>;
+  /** The documents not withdrawn, newest first, one page after `cursor`. */
+  listDocuments(
+    input: { limit: number; cursor?: string },
+    signal?: AbortSignal
+  ): Promise<{ documents: KnowledgeDocumentEntry[]; nextCursor?: string }>;
+  /**
+   * The failed contents of the named documents not withdrawn: what a retry puts back, read
+   * before it does so that their stored extraction failures are gone first.
+   */
+  failedContents(
+    documentIds: readonly string[],
+    signal?: AbortSignal
+  ): Promise<{ contentSha256: string; format: KnowledgeDocumentFormat }[]>;
+  /**
+   * Puts the failed contents of the named documents back to `pending`. Answers each named
+   * document that is not withdrawn, in the order named; an unknown id is left out.
+   */
+  retryDocuments(
+    documentIds: readonly string[],
+    signal?: AbortSignal
+  ): Promise<KnowledgeRetriedDocument[]>;
+}

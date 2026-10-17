@@ -153,6 +153,27 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     return row ? mapManagedFile(row) : undefined;
   }
 
+  async listOwnedManagedFilesById(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    fileIds: readonly string[];
+  }): Promise<ManagedFileRecord[]> {
+    if (input.fileIds.length === 0) return [];
+    const rows = await this.db
+      .select()
+      .from(managedFiles)
+      .where(
+        and(
+          eq(managedFiles.clientInstanceId, input.clientInstanceId),
+          eq(managedFiles.ownerKind, input.owner.kind),
+          eq(managedFiles.ownerId, input.owner.id),
+          inArray(managedFiles.id, [...input.fileIds]),
+          ne(managedFiles.status, "deleted")
+        )
+      );
+    return rows.map(mapManagedFile);
+  }
+
   async listOrphanedManagedFiles(input: {
     clientInstanceId: ClientInstanceId;
     createdBefore: string;

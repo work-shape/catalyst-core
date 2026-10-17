@@ -5,6 +5,7 @@ import {
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
   type ActorAccess,
+  type AuditRecorder,
   type ClientInstanceId,
   type DataToolSource,
   type KnowledgeBackend,
@@ -27,6 +28,7 @@ import {
   type KnowledgeEmbedding
 } from "./definition";
 import { createKnowledgeFileCleanupJobs } from "./file-cleanup";
+import { createKnowledgeIndexJobHandler } from "./index-job";
 import { createKnowledgeOperationSource, createKnowledgeToolSource } from "./operations";
 import { keepKnowledgeCheck, type KnowledgeRuntime } from "./runtime";
 
@@ -69,10 +71,14 @@ export interface KnowledgeBases {
    */
   operationSource(files: KnowledgeFiles | undefined): OperationSource;
   /**
-   * The job that removes the copies a call of `add_files` left without documents, where the
-   * process keeps files.
+   * The jobs of the documents of Knowledge Bases, where the process keeps files: the one that
+   * removes the copies a call of `add_files` left without documents, and the index job
+   * (`knowledge_base.index`). The extract job is the document worker's.
    */
-  fileJobs(files: KnowledgeFiles | undefined): {
+  fileJobs(
+    files: KnowledgeFiles | undefined,
+    auditRecorder: AuditRecorder
+  ): {
     handlers: RegisteredJobHandler[];
     retries: JobRetry[];
   };
@@ -161,7 +167,16 @@ export function createKnowledgeBases(input: {
     },
     operationSource: (files) =>
       createKnowledgeOperationSource(files ? { ...runtime, files } : runtime),
-    fileJobs: (files) => createKnowledgeFileCleanupJobs(runtime, files),
+    fileJobs: (files, auditRecorder) => {
+      const cleanup = createKnowledgeFileCleanupJobs(runtime, files);
+      return {
+        handlers: [
+          ...cleanup.handlers,
+          ...(files ? [createKnowledgeIndexJobHandler(runtime, { files, auditRecorder })] : [])
+        ],
+        retries: cleanup.retries
+      };
+    },
     toolSource: createKnowledgeToolSource(runtime)
   };
 }

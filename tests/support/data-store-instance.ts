@@ -9,6 +9,7 @@ import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   DATA_STORE_ASSET_KIND,
   DATA_STORE_MANIFEST_FILE,
+  defineModule,
   asClientInstanceId,
   type AuthenticatedUser,
   type DataStoreRecord,
@@ -76,7 +77,19 @@ interface KnowledgeOptions {
   attachments?: ClientInstanceCapability;
   /** `knowledge.maxDocuments` of release config. */
   maxDocuments?: number;
+  /**
+   * The module `documents` on, shipped by a test capability with no code of its own: the API
+   * process then takes PDF and DOCX, whose extraction a test serves with a worker of its own.
+   */
+  documents?: true;
 }
+
+/** Ships the module `documents` and nothing else. */
+const documentsModuleCapability: ClientInstanceCapability = {
+  name: "documents-module-test",
+  modules: [defineModule({ name: "documents" })],
+  create: () => ({})
+};
 type Answer = ReturnType<TestInstance["call"]>;
 
 /**
@@ -161,7 +174,10 @@ export function useDataStoreInstance(): {
       modules: {
         assetManagement: { enabled: true },
         dataStores: { enabled: dataStores },
-        ...(knowledge ? { knowledge: { enabled: true } } : {})
+        ...(knowledge ? { knowledge: { enabled: true } } : {}),
+        ...(typeof knowledge === "object" && knowledge.documents
+          ? { documents: { enabled: true } }
+          : {})
       },
       ...(knowledge
         ? {
@@ -213,8 +229,13 @@ export function useDataStoreInstance(): {
       config: parseClientInstanceConfig({ ...settings, ...(guardrails ? { guardrails } : {}) }),
       env,
       tools: [],
-      ...(typeof knowledge === "object" && knowledge.attachments
-        ? { capabilities: [knowledge.attachments] }
+      ...(typeof knowledge === "object" && (knowledge.attachments || knowledge.documents)
+        ? {
+            capabilities: [
+              ...(knowledge.attachments ? [knowledge.attachments] : []),
+              ...(knowledge.documents ? [documentsModuleCapability] : [])
+            ]
+          }
         : {})
     });
     started.push(api);
@@ -226,7 +247,10 @@ export function useDataStoreInstance(): {
           ...(guardrails ? { guardrails } : {})
         }),
         env,
-        tools: []
+        tools: [],
+        ...(typeof knowledge === "object" && knowledge.documents
+          ? { capabilities: [documentsModuleCapability] }
+          : {})
       }
     });
     started.push(calls);

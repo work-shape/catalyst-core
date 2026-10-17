@@ -187,6 +187,10 @@ export function createDataStoreKnowledgeBackend(
     // A Knowledge Base on a Data Store keeps no documents, so no file is named.
     documentFileIds() {
       return Promise.resolve([]);
+    },
+
+    documentStore() {
+      return undefined;
     }
   };
   return backend;

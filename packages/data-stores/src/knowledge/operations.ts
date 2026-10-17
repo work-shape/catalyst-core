@@ -29,6 +29,7 @@ import {
   type KnowledgeBaseDefinition
 } from "./definition";
 import { addFilesOperation } from "./add-files";
+import { listDocumentsOperation, retryDocumentsOperation } from "./document-operations";
 import { checkKnowledgeBase, type KnowledgeRuntime } from "./runtime";
 
 // The operations of one Knowledge Base, `knowledge.<id>.<part>`, each called through
@@ -314,8 +315,8 @@ function checkOperation(
 
 /**
  * The operations of one Knowledge Base by the last part of their names. `query` is answered
- * only on a Data Store; `add_files` only by a Knowledge Base that keeps documents, whose search
- * arrives with KB-7.
+ * only on a Data Store; `add_files`, `list_documents` and `retry` only by a Knowledge Base that
+ * keeps documents, whose search arrives with KB-7.
  */
 const OPERATIONS = {
   query: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) =>
@@ -329,9 +330,35 @@ const OPERATIONS = {
           definition: knowledgeBase.definition,
           resource: knowledgeBase.resource
         }),
+  list_documents: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) => {
+    const target = documentsTargetOf(runtime, knowledgeBase);
+    return target && listDocumentsOperation(runtime, target);
+  },
+  retry: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) => {
+    // Without files the process indexes nothing, so it offers no retry.
+    const { files } = runtime;
+    const target = documentsTargetOf(runtime, knowledgeBase);
+    return files && target && retryDocumentsOperation(runtime, files, target);
+  },
   state: stateOperation,
   check: checkOperation
 } as const;
+
+/** A Knowledge Base that keeps documents, with the store its documents are in. */
+function documentsTargetOf(runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) {
+  if (isStructured(knowledgeBase)) return undefined;
+  const store = runtime.backend.documentStore(
+    knowledgeTargetOf(knowledgeBase.definition, knowledgeBase.asset.id)
+  );
+  return (
+    store && {
+      name: knowledgeBase.definition.name,
+      assetId: knowledgeBase.asset.id,
+      resource: knowledgeBase.resource,
+      store
+    }
+  );
+}
 
 /** The name of the operation of one part of one Knowledge Base, such as `knowledge.<id>.state`. */
 export function knowledgeOperationName(

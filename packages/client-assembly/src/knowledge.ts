@@ -56,7 +56,10 @@ const KNOWLEDGE_BASE_NOT_AVAILABLE = "Knowledge Base is not available";
  * `knowledge.<id>.<part>`: the part is the route's, never the caller's.
  */
 const knowledgeRoutes: RouteRegistration = (routes) => {
-  const bind = (part: "query" | "state" | "check" | "add_files", right: string) => ({
+  const bind = (
+    part: "query" | "state" | "check" | "add_files" | "list_documents" | "retry",
+    right: string
+  ) => ({
     target: ({ knowledgeBase, ...input }: { knowledgeBase: string }) => ({
       operation: knowledgeOperationName(knowledgeBase, part),
       input
@@ -79,6 +82,14 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
   routes.resourceOperation(
     apiOperations["knowledge_bases.add_files"],
     bind("add_files", KNOWLEDGE_BASE_ACTIONS.write)
+  );
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.list_documents"],
+    bind("list_documents", KNOWLEDGE_BASE_ACTIONS.use)
+  );
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.retry_documents"],
+    bind("retry", KNOWLEDGE_BASE_ACTIONS.write)
   );
 };
 
@@ -111,7 +122,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
     assetKinds: [workflowAssetKind(knowledgeBases)],
     operationSources: (runtime) => [knowledgeBases.operationSource(runtime.files)],
     start: (runtime) => {
-      const fileJobs = knowledgeBases.fileJobs(runtime.files);
+      const fileJobs = knowledgeBases.fileJobs(runtime.files, runtime.auditRecorder);
       return {
         routes: [knowledgeRoutes],
         dataToolSources: [knowledgeBases.toolSource],

@@ -659,6 +659,41 @@ export type DataStoreMigrationOutcome = (typeof DATA_STORE_MIGRATION_OUTCOMES)[n
 export const KNOWLEDGE_BASE_STATUSES = ["unchecked", "ok", "needs_attention"] as const;
 export type KnowledgeBaseStatus = (typeof KNOWLEDGE_BASE_STATUSES)[number];
 
+/**
+ * What the page of a Knowledge Base shows of one document. `pending` is added and not yet
+ * searchable: waiting for its index job, being indexed or waiting for extraction. `indexed` is
+ * found by search. `failed` carries one of `KNOWLEDGE_DOCUMENT_FAILURE_CODES`; Retry puts it
+ * back to `pending`.
+ */
+export const KNOWLEDGE_DOCUMENT_STATES = ["pending", "indexed", "failed"] as const;
+export type KnowledgeDocumentState = (typeof KNOWLEDGE_DOCUMENT_STATES)[number];
+
+/**
+ * Why a document was not indexed. The first five can also come from the extraction of a PDF
+ * or DOCX (`KNOWLEDGE_EXTRACTION_FAILURE_CODES` in core); the rest are the index job's own.
+ */
+export const KNOWLEDGE_DOCUMENT_FAILURE_CODES = [
+  // The extractor does not read the file's format.
+  "knowledge_file_format_unsupported",
+  // The file is over a limit of the extraction: size, pages or time.
+  "knowledge_file_over_limit",
+  // The file is corrupt, encrypted, or not the format it claims.
+  "knowledge_file_unreadable",
+  // The copy the Knowledge Base owns, or its bytes, are gone.
+  "knowledge_file_missing",
+  // Extraction failed on every attempt.
+  "knowledge_extraction_failed",
+  // A PDF or DOCX on an instance without document processing.
+  "knowledge_file_format_unavailable",
+  // A text file whose bytes are not text.
+  "knowledge_text_unreadable",
+  // No text to search, such as a scanned PDF without a text layer.
+  "knowledge_text_empty",
+  // Indexing failed on every attempt.
+  "knowledge_index_failed"
+] as const;
+export type KnowledgeDocumentFailureCode = (typeof KNOWLEDGE_DOCUMENT_FAILURE_CODES)[number];
+
 export const DATABASE_RELATION_TYPES = [
   "table",
   "view",

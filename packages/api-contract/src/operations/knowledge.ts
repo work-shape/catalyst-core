@@ -1,6 +1,8 @@
 import {
   DATA_STORE_SCALAR_TYPES,
-  KNOWLEDGE_BASE_STATUSES
+  KNOWLEDGE_BASE_STATUSES,
+  KNOWLEDGE_DOCUMENT_FAILURE_CODES,
+  KNOWLEDGE_DOCUMENT_STATES
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { defineRegisteredOperation, json } from "./define-operation";
@@ -75,6 +77,50 @@ const knowledgeAddFilesResponseSchema = z.object({
   bytes: z.number().int()
 });
 
+const knowledgeListDocumentsQuerySchema = z.object({
+  /** Documents per page: 50 by default, at most 200. */
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  /** The `nextCursor` of the page before. */
+  cursor: z.string().min(1).max(1_000).optional()
+});
+
+const knowledgeListDocumentsResponseSchema = z.object({
+  /** The documents not removed, newest first. */
+  documents: z.array(
+    z.object({
+      id: z.string(),
+      /** The copy of the file the Knowledge Base owns. */
+      fileId: z.string(),
+      fileName: z.string(),
+      title: z.string(),
+      /** `txt`, `markdown`, `pdf` or `docx`. */
+      format: z.string(),
+      /** The size of the file in bytes. */
+      bytes: z.number().int(),
+      /** `pending` until it is searchable, then `indexed`; `failed` with `failureCode`. */
+      state: z.enum(KNOWLEDGE_DOCUMENT_STATES),
+      failureCode: z.enum(KNOWLEDGE_DOCUMENT_FAILURE_CODES).optional(),
+      addedAt: z.string(),
+      /** When its state last changed. */
+      updatedAt: z.string()
+    })
+  ),
+  /** Present while more documents follow. */
+  nextCursor: z.string().optional()
+});
+
+const knowledgeRetryDocumentsRequestSchema = z.strictObject({
+  /** The documents to index again: failed ones, or pending ones whose indexing seems stuck. */
+  documentIds: z.array(z.string().min(1)).min(1).max(100)
+});
+
+const knowledgeRetryDocumentsResponseSchema = z.object({
+  /** Each named document in the Knowledge Base, with its state after the retry. */
+  documents: z.array(z.object({ id: z.string(), state: z.enum(KNOWLEDGE_DOCUMENT_STATES) })),
+  /** How many contents were queued to be indexed again. */
+  queued: z.number().int()
+});
+
 const BASE = {
   tag: "Knowledge Bases",
   auth: "principal",
@@ -133,6 +179,34 @@ export const knowledgeOperations = {
     effect: "changing",
     body: knowledgeAddFilesRequestSchema,
     response: json(knowledgeAddFilesResponseSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
+    rateClass: "write"
+  }),
+  "knowledge_bases.list_documents": defineRegisteredOperation({
+    ...BASE,
+    id: "knowledge_bases.list_documents",
+    method: "GET",
+    path: "/api/v1/knowledge-bases/:knowledgeBase/documents",
+    summary:
+      "List the documents of a Knowledge Base that keeps documents, newest first, each with its state and the failure code of a failed one",
+    scope: "data_store_rows:read",
+    effect: "reading",
+    query: knowledgeListDocumentsQuerySchema,
+    response: json(knowledgeListDocumentsResponseSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
+    rateClass: "read"
+  }),
+  "knowledge_bases.retry_documents": defineRegisteredOperation({
+    ...BASE,
+    id: "knowledge_bases.retry_documents",
+    method: "POST",
+    path: "/api/v1/knowledge-bases/:knowledgeBase/documents/retry",
+    summary:
+      "Index documents of a Knowledge Base again: a failed one goes back to pending, and its content is queued",
+    scope: "data_store_rows:write",
+    effect: "changing",
+    body: knowledgeRetryDocumentsRequestSchema,
+    response: json(knowledgeRetryDocumentsResponseSchema),
     errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
     rateClass: "write"
   })

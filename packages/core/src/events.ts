@@ -406,6 +406,27 @@ export const EVENTS = {
       }
     }
   },
+  // One content of a Knowledge Base indexed, or failed with the code in `reason`. The subject
+  // is the Knowledge Base's asset; the file is one copy that holds the content. No file name,
+  // no text.
+  "knowledge_base.content_indexed": {
+    name: "knowledge_base.content_indexed",
+    subject: "config_asset",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["knowledgeBase", "fileId"],
+      properties: {
+        knowledgeBase: { type: "string" },
+        fileId: { type: "string" },
+        chunks: { type: "integer", minimum: 1 },
+        pages: { type: "integer", minimum: 1 }
+      }
+    }
+  },
   // "Run live once" on an action or a step of a draft (ADR-0031). The subject is the App or
   // the Workflow; the metadata names its draft revision, the action or step and who set it.
   // A guardrail made to enforce at its scope, or taken back: who, which revision and where.

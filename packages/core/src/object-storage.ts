@@ -293,7 +293,10 @@ export function guardObjectStorage(
 }
 
 /** Reads a whole object into memory. For callers whose objects are bounded by an upload limit. */
-export async function readObjectBytes(storage: ObjectStorage, key: string): Promise<Uint8Array> {
+export async function readObjectBytes(
+  storage: Pick<ObjectStorage, "get">,
+  key: string
+): Promise<Uint8Array> {
   const stored = await storage.get(key);
   const chunks: Uint8Array[] = [];
   let length = 0;

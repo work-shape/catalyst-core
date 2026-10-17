@@ -45,6 +45,13 @@ import { createDataStoreServer } from "./server";
 export { sizeLimitBytes } from "./definition";
 export { createKnowledgeBases, knowledgeOperationName, type KnowledgeBases } from "./knowledge";
 export type { KnowledgeEmbedding } from "./knowledge/definition";
+export {
+  chunkKnowledgeText,
+  estimateKnowledgeTokens,
+  KNOWLEDGE_CHUNK_MAX_TOKENS,
+  KNOWLEDGE_CHUNKING_REVISION,
+  knowledgeChunkPrefix
+} from "./knowledge/builtin/chunking";
 export { dataStoreStateOperationName } from "./state";
 
 /**
@@ -95,7 +102,9 @@ export const knowledgeModule = defineModule({
     "knowledge_bases.get",
     "knowledge_bases.check",
     "knowledge_bases.query",
-    "knowledge_bases.add_files"
+    "knowledge_bases.add_files",
+    "knowledge_bases.list_documents",
+    "knowledge_bases.retry_documents"
   ]
 });
 

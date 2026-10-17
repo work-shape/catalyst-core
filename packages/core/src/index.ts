@@ -30,6 +30,7 @@ export * from "./file-search";
 export * from "./guardrails";
 export * from "./infrastructure-checks";
 export * from "./knowledge";
+export * from "./knowledge-extraction";
 export * from "./modules";
 export * from "./operation-denial";
 export * from "./operation-policy";
@@ -119,6 +120,8 @@ export {
   JOB_STATUSES,
   KNOWLEDGE_BASE_STATUSES,
   KNOWLEDGE_CHECK_STATUSES,
+  KNOWLEDGE_DOCUMENT_FAILURE_CODES,
+  KNOWLEDGE_DOCUMENT_STATES,
   LISTED_DATA_STORE_STATUSES,
   LIVE_JOB_STATUSES,
   MESSAGE_FINISH_STATUSES,

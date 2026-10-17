@@ -8,6 +8,7 @@ import {
 import { enqueueStoreDrop, enqueueStoreJob } from "../../jobs";
 import type { DataStoreRuntime } from "../../runtime";
 import { semanticSearchIssue, type KnowledgeEmbedding } from "../definition";
+import { createBuiltinDocumentStore } from "./document-store";
 import { addKnowledgeDocuments, knowledgeDocumentFileIds } from "./documents";
 import { ownedStoreCheck, ownedStoreName } from "./owned-store";
 
@@ -19,8 +20,9 @@ import { ownedStoreCheck, ownedStoreName } from "./owned-store";
 //
 // Sensitive data. The store holds a row per document added to the Knowledge Base, with its
 // title and file name (`documents.ts`); the bytes stay in a Managed File the Knowledge Base
-// owns. No text is sent to an embedding provider and nothing is searched yet. Dropping the
-// store removes every row it holds; backups keep it until their rotation.
+// owns. The index job writes the text of each document as passages into the store
+// (`document-store.ts`). No text is sent to an embedding provider yet. Dropping the store
+// removes every row it holds; backups keep it until their rotation.
 
 export function createBuiltinKnowledgeBackend(
   runtime: DataStoreRuntime,
@@ -137,6 +139,10 @@ export function createBuiltinKnowledgeBackend(
 
     documentFileIds(target, fileIds, signal) {
       return knowledgeDocumentFileIds(runtime, target, fileIds, signal);
+    },
+
+    documentStore(target) {
+      return createBuiltinDocumentStore(runtime, target);
     },
 
     query(target) {

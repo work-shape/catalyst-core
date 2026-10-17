@@ -14463,6 +14463,359 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/knowledge-bases/{knowledgeBase}/documents": {
+      "get": {
+        "operationId": "knowledge_bases.list_documents",
+        "summary": "List the documents of a Knowledge Base that keeps documents, newest first, each with its state and the failure code of a failed one",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "data_store_rows:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "fileId": {
+                            "type": "string"
+                          },
+                          "fileName": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "format": {
+                            "type": "string"
+                          },
+                          "bytes": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "indexed",
+                              "failed"
+                            ]
+                          },
+                          "failureCode": {
+                            "type": "string",
+                            "enum": [
+                              "knowledge_file_format_unsupported",
+                              "knowledge_file_over_limit",
+                              "knowledge_file_unreadable",
+                              "knowledge_file_missing",
+                              "knowledge_extraction_failed",
+                              "knowledge_file_format_unavailable",
+                              "knowledge_text_unreadable",
+                              "knowledge_text_empty",
+                              "knowledge_index_failed"
+                            ]
+                          },
+                          "addedAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "fileId",
+                          "fileName",
+                          "title",
+                          "format",
+                          "bytes",
+                          "state",
+                          "addedAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "documents"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/knowledge-bases/{knowledgeBase}/documents/retry": {
+      "post": {
+        "operationId": "knowledge_bases.retry_documents",
+        "summary": "Index documents of a Knowledge Base again: a failed one goes back to pending, and its content is queued",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "data_store_rows:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "data_store_rows:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "data_store_rows:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "documentIds": {
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "required": [
+                  "documentIds"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "indexed",
+                              "failed"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "state"
+                        ]
+                      }
+                    },
+                    "queued": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "documents",
+                    "queued"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/knowledge-bases/{knowledgeBase}/files": {
       "post": {
         "operationId": "knowledge_bases.add_files",
