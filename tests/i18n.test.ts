@@ -197,12 +197,14 @@ export const unused = two;
 `
   };
 
-  const config = join(dirname(dirname(areas)), "tsconfig.json");
-  const { options } = ts.parseJsonConfigFileContent(
-    ts.readConfigFile(config, ts.sys.readFile).config,
-    ts.sys,
-    dirname(config)
-  );
+  // The package's own compiler options: a config that cannot be read would leave the fixtures
+  // without the declarations their diagnostics name, so the test stops instead.
+  const config = fileURLToPath(new URL("../packages/chat-ui/tsconfig.json", import.meta.url));
+  const read = ts.readConfigFile(config, ts.sys.readFile);
+  if (read.error) {
+    throw new Error(ts.flattenDiagnosticMessageText(read.error.messageText, "\n"));
+  }
+  const { options } = ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(config));
   const pathOf = (name: string) => join(areas, `${name}.fixture.ts`);
   const host = ts.createCompilerHost(options);
   const readFile = host.readFile.bind(host);
