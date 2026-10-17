@@ -515,6 +515,19 @@ function systemPackages(dockerfile, stage) {
 describe("the kit's Dockerfile", () => {
   const kitDockerfile = readFileSync(join(kitDir, "docker/deployment.Dockerfile"), "utf8");
 
+  test("excludes env files without exceptions that force a walk of excluded folders", () => {
+    const patterns = readFileSync(join(kitDir, "docker/deployment.Dockerfile.dockerignore"), "utf8")
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"));
+    assert.ok(patterns.includes(".env"));
+    assert.ok(patterns.includes(".env.*"));
+    assert.deepEqual(
+      patterns.filter((line) => line.startsWith("!")),
+      []
+    );
+  });
+
   test("installs the system packages of the platform's artifact runtime", () => {
     const platformDockerfile = readFileSync(
       join(platformRoot, "docker/vivd-client.Dockerfile"),
