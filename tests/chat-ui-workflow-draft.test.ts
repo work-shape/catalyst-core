@@ -169,10 +169,17 @@ describe("the draft of a Workflow over an instance", () => {
 });
 
 describe("the page of a Workflow with a draft", () => {
-  const edit: { busy: boolean; error: string | undefined; start(): void; dismissError(): void } = {
+  const edit: {
+    busy: boolean;
+    error: string | undefined;
+    start(): void;
+    startWith(prompt: string): void;
+    dismissError(): void;
+  } = {
     busy: false,
     error: undefined,
     start: noop,
+    startWith: noop,
     dismissError: noop
   };
   const page = (

@@ -15,10 +15,11 @@ export interface WorkflowsHost {
   showRoute(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
   /**
    * Starts a conversation of the open workspace that is about this Workflow and opens it: its
-   * agent reads and saves the draft of the Workflow. Rejects where the instance refuses the
-   * conversation. Absent where no conversation can be started, such as over samples.
+   * agent reads and saves the draft of the Workflow. `prompt` stands in its composer, unsent.
+   * Rejects where the instance refuses the conversation. Absent where no conversation can be
+   * started, such as over samples.
    */
-  editWithAgent?(workflow: string): Promise<void>;
+  editWithAgent?(workflow: string, prompt?: string): Promise<void>;
   /**
    * "New workflow": opens the dock on the list with a new conversation with an agent that builds
    * assets and `prompt` in its composer; nothing is created until its first save. Absent where

@@ -19,6 +19,8 @@ export interface WorkflowEdit {
   /** Why the instance made no conversation. */
   error: string | undefined;
   start(): void;
+  /** Starts it with this text in its composer, such as what to fix after a failed run. */
+  startWith(prompt: string): void;
   dismissError(): void;
 }
 
@@ -38,24 +40,27 @@ export function useEditWithAgent(
   if (host === undefined || editWithAgent === undefined || !editOffered(host.rights, view)) {
     return undefined;
   }
+  const start = (prompt?: string) => {
+    setBusy(true);
+    setError(undefined);
+    // The conversation opens in the dock beside the Workflow's page; a refusal is said here.
+    editWithAgent(workflow, prompt)
+      .catch((failure: unknown) => {
+        setError(
+          // A Workflow the reader may not read and one that is gone are refused alike.
+          failure instanceof ApiError && (failure.status === 403 || failure.status === 404)
+            ? t("workflows.edit.refused")
+            : (instanceSentence(failure) ?? t("workflows.edit.failed"))
+        );
+      })
+      .finally(() => setBusy(false));
+  };
   return {
     busy,
     error,
-    start() {
-      setBusy(true);
-      setError(undefined);
-      // The conversation opens in the dock beside this page; a refusal is said here.
-      editWithAgent(workflow)
-        .catch((failure: unknown) => {
-          setError(
-            // A Workflow the reader may not read and one that is gone are refused alike.
-            failure instanceof ApiError && (failure.status === 403 || failure.status === 404)
-              ? t("workflows.edit.refused")
-              : (instanceSentence(failure) ?? t("workflows.edit.failed"))
-          );
-        })
-        .finally(() => setBusy(false));
-    },
+    // A button passes its click to what it calls: the click is no prompt.
+    start: () => start(),
+    startWith: start,
     dismissError: () => setError(undefined)
   };
 }

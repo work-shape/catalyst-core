@@ -56,10 +56,10 @@ interface WorkflowsModel {
   access: WorkflowsAccess;
   rights: WorkflowRights;
   /**
-   * Starts a conversation of the open workspace about this Workflow and opens it. Rejects
-   * where the instance refuses the conversation.
+   * Starts a conversation of the open workspace about this Workflow and opens it, with `prompt`
+   * in its composer where one is given. Rejects where the instance refuses the conversation.
    */
-  editWithAgent(workflow: string): Promise<void>;
+  editWithAgent(workflow: string, prompt?: string): Promise<void>;
   /**
    * Opens the dock on the list with a new conversation with an agent that builds assets and
    * `prompt` in its composer: its first save creates the Workflow. Absent where no agent here

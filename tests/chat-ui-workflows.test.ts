@@ -643,6 +643,30 @@ describe("the runs of a Workflow", () => {
     expect(markup).toContain("Ada Lovelace");
   });
 
+  it("says on a failed row why it failed, in the sentence of its page, on one line", () => {
+    const rows = [
+      toWorkflowRun(
+        runResource({
+          id: "wr_3",
+          status: "failed",
+          error: { code: "FORBIDDEN", message: "The instance's own sentence" }
+        })
+      ),
+      toWorkflowRun(runResource({ id: "wr_2", status: "limit_reached" })),
+      toWorkflowRun(runResource({ id: "wr_1", status: "done" }))
+    ];
+    const markup = render(page(runList({ rows })));
+    const reasons = [...markup.matchAll(/data-run-reason=""[^>]*>([^<]*)</gu)].map(
+      (match) => match[1]
+    );
+    // A failed run whose reason did not arrive says the general sentence; a done run none.
+    expect(reasons).toEqual([t("workflows.reason.missingRight"), t("workflows.reason.other")]);
+    expect(markup).toMatch(/data-run-reason="" class="block truncate"/u);
+    expect(markup).not.toContain("FORBIDDEN");
+    expect(markup).not.toContain("The instance&#x27;s own sentence");
+    expect(render(page(runList({ rows })), "de")).toContain(de("workflows.reason.missingRight"));
+  });
+
   it("marks a test run of the draft among the runs", () => {
     const rows = [
       toWorkflowRun(runResource({ id: "wr_3", status: "done", mode: "test" })),

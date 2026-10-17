@@ -1,6 +1,7 @@
 // What the tests of the Workflows area read. The interface itself reaches these through the
 // area route table and the workspace shell.
-export { CancelRunDialog, WorkflowRunPageView } from "./run-page";
+export { CancelRunDialog, WorkflowRunPage, WorkflowRunPageView } from "./run-page";
+export { fixWithAgentPrompt } from "./fix-with-agent";
 export { LoopEntriesView, defaultEntryFilter, loopEntries } from "./loop-entries";
 export { createInstanceSource } from "./instance-source";
 export { scheduleInWords } from "./schedule-words";
@@ -33,6 +34,9 @@ export {
   workflowsRowShown
 } from "./workflow-model";
 export { StartDialog } from "./start-run";
+export type { WorkflowsSource } from "./source-shapes";
+export { WorkflowsSourceProvider } from "./workflow-source";
+export { WorkflowsHostProvider, type WorkflowsHost } from "./workflows-host";
 export type { LiveOnceControl } from "./test-run";
 export { checkStartForm, startFormOf, startRefusalByField } from "./start-form";
 export { DraftChangeDialog } from "./workflow-draft";

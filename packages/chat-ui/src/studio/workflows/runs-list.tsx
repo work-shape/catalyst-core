@@ -2,6 +2,7 @@ import { Badge, Button, List, ListRow, SkeletonList } from "@work-shape/catalyst
 import { formatMomentShort } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import type { WorkflowRunList } from "./workflow-data";
+import { runFailedBecause } from "./workflow-model";
 import type { WorkflowRunView } from "./workflow-views";
 import {
   LoadError,
@@ -23,7 +24,9 @@ export function startedByText(
 
 /**
  * Runs of one Workflow, newest first: when each started, who started it, how long it took and
- * how it ended. Each row opens its run. A row is two lines, at every width.
+ * how it ended, and for a failed run why, in the sentence its page says. Each row opens its run.
+ * A row is two lines at every width, and a failed run's three: why it failed is a line of its
+ * own, cut where it does not fit and read whole on hover.
  */
 export function RunsList({
   workspaceId,
@@ -60,15 +63,30 @@ export function RunsList({
         <List aria-label={t("workflows.sectionRuns")}>
           {rows.map((run) => {
             const duration = durationText(run, now, translation);
+            const startedLine = [startedByText(run, t), duration]
+              .filter((part) => part !== undefined)
+              .join(" · ");
+            const failedBecause = runFailedBecause(run, t);
             return (
               <ListRow
                 key={run.id}
                 // The state stands beside the time, so the time is the short one and is never cut.
                 title={formatMomentShort(run.createdAt, locale)}
-                description={[startedByText(run, t), duration]
-                  .filter((part) => part !== undefined)
-                  .join(" · ")}
-                descriptionWraps
+                description={
+                  failedBecause === undefined ? (
+                    startedLine
+                  ) : (
+                    // The row cuts this whole line, so its two parts say how each breaks: the
+                    // reason stays one line, who and how long wraps where the window is narrow.
+                    <>
+                      <span data-run-reason="" className="block truncate" title={failedBecause}>
+                        {failedBecause}
+                      </span>
+                      <span className="block whitespace-normal sm:truncate">{startedLine}</span>
+                    </>
+                  )
+                }
+                descriptionWraps={failedBecause === undefined}
                 chips={
                   <>
                     {run.test ? (

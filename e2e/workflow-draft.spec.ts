@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type Browser, type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
+import type { WorkflowStep } from "@work-shape/catalyst-core";
 import { sendToolCall } from "./page-surface-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { shootLocales, shootThemes } from "./surface-shots";
@@ -394,4 +395,107 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     }
     await memberPage.context().close();
   }
+});
+
+// A failed run's "Fix with the agent" (UXA-6b): the run fails at a step whose operation the
+// instance does not have; the runs list says why on the failed row, and the run's main button
+// opens the conversation about the Workflow beside the Workflow's page, with the failed step
+// and its reason in the composer. Fails without the button or without the prompt reaching the
+// dock's composer through the workspace.
+test("a failed run is fixed with the agent beside the Workflow's page", async ({ page }) => {
+  test.setTimeout(120_000);
+  const id = `fix-walk-${randomUUID().slice(0, 8)}`;
+  const runAs = `${id}-runner`;
+  const step = "Load the clients";
+  const reason = "What this step uses no longer exists on this instance.";
+  await page.setViewportSize(WIDE);
+  await signIn(page, superadmin);
+  page.setDefaultTimeout(30_000);
+
+  const principal = await requestWithOrigin(
+    page,
+    "post",
+    `${apiBaseUrl}/api/v1/instance/service-principals`,
+    { data: { name: runAs, displayLabel: runAs, description: "Runs the Workflow of a spec." } }
+  );
+  expect(principal.ok(), await principal.text()).toBe(true);
+  const { manifest } = draftConfig(id, { runAs, description: "Fails at its second step." });
+  // A start does not refuse an operation the instance does not have: the run fails there.
+  const saved = await requestWithOrigin(page, "put", assetUrlOf(id), {
+    data: {
+      expectedRevision: null,
+      config: {
+        name: id,
+        manifest: {
+          ...manifest,
+          steps: [
+            { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
+            {
+              id: "clients",
+              name: step,
+              type: "operation",
+              operation: `connection.${id}.list`,
+              input: {}
+            },
+            { id: "result", name: "Result", type: "output", input: { done: { value: 1 } } }
+          ] satisfies WorkflowStep[]
+        }
+      }
+    }
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  const published = await requestWithOrigin(page, "post", `${assetUrlOf(id)}/publish`, {
+    data: { revision: await assetRevision(page, assetUrlOf(id)) }
+  });
+  expect(published.ok(), await published.text()).toBe(true);
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+    data: { name: `Fix walk ${id.slice(-8)}` }
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const workspaceId = idSchema.parse(await created.json()).id;
+  const started = await requestWithOrigin(
+    page,
+    "post",
+    `${apiBaseUrl}/api/v1/workflows/${id}/runs`,
+    { data: { input: {} } }
+  );
+  expect(started.ok(), await started.text()).toBe(true);
+  const runId = idSchema.parse(await started.json()).id;
+  await expect
+    .poll(
+      async () =>
+        z
+          .looseObject({ status: z.string() })
+          .parse(
+            await (await page.request.get(`${apiBaseUrl}/api/v1/workflow-runs/${runId}`)).json()
+          ).status,
+      { timeout: 60_000 }
+    )
+    .toBe("failed");
+  const workflowPath = `/w/${workspaceId}/workflows/${id}`;
+
+  // The failed row says why, in the sentence of the run's page.
+  await page.goto(`${workflowPath}/runs`);
+  await expect(page.locator("[data-run-reason]")).toHaveText(reason);
+
+  // The run's main button opens the conversation about the Workflow on the Workflow's page.
+  await page.goto(`${workflowPath}/runs/${runId}`);
+  const runPage = page.getByTestId("workflow-run-page");
+  await runPage.getByRole("button", { name: "Fix with the agent", exact: true }).click();
+  await expect(page).toHaveURL(
+    (url) => url.pathname === workflowPath && url.searchParams.has("chat")
+  );
+  const conversationId = new URL(page.url()).searchParams.get("chat") ?? "";
+  const thread = threadSchema.parse(
+    await (
+      await page.request.get(`${apiBaseUrl}/api/v1/conversations/${conversationId}/thread`)
+    ).json()
+  );
+  expect(thread.conversation.subject).toEqual({ kind: "workflow", name: id });
+  await expect(page.getByTestId("dock-head")).toHaveAttribute("data-subject-kind", "workflow");
+  await expect(page.getByTestId("workflow-page").getByTestId("workflow-canvas")).toBeVisible();
+  // The composer holds the failed step and its reason, unsent.
+  const composer = page.getByPlaceholder("Message");
+  await expect.poll(() => composer.inputValue()).toContain(`at the step “${step}”. ${reason}`);
+  await expect(page.locator('[data-role="user"]')).toHaveCount(0);
 });

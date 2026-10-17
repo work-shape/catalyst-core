@@ -234,6 +234,22 @@ export function failureHappened(
   return t(failureSentences(failure.reason).happened);
 }
 
+/** Whether a run ended by failing, or because it reached a limit. */
+export function runFailed(run: Pick<WorkflowRunView, "status">): boolean {
+  return run.status === "failed" || run.status === "limit_reached";
+}
+
+/**
+ * Why a run failed, as the one sentence of its page; nothing for a run that did not fail. A
+ * failed run whose reason did not arrive says the general sentence, never the instance's own.
+ */
+export function runFailedBecause(
+  run: Pick<WorkflowRunView, "status" | "failure">,
+  t: (key: TranslationKey, values?: Record<string, string>) => string
+): string | undefined {
+  return runFailed(run) ? failureHappened(run.failure ?? { reason: "other" }, t) : undefined;
+}
+
 /** What happened, and what the reader can do about it, for why something did not end as done. */
 export function failureSentences(reason: WorkflowFailureReason): {
   happened: TranslationKey;

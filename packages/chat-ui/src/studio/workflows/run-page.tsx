@@ -1,4 +1,4 @@
-import { RotateCw } from "lucide-react";
+import { Bot, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   Badge,
@@ -17,10 +17,12 @@ import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { workspaceRoutePath } from "../../shared/routes";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { FailureBanner } from "./failure-banner";
+import { fixWithAgentPrompt } from "./fix-with-agent";
 import { startedByText } from "./runs-list";
 import { useStartRun } from "./start-run";
 import { useRunLiveOnce, useTestRun, type LiveOnceControl } from "./test-run";
 import { WorkflowCanvas } from "./workflow-canvas";
+import { EditRefusedBanner, useEditWithAgent, type WorkflowEdit } from "./workflow-draft";
 import {
   useWorkflow,
   useWorkflowRun,
@@ -30,7 +32,7 @@ import {
   type WorkflowRunRead
 } from "./workflow-data";
 import type { WorkflowStepRunView, WorkflowStepView, WorkflowView } from "./workflow-views";
-import { cancelOffered, startOffered } from "./workflow-model";
+import { cancelOffered, runFailed, startOffered } from "./workflow-model";
 import {
   BackLink,
   LoadError,
@@ -86,6 +88,7 @@ export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; ru
   });
   const testAgain = useTestRun(workflow, definition.workflow);
   const liveOnce = useRunLiveOnce(workflow, definition.workflow, read.run?.ended === true);
+  const edit = useEditWithAgent(workflow, definition.workflow);
   const test = read.run?.test === true;
 
   if (!host || workspaceId === undefined) {
@@ -132,6 +135,7 @@ export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; ru
         }}
         onRunAgain={test && testAgain !== undefined ? testAgain.open : again.open}
         onOpenRoute={host.showRoute}
+        {...(edit === undefined ? {} : { edit })}
         {...(test && liveOnce !== undefined ? { liveOnce } : {})}
       />
       {again.dialog}
@@ -163,6 +167,7 @@ export function WorkflowRunPageView({
   onCancel,
   onRunAgain,
   onOpenRoute,
+  edit,
   liveOnce
 }: {
   workspaceId: string;
@@ -179,6 +184,11 @@ export function WorkflowRunPageView({
   onCancel(): void;
   onRunAgain(): void;
   onOpenRoute: OpenRoute;
+  /**
+   * For a reader who may write the Workflow: a failed run's "Fix with the agent", which opens
+   * the conversation about the Workflow beside its page.
+   */
+  edit?: WorkflowEdit;
   /** On a test run, for a reader who may write the Workflow: "Run live once" per step. */
   liveOnce?: (
     step: WorkflowStepView,
@@ -204,6 +214,9 @@ export function WorkflowRunPageView({
   // A step that failed says why itself. Until the page holds that step, the run says it.
   const failedStepHeld = (read.stepRuns ?? []).some((stepRun) => stepRun.failure !== undefined);
   const parent = run?.parent;
+  // A failed run is fixed in the Workflow: that is the next step, and running it again is not.
+  const fix = run?.ended === true && runFailed(run) ? edit : undefined;
+  const runAgainLabel = run?.test === true ? "workflows.run.testAgain" : "workflows.run.again";
   const openChild = (step: WorkflowStepView, stepRun: WorkflowStepRunView | undefined) => {
     if (step.workflow === undefined) {
       return;
@@ -260,6 +273,17 @@ export function WorkflowRunPageView({
             </>
           )
         }
+        secondaryActions={
+          fix !== undefined && canRunAgain
+            ? [
+                {
+                  label: t(runAgainLabel),
+                  icon: <RotateCw aria-hidden="true" />,
+                  onSelect: onRunAgain
+                }
+              ]
+            : undefined
+        }
         primaryAction={
           run === undefined ? undefined : !run.ended ? (
             canCancel && !stopping ? (
@@ -267,11 +291,25 @@ export function WorkflowRunPageView({
                 {t("workflows.run.cancel")}
               </Button>
             ) : undefined
+          ) : fix !== undefined ? (
+            <Button
+              loading={fix.busy}
+              // The failed step and its reason go into the composer: they wait for the step runs.
+              disabled={read.stepRuns === undefined}
+              onClick={() =>
+                fix.startWith(
+                  fixWithAgentPrompt(run, read.stepRuns ?? [], workflow?.steps, translation)
+                )
+              }
+            >
+              <Bot aria-hidden="true" />
+              {t("workflows.fix.withAgent")}
+            </Button>
           ) : canRunAgain ? (
             // What happened is the page's subject, so the next action is no primary button.
             <Button variant="outline" onClick={onRunAgain}>
               <RotateCw aria-hidden="true" />
-              {t(run.test ? "workflows.run.testAgain" : "workflows.run.again")}
+              {t(runAgainLabel)}
             </Button>
           ) : undefined
         }
@@ -290,6 +328,7 @@ export function WorkflowRunPageView({
           {secondary}
         </PageLead>
       )}
+      {edit === undefined ? null : <EditRefusedBanner edit={edit} />}
       {parentRoute === undefined || run === undefined ? null : (
         <div className="shrink-0 border-b px-(--layout-gutter) py-2">
           <Breadcrumb

@@ -834,14 +834,15 @@ export function useWorkspaceChatModel({
       enabled: appsEnabled,
       rights: appRights,
       startChat: startNewConversationWith,
-      editWithAgent: (app) => startConversationAbout({ kind: APP_ASSET_KIND, name: app }),
+      editWithAgent: (app) =>
+        startConversationAbout({ kind: APP_ASSET_KIND, name: app }, undefined),
       ...(buildWithAgent !== undefined && appRights.write ? { startNew: buildWithAgent } : {})
     },
     workflows: {
       access: workflowsOpen,
       rights: workflowRights,
-      editWithAgent: (workflow) =>
-        startConversationAbout({ kind: WORKFLOW_ASSET_KIND, name: workflow }),
+      editWithAgent: (workflow, prompt) =>
+        startConversationAbout({ kind: WORKFLOW_ASSET_KIND, name: workflow }, prompt),
       ...(buildWithAgent !== undefined && workflowRights.write ? { startNew: buildWithAgent } : {})
     },
     selectedChat: {

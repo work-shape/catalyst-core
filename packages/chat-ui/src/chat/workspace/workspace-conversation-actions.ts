@@ -5,7 +5,7 @@ import {
   createRunIdempotencyKey,
   startProductConversationRun
 } from "../assistant/product-run-transport";
-import { assetPageRoute } from "../conversation/subject-run";
+import { openConversationAbout } from "./open-conversation-about";
 import type { useConversationListRefresh } from "./use-conversation-list-refresh";
 import type { WorkspaceDock } from "./use-workspace-dock";
 import { WORKSPACE_AUTH_SCOPE, isAbandonedDraftConversation } from "./workspace-chat-state";
@@ -119,9 +119,13 @@ export function createWorkspaceConversationActions({
   /**
    * A conversation of the open workspace about one asset, opened once the instance made it.
    * What a conversation is about is set when it is made, so it is made before its first turn;
-   * it opens in the dock of the asset's page.
+   * it opens in the dock of the asset's page, with `prompt` in its composer where one is given.
+   * Every caller names its prompt, also none, so a prompt is never dropped on the way.
    */
-  async function startConversationAbout(subject: { kind: string; name: string }): Promise<void> {
+  async function startConversationAbout(
+    subject: { kind: string; name: string },
+    prompt: string | undefined
+  ): Promise<void> {
     if (!activeCollaborationWorkspaceId) {
       throw new Error("A conversation about an asset belongs to a workspace");
     }
@@ -132,13 +136,7 @@ export function createWorkspaceConversationActions({
         subject
       }
     });
-    // The asset's page opens with the conversation in the dock beside it.
-    const page = assetPageRoute(subject, conversation.collaborationWorkspaceId);
-    if (page === undefined) {
-      routeState.showConversation(conversation.collaborationWorkspaceId, conversation.id);
-    } else {
-      dock.openPage(page, conversation.id);
-    }
+    openConversationAbout(conversation, subject, prompt, { routeState, dock, draftController });
     setNotice(undefined);
     workspaceCache.invalidateConversations();
     chrome.requestComposerFocus();

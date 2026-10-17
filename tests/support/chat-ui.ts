@@ -282,6 +282,7 @@ export {
   dockPlacement,
   searchWithDock
 } from "../../packages/chat-ui/src/chat/workspace/dock-state";
+export { openConversationAbout } from "../../packages/chat-ui/src/chat/workspace/open-conversation-about";
 export { UserMenu } from "../../packages/chat-ui/src/chat/workspace/user-menu";
 export {
   activeAgentNameFor,
