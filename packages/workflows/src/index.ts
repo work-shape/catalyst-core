@@ -81,6 +81,7 @@ export {
 export { lastDueWithin, nextDueAfter, parseCron } from "./cron";
 export {
   WORKFLOW_EXECUTED_STEP_TYPES,
+  WORKFLOW_LIMIT_ABOVE_CEILING,
   indexWorkflowSteps,
   parseWorkflowManifest,
   readWorkflowManifest,
@@ -106,6 +107,13 @@ export {
 export { workflowStepJobKind } from "./step-job";
 export { WORKFLOW_TEST_RUN_ERRORS } from "./test-run";
 export * from "./limits";
+export {
+  workflowDurationText,
+  workflowLimitIssues,
+  workflowLimitRaises,
+  workflowRunBounds,
+  type WorkflowLimitContext
+} from "./run-limits";
 export { replaceScheduleJob, workflowScheduleJobKind } from "./schedule-trigger";
 export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
 export { checkChildContracts, checkChildCycles } from "./child-contracts";

@@ -100,8 +100,20 @@ export interface WorkflowRun
   operationRunId?: OperationRunId;
   /** Step runs created so far, the steps of every loop iteration among them. */
   stepRunCount: number;
-  /** After this moment no further step starts and the run ends as `limit_reached`. */
+  /**
+   * After this moment no further step starts and the run ends as `limit_reached`. It moves
+   * later by every stretch the run spent waiting, so it counts running time only.
+   */
   deadlineAt: ISODateString;
+  /** The bounds the run was opened under. */
+  limits: WorkflowRunBounds;
+  /**
+   * Since when every open step of the run waits for something outside it: an asynchronous
+   * operation, or a child run that waits as well. Missing while a step of the run works.
+   */
+  waitingSince?: ISODateString;
+  /** The milliseconds the run has spent waiting so far, which count toward no limit. */
+  waitedMs: number;
   error?: WorkflowRunError;
   correlationId: string;
   createdAt: ISODateString;
@@ -113,6 +125,22 @@ export interface WorkflowRun
    * the run still has its values.
    */
   dataPrunedAt?: ISODateString;
+}
+
+/**
+ * The bounds of one run: its Workflow's `limits` within the operator's ceilings, the
+ * release's defaults for what the Workflow leaves out. A child run takes the concurrency of
+ * its root, so the runs of one Workflow and their descendants share its slots.
+ */
+export interface WorkflowRunBounds {
+  durationMs: number;
+  stepRuns: number;
+  loopItems: number;
+  /**
+   * How many step jobs the runs of the root Workflow and their children run at once, counted
+   * by `key`. Missing on a run an earlier release opened, which no such bound holds.
+   */
+  concurrency?: { key: string; slots: number };
 }
 
 export type NewWorkflowRun = Pick<
@@ -129,6 +157,7 @@ export type NewWorkflowRun = Pick<
   | "operationRunId"
   | "runKey"
   | "deadlineAt"
+  | "limits"
   | "correlationId"
   | "createdAt"
 > &
@@ -348,6 +377,19 @@ export interface WorkflowRunsStore {
    * of its step runs is made behind it, so a step that ends and a cancel never both win.
    */
   lockRun(ref: WorkflowRunRef): Promise<WorkflowRun | undefined>;
+  /**
+   * Marks a run as waiting from `at` where every open step of it waits for something outside
+   * it: an `operation` step on an asynchronous operation, or a `workflow` step whose child
+   * waits as well. A step that is queued or running, and a code step whose script runs, is
+   * work of the run. Behind the run's lock. Answers whether the run now waits.
+   */
+  markRunWaiting(ref: WorkflowRunRef & { at: ISODateString }): Promise<boolean>;
+  /**
+   * Ends the wait of a run that waits, at `at`: its deadline moves later by the time it
+   * waited, which is added to `waitedMs`. Behind the run's lock. Answers the run as it now
+   * stands, or nothing where it was not waiting.
+   */
+  endRunWait(ref: WorkflowRunRef & { at: ISODateString }): Promise<WorkflowRun | undefined>;
   /** `id` is whatever a caller named: an id no run has answers `undefined`. */
   readRun(input: {
     clientInstanceId: ClientInstanceId;

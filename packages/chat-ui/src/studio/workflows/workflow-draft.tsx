@@ -205,6 +205,7 @@ export function useWorkflowDraft(
           name={view.name}
           revision={draft.revision}
           publishedRevision={draft.publishedRevision}
+          {...(draft.publishQuestion ? { question: draft.publishQuestion } : {})}
           loading={busy}
           error={error}
           waits={waits}
@@ -223,6 +224,7 @@ export function DraftChangeDialog({
   name,
   revision,
   publishedRevision,
+  question = [],
   loading,
   error,
   waits = false,
@@ -234,6 +236,8 @@ export function DraftChangeDialog({
   /** The draft the page read: the revision a publish names. */
   revision: number;
   publishedRevision: number | undefined;
+  /** The instance's sentences on what a publish raises, each limit above its default. */
+  question?: readonly string[];
   loading: boolean;
   error: string | undefined;
   /** The publish was sent and waits for an approver. */
@@ -256,6 +260,17 @@ export function DraftChangeDialog({
       {publish
         ? t("workflows.draft.publishBody", { number: revision })
         : t("workflows.draft.discardBody", { number: publishedRevision ?? revision })}
+      {publish && question.length > 0 ? (
+        <ul
+          aria-label={t("workflows.draft.publishRaises")}
+          className="mt-3 grid gap-1 text-body text-foreground"
+          data-testid="workflow-publish-question"
+        >
+          {question.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      ) : null}
       {error ? <InlineError className="mt-3">{error}</InlineError> : null}
       {waits ? (
         <Banner layout="line" role="status" className="mt-3" data-testid="workflow-publish-waits">

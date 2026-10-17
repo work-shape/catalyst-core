@@ -50,6 +50,7 @@ export { PLATFORM_TOOL_NAMES } from "./platform-orientation";
 export { platformDocsSkill } from "./platform-docs-skill";
 export {
   createInstanceWorkflows,
+  workflowLimitCeilingsOf,
   type InstanceWorkflows,
   type InstanceWorkflowsParts
 } from "./workflows";

@@ -21,10 +21,10 @@ import {
   type WorkflowRunView,
   type WorkflowStep
 } from "@work-shape/catalyst-core";
-import { workflowDeadlineJobKind } from "./run-deadline";
+import { workflowDeadlineJobKind, workflowDeadlineKey } from "./run-deadline";
 import { codeStepIssues, workflowStepFilesRefusal, type WorkflowStepFiles } from "./code-step";
 import type { WorkflowDefinitionRevision } from "./definition-source";
-import type { WorkflowRunLimits } from "./limits";
+import { workflowRunBounds, type WorkflowLimitContext } from "./run-limits";
 import type { PreparedStart } from "./run-start";
 import type { RunOrigin } from "./scheduled-start";
 
@@ -77,7 +77,8 @@ export function createRunOpening(options: {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
   authorizer: Authorizer;
-  limits: WorkflowRunLimits;
+  /** What a run's bounds are made from: the defaults, the ceilings and the step slots. */
+  limits: WorkflowLimitContext;
   now(): Date;
   stepFiles: WorkflowStepFiles;
   prepareStart(revision: WorkflowDefinitionRevision, given: unknown): Promise<PreparedStart>;
@@ -123,8 +124,12 @@ export function createRunOpening(options: {
     datasetAccess?: { access?: ActorAccess; sourceRunId?: WorkflowRunId }
   ): Promise<WorkflowRun | undefined> {
     const { published, trigger, input, principal } = prepared;
-    const { actor, ...origin } = started;
+    const { actor, parentLimits, ...origin } = started;
     const createdAt = now();
+    const bounds = workflowRunBounds(published.manifest, {
+      ...limits,
+      ...(parentLimits ? { parent: parentLimits } : {})
+    });
     const run = await tx.workflowRuns.createRun({
       id: createPlatformId<"WorkflowRunId">("wfr"),
       clientInstanceId,
@@ -137,9 +142,10 @@ export function createRunOpening(options: {
       principal,
       createdAt: createdAt.toISOString(),
       ...origin,
+      limits: bounds,
       deadlineAt: new Date(
         Math.min(
-          createdAt.getTime() + limits.maxDurationMs,
+          createdAt.getTime() + bounds.durationMs,
           started.deadlineAt === undefined ? Infinity : Date.parse(started.deadlineAt)
         )
       ).toISOString()
@@ -216,7 +222,7 @@ export function createRunOpening(options: {
       {
         clientInstanceId,
         subject: run.id,
-        dedupeKey: `${workflowDeadlineJobKind.kind}:${run.id}`,
+        dedupeKey: workflowDeadlineKey(run.id),
         runAfter: new Date(run.deadlineAt),
         correlationId: run.correlationId
       }

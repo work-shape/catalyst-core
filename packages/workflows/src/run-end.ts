@@ -8,8 +8,8 @@ import {
   type WorkflowRun,
   type WorkflowRunError
 } from "@work-shape/catalyst-core";
-import { workflowStepJobKind } from "./step-job";
-import { workflowDeadlineJobKind } from "./run-deadline";
+import { stepJobConcurrency, workflowStepJobKind } from "./step-job";
+import { workflowDeadlineJobKind, workflowDeadlineKey } from "./run-deadline";
 
 /** Parent and child ends share one transaction, including the parent's wakeup. */
 export function createRunEnd(options: {
@@ -48,7 +48,7 @@ export function createRunEnd(options: {
     await cancelWaiting(tx, run);
     await tx.jobs.withdraw(workflowDeadlineJobKind, {
       clientInstanceId,
-      dedupeKey: `${workflowDeadlineJobKind.kind}:${run.id}`
+      dedupeKey: workflowDeadlineKey(run.id)
     });
     for (const child of await tx.workflowRuns.listChildRuns({ clientInstanceId, id: run.id })) {
       if (isWorkflowRunEnded(child.status)) continue;
@@ -88,6 +88,9 @@ export function createRunEnd(options: {
       ...(await tx.workflowRuns.listLinkedStepRuns({ clientInstanceId, id: run.id }))
     ];
     for (const stepRunId of waiting) {
+      // The step counts against the slots of its own run's root: a child shares its parent's,
+      // and a step linked from another run is read for its own.
+      const owner = stepRunId === run.parentStepRunId ? run : await runOfStep(tx, stepRunId);
       await tx.jobs.enqueue(
         workflowStepJobKind,
         { stepRunId },
@@ -95,11 +98,21 @@ export function createRunEnd(options: {
           clientInstanceId,
           subject: stepRunId,
           dedupeKey: `${workflowStepJobKind.kind}:${stepRunId}:after_child`,
+          ...(owner ? stepJobConcurrency(owner) : {}),
           correlationId: run.correlationId
         }
       );
     }
     return true;
+  }
+
+  /** The run a step run belongs to, for the slots its wake counts against. */
+  async function runOfStep(
+    tx: PlatformStores,
+    stepRunId: string
+  ): Promise<WorkflowRun | undefined> {
+    const stepRun = await tx.workflowRuns.getStepRun({ clientInstanceId, id: stepRunId });
+    return stepRun ? tx.workflowRuns.readRun({ clientInstanceId, id: stepRun.runId }) : undefined;
   }
 
   return endRun;

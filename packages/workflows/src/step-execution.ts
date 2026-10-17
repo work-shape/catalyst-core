@@ -408,7 +408,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
               kind: "operation_wait",
               operationRunId: result.waitFor,
               ...(result.call ? { call: result.call } : {}),
-              timeoutMs: operationWaitMs(step.timeout, limits.maxDurationMs)
+              timeoutMs: operationWaitMs(step.timeout)
             };
           }
           const { output, ...trace } = result;
@@ -445,20 +445,23 @@ export function createStepExecutor(options: StepExecutorOptions) {
               );
             await options.datasets.reader({ id: dataset.$dataset, runId: run.id });
             const record = await options.datasets.metadata(dataset.$dataset);
-            if (record.rowCount > limits.loopMaxItems)
+            // The run's own bound, as for a list: its Workflow's `limits.loopItems`.
+            if (record.rowCount > attempt.run.limits.loopItems)
               throw new WorkflowStepFailure(
                 "loop_too_long",
-                `A loop runs over at most ${limits.loopMaxItems} items`
+                `A loop runs over at most ${attempt.run.limits.loopItems} items`
               );
             return { kind: "loop", items: datasetReference(record) };
           }
           if (!Array.isArray(items)) {
             throw new WorkflowStepFailure("loop_items_not_a_list", "A loop runs over a list");
           }
-          if (items.length > limits.loopMaxItems) {
+          // The run's own bound: its Workflow's `limits.loopItems`, or the default.
+          const loopItems = attempt.run.limits.loopItems;
+          if (items.length > loopItems) {
             throw new WorkflowStepFailure(
               "loop_too_long",
-              `A loop runs over at most ${limits.loopMaxItems} items`
+              `A loop runs over at most ${loopItems} items`
             );
           }
           withinStepData(items, "The list of the loop");

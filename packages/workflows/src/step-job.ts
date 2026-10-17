@@ -2,7 +2,9 @@ import {
   defineJobKind,
   defineSchedule,
   scheduledJobPayloadSchema,
-  workflowStepJobKind
+  workflowStepJobKind,
+  type EnqueueJobOptions,
+  type WorkflowRun
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
@@ -14,6 +16,20 @@ import {
 // The job that executes one step run is defined in core: the store queues it too, when an
 // Operation Run that a step waits for ends.
 export { workflowStepJobKind };
+
+/**
+ * What a step job of the run is counted by at the claim: the slots of its root Workflow
+ * (`limits.concurrency`), which its runs and their children share. A run an earlier release
+ * opened has no such bound, and its jobs are counted by the run alone, against nothing.
+ */
+export function stepJobConcurrency(
+  run: Pick<WorkflowRun, "id" | "limits">
+): Pick<EnqueueJobOptions, "concurrencyKey" | "concurrencyLimit"> {
+  const bound = run.limits.concurrency;
+  return bound
+    ? { concurrencyKey: bound.key, concurrencyLimit: bound.slots }
+    : { concurrencyKey: run.id };
+}
 
 /**
  * The job kind of the script of one code step. It is served by the command worker, the one

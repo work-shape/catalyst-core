@@ -6,6 +6,7 @@ import {
   createJobWorker,
   createWorkflowAssetKind,
   resolveInstanceModules,
+  workflowLimitCeilingsOf,
   type InstanceWorkflows,
   type InstanceWorkflowsParts
 } from "@work-shape/catalyst-client-assembly";
@@ -27,6 +28,7 @@ import {
   workflowDefinitionRefusal,
   workflowManifestFingerprint,
   type WorkflowDefinitionRevision,
+  type WorkflowLimitCeilings,
   type WorkflowDefinitionSource
 } from "@work-shape/catalyst-workflows";
 import { clientInstanceId, setupAccessInstance } from "./access-instance";
@@ -220,6 +222,8 @@ export async function workflowFixture(
     datasetLimits?: InstanceWorkflowsParts["datasetLimits"];
     stepSlots?: number;
     limits?: InstanceWorkflowsParts["limits"];
+    /** The ceilings of release config, over the release's own for what is left out. */
+    ceilings?: Partial<WorkflowLimitCeilings>;
     /**
      * In place of the fixture folders. `assets` is what an instance has: the kind `workflow`
      * is registered and the engine reads the published revisions of its assets.
@@ -252,9 +256,11 @@ export async function workflowFixture(
     if (!instanceStores) throw new Error("The instance is not set up");
     return instanceStores;
   };
+  const ceilings = { ...workflowLimitCeilingsOf(), ...options.ceilings };
   const kind = createWorkflowAssetKind({
     clientInstanceId,
     runnerPackages: options.runnerPackages ?? [],
+    limits: { ceilings, stepSlots: options.stepSlots ?? 4 },
     configAssets: {
       getConfigAsset: (input) => storesOf().configAssets.getConfigAsset(input),
       listPublishedConfigAssets: (input) => storesOf().configAssets.listPublishedConfigAssets(input)
@@ -295,6 +301,7 @@ export async function workflowFixture(
             stores,
             operationCalls: server.operationCalls,
             ...(options.stepSlots === undefined ? {} : { stepSlots: options.stepSlots }),
+            ceilings,
             ...(fromAssets ? {} : { definitions: given ?? fixtureDefinitions() }),
             ...(options.limits ? { limits: options.limits } : {}),
             ...(options.now ? { now: options.now } : {}),

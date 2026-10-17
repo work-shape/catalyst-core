@@ -138,6 +138,13 @@ describe("the draft of a Workflow over an instance", () => {
     expect(draftState(workflow)).toBe("ahead");
   });
 
+  it("carries the limits the draft raises from the read of the asset to the publish question", async () => {
+    const raise = "Raises the run time of each run from 12h to 30h.";
+    const { source } = instance({ ...asset, publishQuestion: [raise] });
+    const workflow = await source.getWorkflow("cw_1", "month-end", signal);
+    expect(workflow.draft?.publishQuestion).toEqual([raise]);
+  });
+
   it("names no draft where the instance answered the published view", async () => {
     const { draftRevision: _left, ...publishedAnswer } = { ...asset, revision: 4 };
     const { source } = instance(publishedAnswer);
@@ -285,5 +292,27 @@ describe("the page of a Workflow with a draft", () => {
     expect(dialog("publish", "Needs what administering service principals needs")).toContain(
       "Needs what administering service principals needs"
     );
+  });
+
+  it("names each limit the draft raises in the publish question, and nothing in the discard", () => {
+    const raise = "Raises the run time of each run from 12h to 30h.";
+    const dialog = (change: "publish" | "discard", question?: string[]) =>
+      render(
+        createElement(DraftChangeDialog, {
+          change,
+          name: "Month end",
+          revision: 6,
+          publishedRevision: 4,
+          ...(question ? { question } : {}),
+          loading: false,
+          error: undefined,
+          onConfirm: noop,
+          onClose: noop
+        })
+      );
+    expect(dialog("publish", [raise])).toContain(raise);
+    expect(dialog("publish", [raise])).toContain(t("workflows.draft.publishRaises"));
+    expect(dialog("discard", [raise])).not.toContain(raise);
+    expect(dialog("publish")).not.toContain("workflow-publish-question");
   });
 });

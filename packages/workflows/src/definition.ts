@@ -7,6 +7,7 @@ import {
   readYamlData,
   workflowBlockIssues,
   workflowInputValueSchema,
+  workflowLimitsSchema,
   workflowLoopOptionsSchema,
   workflowOnFailureSchema,
   workflowPaginateSchema,
@@ -32,9 +33,11 @@ import {
   namesDatasetType
 } from "./json";
 import {
+  WORKFLOW_DATASET_MAX_BYTES,
   WORKFLOW_DEFINITION_MAX_STEPS,
   WORKFLOW_MANIFEST_MAX_BYTES,
-  WORKFLOW_MANIFEST_MAX_NESTING
+  WORKFLOW_MANIFEST_MAX_NESTING,
+  WORKFLOW_PAGED_STEP_MAX_MINUTES
 } from "./limits";
 
 // `workflow.yaml` as a definition the engine runs: its shape, and what must hold between its
@@ -59,7 +62,10 @@ export const WORKFLOW_EXECUTED_STEP_TYPES = [
 export interface WorkflowDefinitionIssue {
   path: string;
   message: string;
-  code?: WorkflowBlockIssue["code"] | typeof WORKFLOW_OPERATION_NOT_CALLABLE;
+  code?:
+    | WorkflowBlockIssue["code"]
+    | typeof WORKFLOW_OPERATION_NOT_CALLABLE
+    | typeof WORKFLOW_LIMIT_ABOVE_CEILING;
 }
 
 export type WorkflowDefinitionResult =
@@ -175,6 +181,7 @@ const manifestSchema = z.strictObject({
   labels: inputMappingSchema.optional(),
   onFailure: workflowOnFailureSchema.optional(),
   retention: workflowRetentionSchema.optional(),
+  limits: workflowLimitsSchema.optional(),
   types: z.record(z.string().min(1), jsonObjectSchema).optional(),
   tools: z.array(z.string().min(1)).optional(),
   packages: z.array(z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/u)).optional(),
@@ -186,6 +193,9 @@ const notSupported = (path: string, what: string): WorkflowDefinitionIssue => ({
   code: WORKFLOW_ERROR_CODES.notSupported,
   message: `This engine does not run ${what} yet (${WORKFLOW_ERROR_CODES.notSupported})`
 });
+
+/** The code of a limit that lies above the ceiling of release config. Asked at publish. */
+export const WORKFLOW_LIMIT_ABOVE_CEILING = "limit_above_ceiling";
 
 /** The code of a step that names an operation no step of a Workflow may call. */
 export const WORKFLOW_OPERATION_NOT_CALLABLE = "operation_not_callable";
@@ -221,6 +231,15 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
   const issues: WorkflowDefinitionIssue[] = [];
   for (const field of ["labels", "onFailure"] as const) {
     if (manifest[field] !== undefined) issues.push(notSupported(field, `'${field}'`));
+  }
+  // Read now, and lowered as a Workflow likes: a raise waits for the datasets and the paging
+  // it would allow more of.
+  const { datasetBytes, pagedStepMinutes } = manifest.limits ?? {};
+  if (datasetBytes !== undefined && datasetBytes > WORKFLOW_DATASET_MAX_BYTES) {
+    issues.push(notSupported("limits.datasetBytes", "datasets above their default size"));
+  }
+  if (pagedStepMinutes !== undefined && pagedStepMinutes > WORKFLOW_PAGED_STEP_MAX_MINUTES) {
+    issues.push(notSupported("limits.pagedStepMinutes", "a paged step above its default minutes"));
   }
   const known: readonly string[] = WORKFLOW_STEP_TYPES;
   const executed: readonly string[] = WORKFLOW_EXECUTED_STEP_TYPES;

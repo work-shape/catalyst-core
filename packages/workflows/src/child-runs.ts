@@ -205,7 +205,9 @@ export function createWorkflowStartSource(options: {
                       : { itemLabel: step.iteration.label })
                   }
                 : {}),
-              deadlineAt: parent.deadlineAt
+              deadlineAt: parent.deadlineAt,
+              // The child takes the slots of its root, which its parent was opened under.
+              parentLimits: parent.limits
             },
             parent.mode
           );

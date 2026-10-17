@@ -14,6 +14,7 @@ import { WORKFLOW_CODE_ERRORS } from "./code-step";
 import { WORKFLOW_STEP_DATA_MAX_BYTES } from "./limits";
 import {
   codeStepContinuationKey,
+  stepJobConcurrency,
   workflowCodeJobKind,
   workflowCodeSweepJobKind,
   workflowCodeSweepSchedule,
@@ -72,6 +73,7 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): CodeStepJobs {
     const stepRun = await tx.workflowRuns.getStepRun(ref);
     // A step run a cancel ended keeps nothing, and nothing takes it up.
     if (!stepRun || !(await tx.workflowRuns.recordCodeOutcome({ ...ref, ...ended }))) return;
+    const run = await tx.workflowRuns.readRun({ clientInstanceId, id: stepRun.runId });
     await tx.jobs.enqueue(
       workflowStepJobKind,
       { stepRunId: stepRun.id },
@@ -79,7 +81,8 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): CodeStepJobs {
         clientInstanceId,
         subject: stepRun.id,
         dedupeKey: codeStepContinuationKey(stepRun.id),
-        concurrencyKey: stepRun.runId,
+        // The step's job counts against its Workflow's slots like every other step job.
+        ...(run ? stepJobConcurrency(run) : { concurrencyKey: stepRun.runId }),
         correlationId
       }
     );

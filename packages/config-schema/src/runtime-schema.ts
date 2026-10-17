@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workflowDurationSchema } from "@work-shape/catalyst-core";
 
 export const conversationTitleConfigSchema = z
   .object({
@@ -139,6 +140,25 @@ export const workflowsConfigSchema = z
           .int()
           .positive()
           .default(50 * 1024 ** 3)
+      })
+      .prefault({}),
+    /**
+     * The ceilings of a Workflow's `limits`: the most its `workflow.yaml` may set for each run.
+     * A publish above one is refused, naming it. The defaults a Workflow runs under when it
+     * sets nothing are the release's (12h, 20,000 step runs, 10,000 items per loop); the
+     * ceiling of `limits.concurrency` is `stepSlots`.
+     */
+    limits: z
+      .strictObject({
+        duration: workflowDurationSchema.default("7d"),
+        stepRuns: z.number().int().positive().default(1_000_000),
+        loopItems: z.number().int().positive().default(1_000_000),
+        datasetBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(2 * 1024 * 1024 * 1024),
+        pagedStepMinutes: z.number().int().positive().default(60)
       })
       .prefault({}),
     codeSteps: z

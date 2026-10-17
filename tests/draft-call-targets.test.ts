@@ -131,6 +131,7 @@ describe("a call made by a draft", () => {
       },
       startedBy: { kind: "user", id: tester.id, label: tester.displayLabel },
       deadlineAt: new Date(now.getTime() + 60_000).toISOString(),
+      limits: { durationMs: 60_000, stepRuns: 20_000, loopItems: 10_000 },
       correlationId: "corr_draft",
       createdAt: now.toISOString(),
       definition: manifestOf(notifyClients()),

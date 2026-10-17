@@ -17,8 +17,11 @@ import { WORKFLOW_EXECUTED_STEP_TYPES } from "./definition";
 import {
   WORKFLOW_DEFINITION_MAX_STEPS,
   WORKFLOW_LOOP_MAX_ITEMS,
+  WORKFLOW_RUN_MAX_DURATION_MS,
+  WORKFLOW_RUN_MAX_STEP_RUNS,
   WORKFLOW_STEP_DATA_MAX_BYTES
 } from "./limits";
+import { workflowDurationText } from "./run-limits";
 
 // The skill an agent reads before it changes the definition of a Workflow. It ships with the
 // engine, and the release seed stores it as a read-only skill: what it says of the step types
@@ -60,7 +63,7 @@ const STEP_REFERENCE: {
         "Use { at: <dotted path> } to replace an object-row list in the answer with a dataset reference at the same path. Rows are streamed into the files store; the step record holds only the reference. See Datasets.",
       paginate: "Reserved for EW-13. Leave it out.",
       timeout:
-        "Only for an operation whose work ends after the call, such as the sync of a Knowledge Base: how long the step waits for it, such as `30m` or `6h`; 6h when left out, at most 12h. At it the step fails with `operation_still_running` and the work goes on."
+        "Only for an operation whose work ends after the call, such as the sync of a Knowledge Base: how long the step waits for it, such as `30m`, `6h` or `3d`; 6h when left out. The wait counts toward no limit of the run. At it the step fails with `operation_still_running` and the work goes on."
     }
   },
   workflow: {
@@ -72,7 +75,7 @@ const STEP_REFERENCE: {
     }
   },
   loop: {
-    does: `Runs its \`steps\` in order once for each item of a list or dataset of at most ${WORKFLOW_LOOP_MAX_ITEMS} items. Its output is the counts { total, done, failed } and never the results of its items: what an item produces is kept by a step inside the loop, such as a changing operation.`,
+    does: `Runs its \`steps\` in order once for each item of a list or dataset of at most ${WORKFLOW_LOOP_MAX_ITEMS} items, or the Workflow's \`limits.loopItems\`. Its output is the counts { total, done, failed } and never the results of its items: what an item produces is kept by a step inside the loop, such as a changing operation.`,
     fields: {
       items:
         "A reference to the list or dataset: { step, path }, without `ref:` around it. The list is a field of the output of an earlier step.",
@@ -368,6 +371,18 @@ Follow the build rules for data scope in the platform docs: \`references/configu
 - \`outputs\`: the JSON Schema of the result of a run. An object schema.
 - \`steps\`: the steps in the order they run, at most ${WORKFLOW_DEFINITION_MAX_STEPS} with the steps of loops counted.
   The first is the \`trigger\`, the last the \`output\`.
+- \`limits\`: optional, the bounds of each run where the defaults do not fit. Set only what the
+  person needs, under the ceilings of the instance, which a publish names when it refuses:
+  - \`duration\`: how long a run may work, such as \`30h\` or \`7d\`; ${workflowDurationText(WORKFLOW_RUN_MAX_DURATION_MS)} when left out.
+    Time a run waits, for work that ends later or for a child, does not count.
+  - \`stepRuns\`: how many step runs a run may create, ${WORKFLOW_RUN_MAX_STEP_RUNS} when left out.
+  - \`loopItems\`: how many items one loop's list may hold, ${WORKFLOW_LOOP_MAX_ITEMS} when left out.
+  - \`concurrency\`: how many steps the Workflow's runs and their children run at once, all
+    together; every step slot of the instance when left out. A loop's \`concurrency\` stays
+    the bound of that loop.
+  - \`datasetBytes\` and \`pagedStepMinutes\`: not above their defaults yet.
+
+  A publish that raises a limit names the raise in its question. Say so to the person.
 
 Every step has an \`id\` (lowercase letters, digits, \`_\` and \`-\`, unique in the whole
 definition), a \`name\` a person reads on the run's page, an optional \`description\` and a \`type\`.

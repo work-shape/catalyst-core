@@ -445,15 +445,18 @@ describe("an operation step on work that ends later", () => {
 });
 
 describe("the timeout of an operation step", () => {
-  it("reads minutes and hours up to the twelve hours of a run, and refuses anything else", () => {
+  // Waiting counts toward no limit of the run, so the time an operation may take is bounded
+  // only by its own timeout, not by the run time.
+  it("reads minutes, hours and days, beyond the run time, and refuses anything else", () => {
     const parsed = (timeout: string) => parseWorkflowManifest(syncWorkflow("kb-sync", timeout)).ok;
     expect(parsed("30m")).toBe(true);
     expect(parsed("6h")).toBe(true);
-    expect(parsed("12h")).toBe(true);
-    expect(parsed("13h")).toBe(false);
-    expect(parsed("721m")).toBe(false);
+    expect(parsed("13h")).toBe(true);
+    expect(parsed("721m")).toBe(true);
+    expect(parsed("3d")).toBe(true);
     expect(parsed("0h")).toBe(false);
     expect(parsed("6 hours")).toBe(false);
+    expect(parsed("2w")).toBe(false);
   });
 });
 

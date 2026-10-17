@@ -573,7 +573,7 @@ export function toWorkflow(
     runsAs
   }: WorkflowListed = {},
   /** The asset's own pointers. The instance names a draft only to who may read it. */
-  pointers: Pick<Asset, "draftRevision" | "publishedRevision"> = {}
+  pointers: Pick<Asset, "draftRevision" | "publishedRevision" | "publishQuestion"> = {}
 ): WorkflowView {
   const definition = asset.config;
   const description = text(definition.description);
@@ -604,6 +604,9 @@ export function toWorkflow(
             revision: pointers.draftRevision,
             // The steps above are the draft's where the reader is shown it, and so are its inputs.
             testForm: startFormOf(definition.inputs),
+            ...(pointers.publishQuestion?.length
+              ? { publishQuestion: pointers.publishQuestion }
+              : {}),
             ...(pointers.publishedRevision === undefined
               ? {}
               : { publishedRevision: pointers.publishedRevision })

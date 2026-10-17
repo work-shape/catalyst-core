@@ -114,7 +114,11 @@ describe("the values of a Workflow Run", () => {
 
   it("stay while the run has not ended, however old it is, and the run goes on to its end", async () => {
     const time = clock();
-    const t = await ready({ now: time.now, limits: { maxDurationMs: 365 * DAY_MS } });
+    const t = await ready({
+      now: time.now,
+      limits: { maxDurationMs: 365 * DAY_MS },
+      ceilings: { durationMs: 365 * DAY_MS }
+    });
     const started = await start(t);
     const worker = t.worker();
     // The trigger, the read, and the loop, which waits for its items.

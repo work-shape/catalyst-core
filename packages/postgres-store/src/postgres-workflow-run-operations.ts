@@ -65,6 +65,7 @@ async function createWorkflowRun(
       itemLabel: run.itemLabel ?? null,
       operationRunId: run.operationRunId ?? null,
       deadlineAt: new Date(run.deadlineAt),
+      limits: run.limits,
       correlationId: run.correlationId,
       createdAt: new Date(run.createdAt),
       scheduledFor: run.scheduledFor === undefined ? null : new Date(run.scheduledFor),
@@ -152,6 +153,72 @@ async function lockWorkflowRun(
   ref: Input<"lockRun">
 ): Promise<WorkflowRun | undefined> {
   const [row] = await db.select(runColumns).from(workflowRuns).where(runIs(ref)).for("update");
+  return row ? mapRun(row) : undefined;
+}
+
+/**
+ * Whether every open step run of the run waits for something outside it. A step run that is
+ * queued or running is work, and so is a code step whose script runs; a loop's own step run
+ * waits for its items, which count by themselves. A `workflow` step waits outside the run
+ * only while its child waits as well.
+ */
+const runIsWaiting = (ref: Input<"markRunWaiting">) => sql`exists (
+    select 1 from workflow_step_runs waiting
+    where waiting.client_instance_id = ${ref.clientInstanceId}
+      and waiting.run_id = ${ref.id}
+      and waiting.status = 'waiting'
+      and waiting.step_type in ('operation', 'workflow')
+  ) and not exists (
+    select 1 from workflow_step_runs working
+    where working.client_instance_id = ${ref.clientInstanceId}
+      and working.run_id = ${ref.id}
+      and (
+        working.status in ('queued', 'running')
+        or (working.status = 'waiting' and working.step_type not in ('operation', 'workflow', 'loop'))
+        or (working.status = 'waiting' and working.step_type = 'workflow' and not exists (
+          select 1 from workflow_runs child
+          where child.client_instance_id = working.client_instance_id
+            and child.parent_step_run_id = working.id
+            and child.waiting_since is not null
+            and child.status in ('queued', 'running', 'waiting')
+        ))
+      )
+  )`;
+
+async function markWorkflowRunWaiting(
+  db: PostgresConnection,
+  ref: Input<"markRunWaiting">
+): Promise<boolean> {
+  const rows = await db
+    .update(workflowRuns)
+    .set({ waitingSince: new Date(ref.at) })
+    .where(
+      and(
+        runIs(ref),
+        notEnded(workflowRuns.status),
+        isNull(workflowRuns.waitingSince),
+        runIsWaiting(ref)
+      )
+    )
+    .returning({ id: workflowRuns.id });
+  return rows.length > 0;
+}
+
+async function endWorkflowRunWait(
+  db: PostgresConnection,
+  ref: Input<"endRunWait">
+): Promise<WorkflowRun | undefined> {
+  // The wait is never negative: a clock that went back ends it at its start.
+  const waited = sql`greatest(${ref.at}::timestamptz - ${workflowRuns.waitingSince}, interval '0')`;
+  const [row] = await db
+    .update(workflowRuns)
+    .set({
+      deadlineAt: sql`${workflowRuns.deadlineAt} + ${waited}`,
+      waitedMs: sql`${workflowRuns.waitedMs} + floor(extract(epoch from ${waited}) * 1000)::bigint`,
+      waitingSince: null
+    })
+    .where(and(runIs(ref), isNotNull(workflowRuns.waitingSince)))
+    .returning(runColumns);
   return row ? mapRun(row) : undefined;
 }
 
@@ -742,6 +809,8 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
     recordCodeOutcome: (ref) => recordWorkflowCodeOutcome(db, ref),
     readCodeOutcome: (ref) => readWorkflowCodeOutcome(db, ref),
     lockRun: (ref) => lockWorkflowRun(db, ref),
+    markRunWaiting: (ref) => markWorkflowRunWaiting(db, ref),
+    endRunWait: (ref) => endWorkflowRunWait(db, ref),
     readRun: (input) => readWorkflowRun(db, input),
     listRuns: (input) => listWorkflowRuns(db, input),
     listLastRuns: (input) => listLastWorkflowRuns(db, input),

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   check,
   foreignKey,
   index,
@@ -24,6 +25,7 @@ import type {
   WorkflowManifest,
   WorkflowDatasetReference,
   WorkflowCodeOutcome,
+  WorkflowRunBounds,
   WorkflowRunError,
   WorkflowStagedCode,
   WorkflowStepRunLog,
@@ -71,6 +73,16 @@ export const workflowRuns = pgTable(
     itemLabel: text("item_label"),
     stepRunCount: integer("step_run_count").notNull().default(0),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }).notNull(),
+    // The bounds the run was opened under: its Workflow's limits within the ceilings. A run
+    // an earlier release opens gets that release's constants and no concurrency.
+    limits: jsonb("limits")
+      .$type<WorkflowRunBounds>()
+      .notNull()
+      .default(sql`'{"durationMs":43200000,"stepRuns":20000,"loopItems":10000}'::jsonb`),
+    // Since when every open step of the run waits for something outside it. Null while it works.
+    waitingSince: timestamp("waiting_since", { withTimezone: true }),
+    // The milliseconds the run spent waiting, which its deadline moved by.
+    waitedMs: bigint("waited_ms", { mode: "number" }).notNull().default(0),
     correlationId: text("correlation_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),

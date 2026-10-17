@@ -36,8 +36,11 @@ import {
   workflowDefinitionRefusal,
   workflowStepFileIssues,
   workflowStepFilesRefusal,
+  workflowLimitIssues,
+  workflowLimitRaises,
   workflowRunPrincipal,
   type WorkflowDefinitionResult,
+  type WorkflowLimitContext,
   type WorkflowDefinitionRevision,
   type WorkflowDefinitionSource,
   type WorkflowStepFile,
@@ -116,9 +119,14 @@ export function createWorkflowAssetKind(
       Pick<import("@work-shape/catalyst-core").OperationRegistry, "resolve"> | undefined;
     /** The clock of the engine, for a test of due times. */
     now?: () => Date;
+    /**
+     * The ceilings of release config and the step slots, which a publish holds a Workflow's
+     * `limits` to and the publish question measures a raise by.
+     */
+    limits: WorkflowLimitContext;
   }
 ): WorkflowAssetKind {
-  const { clientInstanceId, timeZone = "UTC", now = () => new Date() } = options;
+  const { clientInstanceId, timeZone = "UTC", now = () => new Date(), limits } = options;
   /** The definition of a published config as the engine runs it, or nothing where it runs none. */
   const runnable = (config: JsonObject | undefined) => {
     const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
@@ -204,6 +212,9 @@ export function createWorkflowAssetKind(
       const parsed = workflowConfigSchema.parse(config);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      // A limit above the operator's ceiling is refused here, by name, and never clamped.
+      const above = workflowLimitIssues(result.manifest, limits);
+      if (above.length > 0) throw workflowDefinitionRefusal(parsed.name, above);
       assertWorkflowPackages(
         result.manifest,
         options.runnerPackages ?? runnerPackageManifest.packages
@@ -249,6 +260,11 @@ export function createWorkflowAssetKind(
       );
     },
     publishReach: workflowPublishReach,
+    // A raise of a limit above the release's default is named before the publish.
+    publishQuestion: ({ config }) => {
+      const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
+      return Promise.resolve(parsed.ok ? workflowLimitRaises(parsed.manifest, limits) : []);
+    },
     async authorizeLive(input) {
       await createWorkflowLiveCheck(
         options,

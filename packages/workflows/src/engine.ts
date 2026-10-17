@@ -43,7 +43,12 @@ import {
 } from "./data-pruning";
 import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
 import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
-import { WORKFLOW_RUN_LIMITS, type WorkflowRunLimits } from "./limits";
+import {
+  WORKFLOW_RUN_LIMITS,
+  WORKFLOW_UNBOUNDED_CEILINGS,
+  type WorkflowLimitCeilings,
+  type WorkflowRunLimits
+} from "./limits";
 import type { WorkflowOperationCalls } from "./operation-step";
 import { createBlockEnds } from "./run-blocks";
 import { principalActor } from "./run-identity";
@@ -57,7 +62,9 @@ import { withEveryBodyStep, datasetMetadata } from "./run-view";
 import { createScheduleTrigger } from "./schedule-trigger";
 import { createScheduledStart } from "./scheduled-start";
 import { createStepExecutor, type StepEnd, type WorkflowCodeRunner } from "./step-execution";
-import { workflowCodeJobKind, workflowStepJobKind } from "./step-job";
+import { stepJobConcurrency, workflowCodeJobKind, workflowStepJobKind } from "./step-job";
+import type { WorkflowLimitContext } from "./run-limits";
+import { createRunWaiting } from "./run-waiting";
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
 // step run is executed by one job of the shared executor. A step ends in the transaction
@@ -80,8 +87,13 @@ export interface WorkflowEngineOptions {
   definitions: WorkflowDefinitionSource;
   /** The call path of the instance. An operation step calls through it and nothing else. */
   operationCalls: WorkflowOperationCalls;
-  /** Bounds below the release's own, for a test. */
+  /** Defaults below the release's own, for a test. A Workflow's `limits` set its own. */
   limits?: Partial<WorkflowRunLimits>;
+  /**
+   * The ceilings of release config: the most a Workflow's `limits` may set. A run never runs
+   * above them. No ceiling beyond what a Workflow asks when left out.
+   */
+  ceilings?: WorkflowLimitCeilings;
   now?: () => Date;
   /** The time zone the cron expressions of `schedule` triggers are read in. UTC when left out. */
   timeZone?: string;
@@ -159,7 +171,13 @@ interface StepPlace extends WorkflowStepRunPlacement {
 export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEngine {
   const { clientInstanceId, stores, definitions, operationCalls } = options;
   const limits: WorkflowRunLimits = { ...WORKFLOW_RUN_LIMITS, ...options.limits };
+  const limitContext: WorkflowLimitContext = {
+    defaults: limits,
+    ceilings: options.ceilings ?? WORKFLOW_UNBOUNDED_CEILINGS,
+    stepSlots: options.stepSlots
+  };
   const now = options.now ?? (() => new Date());
+  const waiting = createRunWaiting({ clientInstanceId, now });
 
   const datasets =
     options.datasetObjects && options.datasetLimits
@@ -278,12 +296,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     step: WorkflowStep,
     place: StepPlace
   ): Promise<boolean> {
-    if (run.stepRunCount >= limits.maxStepRuns) {
+    if (run.stepRunCount >= run.limits.stepRuns) {
       await finishRun(tx, run, {
         status: "limit_reached",
         error: {
           code: "step_limit",
-          message: `The run reached its limit of ${limits.maxStepRuns} steps`
+          message: `The run reached its limit of ${run.limits.stepRuns} steps`
         }
       });
       return false;
@@ -308,9 +326,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         clientInstanceId,
         subject: stepRun.id,
         dedupeKey: subjectDedupeKey(workflowStepJobKind.kind, stepRun.id),
-        // What one run has running is counted by its id, for the slice that runs the items
-        // of a loop side by side and bounds them per run.
-        concurrencyKey: run.id,
+        // The runs of the root Workflow and their children share its slots, counted at the
+        // claim of every worker of the instance.
+        ...stepJobConcurrency(run),
         correlationId: run.correlationId
       }
     );
@@ -391,7 +409,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     await fillLoop(tx, run, index, loopRun);
   }
 
-  const claim = createStepClaim({ clientInstanceId, stores, limits, now, executor, finishRun });
+  const claim = createStepClaim({ clientInstanceId, stores, now, waiting, executor, finishRun });
 
   /** Writes how the attempt of a step went and, in the same transaction, what follows it. */
   async function settle(
@@ -479,7 +497,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           subject: stepRun.id,
           dedupeKey: operationTimeoutKey(stepRun.id),
           runAfter: new Date(since + end.timeoutMs),
-          concurrencyKey: run.id,
+          ...stepJobConcurrency(run),
           correlationId: run.correlationId
         }
       );
@@ -573,7 +591,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           : new Error("The attempt was stopped");
       }
       await control.transaction(async (tx) => {
+        // The runs above are locked before this one, as `claim` does: what the step's end
+        // does to whether its run waits reaches them too.
+        const chain = await waiting.lockChain(tx, claimed.run.id);
         await settle(tx, ref, index, end);
+        if (chain) await waiting.noteWaiting(tx, chain);
         // The step stopped waiting: its timeout has nothing left to end.
         if (claimed.afterOperation) {
           await tx.jobs.withdraw(workflowStepJobKind, {
@@ -620,7 +642,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     clientInstanceId,
     stores,
     authorizer: operationCalls.deps.authorizer,
-    limits,
+    limits: limitContext,
     now,
     stepFiles,
     prepareStart,
@@ -784,7 +806,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         clientInstanceId,
         id: run.id
       });
-      return definition ? withEveryBodyStep(stepRuns, definition, options.stepSlots) : stepRuns;
+      // What a loop ran with is bounded by the slots of the Workflow, and those of a process.
+      const slots = Math.min(options.stepSlots, run.limits.concurrency?.slots ?? options.stepSlots);
+      return definition ? withEveryBodyStep(stepRuns, definition, slots) : stepRuns;
     },
 
     async listWorkflows() {

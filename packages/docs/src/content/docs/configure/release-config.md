@@ -1262,3 +1262,21 @@ concurrency is the smaller of the two settings. The startup sandbox memory check
 multiplies that effective count by `workflows.codeSteps.memoryBytes`, alongside
 workspace commands and Page builds. Raise `stepSlots` (and any explicitly lower code slot setting) to run more code
 sandboxes concurrently; the host must have enough memory for them.
+
+A Workflow may use every step slot at once, across its runs and their child runs together. A Workflow that should leave room for others sets a lower share with `limits.concurrency` in `workflow.yaml`, up to `stepSlots`. A loop's own `concurrency` still bounds that loop.
+
+## Workflow limits
+
+A Workflow's `limits` in `workflow.yaml` set the bounds of each of its runs: `duration`, `stepRuns`, `loopItems` and `concurrency`. Where a Workflow sets none, its runs get the defaults: 12 hours of run time, 20,000 step runs and 10,000 items per loop. Time a run spends waiting, for work that ends later or for a child run, counts toward no limit: the run's deadline moves later by the time it waited.
+
+`workflows.limits` holds the ceilings a Workflow may raise its limits to. A publish that raises a limit names the raise in its question; a publish above a ceiling is refused with the ceiling named. Lowering a ceiling bounds the runs that start after the restart; it does not unpublish a Workflow.
+
+```yaml
+workflows:
+  limits:
+    duration: 7d          # the default ceiling; `<n>m`, `<n>h` or `<n>d`
+    stepRuns: 1000000
+    loopItems: 1000000
+```
+
+`datasetBytes` and `pagedStepMinutes` are read already and are not above their defaults (2 GiB and 60 minutes) yet. The ceiling of `limits.concurrency` is `workflows.stepSlots`.

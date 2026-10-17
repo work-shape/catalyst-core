@@ -180,6 +180,12 @@ export interface EnqueueJobOptions {
   dedupeKey?: string;
   /** The key the kind's `concurrency.perKey` counts by. */
   concurrencyKey?: string;
+  /**
+   * How many jobs of the kind under `concurrencyKey` run at once, for a bound that differs per
+   * key: it takes the place of the kind's `concurrency.perKey`. The claim counts the running
+   * jobs of the key against the limit of the job it would claim.
+   */
+  concurrencyLimit?: number;
   correlationId?: string;
 }
 

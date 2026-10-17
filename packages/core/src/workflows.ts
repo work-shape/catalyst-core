@@ -471,6 +471,44 @@ export const workflowRetentionSchema = z.strictObject({
 
 export type WorkflowRetention = z.infer<typeof workflowRetentionSchema>;
 
+const WORKFLOW_DURATION = /^([1-9][0-9]{0,3})(m|h|d)$/u;
+const WORKFLOW_DURATION_UNIT_MS = { m: 60 * 1_000, h: 60 * 60 * 1_000, d: 24 * 60 * 60 * 1_000 };
+
+/** A length of time in `workflow.yaml` and in release config: minutes, hours or days. */
+export const workflowDurationSchema = z
+  .string()
+  .regex(
+    WORKFLOW_DURATION,
+    "A duration is a number of minutes, hours or days, such as '45m', '30h' or '3d'"
+  );
+
+/** The milliseconds of a duration `workflowDurationSchema` accepts. `NaN` for any other text. */
+export function workflowDurationMs(text: string): number {
+  const match = WORKFLOW_DURATION.exec(text);
+  const unit = match?.[2];
+  if (!match || (unit !== "m" && unit !== "h" && unit !== "d")) return Number.NaN;
+  return Number(match[1]) * WORKFLOW_DURATION_UNIT_MS[unit];
+}
+
+/**
+ * `limits` of a manifest: the bounds of each run of the Workflow, each one the release's
+ * default when left out and never above the ceiling the operator sets in release config.
+ * `duration` counts running time: time a run spends waiting counts toward no limit.
+ * `concurrency` is how many of the instance's step slots the Workflow's runs and their
+ * children take together. `datasetBytes` and `pagedStepMinutes` are read before datasets and
+ * paging run, and may not be raised until they do. Spec: Limits a Workflow may raise.
+ */
+export const workflowLimitsSchema = z.strictObject({
+  duration: workflowDurationSchema.optional(),
+  stepRuns: z.number().int().min(1).optional(),
+  loopItems: z.number().int().min(1).optional(),
+  concurrency: z.number().int().min(1).optional(),
+  datasetBytes: z.number().int().min(1).optional(),
+  pagedStepMinutes: z.number().int().min(1).optional()
+});
+
+export type WorkflowLimits = z.infer<typeof workflowLimitsSchema>;
+
 /**
  * `workflow.yaml` as it is read. Its steps run in the order of the list, and the steps of a
  * loop are nested in it: the file has no `wiring`, and its schema is strict, so a file that
@@ -505,6 +543,8 @@ export interface WorkflowManifest {
   onFailure?: WorkflowOnFailure;
   /** How long the datasets of a run's result are kept. The release default when left out. */
   retention?: WorkflowRetention;
+  /** The bounds of each run, under the operator's ceilings. The release's defaults when left out. */
+  limits?: WorkflowLimits;
   /**
    * The row types of the definition's datasets, by name, each as JSON Schema of one row. A
    * step schema names one as `{ type: "dataset", row: { $ref: "#/types/<name>" } }`.

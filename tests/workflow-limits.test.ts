@@ -1,0 +1,558 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import {
+  WORKFLOW_ASSET_KIND,
+  type JsonValue,
+  type OperationDefinition,
+  type OperationRunId,
+  type OperationSource,
+  type WorkflowManifest
+} from "@work-shape/catalyst-core";
+import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
+import { clientInstanceId, errorSchema } from "./support/access-instance";
+import { ref } from "./support/workflow-children";
+import {
+  publishedDefinitions,
+  runSchema,
+  type workflowFixture,
+  type WorkflowFixture
+} from "./support/workflow-instance";
+import { readyWorkflows, stepRunsOf } from "./support/workflow-runs";
+
+// Limits as settings (EW-LIM): `limits` in `workflow.yaml` under the operator's ceilings of
+// release config, the raise named in the publish question, `limits.concurrency` per Workflow
+// across its runs and children, held at the claim of the shared executor, and time a run
+// spends waiting outside every limit. Acceptance check 113 of the Events, Workflows And
+// Guardrails spec, on Postgres and the engine's jobs.
+
+const HOUR = 60 * 60 * 1_000;
+const DAY = 24 * HOUR;
+
+let open: WorkflowFixture | undefined;
+afterEach(async () => {
+  await open?.instance.close();
+  open = undefined;
+});
+
+const ready = (options: Parameters<typeof workflowFixture>[0] = {}) =>
+  readyWorkflows((fixture) => {
+    open = fixture;
+  }, options);
+
+/** A Workflow started by hand that reads one value from the Connection `crm`. */
+function reading(id: string, limits?: Record<string, unknown>): WorkflowManifest {
+  return parseOk({
+    id,
+    name: id,
+    runAs: "workflow-runner",
+    inputs: { type: "object" },
+    outputs: { type: "object" },
+    ...(limits ? { limits } : {}),
+    steps: [
+      { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+      {
+        id: "read",
+        name: "Read",
+        type: "operation",
+        operation: "connection.crm.echo",
+        input: { text: { value: id } }
+      },
+      { id: "result", name: "Result", type: "output", input: {} }
+    ]
+  });
+}
+
+function parseOk(value: unknown): WorkflowManifest {
+  const parsed = parseWorkflowManifest(value);
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  return parsed.manifest;
+}
+
+describe("limits in workflow.yaml", () => {
+  const issues = (limits: unknown) => {
+    const parsed = parseWorkflowManifest({ ...reading("bounded"), limits });
+    return parsed.ok ? [] : parsed.issues.map(({ path, code }) => [path, code ?? "invalid"]);
+  };
+
+  it("reads duration, step runs, loop items and concurrency", () => {
+    expect(
+      issues({ duration: "30h", stepRuns: 50_000, loopItems: 20_000, concurrency: 2 })
+    ).toEqual([]);
+    expect(issues({ duration: "45m" })).toEqual([]);
+    expect(issues({ duration: "3d" })).toEqual([]);
+    expect(issues({ duration: "30 hours" })).toEqual([["limits.duration", "invalid"]]);
+    expect(issues({ duration: "0h" })).toEqual([["limits.duration", "invalid"]]);
+    expect(issues({ concurrency: 0 })).toEqual([["limits.concurrency", "invalid"]]);
+    expect(issues({ stepRuns: 1.5 })).toEqual([["limits.stepRuns", "invalid"]]);
+    expect(issues({ timeLimit: "1h" })).toEqual([["limits", "invalid"]]);
+  });
+
+  it("reads dataset bytes and the paged step's minutes, and refuses a raise of either until datasets and paging run", () => {
+    expect(issues({ datasetBytes: 1024 * 1024, pagedStepMinutes: 30 })).toEqual([]);
+    expect(issues({ datasetBytes: 3 * 1024 * 1024 * 1024 })).toEqual([
+      ["limits.datasetBytes", "not_supported_yet"]
+    ]);
+    expect(issues({ pagedStepMinutes: 61 })).toEqual([
+      ["limits.pagedStepMinutes", "not_supported_yet"]
+    ]);
+  });
+});
+
+describe("a raise of a limit at publish", () => {
+  const WORKFLOW = "nightly-import";
+  const address = { kind: WORKFLOW_ASSET_KIND, name: WORKFLOW };
+
+  async function draft(t: WorkflowFixture, limits: Record<string, unknown>) {
+    const response = await t.expectOk(t.admin.id, "assets.put", {
+      params: address,
+      payload: {
+        config: { name: WORKFLOW, manifest: reading(WORKFLOW, limits) },
+        expectedRevision: null
+      }
+    });
+    return z.object({ revision: z.number() }).parse(response.json()).revision;
+  }
+  const publish = (t: WorkflowFixture, revision: number) =>
+    t.call(t.root.id, "assets.publish", { params: address, payload: { revision } });
+  const question = async (t: WorkflowFixture) =>
+    z
+      .object({ publishQuestion: z.array(z.string()).optional() })
+      .parse((await t.expectOk(t.root.id, "assets.get", { params: address })).json())
+      .publishQuestion ?? [];
+
+  it("publishes `duration: 30h` under a ceiling of 48 hours and names the raise", async () => {
+    const t = await ready({ definitions: "assets", ceilings: { durationMs: 48 * HOUR } });
+    const revision = await draft(t, { duration: "30h" });
+    const lines = await question(t);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("12h");
+    expect(lines[0]).toContain("30h");
+    const published = await publish(t, revision);
+    expect(published.statusCode, published.body).toBe(200);
+  });
+
+  it("refuses `duration: 30h` under a ceiling of 12 hours and names the ceiling", async () => {
+    const t = await ready({ definitions: "assets", ceilings: { durationMs: 12 * HOUR } });
+    const refused = await publish(t, await draft(t, { duration: "30h" }));
+    expect(refused.statusCode, refused.body).toBe(422);
+    const error = errorSchema.parse(refused.json()).error;
+    expect(error.details).toMatchObject({ reason: "limit_above_ceiling" });
+    expect(error.message).toContain("12h");
+    expect(
+      (await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address }))
+        ?.publishedRevisionId
+    ).toBeUndefined();
+  });
+
+  it("asks nothing of a definition that keeps the defaults or lowers them", async () => {
+    const t = await ready({ definitions: "assets" });
+    await draft(t, { duration: "2h", stepRuns: 100 });
+    expect(await question(t)).toEqual([]);
+  });
+
+  it("refuses a concurrency above the instance's step slots, naming them", async () => {
+    const t = await ready({ definitions: "assets", stepSlots: 4 });
+    const refused = await publish(t, await draft(t, { concurrency: 6 }));
+    expect(refused.statusCode, refused.body).toBe(422);
+    const error = errorSchema.parse(refused.json()).error;
+    expect(error.details).toMatchObject({ reason: "limit_above_ceiling" });
+    expect(error.message).toContain("4");
+  });
+});
+
+describe("limits.concurrency of a Workflow", () => {
+  const BULK_ITEMS = Array.from({ length: 8 }, (_, index) => `bulk-${String(index)}`);
+  const OTHER_ITEMS = Array.from({ length: 4 }, (_, index) => `other-${String(index)}`);
+
+  /** A root Workflow that fans out over a list, each item a child run or one call. */
+  function fanOut(id: string, items: string, body: unknown, limits?: Record<string, unknown>) {
+    return {
+      id,
+      name: id,
+      runAs: "workflow-runner",
+      inputs: { type: "object" },
+      outputs: { type: "object" },
+      ...(limits ? { limits } : {}),
+      steps: [
+        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+        {
+          id: "list",
+          name: "List",
+          type: "operation",
+          operation: "connection.crm.echo",
+          input: { text: { value: items } }
+        },
+        {
+          id: "each",
+          name: "Each",
+          type: "loop",
+          items: { step: "list", path: "items" },
+          concurrency: 8,
+          steps: [body]
+        },
+        { id: "result", name: "Result", type: "output", input: { done: ref("each", "done") } }
+      ]
+    };
+  }
+
+  const bulkItem = {
+    id: "bulk-item",
+    name: "Bulk item",
+    runAs: "workflow-runner",
+    inputs: {
+      type: "object",
+      properties: { value: { type: "string" } },
+      required: ["value"]
+    },
+    outputs: { type: "object" },
+    steps: [
+      { id: "start", name: "Parent", type: "trigger", triggers: [{ kind: "parent" }] },
+      {
+        id: "read",
+        name: "Read",
+        type: "operation",
+        operation: "connection.crm.echo",
+        input: { text: ref("start", "input.value") }
+      },
+      { id: "result", name: "Result", type: "output", input: {} }
+    ]
+  };
+
+  it("holds a Workflow to its 2 slots across its runs and children while another keeps its own, on two workers", async () => {
+    const definitions = publishedDefinitions();
+    definitions.publish(bulkItem);
+    definitions.publish(
+      fanOut(
+        "bulk",
+        "bulk-items",
+        {
+          id: "item",
+          name: "Item",
+          type: "workflow",
+          workflow: "bulk-item",
+          input: { value: ref("each", "") }
+        },
+        { concurrency: 2 }
+      )
+    );
+    // No limit set: every slot, of which its four items take four.
+    definitions.publish(
+      fanOut("other", "other-items", {
+        id: "call",
+        name: "Call",
+        type: "operation",
+        operation: "connection.crm.echo",
+        input: { text: ref("each", "") }
+      })
+    );
+    const t = await ready({ definitions: definitions.source, stepSlots: 8 });
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    t.state.centralSettings = [
+      ...t.state.centralSettings,
+      { operation: "workflow.bulk-item.start", value: "allow" }
+    ];
+    const going = { bulk: 0, other: 0 };
+    const most = { bulk: 0, other: 0, otherWhileBulkFull: 0 };
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const timer = setTimeout(release, 4_000);
+    t.setBehaviour(async (_operation, input): Promise<JsonValue> => {
+      const text = z.object({ text: z.string() }).parse(input).text;
+      if (text === "bulk-items") return { items: BULK_ITEMS };
+      if (text === "other-items") return { items: OTHER_ITEMS };
+      const which = text.startsWith("bulk-") ? "bulk" : "other";
+      going[which] += 1;
+      most[which] = Math.max(most[which], going[which]);
+      if (going.bulk >= 2) most.otherWhileBulkFull = Math.max(most.otherWhileBulkFull, going.other);
+      // Every call stays until the bulk Workflow holds its two slots and the other one its
+      // four at the same moment, or the timer gives up.
+      if (going.bulk >= 2 && going.other >= 4) release();
+      await gate;
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      going[which] -= 1;
+      return { value: text };
+    });
+    const started = async (workflow: string) =>
+      runSchema.parse(
+        (
+          await t.expectOk(t.root.id, "workflows.start", {
+            params: { workflow },
+            payload: { input: {} }
+          })
+        ).json()
+      );
+    const bulk = await started("bulk");
+    const other = await started("other");
+    const ended = async (id: string) =>
+      ["done", "failed", "cancelled", "limit_reached"].includes(
+        (await t.stores.workflowRuns.readRun({ clientInstanceId, id }))?.status ?? ""
+      );
+    const drive = async () => {
+      const worker = t.worker();
+      // Bound by time, not passes: a pass finds nothing while every slot waits at the gate.
+      const until = Date.now() + 60_000;
+      while (Date.now() < until) {
+        if ((await ended(bulk.id)) && (await ended(other.id))) return;
+        await worker.runDue();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    };
+    await Promise.all([drive(), drive()]);
+    clearTimeout(timer);
+
+    const read = async (id: string) =>
+      runSchema.parse(
+        (await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: id } })).json()
+      );
+    const bulkRun = await read(bulk.id);
+    expect(bulkRun, JSON.stringify(bulkRun.error)).toMatchObject({ status: "done" });
+    const otherRun = await read(other.id);
+    expect(otherRun, JSON.stringify(otherRun.error)).toMatchObject({ status: "done" });
+    expect(most.bulk).toBe(2);
+    expect(most.other).toBe(4);
+    expect(most.otherWhileBulkFull).toBe(4);
+    const loop = (await stepRunsOf(t, bulk.id)).find((step) => step.key === "each");
+    expect(loop?.concurrency).toEqual({ asked: 8, ranWith: 2 });
+  }, 120_000);
+
+  it("lets a Workflow that sets no limit use every idle slot", async () => {
+    const definitions = publishedDefinitions();
+    definitions.publish(
+      fanOut("lone", "lone-items", {
+        id: "call",
+        name: "Call",
+        type: "operation",
+        operation: "connection.crm.echo",
+        input: { text: ref("each", "") }
+      })
+    );
+    const t = await ready({ definitions: definitions.source, stepSlots: 8 });
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    const seen = { going: 0, most: 0 };
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Every call stays until all eight are with the outside system, or the timer gives up
+    // before the test Connection's call timeout of 2 s, after which a held call would no
+    // longer hold its slot.
+    const timer = setTimeout(release, 1_500);
+    t.setBehaviour(async (_operation, input): Promise<JsonValue> => {
+      const text = z.object({ text: z.string() }).parse(input).text;
+      if (text === "lone-items") return { items: BULK_ITEMS };
+      seen.going += 1;
+      seen.most = Math.max(seen.most, seen.going);
+      if (seen.going >= 8) release();
+      await gate;
+      seen.going -= 1;
+      return { value: text };
+    });
+    const started = runSchema.parse(
+      (
+        await t.expectOk(t.root.id, "workflows.start", {
+          params: { workflow: "lone" },
+          payload: { input: {} }
+        })
+      ).json()
+    );
+    const run = await t.finish(started.id);
+    clearTimeout(timer);
+    expect(run, JSON.stringify(run.error)).toMatchObject({ status: "done" });
+    expect(seen.most).toBe(8);
+    const loop = (await stepRunsOf(t, started.id)).find((step) => step.key === "each");
+    expect(loop?.concurrency).toEqual({ asked: 8, ranWith: 8 });
+  }, 120_000);
+});
+
+describe("time a run spends waiting", () => {
+  const SYNC = "fixture_sync.start";
+  const counts = z.strictObject({ added: z.number() });
+
+  /** An operation whose work ends after the call: the test ends its Operation Run. */
+  function syncSource(started: OperationRunId[]): OperationSource {
+    const definition: OperationDefinition = {
+      name: SYNC,
+      effect: "changing",
+      changeClass: "reversible",
+      scope: null,
+      auth: "principal",
+      action: "connection.use",
+      timeoutMs: 10 * DAY,
+      completion: { mode: "async", stillRunning: "Abgleich läuft weiter", example: { added: 0 } },
+      inputSchema: z.object({ source: z.string() }),
+      outputSchema: counts,
+      resource: () => undefined,
+      execute(_input, context) {
+        started.push(context.runId);
+        return Promise.resolve({ started: true });
+      }
+    };
+    return {
+      resolve: (name) => Promise.resolve(name === SYNC ? definition : undefined),
+      list: () => Promise.resolve({ operations: [definition], truncated: [] })
+    };
+  }
+
+  function waiting(id: string, trigger: "manual" | "parent", limits?: Record<string, unknown>) {
+    return {
+      id,
+      name: id,
+      runAs: "workflow-runner",
+      inputs: { type: "object" },
+      outputs: { type: "object" },
+      ...(limits ? { limits } : {}),
+      steps: [
+        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: trigger }] },
+        {
+          id: "sync",
+          name: "Abgleich",
+          type: "operation",
+          operation: SYNC,
+          input: { source: { value: "objekte" } },
+          timeout: "96h"
+        },
+        { id: "result", name: "Result", type: "output", input: { added: ref("sync", "added") } }
+      ]
+    };
+  }
+
+  async function readyWaiting(
+    workflows: unknown[],
+    options: Parameters<typeof workflowFixture>[0] = {}
+  ) {
+    const clock = { offsetMs: 0 };
+    const definitions = publishedDefinitions();
+    for (const workflow of workflows) definitions.publish(workflow);
+    const t = await ready({
+      definitions: definitions.source,
+      now: () => new Date(Date.now() + clock.offsetMs),
+      ...options
+    });
+    const started: OperationRunId[] = [];
+    t.operationCalls.registry.addSource(syncSource(started));
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    t.state.centralSettings = [
+      ...t.state.centralSettings,
+      { operation: SYNC, value: "allow" },
+      { operation: "workflow.synced.start", value: "allow" }
+    ];
+    return { t, clock, started };
+  }
+
+  const endSync = (t: WorkflowFixture, id: OperationRunId | undefined) => {
+    if (id === undefined) throw new Error("The sync was not called");
+    return t.stores.operationRuns.finish({
+      clientInstanceId,
+      id,
+      end: { status: "done", finishedAt: new Date().toISOString(), output: { value: { added: 3 } } }
+    });
+  };
+
+  const startRun = async (t: WorkflowFixture, workflow: string) =>
+    runSchema.parse(
+      (
+        await t.expectOk(t.root.id, "workflows.start", {
+          params: { workflow },
+          payload: { input: {} }
+        })
+      ).json()
+    );
+
+  async function untilSyncWaits(t: WorkflowFixture, runId: () => Promise<string | undefined>) {
+    const worker = t.worker();
+    for (let pass = 0; pass < 40; pass++) {
+      await worker.runDue();
+      const id = await runId();
+      const step = id ? (await stepRunsOf(t, id)).find((s) => s.stepId === "sync") : undefined;
+      if (step?.status === "waiting") return worker;
+    }
+    throw new Error("The sync step did not wait");
+  }
+
+  it("counts no minute of a wait of 3 days against a duration of 1 hour", async () => {
+    const { t, clock, started } = await readyWaiting([
+      waiting("import", "manual", { duration: "1h" })
+    ]);
+    const run = await startRun(t, "import");
+    const worker = await untilSyncWaits(t, () => Promise.resolve(run.id));
+    const before = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
+    clock.offsetMs = 3 * DAY;
+    await endSync(t, started[0]);
+    const done = await t.finish(run.id, worker);
+    expect(done, JSON.stringify(done.error)).toMatchObject({ status: "done" });
+    expect(JSON.parse(done.outputPreview?.text ?? "null")).toEqual({ added: 3 });
+    const after = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
+    expect(after?.waitedMs).toBeGreaterThanOrEqual(3 * DAY);
+    expect(Date.parse(after?.deadlineAt ?? "")).toBeGreaterThanOrEqual(
+      Date.parse(before?.deadlineAt ?? "") + 3 * DAY
+    );
+  });
+
+  it("leaves a waiting run alone when its deadline job comes due, and ends it after the wait", async () => {
+    // Real time here: the deadline job is due at the run's deadline on the database's clock.
+    const { t: short, started } = await readyWaiting([waiting("import", "manual")], {
+      limits: { maxDurationMs: 1_000 }
+    });
+    const run = await startRun(short, "import");
+    const worker = await untilSyncWaits(short, () => Promise.resolve(run.id));
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    // The deadline job runs here and finds the run waiting.
+    await worker.runDue();
+    expect(await short.stores.workflowRuns.readRun({ clientInstanceId, id: run.id })).toMatchObject(
+      { status: "running" }
+    );
+    await endSync(short, started.at(-1));
+    const done = await short.finish(run.id, worker);
+    expect(done, JSON.stringify(done.error)).toMatchObject({ status: "done" });
+    expect(
+      (await short.stores.workflowRuns.readRun({ clientInstanceId, id: run.id }))?.waitedMs
+    ).toBeGreaterThanOrEqual(2_000);
+  });
+
+  it("moves a parent's deadline with the wait of its child", async () => {
+    const { t, clock, started } = await readyWaiting([
+      waiting("synced", "parent", { duration: "1h" }),
+      {
+        id: "outer",
+        name: "Outer",
+        runAs: "workflow-runner",
+        inputs: { type: "object" },
+        outputs: { type: "object" },
+        limits: { duration: "1h" },
+        steps: [
+          { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+          { id: "child", name: "Child", type: "workflow", workflow: "synced", input: {} },
+          { id: "result", name: "Result", type: "output", input: { child: ref("child", "") } }
+        ]
+      }
+    ]);
+    const run = await startRun(t, "outer");
+    const stored = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
+    if (stored === undefined) throw new Error("The run was not stored");
+    const childId = async () =>
+      (await t.stores.workflowRuns.listChildRuns({ clientInstanceId, id: stored.id }))[0]?.id;
+    const worker = await untilSyncWaits(t, childId);
+    clock.offsetMs = 3 * DAY;
+    await endSync(t, started[0]);
+    const done = await t.finish(run.id, worker);
+    expect(done, JSON.stringify(done.error)).toMatchObject({ status: "done" });
+    const id = await childId();
+    if (id === undefined) throw new Error("The child run was not started");
+    const child = await t.stores.workflowRuns.readRun({ clientInstanceId, id });
+    expect(child).toMatchObject({ status: "done" });
+    expect(child?.waitedMs).toBeGreaterThanOrEqual(3 * DAY);
+    expect(
+      (await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id }))?.waitedMs
+    ).toBeGreaterThanOrEqual(3 * DAY);
+  });
+
+  it("still ends a run whose steps work past its duration", async () => {
+    const { t, clock } = await readyWaiting([reading("busy", { duration: "1h" })]);
+    const run = await startRun(t, "busy");
+    clock.offsetMs = 2 * HOUR;
+    const ended = await t.finish(run.id);
+    expect(ended).toMatchObject({ status: "limit_reached", error: { code: "duration_limit" } });
+  });
+});

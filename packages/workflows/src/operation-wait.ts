@@ -1,10 +1,11 @@
 import {
+  workflowDurationMs,
+  workflowDurationSchema,
   type JsonValue,
   type OperationDefinition,
   type OperationRun,
   type WorkflowRunError
 } from "@work-shape/catalyst-core";
-import { z } from "zod";
 import { jsonValueSchema } from "./json";
 
 // The wait of an `operation` step for an operation with `completion: async` (EW-ASYNC): its
@@ -13,39 +14,22 @@ import { jsonValueSchema } from "./json";
 /** How long a step waits for such an operation unless its `timeout` says otherwise. */
 const WORKFLOW_OPERATION_WAIT_DEFAULT_MS = 6 * 60 * 60 * 1_000;
 
-/** The longest `timeout` a step may name: the twelve hours a run may take. */
-const WORKFLOW_OPERATION_WAIT_MAX_MS = 12 * 60 * 60 * 1_000;
-
 /** The code of a step whose wait ended at its `timeout` while the operation goes on. */
 const WORKFLOW_OPERATION_STILL_RUNNING = "operation_still_running";
 
-const UNIT_MS = { m: 60 * 1_000, h: 60 * 60 * 1_000 } as const;
-const TIMEOUT = /^([1-9][0-9]{0,3})(m|h)$/u;
-
-/** A `timeout` in minutes or hours, such as `30m` or `6h`, of at most twelve hours. */
-export const workflowOperationTimeoutSchema = z
-  .string()
-  .regex(TIMEOUT, "A timeout is a number of minutes or hours, such as '30m' or '6h'")
-  .refine((text) => timeoutMsOf(text) <= WORKFLOW_OPERATION_WAIT_MAX_MS, {
-    message: "A timeout is at most 12h, the time a run may take"
-  });
-
-function timeoutMsOf(text: string): number {
-  const match = TIMEOUT.exec(text);
-  const unit = match?.[2] === "h" ? UNIT_MS.h : UNIT_MS.m;
-  return Number(match?.[1] ?? Number.NaN) * unit;
-}
+/**
+ * A `timeout` in minutes, hours or days, such as `30m`, `6h` or `3d`. The wait counts toward
+ * no limit of the run (EW-LIM), so it is not bounded by the run's duration.
+ */
+export const workflowOperationTimeoutSchema = workflowDurationSchema;
 
 /**
- * How long a step waits: its `timeout`, six hours unless set, and never longer than the run
- * may take. A `timeout` this engine cannot read waits the default: a save refuses one.
+ * How long a step waits: its `timeout`, six hours unless set. A `timeout` this engine cannot
+ * read waits the default: a save refuses one.
  */
-export function operationWaitMs(timeout: string | undefined, maxDurationMs: number): number {
-  const asked = timeout === undefined ? Number.NaN : timeoutMsOf(timeout);
-  return Math.min(
-    Number.isFinite(asked) ? asked : WORKFLOW_OPERATION_WAIT_DEFAULT_MS,
-    maxDurationMs
-  );
+export function operationWaitMs(timeout: string | undefined): number {
+  const asked = timeout === undefined ? Number.NaN : workflowDurationMs(timeout);
+  return Number.isFinite(asked) ? asked : WORKFLOW_OPERATION_WAIT_DEFAULT_MS;
 }
 
 /** The step's end as far as the Operation Run it waits for tells it. */

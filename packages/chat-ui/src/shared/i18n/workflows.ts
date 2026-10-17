@@ -122,6 +122,7 @@ export const workflows = defineTranslations({
     "workflows.draft.publishBody":
       "Revision {number} becomes the version that runs, by hand and on its schedule.",
     "workflows.draft.publishFailed": "The draft could not be published.",
+    "workflows.draft.publishRaises": "Limits this revision raises",
     "workflows.draft.publishTitle": "Publish “{name}”?",
     "workflows.draft.unpublished": "Draft · not published",
     "workflows.draft.unpublishedBody":
@@ -460,6 +461,7 @@ export const workflows = defineTranslations({
     "workflows.draft.publishBody":
       "Revision {number} wird die Version, die läuft, von Hand und nach ihrem Zeitplan.",
     "workflows.draft.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
+    "workflows.draft.publishRaises": "Grenzen, die diese Revision anhebt",
     "workflows.draft.publishTitle": "„{name}“ veröffentlichen?",
     "workflows.draft.unpublished": "Entwurf · nicht veröffentlicht",
     "workflows.draft.unpublishedBody":

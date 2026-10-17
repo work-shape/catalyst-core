@@ -30,6 +30,8 @@ export const platformJobs = pgTable(
     heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
     dedupeKey: text("dedupe_key"),
     concurrencyKey: text("concurrency_key"),
+    // The bound of this key where it differs per key, in place of the kind's `perKey`.
+    concurrencyLimit: integer("concurrency_limit"),
     errorCode: text("error_code"),
     errorMessage: text("error_message"),
     correlationId: text("correlation_id").notNull(),

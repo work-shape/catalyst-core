@@ -24,7 +24,8 @@ export async function wakeStepsWaitingFor(
     .select({
       id: workflowStepRuns.id,
       runId: workflowStepRuns.runId,
-      correlationId: workflowRuns.correlationId
+      correlationId: workflowRuns.correlationId,
+      limits: workflowRuns.limits
     })
     .from(workflowStepRuns)
     .innerJoin(
@@ -51,7 +52,13 @@ export async function wakeStepsWaitingFor(
         clientInstanceId: run.clientInstanceId,
         subject: step.id,
         dedupeKey: operationWakeKey(step.id),
-        concurrencyKey: step.runId,
+        // The step's job counts against its Workflow's slots like every other step job.
+        ...(step.limits.concurrency
+          ? {
+              concurrencyKey: step.limits.concurrency.key,
+              concurrencyLimit: step.limits.concurrency.slots
+            }
+          : { concurrencyKey: step.runId }),
         correlationId: step.correlationId
       }
     );

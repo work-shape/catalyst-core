@@ -123,6 +123,11 @@ interface WorkflowDraftView {
   publishedRevision?: number;
   /** What a test run of the draft asks for: the fields of the draft's inputs. */
   testForm: StartForm;
+  /**
+   * What a publish of the draft asks about beyond its steps, in the instance's sentences: each
+   * limit the draft raises above its default. Absent where it raises none.
+   */
+  publishQuestion?: readonly string[];
 }
 
 /** One "Run live once" switch of the reader's, by step, and the test run that used it. */

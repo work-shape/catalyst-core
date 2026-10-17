@@ -163,6 +163,7 @@ export async function enqueueJob<Payload extends JsonObject>(
         maxAttempts: kind.maxAttempts,
         dedupeKey: options.dedupeKey ?? null,
         concurrencyKey: options.concurrencyKey ?? null,
+        concurrencyLimit: options.concurrencyLimit ?? null,
         correlationId: options.correlationId ?? createPlatformId("corr"),
         createdAt: sql`now()`
       })
@@ -432,7 +433,9 @@ export async function listKindsWithWork(
  * Recovers the expired leases of a kind that have attempts left and claims up to `limit` due
  * jobs. Claims of one kind are serialized by an advisory lock held to the end of the
  * transaction, so the running counts read here are exact and both concurrency limits hold
- * across every worker of the instance.
+ * across every worker of the instance: the kind's `global`, and per key the job's own
+ * `concurrencyLimit` or the kind's `perKey`. A job whose key is full is passed over, and the
+ * next due job of another key is claimed in its place.
  */
 export async function claimJobs(
   db: PostgresConnection,
@@ -484,15 +487,14 @@ export async function claimJobs(
             ofKind,
             eq(platformJobs.status, "queued"),
             lte(platformJobs.runAfter, sql`now()`),
-            kind.concurrency.perKey === undefined
-              ? undefined
-              : sql`(${platformJobs.concurrencyKey} is null or (
+            // The limit of a key is the job's own where it carries one, the kind's otherwise.
+            sql`(${platformJobs.concurrencyKey} is null or coalesce(${platformJobs.concurrencyLimit}, ${kind.concurrency.perKey ?? null}::integer) is null or (
                   select count(*) from platform_jobs running
                   where running.client_instance_id = ${clientInstanceId}
                     and running.kind = ${kind.kind}
                     and running.status = 'running'
                     and running.concurrency_key = ${platformJobs.concurrencyKey}
-                ) < ${kind.concurrency.perKey})`
+                ) < coalesce(${platformJobs.concurrencyLimit}, ${kind.concurrency.perKey ?? null}::integer))`
           )
         )
         .orderBy(asc(platformJobs.runAfter), asc(platformJobs.createdAt), asc(platformJobs.id))

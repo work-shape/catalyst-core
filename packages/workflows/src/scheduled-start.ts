@@ -4,7 +4,8 @@ import {
   type AuditActor,
   type ClientInstanceId,
   type PlatformStores,
-  type WorkflowRun
+  type WorkflowRun,
+  type WorkflowRunBounds
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { WorkflowDefinitionRevision } from "./definition-source";
@@ -28,7 +29,11 @@ export type RunOrigin = Pick<WorkflowRun, "trigger" | "startedBy" | "correlation
     | "itemIndex"
     | "itemLabel"
     | "runKey"
-  > & { actor: AuditActor };
+  > & {
+    actor: AuditActor;
+    /** The bounds of the parent of a child run: the child counts against its root's slots. */
+    parentLimits?: WorkflowRunBounds;
+  };
 
 interface ScheduledStartOptions {
   clientInstanceId: ClientInstanceId;

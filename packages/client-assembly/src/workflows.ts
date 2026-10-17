@@ -1,4 +1,7 @@
-import { workflowsConfigSchema } from "@work-shape/catalyst-config-schema";
+import {
+  workflowsConfigSchema,
+  type ClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 import {
   createWorkflowRoutes,
   workflowRunAsPrincipal,
@@ -6,7 +9,12 @@ import {
   type RouteRegistration,
   type WorkflowListEntry
 } from "@work-shape/catalyst-server";
-import { AppError, type JobSchedule, type RegisteredJobHandler } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  workflowDurationMs,
+  type JobSchedule,
+  type RegisteredJobHandler
+} from "@work-shape/catalyst-core";
 import {
   codeStepIssues,
   createWorkflowEngine,
@@ -17,7 +25,8 @@ import {
   workflowStepFileIssues,
   workflowsModule,
   type WorkflowDefinitionSource,
-  type WorkflowEngineOptions
+  type WorkflowEngineOptions,
+  type WorkflowLimitCeilings
 } from "@work-shape/catalyst-workflows";
 import type { ModuleAssemblyParts, ModuleSeam } from "./module-assembly";
 import {
@@ -28,6 +37,14 @@ import {
 } from "./workflow-assets";
 
 export { workflowsModule };
+
+/** The ceilings of a Workflow's `limits` as release config sets them (`workflows.limits`). */
+export function workflowLimitCeilingsOf(
+  config: Pick<ClientInstanceConfig["workflows"], "limits"> = workflowsConfigSchema.parse({})
+): WorkflowLimitCeilings {
+  const { duration, ...counts } = config.limits;
+  return { durationMs: workflowDurationMs(duration), ...counts };
+}
 
 /** What the engine of one process is built on, once the process has its call path. */
 export interface InstanceWorkflowsParts extends Pick<
@@ -40,6 +57,8 @@ export interface InstanceWorkflowsParts extends Pick<
   stepSlots?: number;
   datasetObjects?: WorkflowEngineOptions["datasetObjects"];
   datasetLimits?: WorkflowEngineOptions["datasetLimits"];
+  /** `workflows.limits` of release config, with the release schema's defaults when left out. */
+  ceilings?: WorkflowLimitCeilings;
   /**
    * Where the published definition of a Workflow is read, in place of the instance's own
    * source: the published revisions of its Workflow assets. For a test of the engine.
@@ -125,6 +144,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       : createWorkflowAssetStepFiles({ clientInstanceId, configAssets: stores.configAssets }));
   const engine = createWorkflowEngine({
     stepSlots: parts.stepSlots ?? workflowsConfigSchema.parse({}).stepSlots,
+    ceilings: parts.ceilings ?? workflowLimitCeilingsOf(),
     clientInstanceId,
     stores,
     ...(parts.datasetObjects
@@ -244,6 +264,10 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
               apiAccess: stores.apiAccess,
               configAssets: stores.configAssets,
               access: stores.access,
+              limits: {
+                ceilings: workflowLimitCeilingsOf(config.workflows),
+                stepSlots: config.workflows.stepSlots
+              },
               ...zone,
               registry: () => registry
             })
@@ -261,6 +285,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
         ...(files
           ? { datasetObjects: files.objects, datasetLimits: config.workflows.datasets }
           : {}),
+        ceilings: workflowLimitCeilingsOf(config.workflows),
         ...zone,
         // The command worker runs the scripts of code steps. An instance without Execution
         // Workspaces or without a sandbox has no such worker, and its engine knows.
