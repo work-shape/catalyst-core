@@ -328,6 +328,9 @@ export function mapManagedFile(row: ManagedFileRow | undefined): ManagedFileReco
     id: asManagedFileId(row.id),
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     ownerUserId: row.ownerUserId,
+    ...(row.ownerKind !== null && row.ownerId !== null
+      ? { owner: { kind: row.ownerKind, id: row.ownerId } }
+      : {}),
     filename: row.filename,
     mimeType: row.mimeType ?? undefined,
     byteSize: row.byteSize,

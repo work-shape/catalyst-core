@@ -1,6 +1,7 @@
 import {
   AppError,
   artifactPreviewJobDedupeKey,
+  asManagedFileId,
   createPlatformId,
   renderArtifactPreviewJob,
   type ArtifactPreviewJobRecord,
@@ -23,11 +24,13 @@ import {
   type ManagedArtifactKind,
   type ManagedArtifactRecord,
   type ManagedFileId,
+  type ManagedFileOwner,
   type ManagedFileRecord,
   type ManagedObjectDeletionResult,
   type MarkClaimedArtifactPreviewJobUnsupportedInput,
   type MessageId,
   type OrphanedManagedFile,
+  type OwnedManagedFile,
   type PlatformFileStore,
   type RenewClaimedArtifactPreviewJobLeaseInput,
   type SubjectRowClaim,
@@ -35,7 +38,20 @@ import {
   type UserId,
   type WriteArtifactPreviewManifestInput
 } from "@work-shape/catalyst-core";
-import { and, asc, desc, eq, gt, inArray, lt, ne, notExists, notInArray } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  notExists,
+  notInArray
+} from "drizzle-orm";
 import { enqueueJob } from "./jobs/store";
 import {
   claimArtifactPreviewJob as claimPostgresArtifactPreviewJob,
@@ -105,6 +121,8 @@ class PostgresPlatformFileStore implements PlatformFileStore {
         id: createPlatformId<"ManagedFileId">("file"),
         clientInstanceId: input.clientInstanceId,
         ownerUserId: input.ownerUserId,
+        ownerKind: input.owner?.kind ?? null,
+        ownerId: input.owner?.id ?? null,
         filename: input.filename,
         mimeType: input.mimeType ?? null,
         byteSize: input.byteSize,
@@ -207,9 +225,94 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     return rows.length;
   }
 
+  async markOwnedManagedFilesDeleted(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    fileIds: readonly ManagedFileId[];
+    deletedAt: string;
+  }): Promise<number> {
+    if (input.fileIds.length === 0) {
+      return 0;
+    }
+    const rows = await this.db
+      .update(managedFiles)
+      .set({ status: "deleted", deletedAt: new Date(input.deletedAt) })
+      .where(
+        and(
+          eq(managedFiles.clientInstanceId, input.clientInstanceId),
+          eq(managedFiles.ownerKind, input.owner.kind),
+          eq(managedFiles.ownerId, input.owner.id),
+          ne(managedFiles.status, "deleted"),
+          inArray(managedFiles.id, [...input.fileIds])
+        )
+      )
+      .returning({ id: managedFiles.id });
+    return rows.length;
+  }
+
+  async restoreOwnedManagedFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    fileIds: readonly ManagedFileId[];
+  }): Promise<number> {
+    if (input.fileIds.length === 0) {
+      return 0;
+    }
+    const rows = await this.db
+      .update(managedFiles)
+      .set({ status: "available", deletedAt: null })
+      .where(
+        and(
+          eq(managedFiles.clientInstanceId, input.clientInstanceId),
+          eq(managedFiles.ownerKind, input.owner.kind),
+          eq(managedFiles.ownerId, input.owner.id),
+          eq(managedFiles.status, "deleted"),
+          inArray(managedFiles.id, [...input.fileIds])
+        )
+      )
+      .returning({ id: managedFiles.id });
+    return rows.length;
+  }
+
+  async listOwnedManagedFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    createdAfter: string;
+    createdBefore: string;
+    afterFileId?: ManagedFileId;
+    limit: number;
+  }): Promise<OwnedManagedFile[]> {
+    const rows = await this.db
+      .select({
+        id: managedFiles.id,
+        objectKey: managedFiles.objectKey,
+        status: managedFiles.status
+      })
+      .from(managedFiles)
+      .where(
+        and(
+          eq(managedFiles.clientInstanceId, input.clientInstanceId),
+          eq(managedFiles.ownerKind, input.owner.kind),
+          eq(managedFiles.ownerId, input.owner.id),
+          gte(managedFiles.createdAt, new Date(input.createdAfter)),
+          lt(managedFiles.createdAt, new Date(input.createdBefore)),
+          input.afterFileId ? gt(managedFiles.id, input.afterFileId) : undefined
+        )
+      )
+      .orderBy(asc(managedFiles.id))
+      .limit(input.limit);
+    return rows.map((row) => ({
+      id: asManagedFileId(row.id),
+      objectKey: row.objectKey,
+      deleted: row.status === "deleted"
+    }));
+  }
+
   /**
-   * A file is orphaned when no active Conversation refers to it, neither through an attachment
-   * of any status (a removed draft attachment can be restored) nor as an artifact source.
+   * A file is orphaned when no Asset owns it and no active Conversation refers to it, neither
+   * through an attachment of any status (a removed draft attachment can be restored) nor as an
+   * artifact source. A file an Asset owns, such as a Knowledge Base's copy, is never orphaned:
+   * it has no attachment, and only its owner removes it.
    */
   private orphanedManagedFileCondition(input: {
     clientInstanceId: ClientInstanceId;
@@ -218,6 +321,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     return and(
       eq(managedFiles.clientInstanceId, input.clientInstanceId),
       ne(managedFiles.status, "deleted"),
+      isNull(managedFiles.ownerKind),
       lt(managedFiles.createdAt, new Date(input.createdBefore)),
       notExists(
         this.db

@@ -3,8 +3,11 @@ import { KNOWLEDGE_CHECK_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindActions } from "./asset-kinds";
 import type { ConnectionsStore } from "./connections";
 import type { DataStoreRecordsStore, DataStoreRows, DataStoreStatement } from "./data-stores";
+import { z } from "zod";
+import type { AuthenticatedIdentity } from "./identity";
 import type { ClientInstanceId } from "./ids";
 import type { JobsStore } from "./jobs";
+import type { ObjectStorage } from "./object-storage";
 import type { ActorAccess } from "./permissions";
 import type { ISODateString } from "./time";
 
@@ -25,10 +28,13 @@ import type { ISODateString } from "./time";
 // binding, in that binding's region. No embedding is made and no embedding provider is asked.
 //
 // A Knowledge Base without a backend keeps its documents in a Data Store it owns (the built-in
-// backend). This release makes that store with its empty tables and drops it with the Knowledge
-// Base; no document is added, sent anywhere or searched yet. Spec: Embeddings and documents on
-// the built-in backend, "Documents in a Knowledge Base: retention, audit, authorization and
-// provider region".
+// backend). A holder of `knowledge_base.write` adds a file a person can open with
+// `knowledge.<id>.add_files`: the platform copies it into a Managed File the Knowledge Base owns,
+// which lives as long as the document and no longer follows the Conversation it came from, and
+// writes the document's row into the store. Nothing is sent anywhere and nothing is searched
+// yet. Runs and audit rows name file ids, counts and bytes, never a file name. Spec: Embeddings
+// and documents on the built-in backend, "Documents in a Knowledge Base: retention, audit,
+// authorization and provider region".
 
 /**
  * The asset kind of a Knowledge Base. A kind of its own, with rights of its own: a Data Store
@@ -190,6 +196,43 @@ export interface KnowledgeBackend<Target extends KnowledgeBaseTarget = Knowledge
     statement: DataStoreStatement,
     signal?: AbortSignal
   ): Promise<DataStoreRows>;
+  /**
+   * Writes the rows of documents added to the Knowledge Base, and of their contents where the
+   * store has none yet, in one transaction. Refuses, writing nothing, where the Knowledge Base
+   * would then hold more than `maxDocuments` documents, or where a document names a copy that
+   * was removed. Only a backend that keeps documents writes any.
+   */
+  addDocuments(
+    target: Target,
+    input: { documents: readonly KnowledgeDocumentInput[]; maxDocuments: number },
+    signal?: AbortSignal
+  ): Promise<void>;
+  /**
+   * Which of `fileIds` a document of the Knowledge Base names, read once every write of
+   * documents in progress has ended: it waits for the lock `addDocuments` holds. A write that
+   * starts after a copy is marked deleted refuses with `knowledge_files_released`, so for a
+   * copy marked deleted before the call, the answer is final. None for a backend that keeps no
+   * documents, and none once the store the Knowledge Base owned is gone.
+   */
+  documentFileIds(
+    target: Target,
+    fileIds: readonly string[],
+    signal?: AbortSignal
+  ): Promise<string[]>;
+}
+
+/** A document as it is added to a Knowledge Base that keeps documents. */
+export interface KnowledgeDocumentInput {
+  id: string;
+  /** The Managed File the Knowledge Base owns that holds the document's bytes. */
+  fileId: string;
+  /** The SHA-256 of the bytes, in hex: the content the document shares with identical files. */
+  contentSha256: string;
+  format: KnowledgeDocumentFormat;
+  title: string;
+  fileName: string;
+  /** The user who added it, where a person did. */
+  addedBy?: string;
 }
 
 /** The last check of a Knowledge Base, as the platform keeps it. */
@@ -215,3 +258,89 @@ export interface KnowledgeBaseStateStore {
     assetId: string;
   }): Promise<void>;
 }
+
+/**
+ * The formats a document of a Knowledge Base is in. Text formats are read as they are; PDF and
+ * DOCX need the extraction of the document-processing capability, and an instance without it
+ * refuses them when they are added. Spec: Adding files, Ingestion as jobs.
+ */
+export const KNOWLEDGE_DOCUMENT_FORMATS = ["txt", "markdown", "pdf", "docx"] as const;
+
+export type KnowledgeDocumentFormat = (typeof KNOWLEDGE_DOCUMENT_FORMATS)[number];
+
+/** The formats an instance reads without the document-processing capability. */
+export const KNOWLEDGE_TEXT_FORMATS: readonly KnowledgeDocumentFormat[] = ["txt", "markdown"];
+
+/**
+ * The largest file a Knowledge Base takes, as document processing takes it. A larger file is
+ * refused when it is added, with this limit named.
+ */
+export const KNOWLEDGE_FILE_MAX_BYTES = 25 * 1024 * 1024;
+
+/**
+ * A file a person can open in the platform, named by its ids as `knowledge.<id>.add_files`
+ * takes it: a file of a Conversation the person may read.
+ */
+export interface KnowledgeFileRef {
+  conversationId: string;
+  fileId: string;
+}
+
+/** A file as the person adding it may open it. `read` reads its bytes. */
+export interface OpenedKnowledgeFile {
+  filename: string;
+  mimeType?: string;
+  byteSize: number;
+  read(): Promise<Uint8Array>;
+}
+
+/** Where a Knowledge Base takes the files added to it from, and where it keeps its copies. */
+export interface KnowledgeFiles {
+  /**
+   * The file as `actor` may open it now. Nothing where it does not exist or the actor may not
+   * open it, which a caller answers alike, so that no answer tells the two apart.
+   */
+  open(
+    actor: AuthenticatedIdentity,
+    ref: KnowledgeFileRef
+  ): Promise<OpenedKnowledgeFile | undefined>;
+  /** The instance's store of files, which holds the copies a Knowledge Base owns. */
+  readonly objects: ObjectStorage;
+}
+
+/**
+ * The job that turns one content of a Knowledge Base's store into text by page: PDF and DOCX,
+ * served by the document-processing capability in its worker, which calls no model.
+ */
+export const KNOWLEDGE_BASE_EXTRACT_JOB_KIND = "knowledge_base.extract";
+
+/**
+ * The job that chunks one content's text, writes its chunks and, where the Knowledge Base
+ * searches by meaning, embeds them.
+ */
+export const KNOWLEDGE_BASE_INDEX_JOB_KIND = "knowledge_base.index";
+
+/**
+ * What a job of either kind carries: ids only, never a file name or text. The run is the one of
+ * `knowledge.<id>.add_files` whose files caused the work, for the usage it causes.
+ */
+export interface KnowledgeContentJobPayload {
+  /** The id of the Knowledge Base's asset, which is also the id of the store it owns. */
+  knowledgeBaseId: string;
+  /** The content: the SHA-256 of the file's bytes, in hex. */
+  contentSha256: string;
+  /** The Managed File the Knowledge Base owns that holds the bytes. */
+  fileId: string;
+  operationRunId: string;
+}
+
+/**
+ * What extraction answers for one content: its text by page, numbered from 1. A file without
+ * pages, such as a DOCX, answers one page per section the converter finds. It is outside input
+ * to the platform, parsed with `knowledgeExtractedPagesSchema` before it is stored.
+ */
+export const knowledgeExtractedPagesSchema = z.strictObject({
+  pages: z.array(z.strictObject({ page: z.number().int().min(1), text: z.string() }))
+});
+
+export type KnowledgeExtractedPages = z.infer<typeof knowledgeExtractedPagesSchema>;

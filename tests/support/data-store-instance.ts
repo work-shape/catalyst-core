@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres from "postgres";
 import { afterEach, expect } from "vitest";
+import type { ClientInstanceCapability } from "@work-shape/catalyst-client-assembly";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   DATA_STORE_ASSET_KIND,
@@ -64,9 +65,18 @@ export interface DataStoreInstance {
   api: TestInstance;
   stores: TestInstance["stores"];
   execution: ReturnType<typeof getTestExecution>;
+  /** The directory of the instance's store of files (`infrastructure.objectStorage.files`). */
+  filesRoot: string;
 }
 
 type StoreFiles = readonly { path: string; text: string }[];
+
+interface KnowledgeOptions {
+  embedding?: true;
+  attachments?: ClientInstanceCapability;
+  /** `knowledge.maxDocuments` of release config. */
+  maxDocuments?: number;
+}
 type Answer = ReturnType<TestInstance["call"]>;
 
 /**
@@ -84,9 +94,10 @@ export function useDataStoreInstance(): {
     /**
      * The module `knowledge` on beside the Data Stores, with agents that may be created and
      * given Knowledge Bases. `embedding` also approves an embedding model on the instance, so
-     * a Knowledge Base may search by meaning.
+     * a Knowledge Base may search by meaning. `attachments` is a capability the API process
+     * stores the files of Conversations with.
      */
-    knowledge?: boolean | { embedding: true }
+    knowledge?: boolean | KnowledgeOptions
   ): Promise<DataStoreInstance>;
   /** Closes the processes of every instance the test started. */
   close(): Promise<unknown>;
@@ -140,7 +151,7 @@ export function useDataStoreInstance(): {
     changing?: PolicyValue,
     developmentAuth?: unknown,
     guardrails?: Record<string, unknown>,
-    knowledge: boolean | { embedding: true } = false
+    knowledge: boolean | KnowledgeOptions = false
   ): Promise<DataStoreInstance> {
     const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
     roots.push(root);
@@ -170,13 +181,22 @@ export function useDataStoreInstance(): {
             }
           }
         : {}),
-      ...(typeof knowledge === "object"
+      ...(typeof knowledge === "object" && knowledge.embedding
         ? {
             // The deterministic adapter, which keeps every text inside the instance.
             modelBindings: [
               { id: "embedding", providerId: "local", kind: "embedding", dimensions: 8 }
-            ],
-            knowledge: { defaultEmbeddingBinding: "embedding" }
+            ]
+          }
+        : {}),
+      ...(typeof knowledge === "object"
+        ? {
+            knowledge: {
+              ...(knowledge.embedding ? { defaultEmbeddingBinding: "embedding" } : {}),
+              ...(knowledge.maxDocuments === undefined
+                ? {}
+                : { maxDocuments: knowledge.maxDocuments })
+            }
           }
         : {}),
       secretStore: { keys: [{ id: "k1", ref: KEY_VARIABLE }] },
@@ -192,7 +212,10 @@ export function useDataStoreInstance(): {
     const api = await createTestInstance({
       config: parseClientInstanceConfig({ ...settings, ...(guardrails ? { guardrails } : {}) }),
       env,
-      tools: []
+      tools: [],
+      ...(typeof knowledge === "object" && knowledge.attachments
+        ? { capabilities: [knowledge.attachments] }
+        : {})
     });
     started.push(api);
     const calls = await createTestInstance({
@@ -207,7 +230,7 @@ export function useDataStoreInstance(): {
       }
     });
     started.push(calls);
-    return { api, stores: api.stores, execution: getTestExecution(calls) };
+    return { api, stores: api.stores, execution: getTestExecution(calls), filesRoot: root };
   }
 
   const put = (

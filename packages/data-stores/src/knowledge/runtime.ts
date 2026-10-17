@@ -3,6 +3,8 @@ import type {
   KnowledgeBackend,
   KnowledgeBaseState,
   KnowledgeCheckResult,
+  KnowledgeDocumentFormat,
+  KnowledgeFiles,
   Logger,
   PlatformStores
 } from "@work-shape/catalyst-core";
@@ -14,6 +16,12 @@ export interface KnowledgeRuntime {
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;
   backend: KnowledgeBackend;
+  /** Where added files come from and their copies go. Absent where the process has none. */
+  files?: KnowledgeFiles;
+  /** The formats a file added here may be in: text, and PDF and DOCX with document processing. */
+  documentFormats: readonly KnowledgeDocumentFormat[];
+  /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */
+  maxDocuments: number;
   logger: Logger;
   now(): Date;
 }

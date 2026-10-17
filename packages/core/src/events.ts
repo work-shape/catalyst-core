@@ -385,6 +385,27 @@ export const EVENTS = {
     subject: "instance"
   },
   "job.retried": { ...LEGACY_AUDIT, name: "job.retried", subject: "job" },
+  // Files added to a Knowledge Base: the copies it now owns, by id, how many and their bytes.
+  // The subject is the Knowledge Base's asset. It names no file name, because the names of
+  // personal documents name people, and nothing a file holds.
+  "knowledge_base.files_added": {
+    name: "knowledge_base.files_added",
+    subject: "config_asset",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["knowledgeBase", "fileIds", "count", "bytes"],
+      properties: {
+        knowledgeBase: { type: "string" },
+        fileIds: { type: "array", items: { type: "string" } },
+        count: { type: "integer", minimum: 1 },
+        bytes: { type: "integer", minimum: 0 }
+      }
+    }
+  },
   // "Run live once" on an action or a step of a draft (ADR-0031). The subject is the App or
   // the Workflow; the metadata names its draft revision, the action or step and who set it.
   // A guardrail made to enforce at its scope, or taken back: who, which revision and where.

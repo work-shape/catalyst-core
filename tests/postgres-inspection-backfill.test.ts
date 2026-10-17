@@ -257,7 +257,9 @@ it("backfills only proven path inspections and hides them from resources and fil
           : row
       )
     );
-    expect(await sql`select * from managed_files`).toEqual(upload);
+    expect(await sql`select * from managed_files`).toEqual(
+      upload.map((row) => ({ ...row, owner_kind: null, owner_id: null }))
+    );
     expect(await sql`select * from conversation_attachments`).toEqual(
       attachments.map((row) => ({ ...row, follow_up_id: null }))
     );

@@ -65,10 +65,13 @@ export const modelBindingConfigSchema = z
  * The Knowledge Bases of an instance. `defaultEmbeddingBinding` names the embedding binding a
  * Knowledge Base with semantic search uses unless it names another. Without it the instance
  * offers no semantic search; keyword and structured Knowledge Bases work all the same.
+ * `maxDocuments` is how many documents one Knowledge Base holds at most: adding a file beyond
+ * it is refused with the limit named.
  */
 export const knowledgeConfigSchema = z
   .object({
-    defaultEmbeddingBinding: z.string().min(1).optional()
+    defaultEmbeddingBinding: z.string().min(1).optional(),
+    maxDocuments: z.number().int().positive().max(1_000_000).default(10_000)
   })
   .strict()
   .prefault({});

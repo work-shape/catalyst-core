@@ -3,13 +3,13 @@ import {
   type BuiltinKnowledgeTarget,
   type DataStoreRecord,
   type KnowledgeBackend,
-  type KnowledgeBackendStores,
-  type KnowledgeCheckResult
+  type KnowledgeBackendStores
 } from "@work-shape/catalyst-core";
 import { enqueueStoreDrop, enqueueStoreJob } from "../../jobs";
 import type { DataStoreRuntime } from "../../runtime";
 import { semanticSearchIssue, type KnowledgeEmbedding } from "../definition";
-import { KNOWLEDGE_STORE_LEVEL } from "./store-schema";
+import { addKnowledgeDocuments, knowledgeDocumentFileIds } from "./documents";
+import { ownedStoreCheck, ownedStoreName } from "./owned-store";
 
 // The built-in backend: a Knowledge Base without a backend keeps its documents in a Data Store
 // it owns. Publishing it makes the store through the provisioning of every store (DS-1), as a
@@ -17,32 +17,10 @@ import { KNOWLEDGE_STORE_LEVEL } from "./store-schema";
 // then pgvector where the Knowledge Base searches by meaning, then the platform's tables
 // (`store-schema.ts`). Deleting the Knowledge Base drops the store with a job of its own.
 //
-// Sensitive data. In this release the store holds no document: no file is added, no text is
-// sent to an embedding provider, and nothing is searched. Its tables are made empty. Dropping
-// it removes every row it will hold; backups keep it until their rotation.
-
-/**
- * The name of the store a Knowledge Base owns. A colon is in no id of a Data Store, so no store
- * of its own asset takes the name, and no operation `data_store.<id>.<verb>` reaches it.
- */
-function ownedStoreName(knowledgeBase: string): string {
-  return `knowledge-base:${knowledgeBase}`;
-}
-
-/** What a check of the Knowledge Base says of the store it owns. It reads no row of the store. */
-function ownedStoreCheck(record: DataStoreRecord | undefined): KnowledgeCheckResult {
-  const problem =
-    !record || record.status === "retired"
-      ? "The Knowledge Base has no store for its documents yet: publishing it makes one."
-      : record.failure
-        ? record.failure.message
-        : record.status === "provisioning" || record.level < KNOWLEDGE_STORE_LEVEL
-          ? "The store for the Knowledge Base's documents is being made."
-          : undefined;
-  return problem === undefined
-    ? { status: "ok", tables: [] }
-    : { status: "needs_attention", tables: [], problem };
-}
+// Sensitive data. The store holds a row per document added to the Knowledge Base, with its
+// title and file name (`documents.ts`); the bytes stay in a Managed File the Knowledge Base
+// owns. No text is sent to an embedding provider and nothing is searched yet. Dropping the
+// store removes every row it holds; backups keep it until their rotation.
 
 export function createBuiltinKnowledgeBackend(
   runtime: DataStoreRuntime,
@@ -151,6 +129,14 @@ export function createBuiltinKnowledgeBackend(
         });
       }
       await enqueueStoreDrop(stores, record);
+    },
+
+    addDocuments(target, input, signal) {
+      return addKnowledgeDocuments(runtime, target, input, signal);
+    },
+
+    documentFileIds(target, fileIds, signal) {
+      return knowledgeDocumentFileIds(runtime, target, fileIds, signal);
     },
 
     query(target) {

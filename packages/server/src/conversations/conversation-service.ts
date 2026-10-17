@@ -26,6 +26,7 @@ import { z } from "zod";
 import { getModelSelectionForConversationTitles } from "@work-shape/catalyst-config-schema";
 import { CollaborationWorkspaceWorkflow } from "../workspaces/collaboration-workspace-service";
 import { attemptConversationDataCleanup } from "../deletion/conversation-cleanup";
+import { requireConversationAccess } from "./conversation-access";
 import { assertConversationIdle } from "./conversation-idle";
 import {
   createTitlePrompt,
@@ -496,36 +497,15 @@ export class ConversationWorkflow {
   }
 
   /**
-   * The single access check for a Conversation and everything that hangs off it. A missing
-   * Conversation, one in a workspace the caller is not a member of, and another member's
-   * private Conversation are indistinguishable to the caller.
+   * The single access check for a Conversation and everything that hangs off it:
+   * `requireConversationAccess`. A missing Conversation, one in a workspace the caller is not a
+   * member of, and another member's private Conversation are indistinguishable to the caller.
    */
-  async requireConversationAccess(
+  requireConversationAccess(
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<Conversation> {
-    const conversation = await this.options.stores.conversations.getConversation(
-      this.options.clientInstanceId,
-      conversationId
-    );
-    if (!conversation || conversation.status !== "active") {
-      throw new AppError("NOT_FOUND", "Conversation is not available");
-    }
-    try {
-      await this.workspaces.requireWorkspaceAccess(user, conversation.collaborationWorkspaceId);
-    } catch (error) {
-      if (isAppError(error) && error.code === "NOT_FOUND") {
-        throw new AppError("NOT_FOUND", "Conversation is not available");
-      }
-      throw error;
-    }
-    if (
-      conversation.visibility === "private" &&
-      conversation.createdByUserId !== getSubjectUserId(user)
-    ) {
-      throw new AppError("NOT_FOUND", "Conversation is not available");
-    }
-    return conversation;
+    return requireConversationAccess(this.options, conversationId, user);
   }
 
   async resolveTargetWorkspace(

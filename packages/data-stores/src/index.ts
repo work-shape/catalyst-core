@@ -91,7 +91,12 @@ export const knowledgeModule = defineModule({
   name: "knowledge",
   requires: ["dataStores"],
   kinds: [KNOWLEDGE_BASE_ASSET_KIND],
-  operations: ["knowledge_bases.get", "knowledge_bases.check", "knowledge_bases.query"]
+  operations: [
+    "knowledge_bases.get",
+    "knowledge_bases.check",
+    "knowledge_bases.query",
+    "knowledge_bases.add_files"
+  ]
 });
 
 /** What the Data Stores of one process are made of, for the assembly to put in place. */

@@ -71,7 +71,12 @@ import type {
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
-import { createInstanceInfrastructure, createWorkspacesStore } from "./infrastructure";
+import {
+  createFilesStore,
+  createInstanceInfrastructure,
+  createWorkspacesStore
+} from "./infrastructure";
+import { createKnowledgeFiles } from "./knowledge-files";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePages, createInstanceWorkspaceOpen } from "./pages";
@@ -478,7 +483,17 @@ export async function createClientInstanceExecutionAssembly(
     authorizer,
     auditRecorder,
     modelGateway,
-    tools: toolRegistry
+    tools: toolRegistry,
+    ...(config.infrastructure.objectStorage.files === undefined
+      ? {}
+      : {
+          files: createKnowledgeFiles({
+            clientInstanceId,
+            stores: store,
+            attachments,
+            objects: await createFilesStore(config, infrastructure.context)
+          })
+        })
   });
   const { dataToolSources } = modulesStarted;
   const toolOptions = withConnections(

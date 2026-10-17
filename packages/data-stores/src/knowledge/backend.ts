@@ -171,6 +171,22 @@ export function createDataStoreKnowledgeBackend(
       } catch (error) {
         throw error instanceof AppError ? error : databaseFailureError(error, "The query");
       }
+    },
+
+    addDocuments(target) {
+      return Promise.reject(
+        new AppError(
+          "VALIDATION_FAILED",
+          `Knowledge Base '${target.name}' describes tables of a Data Store and keeps no documents: files are added to a Knowledge Base without a backend.`,
+          { reason: "method_not_offered" },
+          { exposeMessage: true }
+        )
+      );
+    },
+
+    // A Knowledge Base on a Data Store keeps no documents, so no file is named.
+    documentFileIds() {
+      return Promise.resolve([]);
     }
   };
   return backend;

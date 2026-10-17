@@ -15,6 +15,7 @@ import type {
   ArtifactPreviewManifest,
   ConversationAttachment,
   ManagedArtifactRecord,
+  ManagedFileOwner,
   ManagedFileRecord
 } from "@work-shape/catalyst-core";
 import { conversations, messages } from "./conversations";
@@ -25,6 +26,9 @@ export const managedFiles = pgTable(
     id: text("id").primaryKey(),
     clientInstanceId: text("client_instance_id").notNull(),
     ownerUserId: text("owner_user_id").notNull(),
+    // The Asset that owns the file, such as a Knowledge Base, where one does. Both or neither.
+    ownerKind: text("owner_kind").$type<ManagedFileOwner["kind"]>(),
+    ownerId: text("owner_id"),
     filename: text("filename").notNull(),
     mimeType: text("mime_type"),
     byteSize: integer("byte_size").notNull(),

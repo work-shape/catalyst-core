@@ -8,10 +8,14 @@ import {
   type ClientInstanceId,
   type DataToolSource,
   type KnowledgeBackend,
+  type KnowledgeDocumentFormat,
+  type KnowledgeFiles,
   type Logger,
   type OperationSource,
   type PlatformStores,
-  type RegisteredAssetKind
+  type JobRetry,
+  type RegisteredAssetKind,
+  type RegisteredJobHandler
 } from "@work-shape/catalyst-core";
 import {
   KNOWLEDGE_BASE_NAME_MAX_LENGTH,
@@ -22,6 +26,7 @@ import {
   semanticSearchIssue,
   type KnowledgeEmbedding
 } from "./definition";
+import { createKnowledgeFileCleanupJobs } from "./file-cleanup";
 import { createKnowledgeOperationSource, createKnowledgeToolSource } from "./operations";
 import { keepKnowledgeCheck, type KnowledgeRuntime } from "./runtime";
 
@@ -58,7 +63,19 @@ export interface KnowledgeBases {
    * backend the store it owned, which a job drops with every row.
    */
   retire(stores: PlatformStores, assetId: string, published: unknown): Promise<void>;
-  readonly operationSource: OperationSource;
+  /**
+   * The operations of every Knowledge Base, with where added files come from and their copies
+   * go: what the process has once its call path is built.
+   */
+  operationSource(files: KnowledgeFiles | undefined): OperationSource;
+  /**
+   * The job that removes the copies a call of `add_files` left without documents, where the
+   * process keeps files.
+   */
+  fileJobs(files: KnowledgeFiles | undefined): {
+    handlers: RegisteredJobHandler[];
+    retries: JobRetry[];
+  };
   /** Describes the one knowledge tool to an agent that lists Knowledge Bases. */
   readonly toolSource: DataToolSource;
 }
@@ -71,6 +88,10 @@ export function createKnowledgeBases(input: {
   backend: KnowledgeBackend;
   /** The embedding model release config approves for Knowledge Bases (`knowledge`), if any. */
   embedding: KnowledgeEmbedding;
+  /** The formats a file added to a Knowledge Base may be in on this instance. */
+  documentFormats: readonly KnowledgeDocumentFormat[];
+  /** `knowledge.maxDocuments` of release config. */
+  maxDocuments: number;
   logger: Logger;
   now?: () => Date;
 }): KnowledgeBases {
@@ -78,6 +99,8 @@ export function createKnowledgeBases(input: {
     clientInstanceId: input.clientInstanceId,
     stores: input.stores,
     backend: input.backend,
+    documentFormats: input.documentFormats,
+    maxDocuments: input.maxDocuments,
     logger: input.logger,
     now: input.now ?? (() => new Date())
   };
@@ -136,7 +159,9 @@ export function createKnowledgeBases(input: {
         await runtime.backend.retire(stores, knowledgeTargetOf(definition.data, assetId));
       }
     },
-    operationSource: createKnowledgeOperationSource(runtime),
+    operationSource: (files) =>
+      createKnowledgeOperationSource(files ? { ...runtime, files } : runtime),
+    fileJobs: (files) => createKnowledgeFileCleanupJobs(runtime, files),
     toolSource: createKnowledgeToolSource(runtime)
   };
 }

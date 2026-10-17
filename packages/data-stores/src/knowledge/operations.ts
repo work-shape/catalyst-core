@@ -28,6 +28,7 @@ import {
   type DataStoreKnowledgeDefinition,
   type KnowledgeBaseDefinition
 } from "./definition";
+import { addFilesOperation } from "./add-files";
 import { checkKnowledgeBase, type KnowledgeRuntime } from "./runtime";
 
 // The operations of one Knowledge Base, `knowledge.<id>.<part>`, each called through
@@ -313,11 +314,21 @@ function checkOperation(
 
 /**
  * The operations of one Knowledge Base by the last part of their names. `query` is answered
- * only on a Data Store; the built-in backend answers search, which arrives with KB-7.
+ * only on a Data Store; `add_files` only by a Knowledge Base that keeps documents, whose search
+ * arrives with KB-7.
  */
 const OPERATIONS = {
   query: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) =>
     isStructured(knowledgeBase) ? queryOperation(runtime, knowledgeBase) : undefined,
+  add_files: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) =>
+    isStructured(knowledgeBase)
+      ? undefined
+      : addFilesOperation(runtime, {
+          name: knowledgeBase.definition.name,
+          assetId: knowledgeBase.asset.id,
+          definition: knowledgeBase.definition,
+          resource: knowledgeBase.resource
+        }),
   state: stateOperation,
   check: checkOperation
 } as const;

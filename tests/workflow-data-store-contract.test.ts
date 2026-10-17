@@ -603,13 +603,18 @@ describe("the modules workflows and dataStores", () => {
       tools: [],
       ui: []
     };
-    // A Knowledge Base reads a Data Store, its only backend so far.
+    // A Knowledge Base reads a Data Store, or keeps documents in one it owns.
     expect(knowledgeModule).toEqual({
       ...nothing,
       name: "knowledge",
       requires: ["dataStores"],
       kinds: [KNOWLEDGE_BASE_ASSET_KIND],
-      operations: ["knowledge_bases.get", "knowledge_bases.check", "knowledge_bases.query"]
+      operations: [
+        "knowledge_bases.get",
+        "knowledge_bases.check",
+        "knowledge_bases.query",
+        "knowledge_bases.add_files"
+      ]
     });
     // The kind of a Workflow, its runs and the job that executes their steps.
     expect(workflowsModule).toEqual({

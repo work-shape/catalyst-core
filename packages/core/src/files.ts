@@ -242,10 +242,24 @@ export interface AttachmentWarning {
 
 export type AttachmentArtifactRefs = Record<string, ManagedArtifactId>;
 
+/**
+ * The Asset that owns a Managed File, where one does: the file then follows the Asset's
+ * retention and no Conversation's. The cleanup of Conversations and the orphan sweep leave
+ * such a file alone; only its owner removes it. A Knowledge Base owns the copy of every file
+ * added to it.
+ */
+export interface ManagedFileOwner {
+  kind: "knowledge_base";
+  /** The id of the owning Asset. */
+  id: string;
+}
+
 export interface ManagedFileRecord {
   id: ManagedFileId;
   clientInstanceId: ClientInstanceId;
   ownerUserId: string;
+  /** Absent for a file of a Conversation. */
+  owner?: ManagedFileOwner;
   filename: string;
   mimeType?: string;
   byteSize: number;
@@ -331,6 +345,7 @@ export interface AttachmentManifest {
 export interface CreateManagedFileInput {
   clientInstanceId: ClientInstanceId;
   ownerUserId: string;
+  owner?: ManagedFileOwner;
   filename: string;
   mimeType?: string;
   byteSize: number;
@@ -502,8 +517,8 @@ export interface MarkClaimedArtifactPreviewJobUnsupportedInput {
 }
 
 /**
- * A managed file that no active Conversation refers to: neither through an attachment, whatever
- * its status, nor as the source of an artifact that is not deleted.
+ * A managed file that no Asset owns and no active Conversation refers to: neither through an
+ * attachment, whatever its status, nor as the source of an artifact that is not deleted.
  */
 export interface OrphanedManagedFile {
   id: ManagedFileId;
@@ -538,6 +553,46 @@ export interface ManagedFileStore {
     createdBefore: ISODateString;
     deletedAt: ISODateString;
   }): Promise<number>;
+  /**
+   * Marks files `owner` owns deleted and returns how many were marked. A file another owner, or
+   * no owner, holds is left alone. Its object is the owner's to delete.
+   */
+  markOwnedManagedFilesDeleted(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    fileIds: readonly ManagedFileId[];
+    deletedAt: ISODateString;
+  }): Promise<number>;
+  /**
+   * Marks files `owner` owns and marked deleted available again, and returns how many. For an
+   * owner that marks a file deleted as a candidate and finds, before removing its object, that
+   * the file is still used.
+   */
+  restoreOwnedManagedFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    fileIds: readonly ManagedFileId[];
+  }): Promise<number>;
+  /**
+   * The files `owner` owns that were created in `[createdAfter, createdBefore)`, deleted ones
+   * included, ordered by id after `afterFileId`, at most `limit`.
+   */
+  listOwnedManagedFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    createdAfter: ISODateString;
+    createdBefore: ISODateString;
+    afterFileId?: ManagedFileId;
+    limit: number;
+  }): Promise<OwnedManagedFile[]>;
+}
+
+/** A file an owner holds, as its owner looks it up to remove it. */
+export interface OwnedManagedFile {
+  id: ManagedFileId;
+  objectKey: string;
+  /** Marked deleted: its object, if still stored, is no longer needed. */
+  deleted: boolean;
 }
 
 export interface ManagedArtifactStore {

@@ -1,6 +1,11 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { RouteRegistration, WorkflowAssetKind } from "@work-shape/catalyst-server";
-import { AppError, KNOWLEDGE_BASE_ACTIONS } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  KNOWLEDGE_BASE_ACTIONS,
+  KNOWLEDGE_DOCUMENT_FORMATS,
+  KNOWLEDGE_TEXT_FORMATS
+} from "@work-shape/catalyst-core";
 import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   createKnowledgeBases,
@@ -37,6 +42,12 @@ function workflowAssetKind(knowledgeBases: KnowledgeBases): WorkflowAssetKind {
   };
 }
 
+/**
+ * The module of the document-processing capability. With it on, a Knowledge Base takes PDF and
+ * DOCX, which its worker extracts; without it, text files alone.
+ */
+const DOCUMENTS_MODULE = "documents";
+
 /** What a caller who may read Knowledge Bases is told of an id none has. */
 const KNOWLEDGE_BASE_NOT_AVAILABLE = "Knowledge Base is not available";
 
@@ -45,7 +56,7 @@ const KNOWLEDGE_BASE_NOT_AVAILABLE = "Knowledge Base is not available";
  * `knowledge.<id>.<part>`: the part is the route's, never the caller's.
  */
 const knowledgeRoutes: RouteRegistration = (routes) => {
-  const bind = (part: "query" | "state" | "check", right: string) => ({
+  const bind = (part: "query" | "state" | "check" | "add_files", right: string) => ({
     target: ({ knowledgeBase, ...input }: { knowledgeBase: string }) => ({
       operation: knowledgeOperationName(knowledgeBase, part),
       input
@@ -64,6 +75,10 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
   routes.resourceOperation(
     apiOperations["knowledge_bases.check"],
     bind("check", KNOWLEDGE_BASE_ACTIONS.write)
+  );
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.add_files"],
+    bind("add_files", KNOWLEDGE_BASE_ACTIONS.write)
   );
 };
 
@@ -86,14 +101,23 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
     stores: parts.stores,
     backend,
     embedding: knowledgeEmbedding(parts.config),
+    documentFormats: parts.modules.isEnabled(DOCUMENTS_MODULE)
+      ? KNOWLEDGE_DOCUMENT_FORMATS
+      : KNOWLEDGE_TEXT_FORMATS,
+    maxDocuments: parts.config.knowledge.maxDocuments,
     logger: parts.logger
   });
   return {
     assetKinds: [workflowAssetKind(knowledgeBases)],
-    operationSources: () => [knowledgeBases.operationSource],
-    start: () => ({
-      routes: [knowledgeRoutes],
-      dataToolSources: [knowledgeBases.toolSource]
-    })
+    operationSources: (runtime) => [knowledgeBases.operationSource(runtime.files)],
+    start: (runtime) => {
+      const fileJobs = knowledgeBases.fileJobs(runtime.files);
+      return {
+        routes: [knowledgeRoutes],
+        dataToolSources: [knowledgeBases.toolSource],
+        jobHandlers: fileJobs.handlers,
+        jobRetries: fileJobs.retries
+      };
+    }
   };
 };

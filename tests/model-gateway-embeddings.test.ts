@@ -75,7 +75,10 @@ describe("embedding bindings in release config", () => {
       })
     ]);
     expect(config.modelBindings[0]).not.toHaveProperty("kind");
-    expect(config.knowledge).toEqual({ defaultEmbeddingBinding: "embedding" });
+    expect(config.knowledge).toEqual({
+      defaultEmbeddingBinding: "embedding",
+      maxDocuments: 10_000
+    });
   });
 
   it("starts without an embedding binding and without a default", () => {
@@ -83,7 +86,7 @@ describe("embedding bindings in release config", () => {
       releaseConfig({ modelBindings: [{ id: "chat", providerId: "azure" }], knowledge: undefined })
     );
 
-    expect(config.knowledge).toEqual({});
+    expect(config.knowledge).toEqual({ maxDocuments: 10_000 });
   });
 
   it("accepts an embedding binding on a provider that keeps data inside the instance", () => {

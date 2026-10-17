@@ -61,6 +61,20 @@ const knowledgeStateResponseSchema = z.object({
   problem: z.string().optional()
 });
 
+const knowledgeAddFilesRequestSchema = z.strictObject({
+  /** Files the caller can open: each a file of a Conversation they may read. */
+  files: z
+    .array(z.strictObject({ conversationId: z.string().min(1), fileId: z.string().min(1) }))
+    .min(1)
+});
+
+const knowledgeAddFilesResponseSchema = z.object({
+  /** Each document added, and the copy of its file the Knowledge Base now owns. In input order. */
+  documents: z.array(z.object({ id: z.string(), fileId: z.string() })),
+  count: z.number().int(),
+  bytes: z.number().int()
+});
+
 const BASE = {
   tag: "Knowledge Bases",
   auth: "principal",
@@ -107,5 +121,19 @@ export const knowledgeOperations = {
     body: knowledgeQueryRequestSchema,
     response: json(knowledgeQueryResponseSchema),
     rateClass: "read"
+  }),
+  "knowledge_bases.add_files": defineRegisteredOperation({
+    ...BASE,
+    id: "knowledge_bases.add_files",
+    method: "POST",
+    path: "/api/v1/knowledge-bases/:knowledgeBase/files",
+    summary:
+      "Add files the caller can open to a Knowledge Base that keeps documents. Each is copied into a file the Knowledge Base owns",
+    scope: "data_store_rows:write",
+    effect: "changing",
+    body: knowledgeAddFilesRequestSchema,
+    response: json(knowledgeAddFilesResponseSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
+    rateClass: "write"
   })
 };

@@ -6,6 +6,7 @@ import type {
   JobRetry,
   JobSchedule,
   KnowledgeBackend,
+  KnowledgeFiles,
   Logger,
   ModuleSnapshot,
   OperationSource,
@@ -47,6 +48,11 @@ interface ModuleRuntime {
   auditRecorder: AuditRecorder;
   modelGateway: ModelGateway;
   tools: ToolRegistry;
+  /**
+   * The files a person can open and the instance's store of files, for a module that keeps
+   * copies of them. Absent where the process has no store of files.
+   */
+  files?: KnowledgeFiles;
 }
 
 /** What a module adds once it has the call path. A module leaves out what it does not have. */

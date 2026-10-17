@@ -66,6 +66,7 @@ export type {
   UploadDraftAttachmentInput,
   UploadDraftAttachmentResult
 } from "./conversations/attachments";
+export { requireConversationAccess } from "./conversations/conversation-access";
 export type { ConversationCleanupRetrySummary } from "./deletion/conversation-cleanup";
 export type {
   ConversationRetentionRunSummary,
