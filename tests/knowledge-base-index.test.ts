@@ -508,6 +508,7 @@ describe("indexing the documents of a Knowledge Base", () => {
           clientInstanceId,
           objects,
           extractor: fakeExtractor,
+          maxPages: 500,
           slots: 1
         })
       ]
@@ -589,7 +590,15 @@ describe("indexing the documents of a Knowledge Base", () => {
       stores: instance.stores,
       clientInstanceId,
       logger: silent,
-      handlers: [defineKnowledgeExtractHandler({ clientInstanceId, objects, extractor, slots: 1 })]
+      handlers: [
+        defineKnowledgeExtractHandler({
+          clientInstanceId,
+          objects,
+          extractor,
+          maxPages: 500,
+          slots: 1
+        })
+      ]
     });
     const settle = async () => {
       for (let round = 0; round < 4; round += 1) {
@@ -681,5 +690,88 @@ describe("indexing the documents of a Knowledge Base", () => {
       { chunking_revision: 1, state: "extracted" }
     ]);
     await extractWorker.stop();
+  });
+
+  it("fails a PDF over the page limit with its code before converting it, indexes one at the limit, and Retry after a raised limit indexes it", async () => {
+    const { instance } = await instanceWith({ documents: true });
+    const objects = createFilesystemObjectStorage(instance.filesRoot);
+    // Counts the pages first, as the capability does from the PDF's metadata, and converts
+    // only a file within the limit it is given.
+    const converted: number[] = [];
+    const extractor: KnowledgeExtractor = {
+      revision: 1,
+      async extract(input) {
+        const pages = (await fakeExtractor.extract(input)).pages;
+        if (pages.length > input.maxPages) {
+          throw new KnowledgeExtractionError("knowledge_file_too_many_pages", "Too many pages");
+        }
+        converted.push(pages.length);
+        return { pages };
+      }
+    };
+    const extractWorkerWith = (maxPages: number) =>
+      createJobWorker({
+        stores: instance.stores,
+        clientInstanceId,
+        logger: silent,
+        handlers: [
+          defineKnowledgeExtractHandler({
+            clientInstanceId,
+            objects,
+            extractor,
+            maxPages,
+            slots: 1
+          })
+        ]
+      });
+    const settle = async (worker: ReturnType<typeof extractWorkerWith>) => {
+      for (let round = 0; round < 4; round += 1) {
+        await runJobs(instance);
+        await worker.runDue();
+      }
+      await runJobs(instance);
+    };
+    const pdfOf = (pages: number, word: string) =>
+      `%FAKE-PDF\n${Array.from({ length: pages }, (_, index) => `${word} ${index + 1}`).join("\f")}`;
+    const long = await add(instance, {
+      filename: "Akte.pdf",
+      contentType: "application/pdf",
+      content: pdfOf(600, "Akte")
+    });
+    const atLimit = await add(instance, {
+      filename: "Handbuch.pdf",
+      contentType: "application/pdf",
+      content: pdfOf(500, "Handbuch")
+    });
+    const worker = extractWorkerWith(500);
+    await settle(worker);
+    await worker.stop();
+    expect(
+      new Map((await list(instance)).documents.map((document) => [document.id, document]))
+    ).toEqual(
+      new Map([
+        [
+          long.id,
+          expect.objectContaining({ state: "failed", failureCode: "knowledge_file_too_many_pages" })
+        ],
+        [atLimit.id, expect.objectContaining({ state: "indexed" })]
+      ])
+    );
+    expect(converted).toEqual([500]);
+
+    // The operator raises the limit, the worker restarts, and Retry extracts the file again.
+    const raised = extractWorkerWith(1_000);
+    const retried = await instance.api.call("knowledge_bases.retry_documents", {
+      params: { knowledgeBase: KB },
+      payload: { documentIds: [long.id] }
+    });
+    expect(retried.statusCode, retried.body).toBe(200);
+    await settle(raised);
+    await raised.stop();
+    expect((await list(instance)).documents.map((document) => document.state)).toEqual([
+      "indexed",
+      "indexed"
+    ]);
+    expect(converted).toEqual([500, 600]);
   });
 });

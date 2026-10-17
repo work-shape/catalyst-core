@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
+  KNOWLEDGE_MAX_PAGES_PER_DOCUMENT_CEILING,
   MODEL_BINDING_KINDS,
   MODEL_EMBEDDING_MAX_DIMENSIONS,
   MODEL_USAGE_TIERS,
@@ -66,12 +68,20 @@ export const modelBindingConfigSchema = z
  * Knowledge Base with semantic search uses unless it names another. Without it the instance
  * offers no semantic search; keyword and structured Knowledge Bases work all the same.
  * `maxDocuments` is how many documents one Knowledge Base holds at most: adding a file beyond
- * it is refused with the limit named.
+ * it is refused with the limit named. `maxPagesPerDocument` is how many pages of one PDF or
+ * DOCX extraction reads: a longer one fails with `knowledge_file_too_many_pages`, counted
+ * before conversion. It applies to Knowledge Bases only; chat uploads keep their own limits.
  */
 export const knowledgeConfigSchema = z
   .object({
     defaultEmbeddingBinding: z.string().min(1).optional(),
-    maxDocuments: z.number().int().positive().max(1_000_000).default(10_000)
+    maxDocuments: z.number().int().positive().max(1_000_000).default(10_000),
+    maxPagesPerDocument: z
+      .number()
+      .int()
+      .positive()
+      .max(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT_CEILING)
+      .default(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT)
   })
   .strict()
   .prefault({});

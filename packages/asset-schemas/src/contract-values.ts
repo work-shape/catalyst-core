@@ -701,13 +701,14 @@ export const KNOWLEDGE_DOCUMENT_STATES = ["pending", "indexed", "failed"] as con
 export type KnowledgeDocumentState = (typeof KNOWLEDGE_DOCUMENT_STATES)[number];
 
 /**
- * Why a document was not indexed. The first five can also come from the extraction of a PDF
- * or DOCX (`KNOWLEDGE_EXTRACTION_FAILURE_CODES` in core); the rest are the index job's own.
+ * Why a document was not indexed. The first five and `knowledge_file_too_many_pages` can also
+ * come from the extraction of a PDF or DOCX (`KNOWLEDGE_EXTRACTION_FAILURE_CODES` in core); the
+ * rest are the index job's own. The list only gains members.
  */
 export const KNOWLEDGE_DOCUMENT_FAILURE_CODES = [
   // The extractor does not read the file's format.
   "knowledge_file_format_unsupported",
-  // The file is over a limit of the extraction: size, pages or time.
+  // The file is over a limit of the extraction: its size or the size of its text.
   "knowledge_file_over_limit",
   // The file is corrupt, encrypted, or not the format it claims.
   "knowledge_file_unreadable",
@@ -722,7 +723,10 @@ export const KNOWLEDGE_DOCUMENT_FAILURE_CODES = [
   // No text to search, such as a scanned PDF without a text layer.
   "knowledge_text_empty",
   // Indexing failed on every attempt.
-  "knowledge_index_failed"
+  "knowledge_index_failed",
+  // A PDF or DOCX with more pages than `knowledge.maxPagesPerDocument`, counted before its text
+  // is read.
+  "knowledge_file_too_many_pages"
 ] as const;
 export type KnowledgeDocumentFailureCode = (typeof KNOWLEDGE_DOCUMENT_FAILURE_CODES)[number];
 

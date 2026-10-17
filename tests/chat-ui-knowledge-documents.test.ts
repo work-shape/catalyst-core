@@ -224,6 +224,22 @@ describe("the Documents section", () => {
     expect(row("kopie").textContent).not.toContain("Original liegt in der Quelle");
   });
 
+  it("names the page limit of a document with too many pages, in both languages", () => {
+    const long = document_("akte", "failed", {
+      format: "pdf",
+      fileName: "akte.pdf",
+      failureCode: "knowledge_file_too_many_pages"
+    });
+    const source = plantedSource({ useDocuments: () => ready({ documents: [long] }) });
+    const props = { source, knowledgeBase: "objektunterlagen", canWrite: true };
+    show(createElement(KnowledgeDocuments, props));
+    expect(row("akte").textContent).toContain("More than 500 pages.");
+    expect(button("Retry", row("akte"))).toBeDefined();
+    show(createElement(KnowledgeDocuments, props), "de");
+    expect(row("akte").textContent).toContain("Mehr als 500 Seiten.");
+    expect(row("akte").textContent).not.toContain("knowledge_file_too_many_pages");
+  });
+
   it("has a sentence for every failure code the instance sends", () => {
     expect(Object.keys(KNOWLEDGE_DOCUMENT_FAILURES).sort()).toEqual(
       [...KNOWLEDGE_DOCUMENT_FAILURE_CODES].sort()

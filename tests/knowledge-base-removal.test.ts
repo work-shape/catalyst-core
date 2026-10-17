@@ -396,7 +396,13 @@ describe("removing documents from a Knowledge Base", () => {
         clientInstanceId,
         logger: captureLogger().logger,
         handlers: [
-          defineKnowledgeExtractHandler({ clientInstanceId, objects, extractor, slots: 1 })
+          defineKnowledgeExtractHandler({
+            clientInstanceId,
+            objects,
+            extractor,
+            maxPages: 500,
+            slots: 1
+          })
         ]
       });
       await runJobs(world);

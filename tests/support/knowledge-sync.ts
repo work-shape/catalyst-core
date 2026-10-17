@@ -246,7 +246,15 @@ export function useKnowledgeSync() {
         ...handlers,
         ...fileJobs.handlers,
         ...(extractor
-          ? [defineKnowledgeExtractHandler({ clientInstanceId, objects, extractor, slots: 1 })]
+          ? [
+              defineKnowledgeExtractHandler({
+                clientInstanceId,
+                objects,
+                extractor,
+                maxPages: 500,
+                slots: 1
+              })
+            ]
           : [])
       ],
       logger

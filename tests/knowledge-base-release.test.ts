@@ -157,6 +157,7 @@ describe("synced originals are released after extraction (KB 76)", () => {
         clientInstanceId,
         objects: world.objects,
         extractor,
+        maxPages: 500,
         slots: 1
       });
       const delayed = createJobWorker({

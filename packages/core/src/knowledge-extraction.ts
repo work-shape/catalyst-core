@@ -9,6 +9,7 @@ import { defineJobHandler, type RegisteredJobHandler } from "./job-handlers";
 import {
   enqueueKnowledgeIndex,
   KNOWLEDGE_FILE_MAX_BYTES,
+  KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
   knowledgeExtractedPagesSchema,
   knowledgeExtractJob,
   type KnowledgeContentJobPayload,
@@ -28,6 +29,9 @@ import type { PlatformStores } from "./platform-store";
 //      stays `pending`.
 //   2. The extract job reads the bytes of the Managed File the payload names, which the
 //      Knowledge Base owns, and asks the capability's `KnowledgeExtractor` for the text by page.
+//      It passes `knowledge.maxPagesPerDocument` of release config: the extractor counts the
+//      pages before it reads their text and refuses a longer file, so it spends no conversion
+//      on it.
 //   3. It stores the result as one JSON object in the instance's store of files under
 //      `knowledgeExtractionKey`: the pages and the extractor's revision, or a failure code.
 //   4. It queues `knowledge_base.index` for the content again. That job reads the result,
@@ -51,7 +55,8 @@ export const KNOWLEDGE_EXTRACTION_FAILURE_CODES = [
   "knowledge_file_over_limit",
   "knowledge_file_unreadable",
   "knowledge_file_missing",
-  "knowledge_extraction_failed"
+  "knowledge_extraction_failed",
+  "knowledge_file_too_many_pages"
 ] as const satisfies readonly KnowledgeDocumentFailureCode[];
 
 export type KnowledgeExtractionFailureCode = (typeof KNOWLEDGE_EXTRACTION_FAILURE_CODES)[number];
@@ -82,11 +87,13 @@ export interface KnowledgeExtractor {
   /**
    * The text of the file by page, numbered from 1 in ascending order. A file without pages
    * answers one page per section. Throws `KnowledgeExtractionError` for a file no attempt
-   * can read.
+   * can read, and with `knowledge_file_too_many_pages` for one of more than `maxPages` pages,
+   * found before the text of its pages is read.
    */
   extract(input: {
     bytes: Uint8Array;
     format: KnowledgeExtractedFormat;
+    maxPages: number;
     signal: AbortSignal;
   }): Promise<KnowledgeExtractedPages>;
 }
@@ -122,6 +129,8 @@ export const knowledgeDocumentFailureCodeSchema = z.enum(KNOWLEDGE_DOCUMENT_FAIL
 export async function runKnowledgeExtraction(input: {
   format: KnowledgeExtractedFormat;
   extractor: KnowledgeExtractor;
+  /** `knowledge.maxPagesPerDocument`: a file of more pages fails with `knowledge_file_too_many_pages`. */
+  maxPages: number;
   readFile(): Promise<Uint8Array | undefined>;
   signal: AbortSignal;
 }): Promise<KnowledgeExtractionResult> {
@@ -135,6 +144,7 @@ export async function runKnowledgeExtraction(input: {
     extracted = await input.extractor.extract({
       bytes,
       format: input.format,
+      maxPages: input.maxPages,
       signal: input.signal
     });
   } catch (error) {
@@ -146,6 +156,10 @@ export async function runKnowledgeExtraction(input: {
   const pages = knowledgeExtractedPagesSchema.safeParse(extracted);
   if (!pages.success || !ascending(pages.data.pages.map((page) => page.page))) {
     throw new AppError("INTERNAL", "The extractor answered pages outside the contract");
+  }
+  // The extractor refuses such a file before converting it; this holds one that does not.
+  if (pages.data.pages.length > input.maxPages) {
+    return { status: "failed", code: "knowledge_file_too_many_pages" };
   }
   return {
     status: "extracted",
@@ -211,9 +225,11 @@ export function defineKnowledgeExtractHandler(input: {
   clientInstanceId: ClientInstanceId;
   objects: Pick<ObjectStorage, "get" | "put">;
   extractor: KnowledgeExtractor;
+  /** `knowledge.maxPagesPerDocument` of release config. */
+  maxPages: number;
   slots: number;
 }): RegisteredJobHandler {
-  const { clientInstanceId, objects, extractor } = input;
+  const { clientInstanceId, objects, extractor, maxPages } = input;
   return defineJobHandler<KnowledgeExtractJobPayload>({
     kind: knowledgeExtractJob,
     slots: input.slots,
@@ -235,6 +251,7 @@ export function defineKnowledgeExtractHandler(input: {
       const result = await runKnowledgeExtraction({
         format: payload.format,
         extractor,
+        maxPages,
         signal: control.signal,
         readFile: () =>
           control.transaction((stores) => readOwnedCopy(stores, objects, clientInstanceId, payload))
@@ -322,6 +339,7 @@ export async function verifyKnowledgeExtractor(
       const result = await runKnowledgeExtraction({
         format: sample.format,
         extractor,
+        maxPages: KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
         signal,
         readFile: () => Promise.resolve(sample.bytes)
       });
@@ -345,6 +363,7 @@ export async function verifyKnowledgeExtractor(
       const result = await runKnowledgeExtraction({
         format: sample.format,
         extractor,
+        maxPages: KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
         signal,
         readFile: () => Promise.resolve(sample.bytes)
       });

@@ -77,7 +77,8 @@ describe("embedding bindings in release config", () => {
     expect(config.modelBindings[0]).not.toHaveProperty("kind");
     expect(config.knowledge).toEqual({
       defaultEmbeddingBinding: "embedding",
-      maxDocuments: 10_000
+      maxDocuments: 10_000,
+      maxPagesPerDocument: 500
     });
   });
 
@@ -86,7 +87,20 @@ describe("embedding bindings in release config", () => {
       releaseConfig({ modelBindings: [{ id: "chat", providerId: "azure" }], knowledge: undefined })
     );
 
-    expect(config.knowledge).toEqual({ maxDocuments: 10_000 });
+    expect(config.knowledge).toEqual({ maxDocuments: 10_000, maxPagesPerDocument: 500 });
+  });
+
+  it("reads 500 pages per document by default, takes a raised limit and refuses one above 5,000", () => {
+    const raised = parseClientInstanceConfig(
+      releaseConfig({ knowledge: { maxPagesPerDocument: 1_200 } })
+    );
+    expect(raised.knowledge.maxPagesPerDocument).toBe(1_200);
+    expect(() =>
+      parseClientInstanceConfig(releaseConfig({ knowledge: { maxPagesPerDocument: 5_001 } }))
+    ).toThrow(/maxPagesPerDocument/u);
+    expect(() =>
+      parseClientInstanceConfig(releaseConfig({ knowledge: { maxPagesPerDocument: 0 } }))
+    ).toThrow(/maxPagesPerDocument/u);
   });
 
   it("accepts an embedding binding on a provider that keeps data inside the instance", () => {

@@ -424,6 +424,14 @@ export const KNOWLEDGE_TEXT_FORMATS: readonly KnowledgeDocumentFormat[] = ["txt"
 export const KNOWLEDGE_FILE_MAX_BYTES = 25 * 1024 * 1024;
 
 /**
+ * How many pages of one PDF or DOCX a Knowledge Base reads by default, and at most where release
+ * config raises it (`knowledge.maxPagesPerDocument`). Extraction counts the pages before it
+ * reads their text, and refuses a longer document with `knowledge_file_too_many_pages`.
+ */
+export const KNOWLEDGE_MAX_PAGES_PER_DOCUMENT = 500;
+export const KNOWLEDGE_MAX_PAGES_PER_DOCUMENT_CEILING = 5_000;
+
+/**
  * How many files one call of `knowledge.<id>.add_files` adds at most. It bounds what one call
  * reads and copies; a caller with more sends several calls. A larger list is refused with this
  * limit named, and the page's Add dialog lets no more be chosen.
