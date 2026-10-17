@@ -11,7 +11,7 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 import { getTestJobs } from "./support/test-instance";
 
 // The synced source migrations (SRC-0 and SRC-1a) bring a store made
-// at level 1 to level 5 at the next start, without a publish, and leaves its rows as they
+// at level 1 to level 6 at the next start, without a publish, and leaves its rows as they
 // were, and the `sources` entry of a Knowledge Base is saved with a draft but not published
 // until SRC-1a syncs it. `schedule` is withdrawn. Spec: data-stores-and-knowledge-bases.md, Synced sources, check 71.
 
@@ -36,6 +36,28 @@ const source: JsonObject = {
   include: ["*.pdf", "*.docx"],
   exclude: ["**/Personal/**"]
 };
+
+describe("KBW-0 records ownership", () => {
+  const { start } = useDataStoreInstance();
+  it("refuses records in kb.yaml with a pointer to store.yaml and reserves the Workflow source prefix", async () => {
+    const instance = await start(true, undefined, undefined, undefined, true);
+    const records = await instance.api.call("assets.put", {
+      params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB },
+      payload: { config: definition({ records: { table: "properties" } }), expectedRevision: null }
+    });
+    expect(records.statusCode).toBe(422);
+    expect(records.body).toContain("records");
+    expect(records.body).toContain("store.yaml");
+    const sourceId = await instance.api.call("assets.put", {
+      params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB },
+      payload: {
+        config: definition({ sources: [{ ...source, id: "workflow:import" }] }),
+        expectedRevision: null
+      }
+    });
+    expect(sourceId.statusCode).toBe(422);
+  });
+});
 
 describe("catalyst_kb source migrations", () => {
   const { start } = useDataStoreInstance();
@@ -70,10 +92,58 @@ describe("catalyst_kb source migrations", () => {
     expect(published.statusCode, published.body).toBe(200);
   };
 
-  it("brings a store at level 1 to level 5 with its documents, contents and chunks unchanged", async () => {
+  it("upgrades connector cursors unchanged and constrains Workflow source identity (KBW-0)", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
     await writeAndPublish(instance, 1);
-    const made = await settle(instance, 5);
+    const made = await settle(instance, 6);
+    const url = new URL(await fileTestDatabaseUrl());
+    url.pathname = `/${made.location.database}`;
+    const store = postgres(url.toString(), { max: 1, onnotice() {} });
+    try {
+      await store.unsafe(`alter table catalyst_kb.source_cursors
+        drop constraint source_kind_check, drop column workflow_id, drop column kind,
+        alter column cursor set not null;
+        delete from catalyst_kb.migrations where number=6;`);
+      await store`insert into catalyst_kb.source_cursors(source_id,cursor) values ('box','cursor-1')`;
+      await instance.stores.dataStores.putDataStore({
+        ...made,
+        level: 5,
+        migrations: made.migrations.slice(0, 5)
+      });
+      const platform = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
+      try {
+        await platform`update platform_jobs set run_after=now() where kind='data_store.upgrade_owned' and client_instance_id=${clientInstanceId} and status='queued'`;
+      } finally {
+        await platform.end();
+      }
+      await settle(instance, 6);
+      expect(
+        await store`select source_id,cursor,kind,workflow_id from catalyst_kb.source_cursors`
+      ).toEqual([{ source_id: "box", cursor: "cursor-1", kind: "connector", workflow_id: null }]);
+      await store`insert into catalyst_kb.source_cursors(source_id,kind,workflow_id) values ('workflow:import','workflow','import')`;
+      expect(
+        await store`select cursor from catalyst_kb.source_cursors where source_id='workflow:import'`
+      ).toEqual([{ cursor: null }]);
+      for (const [sourceId, kind, workflowId, cursor] of [
+        ["workflow:other", "workflow", "import", null],
+        ["workflow:bad", "connector", null, "cursor"],
+        ["import", "workflow", null, null],
+        ["box-without-cursor", "connector", null, null],
+        ["workflow:withcursor", "workflow", "withcursor", "cursor"]
+      ] as const) {
+        await expect(
+          store`insert into catalyst_kb.source_cursors(source_id,kind,workflow_id,cursor) values (${sourceId},${kind},${workflowId},${cursor})`
+        ).rejects.toMatchObject({ code: "23514" });
+      }
+    } finally {
+      await store.end();
+    }
+  });
+
+  it("brings a store at level 1 to level 6 with its documents, contents and chunks unchanged", async () => {
+    const instance = await start(true, undefined, undefined, undefined, true);
+    await writeAndPublish(instance, 1);
+    const made = await settle(instance, 6);
     const url = new URL(await fileTestDatabaseUrl());
     url.pathname = `/${made.location.database}`;
     const store = postgres(url.toString(), { max: 1, onnotice: () => undefined });
@@ -125,20 +195,21 @@ describe("catalyst_kb source migrations", () => {
       } finally {
         await platform.end();
       }
-      const migrated = await settle(instance, 5);
+      const migrated = await settle(instance, 6);
 
       expect(migrated.migrations.map(({ number, name }) => ({ number, name }))).toEqual([
         { number: 1, name: "documents" },
         { number: 2, name: "sources" },
         { number: 3, name: "source_fetch_claims" },
         { number: 4, name: "source_counts" },
-        { number: 5, name: "source_withdrawal" }
+        { number: 5, name: "source_withdrawal" },
+        { number: 6, name: "workflow_sources" }
       ]);
       expect(
         (await store`select number from catalyst_kb.migrations order by number`).map(
           (row) => row.number
         )
-      ).toEqual([1, 2, 3, 4, 5]);
+      ).toEqual([1, 2, 3, 4, 5, 6]);
       expect(await rowsOf()).toEqual(before);
       // A document added by hand names no item.
       expect(await store`select source_item_id from catalyst_kb.documents`).toEqual([
@@ -165,7 +236,7 @@ describe("catalyst_kb source migrations", () => {
       ).toContainEqual(
         expect.objectContaining({
           subject: made.id,
-          metadata: expect.objectContaining({ level: 5, appliedCount: 4 })
+          metadata: expect.objectContaining({ level: 6, appliedCount: 5 })
         })
       );
 
@@ -234,7 +305,7 @@ describe("the sources entry of a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 5 });
+      expect(record).toMatchObject({ status: "ready", level: 6 });
     });
   });
 

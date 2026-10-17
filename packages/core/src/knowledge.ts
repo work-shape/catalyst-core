@@ -417,11 +417,7 @@ export type KnowledgeDocumentFormat = (typeof KNOWLEDGE_DOCUMENT_FORMATS)[number
 /** The formats an instance reads without the document-processing capability. */
 export const KNOWLEDGE_TEXT_FORMATS: readonly KnowledgeDocumentFormat[] = ["txt", "markdown"];
 
-/**
- * The largest file a Knowledge Base takes, as document processing takes it. A larger file is
- * refused when it is added, with this limit named.
- */
-export const KNOWLEDGE_FILE_MAX_BYTES = 25 * 1024 * 1024;
+export { KNOWLEDGE_FILE_MAX_BYTES } from "@work-shape/catalyst-asset-schemas";
 
 /**
  * How many pages of one PDF or DOCX a Knowledge Base reads by default, and at most where release

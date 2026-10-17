@@ -21,6 +21,7 @@ const listSchema = z.object({
   items: z.array(
     z.strictObject({
       id: z.string(),
+      kind: z.enum(["process", "data"]),
       name: z.string(),
       description: z.string().optional(),
       definitionRevisionId: z.string(),
@@ -182,6 +183,7 @@ describe("a Workflow stored as an asset", () => {
     expect(await listed(t)).toEqual([
       {
         id: WORKFLOW,
+        kind: "process",
         name: "Notify clients",
         definitionRevisionId: revisionId,
         runnable: true,
@@ -405,6 +407,15 @@ describe("a Workflow stored as an asset", () => {
     ]);
     // The list names a Workflow and carries no definition: the page reads that as the asset.
     expect(unknown?.description).toHaveLength(WORKFLOW_LIST_DESCRIPTION_MAX);
+  });
+
+  it("reads and lists an explicitly data Workflow (KBW-0)", async () => {
+    const t = await ready();
+    const revision = await put(t, { ...notifyClients(), kind: "data" }, null);
+    expect((await publish(t, revision)).statusCode).toBe(200);
+    expect((await listed(t))[0]).toMatchObject({ id: WORKFLOW, kind: "data" });
+    const read = (await t.expectOk(t.root.id, "assets.get", { params: address })).json();
+    expect(read).toMatchObject({ config: { manifest: { kind: "data" } } });
   });
 
   it("keeps a run on the revision it started with when another is published", async () => {

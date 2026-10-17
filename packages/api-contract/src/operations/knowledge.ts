@@ -337,3 +337,6 @@ export const knowledgeOperations = {
     rateClass: "read"
   })
 };
+
+// Contract only: routes and execution arrive with KBW-1 and PROC-W.
+export { knowledgeWriteContracts } from "@work-shape/catalyst-asset-schemas";

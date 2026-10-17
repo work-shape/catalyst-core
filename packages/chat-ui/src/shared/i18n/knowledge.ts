@@ -147,6 +147,7 @@ export const knowledge = defineTranslations({
     "knowledge.failureTextEmpty":
       "The file has no text to search, such as a scanned PDF without a text layer.",
     "knowledge.failureIndex": "Indexing failed, even after several tries.",
+    "knowledge.failureProcessorOutput": "The processing result does not match the required format.",
     "knowledge.addDocuments": "Add documents",
     "knowledge.addDescription":
       "Choose files uploaded in the conversations of your workspace. The knowledge base keeps its own copy: deleting the conversation leaves the document.",
@@ -325,6 +326,8 @@ export const knowledge = defineTranslations({
     "knowledge.failureTextEmpty":
       "Die Datei hat keinen Text zum Durchsuchen, zum Beispiel ein gescanntes PDF ohne Textebene.",
     "knowledge.failureIndex": "Das Indexieren ist auch nach mehreren Versuchen fehlgeschlagen.",
+    "knowledge.failureProcessorOutput":
+      "Das Verarbeitungsergebnis entspricht nicht dem erforderlichen Format.",
     "knowledge.addDocuments": "Dokumente hinzufügen",
     "knowledge.addDescription":
       "Wähle Dateien, die in Unterhaltungen deines Arbeitsbereichs hochgeladen wurden. Die Wissensbasis behält eine eigene Kopie: Wird die Unterhaltung gelöscht, bleibt das Dokument.",

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   KNOWLEDGE_DOCUMENT_FAILURE_CODES,
+  knowledgeProcessorOutputSchema,
+  type KnowledgeProcessorOutput,
   type KnowledgeDocumentFailureCode
 } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
@@ -379,4 +381,22 @@ export async function verifyKnowledgeExtractor(
     }
   }
   return problems;
+}
+
+export {
+  knowledgeProcessorOutputSchema,
+  type KnowledgeProcessorOutput
+} from "@work-shape/catalyst-asset-schemas";
+
+/** One refusal for a built-in processor or a data Workflow outside the frozen contract. */
+export function parseKnowledgeProcessorOutput(output: unknown): KnowledgeProcessorOutput {
+  const result = knowledgeProcessorOutputSchema.safeParse(output);
+  if (!result.success) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "The processor answered output outside the Knowledge Base contract",
+      { reason: "knowledge_processor_output_invalid" }
+    );
+  }
+  return result.data;
 }

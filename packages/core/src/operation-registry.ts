@@ -229,6 +229,8 @@ interface OperationDefinitionBase<Input, Output> {
    * `timeoutMs` is how long the work may take before the run counts as interrupted.
    */
   completion?: OperationAsyncCompletion;
+  /** Takes items or a dataset and answers OperationBatchResult, with a failures dataset. */
+  batch?: true;
   /** A Workflow start called by a draft starts a test run of its published revision. */
   draftTarget?: "test";
   /** The release's own policy value. Without one the instance default of the effect applies. */
@@ -509,3 +511,10 @@ export function createOperationRegistry(): OperationRegistry {
     }
   };
 }
+
+export {
+  operationBatchResultSchema,
+  operationBatchFailureSchema,
+  type OperationBatchResult,
+  type OperationBatchFailure
+} from "@work-shape/catalyst-asset-schemas";

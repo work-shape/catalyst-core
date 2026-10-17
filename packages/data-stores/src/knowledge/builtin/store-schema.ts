@@ -240,6 +240,22 @@ const SOURCE_COUNTS = `
     from catalyst_kb.source_items i left join catalyst_kb.documents d on d.id=i.document_id left join catalyst_kb.contents c on c.sha256=d.content_sha256 group by 1,2,3;
 `;
 
+// Existing connector rows keep their cursors and gain kind=connector. A Workflow source
+// has no connector cursor; its id is namespaced by the Workflow, never authored in kb.yaml.
+const WORKFLOW_SOURCES = `
+  alter table catalyst_kb.source_cursors
+    alter column cursor drop not null,
+    add column kind text not null default 'connector',
+    add column workflow_id text,
+    add constraint source_kind_check check (
+      (kind = 'connector' and workflow_id is null and cursor is not null
+          and position(':' in source_id) = 0)
+      or (kind = 'workflow' and workflow_id is not null
+          and workflow_id ~ '^[a-z][a-z0-9_-]{0,62}$'
+          and source_id = 'workflow:' || workflow_id and cursor is null)
+    );
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -252,7 +268,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
       add column fetch_job_id text;`
   },
   { number: 4, name: "source_counts", sql: SOURCE_COUNTS },
-  { number: 5, name: "source_withdrawal", sql: SOURCE_WITHDRAWAL_SCHEMA }
+  { number: 5, name: "source_withdrawal", sql: SOURCE_WITHDRAWAL_SCHEMA },
+  { number: 6, name: "workflow_sources", sql: WORKFLOW_SOURCES }
 ];
 
 /** The level the store of a built-in Knowledge Base is at when its tables are this release's. */

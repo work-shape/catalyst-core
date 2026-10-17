@@ -701,6 +701,12 @@ export const KNOWLEDGE_DOCUMENT_STATES = ["pending", "indexed", "failed"] as con
 export type KnowledgeDocumentState = (typeof KNOWLEDGE_DOCUMENT_STATES)[number];
 
 /**
+ * The largest file a Knowledge Base takes, as document processing takes it. A larger file is
+ * refused when it is added, with this limit named.
+ */
+export const KNOWLEDGE_FILE_MAX_BYTES = 25 * 1024 * 1024;
+
+/**
  * Why a document was not indexed. The first five and `knowledge_file_too_many_pages` can also
  * come from the extraction of a PDF or DOCX (`KNOWLEDGE_EXTRACTION_FAILURE_CODES` in core); the
  * rest are the index job's own. The list only gains members.
@@ -726,7 +732,9 @@ export const KNOWLEDGE_DOCUMENT_FAILURE_CODES = [
   "knowledge_index_failed",
   // A PDF or DOCX with more pages than `knowledge.maxPagesPerDocument`, counted before its text
   // is read.
-  "knowledge_file_too_many_pages"
+  "knowledge_file_too_many_pages",
+  // A built-in or Workflow processor returned output outside its contract.
+  "knowledge_processor_output_invalid"
 ] as const;
 export type KnowledgeDocumentFailureCode = (typeof KNOWLEDGE_DOCUMENT_FAILURE_CODES)[number];
 
@@ -755,7 +763,9 @@ export const KNOWLEDGE_SOURCE_FAILURE_CODES = [
   // A fetch failed on every attempt.
   "knowledge_fetch_failed",
   // The Knowledge Base holds its document limit; the listing stopped discovering there.
-  "knowledge_source_limit_reached"
+  "knowledge_source_limit_reached",
+  "knowledge_item_invalid",
+  "knowledge_fetch_not_allowed"
 ] as const;
 export type KnowledgeSourceFailureCode = (typeof KNOWLEDGE_SOURCE_FAILURE_CODES)[number];
 
@@ -1006,3 +1016,7 @@ export type WorkflowEndedStatus = (typeof WORKFLOW_ENDED_STATUSES)[number];
 
 /** A released Managed File keeps its identity; original bytes live at the synced source. */
 export const MANAGED_FILE_STATUSES = ["available", "released", "deleted"] as const;
+
+/** A Workflow automates a process unless it fills or processes data. */
+export const WORKFLOW_KINDS = ["process", "data"] as const;
+export type WorkflowKind = (typeof WORKFLOW_KINDS)[number];

@@ -197,6 +197,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
         : workflowDefinitionStartIssues(definition.issues);
       const lastRun = last.get(id);
       entries.push({
+        kind: definition.ok ? (definition.manifest.kind ?? "process") : "process",
         id,
         ...(assetId === undefined ? {} : { assetId }),
         name,

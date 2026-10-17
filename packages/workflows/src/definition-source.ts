@@ -1,6 +1,11 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { AppError, WORKFLOW_MANIFEST_FILE, type WorkflowManifest } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  WORKFLOW_MANIFEST_FILE,
+  type WorkflowKind,
+  type WorkflowManifest
+} from "@work-shape/catalyst-core";
 import {
   readWorkflowManifest,
   workflowManifestFingerprint,
@@ -16,6 +21,7 @@ export interface WorkflowDefinitionRevision {
 
 /** A Workflow as a list names it. */
 export interface WorkflowDefinitionSummary {
+  kind?: WorkflowKind;
   id: string;
   name: string;
   description?: string;
@@ -105,8 +111,13 @@ export function createWorkflowFolderSource(root: string): WorkflowDefinitionSour
         const result = text === undefined ? undefined : readWorkflowManifest(text);
         // A folder whose file cannot be run is no Workflow anybody can start.
         if (!result?.ok || result.manifest.id !== folder) continue;
-        const { id, name, description } = result.manifest;
-        summaries.push({ id, name, ...(description === undefined ? {} : { description }) });
+        const { id, name, description, kind } = result.manifest;
+        summaries.push({
+          id,
+          name,
+          kind: kind ?? "process",
+          ...(description === undefined ? {} : { description })
+        });
       }
       return summaries;
     }

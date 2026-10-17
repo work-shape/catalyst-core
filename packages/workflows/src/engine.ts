@@ -819,7 +819,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       });
       return summaries.map((summary) => {
         const lastRun = last.get(summary.id);
-        return { ...summary, ...(lastRun ? { lastRun } : {}) };
+        return { ...summary, kind: summary.kind ?? "process", ...(lastRun ? { lastRun } : {}) };
       });
     }
   };

@@ -62,3 +62,5 @@ export * from "./guardrails";
 export * from "./workflows";
 
 export type ApiOperationName = keyof typeof apiOperations;
+
+export { knowledgeWriteContracts } from "./knowledge";

@@ -1,3 +1,4 @@
+import { WORKFLOW_KINDS } from "@work-shape/catalyst-asset-schemas";
 import {
   OPERATION_EFFECTS,
   OPERATION_TARGETS,
@@ -231,6 +232,7 @@ export const workflowStartIssueSchema = z.object({
 });
 
 export const workflowSummarySchema = z.object({
+  kind: z.enum(WORKFLOW_KINDS).default("process"),
   id: z.string(),
   name: z.string(),
   description: z.string().optional(),

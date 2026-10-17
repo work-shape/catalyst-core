@@ -1,5 +1,6 @@
 import {
   NOTIFY_CHANNELS,
+  WORKFLOW_KINDS,
   WORKFLOW_DATASET_KEY,
   WORKFLOW_START_KEY_INPUT,
   WORKFLOW_ERROR_CODES,
@@ -176,6 +177,7 @@ const manifestSchema = z.strictObject({
   name: z.string().min(1),
   description: z.string().optional(),
   runAs: z.string().min(1),
+  kind: z.enum(WORKFLOW_KINDS).optional(),
   inputs: jsonObjectSchema,
   outputs: jsonObjectSchema,
   labels: inputMappingSchema.optional(),

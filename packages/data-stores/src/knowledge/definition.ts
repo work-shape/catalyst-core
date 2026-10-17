@@ -4,6 +4,7 @@ import {
   CONNECTION_NAME_PATTERN,
   CONNECTION_NAME_RULE,
   KNOWLEDGE_SEARCH_METHODS,
+  knowledgeRecordsRefusalSchema,
   type KnowledgeBaseTarget,
   type KnowledgeEmbeddingModel,
   type KnowledgeSearchMethod
@@ -140,6 +141,7 @@ const definitionFieldsSchema = z.strictObject({
       message: "A source id is named once"
     })
     .optional(),
+  records: knowledgeRecordsRefusalSchema,
   indexing: later("indexing", "DS-7, indexing settings"),
   search: later("search", "DS-7, search settings"),
   extraction: later("extraction", "DS-6a, structured extraction"),

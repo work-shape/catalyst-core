@@ -96,7 +96,7 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 5 });
+      expect(record).toMatchObject({ status: "ready", level: 6 });
       return required(record);
     });
   }
@@ -355,10 +355,10 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(current).toMatchObject({ status: "ready", level: 5 });
+      expect(current).toMatchObject({ status: "ready", level: 6 });
       return required(current);
     });
-    expect(upgraded.migrations.map(({ number }) => number)).toEqual([1, 2, 3, 4, 5]);
+    expect(upgraded.migrations.map(({ number }) => number)).toEqual([1, 2, 3, 4, 5, 6]);
 
     const added = await addFiles(instance, [source]);
     expect(added.statusCode, added.body).toBe(200);

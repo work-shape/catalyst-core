@@ -1,3 +1,5 @@
+import type { WorkflowKind } from "@work-shape/catalyst-asset-schemas";
+import { workflowDatasetReferenceSchema } from "@work-shape/catalyst-asset-schemas";
 import {
   NOTIFY_CHANNELS,
   WORKFLOW_RUN_MODES,
@@ -456,11 +458,7 @@ export const workflowDatasetTypeSchema = z.strictObject({
 export const WORKFLOW_DATASET_KEY = "$dataset";
 
 /** A dataset as a step record holds it: its id, how many rows and how many bytes. */
-export const workflowDatasetReferenceSchema = z.strictObject({
-  [WORKFLOW_DATASET_KEY]: z.string().min(1),
-  rowCount: z.number().int().min(0),
-  bytes: z.number().int().min(0)
-});
+export { workflowDatasetReferenceSchema } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkflowDatasetReference = z.infer<typeof workflowDatasetReferenceSchema>;
 
@@ -515,7 +513,11 @@ export type WorkflowLimits = z.infer<typeof workflowLimitsSchema>;
  * carries one is refused. A branch comes later as a nested block of steps (`then`, `else`),
  * not as edges. Spec: Workflow definition.
  */
+export { WORKFLOW_KINDS, type WorkflowKind } from "@work-shape/catalyst-asset-schemas";
+
 export interface WorkflowManifest {
+  /** process unless set; data Workflows fill or process Knowledge Bases and Data Stores. */
+  kind?: WorkflowKind;
   /** Stable and lowercase. It is part of `workflow.<id>.start`, so it holds no dot. */
   id: string;
   name: string;
@@ -727,6 +729,8 @@ export const WORKFLOW_RUN_MAX_DEPTH = 2;
  * `duplicate_step_id`: two steps of a definition have one id.
  */
 export const WORKFLOW_ERROR_CODES = {
+  /** Reserved for WF-KIND: a process Workflow cannot publish a Knowledge Base write. */
+  processWriteOperation: "process_workflow_write_operation",
   datasetLimit: "dataset_limit",
   datasetExpired: "dataset_expired",
   depthLimit: "depth_limit",

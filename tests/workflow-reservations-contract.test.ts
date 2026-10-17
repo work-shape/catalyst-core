@@ -301,6 +301,7 @@ describe("what the contract reserves for datasets, child runs and run keys", () 
       deleted: "workflow_run.dataset_deleted"
     });
     expect(WORKFLOW_ERROR_CODES).toEqual({
+      processWriteOperation: "process_workflow_write_operation",
       datasetLimit: "dataset_limit",
       datasetExpired: "dataset_expired",
       depthLimit: "depth_limit",

@@ -170,3 +170,27 @@ export {
   type KnowledgeLocateOutput,
   type KnowledgeSourceItemShownState
 } from "@work-shape/catalyst-asset-schemas";
+
+// KBW-0's write contract inventory. No handler runs until KBW-1 or PROC-W.
+export {
+  knowledgeWriteContracts as KNOWLEDGE_WRITE_OPERATIONS,
+  knowledgeWorkflowSourceSchema,
+  knowledgeRecordsRefusalSchema,
+  knowledgeIngestItemSchema,
+  knowledgeIngestInputSchema,
+  knowledgeIngestOutputSchema,
+  knowledgeIngestFetchSchema,
+  type KnowledgeIngestItem,
+  type KnowledgeIngestInput,
+  type KnowledgeIngestOutput,
+  type KnowledgeIngestFetch,
+  type KnowledgeWithdrawInput,
+  type KnowledgeWithdrawOutput,
+  type KnowledgePendingInput,
+  type KnowledgePendingRow,
+  type KnowledgePendingOutput,
+  type KnowledgePutProcessedInput,
+  type KnowledgeExtractFieldsInput,
+  type KnowledgeExtractFieldsOutput,
+  type KnowledgeWorkflowSource
+} from "@work-shape/catalyst-asset-schemas";

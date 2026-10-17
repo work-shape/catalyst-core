@@ -178,7 +178,8 @@ export const KNOWLEDGE_DOCUMENT_FAILURES: Record<
   knowledge_text_unreadable: "knowledge.failureTextUnreadable",
   knowledge_text_empty: "knowledge.failureTextEmpty",
   knowledge_index_failed: "knowledge.failureIndex",
-  knowledge_file_too_many_pages: "knowledge.failureTooManyPages"
+  knowledge_file_too_many_pages: "knowledge.failureTooManyPages",
+  knowledge_processor_output_invalid: "knowledge.failureProcessorOutput"
 };
 
 /** The sentence of why a document failed. A failed one without a code gets the general one. */

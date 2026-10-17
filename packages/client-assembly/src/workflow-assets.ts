@@ -468,7 +468,8 @@ export function createWorkflowAssetDefinitions(options: {
       return { revisionId: workflow.revisionId, manifest: workflow.definition.manifest };
     },
     async list() {
-      return (await published()).map(({ id, name, description }) => ({
+      return (await published()).map(({ id, name, description, definition }) => ({
+        kind: definition.ok ? (definition.manifest.kind ?? "process") : "process",
         id,
         name,
         ...(description === undefined ? {} : { description })

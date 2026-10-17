@@ -1,3 +1,4 @@
+import type { WorkflowKind } from "@work-shape/catalyst-core";
 import type {
   AuthenticatedIdentity,
   AuthenticatedUser,
@@ -72,6 +73,7 @@ export interface WorkflowRunsPort {
 
 /** One published Workflow as the list of the instance names it. */
 export interface WorkflowListEntry {
+  kind?: WorkflowKind;
   id: string;
   /** The id of the asset that holds the Workflow. Decides the right; no part of the answer. */
   assetId?: string;
