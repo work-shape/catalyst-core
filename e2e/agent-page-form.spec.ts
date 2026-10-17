@@ -201,8 +201,12 @@ test("the model section says what reasoning effort does and locks the models for
     await expect(writable.getByRole("combobox").first()).toBeEnabled();
 
     // Who may change the agent and not its models reads the same sentence beside a locked model.
+    // Stop the old identity's page before replacing its session. Its pending workspace
+    // queries must not run with the next person's cookies.
+    await page.goto("about:blank");
     await page.context().clearCookies();
     await signIn(page, admin);
+    await openModel();
     for (const locale of ["en", "de"] as const) {
       await page.evaluate(
         (value) => window.localStorage.setItem("vivd-catalyst:locale", value),
@@ -214,6 +218,7 @@ test("the model section says what reasoning effort does and locks the models for
     }
     await shoot(page, testInfo, "model-section", openModel);
   } finally {
+    await page.goto("about:blank");
     await page.context().clearCookies();
     await signIn(page, superadmin);
     await deleteAgent(page, name);
