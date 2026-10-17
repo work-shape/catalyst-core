@@ -46,6 +46,20 @@ const copy: {
       action: "Passwort festlegen",
       footer: `Der Link ist ${params.validDays} Tage gültig und kann einmal verwendet werden.`
     })
+  },
+  "workflow-notice": {
+    en: (_params, productName) => ({
+      subject: `A new notice in ${productName}`,
+      intro: `A new notice is waiting for you in your ${productName} Inbox. Sign in to read it.`,
+      action: "Open the notice",
+      footer: "This email does not repeat what the notice says."
+    }),
+    de: (_params, productName) => ({
+      subject: `Neue Mitteilung in ${productName}`,
+      intro: `In deinem Eingang in ${productName} wartet eine neue Mitteilung. Melde dich an, um sie zu lesen.`,
+      action: "Mitteilung öffnen",
+      footer: "Diese E-Mail gibt den Inhalt der Mitteilung nicht wieder."
+    })
   }
 };
 
@@ -78,6 +92,8 @@ function resolveCopy(message: MailMessage, productName: string): MailCopy {
       return copy["password-reset"][message.locale](message.params, productName);
     case "platform-invitation":
       return copy["platform-invitation"][message.locale](message.params, productName);
+    case "workflow-notice":
+      return copy["workflow-notice"][message.locale](message.params, productName);
   }
 }
 

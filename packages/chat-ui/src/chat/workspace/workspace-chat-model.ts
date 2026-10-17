@@ -953,7 +953,8 @@ export function useWorkspaceChatModel({
       // The address without a workspace resolves to the conversation's own.
       openConversation: (conversationId) =>
         routeState.showRoute({ kind: "legacy-conversation", conversationId }),
-      openInboxItem: (itemId) => routeState.showRoute({ kind: "inbox-item", itemId })
+      openInboxItem: (itemId) => routeState.showRoute({ kind: "inbox-item", itemId }),
+      openRoute: (route) => routeState.showRoute(route)
     }
   };
 }

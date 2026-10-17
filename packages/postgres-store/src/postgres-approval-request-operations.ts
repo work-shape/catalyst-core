@@ -248,7 +248,12 @@ async function countOwnApprovalRequests(
       and(
         eq(approvalRequests.clientInstanceId, input.clientInstanceId),
         requestedBy(input.requestedById),
-        inArray(approvalRequests.kind, [...input.kinds])
+        inArray(approvalRequests.kind, [...input.kinds]),
+        // What the requester's own list holds: a request addressed to somebody else is theirs.
+        or(
+          isNull(approvalRequests.addresseeUserId),
+          eq(approvalRequests.addresseeUserId, input.requestedById)
+        )
       )
     );
   return { pending: row?.pending ?? 0, total: row?.total ?? 0 };

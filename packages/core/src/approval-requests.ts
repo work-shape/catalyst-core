@@ -241,7 +241,10 @@ export interface ApprovalRequestStore {
   countPendingApprovalRequests(
     input: Pick<ApprovalRequestListFilter, "clientInstanceId" | "kinds" | "reader" | "subjectKinds">
   ): Promise<number>;
-  /** How many requests of these kinds one person made: those still pending, and all of them. */
+  /**
+   * How many requests of these kinds one person made: those still pending, and all of them.
+   * A request addressed to somebody else is not counted: it is the addressee's alone.
+   */
   countOwnApprovalRequests(input: {
     clientInstanceId: ClientInstanceId;
     kinds: readonly string[];

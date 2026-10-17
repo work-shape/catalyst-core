@@ -98,6 +98,7 @@
 {"name":"namespace.created","legacy":true,"audited":true,"phases":["after"]}
 {"name":"namespace.deleted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"namespace.updated","legacy":true,"audited":true,"phases":["after"]}
+{"name":"notice.sent","legacy":false,"audited":true,"phases":["after"]}
 {"name":"operation.authorization_checked","legacy":false,"audited":true,"phases":["after"]}
 {"name":"operation.before_call","legacy":false,"audited":false,"phases":["before"]}
 {"name":"operation.completed","legacy":false,"audited":true,"phases":["after"]}

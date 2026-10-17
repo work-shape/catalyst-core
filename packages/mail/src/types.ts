@@ -22,7 +22,20 @@ export interface PlatformInvitationMail {
   };
 }
 
-export type MailTemplate = PasswordResetMail | PlatformInvitationMail;
+/**
+ * A Workflow notice waits in the addressee's Inbox. The mail says so and links there. It
+ * carries no word of the notice: what a mail may contain is the operator's decision, and until
+ * it is made nothing the author wrote leaves the instance by mail.
+ */
+export interface WorkflowNoticeMail {
+  template: "workflow-notice";
+  params: {
+    /** The notice's own Inbox address. */
+    link: string;
+  };
+}
+
+export type MailTemplate = PasswordResetMail | PlatformInvitationMail | WorkflowNoticeMail;
 export type MailTemplateId = MailTemplate["template"];
 
 export type MailMessage = MailTemplate & {

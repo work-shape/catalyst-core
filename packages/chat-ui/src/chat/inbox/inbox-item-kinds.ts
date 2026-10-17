@@ -1,4 +1,5 @@
 import {
+  Bell,
   BookOpen,
   FileText,
   LayoutGrid,
@@ -21,6 +22,7 @@ import { SkillChangeBody } from "../approvals/skill-change-body";
 import { parseSkillChangePreview } from "../approvals/skill-change-preview";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import type { InboxItemActions } from "./inbox-item-actions";
+import { NoticeBody, NoticeFoot, parseNoticePreview } from "./notice-item";
 
 export type Translate = TranslationContextValue["t"];
 
@@ -235,6 +237,21 @@ function publishKind(kind: string, label: TranslationKey, icon: LucideIcon): Inb
 }
 
 /**
+ * A notice a Workflow left for this person (NOTIFY-a): its title, one paragraph and a link. It
+ * asks nothing; its reader marks it handled.
+ */
+const notice: InboxItemKind = {
+  kind: "notice",
+  label: "inbox.kindNotice",
+  icon: Bell,
+  heading: (item) => parseNoticePreview(item.preview)?.title,
+  subject: (item) => parseNoticePreview(item.preview)?.title,
+  Body: NoticeBody,
+  decisions: [{ decision: "approve", label: "inbox.noticeMarkHandled" }],
+  Foot: NoticeFoot
+};
+
+/**
  * The item kinds of the platform. This is deliberately not the client widget registry: an item
  * decides a change to the instance, so its body must not be replaceable by a client assembly.
  */
@@ -242,7 +259,8 @@ export const inboxItemKinds: readonly InboxItemKind[] = [
   skillChange,
   operationCall,
   publishKind("app_publish", "inbox.kindAppPublish", LayoutGrid),
-  publishKind("workflow_publish", "inbox.kindWorkflowPublish", Workflow)
+  publishKind("workflow_publish", "inbox.kindWorkflowPublish", Workflow),
+  notice
 ];
 
 const InboxItemKindsContext = createContext<readonly InboxItemKind[]>(inboxItemKinds);

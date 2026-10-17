@@ -17,6 +17,7 @@ import {
   executeApprovedOperationCall
 } from "../approvals/operation-call-approval-handler";
 import { publishApprovalKinds } from "../approvals/publish-approval";
+import { createNoticeHandler } from "../notices/notice-kind";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
 import { createAuditingEventEmitter } from "./event-emitter";
 import type { GuardrailRunner } from "../guardrails/guardrail-runner";
@@ -78,7 +79,9 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
   const handlers = [
     // A confirmation in the Inbox is an `operation_call`; it shows what a held kind's subject is.
     createOperationCallApprovalHandler({ ...handlerOptions, subjectKinds: held }),
-    ...held.map((kind) => createOperationCallApprovalHandler(handlerOptions, kind))
+    ...held.map((kind) => createOperationCallApprovalHandler(handlerOptions, kind)),
+    // A notice the platform files for one person, such as a Workflow's (NOTIFY-a).
+    createNoticeHandler()
   ];
   const approvalRequestHandlers = new Map([
     ...(options.approvalRequests?.handlers ?? []),

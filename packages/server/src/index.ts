@@ -298,6 +298,7 @@ export type {
 } from "./approvals/approval-request-service";
 
 export * from "./approvals/skill-change-approval-handler";
+export { createNotices, type NoticesOptions } from "./notices/notices";
 export { applyValidatedConfigAssetMutations } from "./assets/config-asset-writer";
 export type { ConfigAssetWriterOptions } from "./assets/config-asset-writer";
 export { createAgentAssetKind } from "./asset-kinds/agent";

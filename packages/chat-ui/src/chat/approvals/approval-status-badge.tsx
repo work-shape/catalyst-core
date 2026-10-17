@@ -18,7 +18,8 @@ export function ApprovalStatusBadge({
   status,
   applyResult,
   size,
-  confirmation
+  confirmation,
+  notice
 }: {
   status: string;
   /** What the request recorded. A change that ran after the decision says here how it went. */
@@ -26,10 +27,15 @@ export function ApprovalStatusBadge({
   size?: BadgeProps["size"];
   /** The request is a person's own confirmation in their Inbox: it is allowed or denied. */
   confirmation?: boolean;
+  /** A notice is handled without approving an action. */
+  notice?: boolean;
 }) {
   const { t } = useTranslation();
   const execution = readApprovalExecution(applyResult);
-  const presentation = approvalStatusPresentation(status, execution, confirmation);
+  const presentation =
+    notice && status === "approved"
+      ? { tone: "neutral" as const, labelKey: "inbox.noticeDone" as const }
+      : approvalStatusPresentation(status, execution, confirmation);
   return (
     <Badge
       {...BADGE_LOOK[presentation.tone]}

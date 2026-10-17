@@ -91,6 +91,7 @@ export function InboxList({
                   status={item.status}
                   applyResult={item.applyResult}
                   confirmation={isInboxConfirmation(item)}
+                  notice={item.kind === "notice"}
                   size="sm"
                 />
               )

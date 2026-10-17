@@ -124,6 +124,7 @@ export function InboxItemView({
             status={item.status}
             applyResult={item.applyResult}
             confirmation={isInboxConfirmation(item)}
+            notice={item.kind === "notice"}
           />
         </div>
         <p className="text-caption text-muted-foreground" data-testid="inbox-item-asked">

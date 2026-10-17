@@ -1,5 +1,5 @@
 import { WORKFLOW_DATASET_EVENTS } from "./events-workflow-datasets";
-import { GUARDRAIL_OUTCOMES } from "@work-shape/catalyst-asset-schemas";
+import { GUARDRAIL_OUTCOMES, NOTIFY_CHANNELS } from "@work-shape/catalyst-asset-schemas";
 import type { GuardrailAnswer, GuardrailFields } from "./guardrails";
 import type { JsonObject } from "./json";
 import type { OperationCall } from "./operations";
@@ -638,6 +638,26 @@ export const EVENTS = {
   "namespace.created": { ...LEGACY_AUDIT, name: "namespace.created", subject: "namespace" },
   "namespace.deleted": { ...LEGACY_AUDIT, name: "namespace.deleted", subject: "namespace" },
   "namespace.updated": { ...LEGACY_AUDIT, name: "namespace.updated", subject: "namespace" },
+  // A notice left for people of the instance (NOTIFY-a): counts only, never what it said.
+  "notice.sent": {
+    name: "notice.sent",
+    subject: "notice",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["channels", "addressees", "inactive", "mailsSent", "mailsUnsent"],
+      properties: {
+        channels: { type: "array", items: { type: "string", enum: [...NOTIFY_CHANNELS] } },
+        addressees: { type: "integer", minimum: 0 },
+        inactive: { type: "integer", minimum: 0 },
+        mailsSent: { type: "integer", minimum: 0 },
+        mailsUnsent: { type: "integer", minimum: 0 }
+      }
+    }
+  },
   "operation.authorization_checked": {
     ...OPERATION_AUDIT,
     name: "operation.authorization_checked"

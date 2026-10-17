@@ -52,6 +52,26 @@ describe("mail templates", () => {
     expect(mail.html).toContain('href="https://chat.example.test/#password-setup=tok"');
   });
 
+  it("renders a Workflow notice mail as the link to the notice and nothing of what it says", () => {
+    for (const [locale, subject] of [
+      ["de", "Neue Mitteilung in Example Chat"],
+      ["en", "A new notice in Example Chat"]
+    ] as const) {
+      const mail = renderMail(
+        {
+          template: "workflow-notice",
+          to: { email: "ada@example.test" },
+          locale,
+          params: { link: "https://chat.example.test/inbox/apr_1" }
+        },
+        identity
+      );
+      expect(mail.subject).toBe(subject);
+      expect(mail.text).toContain("https://chat.example.test/inbox/apr_1");
+      expect(mail.html).toContain('href="https://chat.example.test/inbox/apr_1"');
+    }
+  });
+
   it("escapes caller-supplied labels in HTML", () => {
     const mail = renderMail(
       {

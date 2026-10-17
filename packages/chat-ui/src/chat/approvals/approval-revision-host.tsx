@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { WorkspaceRoute } from "../../shared/workspace-route";
 
 /**
  * What the workspace does for a reviewer who requested changes away from the
@@ -25,6 +26,8 @@ export interface ApprovalRevisionHost {
   openConversation(conversationId: string): void;
   /** Opens an item of the person's Inbox, such as a confirmation that waits for them there. */
   openInboxItem?(itemId: string): void;
+  /** Opens a place of the workspace, such as the run or the App a notice links to. */
+  openRoute?(route: WorkspaceRoute): void;
 }
 
 export interface ApprovalRevisionStart {

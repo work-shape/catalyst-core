@@ -161,7 +161,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
 
   /**
    * The requests the caller made, in any status. It needs no review permission: a request is
-   * always visible to the person who made it.
+   * visible to the person who made it, unless it is addressed to somebody else. A request
+   * addressed to a person is theirs alone, its requester included (OP-4b): a notice is read by
+   * its addressee, never by its sender.
    */
   async listOwnRequests(
     user: AuthenticatedUser,
@@ -174,6 +176,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       clientInstanceId: this.options.clientInstanceId,
       kinds: this.registeredKinds(),
       requestedById: user.id,
+      reader: this.reader(user),
       ...filter
     });
     // One viewer for the page: what a kind reads for one row it does not read for the next.

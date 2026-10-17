@@ -1,0 +1,75 @@
+import type { NotifyChannel } from "@work-shape/catalyst-asset-schemas";
+import type { AuthenticatedIdentity } from "./identity";
+
+// A notice: a few lines a Workflow leaves for people of the instance, in their Inbox and, where
+// asked, as a mail that leads there. It is an Inbox item of its own kind, addressed to one
+// person each, whose only answer is "mark handled" (`operations-and-policy.md`, Inbox).
+//
+// What a notice may carry is counts and a link. A mail leaves the instance through the mail
+// provider, and what it may contain is the operator's decision (§ 203 StGB for a tax firm), so
+// until that is decided a mail carries no word the author wrote: not the title, not the text.
+// It says that a notice is waiting and links to it; the person reads it after signing in.
+
+/** The Inbox item kind of a notice. */
+export const NOTICE_KIND = "notice";
+
+/**
+ * Where a notice goes, the channels of a `notify` step (`NOTIFY_CHANNELS`). Every notice is an
+ * Inbox item; `mail` adds a mail that links to it.
+ */
+export type NoticeChannel = NotifyChannel;
+
+/** The longest title of a notice: one line. */
+export const NOTICE_TITLE_MAX_LENGTH = 120;
+/** The longest text of a notice: one paragraph. */
+export const NOTICE_TEXT_MAX_LENGTH = 1000;
+/** The most users, and the most workspaces, one notice names. */
+export const NOTICE_RECIPIENTS_MAX = 100;
+
+/** Where a notice leads: the run it is about, or an App. Ids only, never a value of a run. */
+export type NoticeLink =
+  | { kind: "workflow_run"; workspaceId: string; workflowId: string; runId: string }
+  | { kind: "app"; workspaceId: string; app: string };
+
+/**
+ * Who a notice is for: users of the instance by id, and the members of Shared Workspaces of the
+ * instance by the workspace's id. A workspace stands for a group until groups exist (AP-7). No
+ * address is taken: a mail goes only to the address the instance holds for an addressee. An id
+ * that names no user or no Shared Workspace refuses the whole notice (`VALIDATION_FAILED`,
+ * `details.unknownRecipients`), and so does a notice that would reach no active person
+ * (`CONFLICT`, `details.reason: "no_active_recipient"`).
+ */
+export interface NoticeRecipients {
+  users?: readonly string[];
+  workspaces?: readonly string[];
+}
+
+export interface NoticeSendInput {
+  /** Who sends it: the Workflow's principal, or the person testing it. Named on the item. */
+  from: AuthenticatedIdentity;
+  to: NoticeRecipients;
+  /** One line. Shown in the Inbox only. */
+  title: string;
+  /** One paragraph: counts, and what to do. Shown in the Inbox only. */
+  text: string;
+  link?: NoticeLink;
+  /** Must hold `inbox`. */
+  channels: readonly NoticeChannel[];
+}
+
+/** What became of a notice, in counts. */
+export interface NoticeSendResult {
+  /** The people who got the Inbox item. */
+  addressees: number;
+  /** People named, directly or through a workspace, who are not active and got nothing. */
+  inactive: number;
+  /** Mails handed to the mail provider. */
+  mailsSent: number;
+  /** Mails asked for and not sent: no address, no mailer, or the provider refused. */
+  mailsUnsent: number;
+}
+
+/** The one way the platform sends a notice. The Workflow engine calls it. */
+export interface Notices {
+  send(input: NoticeSendInput, context: { correlationId: string }): Promise<NoticeSendResult>;
+}
