@@ -92,7 +92,13 @@ function StatusFacts({ state }: { state: KnowledgeBaseState }) {
           {t(view.label)}
         </Badge>
       </div>
-      {state.problem ? <InlineError>{state.problem}</InlineError> : null}
+      {state.status === "preparing" ? (
+        <p className="text-label text-muted-foreground" data-knowledge-preparing="">
+          {t("knowledge.statusPreparingDescription")}
+        </p>
+      ) : state.problem ? (
+        <InlineError>{state.problem}</InlineError>
+      ) : null}
       <KeyValueList>
         {state.checkedAt ? (
           <KeyValue label={t("knowledge.checkedAt")}>

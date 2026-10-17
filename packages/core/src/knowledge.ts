@@ -115,9 +115,11 @@ export interface KnowledgeTableCheck {
 }
 
 /**
- * What a check of a Knowledge Base found. `needs_attention` where a described table cannot be
- * read, the backend cannot be reached, or the store a Knowledge Base owns is not ready: a
- * query then fails. A Knowledge Base on a Data Store is not published in that state.
+ * What a check of a Knowledge Base found. `preparing` while the store a Knowledge Base of
+ * documents owns is still being made: nothing is wrong, and it takes no files yet.
+ * `needs_attention` where a described table cannot be read, the backend cannot be reached, or
+ * the store a Knowledge Base owns failed or is missing: a query then fails. A Knowledge Base on
+ * a Data Store is not published in either state.
  */
 export interface KnowledgeCheckResult {
   status: (typeof KNOWLEDGE_CHECK_STATUSES)[number];
@@ -254,8 +256,15 @@ export interface KnowledgeDocumentInput {
   addedBy?: string;
 }
 
+/**
+ * What a kept check says. A check that finds the store being made keeps nothing: the state read
+ * looks again until the store is ready, which nobody need check for.
+ */
+export type KeptKnowledgeStatus = Exclude<KnowledgeCheckResult["status"], "preparing">;
+
 /** The last check of a Knowledge Base, as the platform keeps it. */
-export interface KnowledgeBaseState extends KnowledgeCheckResult {
+export interface KnowledgeBaseState extends Omit<KnowledgeCheckResult, "status"> {
+  status: KeptKnowledgeStatus;
   /** The id of the Knowledge Base's asset. */
   assetId: string;
   clientInstanceId: ClientInstanceId;
@@ -295,6 +304,49 @@ export const KNOWLEDGE_TEXT_FORMATS: readonly KnowledgeDocumentFormat[] = ["txt"
  * refused when it is added, with this limit named.
  */
 export const KNOWLEDGE_FILE_MAX_BYTES = 25 * 1024 * 1024;
+
+/**
+ * How many files one call of `knowledge.<id>.add_files` adds at most. It bounds what one call
+ * reads and copies; a caller with more sends several calls. A larger list is refused with this
+ * limit named, and the page's Add dialog lets no more be chosen.
+ */
+export const KNOWLEDGE_ADD_FILES_MAX_COUNT = 20;
+
+/**
+ * The format of a file by its name, then by its media type: what a Knowledge Base reads it as.
+ * Nothing for a file in no format a Knowledge Base takes. The Add dialog offers by the same rule
+ * what the call accepts.
+ */
+export function knowledgeDocumentFormatOf(file: {
+  filename: string;
+  mimeType?: string;
+}): KnowledgeDocumentFormat | undefined {
+  // The extension as `path.extname` reads it, which a browser has no module for.
+  const base = file.filename.slice(file.filename.lastIndexOf("/") + 1);
+  const dot = base.lastIndexOf(".");
+  switch (dot > 0 ? base.slice(dot).toLowerCase() : "") {
+    case ".txt":
+      return "txt";
+    case ".md":
+    case ".markdown":
+      return "markdown";
+    case ".pdf":
+      return "pdf";
+    case ".docx":
+      return "docx";
+  }
+  switch (file.mimeType?.split(";")[0]?.trim().toLowerCase()) {
+    case "text/plain":
+      return "txt";
+    case "text/markdown":
+      return "markdown";
+    case "application/pdf":
+      return "pdf";
+    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+      return "docx";
+  }
+  return undefined;
+}
 
 /**
  * A file a person can open in the platform, named by its ids as `knowledge.<id>.add_files`

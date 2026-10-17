@@ -10,7 +10,6 @@ import {
   type DataToolDescriptor,
   type DataToolSource,
   type JsonObject,
-  type KnowledgeBaseState,
   type OperationDefinition,
   type OperationResource,
   type OperationSource
@@ -31,7 +30,7 @@ import {
 import { removeDocumentsOperation } from "./removal";
 import { addFilesOperation } from "./add-files";
 import { listDocumentsOperation, retryDocumentsOperation } from "./document-operations";
-import { checkKnowledgeBase, type KnowledgeRuntime } from "./runtime";
+import { checkKnowledgeBase, type CheckedKnowledgeState, type KnowledgeRuntime } from "./runtime";
 
 // The operations of one Knowledge Base, `knowledge.<id>.<part>`, each called through
 // `runOperation` like every other operation, and the one agent tool over all of an agent's.
@@ -143,7 +142,7 @@ function splitOperationName(name: string): { knowledgeBase: string; part: string
 
 function stateOf(
   { asset }: PublishedKnowledgeBase,
-  state: KnowledgeBaseState | undefined
+  state: CheckedKnowledgeState | undefined
 ): StateOutput {
   return {
     id: asset.id,
@@ -259,14 +258,40 @@ function stateOperation(
     resource: () => knowledgeBase.resource,
     module: KNOWLEDGE_MODULE,
     timeoutMs: KNOWLEDGE_STATE_TIMEOUT_MS,
-    async execute() {
-      return stateOf(
-        knowledgeBase,
-        await runtime.stores.knowledgeBases.getKnowledgeBaseState({
-          clientInstanceId: runtime.clientInstanceId,
-          assetId: knowledgeBase.asset.id
-        })
-      );
+    async execute(_input, context) {
+      const kept = await runtime.stores.knowledgeBases.getKnowledgeBaseState({
+        clientInstanceId: runtime.clientInstanceId,
+        assetId: knowledgeBase.asset.id
+      });
+      if (kept) return stateOf(knowledgeBase, kept);
+      // Nothing kept: it was never checked, or its store was being made when it was. A store
+      // being made becomes ready by itself, and nobody need check for the page to see it: it is
+      // looked at now, and kept once it is ready, as a query keeps the check after a failure.
+      try {
+        return stateOf(
+          knowledgeBase,
+          await checkKnowledgeBase(
+            runtime,
+            runtime.stores,
+            {
+              assetId: knowledgeBase.asset.id,
+              revision: knowledgeBase.revision,
+              definition: knowledgeBase.definition
+            },
+            context.runtime.signal
+          )
+        );
+      } catch (error) {
+        runtime.logger.warn(
+          {
+            type: "knowledge_base.check_failed",
+            knowledgeBase: knowledgeBase.asset.name,
+            errorName: error instanceof Error ? error.name : "unknown"
+          },
+          "A Knowledge Base with no kept state could not be checked"
+        );
+        return stateOf(knowledgeBase, undefined);
+      }
     }
   };
 }

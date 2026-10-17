@@ -676,7 +676,11 @@ export type DataStoreStatus = (typeof DATA_STORE_STATUSES)[number];
 export const DATA_STORE_MIGRATION_OUTCOMES = ["none", "pending", "applied", "failed"] as const;
 export type DataStoreMigrationOutcome = (typeof DATA_STORE_MIGRATION_OUTCOMES)[number];
 
-export const KNOWLEDGE_BASE_STATUSES = ["unchecked", "ok", "needs_attention"] as const;
+/**
+ * `unchecked` until the first check; `preparing` while the store a Knowledge Base of documents
+ * owns is still being made; then `ok` or `needs_attention`.
+ */
+export const KNOWLEDGE_BASE_STATUSES = ["unchecked", "preparing", "ok", "needs_attention"] as const;
 export type KnowledgeBaseStatus = (typeof KNOWLEDGE_BASE_STATUSES)[number];
 
 /**
@@ -957,6 +961,7 @@ export const LISTED_DATA_STORE_STATUSES = [
 export type ListedDataStoreStatus = (typeof LISTED_DATA_STORE_STATUSES)[number];
 
 export const KNOWLEDGE_CHECK_STATUSES = [
+  "preparing",
   "ok",
   "needs_attention"
 ] as const satisfies readonly KnowledgeBaseStatus[];

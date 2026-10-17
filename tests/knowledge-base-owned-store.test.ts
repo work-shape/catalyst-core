@@ -215,6 +215,37 @@ describe("the store a Knowledge Base owns", () => {
     ).toBe(404);
   });
 
+  it("is being set up, not in need of attention, until its store is made, and then ready without a check", async () => {
+    const instance = await start(true, undefined, undefined, undefined, { embedding: true });
+    const state = async () => {
+      const read = await instance.api.call("knowledge_bases.get", {
+        params: { knowledgeBase: KB }
+      });
+      expect(read.statusCode, read.body).toBe(200);
+      return stateSchema.parse(read.json());
+    };
+
+    const written = await put(instance, documents());
+    expect(written.statusCode, written.body).toBe(200);
+    const made = await publish(instance, 1);
+    expect(made.statusCode, made.body).toBe(200);
+    const record = await ownedRecord(instance);
+    expect(record).toMatchObject({ status: "provisioning" });
+    // The store has the id of the Knowledge Base's asset.
+    const assetId = required(record).id;
+    const kept = () =>
+      instance.stores.knowledgeBases.getKnowledgeBaseState({ clientInstanceId, assetId });
+
+    // Nothing is wrong while the store is made: it says so, and nothing of it is kept.
+    expect(await state()).toMatchObject({ status: "preparing" });
+    expect(await kept()).toBeUndefined();
+
+    // Once the store is made, the next read finds it ready, and keeps that.
+    await settle(instance);
+    expect(await state()).toEqual({ status: "ok", tables: [] });
+    expect(await kept()).toMatchObject({ status: "ok", revision: 1 });
+  });
+
   it("has no pgvector where the Knowledge Base searches by words alone", async () => {
     const instance = await start(true, undefined, undefined, undefined, { embedding: true });
 

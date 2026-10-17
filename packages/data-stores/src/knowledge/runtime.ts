@@ -26,22 +26,38 @@ export interface KnowledgeRuntime {
   now(): Date;
 }
 
-/** Keeps what a check of one revision of a Knowledge Base found, in `stores`. */
+/** What a check of one revision of a Knowledge Base found, kept or not. */
+export type CheckedKnowledgeState = Omit<KnowledgeBaseState, "status"> &
+  Pick<KnowledgeCheckResult, "status">;
+
+/**
+ * Keeps what a check of one revision of a Knowledge Base found, in `stores`. A check that finds
+ * the store being made keeps nothing and drops what an earlier one kept: the state read looks
+ * again until the store is ready.
+ */
 export async function keepKnowledgeCheck(
   runtime: KnowledgeRuntime,
   stores: Pick<PlatformStores, "knowledgeBases">,
   input: { assetId: string; revision: number },
   result: KnowledgeCheckResult
-): Promise<KnowledgeBaseState> {
-  const state: KnowledgeBaseState = {
+): Promise<CheckedKnowledgeState> {
+  const checked: CheckedKnowledgeState = {
     ...result,
     assetId: input.assetId,
     clientInstanceId: runtime.clientInstanceId,
     revision: input.revision,
     checkedAt: runtime.now().toISOString()
   };
-  await stores.knowledgeBases.putKnowledgeBaseState(state);
-  return state;
+  const { status } = checked;
+  if (status === "preparing") {
+    await stores.knowledgeBases.deleteKnowledgeBaseState({
+      clientInstanceId: runtime.clientInstanceId,
+      assetId: input.assetId
+    });
+  } else {
+    await stores.knowledgeBases.putKnowledgeBaseState({ ...checked, status });
+  }
+  return checked;
 }
 
 /** Checks one revision of a Knowledge Base against its backend and keeps what it found. */
@@ -50,7 +66,7 @@ export async function checkKnowledgeBase(
   stores: Pick<PlatformStores, "knowledgeBases">,
   input: { assetId: string; revision: number; definition: KnowledgeBaseDefinition },
   signal?: AbortSignal
-): Promise<KnowledgeBaseState> {
+): Promise<CheckedKnowledgeState> {
   const result = await runtime.backend.check(
     knowledgeTargetOf(input.definition, input.assetId),
     signal

@@ -1,0 +1,8 @@
+---
+section: Added
+---
+
+- A new Knowledge Base in Build is made for documents ("Dokumente") or for tables of a data store (KB-5f). A Knowledge Base of documents names no backend and searches by words (`methods: [keyword]`); the choice is fixed once it exists, and it has no SQL test query.
+- The page of a published Knowledge Base of documents lists its documents, newest first, each with its state: being indexed, searchable, or failed with the reason in plain words. The list is read again every few seconds while a document is being indexed. Whoever may change the Knowledge Base retries a failed document, adds documents and removes one through `knowledge.<id>.remove_documents`, after a confirmation that names it; whoever may use it sees the list.
+- The Add dialog adds files uploaded in the conversations of the reader's workspace through `knowledge.<id>.add_files`. It names the limits of one add and keeps to them: at most 20 files, none over 25 MiB, and only PDF, DOCX, TXT and Markdown. `KNOWLEDGE_ADD_FILES_MAX_COUNT` and `knowledgeDocumentFormatOf` move to `@work-shape/catalyst-core`, so the dialog and the operation apply the same rule.
+- While the store of a Knowledge Base of documents is being made, its state is `preparing` ("Being set up", "Wird eingerichtet") and no longer `needs_attention`, and the page reads it again every few seconds until the store is ready. A check that finds the store being made keeps nothing; `knowledge_bases.get` looks at the store while no check is kept and keeps the first check that finds it ready, so the page shows it ready without a check. `add_files` refuses files until then, as before.

@@ -70,9 +70,19 @@ export { usingPageRoute } from "./data-store-source";
 export { appDataLines, audienceLine, fillerLine } from "./data-store-provenance-model";
 export type { AppDataSources } from "./data-store-provenance-model";
 export { knowledgeBaseKindOn } from "./knowledge-base-kind";
+export { KnowledgeAddDialog, KnowledgeDocuments } from "./knowledge-base-documents";
+export {
+  KNOWLEDGE_DOCUMENT_FAILURES,
+  knowledgeBaseConfigToForm,
+  knowledgeBaseFormToConfig,
+  startedKnowledgeBaseForm
+} from "./knowledge-base-model";
+export { documentsStillIndexing } from "./knowledge-base-source";
 export type {
   KnowledgeBaseSource,
   KnowledgeBaseState,
+  KnowledgeDocument,
+  KnowledgeOpenableFile,
   KnowledgeRead
 } from "./knowledge-base-source";
 export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";

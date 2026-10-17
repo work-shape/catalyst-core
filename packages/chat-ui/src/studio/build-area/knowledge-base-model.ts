@@ -1,6 +1,15 @@
+import {
+  KNOWLEDGE_ADD_FILES_MAX_COUNT,
+  KNOWLEDGE_FILE_MAX_BYTES,
+  knowledgeDocumentFormatOf
+} from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../../shared/i18n";
-import type { KnowledgeBaseState } from "./knowledge-base-source";
+import type {
+  KnowledgeBaseState,
+  KnowledgeDocument,
+  KnowledgeOpenableFile
+} from "./knowledge-base-source";
 
 // The form of a Knowledge Base's page and its definition. The definition is the whole config
 // of a revision: what the form does not show, the instance does not take either.
@@ -11,10 +20,29 @@ export interface KnowledgeTableForm {
   description: string;
 }
 
+/**
+ * What a Knowledge Base answers from: documents it keeps in a store of its own, or tables of a
+ * Data Store it describes. A definition with a `backend` describes tables; one without keeps
+ * documents (the built-in backend).
+ */
+export type KnowledgeBaseHolds = "documents" | "tables";
+
+/**
+ * How a Knowledge Base the page starts searches its documents: by words. Search by meaning
+ * needs an embedding model the instance approves, which the page cannot read yet (KB-5d).
+ */
+const NEW_DOCUMENT_METHODS: readonly string[] = ["keyword"];
+
 export interface KnowledgeBaseForm {
   name: string;
   title: string;
   description: string;
+  holds: KnowledgeBaseHolds;
+  /**
+   * The search methods of a Knowledge Base of documents, kept as its definition names them.
+   * Empty where it names none.
+   */
+  methods: string[];
   /** The id of the Data Store whose tables it describes. Empty until one is chosen. */
   dataStore: string;
   tables: KnowledgeTableForm[];
@@ -34,10 +62,15 @@ function member(value: unknown, key: string): unknown {
 export function knowledgeBaseConfigToForm(config: Record<string, unknown>): KnowledgeBaseForm {
   const store = member(config.backend, "dataStore");
   const tables = Array.isArray(config.tables) ? config.tables : [];
+  const methods = Array.isArray(config.methods)
+    ? config.methods.filter((method: unknown) => typeof method === "string")
+    : [];
   return {
     name: text(config, "name"),
     title: text(config, "title"),
     description: text(config, "description"),
+    holds: config.backend === undefined && !methods.includes("structured") ? "documents" : "tables",
+    methods: methods.includes("structured") ? [...NEW_DOCUMENT_METHODS] : methods,
     dataStore: typeof store === "string" ? store : "",
     tables: tables.flatMap((table: unknown) => {
       const name = member(table, "name");
@@ -49,12 +82,22 @@ export function knowledgeBaseConfigToForm(config: Record<string, unknown>): Know
   };
 }
 
-/** The definition a save writes. It answers the method `structured` alone, over a Data Store. */
+/**
+ * The definition a save writes. Over a Data Store it answers the method `structured` alone;
+ * with documents it names no backend and keeps its search methods.
+ */
 export function knowledgeBaseFormToConfig(form: KnowledgeBaseForm): Record<string, unknown> {
-  return {
+  const about = {
     name: form.name,
     title: form.title.trim(),
-    description: form.description.trim(),
+    description: form.description.trim()
+  };
+  if (form.holds === "documents") {
+    // A definition without methods searches by both, as the instance reads it: it stays so.
+    return { ...about, ...(form.methods.length > 0 ? { methods: form.methods } : {}) };
+  }
+  return {
+    ...about,
     methods: ["structured"],
     backend: { dataStore: form.dataStore },
     tables: form.tables.map((table) => ({
@@ -64,12 +107,23 @@ export function knowledgeBaseFormToConfig(form: KnowledgeBaseForm): Record<strin
   };
 }
 
-/** A Knowledge Base as the dialog that starts one leaves it: its id and its name. */
+/**
+ * A Knowledge Base as the dialog that starts one leaves it: its id and its name. It starts with
+ * documents, the choice its page offers first.
+ */
 export function startedKnowledgeBaseForm(start: {
   name: string;
   title: string;
 }): KnowledgeBaseForm {
-  return { name: start.name, title: start.title, description: "", dataStore: "", tables: [] };
+  return {
+    name: start.name,
+    title: start.title,
+    description: "",
+    holds: "documents",
+    methods: [...NEW_DOCUMENT_METHODS],
+    dataStore: "",
+    tables: []
+  };
 }
 
 /**
@@ -94,7 +148,81 @@ export const KNOWLEDGE_STATUS_VIEWS: Record<
   KnowledgeBaseState["status"],
   { tone: BadgeTone; label: TranslationKey }
 > = {
+  preparing: { tone: "info", label: "knowledge.statusPreparing" },
   ok: { tone: "success", label: "knowledge.statusOk" },
   needs_attention: { tone: "warning", label: "knowledge.statusNeedsAttention" },
   unchecked: { tone: "neutral", label: "knowledge.statusUnchecked" }
+};
+
+/** How a document's state is shown: its badge. */
+export const KNOWLEDGE_DOCUMENT_STATE_VIEWS: Record<
+  KnowledgeDocument["state"],
+  { tone: BadgeTone; label: TranslationKey }
+> = {
+  pending: { tone: "info", label: "knowledge.documentPending" },
+  indexed: { tone: "success", label: "knowledge.documentIndexed" },
+  failed: { tone: "danger", label: "knowledge.documentFailed" }
+};
+
+/** Why a document failed, in a sentence a person reads: one for every code the instance sends. */
+export const KNOWLEDGE_DOCUMENT_FAILURES: Record<
+  NonNullable<KnowledgeDocument["failureCode"]>,
+  TranslationKey
+> = {
+  knowledge_file_format_unsupported: "knowledge.failureFormatUnsupported",
+  knowledge_file_over_limit: "knowledge.failureOverLimit",
+  knowledge_file_unreadable: "knowledge.failureFileUnreadable",
+  knowledge_file_missing: "knowledge.failureFileMissing",
+  knowledge_extraction_failed: "knowledge.failureExtraction",
+  knowledge_file_format_unavailable: "knowledge.failureFormatUnavailable",
+  knowledge_text_unreadable: "knowledge.failureTextUnreadable",
+  knowledge_text_empty: "knowledge.failureTextEmpty",
+  knowledge_index_failed: "knowledge.failureIndex"
+};
+
+/** The sentence of why a document failed. A failed one without a code gets the general one. */
+export function documentFailureText(document: KnowledgeDocument): TranslationKey {
+  return document.failureCode === undefined
+    ? "knowledge.failureIndex"
+    : KNOWLEDGE_DOCUMENT_FAILURES[document.failureCode];
+}
+
+/** The limits of one Add: how many files at once, and how large each may be. */
+export const KNOWLEDGE_ADD_LIMITS = {
+  files: KNOWLEDGE_ADD_FILES_MAX_COUNT,
+  bytes: KNOWLEDGE_FILE_MAX_BYTES
+} as const;
+
+/**
+ * Whether the Add dialog lets a file be chosen, and the reason it does not: a format no
+ * Knowledge Base reads, or a file over the size limit. The call refuses both.
+ */
+export function addableFile(
+  file: Pick<KnowledgeOpenableFile, "name" | "mimeType" | "bytes">
+): { addable: true } | { addable: false; reason: TranslationKey } {
+  const format = knowledgeDocumentFormatOf({
+    filename: file.name,
+    ...(file.mimeType ? { mimeType: file.mimeType } : {})
+  });
+  if (format === undefined) {
+    return { addable: false, reason: "knowledge.addFormatRefused" };
+  }
+  if (file.bytes > KNOWLEDGE_ADD_LIMITS.bytes) {
+    return { addable: false, reason: "knowledge.addTooLarge" };
+  }
+  return { addable: true };
+}
+
+/**
+ * What a refused Add says, by the reason the instance named. A reason the page does not know
+ * shows the instance's own sentence.
+ */
+export const KNOWLEDGE_ADD_REFUSALS: Partial<Record<string, TranslationKey>> = {
+  knowledge_file_not_available: "knowledge.addRefusedNotAvailable",
+  knowledge_file_format_unsupported: "knowledge.addFormatRefused",
+  knowledge_file_format_unavailable: "knowledge.failureFormatUnavailable",
+  knowledge_file_too_large: "knowledge.addRefusedTooLarge",
+  knowledge_documents_limit: "knowledge.addRefusedDocumentsLimit",
+  knowledge_store_not_ready: "knowledge.addRefusedStoreNotReady",
+  knowledge_files_unavailable: "knowledge.addRefusedFilesUnavailable"
 };

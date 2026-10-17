@@ -6,8 +6,11 @@ import {
   EmptyState,
   Field,
   Input,
+  KeyValue,
+  KeyValueList,
   Picker,
   PickerButton,
+  RadioGroup,
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
@@ -18,18 +21,22 @@ import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf } from "./build-refusals";
 import { ReadState } from "./data-store-read-state";
 import { KnowledgeStatus, KnowledgeTestQuery } from "./knowledge-base-checks";
+import { KnowledgeDocuments } from "./knowledge-base-documents";
 import {
   knowledgeBaseFormToConfig,
   knowledgeTableRows,
   type KnowledgeBaseForm,
+  type KnowledgeBaseHolds,
   type KnowledgeTableForm
 } from "./knowledge-base-model";
 import type { KnowledgeBaseSource } from "./knowledge-base-source";
 
 /**
- * The page of one Knowledge Base: what it holds, the Data Store it reads with a sentence per
- * table, and, once published, whether it can read them and a query to try. The frame saves the
- * form as a draft and publishes it.
+ * The page of one Knowledge Base: what it holds and what it answers from. A new one is chosen
+ * to answer from documents or from tables of a Data Store; that stays once it is created. With
+ * documents, the published Knowledge Base lists them with their state and takes more; with
+ * tables, it names the Data Store with a sentence per table, and once published whether it can
+ * read them and a query to try. The frame saves the form as a draft and publishes it.
  */
 export function KnowledgeBaseEditor({
   frame,
@@ -58,6 +65,19 @@ export function KnowledgeBaseEditor({
     return answer;
   };
   const published = asset?.publishedRevision;
+  const documents = form.holds === "documents";
+  const holdsOptions: { value: KnowledgeBaseHolds; label: string; description: string }[] = [
+    {
+      value: "documents",
+      label: t("knowledge.holdsDocuments"),
+      description: t("knowledge.holdsDocumentsDescription")
+    },
+    {
+      value: "tables",
+      label: t("knowledge.holdsTables"),
+      description: t("knowledge.holdsTablesDescription")
+    }
+  ];
 
   const sections: AssetSection[] = [
     {
@@ -76,7 +96,11 @@ export function KnowledgeBaseEditor({
           </Field>
           <Field
             label={t("knowledge.descriptionLabel")}
-            hint={t("knowledge.descriptionHint")}
+            hint={t(
+              form.holds === "documents"
+                ? "knowledge.descriptionHintDocuments"
+                : "knowledge.descriptionHint"
+            )}
             required
           >
             <Textarea
@@ -93,35 +117,60 @@ export function KnowledgeBaseEditor({
     {
       id: "source",
       label: t("knowledge.sourceTitle"),
-      description: t("knowledge.sourceDescription"),
-      count: form.tables.length,
+      description: t(
+        documents ? "knowledge.sourceDocumentsDescription" : "knowledge.sourceDescription"
+      ),
+      ...(documents ? {} : { count: form.tables.length }),
       refusalField: "source",
       body: (
         <>
-          <DataStoreChoice
-            source={source}
-            value={form.dataStore}
-            disabled={!canWrite}
-            // Another store has other tables: what was described of the first one goes.
-            onChange={(dataStore) =>
-              update({ dataStore, tables: dataStore === form.dataStore ? form.tables : [] })
-            }
-          />
-          <TableChoice
-            source={source}
-            store={form.dataStore || undefined}
-            tables={form.tables}
-            disabled={!canWrite}
-            onChange={(tables) => update({ tables })}
-          />
+          {asset ? (
+            <KeyValueList layout="stacked">
+              <KeyValue label={t("knowledge.holdsLabel")}>
+                {t(documents ? "knowledge.holdsDocuments" : "knowledge.holdsTables")}
+              </KeyValue>
+            </KeyValueList>
+          ) : (
+            <RadioGroup
+              label={t("knowledge.holdsLabel")}
+              options={holdsOptions}
+              value={form.holds}
+              disabled={!canWrite}
+              onValueChange={(holds) => update({ holds })}
+            />
+          )}
+          {documents ? null : (
+            <TablesSource source={source} form={form} canWrite={canWrite} update={update} />
+          )}
           <FieldRefusals messages={refusalsOf(outcome, "source")} />
         </>
       )
     },
+    ...(documents
+      ? [
+          {
+            id: "documents",
+            label: t("knowledge.documentsTitle"),
+            description: t("knowledge.documentsDescription"),
+            body:
+              asset && published !== undefined ? (
+                <KnowledgeDocuments
+                  source={source}
+                  knowledgeBase={asset.name}
+                  canWrite={canWrite}
+                />
+              ) : (
+                <EmptyState layout="inline">{t("knowledge.notPublishedDocuments")}</EmptyState>
+              )
+          }
+        ]
+      : []),
     {
       id: "status",
       label: t("knowledge.statusTitle"),
-      description: t("knowledge.statusDescription"),
+      description: t(
+        documents ? "knowledge.statusDocumentsDescription" : "knowledge.statusDescription"
+      ),
       body:
         asset && published !== undefined ? (
           <KnowledgeStatus
@@ -131,24 +180,30 @@ export function KnowledgeBaseEditor({
             canCheck={canWrite}
           />
         ) : (
-          <EmptyState layout="inline">{t("knowledge.notPublished")}</EmptyState>
+          <EmptyState layout="inline">
+            {t(documents ? "knowledge.notPublishedDocuments" : "knowledge.notPublished")}
+          </EmptyState>
         )
     },
-    {
-      id: "test",
-      label: t("knowledge.testTitle"),
-      description: t("knowledge.testDescription"),
-      body:
-        asset && published !== undefined ? (
-          <KnowledgeTestQuery
-            source={source}
-            knowledgeBase={asset.name}
-            firstTable={form.tables[0]?.name}
-          />
-        ) : (
-          <EmptyState layout="inline">{t("knowledge.notPublished")}</EmptyState>
-        )
-    }
+    ...(documents
+      ? []
+      : [
+          {
+            id: "test",
+            label: t("knowledge.testTitle"),
+            description: t("knowledge.testDescription"),
+            body:
+              asset && published !== undefined ? (
+                <KnowledgeTestQuery
+                  source={source}
+                  knowledgeBase={asset.name}
+                  firstTable={form.tables[0]?.name}
+                />
+              ) : (
+                <EmptyState layout="inline">{t("knowledge.notPublished")}</EmptyState>
+              )
+          }
+        ])
   ];
 
   return (
@@ -167,6 +222,40 @@ export function KnowledgeBaseEditor({
       saveLabel={asset ? t("configSaveChanges") : t("knowledge.create")}
       saveHint={t("build.savesDraft")}
     />
+  );
+}
+
+/** The Data Store a Knowledge Base of tables reads, and the tables of it that it describes. */
+function TablesSource({
+  source,
+  form,
+  canWrite,
+  update
+}: {
+  source: KnowledgeBaseSource;
+  form: KnowledgeBaseForm;
+  canWrite: boolean;
+  update(patch: Partial<KnowledgeBaseForm>): void;
+}) {
+  return (
+    <>
+      <DataStoreChoice
+        source={source}
+        value={form.dataStore}
+        disabled={!canWrite}
+        // Another store has other tables: what was described of the first one goes.
+        onChange={(dataStore) =>
+          update({ dataStore, tables: dataStore === form.dataStore ? form.tables : [] })
+        }
+      />
+      <TableChoice
+        source={source}
+        store={form.dataStore || undefined}
+        tables={form.tables}
+        disabled={!canWrite}
+        onChange={(tables) => update({ tables })}
+      />
+    </>
   );
 }
 

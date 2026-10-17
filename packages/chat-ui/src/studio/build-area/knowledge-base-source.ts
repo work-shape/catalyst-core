@@ -1,13 +1,58 @@
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
-import { instanceSentence, PendingApprovalError } from "./build-refusals";
+import { instanceSentence, PendingApprovalError, readRefusalDetails } from "./build-refusals";
 
 /** The state of one published Knowledge Base, as `knowledge_bases.get` answers it. */
 export type KnowledgeBaseState = Awaited<ReturnType<ApiClient["knowledge_bases"]["get"]>>;
 /** The rows a query answers, with the Knowledge Base and its tables as their source. */
 export type KnowledgeQueryAnswer = Awaited<ReturnType<ApiClient["knowledge_bases"]["query"]>>;
+
+/** One document of a Knowledge Base that keeps documents, as `knowledge_bases.list_documents` answers it. */
+export type KnowledgeDocument = Awaited<
+  ReturnType<ApiClient["knowledge_bases"]["list_documents"]>
+>["documents"][number];
+
+/** A file the reader can open in a conversation of their workspace, which the Add dialog offers. */
+export interface KnowledgeOpenableFile {
+  conversationId: string;
+  fileId: string;
+  name: string;
+  mimeType?: string;
+  bytes: number;
+  /** The title of the conversation the file is in. */
+  conversationTitle: string;
+}
+
+/** The documents of a Knowledge Base, read a page at a time, newest first. */
+interface KnowledgeDocumentPages {
+  documents: readonly KnowledgeDocument[];
+  /** Present while more documents follow. */
+  more?: { loading: boolean; load(): void };
+}
+
+/**
+ * Whether a document is still being indexed: the page then reads the documents again every few
+ * seconds, and stops once each is searchable or failed.
+ */
+export function documentsStillIndexing(
+  documents: readonly Pick<KnowledgeDocument, "state">[]
+): boolean {
+  return documents.some((document) => document.state === "pending");
+}
+
+/** How many documents one page of the Documents section asks the instance for. */
+const DOCUMENTS_PAGE_SIZE = 50;
+/** How often the documents are read again while one of them is still being indexed. */
+const DOCUMENTS_POLL_MS = 3_000;
+/** How many files one search of the Add dialog asks the instance for. */
+const OPENABLE_FILES_PAGE_SIZE = 50;
 
 /** How many Data Stores one search of the chooser asks the instance for. */
 const DATA_STORE_CHOICE_PAGE_SIZE = 50;
@@ -30,9 +75,13 @@ export interface KnowledgeChoice {
   description?: string;
 }
 
-/** What a call that may fail answers: its result, or the sentence of why it did not run. */
+/**
+ * What a call that may fail answers: its result, or the sentence of why it did not run with the
+ * reason the instance named, where it named one.
+ */
 type KnowledgeCall<Answer> =
-  { ok: true; data: Answer } | { ok: false; refused: boolean; message: string | undefined };
+  | { ok: true; data: Answer }
+  | { ok: false; refused: boolean; message: string | undefined; reason?: string };
 
 /**
  * Everything the Knowledge Base page and the agent's Knowledge section read and call beyond
@@ -56,11 +105,36 @@ export interface KnowledgeBaseSource {
    * nothing while `enabled` is false, as where the instance has no Knowledge Bases.
    */
   useKnowledgeBases(search: string, enabled: boolean): KnowledgeRead<readonly KnowledgeChoice[]>;
+  /**
+   * A hook: the documents of a published Knowledge Base that keeps documents. While one of them
+   * is still being indexed, they are read again every few seconds.
+   */
+  useDocuments(knowledgeBase: string): KnowledgeRead<KnowledgeDocumentPages>;
+  /** Indexes failed documents again: each goes back to being indexed. */
+  retry(knowledgeBase: string, documentIds: readonly string[]): Promise<KnowledgeCall<unknown>>;
+  /**
+   * Removes documents: they leave search at once, and the Knowledge Base deletes its copies
+   * later. The files stay in their conversations.
+   */
+  remove(knowledgeBase: string, documentIds: readonly string[]): Promise<KnowledgeCall<unknown>>;
+  /** Adds files the reader can open to the Knowledge Base; it keeps a copy of each. */
+  addFiles(
+    knowledgeBase: string,
+    files: readonly { conversationId: string; fileId: string }[]
+  ): Promise<KnowledgeCall<{ count: number }>>;
+  /**
+   * A hook: the uploaded files of the conversations in the reader's workspace whose name or
+   * conversation holds `search`. It reads nothing while `enabled` is false.
+   */
+  useOpenableFiles(
+    search: string,
+    enabled: boolean
+  ): KnowledgeRead<readonly KnowledgeOpenableFile[]>;
 }
 
 /** The Knowledge Base pages on the instance's own operations. */
 export function useKnowledgeBaseSource(): KnowledgeBaseSource {
-  const { apiBaseUrl, authScope, client } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, activeWorkspace } = useSettingsPage();
   const queryClient = useQueryClient();
   const key = (read: string, ...parts: (string | number)[]) => [
     "knowledge-base",
@@ -71,8 +145,11 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
   ];
   return {
     useState: (knowledgeBase, publishedRevision) =>
-      useRead(key("state", knowledgeBase, publishedRevision), (signal) =>
-        client.knowledge_bases.get({ params: { knowledgeBase }, signal })
+      useRead(
+        key("state", knowledgeBase, publishedRevision),
+        (signal) => client.knowledge_bases.get({ params: { knowledgeBase }, signal }),
+        // A store being made becomes ready by itself: the page sees it without a reload.
+        { pollWhile: (state) => state.status === "preparing" }
       ),
     check: (knowledgeBase) =>
       called(async () => {
@@ -106,8 +183,123 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         search,
         limit: KNOWLEDGE_BASE_CHOICE_PAGE_SIZE,
         enabled
-      })
+      }),
+    useDocuments: (knowledgeBase) =>
+      useDocuments(client, knowledgeBase, key("documents", knowledgeBase)),
+    retry: (knowledgeBase, documentIds) =>
+      called(async () => {
+        const outcome = await client.knowledge_bases.retry_documents({
+          params: { knowledgeBase },
+          body: { documentIds: [...documentIds] }
+        });
+        if (outcome.status !== "done") throw new PendingApprovalError();
+        await queryClient.invalidateQueries({ queryKey: key("documents", knowledgeBase) });
+        return outcome.output;
+      }),
+    remove: (knowledgeBase, documentIds) =>
+      called(async () => {
+        const outcome = await client.knowledge_bases.remove_documents({
+          params: { knowledgeBase },
+          body: { documentIds: [...documentIds] }
+        });
+        if (outcome.status !== "done") throw new PendingApprovalError();
+        await queryClient.invalidateQueries({ queryKey: key("documents", knowledgeBase) });
+        return outcome.output;
+      }),
+    addFiles: (knowledgeBase, files) =>
+      called(async () => {
+        const outcome = await client.knowledge_bases.add_files({
+          params: { knowledgeBase },
+          body: { files: files.map(({ conversationId, fileId }) => ({ conversationId, fileId })) }
+        });
+        if (outcome.status !== "done") throw new PendingApprovalError();
+        await queryClient.invalidateQueries({ queryKey: key("documents", knowledgeBase) });
+        return { count: outcome.output.count };
+      }),
+    useOpenableFiles: (search, enabled) => {
+      const workspaceId = activeWorkspace?.id;
+      const read = useRead(
+        key("openable-files", workspaceId ?? "", search),
+        async (signal) =>
+          (
+            await client.workspaces.files.list({
+              params: { collaborationWorkspaceId: workspaceId ?? "" },
+              query: {
+                kind: "upload",
+                limit: OPENABLE_FILES_PAGE_SIZE,
+                ...(search ? { text: search } : {})
+              },
+              signal
+            })
+          ).items.map((file) => ({
+            conversationId: file.conversation.id,
+            fileId: file.id,
+            name: file.name,
+            ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+            bytes: file.bytes,
+            conversationTitle: file.conversation.title
+          })),
+        { keepPrevious: true, enabled: enabled && workspaceId !== undefined }
+      );
+      // Outside a workspace there is no conversation whose files the reader could add.
+      return workspaceId === undefined ? { status: "ready", data: [] } : read;
+    }
   };
+}
+
+/**
+ * The documents of one Knowledge Base, page after page as the reader asks for more. Every page
+ * read is read again every few seconds while a document on it is still being indexed, so a
+ * state changes on the page without a reload.
+ */
+function useDocuments(
+  client: ApiClient,
+  knowledgeBase: string,
+  queryKey: (string | number)[]
+): KnowledgeRead<KnowledgeDocumentPages> {
+  const query = useInfiniteQuery({
+    queryKey,
+    queryFn: ({ pageParam, signal }) =>
+      client.knowledge_bases.list_documents({
+        params: { knowledgeBase },
+        query: { limit: DOCUMENTS_PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) },
+        signal
+      }),
+    initialPageParam: "",
+    getNextPageParam: (page) => page.nextCursor,
+    retry: false,
+    refetchInterval: ({ state }) =>
+      documentsStillIndexing(state.data?.pages.flatMap((page) => page.documents) ?? [])
+        ? DOCUMENTS_POLL_MS
+        : false
+  });
+  if (query.data !== undefined) {
+    return {
+      status: "ready",
+      data: {
+        documents: query.data.pages.flatMap((page) => page.documents),
+        ...(query.hasNextPage
+          ? {
+              more: {
+                loading: query.isFetchingNextPage,
+                load: () => void query.fetchNextPage().catch(() => undefined)
+              }
+            }
+          : {})
+      }
+    };
+  }
+  if (query.error && !query.isFetching) {
+    if (apiErrorCode(query.error) === "FORBIDDEN") {
+      return { status: "refused" };
+    }
+    return {
+      status: "failed",
+      message: instanceSentence(query.error),
+      retry: () => void query.refetch().catch(() => undefined)
+    };
+  }
+  return { status: "loading" };
 }
 
 /** The assets of one kind whose name or id holds the search, one page of them. */
@@ -143,10 +335,12 @@ async function called<Answer>(call: () => Promise<Answer>): Promise<KnowledgeCal
   try {
     return { ok: true, data: await call() };
   } catch (error) {
+    const reason = readRefusalDetails(error).reason;
     return {
       ok: false,
       refused: apiErrorCode(error) === "FORBIDDEN",
-      message: instanceSentence(error)
+      message: instanceSentence(error),
+      ...(reason === undefined ? {} : { reason })
     };
   }
 }
@@ -154,13 +348,21 @@ async function called<Answer>(call: () => Promise<Answer>): Promise<KnowledgeCal
 function useRead<Answer>(
   queryKey: (string | number)[],
   read: (signal: AbortSignal) => Promise<Answer>,
-  options: { enabled?: boolean; keepPrevious?: boolean } = {}
+  options: {
+    enabled?: boolean;
+    keepPrevious?: boolean;
+    /** Reads again every `DOCUMENTS_POLL_MS` while what was read says so. */
+    pollWhile?: (answer: Answer) => boolean;
+  } = {}
 ): KnowledgeRead<Answer> {
+  const { pollWhile } = options;
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) => read(signal),
     retry: false,
     enabled: options.enabled ?? true,
+    refetchInterval: ({ state }) =>
+      pollWhile && state.data !== undefined && pollWhile(state.data) ? DOCUMENTS_POLL_MS : false,
     ...(options.keepPrevious ? { placeholderData: keepPreviousData } : {})
   });
   // What was read stays while it is read again: the page does not blink.

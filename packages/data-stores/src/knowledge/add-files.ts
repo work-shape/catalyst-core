@@ -9,8 +9,10 @@ import {
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   KNOWLEDGE_BASE_ACTIONS,
+  KNOWLEDGE_ADD_FILES_MAX_COUNT,
   KNOWLEDGE_FILE_MAX_BYTES,
   KNOWLEDGE_OPERATION_PREFIX,
+  knowledgeDocumentFormatOf,
   type AuthenticatedIdentity,
   type KnowledgeDocumentFormat,
   type KnowledgeDocumentInput,
@@ -47,12 +49,6 @@ import type { KnowledgeRuntime } from "./runtime";
 // file by its id.
 
 /**
- * How many files one call adds at most. It bounds what one call reads and copies; a caller with
- * more sends several calls. A larger list is refused with this limit named.
- */
-const KNOWLEDGE_ADD_FILES_MAX_COUNT = 20;
-
-/**
  * Where a copy of a Knowledge Base is kept in the store of files: an object of its own, never
  * shared, so that removing one copy cannot take the bytes of another. Every object of one
  * Knowledge Base lies under one prefix.
@@ -78,32 +74,6 @@ const addFilesOutputSchema = z.object({
   count: z.number().int(),
   bytes: z.number().int()
 });
-
-/** The format of a file by its name, then by its media type. Nothing for one a Knowledge Base does not take. */
-function documentFormatOf(file: OpenedKnowledgeFile): KnowledgeDocumentFormat | undefined {
-  switch (extname(file.filename).toLowerCase()) {
-    case ".txt":
-      return "txt";
-    case ".md":
-    case ".markdown":
-      return "markdown";
-    case ".pdf":
-      return "pdf";
-    case ".docx":
-      return "docx";
-  }
-  switch (file.mimeType?.split(";")[0]?.trim().toLowerCase()) {
-    case "text/plain":
-      return "txt";
-    case "text/markdown":
-      return "markdown";
-    case "application/pdf":
-      return "pdf";
-    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-      return "docx";
-  }
-  return undefined;
-}
 
 /** The title a document starts with: its file name without the extension. */
 function titleOf(filename: string): string {
@@ -141,7 +111,7 @@ async function openAll(
   for (const ref of refs) {
     const file = await files.open(actor, ref);
     if (!file) throw fileNotAvailable(ref);
-    const format = documentFormatOf(file);
+    const format = knowledgeDocumentFormatOf(file);
     if (!format) {
       throw knowledgeLimitError(
         "knowledge_file_format_unsupported",

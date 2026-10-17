@@ -14912,6 +14912,7 @@
                       "type": "string",
                       "enum": [
                         "unchecked",
+                        "preparing",
                         "ok",
                         "needs_attention"
                       ]
@@ -15061,6 +15062,7 @@
                       "type": "string",
                       "enum": [
                         "unchecked",
+                        "preparing",
                         "ok",
                         "needs_attention"
                       ]

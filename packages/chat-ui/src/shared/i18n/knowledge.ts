@@ -4,16 +4,16 @@ export const knowledge = defineTranslations({
   en: {
     "knowledge.kind": "Knowledge bases",
     "knowledge.description":
-      "A knowledge base describes tables of a data store. An agent that has it answers from their rows and says where the answer comes from.",
+      "A knowledge base holds documents, or describes tables of a data store. An agent that has it answers from them and says where the answer comes from.",
     "knowledge.search": "Search knowledge bases",
     "knowledge.new": "New knowledge base",
     "knowledge.titleLabel": "Name",
     "knowledge.create": "Create knowledge base",
     "knowledge.deleteTitle": "Delete the knowledge base {name}?",
     "knowledge.deleteDescription":
-      "Agents that have it can no longer answer from it. The data store and its rows stay as they are.",
+      "Agents that have it can no longer answer from it. Its documents are deleted with it; a data store whose tables it describes stays as it is.",
     "knowledge.empty":
-      "No knowledge bases yet. Add one for the tables of a data store, for example customers or invoices, and give it to an agent: the agent then answers questions from their rows.",
+      "No knowledge bases yet. Add one for documents, such as contracts or manuals, or for the tables of a data store, and give it to an agent: the agent then answers questions from them.",
     "knowledge.emptyReadOnly":
       "No knowledge bases yet. Somebody who may build knowledge bases adds one.",
     "knowledge.missing": "There is no knowledge base with the id {name}.",
@@ -24,6 +24,8 @@ export const knowledge = defineTranslations({
     "knowledge.descriptionLabel": "What it holds",
     "knowledge.descriptionHint":
       "An agent reads this to decide when to use it. Say what the rows are about, for example open invoices per customer.",
+    "knowledge.descriptionHintDocuments":
+      "An agent reads this to decide when to use it. Say what the documents are about, for example the staff handbook and its policies.",
     "knowledge.sourceTitle": "Source",
     "knowledge.sourceDescription":
       "The data store it reads and a sentence for each table an agent may use. It only reads: it creates no table and changes no row.",
@@ -43,6 +45,9 @@ export const knowledge = defineTranslations({
     "knowledge.statusTitle": "Status",
     "knowledge.statusDescription":
       "Whether the published version can read every table it describes. It is checked when it is published and when you check now.",
+    "knowledge.statusPreparing": "Being set up",
+    "knowledge.statusPreparingDescription":
+      "Its store is being made. It takes documents once it is ready; this page shows that by itself.",
     "knowledge.statusOk": "Ready",
     "knowledge.statusNeedsAttention": "Needs attention",
     "knowledge.statusUnchecked": "Not checked yet",
@@ -70,21 +75,96 @@ export const knowledge = defineTranslations({
       "The knowledge bases this agent answers from. It gets one tool that reads all of them and says in its answer which one it used.",
     "knowledge.agentNone": "No knowledge base chosen.",
     "knowledge.agentChoose": "Choose knowledge bases",
-    "knowledge.agentNote": "Only a published knowledge base answers."
+    "knowledge.agentNote": "Only a published knowledge base answers.",
+    "knowledge.holdsLabel": "What it answers from",
+    "knowledge.holdsDocuments": "Documents",
+    "knowledge.holdsDocumentsDescription":
+      "Files you add: PDF, DOCX, TXT or Markdown. Agents search them for words.",
+    "knowledge.holdsTables": "Tables of a data store",
+    "knowledge.holdsTablesDescription": "Agents read the rows of the tables you describe with SQL.",
+    "knowledge.sourceDocumentsDescription":
+      "It keeps its documents in a store of its own and searches them for words. You add documents once it is published.",
+    "knowledge.statusDocumentsDescription":
+      "Whether the published version can keep and search its documents. It is checked when it is published and when you check now.",
+    "knowledge.notPublishedDocuments":
+      "Publish the knowledge base to see its status and to add documents.",
+    "knowledge.documentsTitle": "Documents",
+    "knowledge.documentsDescription":
+      "Everyone who may use this knowledge base finds every document in it, once the document is searchable.",
+    "knowledge.documentsEmpty": "No documents yet. Add files from your conversations.",
+    "knowledge.documentsEmptyReadOnly":
+      "No documents yet. Somebody who may change this knowledge base adds them.",
+    "knowledge.documentsFailed": "The documents could not be loaded.",
+    "knowledge.documentsRefused": "You may not see the documents of this knowledge base.",
+    "knowledge.documentsMore": "Show more",
+    "knowledge.documentPending": "Being indexed",
+    "knowledge.documentIndexed": "Searchable",
+    "knowledge.documentFailed": "Failed",
+    "knowledge.retry": "Retry",
+    "knowledge.retryFailed": "The document could not be retried.",
+    "knowledge.retryRefused": "You may not change this knowledge base.",
+    "knowledge.remove": "Remove",
+    "knowledge.removeLabel": "Remove {name}",
+    "knowledge.removeTitle": "Remove the document {name}?",
+    "knowledge.removeDescription":
+      "Nobody finds it in this knowledge base any more, and its copy is deleted. The file stays in its conversation.",
+    "knowledge.removeFailed": "The document could not be removed.",
+    "knowledge.removed": "The document {name} was removed.",
+    "knowledge.failureFormatUnsupported":
+      "A knowledge base cannot read this format. It reads PDF, DOCX, TXT and Markdown.",
+    "knowledge.failureOverLimit": "The file is too large or has too many pages to read.",
+    "knowledge.failureFileUnreadable":
+      "The file is damaged, encrypted, or not the format its name says.",
+    "knowledge.failureFileMissing": "The file is gone. Add it again.",
+    "knowledge.failureExtraction": "Its text could not be read, even after several tries.",
+    "knowledge.failureFormatUnavailable":
+      "This instance reads no PDF or DOCX files. It reads TXT and Markdown.",
+    "knowledge.failureTextUnreadable": "The file holds no readable text.",
+    "knowledge.failureTextEmpty":
+      "The file has no text to search, such as a scanned PDF without a text layer.",
+    "knowledge.failureIndex": "Indexing failed, even after several tries.",
+    "knowledge.addDocuments": "Add documents",
+    "knowledge.addDescription":
+      "Choose files uploaded in the conversations of your workspace. The knowledge base keeps its own copy: deleting the conversation leaves the document.",
+    "knowledge.addLimits":
+      "Up to {count} files at once, each up to {size}: PDF, DOCX, TXT or Markdown.",
+    "knowledge.addSearch": "Search files",
+    "knowledge.addFiles": "Files",
+    "knowledge.addNoFiles":
+      "The conversations of your workspace hold no uploaded files yet. Upload a file in a conversation, then add it here.",
+    "knowledge.addNoMatch": "No file matches.",
+    "knowledge.addFilesFailed": "The files could not be loaded.",
+    "knowledge.addChosen": "{count} of {max} chosen",
+    "knowledge.addFull": "{max} chosen, the most for one add. Add the rest afterwards.",
+    "knowledge.addSubmit": "Add",
+    "knowledge.addFormatRefused": "A knowledge base reads PDF, DOCX, TXT and Markdown only.",
+    "knowledge.addTooLarge": "Larger than {size}, the most a knowledge base takes.",
+    "knowledge.addRefusedNotAvailable": "One of the files is no longer available to you.",
+    "knowledge.addRefusedTooLarge": "One of the files is larger than {size}.",
+    "knowledge.addRefusedDocumentsLimit":
+      "The knowledge base already holds as many documents as it may.",
+    "knowledge.addRefusedStoreNotReady":
+      "The knowledge base cannot take documents right now. Check its status.",
+    "knowledge.addRefusedFilesUnavailable":
+      "This instance keeps no files, so it cannot add documents.",
+    "knowledge.addRefused": "You may not add documents to this knowledge base.",
+    "knowledge.addFailed": "The files could not be added.",
+    "knowledge.addedOne": "1 document added. It is being indexed.",
+    "knowledge.addedMany": "{count} documents added. They are being indexed."
   },
   de: {
     "knowledge.kind": "Wissensbasen",
     "knowledge.description":
-      "Eine Wissensbasis beschreibt Tabellen eines Datenspeichers. Ein Agent, der sie hat, antwortet aus ihren Zeilen und sagt, woher die Antwort kommt.",
+      "Eine Wissensbasis enthält Dokumente oder beschreibt Tabellen eines Datenspeichers. Ein Agent, der sie hat, antwortet daraus und sagt, woher die Antwort kommt.",
     "knowledge.search": "Wissensbasen durchsuchen",
     "knowledge.new": "Neue Wissensbasis",
     "knowledge.titleLabel": "Name",
     "knowledge.create": "Wissensbasis anlegen",
     "knowledge.deleteTitle": "Wissensbasis {name} löschen?",
     "knowledge.deleteDescription":
-      "Agenten, die sie haben, können nicht mehr aus ihr antworten. Der Datenspeicher und seine Zeilen bleiben, wie sie sind.",
+      "Agenten, die sie haben, können nicht mehr aus ihr antworten. Ihre Dokumente werden mit ihr gelöscht; ein Datenspeicher, dessen Tabellen sie beschreibt, bleibt, wie er ist.",
     "knowledge.empty":
-      "Noch keine Wissensbasen. Lege eine für die Tabellen eines Datenspeichers an, zum Beispiel Kunden oder Rechnungen, und gib sie einem Agenten: Er beantwortet dann Fragen aus ihren Zeilen.",
+      "Noch keine Wissensbasen. Lege eine für Dokumente an, zum Beispiel Verträge oder Handbücher, oder für die Tabellen eines Datenspeichers, und gib sie einem Agenten: Er beantwortet dann Fragen daraus.",
     "knowledge.emptyReadOnly":
       "Noch keine Wissensbasen. Jemand, der Wissensbasen bauen darf, legt eine an.",
     "knowledge.missing": "Es gibt keine Wissensbasis mit der Kennung {name}.",
@@ -95,6 +175,8 @@ export const knowledge = defineTranslations({
     "knowledge.descriptionLabel": "Was sie enthält",
     "knowledge.descriptionHint":
       "Ein Agent liest das, um zu entscheiden, wann er sie nutzt. Sag, worum es in den Zeilen geht, zum Beispiel offene Rechnungen je Kunde.",
+    "knowledge.descriptionHintDocuments":
+      "Ein Agent liest das, um zu entscheiden, wann er sie nutzt. Sag, worum es in den Dokumenten geht, zum Beispiel das Mitarbeiterhandbuch und seine Richtlinien.",
     "knowledge.sourceTitle": "Quelle",
     "knowledge.sourceDescription":
       "Der Datenspeicher, den sie liest, und ein Satz zu jeder Tabelle, die ein Agent nutzen darf. Sie liest nur: Sie legt keine Tabelle an und ändert keine Zeile.",
@@ -114,6 +196,9 @@ export const knowledge = defineTranslations({
     "knowledge.statusTitle": "Status",
     "knowledge.statusDescription":
       "Ob die veröffentlichte Version jede Tabelle lesen kann, die sie beschreibt. Das wird beim Veröffentlichen geprüft und wenn du jetzt prüfst.",
+    "knowledge.statusPreparing": "Wird eingerichtet",
+    "knowledge.statusPreparingDescription":
+      "Ihr Speicher wird angelegt. Sobald er bereit ist, nimmt sie Dokumente an; diese Seite zeigt das von selbst.",
     "knowledge.statusOk": "Bereit",
     "knowledge.statusNeedsAttention": "Braucht Aufmerksamkeit",
     "knowledge.statusUnchecked": "Noch nicht geprüft",
@@ -141,6 +226,85 @@ export const knowledge = defineTranslations({
       "Die Wissensbasen, aus denen dieser Agent antwortet. Er bekommt ein Werkzeug, das alle liest, und sagt in seiner Antwort, welche er genutzt hat.",
     "knowledge.agentNone": "Keine Wissensbasis gewählt.",
     "knowledge.agentChoose": "Wissensbasen wählen",
-    "knowledge.agentNote": "Nur eine veröffentlichte Wissensbasis antwortet."
+    "knowledge.agentNote": "Nur eine veröffentlichte Wissensbasis antwortet.",
+    "knowledge.holdsLabel": "Woraus sie antwortet",
+    "knowledge.holdsDocuments": "Dokumente",
+    "knowledge.holdsDocumentsDescription":
+      "Dateien, die du hinzufügst: PDF, DOCX, TXT oder Markdown. Agenten durchsuchen sie nach Wörtern.",
+    "knowledge.holdsTables": "Tabellen eines Datenspeichers",
+    "knowledge.holdsTablesDescription":
+      "Agenten lesen die Zeilen der Tabellen, die du beschreibst, mit SQL.",
+    "knowledge.sourceDocumentsDescription":
+      "Sie hält ihre Dokumente in einem eigenen Speicher und durchsucht sie nach Wörtern. Dokumente fügst du hinzu, sobald sie veröffentlicht ist.",
+    "knowledge.statusDocumentsDescription":
+      "Ob die veröffentlichte Version ihre Dokumente speichern und durchsuchen kann. Das wird beim Veröffentlichen geprüft und wenn du jetzt prüfst.",
+    "knowledge.notPublishedDocuments":
+      "Veröffentliche die Wissensbasis, um ihren Status zu sehen und Dokumente hinzuzufügen.",
+    "knowledge.documentsTitle": "Dokumente",
+    "knowledge.documentsDescription":
+      "Jeder, der diese Wissensbasis nutzen darf, findet jedes Dokument darin, sobald es durchsuchbar ist.",
+    "knowledge.documentsEmpty":
+      "Noch keine Dokumente. Füge Dateien aus deinen Unterhaltungen hinzu.",
+    "knowledge.documentsEmptyReadOnly":
+      "Noch keine Dokumente. Jemand, der diese Wissensbasis ändern darf, fügt sie hinzu.",
+    "knowledge.documentsFailed": "Die Dokumente konnten nicht geladen werden.",
+    "knowledge.documentsRefused": "Du darfst die Dokumente dieser Wissensbasis nicht sehen.",
+    "knowledge.documentsMore": "Mehr zeigen",
+    "knowledge.documentPending": "Wird indexiert",
+    "knowledge.documentIndexed": "Durchsuchbar",
+    "knowledge.documentFailed": "Fehlgeschlagen",
+    "knowledge.retry": "Erneut versuchen",
+    "knowledge.retryFailed": "Der neue Versuch konnte nicht gestartet werden.",
+    "knowledge.retryRefused": "Du darfst diese Wissensbasis nicht ändern.",
+    "knowledge.remove": "Entfernen",
+    "knowledge.removeLabel": "{name} entfernen",
+    "knowledge.removeTitle": "Dokument {name} entfernen?",
+    "knowledge.removeDescription":
+      "Niemand findet es danach mehr in dieser Wissensbasis, und ihre Kopie wird gelöscht. Die Datei bleibt in ihrer Unterhaltung.",
+    "knowledge.removeFailed": "Das Dokument konnte nicht entfernt werden.",
+    "knowledge.removed": "Das Dokument {name} wurde entfernt.",
+    "knowledge.failureFormatUnsupported":
+      "Dieses Format kann eine Wissensbasis nicht lesen. Sie liest PDF, DOCX, TXT und Markdown.",
+    "knowledge.failureOverLimit": "Die Datei ist zu groß oder hat zu viele Seiten zum Auslesen.",
+    "knowledge.failureFileUnreadable":
+      "Die Datei ist beschädigt, verschlüsselt oder nicht das Format, das ihr Name angibt.",
+    "knowledge.failureFileMissing": "Die Datei ist nicht mehr da. Füge sie neu hinzu.",
+    "knowledge.failureExtraction":
+      "Ihr Text ließ sich auch nach mehreren Versuchen nicht auslesen.",
+    "knowledge.failureFormatUnavailable":
+      "Diese Instanz liest keine PDF- und DOCX-Dateien. Sie liest TXT und Markdown.",
+    "knowledge.failureTextUnreadable": "Die Datei enthält keinen lesbaren Text.",
+    "knowledge.failureTextEmpty":
+      "Die Datei hat keinen Text zum Durchsuchen, zum Beispiel ein gescanntes PDF ohne Textebene.",
+    "knowledge.failureIndex": "Das Indexieren ist auch nach mehreren Versuchen fehlgeschlagen.",
+    "knowledge.addDocuments": "Dokumente hinzufügen",
+    "knowledge.addDescription":
+      "Wähle Dateien, die in Unterhaltungen deines Arbeitsbereichs hochgeladen wurden. Die Wissensbasis behält eine eigene Kopie: Wird die Unterhaltung gelöscht, bleibt das Dokument.",
+    "knowledge.addLimits":
+      "Bis zu {count} Dateien auf einmal, jede bis {size}: PDF, DOCX, TXT oder Markdown.",
+    "knowledge.addSearch": "Dateien suchen",
+    "knowledge.addFiles": "Dateien",
+    "knowledge.addNoFiles":
+      "In den Unterhaltungen deines Arbeitsbereichs gibt es noch keine hochgeladenen Dateien. Lade eine Datei in einer Unterhaltung hoch und füge sie dann hier hinzu.",
+    "knowledge.addNoMatch": "Keine Datei passt.",
+    "knowledge.addFilesFailed": "Die Dateien konnten nicht geladen werden.",
+    "knowledge.addChosen": "{count} von {max} gewählt",
+    "knowledge.addFull":
+      "{max} gewählt, mehr gehen auf einmal nicht. Füge die übrigen danach hinzu.",
+    "knowledge.addSubmit": "Hinzufügen",
+    "knowledge.addFormatRefused": "Eine Wissensbasis liest nur PDF, DOCX, TXT und Markdown.",
+    "knowledge.addTooLarge": "Größer als {size}, mehr nimmt eine Wissensbasis nicht.",
+    "knowledge.addRefusedNotAvailable": "Eine der Dateien steht dir nicht mehr zur Verfügung.",
+    "knowledge.addRefusedTooLarge": "Eine der Dateien ist größer als {size}.",
+    "knowledge.addRefusedDocumentsLimit":
+      "Die Wissensbasis enthält schon so viele Dokumente, wie sie darf.",
+    "knowledge.addRefusedStoreNotReady":
+      "Die Wissensbasis kann gerade keine Dokumente aufnehmen. Prüf ihren Status.",
+    "knowledge.addRefusedFilesUnavailable":
+      "Diese Instanz speichert keine Dateien und kann darum keine Dokumente aufnehmen.",
+    "knowledge.addRefused": "Du darfst dieser Wissensbasis keine Dokumente hinzufügen.",
+    "knowledge.addFailed": "Die Dateien konnten nicht hinzugefügt werden.",
+    "knowledge.addedOne": "1 Dokument hinzugefügt. Es wird jetzt indexiert.",
+    "knowledge.addedMany": "{count} Dokumente hinzugefügt. Sie werden jetzt indexiert."
   }
 });
