@@ -460,7 +460,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "packages/chat-ui",
-      "count": 655,
+      "count": 653,
       "owner": "NS-RETIRE"
     },
     {

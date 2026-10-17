@@ -63,10 +63,25 @@ export class AgentDraftWorkflow {
           liveRevision: live.revision,
           stale: draft.baseRevision !== live.revision,
           config: draft.config,
-          author: draft.author,
+          author: await this.namedAuthor(draft.author),
           updatedAt: draft.updatedAt
         }
       : null;
+  }
+
+  /**
+   * The author with the name people read for them, so the agent page can say who wrote the
+   * draft. Only a holder of the agent's write right reads it. A person who is gone has no name.
+   */
+  private async namedAuthor(
+    author: AgentDraftAuthor
+  ): Promise<AgentDraftAuthor & { name?: string }> {
+    if (author.userId === undefined) return author;
+    const user = await this.options.stores.users.getUser({
+      clientInstanceId: this.options.clientInstanceId,
+      userId: author.userId
+    });
+    return user ? { ...author, name: user.displayLabel } : author;
   }
 
   async authorizePublish(call: AssetCall, input: AssetAddress): Promise<OperationAuthorization> {

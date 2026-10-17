@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import { Banner, Button, ConfirmDialog, InlineError } from "@work-shape/catalyst-ui";
+import type { DraftDecision } from "../build-area/build-data";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { useTranslation } from "../../shared/i18n";
 import { useWorkflowDraftWrites } from "./workflow-data";
@@ -136,7 +137,7 @@ export function WorkflowDraftBar({ state, onTest, onPublish, onDiscard }: Workfl
   );
 }
 
-type DraftChange = "publish" | "discard";
+type DraftChange = DraftDecision;
 
 /**
  * The bar of a Workflow's draft and the question before each change of it. The publish names

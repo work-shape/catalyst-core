@@ -117,7 +117,7 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
         response.request().method() === "PUT" &&
         new URL(response.url()).pathname === `/api/v1/assets/agent/${name}`
     );
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
     expect((await saved).status()).toBe(200);
     await publishAgentDraft(page, agentPath(name));
     // Both references must exist when the saved draft is published.

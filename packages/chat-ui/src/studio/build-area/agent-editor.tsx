@@ -1,13 +1,17 @@
-import { Star } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Send, Star, Undo2 } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   AdministeredCollaborationWorkspace,
+  AgentDraft,
   ConfigAssetReferences
 } from "@work-shape/catalyst-api-client";
 import {
   Badge,
+  Button,
   Checkbox,
   Chip,
+  ConfirmDialog,
+  DropdownMenuItem,
   Field,
   FormNotice,
   Input,
@@ -19,6 +23,7 @@ import {
   Switch,
   Textarea
 } from "@work-shape/catalyst-ui";
+import { actionLabel } from "../../admin/access/right-words";
 import { useTranslation } from "../../shared/i18n";
 import { modelDisplayLabel } from "../../shared/model-label";
 import { reasoningEffortLabel } from "../../shared/reasoning-effort-label";
@@ -32,6 +37,7 @@ import {
 import {
   agentAvailabilityFormsEqual,
   agentAvailabilityToForm,
+  agentConfigToForm,
   agentMissingTranslations,
   agentModelReasoningEffort,
   agentModelRows,
@@ -52,12 +58,14 @@ import { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavaila
 import { ToolPackagesSection } from "./tool-packages-section";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
 import {
-  AgentProposalNotice,
-  ProposedSectionMark,
-  proposedFieldsView,
-  type ProposalTitles
-} from "./agent-proposal";
-import type { AgentProposalState } from "./agent-proposal-source";
+  AgentDraftBadge,
+  AgentDraftNotice,
+  DraftSectionMark,
+  draftFieldsView,
+  type DraftTitles
+} from "./agent-draft";
+import type { AgentDraftSource } from "./agent-draft-source";
+import type { DraftDecision } from "./build-data";
 import { PlatformInstructions } from "./platform-instructions";
 import type { SkillFacts } from "./skill-facts";
 
@@ -95,7 +103,7 @@ export function AgentEditor({
   appTools = NO_APP_TOOLS,
   onMakeDefault,
   availability,
-  proposal
+  draft
 }: {
   frame: BuildAssetEditorProps;
   initialForm: AgentFormState;
@@ -120,15 +128,23 @@ export function AgentEditor({
   onMakeDefault?: () => Promise<string | undefined>;
   /** Where the agent can be chosen, for a reader who may change it. */
   availability?: AgentAvailabilityChoice;
-  /** The change the agent in the dock proposes for this agent, where it proposed one. */
-  proposal?: AgentProposalState;
+  /**
+   * The agent's one draft, for a reader who may change the agent: the form starts from the
+   * draft the source read, and saves write it. Absent for a new agent and for a reader.
+   */
+  draft?: AgentDraftSource;
 }) {
   const { locale, t } = useTranslation();
   const state = useAssetForm(initialForm);
   const { form, setForm, outcome } = state;
   const [saving, setSaving] = useState(false);
   const [defaultError, setDefaultError] = useState<string>();
+  const [deciding, setDeciding] = useState<DraftDecision>();
+  const publishReasonId = useId();
   const { canWrite } = frame;
+  // The draft the form was started from or last saved as. The page writes against it, and a
+  // newer one somebody else wrote is taken over only where nothing is typed.
+  const [held, setHeld] = useState<AgentDraft | null>(draft?.latest ?? null);
   const savedAvailability = useMemo(
     () => agentAvailabilityToForm(availability?.saved),
     [availability?.saved]
@@ -148,7 +164,7 @@ export function AgentEditor({
   );
   const modelBindingIds = modelBindings.map((binding) => binding.id);
   const skillsByName = new Map(skillChoice.options.map((skill) => [skill.name, skill]));
-  const titles: ProposalTitles = {
+  const titles: DraftTitles = {
     skill: (name) => skillsByName.get(name)?.title || name,
     tool: (name) =>
       references?.tools?.find((tool) => tool.name === name)?.title?.[locale].trim() || name,
@@ -159,13 +175,21 @@ export function AgentEditor({
       return binding ? modelBindingLabel(binding, modelBindings) : id;
     }
   };
-  // What the proposal changes against the agent as loaded or last saved, with its value
-  // under each field it changes.
-  const proposed = proposedFieldsView(proposal, state.baseline, titles);
-  // The proposal names the agent it changes as people know it now, not as the form edits it.
+  // The live agent the page loaded. The draft as saved is compared with it, with the published
+  // value under each field the draft changes.
+  const live = useMemo(
+    () => (frame.asset === undefined ? undefined : agentConfigToForm(frame.asset.config)),
+    [frame.asset]
+  );
+  const proposed = draftFieldsView(
+    live ?? state.baseline,
+    held === null ? undefined : state.baseline,
+    titles
+  );
+  // The draft names the agent as people who use it know it now, not as the form edits it.
   const liveTitle =
-    state.baseline.displayName[locale].trim() ||
-    state.baseline.displayName[locale === "de" ? "en" : "de"].trim() ||
+    (live ?? state.baseline).displayName[locale].trim() ||
+    (live ?? state.baseline).displayName[locale === "de" ? "en" : "de"].trim() ||
     state.baseline.name;
   const showModels =
     canEditModel ||
@@ -179,18 +203,72 @@ export function AgentEditor({
 
   const update = (patch: Partial<AgentFormState>) => setForm((value) => ({ ...value, ...patch }));
   const changedFields = countChangedFields(form, state.baseline);
+  const dirty = changedFields > 0 || availabilityChanged;
+  const latest = draft?.latest;
+  const latestRevision = latest === undefined ? undefined : (latest?.revision ?? null);
+  const differs = latestRevision !== undefined && latestRevision !== (held?.revision ?? null);
+  const busy = draft?.busy;
+  // Somebody else wrote the draft, or published or discarded it, while the reader types: the
+  // page keeps what was typed and says who, and saves nothing over it.
+  const behind = draft !== undefined && differs && dirty ? { latest: latest ?? null } : undefined;
+  const { amend } = state;
+  const { reload } = frame;
+  // The live agent is read again once: the page starts again from it.
+  const reloading = useRef(false);
+  useEffect(() => {
+    if (latest === undefined || saving || busy !== undefined) return;
+    if (!differs) {
+      // The same revision read again names its author as the instance does.
+      if (latest !== null && latest !== held) setHeld(latest);
+      return;
+    }
+    if (dirty) return;
+    if (latest === null) {
+      // Published or discarded elsewhere: the live agent is read again.
+      if (!reloading.current) {
+        reloading.current = true;
+        reload?.().catch(() => undefined);
+      }
+      return;
+    }
+    amend(() => agentConfigToForm(latest.config));
+    setHeld(latest);
+  }, [amend, busy, differs, dirty, held, latest, reload, saving]);
+  const { onDraftRead } = frame;
+  useEffect(() => {
+    onDraftRead?.(held?.revision ?? null);
+  }, [held, onDraftRead]);
+  const answer = draft?.answerFor(held?.revision);
+  const stale = held !== null && (held.stale || answer?.kind === "stale");
   // One save bar for the agent and where it can be chosen: the agent first, then its
   // availability, each only when it changed.
   const submit = async (): Promise<BuildWriteOutcome> => {
     setSaving(true);
-    const saved: BuildWriteOutcome =
-      frame.asset === undefined || changedFields > 0
+    const config = editedAgentConfig(
+      form,
+      held?.config ?? frame.asset?.config,
+      references?.enabledToolNames
+    );
+    const asset = frame.asset;
+    const saved: BuildWriteOutcome & { draftRevision?: number } =
+      asset === undefined || changedFields > 0
         ? await frame.save(
-            editedAgentConfig(form, frame.asset?.config, references?.enabledToolNames)
+            config,
+            asset !== undefined && draft !== undefined
+              ? { expectedDraftRevision: held?.revision ?? null }
+              : undefined
           )
         : { ok: true };
     if (saved.ok) {
       state.markSaved();
+      if (asset !== undefined && draft !== undefined && saved.draftRevision !== undefined) {
+        setHeld(
+          draft.saved({ revision: saved.draftRevision, config, liveRevision: asset.revision })
+        );
+      }
+    } else if (saved.conflict && saved.draft) {
+      // The page reads the draft again and says who wrote it.
+      await draft?.reread().catch(() => undefined);
     }
     const refused =
       saved.ok && availability !== undefined && availabilityChanged
@@ -521,10 +599,11 @@ export function AgentEditor({
       : [])
   ];
 
-  return (
+  const page = (
     <AssetEditorShell
       frame={{
         ...frame,
+        saveBlocked: frame.saveBlocked === true || behind !== undefined,
         canWrite:
           canWrite &&
           (editableAgentFields.length > 0 || canManageAgentModels || availability !== undefined)
@@ -537,15 +616,56 @@ export function AgentEditor({
       description={
         form.description[locale].trim() || form.description[locale === "de" ? "en" : "de"].trim()
       }
-      badges={isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
+      badges={
+        <>
+          {held === null ? null : <AgentDraftBadge draft={held} />}
+          {isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
+        </>
+      }
+      primaryAction={
+        draft !== undefined && held !== null && !stale ? (
+          <Button
+            data-agent-publish=""
+            disabled={!frame.canPublish || dirty || busy !== undefined || behind !== undefined}
+            aria-describedby={frame.canPublish ? undefined : publishReasonId}
+            title={
+              frame.canPublish
+                ? dirty
+                  ? t("build.publishSaveFirst")
+                  : undefined
+                : t("agentDraft.publishNeedsRight", { right: actionLabel("agent.publish", t) })
+            }
+            onClick={() => setDeciding("publish")}
+          >
+            <Send aria-hidden="true" />
+            {t("build.publish")}
+          </Button>
+        ) : undefined
+      }
+      menu={
+        draft !== undefined && held !== null && !frame.saveBlocked ? (
+          <DropdownMenuItem
+            icon={<Undo2 aria-hidden="true" />}
+            disabled={busy !== undefined}
+            onSelect={() => setDeciding("discard")}
+          >
+            <span data-agent-discard="">{t("agentDraft.discard")}</span>
+          </DropdownMenuItem>
+        ) : undefined
+      }
       notices={
         <>
-          {proposal ? (
-            <AgentProposalNotice
-              state={proposal}
+          {draft !== undefined ? (
+            <AgentDraftNotice
+              draft={held}
+              behind={behind}
               name={liveTitle}
-              changes={proposed.fields.length}
-              unsaved={changedFields > 0 || availabilityChanged}
+              publishRight={frame.canPublish ? undefined : actionLabel("agent.publish", t)}
+              publishReasonId={publishReasonId}
+              answer={answer}
+              onLoad={() => {
+                reload?.().catch(() => undefined);
+              }}
             />
           ) : null}
           {defaultError ? <FormNotice tone="error">{defaultError}</FormNotice> : null}
@@ -567,10 +687,10 @@ export function AgentEditor({
       }
       sections={sections.map((section) => ({
         ...section,
-        ...(proposed.sections.has(section.id) ? { state: <ProposedSectionMark /> } : {}),
-        // While Apply or Discard is on its way nothing is typed: an Apply reads the page again.
+        ...(proposed.sections.has(section.id) ? { state: <DraftSectionMark /> } : {}),
+        // While Publish or Discard is on its way nothing is typed: either reads the page again.
         body: (
-          <fieldset disabled={proposal?.busy !== undefined} className="contents">
+          <fieldset disabled={busy !== undefined} className="contents">
             {section.body}
           </fieldset>
         )
@@ -586,8 +706,60 @@ export function AgentEditor({
       }}
       outcome={outcome}
       saving={saving}
-      saveLabel={frame.asset ? t("configSaveChanges") : t("configCreateAgent")}
+      // The agent's own fields go to its draft; where it can be chosen applies at once.
+      saveLabel={
+        frame.asset === undefined
+          ? t("configCreateAgent")
+          : draft !== undefined && changedFields > 0
+            ? t("agentDraft.saveDraft")
+            : t("configSaveChanges")
+      }
+      {...(frame.asset !== undefined && draft !== undefined && changedFields > 0
+        ? { saveHint: t("agentDraft.saveHint") }
+        : {})}
     />
+  );
+  const decision =
+    held === null ? null : (
+      <>
+        <ConfirmDialog
+          open={deciding === "publish"}
+          tone="primary"
+          title={t("build.publishTitle", { name: liveTitle })}
+          confirmLabel={t("build.publish")}
+          loading={busy === "publish"}
+          onConfirm={() => {
+            draft
+              ?.decide("publish", held.revision)
+              .finally(() => setDeciding(undefined))
+              .catch(() => undefined);
+          }}
+          onClose={() => setDeciding(undefined)}
+        >
+          {t("agentDraft.publishDescription", { revision: held.revision, name: liveTitle })}
+        </ConfirmDialog>
+        <ConfirmDialog
+          open={deciding === "discard"}
+          title={t("agentDraft.discardTitle", { name: liveTitle })}
+          confirmLabel={t("agentDraft.discard")}
+          loading={busy === "discard"}
+          onConfirm={() => {
+            draft
+              ?.decide("discard", held.revision)
+              .finally(() => setDeciding(undefined))
+              .catch(() => undefined);
+          }}
+          onClose={() => setDeciding(undefined)}
+        >
+          {t("agentDraft.discardDescription", { revision: held.revision })}
+        </ConfirmDialog>
+      </>
+    );
+  return (
+    <>
+      {page}
+      {decision}
+    </>
   );
 }
 

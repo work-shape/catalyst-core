@@ -79,8 +79,6 @@ export interface ControlPlaneModelInput {
   buildWithAgent?(prompt: string): void;
   /** Opens the dock beside the open page with a new conversation and this text to send. */
   startDockedChat?: (prompt: string) => void;
-  /** The conversation in the dock beside the page, where it holds one. */
-  dockConversationId?: string;
 }
 
 export interface ControlPlaneModel {
@@ -168,8 +166,7 @@ export function useControlPlaneModel({
   onAccountDeleted,
   onCollaborationWorkspaceDeleted,
   buildWithAgent,
-  startDockedChat,
-  dockConversationId
+  startDockedChat
 }: ControlPlaneModelInput): ControlPlaneModel {
   const catalog = useMemo(() => settingsCatalog(administration), [administration]);
   const platformQuery = usePlatformContextQuery({
@@ -246,8 +243,7 @@ export function useControlPlaneModel({
           onWorkspaceLeft: () => goToDefaultChat(),
           onWorkspaceDeleted: onCollaborationWorkspaceDeleted,
           ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
-          ...(startDockedChat ? { startDockedChat } : {}),
-          ...(dockConversationId === undefined ? {} : { dockConversationId })
+          ...(startDockedChat ? { startDockedChat } : {})
         }
       : undefined;
 

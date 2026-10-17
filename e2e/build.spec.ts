@@ -198,15 +198,15 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await expect(toolRow(tools, "package:results").locator("[data-tool-count]")).toHaveText("1/2");
     await page.getByRole("button", { name: "Create agent", exact: true }).click();
     await expect(page).toHaveURL(/\/build\/agents\/kai-helper$/u);
-    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
     // An id that was used before keeps its history, so the revisions are counted from here.
     const created = await assetRevision(admin, agentPath("kai-helper"));
 
     // A change shows the save bar with its count, and a save hides it again.
     await instructions(page).fill("You help Kai every day.");
     await expect(page.getByText("1 change", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
     await publishAgentDraft(admin, agentPath("kai-helper"));
     await page.reload();
     await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 1);
@@ -217,11 +217,11 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await admin.setViewportSize(WIDE);
     await admin.goto("/build/agents/kai-helper");
     await instructions(admin).fill("The administrator was faster.");
-    await admin.getByRole("button", { name: "Save changes", exact: true }).click();
+    await admin.getByRole("button", { name: "Save draft", exact: true }).click();
     await publishAgentDraft(admin, agentPath("kai-helper"));
     // The administrator makes the saved draft live before the stale editor saves.
     await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 2);
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
     const conflict = page.locator("[data-build-conflict]");
     // Fails without the change: the notice said "Somebody" and offered no way to the history.
     await expect(conflict).toContainText(/saved this on .+, while you were editing\./u);
@@ -230,7 +230,7 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 2);
     // While the conflict stands nothing is saved, and History restores nothing: the page
     // holds an older version than the newest one, which History marks as the current one.
-    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
     await conflict.getByRole("button", { name: "Open history", exact: true }).click();
     const staleHistory = page.getByRole("dialog", { name: "History", exact: true });
     await expect(staleHistory.locator(`[data-revision="${created + 2}"]`)).toContainText("Current");

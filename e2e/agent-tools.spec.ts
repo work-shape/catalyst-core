@@ -231,7 +231,7 @@ test.describe("the Tools section of an agent, as rows", () => {
         response.request().method() === "PUT" &&
         new URL(response.url()).pathname.endsWith(agentName)
     );
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
     expect((await saved).ok()).toBe(true);
     const { config } = storedAgentSchema.parse(await readAgentDraft(page, agentPath));
     expect(config.skillNames).toEqual([skillName]);

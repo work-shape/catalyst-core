@@ -111,6 +111,8 @@ export function AssetEditorShell({
   description,
   badges,
   headActions,
+  primaryAction,
+  menu,
   notices,
   sections,
   missingTranslations,
@@ -128,6 +130,10 @@ export function AssetEditorShell({
   badges?: ReactNode;
   /** Actions of the kind before the frame's own, such as making an agent the default. */
   headActions?: readonly PageHeaderAction[];
+  /** The kind's own primary action of the head, such as an agent's Publish, over the frame's. */
+  primaryAction?: ReactNode;
+  /** Items of the kind's own for the head's "…" menu, before the frame's. */
+  menu?: ReactNode;
   /** What the kind tells of the asset before its sections, such as what of it cannot run. */
   notices?: ReactNode;
   sections: readonly AssetSection[];
@@ -200,9 +206,18 @@ export function AssetEditorShell({
               badges
             )
           }
-          primaryAction={actions.primaryAction}
+          primaryAction={primaryAction ?? actions.primaryAction}
           secondaryActions={[...(headActions ?? []), ...(actions.secondaryActions ?? [])]}
-          menu={actions.menu}
+          menu={
+            menu === undefined || menu === null ? (
+              actions.menu
+            ) : (
+              <>
+                {menu}
+                {actions.menu}
+              </>
+            )
+          }
         />
       }
       outline={

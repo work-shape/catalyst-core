@@ -1,17 +1,17 @@
 export { AgentEditor, type AgentAvailabilityChoice } from "./agent-editor";
 export {
-  listChange,
-  proposedAgentFields,
-  readProposalRefusal,
-  type ProposedAgentField
-} from "./agent-proposal-model";
-export { AgentProposalNotice } from "./agent-proposal";
+  draftAgentFields,
+  draftAuthorLabel,
+  readDraftRefusal,
+  type DraftAgentField
+} from "./agent-draft-model";
+export { AgentDraftBadge, AgentDraftNotice } from "./agent-draft";
 export {
   answerOfRevision,
-  decideProposal,
-  useAgentProposal,
-  type AgentProposalState
-} from "./agent-proposal-source";
+  decideDraft,
+  useAgentDraft,
+  type AgentDraftSource
+} from "./agent-draft-source";
 export { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 export { AssetEditorShell } from "./asset-editor-shell";
 export { PlatformInstructionsBody } from "./platform-instructions";

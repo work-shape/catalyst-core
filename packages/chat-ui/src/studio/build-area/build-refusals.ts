@@ -28,6 +28,11 @@ export type BuildWriteOutcome =
 
 /** What the instance told of the revision a refused write met. */
 interface BuildConflict {
+  /**
+   * The agent's draft is not the one the page read: somebody saved a newer draft, or
+   * published or discarded it. The live agent may be as the page read it.
+   */
+  draft?: true;
   /** The newer revision is the delete of the asset. */
   deleted?: true;
   /** The revision the asset is at, told to a reader of its history. */
@@ -201,7 +206,9 @@ export function readBuildRefusal(
   locale: LocaleCode = "en"
 ): BuildWriteOutcome {
   if (apiErrorCode(error) === "REVISION_CONFLICT") {
-    return { ok: false, conflict: true, ...readConflict(error) };
+    return readRefusalDetails(error).reason === "draft_changed"
+      ? { ok: false, conflict: true, draft: true }
+      : { ok: false, conflict: true, ...readConflict(error) };
   }
   if (error instanceof PendingApprovalError) {
     return refused({ message: t("build.pendingApproval") });

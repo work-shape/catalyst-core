@@ -1,7 +1,7 @@
 import { access } from "./access";
 import { accessKinds } from "./access-kinds";
 import { administration } from "./administration";
-import { agentProposal } from "./agent-proposal";
+import { agentDraft } from "./agent-draft";
 import { agents } from "./agents";
 import { apiAccess } from "./api-access";
 import { approvals } from "./approvals";
@@ -44,7 +44,7 @@ export const translations = combineTranslations(common)
   .and(access)
   .and(accessKinds)
   .and(administration)
-  .and(agentProposal)
+  .and(agentDraft)
   .and(agents)
   .and(apiAccess)
   .and(approvals)

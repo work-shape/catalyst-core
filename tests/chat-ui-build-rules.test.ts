@@ -150,6 +150,21 @@ describe("Studio rights", () => {
     expect(writer.creatableNamespaces("skill")).toEqual([]);
   });
 
+  it("lets only a holder of agent.publish publish an agent, as the instance does (AD-4)", () => {
+    const permissions = ["config_assets.write"];
+    const writer = rights(permissions);
+    const publisher = resolveBuildRights(
+      { permissions },
+      platformContext([], [...instanceActions(permissions), "agent.publish"])
+    );
+
+    expect(writer.may("write", { kind: "agent" })).toBe(true);
+    expect(writer.may("publish", { kind: "agent" })).toBe(false);
+    expect(publisher.may("publish", { kind: "agent" })).toBe(true);
+    // A kind that names no publish right is published with the write right, as before.
+    expect(writer.may("publish", { kind: "skill" })).toBe(true);
+  });
+
   it("lets a Namespace reader read the kinds its actions name and write nothing", () => {
     const reader = rights([], [legalNamespace]);
 

@@ -142,6 +142,12 @@ export const workspaceQueryKeys = {
     ["platform-references", apiBaseUrl, authScope] as const,
   /** Every read of the asset operations: the lists and the single assets. */
   assets: (apiBaseUrl: string, authScope: string) => ["assets", apiBaseUrl, authScope] as const,
+  /**
+   * The one draft of an agent. It stands below the assets, so every write of an asset reads it
+   * again, also a save of the agent in the dock beside its page.
+   */
+  agentDraft: (apiBaseUrl: string, authScope: string, agent: string, workspaceId = "") =>
+    ["assets", apiBaseUrl, authScope, "agent-draft", agent, workspaceId] as const,
   administeredCollaborationWorkspaces: (apiBaseUrl: string, authScope: string) =>
     ["administered-collaboration-workspaces", apiBaseUrl, authScope] as const
 };

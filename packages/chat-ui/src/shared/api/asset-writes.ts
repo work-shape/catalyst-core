@@ -79,11 +79,14 @@ export function createAssetWrites(client: ApiClient) {
       name,
       workspaceId,
       expectedRevision,
+      expectedDraftRevision,
       availableIn,
       ...content
     }: AssetAddress &
       AssetContent & {
         expectedRevision: number | null;
+        /** The agent's draft revision the caller read, or `null` where it read none. */
+        expectedDraftRevision?: number | null;
         availableIn?: AvailableIn;
       }) =>
       client.assets.put({
@@ -91,6 +94,7 @@ export function createAssetWrites(client: ApiClient) {
         body: {
           ...contentOf(content),
           expectedRevision,
+          ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
           ...scopeOf(workspaceId),
           ...(availableIn ? { availableIn } : {})
         }
@@ -121,11 +125,22 @@ export function createAssetWrites(client: ApiClient) {
       name,
       workspaceId,
       revision,
-      expectedRevision
-    }: AssetAddress & { revision: number; expectedRevision: number }) =>
+      expectedRevision,
+      expectedDraftRevision
+    }: AssetAddress & {
+      revision: number;
+      expectedRevision: number;
+      /** The agent's draft revision the caller read, or `null` where it read none. */
+      expectedDraftRevision?: number | null;
+    }) =>
       client.assets.revert({
         params: { kind, name },
-        body: { revision, expectedRevision, ...scopeOf(workspaceId) }
+        body: {
+          revision,
+          expectedRevision,
+          ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
+          ...scopeOf(workspaceId)
+        }
       })
   };
 }

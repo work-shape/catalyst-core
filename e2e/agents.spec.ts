@@ -254,7 +254,7 @@ test("a builder reads what of an agent is unavailable, repairs it and is told it
       .locator("#skills li", { hasText: "tax-old" })
       .getByRole("button", { name: /Remove/u })
       .click();
-    await form.getByRole("button", { name: "Save changes", exact: true }).click();
+    await form.getByRole("button", { name: "Save draft", exact: true }).click();
     await expect(notice).toHaveCount(0);
     await expect(line).toHaveCount(0);
     await publishAgentDraft(page, agentUrl);
@@ -311,8 +311,8 @@ test("a saved agent name stays in the draft until it is published", async ({
     await card(page, "Rename Probe").getByRole("link", { name: "Edit in Studio" }).click();
     await expect(page).toHaveURL(new RegExp(`/build/agents/${name}$`, "u"));
     await page.getByRole("textbox", { name: /^Display name/u }).fill("Renamed Probe");
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
 
     // The list remains live until the administrator publishes the saved draft.
     await rail(page).getByRole("button", { name: "Agents", exact: true }).click();

@@ -81,6 +81,10 @@ export function resolveBuildRights(
   const verbs = ["read", "write", "delete"] as const;
   const action = (kind: string, verb: AssetVerb): string | undefined =>
     context?.kinds.find((candidate) => candidate.kind === kind)?.actions[verb];
+  const onWholeInstance = (verb: AssetVerb, kind: string): boolean => {
+    const named = verb === "publish" ? action(kind, verb) : undefined;
+    return named === undefined ? instanceWrite : onInstance.includes(named);
+  };
   const holds = (kind: string, verb: AssetVerb, prefix: string | undefined): boolean => {
     const name = action(kind, verb);
     return (
@@ -136,8 +140,11 @@ export function resolveBuildRights(
         ? ownWorkspaces.map(({ id, name }) => ({ id, name, member: true, personal: true as const }))
         : [])
     ],
+    // The write right on every asset of the instance writes and deletes them. It publishes only
+    // a kind that names no publish right: where the kind names one, as an agent's
+    // `agent.publish`, the instance publishes for its holders alone.
     may: (verb, asset) =>
-      instanceWrite ||
+      onWholeInstance(verb, asset.kind) ||
       (asset.workspaceId === undefined
         ? holds(asset.kind, verb, asset.namespace)
         : holdsIn(asset.kind, verb, asset.workspaceId)),

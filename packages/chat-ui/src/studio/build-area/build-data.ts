@@ -66,6 +66,9 @@ export interface BuildList {
  * How reading an asset again went. `loaded` hands the page the newer asset; after the other
  * two the page still holds what it held.
  */
+/** What a person decides on a draft: make it the published revision, or drop it. */
+export type DraftDecision = "publish" | "discard";
+
 export type BuildAssetReload = "loaded" | "missing" | "failed";
 
 /** One asset as its page asked for it. */
@@ -112,9 +115,14 @@ interface BuildWrites {
       name: string;
       /** The revision the page loaded, or `null` for an asset the call creates. */
       expectedRevision: number | null;
+      /**
+       * The draft revision of an existing agent the page read, or `null` where it read none:
+       * the write moves the agent's draft and leaves the live agent as it is.
+       */
+      expectedDraftRevision?: number | null;
       availableIn?: AvailableIn;
     } & AssetContent
-  ): Promise<{ revision: number; files?: AssetFileEntry[] }>;
+  ): Promise<{ revision: number; draftRevision?: number; files?: AssetFileEntry[] }>;
   /** The whole folder of an asset's current revision, each file with its content. */
   readFiles(input: { kind: string; name: string }): Promise<AssetFileRead[]>;
   delete(input: { kind: string; name: string; expectedRevision: number }): Promise<unknown>;
@@ -129,6 +137,8 @@ interface BuildWrites {
     name: string;
     revision: number;
     expectedRevision: number;
+    /** The agent's draft revision the page read, or `null`: the revision becomes the draft. */
+    expectedDraftRevision?: number | null;
   }): Promise<{ revision: number }>;
   /** One page of the history, the newest first. `cursor` continues after an earlier page. */
   revisions(input: { kind: string; name: string; cursor?: string }): Promise<BuildRevisionPage>;
@@ -248,11 +258,18 @@ export function useBuildSource(): BuildSource {
   // An agent's name, description and starter prompts are also read outside Studio, from the
   // lists of offered agents: a written agent is asked for there again. The save does not wait
   // for those lists.
-  const changed = (kind: string) => () => {
+  // `gone` names an agent that was deleted: its draft is not read again, the instance has none.
+  const changed = (kind: string, gone?: string) => () => {
     if (kind === AGENT_ASSET_KIND) {
       invalidateOfferedAgents(queryClient, apiBaseUrl, authScope).catch(() => undefined);
     }
-    return queryClient.invalidateQueries({ queryKey: assetsKey });
+    const goneDraft =
+      gone === undefined ? undefined : workspaceQueryKeys.agentDraft(apiBaseUrl, authScope, gone);
+    return queryClient.invalidateQueries({
+      queryKey: assetsKey,
+      predicate: ({ queryKey }) =>
+        goneDraft === undefined || !goneDraft.slice(0, 5).every((part, at) => queryKey[at] === part)
+    });
   };
   return {
     kinds,
@@ -401,7 +418,9 @@ export function useBuildSource(): BuildSource {
       put: (input) =>
         made(writes.put({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
       delete: (input) =>
-        made(writes.delete({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
+        made(writes.delete({ ...input, ...inScope(input.kind) })).finally(
+          changed(input.kind, input.kind === AGENT_ASSET_KIND ? input.name : undefined)
+        ),
       publish: (input) =>
         made(writes.publish({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
       revert: (input) =>

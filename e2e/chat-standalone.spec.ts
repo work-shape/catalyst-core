@@ -3275,16 +3275,15 @@ test("superadmin config follows the German locale", async ({ page }) => {
   // The texts of the page are written in one language at a time: the reader's own to begin with.
   await expect(form.getByRole("radio", { name: "Deutsch", exact: true })).toBeChecked();
   // The save bar shows with the first change.
-  await expect(form.getByRole("button", { name: "Änderungen speichern", exact: true })).toHaveCount(
-    0
-  );
+  await expect(form.getByRole("button", { name: "Entwurf speichern", exact: true })).toHaveCount(0);
   await form.getByRole("textbox", { name: /^Beschreibung/u }).fill("Nicht gespeichert.");
   await expect(form.getByText("1 Änderung", { exact: true })).toBeVisible();
+  await expect(form.getByRole("button", { name: "Entwurf speichern", exact: true })).toBeVisible();
   await expect(
-    form.getByRole("button", { name: "Änderungen speichern", exact: true })
-  ).toBeVisible();
-  await expect(
-    form.getByText("Gilt sofort für neue Unterhaltungen.", { exact: true })
+    form.getByText(
+      "Speichert einen Entwurf. Wer den Agenten nutzt, bekommt die veröffentlichte Version, bis er veröffentlicht ist.",
+      { exact: true }
+    )
   ).toBeVisible();
 });
 
@@ -3386,7 +3385,7 @@ test("superadmin manages config assets with validation and conflict protection",
 
     await clickAgent();
     // Nothing was changed yet, so there is nothing to save.
-    await expect(form().getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    await expect(form().getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
     // The agent holds no tool yet: every package stands as a row, switched off.
     const toolSection = form().locator("#tools");
     await expect(toolRowSwitch(toolSection, "package:results")).toHaveAttribute(
@@ -3447,10 +3446,10 @@ test("superadmin manages config assets with validation and conflict protection",
     await closeToolPackage(toolSection, "package:skills");
     const updatedPrompt = `Keep this saved prompt ${Date.now()}.`;
     await firstPromptText.fill(updatedPrompt);
-    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    await form().getByRole("button", { name: "Save draft", exact: true }).click();
     agentRevision = await expectSaved(researchAgentUrl, agentRevision);
     await expect(firstPromptText).toHaveValue(updatedPrompt);
-    await expect(form().getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    await expect(form().getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
 
     await clickSkill();
     // Closing the confirmation changes nothing.
@@ -3493,7 +3492,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await clickAgent();
     await toggleSkill();
     await expect(form().getByText("No skills chosen.", { exact: true })).toBeVisible();
-    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    await form().getByRole("button", { name: "Save draft", exact: true }).click();
     agentRevision = await expectSaved(researchAgentUrl, agentRevision);
     await clickSkill();
     await askToDelete();
@@ -3522,7 +3521,7 @@ test("superadmin manages config assets with validation and conflict protection",
     agentRevision = await expectSaved(researchAgentUrl, agentRevision, false);
     const unsaved = `${String(originalResearchAgent?.instructions)}\n\nUnsaved UI change.`;
     await instructions.fill(unsaved);
-    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    await form().getByRole("button", { name: "Save draft", exact: true }).click();
     // The page saves against the revision it loaded: the newer one is not overwritten, and
     // what was typed stays until the reader asks for the newer version.
     const conflict = page.locator("[data-build-conflict]");

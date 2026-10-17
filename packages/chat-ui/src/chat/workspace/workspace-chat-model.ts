@@ -480,8 +480,7 @@ export function useWorkspaceChatModel({
     onAccountDeleted: resetAuthenticatedWorkspaceState,
     onCollaborationWorkspaceDeleted: collaborationWorkspace.collaborationWorkspaceDeleted,
     ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
-    startDockedChat,
-    ...(dock.conversationId === undefined ? {} : { dockConversationId: dock.conversationId })
+    startDockedChat
   });
   const canViewAdministration = controlPlane.canViewAdministration;
   const approvalPendingCountQuery = useApprovalPendingCountQuery({

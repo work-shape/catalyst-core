@@ -31,7 +31,12 @@ export function platformContext(
         lifecycle: "active",
         representation: "config",
         owners: ["instance", "workspace"],
-        actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
+        actions: {
+          read: "agent.read",
+          write: "agent.write",
+          publish: "agent.publish",
+          delete: "agent.delete"
+        }
       },
       {
         kind: "skill",

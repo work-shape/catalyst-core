@@ -501,15 +501,15 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
-    name: "agent-proposal-states-for-review",
+    name: "agent-draft-saved-over-a-newer-draft",
     reason:
-      "Chromium's own log line: the test answers Apply once with 412, as when the agent wrote a " +
-      "newer proposal, and once with 500, and asserts what the page says to each.",
-    matches: new RegExp(`${requestAnswered(412).source}|${requestAnswered(500).source}`, "u"),
-    path: /^\/api\/v1\/assets\/agent\/[^/]+\/publish$/u,
+      "Chromium's own log line: the test saves the agent's draft with the API while a writer " +
+      "edits it on the page, the writer's save is answered with 412, and the test asserts that " +
+      "the page names who saved the newer draft and offers to load it.",
+    matches: requestAnswered(412),
+    path: /^\/api\/v1\/assets\/agent\/[^/]+$/u,
     tests: [
-      "the proposal's states and each kind of proposed value, for a writer and a reader",
-      "the agent page marks a draft, publishes it, discards one and refuses a changed one"
+      "a writer without agent.publish, a draft written meanwhile, a reader, and a publish grant on the agent"
     ]
   },
   {

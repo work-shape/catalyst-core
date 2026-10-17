@@ -78,8 +78,23 @@ export interface BuildAssetEditorProps {
   notice: ReactNode;
   /** Hears whether the page holds changes that are not saved: the frame asks before it is left. */
   onUnsavedChange(unsaved: boolean): void;
-  /** Saves the definition against the revision the page loaded, or creates the asset. */
-  save(config: Record<string, unknown>): Promise<BuildWriteOutcome>;
+  /**
+   * Saves the definition against the revision the page loaded, or creates the asset. A save of
+   * an existing agent names the draft revision the page read, or `null` where it read none: it
+   * writes the agent's draft, answers the draft revision it wrote and leaves the live agent and
+   * the revision the page loaded as they are.
+   */
+  save(
+    config: Record<string, unknown>,
+    draft?: { expectedDraftRevision: number | null }
+  ): Promise<BuildWriteOutcome & { draftRevision?: number }>;
+  /** The reader may publish the asset: for an agent, its draft. */
+  canPublish?: boolean;
+  /**
+   * Hears which draft revision of the agent the page shows, or that it shows none: a restore
+   * from the History names it.
+   */
+  onDraftRead?(revision: number | null): void;
   /**
    * Reads the asset again after a change the page did not write itself, such as an applied
    * proposal: the page starts again from what the instance holds. Absent for a new asset.

@@ -197,6 +197,22 @@ export class AssetReadWorkflow {
         : undefined;
     const agentStatus =
       target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;
+    // What the caller may do here, decided as each write decides it, so the page offers no
+    // action the instance refuses and hides none it allows (AD-4).
+    const { write, delete: remove, publish } = target.kind.actions;
+    const allowed = (
+      [
+        ["write", write],
+        ["delete", remove],
+        // Only a person publishes: a key or a service publishes nothing.
+        ["publish", isAuthenticatedServicePrincipal(call.actor) ? undefined : publish]
+      ] as const
+    )
+      .filter(
+        ([, action]) =>
+          action !== undefined && call.access.authorize(action, target.resource).allowed
+      )
+      .map(([verb]) => verb);
     return {
       ...(agentStatus ?? {}),
       ...(draftSummary ? { agentDraft: draftSummary } : {}),
@@ -214,6 +230,7 @@ export class AssetReadWorkflow {
       ...(publishQuestion?.length ? { publishQuestion } : {}),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
+      allowed,
       updatedAt: asset.updatedAt
     };
   }

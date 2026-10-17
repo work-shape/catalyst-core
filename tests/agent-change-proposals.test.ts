@@ -12,6 +12,7 @@ const liveSchema = z.object({
   revision: z.number(),
   config: z.object({ instructions: z.string() }).loose()
 });
+const allowedSchema = z.object({ allowed: z.array(z.string()).optional() });
 const draftSchema = z.object({
   draft: z
     .object({
@@ -20,6 +21,7 @@ const draftSchema = z.object({
       config: z.object({ instructions: z.string() }).loose(),
       author: z.object({
         userId: z.string().optional(),
+        name: z.string().optional(),
         conversationId: z.string().optional(),
         release: z.boolean()
       })
@@ -138,9 +140,11 @@ describe("one shared agent draft (Platform Access 45, 62, 63, 65; Access 45)", (
       conflict: "REVISION_CONFLICT",
       details: { author: { userId: expect.any(String) }, changedAt: expect.any(String) }
     });
+    // The draft names its author as people know them (AD-4): the page's badge says it.
     expect(await t.draft()).toMatchObject({
       revision: 3,
-      config: { instructions: "Studio draft." }
+      config: { instructions: "Studio draft." },
+      author: { userId: expect.any(String), name: expect.stringMatching(/\S/u) }
     });
     expect(await t.live()).toEqual(before);
     expect(await t.version()).toEqual(version);
@@ -235,7 +239,11 @@ describe("one shared agent draft (Platform Access 45, 62, 63, 65; Access 45)", (
           }
         })
       );
+    const allowed = async () =>
+      allowedSchema.parse((await t.ok(t.app.call("assets.get", { params: AGENT }, OTHER))).json())
+        .allowed;
     await grant("agent.read");
+    expect(await allowed()).toEqual([]);
     expect(
       (await t.app.call("agents.draft.get", { params: { name: AGENT.name } }, OTHER)).statusCode
     ).toBe(404);
@@ -251,14 +259,55 @@ describe("one shared agent draft (Platform Access 45, 62, 63, 65; Access 45)", (
     expect(discarded.statusCode).toBe(404);
     expect(await t.draft()).toMatchObject({ revision: 1 });
     await grant("agent.write");
+    expect(await allowed()).toEqual(["write"]);
     expect(await t.draft(OTHER)).toMatchObject({ revision: 1 });
     const denied = await t.publish(1, OTHER);
     expect(denied.statusCode).toBe(403);
     expect(denied.body).toContain("agent.publish");
     expect(await t.draft()).toMatchObject({ revision: 1 });
     await grant("agent.publish");
+    // Studio reads what the caller may do on this asset from the instance, not from its own rules.
+    expect(await allowed()).toEqual(["write", "publish"]);
     await t.ok(t.publish(1, OTHER));
     expect(await t.draft()).toBeNull();
+  }, 120_000);
+
+  it("names what a caller may do on the asset: a deny on the asset outweighs the role's instance allow (Access 45, 63)", async () => {
+    const t = await fixture();
+    await t.ok(t.put("Pending."));
+    await t.ok(t.app.call("me.get", {}, OTHER));
+    const other = (
+      await t.app.stores.users.listUsers({ clientInstanceId: t.clientInstanceId })
+    ).find((user) => user.displayLabel === "Other");
+    if (other === undefined) throw new Error("The other user signed in and is listed.");
+    const live = await t.live();
+    const allowed = async () =>
+      allowedSchema.parse((await t.ok(t.app.call("assets.get", { params: AGENT }, OTHER))).json())
+        .allowed;
+    // The admin role allows every agent right on the whole instance.
+    await t.ok(
+      t.app.call("users.update", {
+        params: { userId: other.id },
+        payload: { roles: ["user", "admin"] }
+      })
+    );
+    expect(await allowed()).toEqual(["write", "delete", "publish"]);
+    await t.ok(
+      t.app.call("permissions.grant", {
+        payload: {
+          holderKind: "user",
+          holderId: other?.id,
+          action: "agent.publish",
+          scopeKind: "asset",
+          scopeId: live.id,
+          effect: "deny"
+        }
+      })
+    );
+    expect(await allowed()).toEqual(["write", "delete"]);
+    const denied = await t.publish(1, OTHER);
+    expect(denied.statusCode).toBe(403);
+    expect(await t.draft()).toMatchObject({ revision: 1 });
   }, 120_000);
 
   it("refuses a stale base and keeps it as a draft (45, 63)", async () => {

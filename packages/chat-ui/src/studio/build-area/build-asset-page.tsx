@@ -1,5 +1,5 @@
 import { Copy, History, Lock, SearchX, Send, Trash2 } from "lucide-react";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import {
   Badge,
   Banner,
@@ -33,7 +33,7 @@ import { BuildHistory } from "./build-history";
 import type { VisibleBuildKind } from "./build-model";
 import { formatDateTime } from "../../shared/locale-format";
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
-import { AGENT_ASSET_KIND, buildWorkspaceName } from "../../shared/build-rights";
+import { AGENT_ASSET_KIND, buildWorkspaceName, type BuildRights } from "../../shared/build-rights";
 
 interface AssetPageProps {
   source: BuildSource;
@@ -242,15 +242,10 @@ export function ViewedAssetPage({
   usePageShown(page, read.status);
   if (read.status === "ready") {
     const { asset } = read;
-    const held = {
-      kind: asset.kind,
-      namespace: asset.namespace,
-      workspaceId: asset.scope.kind === "workspace" ? asset.scope.workspaceId : undefined
-    };
     const draftAhead =
       asset.draftRevision !== undefined && asset.revision !== asset.publishedRevision;
     const publish =
-      draftAhead && source.rights.may("publish", held)
+      draftAhead && mayOnAsset(source.rights, "publish", asset)
         ? async (): Promise<string | undefined> => {
             try {
               await source.writes.publish({ kind, name, revision: asset.revision });
@@ -378,8 +373,7 @@ function LoadedAssetPage({
   const shippedTitle = entry.shippedTitle?.(stored);
   const shipped = shippedTitle !== undefined;
   const owner = stored.scope.kind === "workspace" ? stored.scope.workspaceId : undefined;
-  const held = { kind: stored.kind, namespace: stored.namespace, workspaceId: owner };
-  const canWrite = !shipped && source.rights.may("write", held);
+  const canWrite = !shipped && mayOnAsset(source.rights, "write", stored);
   const namespace = source.rights.namespaces.find(
     (candidate) => candidate.prefix === stored.namespace
   );
@@ -394,12 +388,16 @@ function LoadedAssetPage({
       : stored.namespace === undefined
         ? t("build.readOnlyInstance")
         : t("build.readOnlyNamespace", { namespace: namespace?.displayName ?? stored.namespace });
-  const canDelete = !shipped && state.canDelete && source.rights.may("delete", held);
+  const canDelete = !shipped && state.canDelete && mayOnAsset(source.rights, "delete", stored);
   // A kind with drafts answers its two pointers. The saved draft is ahead of what is
   // published, or nothing is published yet.
   const hasDraft = stored.draftRevision !== undefined;
   const draftAhead = hasDraft && stored.revision !== stored.publishedRevision;
-  const canPublish = draftAhead && conflict === undefined && source.rights.may("publish", held);
+  const canPublish =
+    draftAhead && conflict === undefined && mayOnAsset(source.rights, "publish", stored);
+  // The agent's draft revision the page shows, which a restore names: an agent has one draft,
+  // and an earlier revision becomes its content.
+  const agentDraftRead = useRef<number | null>(stored.agentDraft?.revision ?? null);
   const Editor = entry.Editor;
   const heardUnsaved = useCallback(
     (next: boolean) => {
@@ -412,7 +410,8 @@ function LoadedAssetPage({
   /** Reads what a write was refused for, and remembers a conflict for the notice. */
   const refusalOf = (error: unknown): BuildWriteOutcome => {
     const outcome = readBuildRefusal(error, t, locale);
-    if (!outcome.ok && outcome.conflict) {
+    // A draft somebody else wrote is the agent page's to say: the live agent may be as read.
+    if (!outcome.ok && outcome.conflict && !outcome.draft) {
       setConflict((known) => (outcome.deleted ? "deleted" : (known ?? "saved")));
       setConflictBy(
         outcome.changedBy !== undefined && outcome.changedAt !== undefined
@@ -440,17 +439,28 @@ function LoadedAssetPage({
    * Saves the config or the whole folder against the revision the page loaded. A save of a
    * kind with drafts moves the draft, and nothing of what is published. After a folder write
    * the page keeps the config it loaded: the instance read the new one from the files, and the
-   * editor holds what was saved.
+   * editor holds what was saved. A save of an agent's draft leaves the live agent the page
+   * loaded as it is: the next save names it again, beside the draft revision this one wrote.
    */
   const write = async (
-    content: AssetContent
-  ): Promise<BuildWriteOutcome & { stored?: readonly AssetFileEntry[] }> => {
+    content: AssetContent,
+    draft?: { expectedDraftRevision: number | null }
+  ): Promise<
+    BuildWriteOutcome & { stored?: readonly AssetFileEntry[]; draftRevision?: number }
+  > => {
     try {
-      const { revision, files } = await source.writes.put({
+      const { revision, draftRevision, files } = await source.writes.put({
         ...address,
         ...content,
-        expectedRevision: stored.revision
+        expectedRevision: stored.revision,
+        ...(draft ?? {})
       });
+      if (draft !== undefined && draftRevision !== undefined) {
+        agentDraftRead.current = draftRevision;
+        setFailure(undefined);
+        onRestored(undefined);
+        return { ok: true, draftRevision };
+      }
       setStored({
         ...stored,
         ...("config" in content ? { config: content.config } : {}),
@@ -525,6 +535,10 @@ function LoadedAssetPage({
         readOnlyReason={canWrite ? undefined : readOnlyReason}
         saveBlocked={conflict !== undefined}
         instanceWrite={source.rights.instanceWrite}
+        canPublish={!shipped && mayOnAsset(source.rights, "publish", stored)}
+        onDraftRead={(revision) => {
+          agentDraftRead.current = revision;
+        }}
         {...(owner === undefined ? {} : { owner })}
         onUnsavedChange={heardUnsaved}
         draftState={
@@ -638,7 +652,7 @@ function LoadedAssetPage({
             </Banner>
           ) : null
         }
-        save={(config) => write({ config })}
+        save={(config, draft) => write({ config }, draft)}
         reload={reload}
         folder={{
           read: () => source.writes.readFiles(address),
@@ -658,7 +672,10 @@ function LoadedAssetPage({
                   await source.writes.revert({
                     ...address,
                     revision,
-                    expectedRevision: stored.revision
+                    expectedRevision: stored.revision,
+                    ...(entry.kind === AGENT_ASSET_KIND
+                      ? { expectedDraftRevision: agentDraftRead.current }
+                      : {})
                   });
                 } catch (error) {
                   const outcome = refusalOf(error);
@@ -717,4 +734,21 @@ function LoadedAssetPage({
       </ConfirmDialog>
     </>
   );
+}
+
+/** What the instance names a caller may do to an asset beyond reading it. */
+type AssetChange = NonNullable<BuildAsset["allowed"]>[number];
+
+/**
+ * What the reader may do to the asset on the page. The instance says it with the read, decided
+ * on this asset with every grant and deny there is, those on the asset itself included. An
+ * instance from before AD-4 says nothing, and the rights Studio resolved decide.
+ */
+function mayOnAsset(rights: BuildRights, verb: AssetChange, asset: BuildAsset): boolean {
+  if (asset.allowed !== undefined) return asset.allowed.includes(verb);
+  return rights.may(verb, {
+    kind: asset.kind,
+    namespace: asset.namespace,
+    workspaceId: asset.scope.kind === "workspace" ? asset.scope.workspaceId : undefined
+  });
 }

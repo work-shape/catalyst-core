@@ -200,8 +200,14 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
         await loadNewerVersion(page);
         await expect(conflict).toHaveCount(0);
       }
+      // A newer draft of the agent is loaded the same way.
+      const behind = page.locator("[data-agent-draft-behind]");
+      if (await behind.isVisible()) {
+        await behind.getByRole("button").click();
+        await expect(behind).toHaveCount(0);
+      }
       if (await stale.isVisible()) await stale.getByRole("button", { name: "Remove" }).click();
-      await form.getByRole("button", { name: "Save changes", exact: true }).click();
+      await form.getByRole("button", { name: "Save draft", exact: true }).click();
       await expect
         .poll(
           async () => {

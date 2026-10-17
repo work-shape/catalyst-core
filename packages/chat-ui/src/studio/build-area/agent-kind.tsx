@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge } from "@work-shape/catalyst-ui";
+import { Badge, Page, SkeletonPage } from "@work-shape/catalyst-ui";
 import { useAgentPlacementMutations } from "../../shared/api/agent-placement-mutations";
 import {
   useAdministeredCollaborationWorkspacesQuery,
@@ -13,7 +13,7 @@ import { useAppToolsRead } from "../apps/app-tools-group";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorMessage } from "../../shared/workspace-utils";
 import { AgentEditor } from "./agent-editor";
-import { useAgentProposal } from "./agent-proposal-source";
+import { useAgentDraft } from "./agent-draft-source";
 import { agentConfigToForm, startedAgentForm } from "./asset-form-model";
 import type { BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
 import { AGENT_ASSET_KIND } from "../../shared/build-rights";
@@ -42,7 +42,19 @@ export const agentKind: BuildAssetKind = {
   avatar: "agent",
   // A row says what the agent does, as its card on the Agents page does, and never its id.
   row: (asset) => ({ description: asset.description?.trim() || undefined }),
-  badges: (asset, t) => (asset.isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null),
+  // The draft badge shows to whom the list names the draft: the holders of the agent's write
+  // right (AD-4).
+  badges: (asset, t) =>
+    asset.agentDraft || asset.isDefault ? (
+      <>
+        {asset.agentDraft ? (
+          <Badge tone="warning" data-build-draft-state="">
+            {t("build.draftAhead")}
+          </Badge>
+        ) : null}
+        {asset.isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
+      </>
+    ) : null,
   Editor: AgentAssetEditor,
   startsInWorkspace: true
 };
@@ -110,22 +122,35 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   // the form alone, so the page keeps what it was told and what it changed itself.
   const [isDefault, setIsDefault] = useState(asset?.isDefault === true);
   const [availability, setAvailability] = useState(asset?.availability);
-  const proposal = useAgentProposal({
+  // The page edits the agent's one draft where it has one: the form waits for its read.
+  const draftSource = useAgentDraft({
     agent: asset?.name,
-    canDecide: frame.canWrite,
+    ...(owner === undefined ? {} : { workspaceId: owner }),
+    enabled: frame.canWrite,
     reload: frame.reload ?? (async () => undefined)
   });
+  const draft = asset !== undefined && frame.canWrite ? draftSource : undefined;
+  if (draft !== undefined && draft.latest === undefined) {
+    return (
+      <Page ref={frame.page.ref}>
+        {frame.page.above}
+        <SkeletonPage />
+      </Page>
+    );
+  }
 
   return (
     <AgentEditor
       frame={frame}
       initialForm={
-        asset
-          ? agentConfigToForm(asset.config)
-          : startedAgentForm(start ?? { name: "", title: "" }, locale === "de" ? "de" : "en")
+        draft?.latest
+          ? agentConfigToForm(draft.latest.config)
+          : asset
+            ? agentConfigToForm(asset.config)
+            : startedAgentForm(start ?? { name: "", title: "" }, locale === "de" ? "de" : "en")
       }
       isDefault={isDefault}
-      {...(proposal === undefined ? {} : { proposal })}
+      {...(draft === undefined ? {} : { draft })}
       references={referencesQuery.data}
       referencesLoading={referencesQuery.isPending}
       editableAgentFields={management.editableAgentFields}

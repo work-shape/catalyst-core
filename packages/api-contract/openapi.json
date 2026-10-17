@@ -23725,6 +23725,9 @@
               "displayLabel": {
                 "type": "string"
               },
+              "name": {
+                "type": "string"
+              },
               "conversationId": {
                 "type": "string"
               },
@@ -26289,6 +26292,12 @@
           "chatAvailable": {
             "type": "boolean"
           },
+          "allowed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetVerb"
+            }
+          },
           "updatedAt": {
             "$ref": "#/components/schemas/Timestamp"
           }
@@ -26711,6 +26720,14 @@
         },
         "required": [
           "message"
+        ]
+      },
+      "AssetVerb": {
+        "type": "string",
+        "enum": [
+          "write",
+          "delete",
+          "publish"
         ]
       },
       "AssetWarning": {
