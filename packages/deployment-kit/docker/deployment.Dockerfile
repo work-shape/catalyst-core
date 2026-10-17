@@ -87,6 +87,7 @@ ARG DEPLOYMENT_DIR
 ENV SERVER_ENTRY=${DEPLOYMENT_DIR}/dist/server.js
 
 COPY --from=server-build /app ./
+COPY --from=runner-system /usr/local/share/catalyst/runner-packages.json /usr/local/share/catalyst/runner-packages.json
 
 EXPOSE 4100
 CMD ["sh", "-c", "node ${SERVER_ENTRY}"]
@@ -178,6 +179,7 @@ ARG DEPLOYMENT_DIR
 ENV ARTIFACT_PREVIEW_WORKER_ENTRY=${DEPLOYMENT_DIR}/dist/artifact-preview-worker.js
 
 COPY --from=server-build /app ./
+COPY --from=runner-system /usr/local/share/catalyst/runner-packages.json /usr/local/share/catalyst/runner-packages.json
 RUN test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}"
 
 CMD ["sh", "-c", "node ${ARTIFACT_PREVIEW_WORKER_ENTRY}"]
@@ -219,7 +221,7 @@ EXPOSE 4110
 CMD ["sh", "-c", "node ${DOCUMENT_WORKER_ENTRY}"]
 
 # Copied from the stage runner-base of capabilities/docker/catalyst-runner-base.Dockerfile.
-FROM node:24-trixie-slim AS runner
+FROM node:24-trixie-slim AS runner-system
 
 WORKDIR /opt/catalyst
 ENV NODE_ENV=production
@@ -263,20 +265,24 @@ RUN --mount=type=cache,id=vivd-runner-apt-lists,target=/var/lib/apt/lists,sharin
     python3-pip \
     unzip \
   && python3 -m pip install --break-system-packages --no-cache-dir \
-    numpy \
-    openpyxl \
-    pandas \
-    pdfplumber \
-    Pillow \
-    pypdf \
-    python-docx \
-    python-pptx \
-    reportlab \
+    numpy==2.1.3 \
+    openpyxl==3.1.5 \
+    pandas==2.2.3 \
+    pdfplumber==0.11.4 \
+    Pillow==10.4.0 \
+    pypdf==4.3.1 \
+    python-docx==1.1.2 \
+    python-pptx==0.6.23 \
+    reportlab==4.2.2 \
+  && mkdir -p /usr/local/share/catalyst \
+  && python3 -m pip list --format=json > /usr/local/share/catalyst/runner-packages.json \
   && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable \
   && corepack prepare pnpm@10.29.3 --activate \
   && pnpm --version
+
+FROM runner-system AS runner
 
 # The fixed commands of the runner: the Page build, the repository of an asset and every
 # artifact helper, linked by the names their packages declare. The build runs each once.

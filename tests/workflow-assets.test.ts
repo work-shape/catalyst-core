@@ -74,12 +74,12 @@ describe("a Workflow stored as an asset", () => {
     open = undefined;
   });
 
-  const ready = () =>
+  const ready = (runnerPackages: { name: string; version: string }[] = []) =>
     readyWorkflows(
       (fixture) => {
         open = fixture;
       },
-      { definitions: "assets" }
+      { definitions: "assets", runnerPackages }
     );
 
   /** Writes the definition as the draft, as the administrator. Answers the revision. */
@@ -107,6 +107,36 @@ describe("a Workflow stored as an asset", () => {
       params: { workflow: WORKFLOW },
       payload: { input: { note: NOTE } }
     });
+
+  it("publishes declared installed packages, and refuses an unavailable name without moving the live revision", async () => {
+    const t = await ready([{ name: "pypdf", version: "4.3.1" }]);
+    const first = await put(t, { ...notifyClients(), packages: ["pypdf"] }, null);
+    expect((await publish(t, first)).statusCode).toBe(200);
+    const live = await published(t);
+    const second = await put(
+      t,
+      { ...notifyClients(), packages: ["pypdf", "outside-image"] },
+      first
+    );
+    const refused = await publish(t, second);
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(refused.json()).toMatchObject({
+      error: {
+        code: "VALIDATION_FAILED",
+        message: "Workflow package 'outside-image' is not available in the runner image"
+      }
+    });
+    expect(await published(t)).toBe(live);
+  });
+
+  it("refuses every declared package at publish with an empty runner manifest", async () => {
+    const t = await ready();
+    const revision = await put(t, { ...notifyClients(), packages: ["pypdf"] }, null);
+    const refused = await publish(t, revision);
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(refused.body).toContain("Workflow package 'pypdf' is not available in the runner image");
+    expect(await published(t)).toBeUndefined();
+  });
 
   it("names the active configured account on an unpublished draft to its writer", async () => {
     const t = await ready();

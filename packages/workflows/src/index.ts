@@ -41,6 +41,11 @@ export const workflowsModule = defineModule({
 });
 
 export { createCodeStepJobs, type CodeStepJobs, type CodeStepJobsOptions } from "./code-job";
+export {
+  assertWorkflowPackages,
+  runnerPackageKey,
+  type WorkflowRunnerPackage
+} from "./runner-packages";
 export { createCodeSandbox } from "./code-sandbox";
 export {
   WORKFLOW_CODE_ERRORS,
@@ -69,6 +74,7 @@ export {
   WORKFLOW_AUTHORING_EXAMPLES,
   WORKFLOW_AUTHORING_SKILL_NAME,
   workflowAuthoringSkill,
+  createWorkflowAuthoringSkill,
   workflowStepTypesNotRun
 } from "./authoring-skill";
 export { lastDueWithin, nextDueAfter, parseCron } from "./cron";

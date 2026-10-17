@@ -7,9 +7,12 @@ import {
   type PlatformStores,
   type ShippedSkill
 } from "@work-shape/catalyst-core";
-import { workflowAuthoringSkill, workflowsModule } from "@work-shape/catalyst-workflows";
+import { createWorkflowAuthoringSkill, workflowsModule } from "@work-shape/catalyst-workflows";
+import { runnerPackageManifest } from "./runner-packages";
 import type { ClientInstanceCapability } from "./capabilities";
 import { platformDocsSkill } from "./platform-docs-skill";
+
+const workflowAuthoringSkill = createWorkflowAuthoringSkill(runnerPackageManifest.packages);
 
 // The skills that ship with the platform and with the capabilities of the build, such as the
 // general skills for spreadsheets, documents, presentations and PDF. The API process stores

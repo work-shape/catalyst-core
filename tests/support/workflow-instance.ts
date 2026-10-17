@@ -214,6 +214,7 @@ export interface WorkflowFixture extends ConnectionOperationsFixture {
 
 export async function workflowFixture(
   options: {
+    runnerPackages?: Parameters<typeof createWorkflowAssetKind>[0]["runnerPackages"];
     moduleOn?: boolean;
     stepSlots?: number;
     limits?: InstanceWorkflowsParts["limits"];
@@ -251,6 +252,7 @@ export async function workflowFixture(
   };
   const kind = createWorkflowAssetKind({
     clientInstanceId,
+    runnerPackages: options.runnerPackages ?? [],
     configAssets: {
       getConfigAsset: (input) => storesOf().configAssets.getConfigAsset(input),
       listPublishedConfigAssets: (input) => storesOf().configAssets.listPublishedConfigAssets(input)

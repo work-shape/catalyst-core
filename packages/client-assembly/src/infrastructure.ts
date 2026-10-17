@@ -34,6 +34,7 @@ import {
 import { sandboxProviderDefinitions } from "@work-shape/catalyst-tool-execution";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
+import { runnerPackageManifest } from "./runner-packages";
 import type { ClientInstanceEnv } from "./env";
 
 /**
@@ -128,6 +129,12 @@ export async function createInstanceInfrastructure(input: {
       // The secret provider itself takes no secret.
       { secrets: createEnvironmentSecrets({}), logger: input.logger }
     ));
+  if (input.config.infrastructure.sandbox && runnerPackageManifest.unavailable) {
+    input.logger.warn(
+      { infrastructure: "sandbox.packages", reason: runnerPackageManifest.unavailable },
+      "Runner package manifest unavailable: the allow-list is empty; publishing a Workflow with declared packages is refused"
+    );
+  }
   return { registry, secrets, context: { secrets, logger: input.logger } };
 }
 
@@ -284,7 +291,21 @@ export function infrastructureOverview(input: {
     database,
     ...infrastructureEntries(input.config).map(({ port, entry }) =>
       providerOverview(port, entry, registry, context)
-    )
+    ),
+    ...(input.config.infrastructure.sandbox && runnerPackageManifest.unavailable
+      ? [
+          {
+            id: "sandbox.packages",
+            class: "sandbox" as const,
+            name: "Runner package manifest unavailable; declared Workflow packages cannot be published",
+            type: "runner-package-manifest",
+            origin: "operator" as const,
+            external: false,
+            secrets: [],
+            check: async () => ({ ok: false as const, errorClass: "not_found" as const })
+          }
+        ]
+      : [])
   ];
 }
 

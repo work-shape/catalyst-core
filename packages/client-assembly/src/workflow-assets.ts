@@ -24,6 +24,7 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   WORKFLOW_MANIFEST_MAX_BYTES,
+  assertWorkflowPackages,
   checkChildContracts,
   checkChildCycles,
   indexWorkflowSteps,
@@ -38,9 +39,11 @@ import {
   type WorkflowDefinitionRevision,
   type WorkflowDefinitionSource,
   type WorkflowStepFile,
-  type WorkflowStepFiles
+  type WorkflowStepFiles,
+  type WorkflowRunnerPackage
 } from "@work-shape/catalyst-workflows";
 import { z } from "zod";
+import { runnerPackageManifest } from "./runner-packages";
 
 // A Workflow as an asset: the kind the asset operations register, and the published revisions
 // of that kind as the engine reads its definitions. A revision's config is the id of the
@@ -105,6 +108,8 @@ export function createWorkflowAssetKind(
     /** The time zone of the engine's schedules. UTC when left out. */
     configAssets: Pick<ConfigAssetStore, "getConfigAsset" | "listPublishedConfigAssets">;
     timeZone?: string;
+    /** The installed distributions of the release runner. Empty when its manifest is missing. */
+    runnerPackages?: readonly WorkflowRunnerPackage[];
     /** The clock of the engine, for a test of due times. */
     now?: () => Date;
   }
@@ -192,12 +197,16 @@ export function createWorkflowAssetKind(
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
     async onPublish({ stores, replaced, config }) {
-      // The pointer has moved in this transaction, but is not visible outside it yet.
-      // Serializing graph reads here prevents two individually safe publishes forming a cycle.
-      await stores.workflowRuns.lockDefinitionGraph({ clientInstanceId });
       const parsed = workflowConfigSchema.parse(config);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      assertWorkflowPackages(
+        result.manifest,
+        options.runnerPackages ?? runnerPackageManifest.packages
+      );
+      // The pointer has moved in this transaction, but is not visible outside it yet.
+      // Serializing graph reads here prevents two individually safe publishes forming a cycle.
+      await stores.workflowRuns.lockDefinitionGraph({ clientInstanceId });
       await checkChildCycles(
         result.manifest,
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
@@ -223,6 +232,10 @@ export function createWorkflowAssetKind(
       const config = workflowConfigSchema.parse(input.config);
       const result = parseStoredManifest(config.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(config.name, result.issues);
+      assertWorkflowPackages(
+        result.manifest,
+        options.runnerPackages ?? runnerPackageManifest.packages
+      );
       await checkPublishedChildren(
         options,
         result.manifest,

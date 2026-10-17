@@ -111,6 +111,11 @@ build ui-dev
 for target in api workspace-command-worker artifact-preview-worker; do
   image="catalyst-check-no-git-$target:local"
   build "$target" "$image"
+  docker run --rm --network none --entrypoint node "$image" -e '
+    const packages = require("/usr/local/share/catalyst/runner-packages.json");
+    if (!packages.some(p => p.name.toLowerCase() === "pypdf" && p.version === "4.3.1"))
+      throw new Error("API image has no pinned pypdf in its runner package manifest");
+  '
   found="$(docker run --rm --network none --entrypoint sh "$image" -c 'command -v git || true')"
   docker rmi "$image" >/dev/null
   if [[ -n "$found" ]]; then
@@ -123,3 +128,17 @@ done
 # build runs both.
 build workspace-command-runner
 echo "==> The API, UI, development UI and runner images build"
+
+# Prove the deployment kit's actual pinned Python layer too. This target needs no client
+# install; BuildKit skips unrelated stages. The same layer supplies the release runner and
+# the API's manifest, so publishing does not need Docker access.
+kit_image="catalyst-check-kit-runner-system:local"
+docker buildx build --file "$platform_root/packages/deployment-kit/docker/deployment.Dockerfile" \
+  --target runner-system --tag "$kit_image" --load "$workspace"
+kit_status=0
+docker run --rm --network none --entrypoint python3 \
+  --mount "type=bind,source=$platform_root/packages/deployment-kit/verify/runner-packages.py,target=/verify.py,readonly" \
+  "$kit_image" /verify.py || kit_status=$?
+docker rmi "$kit_image" >/dev/null
+if [[ "$kit_status" -ne 0 ]]; then exit "$kit_status"; fi
+echo "==> The deployment kit runner manifest, pypdf and offline sandbox verify"

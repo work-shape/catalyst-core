@@ -176,6 +176,7 @@ const manifestSchema = z.strictObject({
   retention: workflowRetentionSchema.optional(),
   types: z.record(z.string().min(1), jsonObjectSchema).optional(),
   tools: z.array(z.string().min(1)).optional(),
+  packages: z.array(z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/u)).optional(),
   steps: z.array(stepSchema).min(1)
 });
 

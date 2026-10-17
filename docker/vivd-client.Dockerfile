@@ -88,6 +88,8 @@ RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locke
     python-docx==1.1.2 \
     python-pptx==0.6.23 \
     reportlab==4.2.2 \
+  && mkdir -p /usr/local/share/catalyst \
+  && python3 -m pip list --format=json > /usr/local/share/catalyst/runner-packages.json \
   && /bin/bash --version \
   && fc-match Carlito | grep -qi Carlito \
   && fc-match Caladea | grep -qi Caladea \
@@ -221,6 +223,7 @@ ARG SERVER_ENTRY
 ENV SERVER_ENTRY=${SERVER_ENTRY}
 
 COPY --from=server-build /app ./
+COPY --from=workspace-artifact-runtime /usr/local/share/catalyst/runner-packages.json /usr/local/share/catalyst/runner-packages.json
 
 EXPOSE 4100
 CMD ["sh", "-c", "node ${SERVER_ENTRY}"]
@@ -248,6 +251,7 @@ ARG ARTIFACT_PREVIEW_WORKER_ENTRY
 ENV ARTIFACT_PREVIEW_WORKER_ENTRY=${ARTIFACT_PREVIEW_WORKER_ENTRY}
 
 COPY --from=server-build /app ./
+COPY --from=workspace-artifact-runtime /usr/local/share/catalyst/runner-packages.json /usr/local/share/catalyst/runner-packages.json
 RUN test -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" \
   && test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}"
 

@@ -50,7 +50,7 @@ test("an operator reads what the instance runs on and how its last check went, i
       .getByRole("button", { name: "Infrastructure" })
   ).toBeVisible();
   // The database and every configured provider have a row, grouped by what they are.
-  await expect(page.locator("[data-provider]")).toHaveCount(6);
+  await expect(page.locator("[data-provider]")).toHaveCount(7);
   expect(
     await page
       .locator("[data-provider]")
@@ -61,6 +61,7 @@ test("an operator reads what the instance runs on and how its last check went, i
     "objectStorage.files",
     "objectStorage.workspaces",
     "sandbox",
+    "sandbox.packages",
     "secrets"
   ]);
   const database = providerRow(page, "database");
@@ -188,8 +189,11 @@ test.describe("with a provider that does not answer", () => {
     );
     await page.goto("/settings/instance/infrastructure");
     const main = page.getByRole("region", { name: "Settings" });
-    await expect(page.locator("[data-provider]")).toHaveCount(7);
+    await expect(page.locator("[data-provider]")).toHaveCount(8);
 
+    await expect(providerRow(page, "sandbox.packages")).toContainText(
+      "Runner package manifest unavailable; declared Workflow packages cannot be published"
+    );
     const broken = providerRow(page, "models.broken");
     // What may be shown of its config: the host, the region and the name of its secret.
     await expect(broken).toContainText("openai-compatible");

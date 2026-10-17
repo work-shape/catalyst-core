@@ -512,6 +512,8 @@ export interface WorkflowManifest {
   types?: Readonly<Record<string, JsonObject>>;
   /** The names of the operations an agent step of this Workflow may call as tools. */
   tools?: readonly string[];
+  /** Installed runner distributions required by the code steps; checked at publish. */
+  packages?: readonly string[];
   steps: readonly WorkflowStep[];
 }
 

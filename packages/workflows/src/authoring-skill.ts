@@ -1,3 +1,4 @@
+import type { WorkflowRunnerPackage } from "./runner-packages";
 import {
   WORKFLOW_LOOP_ITEM_FAILURE_MODES,
   WORKFLOW_LOOP_MAX_CONCURRENCY,
@@ -306,7 +307,7 @@ export function workflowStepTypesNotRun(): string[] {
   return WORKFLOW_STEP_TYPES.filter((type) => !executed.includes(type));
 }
 
-function content(): string {
+function content(packages: readonly WorkflowRunnerPackage[]): string {
   const examples = EXAMPLES.map(
     ({ title, yaml }) => `### ${title}\n\n\`\`\`yaml\n${yaml}\n\`\`\``
   ).join("\n\n");
@@ -360,6 +361,8 @@ Follow the build rules for data scope in the platform docs: \`references/configu
 - \`runAs\`: the name of the service principal every step acts as. Its rights decide what a step
   may call. Do not change it unless the person asks: a publish checks whether its publisher
   may let a Workflow act as that principal.
+- \`packages\`: optional list of installed Python distribution names required by the code steps,
+  for example \`packages: [pypdf]\`. Publish refuses any name outside the runner allow-list below.
 - \`inputs\`: the JSON Schema of the input a run is started with. An object schema.
 - \`outputs\`: the JSON Schema of the result of a run. An object schema.
 - \`steps\`: the steps in the order they run, at most ${WORKFLOW_DEFINITION_MAX_STEPS} with the steps of loops counted.
@@ -376,6 +379,15 @@ There is no wiring between steps. They run from top to bottom, and a loop holds 
 ${stepReference()}
 
 ${stepFilesReference()}
+
+## Runner package allow-list
+
+${packages.length === 0 ? "No runner package manifest is available: the allow-list is empty, so publish refuses every declared package." : packages.map(({ name, version }) => `- \`${name}\` (${version})`).join("\n")}
+
+Use distribution names here: \`python-docx\` imports as \`docx\`, \`Pillow\` as \`PIL\`.
+Packages are installed and pinned when the release image is built. Nothing is installed at
+publish or run time, and the container has no network. Imports are not restricted to declared
+packages. Adding a package requires a runner image release. There is no package-count cap.
 
 ## Mappings and references
 
@@ -423,11 +435,18 @@ ${examples}
 }
 
 /** The skill as the platform ships it, offered to a conversation about a Workflow. */
-export const workflowAuthoringSkill: ShippedSkill = {
-  name: WORKFLOW_AUTHORING_SKILL_NAME,
-  title: "Writing a Workflow",
-  description:
-    "How to read, change, check and save the definition of a Workflow: what a manifest holds, the step types this engine runs, the scripts of its code steps, references between steps and what is not run yet. Read it before you change a Workflow.",
-  content: content(),
-  icon: "workflow"
-};
+export function createWorkflowAuthoringSkill(
+  packages: readonly WorkflowRunnerPackage[]
+): ShippedSkill {
+  return {
+    name: WORKFLOW_AUTHORING_SKILL_NAME,
+    title: "Writing a Workflow",
+    description:
+      "How to read, change, check and save the definition of a Workflow: what a manifest holds, the step types this engine runs, the scripts of its code steps, references between steps and what is not run yet. Read it before you change a Workflow.",
+    content: content(packages),
+    icon: "workflow"
+  };
+}
+
+/** Without an image manifest, authoring fails closed just as publishing does. */
+export const workflowAuthoringSkill = createWorkflowAuthoringSkill([]);

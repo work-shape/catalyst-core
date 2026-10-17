@@ -282,7 +282,7 @@ jobs:
           CATALYST_PAGE_BUILD_RUNNER_IMAGE: ${{ env.RUNNER_IMAGE_TAG }}
         run: >-
           pnpm exec vitest run
-          tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts
+          tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts tests/workflow-runner-packages-image.test.ts
           tests/workflow-code-step.test.ts
           -t "in the runner image|gives the workspace|through the job ends"
       - name: Commands in the runner image, worker root
@@ -293,7 +293,7 @@ jobs:
           "CATALYST_RUNNER_IMAGE=$RUNNER_IMAGE_TAG"
           "CATALYST_PAGE_BUILD_RUNNER_IMAGE=$RUNNER_IMAGE_TAG"
           pnpm exec vitest run
-          tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts
+          tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts tests/workflow-runner-packages-image.test.ts
           tests/workflow-code-step.test.ts
           -t "in the runner image|gives the workspace|through the job ends"
   browser-shard:

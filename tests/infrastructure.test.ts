@@ -57,7 +57,8 @@ describe("Instance > Infrastructure: what an operator reads", () => {
       ["models.main", "models", "openai-compatible"],
       ["models.unset", "models", "openai-compatible"],
       ["models.throws", "models", "throwing"],
-      ["models.odd", "models", "oddly-described"]
+      ["models.odd", "models", "oddly-described"],
+      ["sandbox.packages", "sandbox", "runner-package-manifest"]
     ]);
     const items = byId(infrastructure);
     expect(items["models.main"]).toEqual({
@@ -89,8 +90,11 @@ describe("Instance > Infrastructure: what an operator reads", () => {
     expect(items.database?.secrets).toEqual([{ name: "DATABASE_URL", state: "set" }]);
     // The sandbox runs in the command worker, which has reported no check.
     expect(items.sandbox?.check).toEqual({ status: "not_checked" });
+    expect(items["sandbox.packages"]?.name).toContain(
+      "declared Workflow packages cannot be published"
+    );
     // A read asks no provider.
-    expect(infrastructure.items.filter((item) => item.check.status === "pending")).toHaveLength(9);
+    expect(infrastructure.items.filter((item) => item.check.status === "pending")).toHaveLength(10);
   });
 
   it("withholds a host or a bucket that does not read as one and says so in the log", async () => {
