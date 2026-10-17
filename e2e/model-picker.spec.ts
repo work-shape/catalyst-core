@@ -184,7 +184,7 @@ async function expectPanelsShowWhole(page: Page, shot: string): Promise<void> {
   await screenshot(page, `${shot}-model`);
 
   await picker.getByRole("button", { name: /^Reasoning/u }).click();
-  const effort = picker.getByRole("slider", { name: "Reasoning" });
+  const effort = picker.getByRole("slider", { name: "Reasoning effort" });
   await expect(effort).toBeVisible();
   // It settles once it has been placed and has come in.
   await expect.poll(() => uncoveredShare(effort)).toBe(1);
@@ -251,7 +251,7 @@ async function expectPointerReachesOpenPanel(page: Page): Promise<void> {
   await expect(trigger).toContainText("GPT-5.1 Codex Max Preview");
 
   await reasoningRow.hover();
-  await expect(picker.getByRole("slider", { name: "Reasoning" })).toBeVisible();
+  await expect(picker.getByRole("slider", { name: "Reasoning effort" })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);

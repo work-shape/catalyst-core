@@ -1,3 +1,4 @@
+import { rights } from "./rights";
 import { defineTranslations } from "./translation-area";
 
 export const build = defineTranslations({
@@ -33,7 +34,7 @@ export const build = defineTranslations({
     "build.createPurpose": "What should it do?",
     "build.createNoNamespace": "No Namespace",
     "build.defaultModel": "Default model",
-    "build.modelSetByInstance": "Set by your instance.",
+    "build.modelSetByModelManagers": `Only people who may ${rights.en["rights.actionAgentModelsManage"].toLowerCase()} can change these.`,
     "build.reasoningEffortHint":
       "Reasoning effort is how long the model thinks before it answers; more helps with hard questions but takes longer.",
     "build.discard": "Discard",
@@ -168,7 +169,7 @@ export const build = defineTranslations({
     "build.createPurpose": "Was soll er tun?",
     "build.createNoNamespace": "Kein Namespace",
     "build.defaultModel": "Standardmodell",
-    "build.modelSetByInstance": "Von deiner Instanz festgelegt.",
+    "build.modelSetByModelManagers": `Ändern darf das nur, wer die ${rights.de["rights.actionAgentModelsManage"]} darf.`,
     "build.reasoningEffortHint":
       "Der Denkaufwand bestimmt, wie lange das Modell vor der Antwort nachdenkt; mehr hilft bei schwierigen Fragen, dauert aber länger.",
     "build.discard": "Verwerfen",

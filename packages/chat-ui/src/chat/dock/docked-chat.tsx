@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { PanelRight } from "lucide-react";
 import { Avatar, PageHeaderShellAction, SplitHandle } from "@work-shape/catalyst-ui";
+import { conversationTitle } from "../../shared/conversation-title";
 import { useTranslation } from "../../shared/i18n";
 import type { ConversationSubjectState } from "../conversation/use-conversation-subject";
 import { SurfaceSlot } from "../surface/surface-slot";
@@ -92,7 +93,11 @@ export function DockedChat({
         <DockHead
           title={
             subjectAgent ??
-            (dock.conversationId === undefined ? t("nav.newChat") : title || t("dock.chat"))
+            (dock.conversationId === undefined
+              ? t("nav.newChat")
+              : title
+                ? conversationTitle(title, t)
+                : t("dock.chat"))
           }
           mark={
             subjectAgent === undefined ? undefined : (

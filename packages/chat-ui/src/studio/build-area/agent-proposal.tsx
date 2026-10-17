@@ -2,6 +2,7 @@ import { Check, X } from "lucide-react";
 import { useId, type ReactNode } from "react";
 import { Badge, Banner, Button, FoldedText, ProposedValue } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import { reasoningEffortLabel } from "../../shared/reasoning-effort-label";
 import {
   changedLanguages,
   listChange,
@@ -320,7 +321,11 @@ function ModelLines({
   }
   if (live.reasoningEffort !== proposed.reasoningEffort) {
     lines.push(
-      `${t("configReasoningEffort")}: ${proposed.reasoningEffort || t("configModelDefault")}`
+      `${t("configReasoningEffort")}: ${
+        proposed.reasoningEffort
+          ? reasoningEffortLabel(proposed.reasoningEffort, t)
+          : t("configModelDefault")
+      }`
     );
   }
   if (live.fastMode !== proposed.fastMode) {

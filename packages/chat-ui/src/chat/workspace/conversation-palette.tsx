@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { ApiClient, ConversationListItem } from "@work-shape/catalyst-api-client";
 import { CommandPalette, type CommandPaletteGroup } from "@work-shape/catalyst-ui";
 import { useConversationSearchQuery } from "../../shared/api/conversation-search-query";
+import { conversationTitle } from "../../shared/conversation-title";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { workspaceShortcutLabel } from "./workspace-shortcuts";
 
@@ -89,7 +90,10 @@ export function ConversationPalette({
   }, [open]);
 
   const conversationItems = (conversations: readonly ConversationListItem[]) =>
-    conversations.map((conversation) => ({ value: conversation.id, label: conversation.title }));
+    conversations.map((conversation) => ({
+      value: conversation.id,
+      label: conversationTitle(conversation.title, t)
+    }));
   const results = searched === "" ? undefined : search.data;
   const needle = typed.toLocaleLowerCase();
   const goTo: CommandPaletteGroup = {

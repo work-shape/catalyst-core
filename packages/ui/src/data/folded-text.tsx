@@ -15,10 +15,7 @@ export function FoldedText({ className, children, ...props }: HTMLAttributes<HTM
       <span
         ref={fold.ref}
         id={textId}
-        className={cn(
-          "block w-full min-w-0 break-words whitespace-pre-line",
-          fold.folded && "line-clamp-3"
-        )}
+        className={cn("block w-full min-w-0 break-words whitespace-pre-line", fold.className)}
       >
         {children}
       </span>
@@ -61,6 +58,14 @@ export function FoldToggle({
   );
 }
 
+/** Three lines, with the browser's "…" where the value goes on. */
+const FOLD = "line-clamp-3";
+/**
+ * Three lines without a mark, for a fold whose third line ends with a full stop: a "…" behind
+ * the stop reads as a trailing sentence. `3lh` is the height `line-clamp-3` keeps.
+ */
+const FOLD_AT_FULL_STOP = "max-h-[3lh] overflow-hidden";
+
 /**
  * Folding of a long value. The control shows only when the value is longer than the three
  * lines it folds to, which is measured, because the same text is long in a narrow column and
@@ -70,29 +75,73 @@ export function useFold<Node extends HTMLElement>(foldable: boolean) {
   const ref = useRef<Node>(null);
   const [expanded, setExpanded] = useState(false);
   const [long, setLong] = useState(false);
+  const [endsAtFullStop, setEndsAtFullStop] = useState(false);
   const folded = foldable && !expanded;
 
   useEffect(() => {
     const node = ref.current;
-    if (!foldable || !node || typeof ResizeObserver === "undefined") {
+    // Unfolded, the value shows whole and cannot be measured against its fold; it stays long.
+    if (!folded || !node || typeof ResizeObserver === "undefined") {
       return;
     }
-    // Unfolded, the value shows whole and cannot be measured against its fold; it stays long.
     const measure = () => {
-      if (node.classList.contains("line-clamp-3")) {
-        setLong(node.scrollHeight > node.clientHeight + 1);
-      }
+      const cut = node.scrollHeight > node.clientHeight + 1;
+      setLong(cut);
+      setEndsAtFullStop(cut && lastShownCharacter(node) === ".");
     };
     measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [foldable]);
+    const resized = new ResizeObserver(measure);
+    resized.observe(node);
+    // A new text of the same height resizes nothing, and its third line may end differently.
+    // Attributes stay unobserved: the fold's own class changes with what it measures.
+    const changed = new MutationObserver(measure);
+    changed.observe(node, { childList: true, characterData: true, subtree: true });
+    return () => {
+      resized.disconnect();
+      changed.disconnect();
+    };
+  }, [folded]);
 
   return {
     ref,
     folded,
     long: foldable && long,
+    /** The fold's classes, for the element `ref` is on. */
+    className: folded ? (endsAtFullStop ? FOLD_AT_FULL_STOP : FOLD) : undefined,
     toggle: () => setExpanded((value) => !value)
   };
+}
+
+/**
+ * The last character a folded value shows, white space aside: where its third line ends. The
+ * text up to a character ends no lower than the character, so each text node is halved down to
+ * the characters that end above the fold.
+ */
+function lastShownCharacter(node: HTMLElement): string | undefined {
+  const document = node.ownerDocument;
+  const foldBottom = node.getBoundingClientRect().top + node.clientHeight + 1;
+  const range = document.createRange();
+  const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+  let last: string | undefined;
+  for (let next = walker.nextNode(); next; next = walker.nextNode()) {
+    const text = next;
+    const value = text.textContent ?? "";
+    const endsAbove = (end: number) => {
+      range.setStart(text, 0);
+      range.setEnd(text, end);
+      return range.getBoundingClientRect().bottom <= foldBottom;
+    };
+    if (value.length === 0) continue;
+    if (!endsAbove(1)) break;
+    let shown = 1;
+    let hidden = value.length + 1;
+    while (hidden - shown > 1) {
+      const middle = Math.floor((shown + hidden) / 2);
+      if (endsAbove(middle)) shown = middle;
+      else hidden = middle;
+    }
+    last = value.slice(0, shown).trimEnd().at(-1) ?? last;
+    if (shown < value.length) break;
+  }
+  return last;
 }

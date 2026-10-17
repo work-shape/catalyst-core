@@ -1,4 +1,5 @@
 // @rights-copy: included in the rights wording guard.
+import { rights } from "./rights";
 import { defineTranslations } from "./translation-area";
 
 export const administration = defineTranslations({
@@ -165,7 +166,7 @@ export const administration = defineTranslations({
     userRightAgentSkillsApprove: "Approve skill changes",
     userRightAgentSkillsApproveDescription:
       "Accept, reject and undo proposed changes to skills, and see their history.",
-    userRightAgentModelsManage: "Manage agent model settings",
+    userRightAgentModelsManage: rights.en["rights.actionAgentModelsManage"],
     userRightAgentModelsManageDescription:
       "Choose the model, reasoning effort and fast mode of each agent.",
     userRightApiAccessManage: "Manage API access",
@@ -355,7 +356,7 @@ export const administration = defineTranslations({
     userRightAgentSkillsApprove: "Änderungen an Skills freigeben",
     userRightAgentSkillsApproveDescription:
       "Vorgeschlagene Änderungen an Skills übernehmen, ablehnen und rückgängig machen sowie den Verlauf sehen.",
-    userRightAgentModelsManage: "Modelleinstellungen der Agenten verwalten",
+    userRightAgentModelsManage: rights.de["rights.actionAgentModelsManage"],
     userRightAgentModelsManageDescription:
       "Modell, Denkaufwand und Schnellmodus je Agent festlegen.",
     userRightApiAccessManage: "API-Zugriff verwalten",

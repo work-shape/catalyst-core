@@ -21,6 +21,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { modelDisplayLabel } from "../../shared/model-label";
+import { reasoningEffortLabel } from "../../shared/reasoning-effort-label";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import {
   CheckboxGroup,
@@ -309,7 +310,7 @@ export function AgentEditor({
                   modelBindings={modelBindings}
                   reasoningEfforts={references?.reasoningEfforts ?? []}
                   editable={canEditModel}
-                  setByInstance={!canManageAgentModels}
+                  setByModelManagers={canWrite && !canManageAgentModels}
                   onSelectDefault={(modelBindingId) =>
                     setForm((value) =>
                       selectAgentModelBinding(value, modelBindingId, {
@@ -687,7 +688,7 @@ function AgentModels({
   modelBindings,
   reasoningEfforts,
   editable,
-  setByInstance,
+  setByModelManagers,
   onSelectDefault,
   onSetUserSelectable,
   onSetReasoningEffort
@@ -696,8 +697,8 @@ function AgentModels({
   modelBindings: readonly { id: string; model: string; label?: string }[];
   reasoningEfforts: readonly string[];
   editable: boolean;
-  /** The reader may not change the agent's models: the default model says why. */
-  setByInstance: boolean;
+  /** The reader may change the agent but not its models: the default model says who may. */
+  setByModelManagers: boolean;
   onSelectDefault(modelBindingId: string): void;
   onSetUserSelectable(modelBindingId: string, userSelectable: boolean): void;
   onSetReasoningEffort(modelBindingId: string, reasoningEffort: string): void;
@@ -725,7 +726,7 @@ function AgentModels({
       <option value="">{t("configModelDefault")}</option>
       {reasoningEfforts.map((effort) => (
         <option key={effort} value={effort}>
-          {effort}
+          {reasoningEffortLabel(effort, t)}
         </option>
       ))}
     </Select>
@@ -736,7 +737,7 @@ function AgentModels({
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
           label={t("build.defaultModel")}
-          hint={setByInstance ? t("build.modelSetByInstance") : undefined}
+          hint={setByModelManagers ? t("build.modelSetByModelManagers") : undefined}
         >
           <Select
             value={form.modelBindingId}

@@ -9,6 +9,20 @@ describe("interface translations", () => {
   const en = createTranslationContext("en");
   const de = createTranslationContext("de");
 
+  it.each(["en", "de"] as const)(
+    "names the model-setting right in the locked-field hint (%s)",
+    (locale) => {
+      const { t } = createTranslationContext(locale);
+      const right = t("rights.actionAgentModelsManage");
+      expect(t("userRightAgentModelsManage")).toBe(right);
+      expect(t("build.modelSetByModelManagers")).toBe(
+        locale === "en"
+          ? `Only people who may ${right.toLowerCase()} can change these.`
+          : `Ändern darf das nur, wer die ${right} darf.`
+      );
+    }
+  );
+
   it("uses a neutral data label unless the client overrides that locale", () => {
     expect(en.t("resourcesCustomerData")).toBe("Data");
     expect(de.t("resourcesCustomerData")).toBe("Daten");

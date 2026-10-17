@@ -5,6 +5,7 @@ import type {
   LocaleCode,
   StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
+import { NEW_CONVERSATION_TITLE } from "../../shared/conversation-title";
 import type { ReasoningEffort } from "../workspace/agent-model-selection";
 
 /** The two operations that start an agent run. */
@@ -242,7 +243,12 @@ function extractUserText(message: UIMessage | undefined): string {
   );
 }
 
+/**
+ * The title a new conversation starts with: its first line, or the server's placeholder, which
+ * stays English in every language so that the server still replaces it with a generated title.
+ */
 function firstLineTitle(text: string): string {
-  const firstLine = text.split("\n")[0]?.trim() ?? "New conversation";
-  return firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine || "New conversation";
+  const firstLine = text.split("\n")[0]?.trim() ?? "";
+  if (!firstLine) return NEW_CONVERSATION_TITLE;
+  return firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine;
 }

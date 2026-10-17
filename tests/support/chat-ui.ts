@@ -118,6 +118,7 @@ export {
 export { ContextIndicator } from "../../packages/chat-ui/src/chat/assistant/context-indicator";
 export { resolveContextUsage } from "../../packages/chat-ui/src/chat/assistant/context-usage";
 export { ModelCard, ModelPicker } from "../../packages/chat-ui/src/chat/assistant/model-picker";
+export { DockedChat } from "../../packages/chat-ui/src/chat/dock/docked-chat";
 export {
   ProductConversationRunTransport,
   startProductConversationRun
@@ -270,6 +271,7 @@ export {
   agentChipDisplayFor,
   agentPickerOptions
 } from "../../packages/chat-ui/src/chat/workspace/agent-selector";
+export { ConversationPalette } from "../../packages/chat-ui/src/chat/workspace/conversation-palette";
 export { ClientBrandingHeader } from "../../packages/chat-ui/src/chat/workspace/client-branding";
 export {
   addressDockConversation,
@@ -320,7 +322,7 @@ export {
 export {
   useWorkspaceApiClient,
   WorkspaceApiClientProvider
-} from "../../packages/chat-ui/src/shared/api/workspace-api-client";
+} from "@work-shape/catalyst-chat-ui/workspace-api-client";
 export {
   cacheStartedRunThread,
   conversationListCacheKey,

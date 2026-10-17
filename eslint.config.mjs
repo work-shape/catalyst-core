@@ -25,6 +25,11 @@ export default [
       ]
     }
   },
+  {
+    // The sole private chat-ui test seam is allowed to cross this package boundary.
+    files: ["tests/support/chat-ui.ts"],
+    rules: { "import-x/no-relative-packages": "off" }
+  },
   { rules: { "catalyst/retired-terms": "error" } },
   {
     // Release tooling reuses the kit in this checkout before its package is published.

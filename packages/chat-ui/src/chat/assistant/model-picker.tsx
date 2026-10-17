@@ -4,6 +4,7 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { modelDisplayLabel } from "../../shared/model-label";
+import { reasoningEffortLabel } from "../../shared/reasoning-effort-label";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { EuResidencyBadge, ModelVendorIcon, modelVendorLabel } from "./model-vendor";
 
@@ -18,14 +19,6 @@ const usageTierLabels: Record<UsageTier, TranslationKey> = {
   elevated: "modelUsageTierElevated",
   high: "modelUsageTierHigh",
   very_high: "modelUsageTierVeryHigh"
-};
-const reasoningEffortLabels: Record<ReasoningEffort, TranslationKey> = {
-  none: "reasoningEffortNone",
-  low: "reasoningEffortLow",
-  medium: "reasoningEffortMedium",
-  high: "reasoningEffortHigh",
-  xhigh: "reasoningEffortXhigh",
-  max: "reasoningEffortMax"
 };
 
 const VIEWPORT_GUTTER = 16;
@@ -285,7 +278,7 @@ export function ModelPicker({
           <span className="truncate">{modelDisplayLabel(selectedModel)}</span>
           {offersReasoning ? (
             <span className="hidden shrink-0 font-normal opacity-75 sm:inline">
-              {t(reasoningEffortLabels[reasoningEffort])}
+              {reasoningEffortLabel(reasoningEffort, t)}
             </span>
           ) : null}
           <ChevronDown
@@ -418,14 +411,14 @@ export function ModelPicker({
             menuRow(
               "reasoning",
               t("modelPickerReasoning"),
-              t(reasoningEffortLabels[reasoningEffort])
+              reasoningEffortLabel(reasoningEffort, t)
             )
           ) : reasoningEffort ? (
             // A model with a fixed effort still says which one it runs with.
             <div className="flex h-9 items-center gap-2 px-2 text-sm text-muted-foreground">
               {opensRight ? null : <span className="w-3.5 shrink-0 max-sm:hidden" />}
               <span className="font-medium">{t("modelPickerReasoning")}</span>
-              <span className="ml-auto">{t(reasoningEffortLabels[reasoningEffort])}</span>
+              <span className="ml-auto">{reasoningEffortLabel(reasoningEffort, t)}</span>
             </div>
           ) : null}
         </div>
@@ -461,7 +454,7 @@ function ReasoningEffortSlider({
 
   return (
     <div className={cn("grid gap-2.5 px-3.5 pb-3.5 pt-3", className)}>
-      <p className="text-center text-sm font-semibold">{t(reasoningEffortLabels[value])}</p>
+      <p className="text-center text-sm font-semibold">{reasoningEffortLabel(value, t)}</p>
       <div className="relative h-6 rounded-full bg-muted">
         <span
           className="absolute inset-y-0 left-0 rounded-full bg-primary"
@@ -485,7 +478,7 @@ function ReasoningEffortSlider({
           step={1}
           value={index}
           aria-label={t("modelPickerReasoning")}
-          aria-valuetext={t(reasoningEffortLabels[value])}
+          aria-valuetext={reasoningEffortLabel(value, t)}
           onChange={(event) => onChange(efforts[Number(event.target.value)] ?? value)}
         />
       </div>

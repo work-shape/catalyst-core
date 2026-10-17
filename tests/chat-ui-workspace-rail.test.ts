@@ -4,6 +4,7 @@ import type { ConversationListItem, LocaleCode, SafeConfig } from "@work-shape/c
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CollaborationWorkspaceSelector,
+  DockedChat,
   WorkspaceRail,
   retentionHintAfter,
   retentionHintClosed,
@@ -323,6 +324,80 @@ describe("workspace rail Studio row and Settings gear", () => {
       view: "settings"
     });
     expect(onSettings).toMatch(/<button[^>]*aria-label="Return to chat"[^>]*aria-pressed="true"/u);
+  });
+});
+
+describe("workspace rail conversation titles", () => {
+  it.each([
+    ["en", "New conversation"],
+    ["de", "Neue Unterhaltung"]
+  ] as const)(
+    "shows the stored placeholder title in the reader's language (%s)",
+    (locale, shown) => {
+      const markup = renderRail(
+        undefined,
+        undefined,
+        [
+          conversation("conv_new", "New conversation"),
+          conversation("conv_named", "New conversation about Q3")
+        ],
+        {},
+        locale
+      );
+
+      expect(markup).toContain(`title="${shown}">${shown}</span>`);
+      // Only the exact placeholder is translated; a title that starts with it is the person's own.
+      expect(markup).toContain(
+        `title="New conversation about Q3">New conversation about Q3</span>`
+      );
+      if (locale === "de") {
+        expect(markup).not.toContain(`"New conversation"`);
+        expect(markup).not.toContain(">New conversation<");
+      }
+    }
+  );
+
+  it.each([
+    ["en", "New conversation"],
+    ["de", "Neue Unterhaltung"]
+  ] as const)("names the docked conversation's head by the placeholder in %s", (locale, shown) => {
+    const dock = {
+      conversationId: "conv_new",
+      open: true,
+      inFront: false,
+      openPage: noop,
+      show: noop,
+      close: noop,
+      forget: noop,
+      reopen: noop,
+      showPage: noop,
+      showChat: noop
+    };
+    const view = {
+      mode: "dock" as const,
+      layout: { over: false, width: 420, min: 380, max: 760, choose: noop, keep: noop },
+      arrival: undefined,
+      arrived: noop,
+      measure: noop
+    };
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale },
+        createElement(DockedChat, {
+          view,
+          dock,
+          title: "New conversation",
+          agent: undefined,
+          children: null
+        })
+      )
+    );
+
+    expect(markup).toContain(shown);
+    if (locale === "de") {
+      expect(markup).not.toContain("New conversation");
+    }
   });
 });
 

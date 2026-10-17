@@ -2,6 +2,7 @@ import { FolderInput } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
 import { Button, cn, Dialog, RadioGroup } from "@work-shape/catalyst-ui";
+import { conversationTitle as displayedTitle } from "../conversation-title";
 import { useTranslation } from "../i18n";
 import {
   CollaborationWorkspaceAvatar,
@@ -90,7 +91,7 @@ export function MoveConversationDialog({
         }}
       >
         <p className="text-sm leading-6 text-muted-foreground">
-          {t("moveConversationDescription", { title: conversationTitle })}
+          {t("moveConversationDescription", { title: displayedTitle(conversationTitle, t) })}
         </p>
 
         {destinations.length === 0 ? (

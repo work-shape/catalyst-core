@@ -165,6 +165,12 @@ describe("the agent page with a proposal", () => {
     ).toContain("Der Agent schlägt eine Änderung an einem Feld vor. Sie ist unten markiert.");
   });
 
+  it("names a proposed reasoning effort in the reader's language, not by its value", () => {
+    const effort = proposalState({ ...live, reasoningEffort: "xhigh" });
+    expect(agentPage(effort)).toContain(">Reasoning effort: Extra high</p>");
+    expect(agentPage(effort, { locale: "de" })).toContain(">Denkaufwand: Sehr hoch</p>");
+  });
+
   it("keeps a proposed value with its field, in one group", () => {
     const markup = agentPage(proposalState(proposed));
     expect(markup).toMatch(

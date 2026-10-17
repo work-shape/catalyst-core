@@ -56,6 +56,32 @@ describe("chat UI product run transport", () => {
     ]);
   });
 
+  it.each(["en", "de"] as const)(
+    "stores the server's placeholder for a conversation without a first line, in %s too",
+    async (locale) => {
+      const bodies: { conversation?: { title?: string } }[] = [];
+      const client = {
+        conversations: {
+          runs: {
+            async create(input: { body: { conversation?: { title?: string } } }) {
+              bodies.push(input.body);
+              return createStartResponse({ conversationId: "conv_new" });
+            },
+            async start() {
+              throw new Error("startRun should not be called");
+            }
+          }
+        }
+      };
+
+      // An attachment-only first message has no text.
+      await startProductConversationRun({ client, idempotencyKey: "idem", locale, text: "" });
+
+      // The server replaces exactly these words with a generated title; the interface translates them.
+      expect(bodies.map((body) => body.conversation?.title)).toEqual(["New conversation"]);
+    }
+  );
+
   it("creates the conversation inside the active collaboration workspace", async () => {
     const calls: unknown[] = [];
     const client = {

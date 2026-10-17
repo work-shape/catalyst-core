@@ -654,6 +654,19 @@ describe("move conversation dialog", () => {
     expect(markup.match(/data-testid="move-conversation-destination-row"/gu)).toHaveLength(2);
   });
 
+  it("names a conversation with the stored placeholder title in the reader's language", () => {
+    const markup = render(
+      "de",
+      createElement(MoveConversationDialog, {
+        ...moveDialogProps,
+        conversationTitle: "New conversation"
+      })
+    );
+
+    expect(markup).toContain("Neue Unterhaltung");
+    expect(markup).not.toContain("New conversation");
+  });
+
   it("keeps the move disabled until a destination is picked", () => {
     const markup = render("de", createElement(MoveConversationDialog, moveDialogProps));
 

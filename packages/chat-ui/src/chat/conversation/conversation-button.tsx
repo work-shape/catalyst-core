@@ -14,6 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger
 } from "@work-shape/catalyst-ui";
+import { conversationTitle } from "../../shared/conversation-title";
 import { useTranslation } from "../../shared/i18n";
 import { retentionWarningDate, retentionWarningText } from "./retention-warning";
 
@@ -39,9 +40,10 @@ export function ConversationButton({
   deleting: boolean;
 }) {
   const { locale, t } = useTranslation();
+  const title = conversationTitle(conversation.title, t);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [draftTitle, setDraftTitle] = useState(conversation.title);
+  const [draftTitle, setDraftTitle] = useState(title);
   const [saving, setSaving] = useState(false);
   const editorFormRef = useRef<HTMLFormElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
@@ -63,9 +65,9 @@ export function ConversationButton({
     if (saving) {
       return;
     }
-    setDraftTitle(conversation.title);
+    setDraftTitle(title);
     setEditing(false);
-  }, [conversation.title, saving]);
+  }, [title, saving]);
 
   useEffect(() => {
     const movedToAnotherConversation = wasSelectedRef.current && !selected;
@@ -100,17 +102,18 @@ export function ConversationButton({
   }, [editing, exitEditing]);
 
   function startEditing() {
-    setDraftTitle(conversation.title);
+    setDraftTitle(title);
     setEditing(true);
   }
 
   async function saveTitle() {
-    const title = draftTitle.trim();
-    if (!title || saving) {
+    const draft = draftTitle.trim();
+    if (!draft || saving) {
       titleInputRef.current?.focus();
       return;
     }
-    if (title === conversation.title) {
+    // An unchanged placeholder stays the stored one, which the server still replaces.
+    if (draft === title) {
       exitEditing();
       return;
     }
@@ -118,7 +121,7 @@ export function ConversationButton({
     exitEditing();
     setSaving(true);
     try {
-      await onRename(title);
+      await onRename(draft);
     } catch {
       // The mutation surfaces the error and the persisted title remains unchanged.
     } finally {
@@ -129,7 +132,7 @@ export function ConversationButton({
   const options = (
     <ThreadListItemMorePrimitive.Root>
       <ThreadListItemMorePrimitive.Trigger asChild disabled={deleting || saving}>
-        <IconButton size="sm" label={t("conversationOptions", { title: conversation.title })}>
+        <IconButton size="sm" label={t("conversationOptions", { title })}>
           <MoreHorizontal aria-hidden="true" />
         </IconButton>
       </ThreadListItemMorePrimitive.Trigger>
@@ -265,7 +268,7 @@ export function ConversationButton({
               ) : null}
               <span
                 className="min-w-0 truncate"
-                title={conversation.title}
+                title={title}
                 onClick={(event) => {
                   if (!selected) {
                     return;
@@ -275,7 +278,7 @@ export function ConversationButton({
                   startEditing();
                 }}
               >
-                {conversation.title}
+                {title}
               </span>
               {conversation.visibility === "private" ? (
                 <span
@@ -328,7 +331,7 @@ export function ConversationButton({
       >
         <div className="grid gap-4">
           <p className="text-sm leading-6 text-muted-foreground">
-            {t("deleteConversationDialogDescription", { title: conversation.title })}
+            {t("deleteConversationDialogDescription", { title })}
           </p>
           <div className="flex justify-end gap-2">
             <Button

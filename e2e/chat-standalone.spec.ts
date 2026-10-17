@@ -3397,7 +3397,7 @@ test("superadmin manages config assets with validation and conflict protection",
       form()
         .getByRole("combobox", { name: "Default model: Reasoning effort", exact: true })
         .locator("option")
-    ).toContainText(["Model default", "none", "low", "medium", "high", "xhigh"]);
+    ).toHaveText(["Model default", "Off", "Low", "Medium", "High", "Extra high", "Max"]);
     await expect(
       fieldset("Models people can choose in chat").getByLabel("deterministic-local", {
         exact: true

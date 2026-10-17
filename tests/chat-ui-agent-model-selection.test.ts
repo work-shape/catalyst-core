@@ -1,3 +1,4 @@
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -99,11 +100,11 @@ describe("agent model selection", () => {
   });
 });
 
-function renderPicker(models: AgentSelectableModel[]) {
+function renderPicker(models: AgentSelectableModel[], locale: "en" | "de" = "en") {
   return renderInUiRoot(
     createElement(
       TranslationProvider,
-      { children: null, locale: "en" as const },
+      { children: null, locale },
       createElement(ModelPicker, {
         models,
         selectedModelBindingId: models[0]?.bindingId,
@@ -175,6 +176,24 @@ describe("composer model picker", () => {
     expect(markup).toContain(">Medium<");
     // The list stays closed until asked for.
     expect(markup).not.toContain("GPT-5.6 Terra");
+  });
+
+  it.each([
+    ["en", "Reasoning effort", "Off"],
+    ["de", "Denkaufwand", "Aus"]
+  ] as const)(
+    "calls the effort choice and its lowest step by their words (%s)",
+    (locale, choice, off) => {
+      const { t } = createTranslationContext(locale);
+
+      // The picker's row, panel and slider all carry this one label.
+      expect(t("modelPickerReasoning")).toBe(choice);
+      expect(t("reasoningEffortNone")).toBe(off);
+    }
+  );
+
+  it("names the effort on the trigger in German with the agent page's word", () => {
+    expect(renderPicker([{ ...own, reasoningEffort: "xhigh" }], "de")).toContain(">Sehr hoch<");
   });
 
   it("shows the name release config gives a model, not its deployment name", () => {

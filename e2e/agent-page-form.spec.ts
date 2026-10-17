@@ -171,9 +171,10 @@ test("an agent has the same mark on the Agents page, in Studio and in the dock",
   }
 });
 
-// Fails without the sentences: the section explained reasoning effort in terms of model
-// bindings, and a default model locked for the reader gave no reason.
-test("the model section says what reasoning effort does and why the model is fixed", async ({
+// Fails without the sentence: the section explained reasoning effort in terms of model bindings.
+// A locked default model names no source: the models on offer come from the agent and the
+// limits around it, not from "the instance" (COPY-1).
+test("the model section says what reasoning effort does and locks the models for a reader", async ({
   page,
   instanceAgentsChange: _instanceAgentsChange
 }, testInfo) => {
@@ -187,7 +188,6 @@ test("the model section says what reasoning effort does and why the model is fix
     en: "Reasoning effort is how long the model thinks before it answers; more helps with hard questions but takes longer.",
     de: "Der Denkaufwand bestimmt, wie lange das Modell vor der Antwort nachdenkt; mehr hilft bei schwierigen Fragen, dauert aber länger."
   };
-  const fixed = { en: "Set by your instance.", de: "Von deiner Instanz festgelegt." };
   const openModel = async () => {
     await page.goto(`/build/agents/${name}`);
     const model = page.locator("section#model");
@@ -195,13 +195,12 @@ test("the model section says what reasoning effort does and why the model is fix
     return model;
   };
   try {
-    // Who may change the models reads the sentence on effort and no reason for a lock.
+    // Who may change the models reads the sentence on effort and may change them.
     const writable = await openModel();
     await expect(writable).toContainText(effort.en);
-    await expect(writable).not.toContainText(fixed.en);
     await expect(writable.getByRole("combobox").first()).toBeEnabled();
 
-    // Who may change the agent and not its models reads why the model stays as it is.
+    // Who may change the agent and not its models reads the same sentence beside a locked model.
     await page.context().clearCookies();
     await signIn(page, admin);
     for (const locale of ["en", "de"] as const) {
@@ -211,7 +210,6 @@ test("the model section says what reasoning effort does and why the model is fix
       );
       const model = await openModel();
       await expect(model).toContainText(effort[locale]);
-      await expect(model).toContainText(fixed[locale]);
       await expect(model.getByRole("combobox").first()).toBeDisabled();
     }
     await shoot(page, testInfo, "model-section", openModel);

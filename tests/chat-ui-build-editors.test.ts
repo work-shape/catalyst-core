@@ -144,10 +144,26 @@ describe("agent page", () => {
 
     expect(markup).toContain(">Instance default</option>");
     expect(markup).toContain('value="Help with the workflow."');
-    expect(markup).toContain('<option value="high" selected="">high</option>');
+    expect(markup).toContain('<option value="high" selected="">High</option>');
     expect(markup).toContain('value="128"');
     expect(markup).not.toContain("Save changes");
     expect(markup).toContain("You can read this but not change it.");
+  });
+
+  it.each([
+    ["en", ["Off", "Low", "Medium", "High", "Extra high", "Max"]],
+    ["de", ["Aus", "Niedrig", "Mittel", "Hoch", "Sehr hoch", "Maximal"]]
+  ] as const)("names each reasoning effort as the composer does, in %s", (locale, words) => {
+    const efforts = ["none", "low", "medium", "high", "xhigh", "max"] as const;
+    const markup = agentPage({
+      config: { modelProviderId: "azure-eu" },
+      references: { reasoningEfforts: [...efforts] },
+      locale
+    });
+    // The value stays the one the instance stores; only the words are the reader's.
+    efforts.forEach((effort, index) => {
+      expect(markup).toContain(`<option value="${effort}">${words[index]}</option>`);
+    });
   });
 
   it("says that the page is read-only to a reader who may not write the agent", () => {
@@ -280,7 +296,6 @@ describe("agent page", () => {
     expect(fastSwitch(editable)).not.toContain('disabled=""');
     expect(editable).toContain("Fast runs are billed at a higher rate.");
     expect(editable).toContain('data-model-binding="plain"');
-    expect(editable).not.toContain("Set by your instance.");
 
     const readOnly = page(false);
     expect(readOnly).toContain('<option value="fast" selected="">GPT-fast</option>');
@@ -289,10 +304,34 @@ describe("agent page", () => {
     expect(readOnly).not.toContain('data-model-binding="plain"');
     expect(effortSelect(readOnly)).toContain('disabled=""');
     expect(fastSwitch(readOnly)).toContain('disabled=""');
-    expect(readOnly).toContain("Set by your instance.");
 
     // No fast-mode control for a binding that does not support it.
     expect(fastSwitch(page(true, "plain"))).toBeUndefined();
+  });
+
+  it.each([
+    ["en", "Only people who may manage agent model settings can change these."],
+    ["de", "Ändern darf das nur, wer die Modelleinstellungen der Agenten verwalten darf."]
+  ] as const)("says who sets the models only to a writer who may not (%s)", (locale, hint) => {
+    const model = (canWrite: boolean, canManageAgentModels: boolean) =>
+      section(
+        agentPage({
+          config: { modelBindingId: "plain" },
+          references: {
+            modelBindingIds: ["plain"],
+            modelBindings: [{ id: "plain", model: "gpt-plain" }]
+          },
+          frame: { canWrite },
+          canManageAgentModels,
+          locale
+        }),
+        "model"
+      );
+
+    expect(model(true, false)).toContain(hint);
+    expect(model(true, true)).not.toContain(hint);
+    // A reader who may not change the agent at all is told so once, for the whole page.
+    expect(model(false, false)).not.toContain(hint);
   });
 
   it("shows the agent's default model and the models people can choose beside it", () => {

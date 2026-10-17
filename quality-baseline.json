@@ -229,7 +229,7 @@
       "target": "lint",
       "rule": "import-x/no-relative-packages",
       "scope": "tests",
-      "count": 117,
+      "count": 26,
       "owner": "CB-2"
     },
     {

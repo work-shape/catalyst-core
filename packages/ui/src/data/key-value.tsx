@@ -54,7 +54,7 @@ export function KeyValue({
           <div
             ref={fold.ref}
             id={valueId}
-            className={cn("min-w-0 flex-1 break-words", fold.folded && "line-clamp-3")}
+            className={cn("min-w-0 flex-1 break-words", fold.className)}
           >
             {children}
           </div>

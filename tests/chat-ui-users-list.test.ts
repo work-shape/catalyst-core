@@ -93,6 +93,12 @@ describe("Instance > Users", () => {
     expect(panel([user(signedIn)])).toContain("1 users · 1 active<");
   });
 
+  it("reads Eingeladen in German for a person who never signed in, as its filter does", () => {
+    const german = panel([user()], "de");
+    expect(german.match(/>Eingeladen</gu)).toHaveLength(2); // the filter's option and the badge
+    expect(german).not.toMatch(/>Aktiv<\/span>/u);
+  });
+
   it("folds Last active, then Access, then Status into the details under the full name", () => {
     expect(
       heads.map(([, attributes, label]) => [

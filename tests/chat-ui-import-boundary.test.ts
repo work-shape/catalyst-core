@@ -17,7 +17,7 @@ const fixtures = [
   ['import { createTranslationContext } from "@work-shape/catalyst-chat-ui";', undefined],
   ['import { AccessPage } from "@work-shape/catalyst-chat-ui/access";', undefined],
   [
-    `export { resolveThemeModePreference } from "../${path}";`,
+    'export { ConversationPalette } from "../../packages/chat-ui/src/chat/workspace/conversation-palette";',
     undefined,
     "tests/support/chat-ui.ts"
   ],
@@ -64,7 +64,7 @@ try {
 describe("chat-ui test import boundary", () => {
   it.each(fixtures.map((fixture, index) => ({ fixture, index, source: fixture[0] })))(
     "checks the import boundary: $source",
-    ({ fixture: [, rule], index }) => {
+    ({ fixture: [, rule, file], index }) => {
       const result = results[index];
       expect(result).toBeDefined();
       expect(result).not.toContain('"fatal":true');
@@ -73,6 +73,9 @@ describe("chat-ui test import boundary", () => {
       } else {
         expect(result).not.toContain('"ruleId":"no-restricted-imports"');
         expect(result).not.toContain('"ruleId":"no-restricted-syntax"');
+        if (file === "tests/support/chat-ui.ts") {
+          expect(result).not.toContain('"ruleId":"import-x/no-relative-packages"');
+        }
       }
     }
   );
