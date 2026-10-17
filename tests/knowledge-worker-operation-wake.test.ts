@@ -64,6 +64,7 @@ describe("Knowledge Base completion from the knowledge worker", () => {
         clientInstanceId,
         workflow: definition.id,
         definitionRevisionId: "wake-fixture",
+        limits: { durationMs: 60_000, stepRuns: 20_000, loopItems: 10_000 },
         mode: "live",
         trigger: "manual",
         principal,
