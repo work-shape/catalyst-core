@@ -51,7 +51,9 @@ function contextWith(secret: string): ConnectorContext {
 function harnessOf(
   wrap: (source: DocumentSourceCapability) => DocumentSourceCapability = (source) => source
 ): DocumentSourceKitHarness {
-  const { capability, world } = createFixtureDocumentSource({ secret: SECRET });
+  const { connectorType, world } = createFixtureDocumentSource({ secret: SECRET });
+  const capability = connectorType.documentSource;
+  if (!capability) throw new Error("The fixture type must offer document_source");
   const put = (name: string, size: number) =>
     world.put({ folderId: FOLDER, name, mime: "text/plain", bytes: new Uint8Array(size).fill(65) });
   put("a.txt", 10);

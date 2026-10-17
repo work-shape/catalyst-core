@@ -85,7 +85,7 @@ const ownerOf = (knowledgeBaseId: string): ManagedFileOwner => ({
  * could have made a copy in the window.
  */
 export async function enqueueKnowledgeFileCleanup(
-  runtime: KnowledgeRuntime,
+  runtime: Pick<KnowledgeRuntime, "clientInstanceId" | "stores" | "now">,
   target: BuiltinKnowledgeTarget
 ): Promise<void> {
   const now = runtime.now().getTime();

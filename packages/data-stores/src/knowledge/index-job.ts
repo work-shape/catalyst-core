@@ -12,6 +12,7 @@ import {
   knowledgeIndexJob,
   ObjectNotFound,
   readObjectBytes,
+  storeKnowledgeExtraction,
   type AssetScope,
   type AuditRecorder,
   type BuiltinKnowledgeTarget,
@@ -346,13 +347,29 @@ async function pagesOf(
   files: KnowledgeFiles,
   control: JobControl,
   payload: KnowledgeContentJobPayload,
-  content: { format: KnowledgeDocumentFormat; fileId: string }
+  content: { format: KnowledgeDocumentFormat; fileId: string; synced?: boolean }
 ): Promise<Pages> {
   if (!isExtracted(content.format)) {
+    if (content.synced) {
+      const stored = await readExtraction(files, payload);
+      if (stored !== undefined && stored !== "invalid" && stored.status === "extracted") {
+        return {
+          kind: "pages",
+          pages: stored.pages.map((page) => ({ text: page.text })),
+          extractionRevision: stored.extractionRevision
+        };
+      }
+    }
     const bytes = await readCopy(runtime, files, payload.knowledgeBaseId, content.fileId);
     if (!bytes) return { kind: "failed", code: "knowledge_file_missing" };
     const text = decodeKnowledgeText(bytes);
     if (text === undefined) return { kind: "failed", code: "knowledge_text_unreadable" };
+    if (content.synced)
+      await storeKnowledgeExtraction(files.objects, payload, {
+        status: "extracted",
+        extractionRevision: KNOWLEDGE_TEXT_EXTRACTION_REVISION,
+        pages: [{ page: 1, text }]
+      });
     return {
       kind: "pages",
       pages: [{ text }],
@@ -409,6 +426,9 @@ export function createKnowledgeIndexJobHandler(
       | { chunks?: number; pages?: number; embedded?: number }
       | { code: KnowledgeDocumentFailureCode }
   ): Promise<void> {
+    // Synced content is audited by its sync run, never once per document/content.
+    const found = await indexTargetOf(runtime, payload.knowledgeBaseId);
+    if ((await found?.store.readContent(payload.contentSha256))?.synced) return;
     const failed = "code" in outcome;
     await auditRecorder.record({
       type: "knowledge_base.content_indexed",
@@ -590,6 +610,7 @@ export function createKnowledgeIndexJobHandler(
       if (!chunked) {
         const pages = await pagesOf(runtime, files, control, payload, {
           format: content.format,
+          synced: content.synced,
           fileId: document.fileId
         });
         if (pages.kind === "requested") return;

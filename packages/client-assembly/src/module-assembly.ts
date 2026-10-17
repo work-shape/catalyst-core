@@ -1,3 +1,5 @@
+import type { DataStores } from "@work-shape/catalyst-data-stores";
+import type { InstanceConnections } from "./connections";
 import type {
   AuditRecorder,
   Authorizer,
@@ -31,6 +33,7 @@ import type { ToolAssemblyDefinition } from "@work-shape/catalyst-tool-sdk";
  */
 export interface ModuleAssemblyParts {
   config: ClientInstanceConfig;
+  connections?: InstanceConnections;
   modules: ModuleSnapshot;
   clientInstanceId: ClientInstanceId;
   secrets: SecretResolver;
@@ -83,6 +86,7 @@ export interface ModuleAssembly {
   readonly tools?: readonly ToolAssemblyDefinition[];
   /** Where a Knowledge Base reads the tables it describes, where this module offers that. */
   readonly knowledgeBackend?: KnowledgeBackend;
+  readonly knowledgeSourceJobs?: DataStores["knowledgeSourceJobs"];
   /** The operations of each Asset of the kind. Built here and resolved when one is called. */
   operationSources?(runtime: ModuleRuntime): readonly OperationSource[];
   start?(runtime: ModuleRuntime): ModuleRuntimeAssembly | Promise<ModuleRuntimeAssembly>;

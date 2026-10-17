@@ -285,7 +285,10 @@ export async function createClientInstanceExecutionAssembly(
   });
   const connectionParts = { config, modules, clientInstanceId, secrets, stores: store, logger };
   const connections = await createInstanceConnections(connectionParts, input.connectorTypes);
-  const moduleAssembly = await assembleModules(connectionParts);
+  const moduleAssembly = await assembleModules({
+    ...connectionParts,
+    ...(connections ? { connections } : {})
+  });
   const dataSources = await createDataSourceRegistry({ configs: config.dataSources, secrets });
   const workspaceObjectStore = config.executionWorkspaces.enabled
     ? await createWorkspacesStore(config, infrastructure.context)

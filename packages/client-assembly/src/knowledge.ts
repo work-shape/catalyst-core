@@ -4,6 +4,7 @@ import {
   AppError,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_DOCUMENT_FORMATS,
+  DocumentSourceError,
   KNOWLEDGE_TEXT_FORMATS
 } from "@work-shape/catalyst-core";
 import {
@@ -126,6 +127,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       "Knowledge Bases need a backend, and no module of this process offers one: the Data Stores seam is assembled before the Knowledge Base seam"
     );
   }
+  const sourceJobs = earlier.find((assembly) => assembly.knowledgeSourceJobs)?.knowledgeSourceJobs;
   const knowledgeBases = createKnowledgeBases({
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
@@ -147,7 +149,24 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       return {
         routes: [knowledgeRoutes],
         dataToolSources: [knowledgeBases.toolSource],
-        jobHandlers: fileJobs.handlers,
+        jobHandlers: [
+          ...fileJobs.handlers,
+          ...(runtime.files && sourceJobs
+            ? sourceJobs({
+                files: runtime.files,
+                documentFormats: parts.modules.isEnabled(DOCUMENTS_MODULE)
+                  ? KNOWLEDGE_DOCUMENT_FORMATS
+                  : KNOWLEDGE_TEXT_FORMATS,
+                maxDocuments: parts.config.knowledge.maxDocuments,
+                async openSource(name, signal) {
+                  const connections = parts.connections;
+                  if (!connections)
+                    throw new DocumentSourceError("unavailable", "Connections are unavailable");
+                  return connections.openDocumentSource(name, signal);
+                }
+              })
+            : [])
+        ],
         jobRetries: fileJobs.retries
       };
     }

@@ -5,9 +5,11 @@ import postgres from "postgres";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createJobWorker } from "@work-shape/catalyst-client-assembly";
 import { createFixtureDocumentSource, loadSecretKeyring } from "@work-shape/catalyst-connections";
-import { createDataStores } from "@work-shape/catalyst-data-stores";
+import { createDataStores, createKnowledgeBases } from "@work-shape/catalyst-data-stores";
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import {
+  StoreBackedAuditRecorder,
+  enqueueKnowledgeIndex,
   DocumentSourceError,
   KNOWLEDGE_BASE_ASSET_KIND,
   KNOWLEDGE_FILE_MAX_BYTES,
@@ -148,6 +150,26 @@ describe("initial and full source import (KB 72, 73)", () => {
       logger: silent
     });
     cleanups.push(() => dataStores.close());
+    const embed = vi.fn(async ({ texts }: { texts: readonly string[] }) => ({
+      vectors: texts.map(() => Array.from({ length: 8 }, () => 0.25))
+    }));
+    const knowledge = createKnowledgeBases({
+      clientInstanceId,
+      stores: instance.stores,
+      backend: dataStores.knowledgeBackend,
+      embedding: {
+        defaultBinding: "embedding",
+        models: [{ bindingId: "embedding", model: "test", dimensions: 8 }]
+      },
+      documentFormats: ["txt", "markdown"],
+      maxDocuments: 10000,
+      logger: silent
+    });
+    const fileJobs = knowledge.fileJobs(
+      files,
+      new StoreBackedAuditRecorder({ clientInstanceId, store: instance.stores.audit }),
+      embed
+    );
     const handlers = dataStores.knowledgeSourceJobs({
       files,
       documentFormats: ["txt", "markdown"],
@@ -157,7 +179,7 @@ describe("initial and full source import (KB 72, 73)", () => {
     const worker = createJobWorker({
       clientInstanceId,
       stores: instance.stores,
-      handlers,
+      handlers: [...handlers, ...fileJobs.handlers],
       logger: silent
     });
     cleanups.push(() => worker.stop());
@@ -182,7 +204,6 @@ describe("initial and full source import (KB 72, 73)", () => {
           // Advance only this test's scheduled retries, without depending on wall-clock sleeps.
           await platform`update platform_jobs set run_after = now() where status = 'queued' and kind in ('knowledge_base.sync', 'knowledge_base.fetch')`;
           await worker.runDue();
-          await jobs.runDue();
           const [pending] =
             await sql`select count(*)::int as n from catalyst_kb.source_items where state = 'discovered'`;
           const [runRow] = await sql`select state from catalyst_kb.sync_runs where id = ${run}`;
@@ -195,7 +216,19 @@ describe("initial and full source import (KB 72, 73)", () => {
         { timeout: 180_000 }
       );
     }
-    return { ...fixture, instance, sql, platform, worker, jobs, sync, drain, objects, record };
+    return {
+      ...fixture,
+      instance,
+      sql,
+      platform,
+      worker,
+      jobs: worker,
+      embed,
+      sync,
+      drain,
+      objects,
+      record
+    };
   }
 
   it("imports 10,000 items, isolates three failed fetches, and makes zero fetch or embedding calls on the second full pass", async () => {
@@ -232,11 +265,21 @@ describe("initial and full source import (KB 72, 73)", () => {
     expect(await world.sql`select count(*)::int as n from catalyst_kb.chunks`).toMatchObject([
       { n: 1 }
     ]);
-    const before = await world.platform`select count(*)::int as n from model_usage_events`;
+    expect(fetches).toBe(10002);
+    expect(world.embed).toHaveBeenCalledTimes(1);
+    expect(await world.sql`select count(*)::int as n from catalyst_kb.embeddings_1`).toEqual([
+      { n: 1 }
+    ]);
+    const extractions = await world.objects.list(`knowledge-bases/${world.record.id}/extracted/`);
+    expect(extractions.objects).toHaveLength(1);
+    const before = world.embed.mock.calls.length;
     fetches = 0;
     await world.drain(await world.sync("full"));
     expect(fetches).toBe(0);
-    expect(await world.platform`select count(*)::int as n from model_usage_events`).toEqual(before);
+    expect(world.embed.mock.calls.length).toBe(before);
+    expect(await world.objects.list(`knowledge-bases/${world.record.id}/extracted/`)).toEqual(
+      extractions
+    );
   }, 240_000);
 
   it("resumes after SIGKILL during a fetch batch without duplicate items, documents, contents or chunks", async () => {
@@ -249,7 +292,7 @@ describe("initial and full source import (KB 72, 73)", () => {
         bytes: new TextEncoder().encode("Resumed content")
       });
     const run = await world.sync();
-    const child = spawn(process.execPath, ["tests/fixtures/knowledge-sync/worker.mjs"], {
+    const child = spawn(process.execPath, ["tests/support/knowledge-sync-worker.mjs"], {
       stdio: ["ignore", "ignore", "pipe", "ipc"],
       env: {
         ...process.env,
@@ -277,9 +320,9 @@ describe("initial and full source import (KB 72, 73)", () => {
       const exited = once(child, "exit");
       child.kill("SIGKILL");
       await exited;
-      expect(await world.sql`select count(*)::int as n from catalyst_kb.documents`).toMatchObject([
-        { n: expect.any(Number) }
-      ]);
+      const [committed] = await world.sql`select count(*)::int as n from catalyst_kb.documents`;
+      expect(committed?.n).toBeGreaterThan(0);
+      expect(committed?.n).toBeLessThan(300);
       // The lease of a dead process expires; the replacement claims the same persisted job.
       await world.platform`update platform_jobs set lease_expires_at = now() - interval '1 second' where kind in ('knowledge_base.sync', 'knowledge_base.fetch') and status = 'running'`;
       await world.drain(run);
@@ -337,6 +380,7 @@ describe("initial and full source import (KB 72, 73)", () => {
     ).toMatchObject({ contentType: "application/json" });
     const rows = await world.sql`select id, content_sha256 from catalyst_kb.documents order by id`;
     world.world.rename(a, "renamed.md");
+    world.world.move(a, "other");
     fetches = 0;
     await world.drain(await world.sync("full"));
     expect(fetches).toBe(0);
@@ -345,10 +389,71 @@ describe("initial and full source import (KB 72, 73)", () => {
     ).toEqual(rows);
     expect(
       await world.sql`select name, path from catalyst_kb.source_items where item_id = ${a}`
-    ).toEqual([{ name: "renamed.md", path: "/renamed.md" }]);
+    ).toEqual([{ name: "renamed.md", path: "/other/renamed.md" }]);
     expect(
       await world.sql`select title, file_name from catalyst_kb.documents where source_item_id = (select id from catalyst_kb.source_items where item_id = ${a})`
     ).toEqual([{ title: "renamed.md", file_name: "renamed.md" }]);
+    const [copy] =
+      await world.sql`select managed_file_id,content_sha256 from catalyst_kb.documents limit 1`;
+    const files = await world.instance.stores.files.listOwnedManagedFilesById({
+      clientInstanceId,
+      owner: { kind: "knowledge_base", id: world.record.id },
+      fileIds: (await world.sql`select managed_file_id from catalyst_kb.documents`).map((row) =>
+        String(row.managed_file_id)
+      )
+    });
+    for (const file of files) await world.objects.delete(file.objectKey);
+    await world.sql`delete from catalyst_kb.chunks`;
+    await world.sql`update catalyst_kb.contents set state='pending',chunking_revision=null`;
+    await enqueueKnowledgeIndex(
+      world.instance.stores.jobs,
+      {
+        knowledgeBaseId: world.record.id,
+        contentSha256: String(required(copy).content_sha256),
+        fileId: String(required(copy).managed_file_id),
+        operationRunId: "operation"
+      },
+      { clientInstanceId }
+    );
+    await world.worker.runDue();
+    expect(await world.sql`select state from catalyst_kb.contents`).toEqual([
+      { state: "extracted" }
+    ]);
+    expect(fetches).toBe(0);
+    expect(
+      await world.platform`select count(*)::int as n from audit_events where type='knowledge_base.content_indexed'`
+    ).toEqual([{ n: 0 }]);
+  });
+
+  it("rolls back the items and page cursor together on an invalid source item", async () => {
+    const world = await setup((source) => ({
+      ...source,
+      async list(input, ctx) {
+        const page = await source.list(input, ctx);
+        return {
+          ...page,
+          items: page.items.map((item, index) => (index === 1 ? { ...item, name: "" } : item))
+        };
+      }
+    }));
+    for (let i = 0; i < 3; i++)
+      world.world.put({
+        folderId: "folder",
+        name: `${i}.txt`,
+        mime: "text/plain",
+        bytes: new TextEncoder().encode("test")
+      });
+    const run = await world.sync();
+    await world.worker.runDue();
+    expect(await world.sql`select count(*)::int as n from catalyst_kb.source_items`).toEqual([
+      { n: 0 }
+    ]);
+    expect(await world.sql`select cursor_after from catalyst_kb.sync_runs where id=${run}`).toEqual(
+      [{ cursor_after: null }]
+    );
+    expect(await world.sql`select count(*)::int as n from catalyst_kb.source_cursors`).toEqual([
+      { n: 0 }
+    ]);
   });
 
   it("requeues Retry-After without an attempt and stops a failed listing without withdrawing documents", async () => {

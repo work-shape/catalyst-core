@@ -80,7 +80,9 @@ const addFilesOutputSchema = z.object({
 });
 
 /** The format of a file by its name, then by its media type. Nothing for one a Knowledge Base does not take. */
-function documentFormatOf(file: OpenedKnowledgeFile): KnowledgeDocumentFormat | undefined {
+export function documentFormatOf(
+  file: Pick<OpenedKnowledgeFile, "filename" | "mimeType">
+): KnowledgeDocumentFormat | undefined {
   switch (extname(file.filename).toLowerCase()) {
     case ".txt":
       return "txt";

@@ -1,6 +1,8 @@
+import { z } from "zod";
 import {
   DocumentSourceError,
   type ConnectorContext,
+  type ConnectorTypeDefinition,
   type DocumentSourceCapability,
   type DocumentSourceChange,
   type DocumentSourceItem
@@ -28,6 +30,7 @@ export interface FixtureDocumentWorld {
   /** Gives the file other bytes, and so a new version. */
   write(itemId: string, bytes: Uint8Array): void;
   rename(itemId: string, name: string): void;
+  move(itemId: string, folderId: string): void;
   remove(itemId: string): void;
   /** Makes every cursor handed out so far refused, as an expired stream position. */
   expireCursors(): void;
@@ -56,10 +59,23 @@ export function createFixtureDocumentSource(input: {
   secret: string;
   /** Page size for import tests; the contract kit uses the default of two. */
   pageSize?: number;
+  /** False simulates a source without a change feed. */
+  feed?: boolean;
+  /** Inject named failures, including Retry-After, without an outside service. */
+  failure?: (call: {
+    kind: "list" | "changes" | "fetch";
+    itemId?: string;
+  }) => DocumentSourceError | undefined;
   /** The time each change is stamped with. */
   now?: () => Date;
-}): { capability: DocumentSourceCapability; world: FixtureDocumentWorld } {
+}): {
+  capability: DocumentSourceCapability;
+  world: FixtureDocumentWorld;
+  connectorType: ConnectorTypeDefinition;
+} {
   const pageSize = input.pageSize ?? FIXTURE_PAGE_SIZE;
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 1000)
+    throw new Error("A fixture page holds 1 to 1000 items");
   const now = input.now ?? (() => new Date());
   const files = new Map<string, StoredFile>();
   const feed: DocumentSourceChange[] = [];
@@ -70,7 +86,7 @@ export function createFixtureDocumentSource(input: {
   const itemOf = (file: StoredFile): DocumentSourceItem => ({
     id: file.id,
     version: `v${file.version}`,
-    path: `/${file.name}`,
+    path: `/${file.folderId}/${file.name}`,
     name: file.name,
     mime: file.mime,
     size: file.bytes.byteLength,
@@ -125,6 +141,11 @@ export function createFixtureDocumentSource(input: {
       file.name = name;
       changed(file);
     },
+    move(itemId, folderId) {
+      const file = stored(itemId);
+      file.folderId = folderId;
+      changed(file);
+    },
     remove(itemId) {
       stored(itemId);
       files.delete(itemId);
@@ -138,6 +159,9 @@ export function createFixtureDocumentSource(input: {
   const capability: DocumentSourceCapability = {
     list({ boundary, pageToken }, context) {
       authenticate(context);
+      const failure = input.failure?.({ kind: "list" });
+      if (failure) throw failure;
+      context.signal.throwIfAborted();
       const below = [...files.values()]
         .filter((file) => boundary.folderIds.includes(file.folderId))
         .sort((a, b) => (a.id < b.id ? -1 : 1));
@@ -153,6 +177,10 @@ export function createFixtureDocumentSource(input: {
 
     changes({ boundary, cursor }, context) {
       authenticate(context);
+      const failure = input.failure?.({ kind: "changes" });
+      if (failure) throw failure;
+      context.signal.throwIfAborted();
+      if (input.feed === false) return Promise.resolve({ kind: "not_offered" });
       if (cursor === undefined) {
         return Promise.resolve({ kind: "changes", changes: [], nextCursor: cursorAt(feed.length) });
       }
@@ -172,6 +200,9 @@ export function createFixtureDocumentSource(input: {
 
     async *fetch({ itemId, version, maxBytes }, context) {
       authenticate(context);
+      const failure = input.failure?.({ kind: "fetch", itemId });
+      if (failure) throw failure;
+      context.signal.throwIfAborted();
       const file = files.get(itemId);
       if (!file || `v${file.version}` !== version) {
         throw new DocumentSourceError("not_found", "The fixture holds no such version");
@@ -179,6 +210,7 @@ export function createFixtureDocumentSource(input: {
       // A copy, so a write during the stream does not change what it yields.
       const bytes = file.bytes.slice();
       for (let offset = 0; offset < bytes.byteLength; offset += FIXTURE_CHUNK_BYTES) {
+        context.signal.throwIfAborted();
         const end = Math.min(offset + FIXTURE_CHUNK_BYTES, bytes.byteLength);
         if (end > maxBytes) {
           throw new DocumentSourceError("over_limit", "The item is larger than the cap");
@@ -188,5 +220,26 @@ export function createFixtureDocumentSource(input: {
     }
   };
 
-  return { capability, world };
+  return {
+    capability,
+    world,
+    connectorType: {
+      type: "fixture",
+      description: "In-process document source for import and connector contract tests.",
+      settingsSchema: z.strictObject({}),
+      authSchemes: ["bearer"],
+      secretFields: ["secret"],
+      catalog: [],
+      target: () => ({ protocol: "https", host: "fixture.invalid", port: 443 }),
+      limits: { callTimeoutMs: 60000, resultMaxBytes: 1024 * 1024, maxParallelCalls: 4 },
+      documentSource: capability,
+      async test(context) {
+        authenticate(context);
+        return { status: "ready" };
+      },
+      async execute() {
+        throw new Error("The fixture offers documents and no operations");
+      }
+    }
+  };
 }
