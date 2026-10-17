@@ -1,0 +1,6 @@
+---
+section: Fixed
+---
+
+- `docker/vivd-client.Dockerfile` installs and builds every workspace package a client declares as a dependency, together with that package's own dependencies, also where the client pins a released Catalyst version that the local workspace root links to source through an override (`pnpm dev:links`). Since the deployments pin `0.8.0-rc.2`, their local images built none of the linked packages: the build printed `No projects matched the filters` and stopped on `ERR_MODULE_NOT_FOUND` for `@work-shape/catalyst-client-assembly/dist/index.js`. The release images are unchanged; they build from the deployment kit's `docker/deployment.Dockerfile`.
+- The client image's ignore file has no `!` exceptions any more (`!.env.example`, `!**/.env.example`). An exception makes Docker walk every excluded folder for a file to keep; from the local workspace root, whose `.worktrees` hold hundreds of gigabytes, loading the build context took 16 minutes before each image of a local deployment. It now takes about a second. The file also leaves out `.worktrees`, `.agents`, `.claude` and `.codex` at any depth, `.data`, copies of `.venv`, and the workspace root's `data` and `outputs`: the context falls from 1.65 GB to about 0.1 GB. No image used an `.env.example`.

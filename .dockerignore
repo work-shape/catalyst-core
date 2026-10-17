@@ -1,9 +1,13 @@
+# No `!` exceptions: one makes Docker walk every excluded folder for a file to keep, the local
+# workspace's .worktrees included, which took a local deployment build 16 minutes.
+
 .git
 **/.git
 .agents
 .claude
 .codex
 .worktrees
+**/.worktrees
 node_modules
 **/node_modules
 .pnpm-store
@@ -24,16 +28,14 @@ coverage
 **/.next
 .cache
 **/.cache
-.venv
-**/.venv
+.venv*
+**/.venv*
+.data
+**/.data
 .env
 .env.*
 **/.env
 **/.env.*
-!.env.example
-!**/.env.example
-!.env.prod.example
-!**/.env.prod.example
 tmp
 **/tmp
 temp

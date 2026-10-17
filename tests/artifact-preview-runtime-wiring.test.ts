@@ -60,6 +60,9 @@ const secretEnvNames = [
 const dockerIgnoreFiles = [".dockerignore", "docker/vivd-client.Dockerfile.dockerignore"];
 const expectedIgnoredContextPatterns = [
   ".worktrees",
+  "**/.worktrees",
+  "**/.venv*",
+  "**/.data",
   "**/.cache",
   ".pnpm-store",
   "**/.pnpm-store",
@@ -118,10 +121,16 @@ describe("artifact preview runtime wiring", () => {
     expect(deps.indexOf("pnpm fetch --frozen-lockfile")).toBeLessThan(deps.indexOf("COPY . ./"));
     expect(deps).toContain("install --offline --frozen-lockfile");
 
-    expect(serverBuild).toContain('pnpm --filter "${APP_PACKAGE}^..." build');
+    expect(deps).toContain('dependencies=$(dependency-filters "${APP_PACKAGE}" "${UI_PACKAGE}")');
+    expect(deps).toContain(
+      'pnpm --filter "${APP_PACKAGE}" --filter "${UI_PACKAGE}" ${dependencies}'
+    );
+
+    expect(serverBuild).toContain('dependencies=$(dependency-filters "${APP_PACKAGE}")');
+    expect(serverBuild).toContain("pnpm --fail-if-no-match ${dependencies} build");
     expect(serverBuild).toContain('pnpm --filter "${APP_PACKAGE}" build:server');
     expect(serverBuild).toContain("ARG ARTIFACT_PREVIEW_WORKER_ENTRY");
-    expect(serverBuild.indexOf('pnpm --filter "${APP_PACKAGE}^..." build')).toBeLessThan(
+    expect(serverBuild.indexOf("pnpm --fail-if-no-match ${dependencies} build")).toBeLessThan(
       serverBuild.indexOf('pnpm --filter "${APP_PACKAGE}" build:server')
     );
     expect(serverBuild).toContain('if [ -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" ]');
@@ -133,9 +142,10 @@ describe("artifact preview runtime wiring", () => {
     expect(serverBuild).toContain("await import('@work-shape/catalyst-client-assembly')");
     expect(serverBuild).toContain("runClientInstanceArtifactPreviewWorker");
     expect(serverBuild).not.toContain("build:ui");
-    expect(uiBuild).toContain('pnpm --filter "${UI_PACKAGE}^..." build');
+    expect(uiBuild).toContain('dependencies=$(dependency-filters "${UI_PACKAGE}")');
+    expect(uiBuild).toContain("pnpm --fail-if-no-match ${dependencies} build");
     expect(uiBuild).toContain('pnpm --filter "${UI_PACKAGE}" build:ui');
-    expect(uiBuild.indexOf('pnpm --filter "${UI_PACKAGE}^..." build')).toBeLessThan(
+    expect(uiBuild.indexOf("pnpm --fail-if-no-match ${dependencies} build")).toBeLessThan(
       uiBuild.indexOf('pnpm --filter "${UI_PACKAGE}" build:ui')
     );
 
@@ -270,6 +280,9 @@ describe("artifact preview runtime wiring", () => {
         expect(ignorePatterns).not.toContain(requiredPath);
         expect(ignorePatterns).not.toContain(`**/${requiredPath}`);
       }
+
+      // An exception makes Docker walk every excluded folder for a file to keep.
+      expect(ignorePatterns.filter((pattern) => pattern.startsWith("!"))).toEqual([]);
     }
   );
 

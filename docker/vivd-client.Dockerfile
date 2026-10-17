@@ -5,6 +5,38 @@ FROM node:24-bookworm-slim AS base
 WORKDIR /app
 RUN corepack enable
 
+# `dependency-filters <package>...` prints `--filter=<name>...` for every workspace project the
+# packages declare as a dependency, so that pnpm selects it together with its own dependencies.
+# pnpm's `--filter "<package>^..."` would select the same only where the packages name those
+# dependencies with `workspace:`. A deployment pins released Catalyst versions instead, and in
+# the local workspace root it reaches their source through overrides (`pnpm dev:links` in the
+# workspace repository), which that filter does not follow. The helper fails rather than print
+# nothing, so that pnpm never runs without a filter.
+COPY --chmod=755 <<'EOF' /usr/local/bin/dependency-filters
+#!/bin/sh
+set -eu
+pnpm --recursive list --depth -1 --json | node -e '
+  const projects = new Map(
+    JSON.parse(require("node:fs").readFileSync(0, "utf8")).map((project) => [project.name, project.path])
+  );
+  const fail = (message) => {
+    console.error(`dependency-filters: ${message}`);
+    process.exit(1);
+  };
+  const names = new Set();
+  for (const name of process.argv.slice(1)) {
+    const path = projects.get(name);
+    if (path === undefined) fail(`no workspace project is named ${name}`);
+    const manifest = require(`${path}/package.json`);
+    for (const group of ["dependencies", "devDependencies", "optionalDependencies"])
+      for (const dependency of Object.keys(manifest[group] ?? {}))
+        if (projects.has(dependency)) names.add(dependency);
+  }
+  if (names.size === 0) fail(`${process.argv.slice(1).join(" ")} depend on no workspace project`);
+  for (const name of [...names].sort()) console.log(`--filter=${name}...`);
+' "$@"
+EOF
+
 FROM node:24-trixie-slim AS workspace-artifact-runtime
 
 WORKDIR /workspace
@@ -145,9 +177,8 @@ ARG APP_PACKAGE
 ARG UI_PACKAGE
 
 RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
-  pnpm \
-    --filter "${APP_PACKAGE}..." \
-    --filter "${UI_PACKAGE}..." \
+  dependencies=$(dependency-filters "${APP_PACKAGE}" "${UI_PACKAGE}") \
+  && pnpm --filter "${APP_PACKAGE}" --filter "${UI_PACKAGE}" ${dependencies} \
     install --offline --frozen-lockfile
 
 FROM deps AS server-build
@@ -155,7 +186,8 @@ FROM deps AS server-build
 ARG APP_PACKAGE
 ARG ARTIFACT_PREVIEW_WORKER_ENTRY=""
 
-RUN pnpm --filter "${APP_PACKAGE}^..." build \
+RUN dependencies=$(dependency-filters "${APP_PACKAGE}") \
+  && pnpm --fail-if-no-match ${dependencies} build \
   && pnpm --filter "${APP_PACKAGE}" build:server \
   && if [ -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" ]; then \
     test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}" \
@@ -177,7 +209,8 @@ ARG VITE_CHAT_API_PORT
 ENV VITE_CHAT_API_URL=${VITE_CHAT_API_URL}
 ENV VITE_CHAT_API_PORT=${VITE_CHAT_API_PORT}
 
-RUN pnpm --filter "${UI_PACKAGE}^..." build \
+RUN dependencies=$(dependency-filters "${UI_PACKAGE}") \
+  && pnpm --fail-if-no-match ${dependencies} build \
   && pnpm --filter "${UI_PACKAGE}" build:ui
 
 FROM node:24-bookworm-slim AS api

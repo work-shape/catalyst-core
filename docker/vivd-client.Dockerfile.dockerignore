@@ -1,16 +1,21 @@
+# No `!` exceptions: one makes Docker walk every excluded folder for a file to keep, the local
+# workspace's .worktrees included, which took a local deployment build 16 minutes.
+
 .env
 .env.*
 **/.env
 **/.env.*
-!.env.example
-!**/.env.example
 
 .git
 **/.git
 .agents
+**/.agents
 .claude
+**/.claude
 .codex
+**/.codex
 .worktrees
+**/.worktrees
 .pnpm-store
 **/.pnpm-store
 node_modules
@@ -21,8 +26,10 @@ README.md
 docs
 **/docs
 
-.venv
-**/.venv
+.venv*
+**/.venv*
+.data
+**/.data
 .turbo
 **/.turbo
 .vite
@@ -70,5 +77,7 @@ test-results
 **/terraform.tfstate.*
 **/*.tfvars
 
-tmp
+# Folders of the local workspace root, the build context of a deployment's local images.
+data
+outputs
 reference-projects
