@@ -435,9 +435,13 @@ describe("assets.put, assets.delete and assets.revert", () => {
       ...t.forbidden("agent.read", "no_grant")
     });
 
+    // Call order is the revision each row names: audit timestamps of two calls may tie, and the
+    // list breaks a tie by random id.
     const events = await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 });
-    const written = events.filter((event) => event.type.startsWith("config_asset."));
-    expect(written.map((event) => [event.type, event.metadata?.revision]).reverse()).toEqual([
+    const written = events
+      .filter((event) => event.type.startsWith("config_asset."))
+      .sort((left, right) => Number(left.metadata?.revision) - Number(right.metadata?.revision));
+    expect(written.map((event) => [event.type, event.metadata?.revision])).toEqual([
       ["config_asset.updated", 1],
       ["config_asset.updated", 2],
       ["config_asset.reverted", 3],

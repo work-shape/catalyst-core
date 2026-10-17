@@ -39,7 +39,7 @@ async function listStructuredDataResources(
         eq(structuredDataResources.conversationId, input.conversationId)
       )
     )
-    .orderBy(desc(structuredDataResources.updatedAt));
+    .orderBy(desc(structuredDataResources.updatedAt), desc(structuredDataResources.id));
   return rows.map(mapStructuredDataResource);
 }
 

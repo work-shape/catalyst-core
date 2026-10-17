@@ -101,7 +101,10 @@ export async function getWorkspaceInDeletion(
         )
       )
     )
-    .orderBy(asc(collaborationWorkspaceMemberships.createdAt));
+    .orderBy(
+      asc(collaborationWorkspaceMemberships.createdAt),
+      asc(collaborationWorkspaceMemberships.userId)
+    );
   return {
     workspace: mapCollaborationWorkspace(row),
     memberships: memberships.map(mapWorkspaceMembership)

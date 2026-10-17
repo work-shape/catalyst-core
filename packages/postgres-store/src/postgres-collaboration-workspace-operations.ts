@@ -95,7 +95,7 @@ async function listWorkspacesForUser(
         notInDeletion
       )
     )
-    .orderBy(asc(collaborationWorkspaces.createdAt));
+    .orderBy(asc(collaborationWorkspaces.createdAt), asc(collaborationWorkspaces.id));
   return rows.map(mapCollaborationWorkspaceWithRole);
 }
 
@@ -114,7 +114,7 @@ async function listDiscoverableWorkspaces(
         notInDeletion
       )
     )
-    .orderBy(asc(collaborationWorkspaces.createdAt));
+    .orderBy(asc(collaborationWorkspaces.createdAt), asc(collaborationWorkspaces.id));
   return rows.map(mapCollaborationWorkspace);
 }
 
@@ -132,7 +132,7 @@ async function listSharedWorkspaces(
         notInDeletion
       )
     )
-    .orderBy(asc(collaborationWorkspaces.createdAt));
+    .orderBy(asc(collaborationWorkspaces.createdAt), asc(collaborationWorkspaces.id));
   return rows.map(mapCollaborationWorkspace);
 }
 
@@ -328,7 +328,10 @@ async function listMemberships(
         )
       )
     )
-    .orderBy(asc(collaborationWorkspaceMemberships.createdAt));
+    .orderBy(
+      asc(collaborationWorkspaceMemberships.createdAt),
+      asc(collaborationWorkspaceMemberships.userId)
+    );
   return rows.map(mapWorkspaceMembership);
 }
 
@@ -534,7 +537,10 @@ async function listAccessRequestsForWorkspace(
         )
       )
     )
-    .orderBy(asc(collaborationWorkspaceAccessRequests.createdAt));
+    .orderBy(
+      asc(collaborationWorkspaceAccessRequests.createdAt),
+      asc(collaborationWorkspaceAccessRequests.id)
+    );
   return rows.map(mapWorkspaceAccessRequest);
 }
 

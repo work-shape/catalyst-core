@@ -106,7 +106,7 @@ export async function listDraftAttachments(
         ne(conversationAttachments.status, "deleted")
       )
     )
-    .orderBy(asc(conversationAttachments.createdAt));
+    .orderBy(asc(conversationAttachments.createdAt), asc(conversationAttachments.id));
   return rows.map(mapConversationAttachment) as DraftAttachment[];
 }
 
@@ -128,7 +128,7 @@ export async function listSentConversationAttachments(
         ne(conversationAttachments.status, "deleted")
       )
     )
-    .orderBy(desc(conversationAttachments.createdAt));
+    .orderBy(desc(conversationAttachments.createdAt), desc(conversationAttachments.id));
   return rows.map(mapConversationAttachment);
 }
 
@@ -150,7 +150,7 @@ export async function findConversationAttachmentByChecksum(
         eq(conversationAttachments.checksum, input.checksum)
       )
     )
-    .orderBy(desc(conversationAttachments.createdAt))
+    .orderBy(desc(conversationAttachments.createdAt), desc(conversationAttachments.id))
     .limit(1);
   return row ? mapConversationAttachment(row) : undefined;
 }
@@ -562,7 +562,7 @@ export async function findReadyConversationAttachmentByFile(
         eq(conversationAttachments.status, "ready")
       )
     )
-    .orderBy(desc(conversationAttachments.updatedAt))
+    .orderBy(desc(conversationAttachments.updatedAt), desc(conversationAttachments.id))
     .limit(1);
   return row ? mapConversationAttachment(row) : undefined;
 }
@@ -586,7 +586,7 @@ export async function findConversationAttachmentByFile(
         ne(conversationAttachments.status, "deleted")
       )
     )
-    .orderBy(desc(conversationAttachments.updatedAt))
+    .orderBy(desc(conversationAttachments.updatedAt), desc(conversationAttachments.id))
     .limit(1);
   return row ? mapConversationAttachment(row) : undefined;
 }

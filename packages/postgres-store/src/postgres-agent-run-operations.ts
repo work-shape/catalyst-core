@@ -474,7 +474,7 @@ async function getLatestConversationAgentRun(
         eq(agentRuns.conversationId, input.conversationId)
       )
     )
-    .orderBy(desc(agentRuns.startedAt))
+    .orderBy(desc(agentRuns.startedAt), desc(agentRuns.id))
     .limit(1);
   return row ? mapAgentRun(row) : undefined;
 }

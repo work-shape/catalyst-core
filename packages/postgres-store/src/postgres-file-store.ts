@@ -346,7 +346,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
       .select()
       .from(managedArtifacts)
       .where(and(...where))
-      .orderBy(desc(managedArtifacts.createdAt));
+      .orderBy(desc(managedArtifacts.createdAt), desc(managedArtifacts.id));
     return rows.map(mapManagedArtifact);
   }
 
@@ -364,7 +364,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
           eq(managedArtifacts.status, "available")
         )
       )
-      .orderBy(desc(managedArtifacts.createdAt));
+      .orderBy(desc(managedArtifacts.createdAt), desc(managedArtifacts.id));
     return rows.map(mapManagedArtifact);
   }
 
