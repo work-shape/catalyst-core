@@ -20,6 +20,7 @@ export {
   type NameAndAddress,
   type NameWithAddressProps
 } from "./name-with-address";
+export { ProposedValue, type ProposedValueProps } from "./proposed-value";
 export {
   RadioGroup,
   type RadioGroupProps,

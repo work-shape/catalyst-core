@@ -234,6 +234,29 @@ describe("form components", () => {
     expect(markup).toContain(`<p id="${hintId}" class="text-caption text-muted-foreground">`);
   });
 
+  it("names a proposed value's group by its label and keeps the value under it", () => {
+    const markup = render(
+      createElement(library.ProposedValue, { label: "Proposed by the agent" }, "Cite the clause.")
+    );
+    const labelId = attribute(markup, "span", "id");
+
+    expect(attribute(markup, "div", "role")).toBe("group");
+    expect(attribute(markup, "div", "aria-labelledby")).toBe(labelId);
+    expect(markup).toMatch(/>Proposed by the agent<\/span><div[^>]*>Cite the clause\.<\/div>/u);
+  });
+
+  it("puts a section's state after its title", () => {
+    const markup = render(
+      createElement(
+        library.Section,
+        { title: "Instructions", state: createElement("span", null, "STATE") },
+        "FIELDS"
+      )
+    );
+
+    expect(markup).toMatch(/>Instructions<\/h2><span>STATE<\/span>/u);
+  });
+
   it("puts a field's end slot on the label's row, outside the label", () => {
     const markup = render(
       createElement(Field, {

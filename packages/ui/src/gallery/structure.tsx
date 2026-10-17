@@ -193,6 +193,19 @@ function SectionSamples({ text }: { text: GalleryText }) {
             >
               <p className="text-body text-muted-foreground">{text.sectionBody}</p>
             </Section>
+            <Section
+              layout={layout}
+              headingLevel={3}
+              title={text.sectionInstructions}
+              description={text.sectionInstructionsDescription}
+              state={
+                <Badge tone="accent" appearance="outline">
+                  {text.proposedState}
+                </Badge>
+              }
+            >
+              <p className="text-body text-muted-foreground">{text.sectionBody}</p>
+            </Section>
           </div>
         </Samples>
       ))}

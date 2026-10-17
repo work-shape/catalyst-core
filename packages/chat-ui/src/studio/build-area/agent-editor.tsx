@@ -51,6 +51,13 @@ import { heldToolCount, toolPackages } from "./instance-tools";
 import { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 import { ToolPackagesSection } from "./tool-packages-section";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
+import {
+  AgentProposalNotice,
+  ProposedSectionMark,
+  proposedFieldsView,
+  type ProposalTitles
+} from "./agent-proposal";
+import type { AgentProposalState } from "./agent-proposal-source";
 import { PlatformInstructions } from "./platform-instructions";
 import type { SkillFacts } from "./skill-facts";
 
@@ -87,7 +94,8 @@ export function AgentEditor({
   connectionTools = NO_CONNECTION_TOOLS,
   appTools = NO_APP_TOOLS,
   onMakeDefault,
-  availability
+  availability,
+  proposal
 }: {
   frame: BuildAssetEditorProps;
   initialForm: AgentFormState;
@@ -112,6 +120,8 @@ export function AgentEditor({
   onMakeDefault?: () => Promise<string | undefined>;
   /** Where the agent can be chosen, for a reader who may change it. */
   availability?: AgentAvailabilityChoice;
+  /** The change the agent in the dock proposes for this agent, where it proposed one. */
+  proposal?: AgentProposalState;
 }) {
   const { locale, t } = useTranslation();
   const state = useAssetForm(initialForm);
@@ -137,11 +147,33 @@ export function AgentEditor({
     [references]
   );
   const modelBindingIds = modelBindings.map((binding) => binding.id);
+  const skillsByName = new Map(skillChoice.options.map((skill) => [skill.name, skill]));
+  const titles: ProposalTitles = {
+    skill: (name) => skillsByName.get(name)?.title || name,
+    tool: (name) =>
+      references?.tools?.find((tool) => tool.name === name)?.title?.[locale].trim() || name,
+    knowledgeBase: (name) =>
+      knowledgeChoice?.options.find((option) => option.name === name)?.title || name,
+    model: (id) => {
+      const binding = modelBindings.find((candidate) => candidate.id === id);
+      return binding ? modelBindingLabel(binding, modelBindings) : id;
+    }
+  };
+  // What the proposal changes against the agent as loaded or last saved, with its value
+  // under each field it changes.
+  const proposed = proposedFieldsView(proposal, state.baseline, titles);
+  // The proposal names the agent it changes as people know it now, not as the form edits it.
+  const liveTitle =
+    state.baseline.displayName[locale].trim() ||
+    state.baseline.displayName[locale === "de" ? "en" : "de"].trim() ||
+    state.baseline.name;
   const showModels =
     canEditModel ||
+    proposed.fields.includes("model") ||
     Boolean(form.modelBindingId || form.modelProviderId || form.reasoningEffort) ||
     form.userSelectableModelBindingIds.some((id) => modelBindingIds.includes(id));
-  const showMaxSteps = canEditMaxSteps || Boolean(form.maxSteps);
+  const showMaxSteps =
+    canEditMaxSteps || Boolean(form.maxSteps) || proposed.fields.includes("maxSteps");
   const fastModeModelBindingIds = references?.fastModeModelBindingIds ?? [];
   const showFastMode = form.fastMode || fastModeModelBindingIds.includes(form.modelBindingId);
 
@@ -174,7 +206,6 @@ export function AgentEditor({
   };
   // What the agent's read reported unavailable, as far as the last save left it named.
   const unavailable = savedAgentUnavailable(frame.asset, state.baseline);
-  const skillsByName = new Map(skillChoice.options.map((skill) => [skill.name, skill]));
 
   const sections: AssetSection[] = [
     {
@@ -183,31 +214,43 @@ export function AgentEditor({
       description: t("configIdentityDescription"),
       body: (
         <>
-          <LocalizedField
-            label={t("configDisplayName")}
-            required
-            readOnly={!canEdit("displayName")}
-            value={form.displayName}
-            onChange={(displayName) => update({ displayName })}
-          />
-          <LocalizedField
-            label={t("configDescription")}
-            readOnly={!canEdit("description")}
-            value={form.description}
-            onChange={(description) => update({ description })}
-          />
-          <LocalizedField
-            label={t("configWelcomeMessage")}
-            readOnly={!canEdit("welcomeMessage")}
-            value={form.welcomeMessage}
-            onChange={(welcomeMessage) => update({ welcomeMessage })}
-          />
-          <LocalizedField
-            label={t("configWelcomeSubtitle")}
-            readOnly={!canEdit("welcomeSubtitle")}
-            value={form.welcomeSubtitle}
-            onChange={(welcomeSubtitle) => update({ welcomeSubtitle })}
-          />
+          {proposed.around(
+            "displayName",
+            <LocalizedField
+              label={t("configDisplayName")}
+              required
+              readOnly={!canEdit("displayName")}
+              value={form.displayName}
+              onChange={(displayName) => update({ displayName })}
+            />
+          )}
+          {proposed.around(
+            "description",
+            <LocalizedField
+              label={t("configDescription")}
+              readOnly={!canEdit("description")}
+              value={form.description}
+              onChange={(description) => update({ description })}
+            />
+          )}
+          {proposed.around(
+            "welcomeMessage",
+            <LocalizedField
+              label={t("configWelcomeMessage")}
+              readOnly={!canEdit("welcomeMessage")}
+              value={form.welcomeMessage}
+              onChange={(welcomeMessage) => update({ welcomeMessage })}
+            />
+          )}
+          {proposed.around(
+            "welcomeSubtitle",
+            <LocalizedField
+              label={t("configWelcomeSubtitle")}
+              readOnly={!canEdit("welcomeSubtitle")}
+              value={form.welcomeSubtitle}
+              onChange={(welcomeSubtitle) => update({ welcomeSubtitle })}
+            />
+          )}
         </>
       )
     },
@@ -220,30 +263,36 @@ export function AgentEditor({
             instructions={references?.platformInstructions}
             toolNames={state.baseline.toolNames}
           />
-          <Field
-            label={t("configSystemPrompt")}
-            hint={t("configSystemPromptHint")}
-            required={canEdit("instructions")}
-          >
-            <Textarea
-              variant="code"
-              className="min-h-72"
-              value={form.instructions}
-              readOnly={!canEdit("instructions")}
-              onChange={(event) => update({ instructions: event.target.value })}
-            />
-          </Field>
-          {showMaxSteps ? (
-            <Field label={t("configMaxSteps")} hint={t("configMaxStepsHint")}>
-              <Input
-                type="number"
-                min={1}
-                value={form.maxSteps}
-                readOnly={!canEditMaxSteps}
-                onChange={(event) => update({ maxSteps: event.target.value })}
+          {proposed.around(
+            "instructions",
+            <Field
+              label={t("configSystemPrompt")}
+              hint={t("configSystemPromptHint")}
+              required={canEdit("instructions")}
+            >
+              <Textarea
+                variant="code"
+                className="min-h-72"
+                value={form.instructions}
+                readOnly={!canEdit("instructions")}
+                onChange={(event) => update({ instructions: event.target.value })}
               />
             </Field>
-          ) : null}
+          )}
+          {proposed.around(
+            "maxSteps",
+            showMaxSteps ? (
+              <Field label={t("configMaxSteps")} hint={t("configMaxStepsHint")}>
+                <Input
+                  type="number"
+                  min={1}
+                  value={form.maxSteps}
+                  readOnly={!canEditMaxSteps}
+                  onChange={(event) => update({ maxSteps: event.target.value })}
+                />
+              </Field>
+            ) : null
+          )}
         </>
       )
     },
@@ -295,6 +344,7 @@ export function AgentEditor({
                     />
                   </Field>
                 ) : null}
+                {proposed.value("model")}
                 <FieldRefusals messages={refusalsOf(outcome, "model")} />
               </>
             )
@@ -361,6 +411,7 @@ export function AgentEditor({
               </Picker>
             </div>
           ) : null}
+          {proposed.value("skillNames")}
           <FieldRefusals messages={refusalsOf(outcome, "skills")} />
         </>
       )
@@ -381,6 +432,7 @@ export function AgentEditor({
                   editable={canEdit("knowledgeBases")}
                   onChange={(knowledgeBases) => update({ knowledgeBases })}
                 />
+                {proposed.value("knowledgeBases")}
                 <FieldRefusals messages={refusalsOf(outcome, "knowledge")} />
               </>
             )
@@ -425,6 +477,7 @@ export function AgentEditor({
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
           />
+          {proposed.value("toolNames")}
           <FieldRefusals messages={refusalsOf(outcome, "tools")} />
         </>
       )
@@ -435,11 +488,14 @@ export function AgentEditor({
       description: t("configStarterPromptsDescription"),
       count: form.initialPrompts.length,
       body: (
-        <InitialPromptsEditor
-          prompts={form.initialPrompts}
-          disabled={!canEdit("initialPrompts")}
-          onChange={(initialPrompts) => update({ initialPrompts })}
-        />
+        <>
+          <InitialPromptsEditor
+            prompts={form.initialPrompts}
+            disabled={!canEdit("initialPrompts")}
+            onChange={(initialPrompts) => update({ initialPrompts })}
+          />
+          {proposed.value("initialPrompts")}
+        </>
       )
     },
     ...(availability
@@ -482,7 +538,19 @@ export function AgentEditor({
         form.description[locale].trim() || form.description[locale === "de" ? "en" : "de"].trim()
       }
       badges={isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
-      notices={<AgentUnavailableNotices status={unavailable} />}
+      notices={
+        <>
+          {proposal ? (
+            <AgentProposalNotice
+              state={proposal}
+              name={liveTitle}
+              changes={proposed.fields.length}
+              unsaved={changedFields > 0 || availabilityChanged}
+            />
+          ) : null}
+          <AgentUnavailableNotices status={unavailable} />
+        </>
+      }
       headActions={
         <>
           {defaultError ? <FormNotice tone="error">{defaultError}</FormNotice> : null}
@@ -500,7 +568,16 @@ export function AgentEditor({
           ) : null}
         </>
       }
-      sections={sections}
+      sections={sections.map((section) => ({
+        ...section,
+        ...(proposed.sections.has(section.id) ? { state: <ProposedSectionMark /> } : {}),
+        // While Apply or Discard is on its way nothing is typed: an Apply reads the page again.
+        body: (
+          <fieldset disabled={proposal?.busy !== undefined} className="contents">
+            {section.body}
+          </fieldset>
+        )
+      }))}
       missingTranslations={agentMissingTranslations(form)}
       control={{
         changes: changedFields + (availabilityChanged ? 1 : 0),

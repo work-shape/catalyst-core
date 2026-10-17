@@ -13,6 +13,7 @@ import { useAppToolsRead } from "../apps/app-tools-group";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorMessage } from "../../shared/workspace-utils";
 import { AgentEditor } from "./agent-editor";
+import { useAgentProposal } from "./agent-proposal-source";
 import { agentConfigToForm, startedAgentForm } from "./asset-form-model";
 import type { BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
 import { AGENT_ASSET_KIND } from "../../shared/build-rights";
@@ -109,6 +110,11 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   // the form alone, so the page keeps what it was told and what it changed itself.
   const [isDefault, setIsDefault] = useState(asset?.isDefault === true);
   const [availability, setAvailability] = useState(asset?.availability);
+  const proposal = useAgentProposal({
+    agent: asset?.name,
+    canDecide: frame.canWrite,
+    reload: frame.reload ?? (async () => undefined)
+  });
 
   return (
     <AgentEditor
@@ -119,6 +125,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
           : startedAgentForm(start ?? { name: "", title: "" }, locale === "de" ? "de" : "en")
       }
       isDefault={isDefault}
+      {...(proposal === undefined ? {} : { proposal })}
       references={referencesQuery.data}
       referencesLoading={referencesQuery.isPending}
       editableAgentFields={management.editableAgentFields}

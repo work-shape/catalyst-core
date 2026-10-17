@@ -1,4 +1,17 @@
 export { AgentEditor, type AgentAvailabilityChoice } from "./agent-editor";
+export {
+  listChange,
+  proposedAgentFields,
+  readProposalRefusal,
+  type ProposedAgentField
+} from "./agent-proposal-model";
+export { AgentProposalNotice } from "./agent-proposal";
+export {
+  answerOfRevision,
+  decideProposal,
+  useAgentProposal,
+  type AgentProposalState
+} from "./agent-proposal-source";
 export { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 export { AssetEditorShell } from "./asset-editor-shell";
 export { PlatformInstructionsBody } from "./platform-instructions";

@@ -649,6 +649,7 @@ function LoadedAssetPage({
           ) : null
         }
         save={(config) => write({ config })}
+        reload={reload}
         folder={{
           read: () => source.writes.readFiles(address),
           save: (files) => write({ files })

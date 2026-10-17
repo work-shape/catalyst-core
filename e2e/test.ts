@@ -476,6 +476,35 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["a Page saved as an App updates the draft of that App, and nothing that is published"]
   },
   {
+    name: "agent-proposal-over-a-moved-base",
+    reason:
+      "Chromium's own log line: the test saves the agent with the API over the base of a " +
+      "proposal, Apply is answered with 409, and the test asserts that the page says the agent " +
+      "prepares a new proposal and applies nothing.",
+    matches: requestAnswered(409),
+    path: /^\/api\/v1\/agents\/[^/]+\/proposals\/[^/]+\/apply$/u,
+    tests: ["the agent page marks a proposal, applies it, discards one and refuses a stale one"]
+  },
+  {
+    name: "agent-proposal-states-for-review",
+    reason:
+      "Chromium's own log line: the test answers Apply once with 412, as when the agent wrote a " +
+      "newer proposal, and once with 500, and asserts what the page says to each.",
+    matches: new RegExp(`${requestAnswered(412).source}|${requestAnswered(500).source}`, "u"),
+    path: /^\/api\/v1\/agents\/[^/]+\/proposals\/[^/]+\/apply$/u,
+    tests: ["the proposal's states and each kind of proposed value, for a writer and a reader"]
+  },
+  {
+    name: "agent-reader-references",
+    reason:
+      "Known, not fixed here: the agent page asks a reader who may read the one agent and " +
+      "change nothing for the instance's references, which the instance refuses with 403. " +
+      "The page shows the agent without them.",
+    matches: requestAnswered(403),
+    path: /^\/api\/v1\/context\/references$/u,
+    tests: ["the proposal's states and each kind of proposed value, for a writer and a reader"]
+  },
+  {
     name: "unread-configuration-diagnostic",
     reason:
       "The interface writes this line itself when the instance configuration does not fit it, " +

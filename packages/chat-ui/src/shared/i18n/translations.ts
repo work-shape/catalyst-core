@@ -1,5 +1,6 @@
 import { access } from "./access";
 import { administration } from "./administration";
+import { agentProposal } from "./agent-proposal";
 import { agents } from "./agents";
 import { apiAccess } from "./api-access";
 import { approvals } from "./approvals";
@@ -39,6 +40,7 @@ import { combineTranslations } from "./translation-area";
 export const translations = combineTranslations(common)
   .and(access)
   .and(administration)
+  .and(agentProposal)
   .and(agents)
   .and(apiAccess)
   .and(approvals)

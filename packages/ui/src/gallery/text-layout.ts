@@ -45,6 +45,9 @@ export interface LayoutGalleryText {
   sectionHistory: string;
   sectionHistoryDescription: string;
   sectionBody: string;
+  proposedLabel: string;
+  proposedState: string;
+  proposedSample: string;
   tabsLabel: string;
   tabsGeneral: string;
   tabsMembers: string;
@@ -233,6 +236,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     sectionHistory: "History",
     sectionHistoryDescription: "Every published revision of this agent.",
     sectionBody: "Each section is flat. A hairline separates it from the next one.",
+    proposedLabel: "Proposed by the agent",
+    proposedState: "Proposed change",
+    proposedSample: "Answer in short sentences and name the contract clause you rely on.",
     tabsLabel: "Views of the workspace",
     tabsGeneral: "General",
     tabsMembers: "Members",
@@ -420,6 +426,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     sectionHistory: "Verlauf",
     sectionHistoryDescription: "Jede veröffentlichte Revision dieses Agenten.",
     sectionBody: "Jeder Abschnitt ist flach. Eine Haarlinie trennt ihn vom nächsten.",
+    proposedLabel: "Vom Agenten vorgeschlagen",
+    proposedState: "Vorgeschlagene Änderung",
+    proposedSample:
+      "Antworte in kurzen Sätzen und nenne die Vertragsklausel, auf die du dich stützt.",
     tabsLabel: "Ansichten des Arbeitsbereichs",
     tabsGeneral: "Allgemein",
     tabsMembers: "Mitglieder",

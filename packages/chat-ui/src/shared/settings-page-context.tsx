@@ -46,6 +46,11 @@ export interface SettingsPageContextValue {
    * composer, for the person to send. Absent where the shell has no dock.
    */
   startDockedChat?: (prompt: string) => void;
+  /**
+   * The conversation in the dock beside the page, where it holds one. On an agent's page it is
+   * the Build conversation whose agent may have proposed a change to the agent.
+   */
+  dockConversationId?: string;
 }
 
 const SettingsPageContext = createContext<SettingsPageContextValue | undefined>(undefined);

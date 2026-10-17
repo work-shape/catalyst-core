@@ -13,6 +13,8 @@ export interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, "title">
   description?: ReactNode;
   /** How many things the section holds, after the title. */
   count?: number;
+  /** What is true of the section now, after the title and its count: a `Badge`, such as a proposed change. */
+  state?: ReactNode;
   /** One action for the section, such as adding to it. */
   action?: ReactNode;
   /** More under the description, in the title's column, such as a list that picks what the content shows. */
@@ -31,6 +33,7 @@ export function Section({
   headingLevel = 2,
   description,
   count,
+  state,
   action,
   aside,
   children,
@@ -62,6 +65,7 @@ export function Section({
               {title}
             </Heading>
             {count === undefined ? null : <CountBadge count={count} tone="muted" />}
+            {state}
             {action === undefined ? null : <div className="ml-auto shrink-0">{action}</div>}
           </div>
           {description === undefined ? null : (

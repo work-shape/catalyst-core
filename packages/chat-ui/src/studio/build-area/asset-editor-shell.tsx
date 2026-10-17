@@ -34,6 +34,8 @@ export interface AssetSection {
    * the outline marks it.
    */
   refusalField?: BuildRefusalField;
+  /** What is true of the section now, after its heading, such as a change somebody proposes. */
+  state?: ReactNode;
   body: ReactNode;
 }
 
@@ -282,6 +284,7 @@ export function AssetEditorShell({
               title={section.label}
               description={section.description}
               count={section.count}
+              state={section.state}
             >
               {section.body}
             </Section>

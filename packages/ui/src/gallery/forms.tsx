@@ -6,6 +6,7 @@ import { ComposerFrame } from "../forms/composer-frame";
 import { Field } from "../forms/field";
 import { Input, Textarea } from "../forms/input";
 import { NameWithAddress, addressOf, type NameAndAddress } from "../forms/name-with-address";
+import { ProposedValue } from "../forms/proposed-value";
 import { RadioGroup } from "../forms/radio-group";
 import { SaveBar } from "../forms/save-bar";
 import { Select } from "../forms/select";
@@ -382,6 +383,18 @@ export const formsGallery: GalleryGroup = {
       name: "Field",
       components: ["Field"],
       render: (text) => <FieldSamples text={text} />
+    },
+    {
+      name: "ProposedValue",
+      components: ["ProposedValue"],
+      render: (text) => (
+        <div className="grid max-w-sm gap-2">
+          <Field label={text.instructions}>
+            <Textarea readOnly defaultValue={text.instructionsSample} />
+          </Field>
+          <ProposedValue label={text.proposedLabel}>{text.proposedSample}</ProposedValue>
+        </div>
+      )
     },
     {
       name: "NameWithAddress",

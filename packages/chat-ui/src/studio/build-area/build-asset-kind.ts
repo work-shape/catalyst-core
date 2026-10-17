@@ -78,6 +78,11 @@ export interface BuildAssetEditorProps {
   /** Saves the definition against the revision the page loaded, or creates the asset. */
   save(config: Record<string, unknown>): Promise<BuildWriteOutcome>;
   /**
+   * Reads the asset again after a change the page did not write itself, such as an applied
+   * proposal: the page starts again from what the instance holds. Absent for a new asset.
+   */
+  reload?(): Promise<unknown>;
+  /**
    * The folder of a kind whose revision holds files beside its config, such as a skill: reads
    * the files of the revision the page loaded, and saves the whole folder against it, or
    * creates the asset with it. Absent where the frame writes the config alone.

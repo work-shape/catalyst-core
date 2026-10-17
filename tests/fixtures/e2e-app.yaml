@@ -324,6 +324,16 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The reader of the agent proposal spec, who may read one agent and not change it. No
+      # other spec uses this member.
+      - email: e2e-agent-proposal-reader@example.test
+        displayLabel: E2E Zz Agent Proposal Reader
+        passwordEnvName: E2E_AGENT_PROPOSAL_READER_PASSWORD
+        developmentPassword: e2e-agent-proposal-reader-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900
