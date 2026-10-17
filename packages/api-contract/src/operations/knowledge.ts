@@ -62,6 +62,8 @@ const knowledgeQueryResponseSchema = z.object({
 });
 
 const knowledgeStateResponseSchema = z.object({
+  /** Due ingestion has no reporting worker. Omitted for a structured Knowledge Base. */
+  processingWaiting: z.boolean().optional(),
   /** The id of the Knowledge Base's asset. */
   id: z.string(),
   /** The id operations and routes name the Knowledge Base by. */

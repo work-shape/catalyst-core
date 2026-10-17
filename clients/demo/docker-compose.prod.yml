@@ -61,6 +61,31 @@ services:
       <<: *app-environment
     command: ["node", "clients/demo/dist/migrate.js"]
 
+  knowledge-worker:
+    build:
+      <<: *client-build
+      target: api
+    stop_grace_period: 30s
+    cpus: ${KNOWLEDGE_WORKER_CPUS:-2}
+    mem_limit: ${KNOWLEDGE_WORKER_MEMORY_LIMIT:-2g}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
+      DATABASE_URL: ${DATABASE_URL:-postgres://agent_chat:agent_chat@postgres:5432/agent_chat}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEMO_SECRET_STORE_KEY: ${DEMO_SECRET_STORE_KEY:-}
+      DEMO_SAMPLE_MCP_KEY: ${DEMO_SAMPLE_MCP_KEY:-}
+      KNOWLEDGE_WORKER_ID: demo-knowledge-worker
+      KNOWLEDGE_WORKER_POOL_SIZE: ${KNOWLEDGE_WORKER_POOL_SIZE:-6}
+    command: ["node", "clients/demo/dist/knowledge-worker.js"]
+    volumes:
+      - execution-workspace-objects:/var/lib/vivd-catalyst/demo/execution-workspaces
+      - page-files:/var/lib/vivd-catalyst/demo/files
+
   api:
     build:
       <<: *client-build

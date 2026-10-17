@@ -97,7 +97,7 @@ const resolved = () => console.log("resolve-only: this process starts with this 
   assert_contains "$scratch/failure-output" \
     "entry points run: server.js, workspace-command-worker.js, artifact-preview-worker.js"
   assert_contains "$scratch/failure-output" \
-    "entry points this deployment does not build: agent-run-worker.js"
+    "entry points this deployment does not build: agent-run-worker.js, knowledge-worker.js"
   # Every process entry point once per config a release starts from, and nothing else in dist/.
   [[ "$(LC_ALL=C sort "$runs")" == "artifact-preview-worker.js app.production.yaml --resolve-only
 artifact-preview-worker.js app.staging.yaml --resolve-only
@@ -471,7 +471,7 @@ test_deploy() {
   assert_contains "$remote_command" "IMAGE_REPOSITORY=$fixture_repository IMAGE_TAG=staging-2026.10.06-1"
   assert_contains "$remote_command" "API_IMAGE_DIGEST=$digest_a UI_IMAGE_DIGEST=$digest_b"
   assert_contains "$remote_command" "RUNNER_IMAGE_DIGEST=$digest_b EXECUTION_WORKSPACES=1 bash -c "
-  if grep -v '^[[:space:]]*#' "$kit_dir/lib/deploy.sh" | grep -Eq 'bash -s([[:space:]"]|$)'; then
+  if grep -v '^[[:space:]]*#' "$kit_dir/lib/deploy.sh" | grep -E 'bash -s([[:space:]"]|$)' > /dev/null; then
     fail "deploy.sh must not feed the remote script to bash on stdin"
   fi
 
@@ -529,7 +529,17 @@ SH
   sed -e "s#REMOTE_APP_DIR=[^ ]*#REMOTE_APP_DIR=$app_dir#" \
     -e "s#REMOTE_ENV_FILE=[^ ]*#REMOTE_ENV_FILE=$host/app.env#" \
     "$capture/ssh-2.command" > "$host/command"
-  env "PATH=$bin:$PATH" "HOST_LOG=$host/log" "HOST_STATE=$host/state" "$@" \
+  local host_path="$bin:$PATH"
+  if [[ "${HOST_MINIMAL_PATH:-0}" == "1" ]]; then
+    # Only Ubuntu base utilities and Docker; no jq, Node, Python, gh or AWS CLI.
+    local tool
+    for tool in bash chmod awk mktemp cp rm sed grep wc tr nohup sh cat touch; do
+      ln -s "$(command -v "$tool")" "$bin/$tool"
+    done
+    host_path="$bin"
+    env "PATH=$host_path" bash -c 'command -v jq' >/dev/null 2>&1 && fail "host fixture contains jq"
+  fi
+  env "PATH=$host_path" "HOST_LOG=$host/log" "HOST_STATE=$host/state" "$@" \
     bash -c "$(cat "$host/command")" > "$host/output" 2>&1 < /dev/null
 }
 
@@ -568,7 +578,7 @@ test_remote_deploy() {
     (( current > previous )) || fail "remote deploy ran out of order: $step"
     previous="$current"
   done
-  if grep -E 'up -d [^-].*agent-run-worker' "$log" | grep -v -e '--no-recreate' -q; then
+  if grep -E 'up -d [^-].*agent-run-worker' "$log" | grep -v -e '--no-recreate' > /dev/null; then
     fail "agent-run-worker was recreated instead of rolled"
   fi
 
@@ -651,6 +661,32 @@ run_upload_check() {
   kill "$api" 2> /dev/null || true
   wait "$api" 2> /dev/null || true
   return "$status"
+}
+
+test_remote_deploy_without_jq() {
+  local host="$scratch/host-no-jq" capture="$scratch/deploy-capture"
+  HOST_MINIMAL_PATH=1 run_remote_deploy "$capture" "$host" HOST_KNOWLEDGE_WORKER=1 \
+    || { cat "$host/output" >&2; fail "remote deploy requires a non-base host tool"; }
+  assert_contains "$host/output" "All services run the images of staging-2026.10.06-1."
+  assert_contains "$host/log" "up -d api doc-worker artifact-preview-worker ui caddy knowledge-worker doc-worker-knowledge workspace-command-worker"
+  assert_contains "$host/log" "docker inspect -f {{.Config.Image}} {{.State.Running}} knowledge-worker-new"
+  assert_contains "$host/log" "docker inspect -f {{.Config.Image}} {{.State.Running}} doc-worker-knowledge-new"
+  assert_contains "$host/log" "exec -T knowledge-worker node fixture/dist/knowledge-worker.js --check-ready"
+}
+
+# Exercise the real remote script repeatedly with a streaming Compose producer. A quiet
+# grep used to close the pipe before Docker finished, skipping replacement and readiness.
+test_remote_deploy_streaming_services() {
+  local capture="$scratch/deploy-capture" host attempt
+  for attempt in {1..10}; do
+    host="$scratch/host-streaming-$attempt"
+    run_remote_deploy "$capture" "$host" HOST_KNOWLEDGE_WORKER=1 \
+      || { cat "$host/output" >&2; fail "streaming service detection failed on attempt $attempt"; }
+    assert_contains "$host/log" "up -d api doc-worker artifact-preview-worker ui caddy knowledge-worker doc-worker-knowledge workspace-command-worker"
+    assert_contains "$host/log" "exec -T knowledge-worker node fixture/dist/knowledge-worker.js --check-ready"
+    [[ "$(grep -c 'config --services$' "$host/log")" == "1" ]] \
+      || fail "service detection must read Compose once"
+  done
 }
 
 test_upload_check() {
@@ -1026,6 +1062,8 @@ test_release_manifest
 test_publish
 test_deploy
 test_remote_deploy
+test_remote_deploy_without_jq
+test_remote_deploy_streaming_services
 test_upload_check
 test_host_backup_scripts
 test_deployment_policy

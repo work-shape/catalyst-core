@@ -1,3 +1,4 @@
+import type { AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { RouteRegistration, WorkflowAssetKind } from "@work-shape/catalyst-server";
 import {
@@ -26,6 +27,9 @@ import {
 import type { ModuleSeam } from "./module-assembly";
 
 export { knowledgeModule };
+
+/** Where ingestion runs. Search and operations always stay in the API. */
+export type KnowledgeWorkerPlacement = AgentRunWorkerPlacement;
 
 /**
  * The embedding models release config approves for Knowledge Bases, every binding of kind

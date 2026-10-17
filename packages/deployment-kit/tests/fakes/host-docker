@@ -9,9 +9,9 @@ state="$HOST_STATE"
 service_image() {
   local service="$1" suffix digest
   case "$service" in
-    api | agent-run-worker) suffix=api digest="$API_IMAGE_DIGEST" ;;
+    api | agent-run-worker | knowledge-worker) suffix=api digest="$API_IMAGE_DIGEST" ;;
     ui) suffix=ui digest="$UI_IMAGE_DIGEST" ;;
-    doc-worker) suffix=doc-worker digest="$DOC_WORKER_IMAGE_DIGEST" ;;
+    doc-worker | doc-worker-knowledge) suffix=doc-worker digest="$DOC_WORKER_IMAGE_DIGEST" ;;
     artifact-preview-worker)
       suffix=artifact-preview-worker digest="$ARTIFACT_PREVIEW_WORKER_IMAGE_DIGEST" ;;
     workspace-command-worker)
@@ -28,6 +28,20 @@ if [[ "$1" == "compose" ]]; then
   shift
   while [[ "$1" == --profile || "$1" == --env-file || "$1" == -f ]]; do shift 2; done
   case "$1" in
+    config)
+      [[ "$2" == "--services" ]] || exit 1
+      services=(api doc-worker agent-run-worker artifact-preview-worker ui caddy)
+      if [[ "${HOST_KNOWLEDGE_WORKER:-0}" == "1" ]]; then
+        services+=(knowledge-worker doc-worker-knowledge)
+      fi
+      # Model Compose streaming its output. Trailing services expose consumers that
+      # exit at a match: the next write fails with SIGPIPE under pipefail.
+      services+=(postgres migrate)
+      for service in "${services[@]}"; do
+        printf '%s\n' "$service"
+        /bin/sleep 0.01
+      done
+      ;;
     ps)
       service="$3"
       if [[ "$service" == "agent-run-worker" ]]; then
@@ -63,7 +77,9 @@ fi
 case "$1" in
   inspect)
     container="$4"
-    if [[ "$3" == "{{.State.Running}}" ]]; then
+    if [[ "$3" == "{{index .Config.Cmd 1}}" && "$container" == "knowledge-worker-new" ]]; then
+      echo fixture/dist/knowledge-worker.js
+    elif [[ "$3" == "{{.State.Running}}" ]]; then
       echo true
     elif [[ "$container" == *-old ]]; then
       echo "previous-release-image true"

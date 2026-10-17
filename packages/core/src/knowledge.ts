@@ -513,11 +513,20 @@ export interface KnowledgeFiles {
  */
 export const KNOWLEDGE_BASE_EXTRACT_JOB_KIND = "knowledge_base.extract";
 
-/**
- * The job that chunks one content's text, writes its chunks and, where the Knowledge Base
- * searches by meaning, embeds them. It runs in the API process.
- */
-export const KNOWLEDGE_BASE_INDEX_JOB_KIND = "knowledge_base.index";
+/** The Knowledge Base jobs served by the knowledge worker; extraction needs the doc-worker. */
+export const KNOWLEDGE_JOB_KINDS = {
+  sync: "knowledge_base.sync",
+  fetch: "knowledge_base.fetch",
+  index: "knowledge_base.index",
+  cleanFiles: "knowledge_base.clean_files",
+  removeDocuments: "knowledge_base.remove_documents",
+  releaseOriginals: "knowledge_base.release_originals",
+  deleteOriginals: "knowledge_base.delete_originals",
+  reconcileSources: "knowledge_base.reconcile_sources"
+} as const;
+
+/** Chunks and optionally embeds a content in the configured ingestion process. */
+export const KNOWLEDGE_BASE_INDEX_JOB_KIND = KNOWLEDGE_JOB_KINDS.index;
 
 const jobIdSchema = z.string().min(1).max(200);
 

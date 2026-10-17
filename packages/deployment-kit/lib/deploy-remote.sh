@@ -172,6 +172,17 @@ APP_DIR="$REMOTE_APP_DIR" ENV_FILE="$REMOTE_ENV_FILE" BACKUP_PREFIX=pre-deploy \
   "$REMOTE_APP_DIR/backup-postgres.sh" "pre-deploy-$IMAGE_TAG" < /dev/null
 compose run --rm -T migrate < /dev/null
 services=(api doc-worker artifact-preview-worker ui caddy)
+services_list="$(compose config --services)"
+knowledge_worker_service=""
+if grep -qx knowledge-worker <<< "$services_list"; then
+  knowledge_worker_service=knowledge-worker
+  services+=(knowledge-worker)
+fi
+knowledge_extraction_service=""
+if grep -qx doc-worker-knowledge <<< "$services_list"; then
+  knowledge_extraction_service=doc-worker-knowledge
+  services+=(doc-worker-knowledge)
+fi
 if [[ "$EXECUTION_WORKSPACES" == "1" ]]; then
   services+=(workspace-command-worker)
 fi
@@ -191,6 +202,19 @@ require_release_image ui "$(release_image ui "$UI_IMAGE_DIGEST")"
 if [[ "$EXECUTION_WORKSPACES" == "1" ]]; then
   require_release_image workspace-command-worker \
     "$(release_image workspace-command-worker "$WORKSPACE_COMMAND_WORKER_IMAGE_DIGEST")"
+fi
+if [[ -n "$knowledge_worker_service" ]]; then
+  require_release_image knowledge-worker "$(release_image api "$API_IMAGE_DIGEST")"
+  if [[ -n "$knowledge_extraction_service" ]]; then
+    require_release_image doc-worker-knowledge "$(release_image doc-worker "$DOC_WORKER_IMAGE_DIGEST")"
+  fi
+  # Old containers have stopped and the API serves no ingestion kind. Only the new release
+  # can renew this report after now; a container merely being alive is insufficient.
+  # The verified production command is [node, entrypoint]. Docker exposes it without
+  # requiring a JSON parser (or Node) on the Ubuntu host.
+  knowledge_worker_id="$(compose ps -q knowledge-worker)"
+  knowledge_worker_entry="$(docker inspect -f '{{index .Config.Cmd 1}}' "$knowledge_worker_id")"
+  compose exec -T knowledge-worker node "$knowledge_worker_entry" --check-ready < /dev/null
 fi
 echo "All services run the images of $IMAGE_TAG."
 

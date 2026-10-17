@@ -424,10 +424,11 @@ export function declaredSecretNames(
 export function createInfrastructureWorkflow(
   config: ClientInstanceConfig,
   infrastructure: InstanceInfrastructure,
-  stores: PlatformStores
+  stores: PlatformStores,
+  processes: readonly InfrastructureEntry[] = []
 ): InfrastructureWorkflow {
   return new InfrastructureWorkflow({
-    entries: infrastructureOverview({ config, infrastructure, stores }),
+    entries: [...infrastructureOverview({ config, infrastructure, stores }), ...processes],
     declaredSecretNames: declaredSecretNames(config, infrastructure.registry),
     secrets: infrastructure.secrets,
     store: stores.infrastructureChecks,

@@ -1,6 +1,9 @@
 import { sourceOperation } from "./source-operations";
 import {
   isAppError,
+  knowledgeIndexJob,
+  knowledgeSyncJob,
+  noWorkerTakesJobs,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
   KNOWLEDGE_BASE_STATUSES,
@@ -76,6 +79,7 @@ const tableCheckSchema = z.object({ name: z.string(), readable: z.boolean() });
 
 /** The state of one Knowledge Base as its page reads it. */
 const stateOutputSchema = z.object({
+  processingWaiting: z.boolean().optional(),
   /** The id of the Knowledge Base's asset. */
   id: z.string(),
   name: z.string(),
@@ -147,11 +151,28 @@ function splitOperationName(name: string): { knowledgeBase: string; part: string
   return knowledgeBase && part && rest.length === 0 ? { knowledgeBase, part } : undefined;
 }
 
-function stateOf(
-  { asset }: PublishedKnowledgeBase,
+async function stateOf(
+  runtime: KnowledgeRuntime,
+  knowledgeBase: PublishedKnowledgeBase,
   state: CheckedKnowledgeState | undefined
-): StateOutput {
+): Promise<StateOutput> {
+  const { asset } = knowledgeBase;
+  const processing = isStructured(knowledgeBase)
+    ? {}
+    : {
+        processingWaiting: (
+          await Promise.all(
+            [knowledgeSyncJob, knowledgeIndexJob].map((kind) =>
+              noWorkerTakesJobs(runtime.stores.jobs, {
+                clientInstanceId: runtime.clientInstanceId,
+                kind
+              })
+            )
+          )
+        ).some(Boolean)
+      };
   return {
+    ...processing,
     id: asset.id,
     name: asset.name,
     ...(state
@@ -270,12 +291,13 @@ function stateOperation(
         clientInstanceId: runtime.clientInstanceId,
         assetId: knowledgeBase.asset.id
       });
-      if (kept) return stateOf(knowledgeBase, kept);
+      if (kept) return stateOf(runtime, knowledgeBase, kept);
       // Nothing kept: it was never checked, or its store was being made when it was. A store
       // being made becomes ready by itself, and nobody need check for the page to see it: it is
       // looked at now, and kept once it is ready, as a query keeps the check after a failure.
       try {
-        return stateOf(
+        return await stateOf(
+          runtime,
           knowledgeBase,
           await checkKnowledgeBase(
             runtime,
@@ -297,7 +319,7 @@ function stateOperation(
           },
           "A Knowledge Base with no kept state could not be checked"
         );
-        return stateOf(knowledgeBase, undefined);
+        return stateOf(runtime, knowledgeBase, undefined);
       }
     }
   };
@@ -341,7 +363,7 @@ function checkOperation(
           signal
         );
       }
-      return stateOf(knowledgeBase, state);
+      return stateOf(runtime, knowledgeBase, state);
     }
   };
 }

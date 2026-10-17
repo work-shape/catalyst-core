@@ -12,6 +12,8 @@ import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 export interface CreateJobWorkerInput {
   stores: PlatformStores;
   clientInstanceId: ClientInstanceId;
+  /** Stable process identity in leases and log lines; generated when absent. */
+  workerId?: string;
   /** The job kinds this process serves. */
   handlers: readonly RegisteredJobHandler[];
   /** Schedules of kinds this process serves. */

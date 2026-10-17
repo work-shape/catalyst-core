@@ -10,7 +10,9 @@ import {
   KNOWLEDGE_DOCUMENT_FAILURES,
   KnowledgeAddDialog,
   KnowledgeDocuments,
+  knowledgeStateStillChanging,
   type KnowledgeBaseSource,
+  type KnowledgeBaseState,
   type KnowledgeDocument,
   type KnowledgeOpenableFile,
   type KnowledgeRead
@@ -154,6 +156,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source: plantedSource(),
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: true
       })
     );
@@ -176,6 +179,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source: plantedSource(),
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: true
       }),
       "de"
@@ -205,7 +209,12 @@ describe("the Documents section", () => {
       })
     ];
     const source = plantedSource({ useDocuments: () => ready({ documents: synced }) });
-    const shown = { source, knowledgeBase: "objektunterlagen", canWrite: true };
+    const shown = {
+      source,
+      knowledgeBase: "objektunterlagen",
+      publishedRevision: 1,
+      canWrite: true
+    };
 
     show(createElement(KnowledgeDocuments, shown));
     expect(row("richtlinie").textContent).toContain(
@@ -231,7 +240,12 @@ describe("the Documents section", () => {
       failureCode: "knowledge_file_too_many_pages"
     });
     const source = plantedSource({ useDocuments: () => ready({ documents: [long] }) });
-    const props = { source, knowledgeBase: "objektunterlagen", canWrite: true };
+    const props = {
+      source,
+      knowledgeBase: "objektunterlagen",
+      publishedRevision: 1,
+      canWrite: true
+    };
     show(createElement(KnowledgeDocuments, props));
     expect(row("akte").textContent).toContain("More than 500 pages.");
     expect(button("Retry", row("akte"))).toBeDefined();
@@ -252,6 +266,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source,
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: true
       })
     );
@@ -271,6 +286,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source,
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: true
       })
     );
@@ -291,6 +307,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source,
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: true
       })
     );
@@ -320,6 +337,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source,
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: true
       })
     );
@@ -348,6 +366,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source,
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: true
       })
     );
@@ -370,6 +389,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source,
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: true
       }),
       "de"
@@ -393,6 +413,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source: plantedSource({ useDocuments: () => ready({ documents: [synced, ...documents] }) }),
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: true
       })
     );
@@ -415,6 +436,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source,
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: true
       }),
       "de"
@@ -436,6 +458,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source: plantedSource(),
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: false
       })
     );
@@ -451,6 +474,7 @@ describe("the Documents section", () => {
       createElement(KnowledgeDocuments, {
         source: plantedSource({ useDocuments: () => ({ status: "refused" }) }),
         knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
         canWrite: false
       })
     );
@@ -462,13 +486,25 @@ describe("the Documents section", () => {
 
   it("says who adds documents to an empty Knowledge Base", () => {
     const empty = plantedSource({ useDocuments: () => ready({ documents: [] }) });
-    show(createElement(KnowledgeDocuments, { source: empty, knowledgeBase: "kb", canWrite: true }));
+    show(
+      createElement(KnowledgeDocuments, {
+        source: empty,
+        knowledgeBase: "kb",
+        publishedRevision: 1,
+        canWrite: true
+      })
+    );
     expect(document.body.textContent).toContain(
       "No documents yet. Add files from your conversations."
     );
 
     show(
-      createElement(KnowledgeDocuments, { source: empty, knowledgeBase: "kb", canWrite: false })
+      createElement(KnowledgeDocuments, {
+        source: empty,
+        knowledgeBase: "kb",
+        publishedRevision: 1,
+        canWrite: false
+      })
     );
     expect(document.body.textContent).toContain(
       "No documents yet. Somebody who may change this knowledge base adds them."
@@ -480,6 +516,73 @@ describe("the Documents section", () => {
     expect(documentsStillIndexing(documents.filter((each) => each.state !== "pending"))).toBe(
       false
     );
+  });
+});
+
+describe("processing that waits for a worker", () => {
+  const state = (extra: Partial<KnowledgeBaseState> = {}): KnowledgeBaseState => ({
+    id: "asset_objektunterlagen",
+    name: "objektunterlagen",
+    status: "ok",
+    tables: [],
+    ...extra
+  });
+  const notice = () => document.querySelector("[data-knowledge-processing-waiting]");
+
+  it("says that processing waits while no worker takes the documents, in English and German", () => {
+    const source = plantedSource({ useState: () => ready(state({ processingWaiting: true })) });
+    const props = {
+      source,
+      knowledgeBase: "objektunterlagen",
+      publishedRevision: 1,
+      canWrite: true
+    };
+    show(createElement(KnowledgeDocuments, props));
+    expect(notice()?.textContent).toBe(
+      "Processing is waiting: the knowledge base service is not responding."
+    );
+    show(createElement(KnowledgeDocuments, props), "de");
+    expect(notice()?.textContent).toBe(
+      "Verarbeitung wartet: Der Dienst für Wissensdatenbanken meldet sich nicht."
+    );
+  });
+
+  it("says nothing while a worker takes them, and nothing for an instance that does not say", () => {
+    for (const answer of [state({ processingWaiting: false }), state()]) {
+      show(
+        createElement(KnowledgeDocuments, {
+          source: plantedSource({ useState: () => ready(answer) }),
+          knowledgeBase: "objektunterlagen",
+          publishedRevision: 1,
+          canWrite: true
+        })
+      );
+      expect(notice()).toBeNull();
+    }
+  });
+
+  it("watches processing with no document pending, as a sync queued before any document", () => {
+    const useState = vi.fn<KnowledgeBaseSource["useState"]>(() => ready(state()));
+    const props = { knowledgeBase: "objektunterlagen", publishedRevision: 3, canWrite: true };
+    for (const listed of [[], documents.filter((each) => each.state !== "pending"), documents]) {
+      show(
+        createElement(KnowledgeDocuments, {
+          ...props,
+          source: plantedSource({ useState, useDocuments: () => ready({ documents: listed }) })
+        })
+      );
+      expect(useState).toHaveBeenLastCalledWith("objektunterlagen", 3, true);
+    }
+  });
+
+  it("reads the state again while watched, made or waiting, and a structured one stops after", () => {
+    // The Documents section watches: a sync before any document leaves no pending document.
+    expect(knowledgeStateStillChanging(state(), true)).toBe(true);
+    expect(knowledgeStateStillChanging(state({ processingWaiting: true }), false)).toBe(true);
+    expect(knowledgeStateStillChanging(state({ status: "preparing" }), false)).toBe(true);
+    // The Status section of a Knowledge Base of tables polls as before.
+    expect(knowledgeStateStillChanging(state({ status: "needs_attention" }), false)).toBe(false);
+    expect(knowledgeStateStillChanging(state(), false)).toBe(false);
   });
 });
 

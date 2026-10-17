@@ -15,6 +15,7 @@ import { basename, join, resolve } from "node:path";
 const PROCESS_ENTRY_POINTS = [
   "server.js",
   "agent-run-worker.js",
+  "knowledge-worker.js",
   "workspace-command-worker.js",
   "artifact-preview-worker.js"
 ];

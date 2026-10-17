@@ -5,6 +5,8 @@ interface NamedClientInstanceEnv {
   CLIENT_CONFIG_PATH?: string | undefined;
   BETTER_AUTH_URL?: string | undefined;
   CHAT_UI_ORIGIN?: string | undefined;
+  KNOWLEDGE_WORKER_ID?: string | undefined;
+  KNOWLEDGE_WORKER_POOL_SIZE?: string | undefined;
   AGENT_RUN_WORKER_ID?: string | undefined;
   AGENT_RUN_WORKER_CONCURRENCY?: string | undefined;
   AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS?: string | undefined;

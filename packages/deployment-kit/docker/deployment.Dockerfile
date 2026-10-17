@@ -156,10 +156,10 @@ RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locke
     python-pptx==0.6.23 \
     reportlab==4.2.2 \
   && /bin/bash --version \
-  && fc-match Carlito | grep -qi Carlito \
-  && fc-match Caladea | grep -qi Caladea \
-  && fc-match "Noto Sans" | grep -qi "Noto Sans" \
-  && fc-match Montserrat | grep -qi Montserrat \
+  && fc-match Carlito | grep -i Carlito > /dev/null \
+  && fc-match Caladea | grep -i Caladea > /dev/null \
+  && fc-match "Noto Sans" | grep -i "Noto Sans" > /dev/null \
+  && fc-match Montserrat | grep -i Montserrat > /dev/null \
   && python3 -c "import docx, openpyxl, pdfplumber, pptx, pypdf, reportlab, xlsxwriter; from PIL import Image" \
   && node --version \
   && soffice --headless --version \
@@ -300,10 +300,10 @@ RUN while IFS="$(printf '\t')" read -r command file; do \
   && python -c "from PIL import Image; Image.new('RGB', (1, 1)); print('pillow ok')" \
   && node --version \
   && git --version \
-  && fc-match Carlito | grep -qi Carlito \
-  && fc-match Caladea | grep -qi Caladea \
-  && fc-match "Noto Sans" | grep -qi "Noto Sans" \
-  && fc-match Montserrat | grep -qi Montserrat \
+  && fc-match Carlito | grep -i Carlito > /dev/null \
+  && fc-match Caladea | grep -i Caladea > /dev/null \
+  && fc-match "Noto Sans" | grep -i "Noto Sans" > /dev/null \
+  && fc-match Montserrat | grep -i Montserrat > /dev/null \
   && libreoffice --version \
   && pdfinfo -v >/tmp/poppler-version.txt 2>&1 \
   && unzip -v >/tmp/unzip-version.txt 2>&1 \

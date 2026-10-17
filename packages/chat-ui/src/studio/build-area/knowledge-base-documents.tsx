@@ -44,19 +44,25 @@ const FORMAT_NAMES: Record<string, string> = {
  * The documents of a published Knowledge Base that keeps documents, each with its state: being
  * indexed, searchable, or failed with the reason. Whoever may change the Knowledge Base adds
  * documents, retries a failed one and removes one they added; a document synced from a source
- * leaves only when the source withdraws it. Whoever may use the Knowledge Base sees the list.
+ * leaves only when the source withdraws it. Whoever may use the Knowledge Base sees the list,
+ * and a notice while no worker takes its documents.
  */
 export function KnowledgeDocuments({
   source,
   knowledgeBase,
+  publishedRevision,
   canWrite
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
+  publishedRevision: number;
   canWrite: boolean;
 }) {
   const { t } = useTranslation();
   const read = source.useDocuments(knowledgeBase);
+  // Watched while the section is open, with or without documents: a sync from a source can be
+  // queued before any document exists, and waits just the same when no worker takes it.
+  const state = source.useState(knowledgeBase, publishedRevision, true);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<number>();
   const [retrying, setRetrying] = useState<string>();
@@ -130,6 +136,11 @@ export function KnowledgeDocuments({
         <FormNotice tone="success">{t("knowledge.removed", { name: removed })}</FormNotice>
       )}
       {failure ? <FormNotice tone="error">{failure}</FormNotice> : null}
+      {state.status === "ready" && state.data.processingWaiting ? (
+        <FormNotice tone="error" data-knowledge-processing-waiting="">
+          {t("knowledge.processingWaiting")}
+        </FormNotice>
+      ) : null}
       <ReadState
         read={read}
         failedText={t("knowledge.documentsFailed")}

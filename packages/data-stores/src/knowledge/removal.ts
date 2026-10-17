@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  KNOWLEDGE_JOB_KINDS,
   AppError,
   auditActorFromIdentity,
   defineJobHandler,
@@ -38,7 +39,7 @@ const PURGE_INCOMPLETE = "knowledge_purge_incomplete";
 const inputSchema = z.strictObject({
   documentIds: z.array(z.string().min(1).max(200)).min(1).max(REMOVE_MAX)
 });
-export const KNOWLEDGE_REMOVE_DOCUMENTS_JOB_KIND = "knowledge_base.remove_documents";
+const KNOWLEDGE_REMOVE_DOCUMENTS_JOB_KIND = KNOWLEDGE_JOB_KINDS.removeDocuments;
 
 const removalJob = defineJobKind({
   kind: KNOWLEDGE_REMOVE_DOCUMENTS_JOB_KIND,

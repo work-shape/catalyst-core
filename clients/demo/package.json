@@ -8,14 +8,14 @@
     "./seed": "./src/seed/index.ts"
   },
   "scripts": {
-    "build": "tsup src/server.ts src/e2e-server.ts src/seed-auth.ts src/migrate.ts src/artifact-preview-worker.ts src/workspace-command-worker.ts src/sample-mcp-server.ts --format esm --out-dir dist && vite build",
-    "build:server": "tsup src/server.ts src/e2e-server.ts src/seed-auth.ts src/migrate.ts src/artifact-preview-worker.ts src/workspace-command-worker.ts src/sample-mcp-server.ts --format esm --out-dir dist",
+    "build": "tsup src/server.ts src/e2e-server.ts src/seed-auth.ts src/migrate.ts src/knowledge-worker.ts src/artifact-preview-worker.ts src/workspace-command-worker.ts src/sample-mcp-server.ts --format esm --out-dir dist && vite build",
+    "build:server": "tsup src/server.ts src/e2e-server.ts src/seed-auth.ts src/migrate.ts src/knowledge-worker.ts src/artifact-preview-worker.ts src/workspace-command-worker.ts src/sample-mcp-server.ts --format esm --out-dir dist",
     "build:ui": "vite build",
     "config:local-key": "pnpm --filter \"@work-shape/catalyst-client-assembly...\" build && node --env-file-if-exists=.env ../../packages/client-assembly/dist/local-key-cli.js --instance http://127.0.0.1:4100",
     "config:diff": "pnpm --filter \"@work-shape/catalyst-cli...\" build && node --env-file-if-exists=.env ../../packages/config-cli/dist/index.js config diff --dir .",
     "demo:seed": "pnpm --filter \"@work-shape/catalyst-client-assembly...\" --filter \"@work-shape/catalyst-cli...\" build && tsup src/demo-seed.ts --format esm --out-dir dist && node --env-file-if-exists=.env dist/demo-seed.js",
     "config:push": "pnpm --filter \"@work-shape/catalyst-cli...\" build && node --env-file-if-exists=.env ../../packages/config-cli/dist/index.js config push --dir .",
-    "dev": "node scripts/ensure-local-secrets.mjs && docker compose build migrate && docker compose watch api ui artifact-preview-worker workspace-command-worker sample-mcp",
+    "dev": "node scripts/ensure-local-secrets.mjs && docker compose build migrate && docker compose watch api ui knowledge-worker artifact-preview-worker workspace-command-worker sample-mcp",
     "dev:down": "docker compose down",
     "dev:db": "docker compose up -d postgres",
     "dev:restart": "pnpm run dev",
@@ -28,7 +28,8 @@
     "start:sample-mcp": "node --env-file-if-exists=.env dist/sample-mcp-server.js",
     "start:artifact-preview-worker": "node dist/artifact-preview-worker.js",
     "start:workspace-command-worker": "node dist/workspace-command-worker.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check:knowledge-worker-compose": "node ../../packages/deployment-kit/verify/knowledge-worker-compose.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

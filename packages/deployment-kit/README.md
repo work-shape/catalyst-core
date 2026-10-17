@@ -50,6 +50,9 @@ start `workspace-command-worker`.
 | `manifest write\|check\|fetch\|staging-deployed` | Writes, validates and downloads release manifests (writes schema 2; reads schemas 1 and 2).                                             |
 | `deploy --host HOST --manifest FILE`             | Deploys the images of a manifest by digest.                                                                                             |
 
+The remote VM needs Bash 4.4+, Docker with Compose, sudo, rsync and Ubuntu base utilities.
+Node, jq and the AWS CLI run in containers or on the release machine, not on the VM.
+
 A deploy sends the Compose file, the Caddyfile and the files under `host/` to the VM, then runs
 `lib/deploy-remote.sh` there: pull, back up the database server under `pre-deploy/` (a failed
 backup aborts before migrations), migrate, start the services, roll `agent-run-worker` with a

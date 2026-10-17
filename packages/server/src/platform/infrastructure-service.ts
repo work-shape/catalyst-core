@@ -73,6 +73,8 @@ export interface InfrastructureEntry {
    * not only when its last result is stale.
    */
   checkedByJobKind?: string;
+  /** A process represented directly by its heartbeat, without a provider check outcome. */
+  reportedByJobKind?: string;
 }
 
 /**
@@ -117,12 +119,13 @@ export class InfrastructureWorkflow {
     const checks = await Promise.all(
       this.options.entries.map(async (entry) => {
         const outcome = state.outcomes[entry.id];
+        const reportKind = entry.reportedByJobKind ?? entry.checkedByJobKind;
         const report =
-          entry.checkedByJobKind === undefined
+          reportKind === undefined
             ? undefined
             : await this.options.jobs.readWorkerReport({
                 clientInstanceId,
-                kind: entry.checkedByJobKind
+                kind: reportKind
               });
         return { entry, outcome, report, check: checkOf(entry, outcome, report, now) };
       })
@@ -258,6 +261,13 @@ function checkOf(
   report: JobWorkerReport | undefined,
   now: number
 ): InfrastructureCheck {
+  if (entry.reportedByJobKind !== undefined) {
+    if (!report)
+      return { status: "failed", checkedAt: new Date(now).toISOString(), errorClass: "no_report" };
+    return now - Date.parse(report.seenAt) > JOB_WORKER_SILENT_MS
+      ? { status: "failed", checkedAt: report.seenAt, errorClass: "no_report" }
+      : { status: "ok", checkedAt: report.seenAt };
+  }
   if (!outcome) {
     // A worker that reported and went silent before its first result is gone, not yet to come.
     if (!entry.check && report && now - Date.parse(report.seenAt) > JOB_WORKER_SILENT_MS)

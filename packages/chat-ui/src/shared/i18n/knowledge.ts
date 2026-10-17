@@ -115,6 +115,8 @@ export const knowledge = defineTranslations({
     "knowledge.documentsRefused": "You may not see the documents of this knowledge base.",
     "knowledge.documentsMore": "Show more",
     "knowledge.documentPending": "Being indexed",
+    "knowledge.processingWaiting":
+      "Processing is waiting: the knowledge base service is not responding.",
     "knowledge.documentIndexed": "Searchable",
     "knowledge.documentFailed": "Failed",
     "knowledge.originalReleased": "Original is stored at the source",
@@ -290,6 +292,8 @@ export const knowledge = defineTranslations({
     "knowledge.documentsRefused": "Du darfst die Dokumente dieser Wissensbasis nicht sehen.",
     "knowledge.documentsMore": "Mehr zeigen",
     "knowledge.documentPending": "Wird indexiert",
+    "knowledge.processingWaiting":
+      "Verarbeitung wartet: Der Dienst für Wissensdatenbanken meldet sich nicht.",
     "knowledge.documentIndexed": "Durchsuchbar",
     "knowledge.documentFailed": "Fehlgeschlagen",
     "knowledge.originalReleased": "Original liegt in der Quelle",

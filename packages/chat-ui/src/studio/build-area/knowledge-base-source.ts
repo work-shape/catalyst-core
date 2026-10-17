@@ -51,6 +51,19 @@ export function documentsStillIndexing(
   return documents.some((document) => document.state === "pending");
 }
 
+/**
+ * Whether the state of a Knowledge Base is read again every few seconds: while its store is being
+ * made, while its processing waits for a worker, so the page sees it recover, and always on the
+ * Documents section of a Knowledge Base that keeps documents. There a sync from a source can be
+ * queued before any document exists, so no document's state tells when no worker takes it.
+ */
+export function knowledgeStateStillChanging(
+  state: Pick<KnowledgeBaseState, "status" | "processingWaiting">,
+  watchProcessing: boolean
+): boolean {
+  return watchProcessing || state.status === "preparing" || state.processingWaiting === true;
+}
+
 /** How many documents one page of the Documents section asks the instance for. */
 const DOCUMENTS_PAGE_SIZE = 50;
 /** How often the documents are read again while one of them is still being indexed. */
@@ -94,8 +107,16 @@ type KnowledgeCall<Answer> =
  * frame.
  */
 export interface KnowledgeBaseSource {
-  /** A hook: what the last check of the published revision found. */
-  useState(knowledgeBase: string, publishedRevision: number): KnowledgeRead<KnowledgeBaseState>;
+  /**
+   * A hook: what the last check of the published revision found, and whether its processing
+   * waits for a worker. With `watchProcessing` the state is read again every few seconds, as the
+   * Documents section of a Knowledge Base that keeps documents does.
+   */
+  useState(
+    knowledgeBase: string,
+    publishedRevision: number,
+    watchProcessing?: boolean
+  ): KnowledgeRead<KnowledgeBaseState>;
   /** Checks the published revision now. */
   check(knowledgeBase: string): Promise<KnowledgeCall<KnowledgeBaseState>>;
   /** Runs one read-only statement on the published revision. */
@@ -150,12 +171,11 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
     ...parts
   ];
   return {
-    useState: (knowledgeBase, publishedRevision) =>
+    useState: (knowledgeBase, publishedRevision, watchProcessing = false) =>
       useRead(
         key("state", knowledgeBase, publishedRevision),
         (signal) => client.knowledge_bases.get({ params: { knowledgeBase }, signal }),
-        // A store being made becomes ready by itself: the page sees it without a reload.
-        { pollWhile: (state) => state.status === "preparing" }
+        { pollWhile: (state) => knowledgeStateStillChanging(state, watchProcessing) }
       ),
     check: (knowledgeBase) =>
       called(async () => {

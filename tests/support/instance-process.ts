@@ -24,10 +24,12 @@ const documents = defineCapability({
 const client = defineClientInstance({
   rootDir: process.cwd(),
   loadEnv: false,
+  knowledgeWorker: "separate",
   capabilities: build === "without-capability" ? [] : [documents]
 });
 const processes: Record<string, () => Promise<unknown>> = {
   server: () => client.listen(),
+  "knowledge-worker": () => client.runKnowledgeWorker(),
   "agent-run-worker": () => client.runAgentRunWorker(),
   "workspace-command-worker": () => client.runWorkspaceCommandWorker(),
   "artifact-preview-worker": () => client.runArtifactPreviewWorker()

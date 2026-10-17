@@ -38,7 +38,8 @@ const classes: readonly { id: InfrastructureClass; labelKey: TranslationKey }[] 
   { id: "objectStorage", labelKey: "infrastructure.classObjectStorage" },
   { id: "mail", labelKey: "infrastructure.classMail" },
   { id: "sandbox", labelKey: "infrastructure.classSandbox" },
-  { id: "secrets", labelKey: "infrastructure.classSecrets" }
+  { id: "secrets", labelKey: "infrastructure.classSecrets" },
+  { id: "workers", labelKey: "infrastructure.classWorkers" }
 ];
 
 type CheckStatus = InfrastructureCheck["status"];
@@ -53,6 +54,11 @@ const checkTones: Record<CheckStatus, BadgeTone> = {
   failed: "danger",
   pending: "neutral",
   not_checked: "neutral"
+};
+
+/** The workers the page names in words; any other row shows its adapter type. */
+const workerNameKeys: Partial<Record<string, TranslationKey>> = {
+  "knowledge-worker": "infrastructure.workerKnowledge"
 };
 
 type ErrorClass = Extract<InfrastructureCheck, { status: "failed" }>["errorClass"];
@@ -192,12 +198,17 @@ function ProviderTable({ providers }: { providers: readonly InfrastructureProvid
 
 function ProviderRow({ provider }: { provider: InfrastructureProvider }) {
   const { t } = useTranslation();
+  const workerNameKey = provider.class === "workers" ? workerNameKeys[provider.type] : undefined;
   return (
     <TableRow data-provider={provider.id} data-origin={provider.origin}>
-      <TableCell className="font-mono">
-        {provider.name ?? provider.type}
-        {provider.name === undefined ? null : <TableCellDetail>{provider.type}</TableCellDetail>}
-      </TableCell>
+      {workerNameKey === undefined ? (
+        <TableCell className="font-mono">
+          {provider.name ?? provider.type}
+          {provider.name === undefined ? null : <TableCellDetail>{provider.type}</TableCellDetail>}
+        </TableCell>
+      ) : (
+        <TableCell>{t(workerNameKey)}</TableCell>
+      )}
       <TableCell>
         {provider.region === undefined ? (
           <span className="text-muted-foreground">{t("infrastructure.regionInside")}</span>

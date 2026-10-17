@@ -118,3 +118,11 @@ export {
   type LocalApiKeyOptions,
   type LocalKeyCliRuntime
 } from "./local-key";
+
+export {
+  createClientInstanceKnowledgeWorker,
+  runClientInstanceKnowledgeWorker,
+  type ClientInstanceKnowledgeWorker,
+  type CreateClientInstanceKnowledgeWorkerInput,
+  type KnowledgeWorkerPlacement
+} from "./knowledge-worker";

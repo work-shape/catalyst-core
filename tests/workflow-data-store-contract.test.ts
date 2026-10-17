@@ -20,6 +20,7 @@ import {
   DATA_STORE_SCALAR_TYPES,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
+  KNOWLEDGE_JOB_KINDS,
   KNOWLEDGE_OPERATION_PREFIX,
   KNOWLEDGE_QUERY_TOOL_NAME,
   MODULE_NAMES,
@@ -612,7 +613,7 @@ describe("the modules workflows and dataStores", () => {
     expect(knowledgeModule).toEqual({
       ...nothing,
       name: "knowledge",
-      jobKinds: ["knowledge_base.remove_documents", "knowledge_base.sync", "knowledge_base.fetch"],
+      jobKinds: Object.values(KNOWLEDGE_JOB_KINDS),
       requires: ["dataStores"],
       kinds: [KNOWLEDGE_BASE_ASSET_KIND],
       operations: [

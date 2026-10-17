@@ -14918,6 +14918,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "processingWaiting": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -15068,6 +15071,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "processingWaiting": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -30023,7 +30029,8 @@
           "objectStorage",
           "sandbox",
           "secrets",
-          "database"
+          "database",
+          "workers"
         ]
       },
       "InfrastructureOrigin": {

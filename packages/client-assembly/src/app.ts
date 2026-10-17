@@ -20,6 +20,7 @@ import type { ChatAttachmentService, ChatServerOptions } from "@work-shape/catal
 import { createManagedObjectAccess } from "@work-shape/catalyst-capability-sdk";
 import {
   AppError,
+  KNOWLEDGE_JOB_KINDS,
   type ConnectorTypeDefinition,
   type HttpRuntime,
   type JobWorker,
@@ -81,6 +82,7 @@ import { createKnowledgeFiles } from "./knowledge-files";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePages, createInstanceWorkspaceOpen } from "./pages";
+import type { KnowledgeWorkerPlacement } from "./knowledge";
 import { createJobWorker } from "./job-worker";
 import { createPlatformTools } from "./conversation-offer";
 import { PLATFORM_INSTRUCTIONS, agentListableToolNames } from "./platform-orientation";
@@ -111,6 +113,8 @@ export interface CreateClientInstanceAppInput {
   operations?: ChatServerOptions["operations"];
   allowedOrigins?: string | string[];
   agentRunWorker?: AgentRunWorkerPlacement;
+  /** Where Knowledge Base ingestion executes. Search and operations stay in the API. */
+  knowledgeWorker?: KnowledgeWorkerPlacement;
   /**
    * Which Agent Runs nobody watches, so a confirmation they ask waits in their person's Inbox.
    * A scheduled start says so once EW-8 builds it. For tests until then.
@@ -173,7 +177,24 @@ export async function createClientInstanceApp(
     logger,
     config,
     modules: execution.modules,
-    infrastructure: createInfrastructureWorkflow(config, execution.infrastructure, store),
+    infrastructure: createInfrastructureWorkflow(
+      config,
+      execution.infrastructure,
+      store,
+      input.knowledgeWorker === "separate" && execution.modules.isEnabled("knowledge")
+        ? [
+            {
+              id: "knowledge-worker",
+              class: "workers",
+              type: "knowledge-worker",
+              origin: "operator",
+              external: false,
+              secrets: [],
+              reportedByJobKind: KNOWLEDGE_JOB_KINDS.index
+            }
+          ]
+        : []
+    ),
     clientInstanceId,
     authAdapter,
     stores: store,
@@ -224,8 +245,16 @@ export async function createClientInstanceApp(
     clientInstanceId,
     logger,
     modules: execution.modules,
-    handlers: [...serverJobs.handlers, ...execution.modulesStarted.jobHandlers],
-    schedules: [...serverJobs.schedules, ...execution.modulesStarted.schedules]
+    handlers: [...serverJobs.handlers, ...execution.modulesStarted.jobHandlers].filter(
+      (handler) =>
+        input.knowledgeWorker !== "separate" ||
+        !Object.values(KNOWLEDGE_JOB_KINDS).some((kind) => kind === handler.kind.kind)
+    ),
+    schedules: [...serverJobs.schedules, ...execution.modulesStarted.schedules].filter(
+      (schedule) =>
+        input.knowledgeWorker !== "separate" ||
+        !Object.values(KNOWLEDGE_JOB_KINDS).some((kind) => kind === schedule.kind.kind)
+    )
   });
   const agentRunJobs = inProcess
     ? createInProcessAgentRunWorker(execution, inProcess, input.unattendedRuns)
@@ -259,7 +288,11 @@ export async function createClientInstanceApp(
 }
 
 export async function createClientInstanceExecutionAssembly(
-  input: Omit<CreateClientInstanceAppInput, "agentRunWorker" | "allowedOrigins">
+  input: Omit<
+    CreateClientInstanceAppInput,
+    "agentRunWorker" | "knowledgeWorker" | "allowedOrigins"
+  >,
+  processOptions: { poolSize?: number } = {}
 ) {
   const logger = createLogger();
   const env = readClientInstanceEnv(input.env);
@@ -280,7 +313,7 @@ export async function createClientInstanceExecutionAssembly(
   const { secrets } = infrastructure;
   const store = await createPlatformStore({
     secrets,
-    poolSize: config.infrastructure.database.poolSize,
+    poolSize: processOptions.poolSize ?? config.infrastructure.database.poolSize,
     logger
   });
   const connectionParts = { config, modules, clientInstanceId, secrets, stores: store, logger };

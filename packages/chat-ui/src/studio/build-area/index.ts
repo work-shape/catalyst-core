@@ -92,7 +92,7 @@ export {
   knowledgeBaseFormToConfig,
   startedKnowledgeBaseForm
 } from "./knowledge-base-model";
-export { documentsStillIndexing } from "./knowledge-base-source";
+export { documentsStillIndexing, knowledgeStateStillChanging } from "./knowledge-base-source";
 export type {
   KnowledgeBaseSource,
   KnowledgeBaseState,

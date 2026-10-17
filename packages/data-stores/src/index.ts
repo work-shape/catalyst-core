@@ -5,7 +5,6 @@ import {
   createKnowledgeSourceJobs,
   type KnowledgeSourceJobsInput
 } from "./knowledge/builtin/source-jobs";
-import { KNOWLEDGE_REMOVE_DOCUMENTS_JOB_KIND } from "./knowledge/removal";
 import type { SecretKeyring } from "@work-shape/catalyst-connections";
 import {
   ASSET_OWNER_KINDS,
@@ -16,8 +15,7 @@ import {
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_OPERATION_PREFIX,
   KNOWLEDGE_BASE_ASSET_KIND,
-  KNOWLEDGE_BASE_SYNC_JOB_KIND,
-  KNOWLEDGE_BASE_FETCH_JOB_KIND,
+  KNOWLEDGE_JOB_KINDS,
   StoreBackedAuditRecorder,
   defineAssetKind,
   defineModule,
@@ -112,6 +110,7 @@ export const dataStoresModule = defineModule({
  */
 export const knowledgeModule = defineModule({
   name: "knowledge",
+  jobKinds: Object.values(KNOWLEDGE_JOB_KINDS),
   requires: ["dataStores"],
   kinds: [KNOWLEDGE_BASE_ASSET_KIND],
   operations: [
@@ -126,11 +125,6 @@ export const knowledgeModule = defineModule({
     "knowledge_bases.list_documents",
     "knowledge_bases.retry_documents",
     "knowledge_bases.remove_documents"
-  ],
-  jobKinds: [
-    KNOWLEDGE_REMOVE_DOCUMENTS_JOB_KIND,
-    KNOWLEDGE_BASE_SYNC_JOB_KIND,
-    KNOWLEDGE_BASE_FETCH_JOB_KIND
   ]
 });
 

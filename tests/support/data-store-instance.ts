@@ -78,6 +78,7 @@ type StoreFiles = readonly { path: string; text: string }[];
 
 interface KnowledgeOptions {
   apiAccess?: true;
+  knowledgeWorker?: "in_process" | "separate";
   embedding?: true;
   /**
    * With `embedding`: the binding is on an OpenAI-compatible provider in region `eu` at this
@@ -273,6 +274,7 @@ export function useDataStoreInstance(): {
       config: parseClientInstanceConfig({ ...settings, ...(guardrails ? { guardrails } : {}) }),
       env,
       tools: [],
+      knowledgeWorker: options.knowledgeWorker,
       ...(typeof knowledge === "object" && (knowledge.attachments || knowledge.documents)
         ? {
             capabilities: [

@@ -1,6 +1,7 @@
 import { createOriginalReleaseJobs } from "./original-release";
 import { z } from "zod";
 import {
+  KNOWLEDGE_JOB_KINDS,
   defineJobHandler,
   defineJobKind,
   type BuiltinKnowledgeTarget,
@@ -45,7 +46,7 @@ import type { KnowledgeRuntime } from "./runtime";
 // objects of a deleted Knowledge Base is its retirement's (`removal.ts`).
 
 /** The kind of the job that removes the copies a call of `add_files` left without documents. */
-const KNOWLEDGE_FILE_CLEANUP_JOB_KIND = "knowledge_base.clean_files";
+const KNOWLEDGE_FILE_CLEANUP_JOB_KIND = KNOWLEDGE_JOB_KINDS.cleanFiles;
 
 /** How long one call of `add_files` may take; when its job looks is built on it. */
 export const KNOWLEDGE_ADD_FILES_TIMEOUT_MS = 300_000;

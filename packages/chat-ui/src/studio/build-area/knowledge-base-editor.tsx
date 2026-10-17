@@ -158,6 +158,7 @@ export function KnowledgeBaseEditor({
                 <KnowledgeDocuments
                   source={source}
                   knowledgeBase={asset.name}
+                  publishedRevision={published}
                   canWrite={canWrite}
                 />
               ) : (

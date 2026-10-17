@@ -13,6 +13,7 @@ const MARKER = "resolve-only: this process starts with this config";
 const PROCESSES = [
   "server",
   "agent-run-worker",
+  "knowledge-worker",
   "workspace-command-worker",
   "artifact-preview-worker"
 ];

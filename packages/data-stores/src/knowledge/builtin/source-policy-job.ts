@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { defineJobKind, defineJobHandler } from "@work-shape/catalyst-core";
+import { defineJobKind, defineJobHandler, KNOWLEDGE_JOB_KINDS } from "@work-shape/catalyst-core";
 import { knowledgeBaseDefinitionSchema } from "../definition";
 import { sourceBoundaryKey, withinSource } from "../source-boundary";
 import { createSourceStore, sourceTransaction } from "./source-store";
 import { sourceTarget, type SourceJobRuntime } from "./source-runtime";
 
 export const sourcePolicyJob = defineJobKind({
-  kind: "knowledge_base.reconcile_sources",
+  kind: KNOWLEDGE_JOB_KINDS.reconcileSources,
   payloadSchema: z.strictObject({
     knowledgeBaseId: z.string(),
     knowledgeBase: z.string(),

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   defineJobHandler,
   defineJobKind,
+  KNOWLEDGE_JOB_KINDS,
   knowledgeIndexJob,
   knowledgeContentJobPayloadSchema,
   knowledgeExtractionKey,
@@ -17,14 +18,14 @@ import type { KnowledgeRuntime } from "./runtime";
 const RELEASE_BATCH = 100;
 const releaseOriginalsJob = defineJobKind({
   ...knowledgeIndexJob,
-  kind: "knowledge_base.release_originals",
+  kind: KNOWLEDGE_JOB_KINDS.releaseOriginals,
   payloadSchema: knowledgeContentJobPayloadSchema.extend({
     fileIds: z.array(z.string().min(1)).min(1).max(RELEASE_BATCH).optional()
   })
 });
 const deleteOriginalsJob = defineJobKind({
   ...knowledgeIndexJob,
-  kind: "knowledge_base.delete_originals",
+  kind: KNOWLEDGE_JOB_KINDS.deleteOriginals,
   payloadSchema: z.strictObject({
     knowledgeBaseId: z.string().min(1),
     fileIds: z.array(z.string().min(1)).min(1).max(RELEASE_BATCH)

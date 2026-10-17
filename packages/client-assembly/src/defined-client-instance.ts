@@ -35,6 +35,13 @@ import {
   type CreateClientInstanceArtifactPreviewWorkerInput
 } from "./artifact-preview-worker";
 
+import {
+  createClientInstanceKnowledgeWorker,
+  runClientInstanceKnowledgeWorker,
+  type ClientInstanceKnowledgeWorker,
+  type CreateClientInstanceKnowledgeWorkerInput
+} from "./knowledge-worker";
+
 /** What a caller still gives a process of this instance: the build and the config path are its own. */
 type OfThisBuild<Input> = Omit<
   Input,
@@ -57,6 +64,7 @@ export interface DefineClientInstanceInput {
   loadEnv?: boolean;
   /** Where the Agent Runs execute. `separate` when the deployment runs `runAgentRunWorker`. */
   agentRunWorker?: CreateClientInstanceAppInput["agentRunWorker"];
+  knowledgeWorker?: CreateClientInstanceAppInput["knowledgeWorker"];
 }
 
 export interface DefinedClientInstance {
@@ -74,6 +82,10 @@ export interface DefinedClientInstance {
     /** What the calls of operations run with beyond the instance's own defaults. For tests. */
     operations?: CreateClientInstanceAppInput["operations"];
   }): Promise<ClientInstanceApp>;
+  createKnowledgeWorker(
+    input?: OfThisBuild<CreateClientInstanceKnowledgeWorkerInput>
+  ): Promise<ClientInstanceKnowledgeWorker>;
+  runKnowledgeWorker(input?: OfThisBuild<CreateClientInstanceKnowledgeWorkerInput>): Promise<void>;
   createAgentRunWorker(
     input?: OfThisBuild<CreateClientInstanceAgentRunWorkerInput>
   ): Promise<ClientInstanceAgentRunWorker>;
@@ -153,7 +165,8 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
         appInput.structuredDataPublicationReviewer ?? input.structuredDataPublicationReviewer,
       allowedOrigins:
         appInput.allowedOrigins === undefined ? input.allowedOrigins : appInput.allowedOrigins,
-      agentRunWorker: appInput.agentRunWorker ?? input.agentRunWorker
+      agentRunWorker: appInput.agentRunWorker ?? input.agentRunWorker,
+      knowledgeWorker: appInput.knowledgeWorker ?? input.knowledgeWorker
     });
   }
 
@@ -186,6 +199,18 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
     loadEnvironment,
     resolveConfigPath,
     createApp,
+    createKnowledgeWorker(workerInput = {}) {
+      return createClientInstanceKnowledgeWorker({
+        ...resolveAgentWorkerInput(workerInput),
+        knowledgeWorker: input.knowledgeWorker
+      });
+    },
+    runKnowledgeWorker(workerInput = {}) {
+      return runClientInstanceKnowledgeWorker({
+        ...resolveAgentWorkerInput(workerInput),
+        knowledgeWorker: input.knowledgeWorker
+      });
+    },
     createAgentRunWorker(workerInput = {}) {
       return createClientInstanceAgentRunWorker(resolveAgentWorkerInput(workerInput));
     },

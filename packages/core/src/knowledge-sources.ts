@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineJobKind } from "./jobs";
 import {
   KNOWLEDGE_BASE_ACTIONS,
+  KNOWLEDGE_JOB_KINDS,
   type KnowledgeContentJobPayload,
   type KnowledgeDocumentInput
 } from "./knowledge";
@@ -37,10 +38,10 @@ import {
  * page, and queues fetch batches. One per source at a time: queue it with
  * `knowledgeSourceKey` as its concurrency key.
  */
-export const KNOWLEDGE_BASE_SYNC_JOB_KIND = "knowledge_base.sync";
+export const KNOWLEDGE_BASE_SYNC_JOB_KIND = KNOWLEDGE_JOB_KINDS.sync;
 
 /** The job that fetches one batch of items of a source and hands each to the index job. */
-export const KNOWLEDGE_BASE_FETCH_JOB_KIND = "knowledge_base.fetch";
+export const KNOWLEDGE_BASE_FETCH_JOB_KIND = KNOWLEDGE_JOB_KINDS.fetch;
 
 /** How many items one fetch job carries at most. */
 export const KNOWLEDGE_FETCH_BATCH_MAX_ITEMS = 200;

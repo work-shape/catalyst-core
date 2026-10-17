@@ -56,6 +56,8 @@ export interface CreatePostgresJobWorkerInput {
   /** Stores made by `createPostgresStores`. */
   stores: PlatformStores;
   clientInstanceId: ClientInstanceId;
+  /** Stable process identity in leases and log lines; generated when absent. */
+  workerId?: string;
   /** The kinds this process serves. */
   handlers: readonly RegisteredJobHandler[];
   /** Schedules of kinds this process serves. */
@@ -86,7 +88,7 @@ interface Pass {
 
 export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): JobWorker {
   const { stores, clientInstanceId } = input;
-  const workerId = createPlatformId("worker");
+  const workerId = input.workerId ?? createPlatformId("worker");
   const logger = input.logger.child({ component: "job-worker", workerId });
   const db = connectionOf(stores.jobs);
   const handlers = new Map(input.handlers.map((handler) => [handler.kind.kind, handler]));
