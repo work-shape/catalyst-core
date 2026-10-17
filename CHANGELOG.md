@@ -7,6 +7,47 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.4 — 2026-10-17
+
+### Added
+
+- The agent page edits the agent's one draft (AD-4). The form starts from the pending draft when there is one, and Save draft writes it on the live revision and the draft revision the page holds. Save after save now works; before, the second save was refused with 412 and the page went on showing the live agent. The head names the draft as "Draft revision n"; the banner under it names the author and the time. Each changed field shows its published value under it.
+- Publish sits in the agent page's head. A holder of `agent.publish` can use it; anybody else sees it disabled with the missing right named. Discard draft sits in the "…" menu behind a dialog. Before, both were only offered beside a Build conversation.
+- When a save is refused because somebody else saved a newer draft, the page says who saved it and when. It keeps what the reader typed and offers to load the newer draft.
+- Build > Agents marks an agent that has a draft, for holders of `agent.write`.
+- `agents.draft.get` names the draft's author with `author.name`.
+- Studio offers Publish only to holders of the kind's own publish right where the kind names one, as the instance does. Before, the write right on all assets was enough.
+- `assets.get` names what the caller may do on the asset in `allowed` (`write`, `delete`, `publish`), decided by the instance with grants and denies on the asset itself. An asset's page in Studio follows it for Save, Publish, Discard and Delete. Before, Studio derived the rights itself and missed a grant or a deny on one asset: a holder of `agent.publish` on one agent saw Publish disabled although the instance would publish.
+- **Workflows:** Run keys (EW-13k). `workflows.start`, `workflows.test` and `workflow.<id>.start` take a `key` beside the inputs (1 to 200 characters). Among a Workflow's open and `done` runs of one mode a key exists once: a start with it starts nothing and answers that run, also when two starts race. A run that ended `failed`, `cancelled` or `limit_reached` gives its key up, so a start with it is a new run on the published revision. A `workflow` step sets its child's key with `key`, literals and references joined with `/`; a step a key answered links to that run (`linkedRunId`), waits for it and does not own it, so cancelling the parent leaves it going. Runs carry `runKey`, the runs list filters by `key` or `keyPrefix`, and the run page and runs list show the key. No Workflow declares an input named `key`. Keys stay out of audit events.
+
+### Changed
+
+- `catalyst config push` writes a changed agent that exists as its draft and prints "draft revision n; live revision m is unchanged until it is published". Each agent names the draft revision its last pull or push saw (`expectedDraftRevision`). A push over a draft somebody changed since is refused as a whole and names who changed it and when, with the pull that records it.
+- `catalyst config pull` writes each agent's live revision and lists every pending draft with its revision, author and time. `catalyst config diff` compares agents with their live revision, shows an agent the last push wrote as "pushed as a draft, not live", and names each pending draft.
+- **Upgrade:** `.catalyst-state.json` records each agent's draft revision. A state file of an earlier CLI refuses a push that changes an agent until one `catalyst config pull`; commit or stash local edits first, as the pull overwrites the files.
+- `catalyst config push --publish` publishes each draft the push wrote. An instance's own agent goes live without a terminal unless a guardrail on `agent.before_publish` asks for an approval, which prints the waiting Operation Run and exits 3. A workspace's agent asks first. A service principal's key, such as an operated instance's release key, writes drafts and publishes none, and the CLI says why; publish with a personal key that holds `config_assets:publish`, or on the agent page.
+- `catalyst agent publish <name> --revision <n>` publishes an agent draft, `catalyst agent discard <name> --revision <n>` drops it, and `catalyst agent put` and `revert` take `--if-draft-revision <n|none>`. `agent list` shows a draft column and `agent show` the pending draft.
+- API, additive: an agent draft's `author` carries `displayLabel` while the account exists; a `draft_changed` refusal names the agent's `kind` and `name`; and a release key (the release right with the scope `config_assets:release`) is given the pending draft summary in `assets.list` and `assets.get`, so its pull records the draft its push writes over.
+- SRC-1b: sync operations, source inspection and retry commands for synced Knowledge Bases, using an owned ingestion principal.
+
+- Source narrowing and removal remain refused with `not_supported_yet`: "Changing a source boundary or removing a source is not supported yet; the published source is kept."
+
+- Change-feed sync remains refused with `not_supported_yet`: "Change-feed sync is not supported yet; request mode full." Use `catalyst knowledge-base sync <kb> --source <id> --full` for a full pass.
+
+- Knowledge Base document retry now requires credential scope `config_assets:write` instead of `data_store_rows:write` shipped in 0.8.0-rc.3. Integrations issuing access tokens must request `config_assets:write`; CLI automation must use a personal API key that includes `knowledge_base.write`, also held by its owner. Existing service API credentials cannot carry the new write scope: replace them with such a personal key for retry automation. An old scope alone is refused with "Missing auth scope 'config_assets:write'". On rollback, use the previous credential scope again.
+- **Knowledge Bases:** Synced Knowledge Base documents release their original bytes once indexing succeeds or fails. Their Managed File records and extracted text remain; re-indexing uses that text without fetching the original. Files added by hand retain their own copy, including files with the same content hash. Released originals remain at the source. No migration is required. Rolling back does not restore released bytes; recovering them requires a source retry.
+
+- Retrying shared content uses an available document copy even when an earlier synced original was released. If extraction has neither retained text nor an available original, indexing fails with `knowledge_file_missing`; delayed extraction jobs requeue indexing without overwriting retained results.
+
+### Fixed
+
+- **Sandbox:** A command of the `local` sandbox no longer leaves running what it started in the background. When the command ends, by itself, at its time limit or at a cancel, every process still in its process group is killed, and the result no longer waits for a process that left the group and holds the command's output open: it waits one second at most. A process that left the group with a session of its own or a double fork is still out of reach of the `local` sandbox, which is for development only. In the `docker` sandbox the script of a code step is the first process of its container, and every process of the container ends with it, including one in a session of its own; the tests now check this against the runner image.
+
+### Database
+
+- Add `workflow_runs.run_key` and `workflow_step_runs.linked_run_id` (0107), then, concurrently, the partial unique index `workflow_runs_run_key_idx` on `(client_instance_id, workflow, mode, run_key)` for keyed runs that are not `failed`, `cancelled` or `limit_reached`, and `workflow_step_runs_linked_run_idx` (0108). Apply both before startup; existing runs have no key, and the previous release reads the expanded schema.
+- Add generic asset ownership to service principals (0105/0106), and owned Knowledge Base store migration 4 for transactionally maintained source counts. Apply the migration before startup; the previous release can read the expanded schema. Source narrowing and removal remain refused with `not_supported_yet` ("Changing a source boundary or removing a source is not supported yet; the published source is kept."); rollback stops new source operations but keeps imported data and owned principals. The previous API lists those principals and does not enforce ownership, so do not administer their accounts on a rollback.
+
 ## 0.8.0-rc.3 — 2026-10-17
 
 ### Added
