@@ -301,9 +301,11 @@ test("the users list folds as its window narrows and unfolds as it widens, and s
 
     // The same table, never reloaded: the box narrows, the table folds; it widens, it unfolds.
     await page.setViewportSize(WINDOWS[1]);
-    await expect.poll(() => foldedHeads(page)).toContain(words.lastActive);
+    // Last active may already be folded at desktop width. Wait for the resize to fold
+    // another column before capturing the phone layout used by the return trip below.
+    await expect.poll(async () => (await foldedHeads(page)).length).toBeGreaterThan(wide.length);
     const narrow = await foldedHeads(page);
-    expect(narrow.length).toBeGreaterThan(wide.length);
+    expect(narrow).toContain(words.lastActive);
     const invited = rowOf(page, people.invited.email);
     await expect(invited.locator('[data-slot="table-row-detail"]')).toContainText(words.never);
     await expectFullName(invited, people.invited.name, WINDOWS[1].width, false);
