@@ -101,6 +101,12 @@ export interface PlatformStores {
   guardrails: GuardrailStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
+  /**
+   * Reads at one moment: every read of `fn` sees the same committed state, so a write that
+   * commits meanwhile is seen by all of them or by none. It writes nothing. Inside a
+   * transaction it reads as that transaction does.
+   */
+  readSnapshot<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   close?: () => Promise<void>;
   /** Absent, like `close`, on stores bound to a transaction. It never rejects. */
   readiness?: () => Promise<DatabaseReadiness>;

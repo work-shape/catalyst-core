@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import { describe, expect, it, vi } from "vitest";
+import { createLogger } from "@work-shape/catalyst-client-assembly";
 import {
   asAgentRunId,
   createPlatformId,
@@ -9,6 +10,7 @@ import { required, waitUntil } from "./support/assertions";
 import { followUpFixture as fixture } from "./support/follow-up-fixture";
 import { drainRunEvents } from "./support/chat-server-run-harness";
 import { withTestSql } from "./support/test-sql";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // Count only statements of this read, excluding concurrent worker activity on the pool.
 const counted = await vi.hoisted(async () => {
@@ -425,6 +427,8 @@ describe("server follow-up queue on Postgres", () => {
       (sql) =>
         sql`delete from collaboration_workspace_memberships where collaboration_workspace_id = ${f.workspace.id} and user_id = ${f.other.id}`
     );
+    // The process logger the instance writes to.
+    const warn = vi.spyOn(createLogger(), "warn");
     await f.complete();
     await f.dispatch();
     expect(await f.app.stores.followUps.get({ ...f.scope, followUpId: lost.id })).toMatchObject({
@@ -435,6 +439,80 @@ describe("server follow-up queue on Postgres", () => {
         .filter((message) => message.role === "user")
         .map((message) => message.text)
     ).toEqual(["First"]);
+    // Never in silence: the withdrawal is logged with its code, and without the message.
+    expect(warn).toHaveBeenCalledWith(
+      {
+        conversationId: f.scope.conversationId,
+        followUpId: lost.id,
+        errorCode: "NOT_FOUND",
+        step: "access",
+        outcome: "cancelled"
+      },
+      "Queued follow-up was refused at dispatch"
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("No longer allowed");
+    warn.mockRestore();
+  });
+
+  it("FU-6 keeps a follow-up queued and logs the refusal when its start is refused", async () => {
+    const f = await fixture();
+    const kept = await f.queue("Agent went away", "other");
+    // An admin withdraws the agent from this workspace. The default agent stays available
+    // everywhere, so another agent becomes the default first.
+    await applyAtCurrentRevisions(f.app.stores.configAssets, {
+      clientInstanceId: f.scope.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "other_agent",
+          config: {
+            skillNames: [],
+            name: "other_agent",
+            displayName: "Other Agent",
+            instructions: "Answer briefly.",
+            modelProviderId: "local",
+            toolNames: [],
+            initialPrompts: []
+          }
+        },
+        { type: "setDefaultAgent", agentName: "other_agent" }
+      ]
+    });
+    await f.app.stores.configAssets.setAgentAvailability({
+      clientInstanceId: f.scope.clientInstanceId,
+      agentName: kept.agentName,
+      availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+    });
+    // The process logger the instance writes to.
+    const warn = vi.spyOn(createLogger(), "warn");
+    await f.complete();
+    await f.dispatch();
+    // Still in the queue that every member sees, paused, for its author to send or remove.
+    expect(await f.pending()).toMatchObject([{ id: kept.id, status: "pending" }]);
+    expect(
+      (await f.messages())
+        .filter((message) => message.role === "user")
+        .map((message) => message.text)
+    ).toEqual(["First"]);
+    const thread = await f.app.call(
+      "conversations.thread.get",
+      { params: { conversationId: f.scope.conversationId } },
+      "other"
+    );
+    expect(thread.json()).toMatchObject({ followUps: [{ id: kept.id }] });
+    expect(warn).toHaveBeenCalledWith(
+      {
+        conversationId: f.scope.conversationId,
+        followUpId: kept.id,
+        errorCode: "NOT_FOUND",
+        step: "start",
+        outcome: "kept_pending"
+      },
+      "Queued follow-up was refused at dispatch"
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("Agent went away");
+    warn.mockRestore();
   });
 
   it("FU-7 audits message.created with queued delivery only when the message enters the transcript", async () => {

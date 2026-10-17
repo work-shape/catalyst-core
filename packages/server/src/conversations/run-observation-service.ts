@@ -18,9 +18,11 @@ import {
   type ChatMessage,
   type ConversationId,
   type ConversationThreadSnapshot,
+  type PlatformStores,
   type RuntimeCallContext
 } from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "../types";
+import { requireConversationAccess } from "./conversation-access";
 import { ConversationWorkflow } from "./conversation-service";
 
 export class RunObservationWorkflow {
@@ -44,76 +46,87 @@ export class RunObservationWorkflow {
     return messages.map(toPublicChatMessage);
   }
 
+  /**
+   * The thread at one moment. A follow-up that starts meanwhile leaves the queue in the same
+   * commit that adds its message and run, so the snapshot shows it in one place or the other,
+   * never in neither: a page that read neither had no run to follow and no queue to wait for.
+   */
   async getThreadSnapshot(
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<ConversationThreadSnapshot> {
-    const conversation = await this.conversations.requireConversationAccess(conversationId, user);
-    const messages = await this.options.stores.conversations.listMessages({
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId
-    });
-    const activeRun = await this.options.stores.agentRuns.getActiveConversationAgentRun({
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId
-    });
-    const latestRun = activeRun
-      ? undefined
-      : await this.options.stores.agentRuns.getLatestConversationAgentRun({
-          clientInstanceId: this.options.clientInstanceId,
-          conversationId
-        });
-    const latestVisibleTerminalRun =
-      latestRun?.status === "failed" || latestRun?.status === "cancelled" ? latestRun : undefined;
-    const runForSnapshot = activeRun ?? latestVisibleTerminalRun;
-    const latestRunOfAnyStatus = activeRun ?? latestRun;
-    const serverTime = new Date().toISOString();
-    const completedRunProjections = await this.createCompletedRunProjections(
-      conversationId,
-      messages,
-      runForSnapshot?.id
-    );
-
-    return {
-      conversation,
-      followUps: await this.options.stores.followUps.listPending({
-        clientInstanceId: this.options.clientInstanceId,
-        conversationId
-      }),
-      messages: messages.map(toPublicChatMessage),
-      ...(Object.keys(completedRunProjections).length > 0 ? { completedRunProjections } : {}),
-      ...(runForSnapshot
-        ? {
-            activeRun: {
-              run: toActiveRunSummary(runForSnapshot),
-              projection: await this.createRunProjection(runForSnapshot)
-            }
-          }
-        : {}),
-      ...(latestRunOfAnyStatus
-        ? {
-            modelSelection: {
-              ...(latestRunOfAnyStatus.modelBindingId
-                ? { modelBindingId: latestRunOfAnyStatus.modelBindingId }
-                : {}),
-              ...(latestRunOfAnyStatus.reasoningEffort
-                ? { reasoningEffort: latestRunOfAnyStatus.reasoningEffort }
-                : {})
-            }
-          }
-        : {}),
-      // Synthetic until a backend read-marker mutation makes unread/read state product scope.
-      userState: {
-        clientInstanceId: this.options.clientInstanceId,
+    return this.options.stores.readSnapshot(async (stores) => {
+      const clientInstanceId = this.options.clientInstanceId;
+      const conversation = await requireConversationAccess(
+        { stores, clientInstanceId },
         conversationId,
-        userId: getSubjectUserId(user),
-        updatedAt: serverTime
-      },
-      serverTime
-    };
+        user
+      );
+      const messages = await stores.conversations.listMessages({
+        clientInstanceId,
+        conversationId
+      });
+      const activeRun = await stores.agentRuns.getActiveConversationAgentRun({
+        clientInstanceId,
+        conversationId
+      });
+      const latestRun = activeRun
+        ? undefined
+        : await stores.agentRuns.getLatestConversationAgentRun({
+            clientInstanceId,
+            conversationId
+          });
+      const latestVisibleTerminalRun =
+        latestRun?.status === "failed" || latestRun?.status === "cancelled" ? latestRun : undefined;
+      const runForSnapshot = activeRun ?? latestVisibleTerminalRun;
+      const latestRunOfAnyStatus = activeRun ?? latestRun;
+      const serverTime = new Date().toISOString();
+      const completedRunProjections = await this.createCompletedRunProjections(
+        stores,
+        conversationId,
+        messages,
+        runForSnapshot?.id
+      );
+
+      return {
+        conversation,
+        followUps: await stores.followUps.listPending({ clientInstanceId, conversationId }),
+        messages: messages.map(toPublicChatMessage),
+        ...(Object.keys(completedRunProjections).length > 0 ? { completedRunProjections } : {}),
+        ...(runForSnapshot
+          ? {
+              activeRun: {
+                run: toActiveRunSummary(runForSnapshot),
+                projection: await this.createRunProjection(stores, runForSnapshot)
+              }
+            }
+          : {}),
+        ...(latestRunOfAnyStatus
+          ? {
+              modelSelection: {
+                ...(latestRunOfAnyStatus.modelBindingId
+                  ? { modelBindingId: latestRunOfAnyStatus.modelBindingId }
+                  : {}),
+                ...(latestRunOfAnyStatus.reasoningEffort
+                  ? { reasoningEffort: latestRunOfAnyStatus.reasoningEffort }
+                  : {})
+              }
+            }
+          : {}),
+        // Synthetic until a backend read-marker mutation makes unread/read state product scope.
+        userState: {
+          clientInstanceId,
+          conversationId,
+          userId: getSubjectUserId(user),
+          updatedAt: serverTime
+        },
+        serverTime
+      };
+    });
   }
 
   private async createCompletedRunProjections(
+    stores: PlatformStores,
     conversationId: ConversationId,
     messages: ChatMessage[],
     activeRunId: AgentRunId | undefined
@@ -131,7 +144,7 @@ export class RunObservationWorkflow {
     );
     const projections: Record<string, AgentRunProjection> = {};
     for (const runId of runIds) {
-      const run = await this.options.stores.agentRuns.getConversationAgentRun({
+      const run = await stores.agentRuns.getConversationAgentRun({
         clientInstanceId: this.options.clientInstanceId,
         conversationId,
         runId
@@ -139,7 +152,7 @@ export class RunObservationWorkflow {
       if (!run || isActiveAgentRunStatus(run.status)) {
         continue;
       }
-      const observations = await this.options.stores.agentRuns.listRunObservations({
+      const observations = await stores.agentRuns.listRunObservations({
         clientInstanceId: this.options.clientInstanceId,
         runId
       });
@@ -239,8 +252,11 @@ export class RunObservationWorkflow {
     return run;
   }
 
-  private async createRunProjection(run: AgentRun): Promise<AgentRunProjection> {
-    const observations = await this.options.stores.agentRuns.listRunObservations({
+  private async createRunProjection(
+    stores: PlatformStores,
+    run: AgentRun
+  ): Promise<AgentRunProjection> {
+    const observations = await stores.agentRuns.listRunObservations({
       clientInstanceId: this.options.clientInstanceId,
       runId: run.id,
       afterSequence: 0

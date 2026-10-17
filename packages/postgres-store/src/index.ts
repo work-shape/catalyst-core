@@ -168,7 +168,15 @@ function bindStores(
     dataStores: createPostgresDataStoreRecordsStore(db),
     knowledgeBases: createPostgresKnowledgeBaseStateStore(db),
     guardrails: createPostgresGuardrailsStore(db),
-    transaction: (fn) => transact((_tx, stores) => fn(stores))
+    transaction: (fn) => transact((_tx, stores) => fn(stores)),
+    // Under read committed every statement reads its own moment; repeatable read gives the
+    // whole transaction the moment of its first read. Only the outermost transaction sets it.
+    readSnapshot: (fn) =>
+      db.transaction(async (tx) => {
+        if (!inTransaction)
+          await tx.setTransaction({ isolationLevel: "repeatable read", accessMode: "read only" });
+        return fn(bindStores(tx, enqueued, true));
+      })
   };
 }
 

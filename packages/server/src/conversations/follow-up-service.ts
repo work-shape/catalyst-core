@@ -92,6 +92,9 @@ export function createFollowUpDispatchHandler(options: ChatServerOptions) {
         followUpId: followUp.id
       });
       const user = await loadFollowUpAuthor(options, followUp.authorUserId, authorization);
+      // Which check refused: the author's own standing, their access to the conversation, or
+      // the start itself (agent, model, store).
+      let step: "author" | "access" | "start" = "author";
       try {
         if (
           !user ||
@@ -102,12 +105,14 @@ export function createFollowUpDispatchHandler(options: ChatServerOptions) {
           authorization.scopes.some((scope) => typeof scope !== "string")
         )
           throw new AppError("FORBIDDEN", "Follow-up authorization is unavailable");
+        step = "access";
         const conversations = new ConversationWorkflow(options);
         const conversation = await conversations.requireConversationAccess(
           scope.conversationId,
           user
         );
         await conversations.requireMemberWorkspace(user, conversation.collaborationWorkspaceId);
+        step = "start";
         await new RunStartWorkflow(options, (fn) => control.transaction(fn)).startMessageRun(
           scope.conversationId,
           user,
@@ -130,7 +135,23 @@ export function createFollowUpDispatchHandler(options: ChatServerOptions) {
         );
       } catch (error) {
         if (isAppError(error) && (error.code === "NOT_FOUND" || error.code === "FORBIDDEN")) {
-          await cancelUnavailableFollowUp(options, control, scope.conversationId, followUp.id);
+          // An author who can no longer act here has their message withdrawn: nobody else may
+          // send or remove it, and it would hold the queue. Any other refusal keeps it queued,
+          // and the queue reads as paused until its author sends it again or removes it.
+          const withdrawn = step !== "start";
+          // Code and step only: the message and its authorization stay out of the log.
+          options.logger.warn(
+            {
+              conversationId: scope.conversationId,
+              followUpId: followUp.id,
+              errorCode: error.code,
+              step,
+              outcome: withdrawn ? "cancelled" : "kept_pending"
+            },
+            "Queued follow-up was refused at dispatch"
+          );
+          if (withdrawn)
+            await cancelUnavailableFollowUp(options, control, scope.conversationId, followUp.id);
           return;
         }
         // Another start, withdrawal or dispatch won the conversation lock. Its outcome stands.
