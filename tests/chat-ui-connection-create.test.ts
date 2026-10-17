@@ -331,7 +331,10 @@ describe("the dialog's first step", () => {
     discover: async () => undefined,
     useTest: () => ({ run: { status: "idle" }, start: () => undefined }),
     useHolders: () => ({ status: "hidden" }),
-    principalHref: () => ""
+    principalHref: () => "",
+    oauthStart: async () => {
+      throw new Error("This test signs nothing in.");
+    }
   };
   const render = (locale: "en" | "de") =>
     renderToStaticMarkup(

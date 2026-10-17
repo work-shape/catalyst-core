@@ -22,6 +22,9 @@ export const connections = defineTranslations({
       "The https address of the server with the path of its MCP endpoint, as its provider gives it. Moving to another server removes the key entered for this one.",
     "connections.authTitle": "Authentication",
     "connections.authDescription": "How the instance proves itself to the server.",
+    "connections.authOAuth": "OAuth sign-in",
+    "connections.authOAuthText":
+      "A person signs in at the provider under Sign-in, and every call uses that account.",
     "connections.authNone": "None",
     "connections.authNoneText": "The server asks for no credential.",
     "connections.authBearer": "Bearer token",
@@ -123,6 +126,11 @@ export const connections = defineTranslations({
       "The instance may not reach this address. Its host is not among the outside addresses the operator allowed.",
     "connections.healthNeverTested": "Not tested",
     "connections.healthNeverTestedText": "This connection has not been tested yet.",
+    "connections.healthSignInNeeded": "Sign-in needed",
+    "connections.healthSignInNeededText":
+      "This connection signs in at its provider with OAuth, and nobody is signed in.",
+    "connections.healthSignInNeededNext":
+      "An administrator signs in under Sign-in. Until then nothing can call the connection.",
     "connections.healthNotConfigured": "Not configured",
     "connections.healthNotConfiguredText":
       "The credential of this connection is missing. Until the operator supplies it, no call reaches the outside system.",
@@ -208,6 +216,9 @@ export const connections = defineTranslations({
       "Die https-Adresse des Servers mit dem Pfad seines MCP-Endpunkts, wie sein Anbieter sie angibt. Beim Wechsel zu einem anderen Server wird der für diesen eingegebene Schlüssel entfernt.",
     "connections.authTitle": "Authentifizierung",
     "connections.authDescription": "Wie sich die Instanz beim Server ausweist.",
+    "connections.authOAuth": "Anmeldung mit OAuth",
+    "connections.authOAuthText":
+      "Eine Person meldet sich unter Anmeldung beim Anbieter an, und jeder Aufruf nutzt dieses Konto.",
     "connections.authNone": "Keine",
     "connections.authNoneText": "Der Server verlangt keine Zugangsdaten.",
     "connections.authBearer": "Bearer-Token",
@@ -315,6 +326,11 @@ export const connections = defineTranslations({
       "Die Instanz darf diese Adresse nicht erreichen. Ihr Host gehört nicht zu den externen Adressen, die der Betreiber erlaubt hat.",
     "connections.healthNeverTested": "Nicht getestet",
     "connections.healthNeverTestedText": "Diese Verbindung wurde noch nicht getestet.",
+    "connections.healthSignInNeeded": "Anmeldung nötig",
+    "connections.healthSignInNeededText":
+      "Diese Verbindung meldet sich mit OAuth beim Anbieter an, und niemand ist angemeldet.",
+    "connections.healthSignInNeededNext":
+      "Eine Administratorin oder ein Administrator meldet sie unter Anmeldung an. Bis dahin kann nichts die Verbindung aufrufen.",
     "connections.healthNotConfigured": "Nicht konfiguriert",
     "connections.healthNotConfiguredText":
       "Die Zugangsdaten dieser Verbindung fehlen. Bis der Betreiber sie bereitstellt, erreicht kein Aufruf das externe System.",

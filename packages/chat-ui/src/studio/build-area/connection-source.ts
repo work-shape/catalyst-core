@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ConnectionDetail, ConnectionTestResult } from "@work-shape/catalyst-api-client";
+import type {
+  ConnectionDetail,
+  ConnectionOAuthStart,
+  ConnectionTestResult
+} from "@work-shape/catalyst-api-client";
 import { loadFailure } from "../../admin/access/access-model";
 import { useAssetGrantsQuery } from "../../admin/access/access-queries";
 import {
@@ -78,6 +82,13 @@ export interface ConnectionSource {
   readDetail(name: string): Promise<ConnectionDetail>;
   /** Tests the Connection. Throws `PendingApprovalError` when somebody approves the test first. */
   test(name: string): Promise<ConnectionTestResult>;
+  /**
+   * Starts the shared OAuth sign-in of the Connection: the address of the provider's page, its
+   * host and the permissions asked for. The address is opened and kept nowhere here.
+   */
+  oauthStart(name: string): Promise<ConnectionOAuthStart>;
+  /** A hook: the name of a person by id, where the reader is shown people. */
+  usePersonName?(userId: string | undefined): string | undefined;
   /**
    * Opens the chat dock beside the page with a new conversation and this request in its
    * composer, to send or change. Absent where the page has no dock.
@@ -182,6 +193,23 @@ export function useConnectionSource(): ConnectionSource {
       await queryClient.invalidateQueries({ queryKey: detailKey(name) });
     },
     readDetail: (name) => calls.get({ params: { name } }),
+    async oauthStart(name) {
+      try {
+        return await calls.oauth_start({ params: { name } });
+      } finally {
+        // A start may write the registered client: the page reads the Connection again.
+        await queryClient.invalidateQueries({ queryKey: detailKey(name) });
+      }
+    },
+    usePersonName(userId) {
+      const users = useWorkspaceUsersQuery({
+        ...api,
+        enabled: seesHolders && userId !== undefined
+      });
+      return userId === undefined
+        ? undefined
+        : users.data?.find((user) => user.id === userId)?.displayLabel;
+    },
     async test(name) {
       try {
         const outcome = await calls.test({ params: { name } });

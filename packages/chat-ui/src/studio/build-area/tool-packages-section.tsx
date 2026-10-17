@@ -162,6 +162,10 @@ export function ToolPackagesSection({
             selected={selected}
             disabled={disabled}
             link={item.connection ? connectionTools.place?.(item.connection.name) : undefined}
+            signInNeeded={
+              item.connection !== undefined &&
+              (connectionTools.signInNeeded?.has(item.connection.name) ?? false)
+            }
             onChange={onChange}
           />
         ))}
@@ -250,6 +254,7 @@ function PackageRow({
   selected,
   disabled,
   link,
+  signInNeeded,
   onChange
 }: {
   item: ToolPackageView;
@@ -257,6 +262,8 @@ function PackageRow({
   selected: readonly string[];
   disabled?: boolean;
   link: { href: string; open(): void } | undefined;
+  /** The row's Connection signs in with OAuth, and nobody is signed in. */
+  signInNeeded: boolean;
   onChange(selected: string[]): void;
 }) {
   const { t } = useTranslation();
@@ -272,6 +279,13 @@ function PackageRow({
       title={face.title}
       description={face.text}
       descriptionWraps
+      chips={
+        signInNeeded ? (
+          <Badge tone="warning" size="sm" data-tool-sign-in-needed="">
+            {t("connectionSignIn.needed")}
+          </Badge>
+        ) : undefined
+      }
       actionsVisible
       actions={
         <span className="flex items-center gap-3">

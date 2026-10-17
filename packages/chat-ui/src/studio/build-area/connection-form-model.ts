@@ -10,6 +10,13 @@ export type ConnectionFormType = "mcp" | "http_api";
 export const CONNECTION_AUTH_CHOICES = ["none", "bearer", "header"] as const;
 export type ConnectionAuthChoice = (typeof CONNECTION_AUTH_CHOICES)[number];
 
+/**
+ * The auth scheme as the form holds it: a choice, or `oauth`, which a Connection takes when its
+ * server asks for a sign-in. The form offers `oauth` only to a Connection that has it, and keeps
+ * its `settings.oauth` while it stays.
+ */
+export type ConnectionFormAuthScheme = ConnectionAuthChoice | "oauth";
+
 /** A fixed header of a REST API, as the form lists it: never a credential. */
 export interface ConnectionHeaderRow {
   name: string;
@@ -20,7 +27,7 @@ export interface ConnectionFormState {
   connectorType: ConnectionFormType;
   /** The address: the MCP server's `url`, or the REST API's `baseUrl`. */
   url: string;
-  authScheme: ConnectionAuthChoice;
+  authScheme: ConnectionFormAuthScheme;
   /** With `header`: the header that carries the secret. */
   headerName: string;
   /** For `http_api`: the fixed headers sent with every request. */
@@ -48,7 +55,8 @@ function textOf(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function authChoiceOf(value: unknown): ConnectionAuthChoice {
+function authChoiceOf(value: unknown): ConnectionFormAuthScheme {
+  if (value === "oauth") return "oauth";
   return CONNECTION_AUTH_CHOICES.find((choice) => choice === value) ?? "none";
 }
 
@@ -100,8 +108,9 @@ export function addressOrigin(url: string): string | undefined {
 }
 
 /** Whether the auth scheme sends a secret, which the form then asks for. */
-export function sendsSecret(authScheme: ConnectionAuthChoice): boolean {
-  return authScheme !== "none";
+export function sendsSecret(authScheme: ConnectionFormAuthScheme): boolean {
+  // A sign-in's client secret is entered with the sign-in, not as a key.
+  return authScheme === "bearer" || authScheme === "header";
 }
 
 /**
@@ -115,9 +124,12 @@ export function withConnectionForm(
   const headerName = form.headerName.trim();
   const credentialHeader = form.authScheme === "header" && headerName !== "" ? { headerName } : {};
   if (form.connectorType === "mcp") {
+    const oauth = recordOf(config.settings).oauth;
+    // The sign-in's client and permissions stay while the Connection signs in.
+    const signIn = form.authScheme === "oauth" && oauth !== undefined ? { oauth } : {};
     return {
       ...config,
-      settings: { url: form.url.trim(), ...credentialHeader },
+      settings: { url: form.url.trim(), ...credentialHeader, ...signIn },
       authScheme: form.authScheme
     };
   }

@@ -3,6 +3,10 @@ clientInstance:
   id: demo-e2e
   displayName: Demo E2E Client Instance
   environment: development
+# The origin the browser opens the suite's UI on. A shared OAuth sign-in sends the provider back
+# to its callback there; connection-sign-in.spec.ts hands that request on to the API.
+instance:
+  publicUrl: http://127.0.0.1:5273
 auth:
   standalone:
     enabled: true

@@ -30,6 +30,11 @@ import { LoginPanel } from "./chat/login-panel";
 import { operationRunHref, operationRunsHref } from "./shared/operations-model";
 import { PageHostProvider } from "./studio/pages/page-host";
 import {
+  ConnectionSignInLanding,
+  useSignInLanding
+} from "./studio/build-area/connection-sign-in-landing";
+import { CONNECTIONS_BUILD_PATH } from "./studio/build-area/connection-tools";
+import {
   ResourcesPanel,
   ResourcesPanelToggle,
   useResourcesPanelState
@@ -165,6 +170,8 @@ function ChatWorkspaceContent({
   });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [passwordSetupToken, setPasswordSetupToken] = useState(readPasswordSetupToken);
+  // A tab an OAuth sign-in of a Connection came back to shows its outcome alone.
+  const [signInLanding, leaveSignInLanding] = useSignInLanding();
 
   function clearPasswordSetupToken() {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -288,6 +295,26 @@ function ChatWorkspaceContent({
             retrying={model.config.retrying}
             onRetry={model.config.retry}
             onReload={() => window.location.reload()}
+          />
+        </UiRoot>
+      </TranslationProvider>
+    );
+  }
+
+  if (signInLanding) {
+    return (
+      <TranslationProvider locale={model.config.activeLocale} labelOverrides={labelOverrides}>
+        <UiRoot as="main" theme={model.config.theme} mode={themeMode} labels={uiLabels}>
+          <ConnectionSignInLanding
+            landing={signInLanding}
+            onOpen={(connection) => {
+              leaveSignInLanding();
+              model.route.showRoute(
+                connection === undefined
+                  ? { kind: "build-kind", assetKind: CONNECTIONS_BUILD_PATH }
+                  : { kind: "build-asset", assetKind: CONNECTIONS_BUILD_PATH, name: connection }
+              );
+            }}
           />
         </UiRoot>
       </TranslationProvider>

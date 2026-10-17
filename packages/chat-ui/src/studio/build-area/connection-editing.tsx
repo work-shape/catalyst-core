@@ -115,7 +115,11 @@ export function ConnectionSettingsEditor({
       }}
     >
       <ConnectionServerFields form={form} onChange={setForm} />
-      <ConnectionAuthFields form={form} onChange={setForm} />
+      <ConnectionAuthFields
+        form={form}
+        onChange={setForm}
+        offersOAuth={stored.authScheme === "oauth"}
+      />
       {write.failure ? <FormNotice tone="error">{write.failure}</FormNotice> : null}
       <div className="flex flex-wrap gap-2">
         <Button

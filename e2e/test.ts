@@ -499,6 +499,18 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["the agent page marks a proposal, applies it, discards one and refuses a stale one"]
   },
   {
+    name: "oauth-start-without-a-client",
+    reason:
+      "Chromium's own log line: the provider of the sample registers no client, the start of " +
+      "the sign-in is answered with 409, and the test asserts that the step asks for the client " +
+      "the provider issued.",
+    matches: requestAnswered(409),
+    path: /^\/api\/v1\/connections\/[^/]+\/oauth\/start$/u,
+    tests: [
+      "en: a provider that registers no client asks for the one it issued, and an unticked permission is not asked for"
+    ]
+  },
+  {
     name: "agent-proposal-states-for-review",
     reason:
       "Chromium's own log line: the test answers Apply once with 412, as when the agent wrote a " +

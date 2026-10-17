@@ -373,7 +373,10 @@ describe("the New connection dialog opened from a card", () => {
       discover: async () => undefined,
       useTest: () => ({ run: { status: "idle" }, start: () => undefined }),
       useHolders: () => ({ status: "hidden" }),
-      principalHref: () => ""
+      principalHref: () => "",
+      oauthStart: async () => {
+        throw new Error("This test signs nothing in.");
+      }
     };
     const markup = renderToStaticMarkup(
       createElement(

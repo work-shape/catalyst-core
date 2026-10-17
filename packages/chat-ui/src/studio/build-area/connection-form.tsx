@@ -5,12 +5,16 @@ import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import {
   CONNECTION_AUTH_CHOICES,
   sendsSecret,
-  type ConnectionAuthChoice,
+  type ConnectionFormAuthScheme,
   type ConnectionFormState,
   type ConnectionHeaderRow
 } from "./connection-form-model";
 
-const AUTH_LABELS: Record<ConnectionAuthChoice, { label: TranslationKey; text: TranslationKey }> = {
+const AUTH_LABELS: Record<
+  ConnectionFormAuthScheme,
+  { label: TranslationKey; text: TranslationKey }
+> = {
+  oauth: { label: "connections.authOAuth", text: "connections.authOAuthText" },
   none: { label: "connections.authNone", text: "connections.authNoneText" },
   bearer: { label: "connections.authBearer", text: "connections.authBearerText" },
   header: { label: "connections.authHeader", text: "connections.authHeaderText" }
@@ -167,24 +171,29 @@ export function ConnectionTestPathField({
 export function ConnectionAuthFields({
   form,
   onChange,
-  secret
+  secret,
+  offersOAuth = false
 }: {
   form: ConnectionFormState;
   onChange(next: ConnectionFormState): void;
   secret?: { value: string; onChange(value: string): void };
+  /** The Connection signs in with OAuth: that stays one of the choices. */
+  offersOAuth?: boolean;
 }) {
   const { t } = useTranslation();
   return (
     <>
-      <RadioGroup<ConnectionAuthChoice>
+      <RadioGroup<ConnectionFormAuthScheme>
         label={t("connections.authTitle")}
         value={form.authScheme}
         onValueChange={(authScheme) => onChange({ ...form, authScheme })}
-        options={CONNECTION_AUTH_CHOICES.map((choice) => ({
-          value: choice,
-          label: t(AUTH_LABELS[choice].label),
-          description: t(AUTH_LABELS[choice].text)
-        }))}
+        options={[...(offersOAuth ? (["oauth"] as const) : []), ...CONNECTION_AUTH_CHOICES].map(
+          (choice) => ({
+            value: choice,
+            label: t(AUTH_LABELS[choice].label),
+            description: t(AUTH_LABELS[choice].text)
+          })
+        )}
       />
       {form.authScheme === "header" ? (
         <Field label={t("connections.headerName")} hint={t("connections.headerNameHint")} required>

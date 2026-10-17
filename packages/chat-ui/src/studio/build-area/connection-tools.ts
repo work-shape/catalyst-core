@@ -1,13 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import type { ConnectionTools } from "@work-shape/catalyst-api-client";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { useBuildNavigation } from "../../shared/build-route";
+import { needsSignIn } from "./connection-sign-in-model";
 import { toolGroupStartsOpen } from "./tool-group";
 
 // The tools of Connections an agent can be given, as the agent page offers them. The instance
 // answers them for the Connections the reader may read (`connections.list_tools`): operations
 // that agents may call, that are on and ready. A name the agent holds and the answer lacks is
 // kept and shown as unavailable. The page never drops a name the reader did not remove.
+
+/** The only Connector type whose Connections sign in with OAuth. */
+const SIGNS_IN_CONNECTOR_TYPE = "mcp";
 
 /** The path segment of Connections in Build. */
 export const CONNECTIONS_BUILD_PATH = "connections";
@@ -27,6 +31,11 @@ export type ConnectionToolsRead =
 /** What the agent page is handed for the tools of Connections. */
 export interface ConnectionToolChoice {
   read: ConnectionToolsRead;
+  /**
+   * The Connections that sign in with OAuth and have no sign-in their calls can use. Their
+   * tools carry "Sign-in needed". Empty until they are read.
+   */
+  signInNeeded?: ReadonlySet<string>;
   /** The way to a Connection's page. Absent where the page stands outside Build. */
   place?(name: string): { href: string; open(): void };
 }
@@ -98,7 +107,24 @@ export function useConnectionToolChoice(): ConnectionToolChoice {
     queryFn: ({ signal }) => client.connections.list_tools({ signal }),
     retry: false
   });
+  // The list says nothing of a sign-in: each Connection that may sign in is read by itself,
+  // as its page reads it. A read that fails shows no badge.
+  const signingIn = (query.data?.connections ?? []).filter(
+    (connection) => connection.connectorType === SIGNS_IN_CONNECTOR_TYPE
+  );
+  const details = useQueries({
+    queries: signingIn.map(({ name }) => ({
+      queryKey: ["connection-detail", apiBaseUrl, authScope, name],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        client.connections.get({ params: { name }, signal }),
+      retry: false
+    }))
+  });
+  const signInNeeded = new Set(
+    details.flatMap((detail) => (detail.data && needsSignIn(detail.data) ? [detail.data.name] : []))
+  );
   return {
+    signInNeeded,
     read: query.data
       ? { status: "ready", connections: query.data.connections }
       : query.isPending

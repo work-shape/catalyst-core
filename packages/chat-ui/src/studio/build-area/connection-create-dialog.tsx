@@ -1,7 +1,15 @@
 import { ArrowLeft, Code, Plug } from "lucide-react";
 import { useRef, useState } from "react";
 import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
-import { Banner, Button, ConfirmDialog, Dialog, IconButton } from "@work-shape/catalyst-ui";
+import {
+  Banner,
+  Button,
+  ConfirmDialog,
+  Dialog,
+  IconButton,
+  Step,
+  Steps
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildCreateDialogProps } from "./build-asset-kind";
 import { assetIdFromTitle } from "./build-model";
@@ -28,11 +36,20 @@ import {
 } from "./connection-create-form";
 import { useDraftForNewConnection, type ConnectionDraft } from "./connection-draft";
 import {
+  DISCOVERY_WAIT_MS,
   emptyConnectionForm,
   newConnectionConfig,
   withApprovedOperations,
   type ConnectionFormType
 } from "./connection-form-model";
+import {
+  SignInActions,
+  SignInBody,
+  signInHeading,
+  useConnectionSignIn,
+  type SignInBrowser
+} from "./connection-sign-in";
+import { withOAuthSettings } from "./connection-sign-in-model";
 import {
   AddToolsChoices,
   ApprovalRefusals,
@@ -51,6 +68,10 @@ type Stage =
   | { step: "form" }
   /** A call waits for somebody's approval in the Inbox. */
   | { step: "held" }
+  /** The server asks for an OAuth sign-in: the provider's host, the permissions, the button. */
+  | { step: "sign-in" }
+  /** Signed in: the tools of the server are read. */
+  | { step: "signed-in" }
   /** An MCP server is connected: its tools, as the discovery read them. */
   | { step: "tools"; candidates: ApprovalCandidate[]; waiting: boolean }
   /** A REST API is connected: how its tools come in. */
@@ -63,9 +84,16 @@ export function ConnectionCreateDialog(props: BuildCreateDialogProps) {
   return <ConnectionCreateFlow {...props} source={useConnectionSource()} />;
 }
 
-/** The same dialog on a source it is handed, so a test hands it answers of its own. */
+/** How often the dialog reads the Connection while the tools of a signed-in server are read. */
+const SIGNED_IN_READ_MS = 1_000;
+
+/**
+ * The same dialog on a source it is handed, so a test hands it answers of its own, and the
+ * browser of its sign-in.
+ */
 export function ConnectionCreateFlow({
   source,
+  browser,
   namespaces,
   mayNameFreely,
   checkName,
@@ -74,7 +102,7 @@ export function ConnectionCreateFlow({
   mayDelete,
   onClose,
   onCreated
-}: BuildCreateDialogProps & { source: ConnectionSource }) {
+}: BuildCreateDialogProps & { source: ConnectionSource; browser?: SignInBrowser }) {
   const { t } = useTranslation();
   // The agent's draft opened from its card: the dialog starts at the REST API's form, filled
   // with it, and after Verbinden its tools wait in the approval list.
@@ -106,6 +134,8 @@ export function ConnectionCreateFlow({
   // What the dialog wrote and sent so far: a later Verbinden picks up from here.
   const memory = useRef<ConnectMemory>({});
   const written = useRef<Record<string, unknown>>({});
+  /** When the tools were read before the sign-in: a later reading is the signed-in one. */
+  const discoveredBefore = useRef<string | undefined>(undefined);
 
   const choices = [
     ...(mayNameFreely
@@ -118,6 +148,31 @@ export function ConnectionCreateFlow({
   const title = fields.title.trim();
   const created = memory.current.revision !== undefined;
   const rest = fields.form.connectorType === "http_api";
+
+  /** One write of the definition over the revision the dialog wrote last. */
+  const rewrite = async (config: Record<string, unknown>) => {
+    const revision = (
+      await put({ name, config, expectedRevision: memory.current.revision ?? null })
+    ).revision;
+    memory.current = { ...memory.current, revision };
+    written.current = config;
+  };
+  const signIn = useConnectionSignIn(
+    {
+      connection: name,
+      start: () => source.oauthStart(name),
+      readDetail: () => source.readDetail(name),
+      writeOAuth: (oauth) => rewrite(withOAuthSettings(written.current, oauth)),
+      setSecret: (value, expectedVersion) => source.setSecret(name, value, expectedVersion)
+    },
+    {
+      enabled: stage.step === "sign-in",
+      onConnected: () => {
+        readSignedInTools().catch(() => enterTools(undefined));
+      },
+      ...(browser ? { browser } : {})
+    }
+  );
 
   const pick = (connectorType: ConnectionFormType) => {
     setFields({ ...fields, form: { ...fields.form, connectorType } });
@@ -206,6 +261,10 @@ export function ConnectionCreateFlow({
         return;
       case "refused":
         setSteps([]);
+        if (outcome.reason === "oauth_required") {
+          enterSignIn().catch(() => setBusy(false));
+          return;
+        }
         if (outcome.reason === "unauthorized") {
           // A refused key is never shown again: the field is empty and waits for a new one.
           setFields((current) => ({ ...current, key: "" }));
@@ -257,6 +316,46 @@ export function ConnectionCreateFlow({
       : outcome.refusals.map((refusal) => refusal.message).join(" ");
   };
 
+  /**
+   * The server asks for a sign-in: the key field leaves, the Connection signs in with OAuth
+   * from its next write on, and the step of the sign-in starts.
+   */
+  const enterSignIn = async () => {
+    setFields((current) => ({ ...current, key: "" }));
+    setBusy(true);
+    try {
+      await rewrite({ ...written.current, authScheme: "oauth" });
+      discoveredBefore.current = (await source.readDetail(name).catch(() => undefined))
+        ?.discoveredAt;
+    } catch (error) {
+      setBusy(false);
+      setErrors(writeErrors(error));
+      return;
+    }
+    setBusy(false);
+    setStage({ step: "sign-in" });
+  };
+
+  /** After the sign-in: the test, then the tools the instance reads with the new account. */
+  const readSignedInTools = async () => {
+    setStage({ step: "signed-in" });
+    // The test writes the health; what it answers changes nothing here.
+    await source.test(name).catch(() => undefined);
+    const since = Date.now();
+    for (;;) {
+      const detail = await source.readDetail(name).catch(() => undefined);
+      if (detail?.discoveredAt !== undefined && detail.discoveredAt !== discoveredBefore.current) {
+        enterTools(detail);
+        return;
+      }
+      if (Date.now() - since >= DISCOVERY_WAIT_MS) {
+        enterTools(detail);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, SIGNED_IN_READ_MS));
+    }
+  };
+
   const enterTools = (detail: ConnectionDetail | undefined) => {
     const candidates = discoveredCandidates(detail?.discovered ?? []);
     approval.reset(candidates);
@@ -296,6 +395,7 @@ export function ConnectionCreateFlow({
       onClose();
       return;
     }
+    // Signing in: the Connection stays, and its page offers the sign-in again.
     // Connected: "Later" leaves it with no tool accepted, on its page.
     onCreated(name);
   };
@@ -331,6 +431,9 @@ export function ConnectionCreateFlow({
         return t(rest ? "connectionCreate.restHeading" : "connectionCreate.mcpHeading");
       case "held":
         return t("connectionCreate.heldTitle");
+      case "sign-in":
+      case "signed-in":
+        return signInHeading(signIn, t);
       case "add":
         return t("connectionCreate.addHeading");
       case "paste":
@@ -429,6 +532,19 @@ export function ConnectionCreateFlow({
             {t("connectionCreate.held")}
           </Banner>
         );
+      case "sign-in":
+        return <SignInBody signIn={signIn} />;
+      case "signed-in":
+        return (
+          <Steps label={t("connectionCreate.steps")} data-connection-steps="">
+            <Step state="done" title={t("connectionSignIn.signedIn")} data-connect-step="sign-in" />
+            <Step
+              state="running"
+              title={t("connectionSignIn.readTools")}
+              data-connect-step="tools"
+            />
+          </Steps>
+        );
       case "add":
         return (
           <div className="grid min-w-0 gap-4">
@@ -522,6 +638,19 @@ export function ConnectionCreateFlow({
             {t("connectionCreate.close")}
           </Button>
         );
+      case "sign-in":
+        return (
+          <>
+            {signIn.state.phase === "waiting" ? null : (
+              <Button variant="outline" onClick={() => onCreated(name)}>
+                {t("connectionCreate.later")}
+              </Button>
+            )}
+            <SignInActions signIn={signIn} />
+          </>
+        );
+      case "signed-in":
+        return undefined;
       case "add":
         return (
           <Button variant="outline" onClick={() => onCreated(name)}>

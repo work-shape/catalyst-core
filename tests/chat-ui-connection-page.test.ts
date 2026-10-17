@@ -67,7 +67,10 @@ function renderPage(input: PageInput = {}): string {
     discover: async () => undefined,
     readDetail: async (name) => connectionDetail(name, input.detail),
     test: async () => testResult("ready"),
-    principalHref: (principalId) => `/settings/instance/api-access?principal=${principalId}`
+    principalHref: (principalId) => `/settings/instance/api-access?principal=${principalId}`,
+    oauthStart: async () => {
+      throw new Error("This test signs nothing in.");
+    }
   };
   const context = platformContext();
   const source: BuildSource = {
@@ -442,6 +445,71 @@ describe("Connection page", () => {
     expect(renderPage({ detail: { sharedCredential: false } })).not.toContain(
       "data-connection-shared"
     );
+  });
+
+  it("shows the shared sign-in of a Connection that signs in with OAuth, and whether anybody is signed in", () => {
+    const oauthAsset = connectionAsset("files", {
+      origin: "runtime",
+      authScheme: "oauth",
+      secretHandle: undefined,
+      settings: { url: "https://files.example.test/mcp", oauth: { clientId: "catalyst-files" } }
+    });
+    const oauth = {
+      registration: "preregistered" as const,
+      providerHost: "auth.files.example.test",
+      redirectUri: "https://chat.example.com/api/v1/connections/oauth/callback"
+    };
+    const unsigned = renderPage({
+      asset: oauthAsset,
+      detail: { health: "needs_configuration", secret: { state: "not_set" }, oauth },
+      locale: "de"
+    });
+    expect(unsigned).toContain("data-connection-sign-in");
+    expect(unsigned).toContain(">Anmeldung<");
+    expect(unsigned).toContain('data-sign-in-state="none"');
+    expect(unsigned).toContain(">Nicht angemeldet<");
+    // The recorded state names the missing sign-in, not a missing key.
+    expect(unsigned).toContain(">Anmeldung nötig<");
+    expect(unsigned).toContain("auth.files.example.test");
+    expect(unsigned).toContain("catalyst-files");
+    expect(unsigned).toContain("https://chat.example.com/api/v1/connections/oauth/callback");
+    expect(unsigned).toContain('data-sign-in-begin=""');
+    expect(unsigned).toContain(">Anmelden<");
+    expect(unsigned).not.toContain("data-connection-shared");
+
+    const signedIn = renderPage({
+      asset: oauthAsset,
+      detail: {
+        health: "ok",
+        oauth,
+        binding: {
+          state: "connected",
+          account: "team@files.example.test",
+          scopes: ["files.read"],
+          connectedAt: "2026-10-17T09:00:00.000Z"
+        }
+      },
+      locale: "de"
+    });
+    expect(signedIn).toContain('data-sign-in-state="connected"');
+    expect(signedIn).toContain("team@files.example.test");
+    expect(signedIn).toContain("files.read");
+    expect(signedIn).toContain(
+      "Alle, die diese Verbindung nutzen dürfen, lesen und handeln über dieses Konto."
+    );
+    expect(signedIn).toContain(">Neu anmelden<");
+
+    // A reader who may not change it sees the state, and that an administrator signs it in.
+    const member = renderPage({
+      asset: oauthAsset,
+      detail: { health: "needs_configuration", oauth },
+      canWrite: false,
+      mayTest: false
+    });
+    expect(member).toContain("An administrator signs this connection in.");
+    expect(member).not.toContain("data-sign-in-begin");
+
+    expect(renderPage()).not.toContain("data-connection-sign-in");
   });
 
   it("lists the operations with effect, who may call them and their status", () => {

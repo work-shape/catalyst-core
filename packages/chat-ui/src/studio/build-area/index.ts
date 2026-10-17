@@ -43,6 +43,20 @@ export {
 } from "./connection-draft-card";
 export { ConnectionEditor } from "./connection-editor";
 export * from "./connection-form-model";
+export * from "./connection-sign-in-model";
+export {
+  SignInActions,
+  SignInBody,
+  signInHeading,
+  useConnectionSignIn,
+  type ConnectionSignIn,
+  type SignInBrowser,
+  type SignInCalls,
+  type SignInPhase,
+  type SignInTab
+} from "./connection-sign-in";
+export { ConnectionSignInLanding } from "./connection-sign-in-landing";
+export { ConnectionSignInSection, SignInStateBadge } from "./connection-sign-in-section";
 export type {
   ConnectionDetailRead,
   ConnectionHoldersRead,
