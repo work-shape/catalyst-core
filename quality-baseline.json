@@ -516,7 +516,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "tests",
-      "count": 830,
+      "count": 832,
       "owner": "NS-RETIRE"
     },
     {
@@ -781,13 +781,6 @@
       "date": "2026-10-15"
     },
     {
-      "key": "lint|catalyst/retired-terms|tests",
-      "to": 865,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
-      "acceptedBy": "manager (D4′, 2026-10-15)",
-      "date": "2026-10-15"
-    },
-    {
       "key": "lint|catalyst/duplicate-literal-list|packages/api-contract",
       "to": 6,
       "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
@@ -947,6 +940,13 @@
       "reason": "S9 transfers existing UI guard counts unchanged from tests/ui-guard.baseline.json; no additional violations accepted.",
       "acceptedBy": "Felix (test-audit S9 brief)",
       "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|tests",
+      "to": 832,
+      "reason": "AD-3: check 66's personal-key push of an instance agent needs a Namespace root until NS-RETIRE",
+      "acceptedBy": "manager",
+      "date": "2026-10-17"
     }
   ]
 }

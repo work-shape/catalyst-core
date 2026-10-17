@@ -29,6 +29,8 @@ catalyst config validate
 catalyst config push
 ```
 
+A push of a changed agent writes the agent's draft and prints "draft revision n"; the live revision stays until somebody publishes the draft. `catalyst config push --publish` publishes each draft the push wrote, which needs a personal key with the publish right, `config_assets:publish`. A service principal's key, such as an operated instance's release key, writes drafts and publishes none. [Agents: a push writes a draft](/configure/config-assets/#agents-a-push-writes-a-draft) has the rest, and the one pull a working copy of an earlier CLI needs.
+
 ## Follow a held call
 
 A publish that waits for approval exits 3 and prints its Operation Run id. Follow it with:
@@ -85,7 +87,11 @@ catalyst app put offers --from offers --if-revision 4 --workspace <workspace-id>
 catalyst app publish offers --revision 5 --workspace <workspace-id>
 catalyst agent revert tax-vat --to 2 --if-revision 4
 catalyst agent delete tax-vat --if-revision 5
+catalyst agent publish tax-vat --revision 6
+catalyst agent discard tax-vat --revision 6
 ```
+
+A `put` or `revert` of an agent that exists writes its draft and prints the draft revision. `--if-revision` names the live revision. Where the agent has a draft, `--if-draft-revision <n>` names the draft revision you read, the one `show` prints; without it the write expects no draft, and one that finds a draft is refused with its revision and author and changes nothing. `catalyst agent publish <name> --revision <n>` makes that draft revision live, and `catalyst agent discard <name> --revision <n>` drops it and leaves the live agent as it is. `list` shows each agent's pending draft in a column of its own, and `show` names it with its author. An instance's own agent is published without a question, a workspace's agent (`--workspace <id>`) asks as an App does. A key that may not publish, such as a service principal's, is refused with the reason and what to do instead.
 
 `catalyst app publish` and `catalyst workflow publish` ask before they publish. With `--yes` they ask nothing and publish nothing yet: the publish waits in your own Inbox as a confirmation, the command ends with exit code `3` and the request id, and your **Allow** there counts as your click on Publish. A run without a terminal and without `--yes` publishes nothing and exits with 1. When approval is required, the command ends with exit code `3` and the request id, including for an admin's key. An instance approver can approve it in the Inbox ([Guardrails](/manage/guardrails/#publishing-needs-an-instance-admins-approval)). A CLI answer never supplies that approval.
 

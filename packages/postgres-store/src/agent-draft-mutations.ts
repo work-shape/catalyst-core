@@ -41,6 +41,9 @@ export async function writeAgentDraft(
       "The agent draft changed. Read it again before saving",
       {
         reason: "draft_changed",
+        // A batch writes several agents: the refusal names the one whose draft moved.
+        kind: mutation.kind,
+        name: mutation.name,
         currentDraftRevision: draft?.revision ?? null,
         ...(draft ? { author: draft.author, changedAt: draft.updatedAt } : {})
       }

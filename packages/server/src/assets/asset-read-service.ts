@@ -24,6 +24,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
 import { accessResource, decide, type AssetCall } from "./asset-access";
+import { isReleaseSync } from "./asset-write-rules";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
 import {
@@ -34,6 +35,17 @@ import {
   type AssetTarget
 } from "./asset-target";
 import type { AssetWorkflowOptions } from "../types";
+
+/**
+ * Who is told of an agent's pending draft: a holder of `agent.write` on it, and the holder of
+ * the release right, whose release sync writes the draft and names the draft revision it saw.
+ */
+function readsAgentDraft(
+  access: ActorAccess,
+  resource: ReturnType<typeof accessResource>
+): boolean {
+  return access.authorize("agent.write", resource).allowed || isReleaseSync(access, "sync");
+}
 
 /** How many assets a list reads where its caller names no page. */
 const DEFAULT_ASSET_LIST_LIMIT = 51;
@@ -111,12 +123,11 @@ export class AssetReadWorkflow {
       agentIds:
         kind.kind === "agent"
           ? records
-              .filter(
-                (record) =>
-                  call.access.authorize(
-                    "agent.write",
-                    accessResource(record.kind, record.name, record.scope, record.id)
-                  ).allowed
+              .filter((record) =>
+                readsAgentDraft(
+                  call.access,
+                  accessResource(record.kind, record.name, record.scope, record.id)
+                )
               )
               .map((record) => record.id)
           : []
@@ -168,7 +179,7 @@ export class AssetReadWorkflow {
     // Resolve only after authorization, from the revision the caller is allowed to read.
     const runsAs = await target.kind.readRunsAs?.(content.config);
     const draftSummary =
-      target.kind.kind === "agent" && call.access.authorize("agent.write", target.resource).allowed
+      target.kind.kind === "agent" && readsAgentDraft(call.access, target.resource)
         ? (
             await this.options.stores.agentProposals.summaries({
               clientInstanceId: this.options.clientInstanceId,

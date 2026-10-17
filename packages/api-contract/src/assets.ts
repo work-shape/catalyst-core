@@ -102,6 +102,8 @@ export const agentDraftSummarySchema = z.object({
   baseRevision: revisionNumberSchema,
   author: z.object({
     userId: z.string().optional(),
+    /** The name of the person who wrote the draft last, while their account exists. */
+    displayLabel: z.string().optional(),
     conversationId: z.string().optional(),
     release: z.boolean()
   }),

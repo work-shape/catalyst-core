@@ -8,7 +8,7 @@ Agents, skills, and the default agent are **config assets**: they live in the cl
 This gives config assets a different lifecycle than release config:
 
 - **Release config** (`app.yaml`) ships with a deployment and owns infrastructure: auth, model providers and bindings, usage budgets, tool enablement, workspaces.
-- **Config assets** change at runtime — in [Studio](/configure/build/) or with a `catalyst config push` — and apply to new conversations immediately, without a deployment. A running conversation keeps the agent snapshot it started with.
+- **Config assets** change at runtime — in [Studio](/configure/build/) or with a `catalyst config push` — without a deployment. A skill applies to new conversations immediately. A change of an agent that exists is that agent's draft until someone publishes it ([Agents: a push writes a draft](#agents-a-push-writes-a-draft)). A running conversation keeps the agent snapshot it started with.
 
 Skill content is read on demand by the `read_skill` tool, so edits are visible to reads after the edit even within an already-running conversation; the agent's system prompt, model selection, and tool list remain on the run's snapshot. A skill is one atomic package: its required `SKILL.md` root may include selectively readable UTF-8 text resources. The root read returns a compact resource manifest, and a second `read_skill` call can load one exact listed path.
 
@@ -27,7 +27,7 @@ catalyst config validate    # schema + cross-reference check without writing
 catalyst config push        # merge changed local assets into the live instance
 ```
 
-A `catalyst.yaml` manifest in the working-copy root names instances and the asset file globs. The database is the live authoring source; the folder is a pulled working copy. `.catalyst-state.json` (gitignored) records each pulled asset's revision and content hash, plus the default agent. Skill hashes cover the root and all resources. YAML formatting and provenance comments do not count as edits.
+A `catalyst.yaml` manifest in the working-copy root names instances and the asset file globs. The database is the live authoring source; the folder is a pulled working copy. `.catalyst-state.json` (gitignored) records each pulled asset's revision and content hash, plus the default agent, and for an agent the draft revision it saw, or that it saw none. Skill hashes cover the root and all resources. YAML formatting and provenance comments do not count as edits.
 
 `push` sends only assets changed locally since their last pull, in one `assets.sync` call that is applied completely or not at all. Each asset names the revision of its last pull, and an asset the working copy never pulled names none: it is a creation, which the instance refuses when it holds the name. Unchanged files leave instance edits alone. Assets missing locally stay on the instance unless you use `--prune`, which deletes them at the revision of the last pull; an asset that appeared on the instance since is reported as a conflict instead of being deleted. `--prune` cannot be combined with `--only`, and a push whose listing of the instance fails deletes nothing.
 
@@ -48,6 +48,45 @@ Commit or stash local edits in git before running that command: pull overwrites 
 `diff` labels assets **changed locally**, **remote newer**, or **conflict** when both sides changed. Remote-newer assets are not local updates. A full pull refreshes all written asset baselines and the manifest's default agent; `pull --only` refreshes only the selected assets. The default-agent pointer is guarded only when you change it locally. Resolving a default-agent conflict requires a full pull.
 
 State files from an older CLI remain readable, but their global version is not a per-asset baseline. Pull before a guarded push.
+
+### Agents: a push writes a draft
+
+An agent has its live revision and at most one draft, which every writer shares: Studio's Save draft, the Build Agent, `catalyst agent put` and `catalyst config push`. Everyone outside Try is served the live revision. A push of a changed agent that exists writes its draft and leaves the live revision, and every conversation that starts, as they were:
+
+```text
+agent:assistant: draft revision 4; live revision 2 is unchanged until it is published.
+```
+
+A new agent is the exception: its creation is revision 1, live at once and offered as its availability says. Deleting an agent, its availability and the default agent are not drafted either.
+
+Each agent in a push names the live revision and the draft revision its last pull or push saw, or that it saw no draft. When somebody wrote, published or discarded the draft since, the instance refuses the whole push, and the CLI names who changed it and when:
+
+```text
+agent:assistant: its draft changed since the last pull: draft revision 5, written by Kai Weber at 2026-10-17T09:12:00.000Z. A pull records it, and the push after it writes over that draft
+```
+
+`pull` writes each agent's live revision into the working copy, records the draft revision it saw, and lists every pending draft with its revision, its author and when it was written. The push after that pull writes over that draft, so read it first, in Studio or with `catalyst agent show <name>`. `diff` compares each agent with its live revision: an agent the last push wrote as a draft shows as **pushed as a draft, not live** with the difference to live, and each pending draft is named with its author.
+
+A `.catalyst-state.json` written before agents had drafts does not say which draft revision an agent was pulled at. A push that changes an agent refuses before it sends anything and asks for one `catalyst config pull`; commit or stash local edits in git first, since the pull overwrites the files.
+
+Publishing is a step of its own:
+
+```sh
+catalyst config push --publish                        # push, then publish each draft it wrote
+catalyst agent publish assistant --revision 4         # publish one draft revision
+catalyst agent discard assistant --revision 4         # drop the draft; live stays
+```
+
+Publishing needs `agent.publish` on the agent and, for a key, the scope `config_assets:publish`, which `config_assets:write` does not include. A personal key of an instance admin carries both. An instance's own agent is published without a question, also without a terminal, unless a guardrail on `agent.before_publish` asks for an approval: then the push prints the waiting Operation Run and ends with exit code 3, and the draft goes live when the approval is given. A workspace's agent asks before it publishes, as an App does. A service principal holds no publish right, so a release key writes drafts and publishes none; `push --publish` with such a key writes the drafts, says why nothing was published, and ends with exit code 1. A draft the push left unpublished is listed with the `catalyst agent publish` command for it.
+
+### Releasing agents to an operated instance
+
+An operated instance pushes with its release key, which publishes nothing. A release of changed agents therefore has two steps per instance:
+
+1. `catalyst config push` with the release key writes each changed agent as its draft.
+2. A person publishes: an admin on the agent page, after trying the draft, or with `catalyst agent publish <name> --revision <n>` and a personal key. `catalyst config diff` and `catalyst config pull` name every draft still waiting.
+
+A draft written by a release sync is checked at publish against the editable agent fields as that release sync was, not as the publisher's own save would be. The release key needs to see the drafts its push writes over: its listing names each agent's pending draft, and its pull records the draft revision.
 
 Agent tool validation checks every `toolNames` entry and dotted tool names in agent `instructions`, with or without backticks. The scan recognizes namespaces from the full registered tool inventory, including tools this instance does not enable, plus `connection.`, `app.` and `data_store.` and names with further dotted segments. A reference to a tool the instance does not enable is refused. URLs, paths, e-mails, filename extensions and domain endings are ignored, and trailing punctuation is stripped. Skills are not scanned. Errors name the agent, the unavailable tool and either the zero-based `toolNames` index or the one-based line within the instructions string. A Connection operation must exist in the stored assets and be exposed to agents; an App action must exist in stored assets or the same push batch. Existing, exposed tools that are disabled, lack a readable secret or await discovery produce warnings in validate and push output. The same check runs through `assets.validate`, release preflight and writes. Connections cannot be written through a push batch.
 
@@ -302,6 +341,8 @@ Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, 
 | `assets.discard_draft`    | `POST /api/v1/assets/{kind}/{name}/discard-draft` | `<kind>.write`       |
 | `assets.sync`             | `POST /api/v1/assets/sync`                        | per item             |
 | `assets.sync_check`       | `POST /api/v1/assets/sync/check`                  | per item             |
+| `agents.draft.get`        | `GET /api/v1/agents/{name}/draft`                 | `agent.write`        |
+| `agents.draft.discard`    | `POST /api/v1/agents/{name}/draft/discard`        | `agent.write`        |
 | `platform.context.get`    | `GET /api/v1/context`                             | any signed-in caller |
 | `platform.references.get` | `GET /api/v1/context/references`                  | a right on any kind  |
 
@@ -324,6 +365,8 @@ A deleted asset keeps its name, its history and the revision of its delete. `nul
 `assets.sync` applies up to 200 puts and deletes to the assets one Shared Workspace owns, named by its id in `workspaceId`. Only a release, below, leaves it out. Each item is checked like the single call: the right on that asset, its revision, its content. An item may also carry `expectedAssetId`, the id of the asset its revision was read from; where the instance holds another asset under the name the batch is refused with `409 CONFLICT` and `details.reason` `asset_replaced`. Each applied item answers the `id` and the `revision` it wrote. One put item holds at most 2 MiB as JSON (`ASSET_SYNC_ITEM_MAX_BYTES`). Every item carries `expectedRevision` as the single call does, and the answers are the same two: `428` with `details.assets` when an item names none, `412` with `details.conflicts` when an item is stale. The rights are decided first, those beside the right on the item included, so a caller without a right learns nothing of a revision. The whole set is validated against what the transaction's lock protects: a write that another write made invalid between its check and its commit is refused. An asset the batch does not name is not read for its revision and never refuses the batch. The batch is applied completely or not at all, in one transaction: an agent may name a skill the same batch creates. A kind with a draft and a published revision has its draft moved by a put; the published revision and the version of the asset set stay. An App is refused as an item, since its files are built per write. When any item is refused the answer carries `details.items` with one entry per item, `refused` with its error or `not_applied`, and nothing is written. The right on every item is decided before the instance's policy is asked, and a policy setting narrowed to a kind or a workspace applies to a batch that names an asset of that kind or in that workspace. A batch may still name a Namespace registered earlier in `namespace`; an item whose name does not start with its prefix is then refused for every caller, an administrator included.
 
 A holder of `config_assets.release` whose key carries the scope `config_assets:release` may send a batch without `workspaceId`. That batch is a release, which is what `catalyst config push` sends: it may name any agent or skill of the instance, holds up to 2,000 items, may carry `defaultAgentName` and `expectedDefaultAgentName`, is not bound by `editableAgentFields` or the right for model settings, and is checked against the whole stored set instead of what its key may read. A delete of an asset that is not there is answered `absent` and refuses nothing, unless the asset was created meanwhile. Every batch answers `hiddenAgentNames` for agents it wrote that no workspace offers.
+
+An agent that exists is written as its draft by `assets.put`, `assets.revert` and every `assets.sync` item, a release included. Such a write names `expectedRevision`, the live revision, and `expectedDraftRevision`, the draft revision it read or `null` where it read none. A draft at another revision is refused with `412 REVISION_CONFLICT` and `details.reason` `draft_changed`, with the `kind` and `name` of the agent, `currentDraftRevision` and, while a draft is there, its `author` and `changedAt`. The applied write answers `draftRevision` and `publishedRevision`, the live revision, which it leaves as it was, and so does the configuration `version`. `assets.list` and `assets.get` of an agent carry `agentDraft` with the pending draft's `revision`, `baseRevision`, `author` and `updatedAt` for holders of `agent.write` and for a release key. An `author` holds `userId` and, while the account exists, its `displayLabel`; `conversationId` where the Build Agent wrote the draft; and `release: true` for a release sync. `assets.publish` of an agent names the draft revision in `revision` and answers `draftRevision`, `publishedRevision` and `replacedRevision`. A service principal is refused, since it holds no publish right.
 
 `assets.sync_check` takes the body of a sync, runs every check of it and writes nothing. It answers `{ "valid": true }` or the refusal the sync would answer.
 

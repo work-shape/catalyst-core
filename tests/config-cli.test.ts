@@ -804,6 +804,8 @@ skills:
             kind: "agent",
             config: canonicalizeAgentConfig(agentConfig("Local update")),
             expectedRevision: 1,
+            // The pull saw no draft: the push writes one only where none is pending.
+            expectedDraftRevision: null,
             expectedAssetId: "cfga_held_agent_assistant"
           },
           {
@@ -903,6 +905,8 @@ skills:
             kind: "agent",
             config: canonicalizeAgentConfig(agentConfig("Selected")),
             expectedRevision: 1,
+            // The pull saw no draft: the push writes one only where none is pending.
+            expectedDraftRevision: null,
             expectedAssetId: "cfga_held_agent_assistant"
           },
           {
@@ -1084,7 +1088,8 @@ skills:
             "agent:assistant": {
               id: "cfga_held_agent_assistant",
               revision: 1,
-              hash: expect.any(String)
+              hash: expect.any(String),
+              draftRevision: null
             }
           }
         }
@@ -3821,7 +3826,9 @@ function pulledBaseline(
         {
           id: heldAssetId(asset.key),
           revision: 1,
-          hash: createHash("sha256").update(asset.contents).digest("hex")
+          hash: createHash("sha256").update(asset.contents).digest("hex"),
+          // A pull of this CLI saw no agent draft.
+          ...(asset.key.startsWith("agent:") ? { draftRevision: null } : {})
         }
       ])
     )

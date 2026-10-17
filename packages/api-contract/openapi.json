@@ -23667,6 +23667,9 @@
               "userId": {
                 "type": "string"
               },
+              "displayLabel": {
+                "type": "string"
+              },
               "conversationId": {
                 "type": "string"
               },
@@ -23728,6 +23731,9 @@
             "type": "object",
             "properties": {
               "userId": {
+                "type": "string"
+              },
+              "displayLabel": {
                 "type": "string"
               },
               "conversationId": {

@@ -9,6 +9,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { agentProposalRevisions, agentProposals } from "./schema/agentProposals";
+import { productUsers } from "./schema/users";
 
 type Input<Method extends keyof AgentProposalStore> = Parameters<AgentProposalStore[Method]>[0];
 type ProposalRow = typeof agentProposals.$inferSelect;
@@ -28,13 +29,24 @@ const ofAgent = (input: Input<"get">) =>
     eq(agentProposals.agentId, input.agentId)
   );
 
-function mapProposal(row: ProposalRow, config: AgentProposal["config"]): AgentProposal {
+/** The last author's name, read beside the draft: no foreign key, so a gone account has none. */
+const authorJoin = and(
+  eq(productUsers.id, agentProposals.lastAuthorUserId),
+  eq(productUsers.clientInstanceId, agentProposals.clientInstanceId)
+);
+
+function mapProposal(
+  row: ProposalRow,
+  config: AgentProposal["config"],
+  authorLabel?: string | null
+): AgentProposal {
   return {
     id: row.id,
     agentId: row.agentId,
     source: sourceOf(row),
     author: {
       ...(row.lastAuthorUserId ? { userId: asUserId(row.lastAuthorUserId) } : {}),
+      ...(authorLabel ? { displayLabel: authorLabel } : {}),
       ...(row.lastBuildConversationId
         ? { conversationId: asConversationId(row.lastBuildConversationId) }
         : {}),
@@ -53,7 +65,11 @@ export async function getAgentProposal(
   input: Input<"get">
 ): Promise<AgentProposal | undefined> {
   const [found] = await db
-    .select({ proposal: agentProposals, config: agentProposalRevisions.config })
+    .select({
+      proposal: agentProposals,
+      config: agentProposalRevisions.config,
+      authorLabel: productUsers.displayLabel
+    })
     .from(agentProposals)
     .innerJoin(
       agentProposalRevisions,
@@ -62,9 +78,10 @@ export async function getAgentProposal(
         eq(agentProposalRevisions.revision, agentProposals.revision)
       )
     )
+    .leftJoin(productUsers, authorJoin)
     .where(ofAgent(input))
     .limit(1);
-  return found ? mapProposal(found.proposal, found.config) : undefined;
+  return found ? mapProposal(found.proposal, found.config, found.authorLabel) : undefined;
 }
 
 /**
@@ -173,7 +190,7 @@ export function createPostgresAgentProposalStore(db: PostgresConnection): AgentP
     async summaries(input) {
       if (!input.agentIds.length) return new Map();
       const rows = await db
-        .select({ proposal: agentProposals })
+        .select({ proposal: agentProposals, authorLabel: productUsers.displayLabel })
         .from(agentProposals)
         .innerJoin(
           agentProposalRevisions,
@@ -182,6 +199,7 @@ export function createPostgresAgentProposalStore(db: PostgresConnection): AgentP
             eq(agentProposalRevisions.revision, agentProposals.revision)
           )
         )
+        .leftJoin(productUsers, authorJoin)
         .where(
           and(
             eq(agentProposals.clientInstanceId, input.clientInstanceId),
@@ -189,8 +207,12 @@ export function createPostgresAgentProposalStore(db: PostgresConnection): AgentP
           )
         );
       return new Map(
-        rows.map(({ proposal }) => {
-          const { revision, baseRevision, author, updatedAt } = mapProposal(proposal, {});
+        rows.map(({ proposal, authorLabel }) => {
+          const { revision, baseRevision, author, updatedAt } = mapProposal(
+            proposal,
+            {},
+            authorLabel
+          );
           return [proposal.agentId, { revision, baseRevision, author, updatedAt }];
         })
       );

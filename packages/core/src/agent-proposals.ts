@@ -9,6 +9,8 @@ export type AgentProposalSource =
 /** The last writer of the shared draft. No foreign keys: deleting its author leaves it. */
 export interface AgentDraftAuthor {
   userId?: UserId;
+  /** The person's name as a read finds it; absent once the account is gone. Never stored. */
+  displayLabel?: string;
   conversationId?: ConversationId;
   release: boolean;
 }
