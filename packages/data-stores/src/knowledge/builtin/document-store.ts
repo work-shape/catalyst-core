@@ -1,3 +1,4 @@
+import { visibleSourceHits } from "./source-search-visibility";
 import { z } from "zod";
 import {
   AppError,
@@ -637,8 +638,8 @@ export function createBuiltinDocumentStore(
       );
     },
 
-    search(input, signal) {
-      return searchKnowledgeStore(
+    async search(input, signal) {
+      const answer = await searchKnowledgeStore(
         (work) =>
           inStore("Searching the documents", KNOWLEDGE_SEARCH_TIMEOUT_MS, signal, async (sql) => {
             await sql.script("set transaction read only");
@@ -646,6 +647,9 @@ export function createBuiltinDocumentStore(
           }),
         target,
         input
+      );
+      return visibleSourceHits(runtime, target.assetId, target.name, answer, (work) =>
+        inStore("Checking source visibility", KNOWLEDGE_SEARCH_TIMEOUT_MS, signal, work)
       );
     }
   };

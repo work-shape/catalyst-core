@@ -72,20 +72,13 @@ export function sourceOperation(
         async execute(input, context) {
           const parsed = knowledgeSyncInputSchema.parse(input);
           requireSource(parsed.source);
-          if (parsed.mode !== "full")
-            throw new AppError(
-              "VALIDATION_FAILED",
-              "Change-feed sync is not supported yet; request mode full.",
-              { reason: "not_supported_yet" },
-              { exposeMessage: true }
-            );
           const payload = {
             ...initialSyncIds(target.assetId, parsed.source),
             operationRunId: context.runId
           };
           const runId = await sources.start(
             payload,
-            "full",
+            parsed.mode ?? "changes",
             context.runtime.signal ?? new AbortController().signal
           );
           if (isOperationRunId(runId)) context.joinAsyncRun?.(runId);

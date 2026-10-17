@@ -1,3 +1,5 @@
+import { sourceBoundaryKey } from "../source-boundary";
+import { readSourcePages } from "./source-listing";
 import { sourceAuthority } from "../source-principal";
 import {
   isOperationRunId,
@@ -6,7 +8,6 @@ import {
 } from "@work-shape/catalyst-core";
 import { sourceSyncStarted } from "./source-lifecycle";
 import { createHash } from "node:crypto";
-import { matchesGlob } from "node:path";
 import {
   DocumentSourceError,
   defineJobHandler,
@@ -19,8 +20,8 @@ import {
   type KnowledgeSyncJobPayload,
   type RegisteredJobHandler
 } from "@work-shape/catalyst-core";
-import { createSourceStore, sourceTransaction, type SourceProgress } from "./source-store";
-import { sourceTarget, sourceCall, type SourceJobRuntime } from "./source-runtime";
+import { createSourceStore, sourceTransaction } from "./source-store";
+import { sourceTarget, type SourceJobRuntime } from "./source-runtime";
 
 // 100 ids keep queue rows bounded and limit the work lost with one lease to one batch.
 const KNOWLEDGE_FETCH_BATCH_ITEMS = 100;
@@ -89,6 +90,7 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
       let run = await store.run(payload.syncRunId);
       if (!run) {
         await store.change(async (sql) => {
+          await sql.run("lock table catalyst_kb.documents in share row exclusive mode");
           const bound = createSourceStore(
             runtime.data,
             payload.knowledgeBaseId,
@@ -113,15 +115,12 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
       }
       if (!run || run.state !== "running") return;
       const found = await sourceTarget(runtime, payload);
-      if (!found) {
+      if (!found || run.definitionKey !== sourceBoundaryKey(found.source)) {
         await sourceTransaction(runtime.data, payload, control, (store) =>
-          store.finish(payload, "knowledge_source_unreachable")
+          store.finish(payload, found ? "knowledge_source_refused" : "knowledge_source_unreachable")
         );
         return;
       }
-      if (run.mode === "changes")
-        throw new Error("Change-feed ingestion is not available in this release");
-      let progress: SourceProgress = run.progress ?? { complete: false };
       try {
         const authorizedRuntime = {
           ...runtime,
@@ -145,79 +144,40 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
             after = ids.at(-1) ?? after;
           }
         }
-        if (!run.progress) {
-          const feed = await listing(() =>
-            sourceCall(
-              authorizedRuntime,
-              found.source.connection,
-              payload.knowledgeBaseId,
-              control.signal,
-              ({ capability, context }) =>
-                capability.changes({ boundary: { folderIds: found.source.folders } }, context)
-            )
+        try {
+          await readSourcePages(
+            authorizedRuntime,
+            payload,
+            control,
+            found.source,
+            run.mode,
+            run.progress,
+            (ids) => queueFetches(runtime, control, payload, ids)
           );
-          progress = {
-            complete: false,
-            ...(feed.kind === "changes" ? { feedCursor: feed.nextCursor } : {})
-          };
-        }
-        while (!progress.complete) {
-          const page = await listing(() =>
-            sourceCall(
-              authorizedRuntime,
-              found.source.connection,
-              payload.knowledgeBaseId,
-              control.signal,
-              ({ capability, context }) =>
-                capability.list(
-                  {
-                    boundary: { folderIds: found.source.folders },
-                    ...(progress.pageToken ? { pageToken: progress.pageToken } : {})
-                  },
-                  context
-                )
-            )
-          );
-          if (page.nextPageToken !== undefined && page.nextPageToken === progress.pageToken)
-            throw new Error("The source repeated its page token");
-          const next: SourceProgress = {
-            complete: page.nextPageToken === undefined,
-            ...(page.nextPageToken === undefined ? {} : { pageToken: page.nextPageToken }),
-            ...(progress.feedCursor === undefined ? {} : { feedCursor: progress.feedCursor })
-          };
-          const items = page.items.filter(
-            (item) =>
-              item.parents.some((parent) => found.source.folders.includes(parent)) &&
-              (!found.source.include ||
-                found.source.include.some((pattern) => matchesGlob(item.name, pattern))) &&
-              !found.source.exclude?.some(
-                (pattern) =>
-                  matchesGlob(item.path.slice(1), pattern) || matchesGlob(item.path, pattern)
+        } catch (error) {
+          if (documentSourceErrorCodeOf(error) !== "cursor_expired") throw error;
+          await sourceTransaction(runtime.data, payload, control, (store) =>
+            store.change((sql) =>
+              sql.run(
+                "update catalyst_kb.sync_runs set mode='full',reason='cursor_expired',cursor_after=null where id=$1::text",
+                [payload.syncRunId]
               )
-          );
-          const result = await sourceTransaction(runtime.data, payload, control, (store) =>
-            store.page(
-              payload,
-              items,
-              next,
-              runtime.input.documentFormats,
-              runtime.input.maxDocuments
             )
           );
-          await queueFetches(runtime, control, payload, result.queued);
-          if (result.limited) {
-            await sourceTransaction(runtime.data, payload, control, (store) =>
-              store.finish(payload, "knowledge_source_limit_reached")
-            );
-            return;
-          }
-          progress = next;
+          await readSourcePages(
+            authorizedRuntime,
+            payload,
+            control,
+            found.source,
+            "full",
+            undefined,
+            (ids) => queueFetches(runtime, control, payload, ids)
+          );
         }
-        await sourceTransaction(runtime.data, payload, control, (store) => store.finish(payload));
       } catch (error) {
         control.signal.throwIfAborted();
-        if (!(error instanceof ListingFailure)) throw error;
-        const { code } = error;
+        const code =
+          error instanceof ListingFailure ? error.code : documentSourceErrorCodeOf(error);
         if (code === "rate_limited") {
           await control.transaction((stores) =>
             stores.jobs.enqueue(knowledgeSyncJob, payload, {
@@ -225,7 +185,10 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
               subject: payload.knowledgeBaseId,
               concurrencyKey: knowledgeSourceKey(payload.knowledgeBaseId, payload.sourceId),
               runAfter: new Date(
-                Date.now() + (error.retryAfterMs ?? knowledgeSyncJob.backoff.baseMs)
+                Date.now() +
+                  ((error instanceof ListingFailure || error instanceof DocumentSourceError
+                    ? error.retryAfterMs
+                    : undefined) ?? knowledgeSyncJob.backoff.baseMs)
               )
             })
           );
@@ -235,7 +198,11 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
         await sourceTransaction(runtime.data, payload, control, (store) =>
           store.finish(
             payload,
-            code === "unauthorized" ? "knowledge_source_refused" : "knowledge_source_unreachable"
+            code === "over_limit"
+              ? "knowledge_source_limit_reached"
+              : code === "unauthorized" || code === "forbidden"
+                ? "knowledge_source_refused"
+                : "knowledge_source_unreachable"
           )
         );
       }

@@ -2,6 +2,7 @@ import type { DataStores } from "@work-shape/catalyst-data-stores";
 import type { InstanceConnections } from "./connections";
 import type {
   AuditRecorder,
+  ApprovalRequestHandler,
   Authorizer,
   ClientInstanceId,
   DataToolSource,
@@ -81,6 +82,7 @@ interface ModuleRuntimeAssembly {
  */
 export interface ModuleAssembly {
   /** Kinds as the asset workflow of the API registers them, which is what that type names. */
+  readonly approvalRequestHandlers?: readonly ApprovalRequestHandler[];
   readonly assetKinds?: readonly WorkflowAssetKind[];
   /** Agent tools, registered with the tools of the assembly. */
   readonly tools?: readonly ToolAssemblyDefinition[];
@@ -105,6 +107,7 @@ export type ModuleSeam = (
 
 /** What the seams of one process add together, each list in the order of the seams. */
 export interface AssembledModules {
+  readonly approvalRequestHandlers: readonly ApprovalRequestHandler[];
   readonly assetKinds: readonly WorkflowAssetKind[];
   readonly tools: readonly ToolAssemblyDefinition[];
   /** Adds every module's operation sources to the call path, then starts each module. */

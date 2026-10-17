@@ -25,15 +25,7 @@ export const knowledgeSyncInputSchema = z.strictObject({
   /** The `id` of the source in the definition. */
   source: sourceIdSchema,
   /** `changes` unless `full`. The initial import is started by publish, not by this call. */
-  mode: z
-    .literal("full", {
-      // Keep SRC-0's accepted values frozen while explaining the deferred mode.
-      error: (issue) =>
-        issue.input === "changes"
-          ? "not_supported_yet: Change-feed sync is not supported yet; request mode full."
-          : undefined
-    })
-    .optional()
+  mode: z.enum(["changes", "full"]).optional()
 });
 
 export type KnowledgeSyncInput = z.infer<typeof knowledgeSyncInputSchema>;

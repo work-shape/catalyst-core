@@ -4,6 +4,7 @@ import {
   type ConnectorContext,
   type DocumentSourceCapability,
   type KnowledgeFiles,
+  type PlatformStores,
   type KnowledgeDocumentFormat,
   type KnowledgeSyncJobPayload
 } from "@work-shape/catalyst-core";
@@ -18,6 +19,7 @@ export interface KnowledgeSourceJobsInput {
   files: KnowledgeFiles;
   documentFormats: readonly KnowledgeDocumentFormat[];
   maxDocuments: number;
+  withdrawShareConfirm?: number;
   openSource(
     connection: string,
     signal: AbortSignal
@@ -28,22 +30,28 @@ export interface SourceJobRuntime {
   input: KnowledgeSourceJobsInput;
   authority?: SourceAuthority;
 }
-export async function sourceTarget(runtime: SourceJobRuntime, payload: KnowledgeSyncJobPayload) {
-  const record = await runtime.data.stores.dataStores.getDataStore({
+export async function sourceTarget(
+  runtime: Pick<SourceJobRuntime, "data">,
+  payload: KnowledgeSyncJobPayload,
+  stores: PlatformStores = runtime.data.stores,
+  lock?: "share"
+) {
+  const record = await stores.dataStores.getDataStore({
     clientInstanceId: runtime.data.clientInstanceId,
     id: payload.knowledgeBaseId
   });
   if (!record || record.status !== "ready" || !record.ownerKnowledgeBaseId) return undefined;
-  const asset = await runtime.data.stores.configAssets.getConfigAsset({
+  const asset = await stores.configAssets.getConfigAsset({
     clientInstanceId: runtime.data.clientInstanceId,
     kind: KNOWLEDGE_BASE_ASSET_KIND,
-    name: record.ownerKnowledgeBaseId
+    name: record.ownerKnowledgeBaseId,
+    ...(lock ? { lock } : {})
   });
   if (!asset || asset.id !== payload.knowledgeBaseId || asset.status !== "active") return undefined;
   const definition = knowledgeBaseDefinitionSchema.safeParse(asset.publishedConfig);
   if (!definition.success || "backend" in definition.data) return undefined;
   const source = definition.data.sources?.find((source) => source.id === payload.sourceId);
-  return source && { source, name: asset.name };
+  return source && { source, name: asset.name, scope: asset.scope };
 }
 export async function sourceCall<T>(
   runtime: SourceJobRuntime,
@@ -74,6 +82,14 @@ export async function sourceCall<T>(
         );
       signal.throwIfAborted();
       const result = await call(opened);
+      if (runtime.authority) await runtime.authority.require();
+      else
+        await requireSourceUse(
+          runtime.data.stores,
+          runtime.data.clientInstanceId,
+          knowledgeBaseId,
+          connection
+        );
       signal.throwIfAborted();
       return result;
     })();

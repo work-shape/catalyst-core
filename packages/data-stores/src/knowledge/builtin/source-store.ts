@@ -1,3 +1,6 @@
+import { sourceTarget } from "./source-runtime";
+import { sourceBoundaryKey } from "../source-boundary";
+import { withdrawSourceItems, refreshSourceFreshness } from "./source-withdrawal";
 import type { KnowledgeListingMode } from "../source-port";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -27,13 +30,17 @@ const SOURCE_STORE_TIMEOUT_MS = 30_000; // Bounds a page transaction; the job ca
 const progressSchema = z.object({
   pageToken: z.string().optional(),
   complete: z.boolean(),
-  feedCursor: z.string().optional()
+  feedCursor: z.string().optional(),
+  reconciled: z.boolean().optional(),
+  listing: z.boolean().optional()
 });
 export type SourceProgress = z.infer<typeof progressSchema>;
 const runSchema = z.object({
   mode: knowledgeSyncResultSchema.shape.mode,
   state: z.string(),
-  cursor_after: z.string().nullable()
+  cursor_after: z.string().nullable(),
+  approval_request_id: z.string().nullable(),
+  definition_key: z.string().nullable()
 });
 const itemSchema = z.object({
   id: z.string(),
@@ -47,7 +54,8 @@ const itemSchema = z.object({
   attempts: z.number().int(),
   document_id: z.string().nullable(),
   origin_link: z.string().nullable(),
-  enqueued_run_id: z.string().nullable()
+  enqueued_run_id: z.string().nullable(),
+  fetch_job_id: z.string().nullable()
 });
 export type SourceItem = z.infer<typeof itemSchema>;
 const idSchema = z.object({ id: z.string() });
@@ -91,7 +99,13 @@ export function createSourceStore(
   }
   return {
     change,
+    withdraw(payload: KnowledgeSyncJobPayload, ids: readonly string[]) {
+      return change((sql) => withdrawSourceItems(sql, stores, runtime, payload, ids));
+    },
     async start(payload: KnowledgeSyncJobPayload, mode: KnowledgeListingMode) {
+      const target = await sourceTarget({ data: runtime }, payload, stores);
+      if (!target) throw new AppError("CONFLICT", "The published source is unavailable");
+      const definitionKey = sourceBoundaryKey(target.source);
       return change(async (sql) => {
         // Return and lock the winner in the same statement. A finishing run cannot leave
         // a gap between a uniqueness refusal and a separate lookup of the running row.
@@ -99,8 +113,8 @@ export function createSourceStore(
           .array(z.object({ id: z.string(), operation_run_id: z.string(), created: z.boolean() }))
           .parse(
             await sql.run(
-              "insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id) values ($1::text,$2::text,$3::text,$4::text) on conflict (source_id) where state='running' do update set source_id=sync_runs.source_id returning id,operation_run_id,(xmax=0) as created",
-              [payload.syncRunId, payload.sourceId, mode, payload.operationRunId]
+              "insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,cursor_before,definition_key) values ($1::text,$2::text,$3::text,$4::text,(select cursor from catalyst_kb.source_cursors where source_id=$2::text and definition_key=$5::text),$5::text) on conflict (source_id) where state='running' do update set source_id=sync_runs.source_id returning id,operation_run_id,(xmax=0) as created",
+              [payload.syncRunId, payload.sourceId, mode, payload.operationRunId, definitionKey]
             )
           );
         if (!row) throw new AppError("INTERNAL", "The source sync could not be started");
@@ -117,7 +131,7 @@ export function createSourceStore(
           .array(runSchema)
           .parse(
             await sql.run(
-              "select mode, state, cursor_after from catalyst_kb.sync_runs where id = $1::text",
+              "select mode, state, cursor_after, approval_request_id, definition_key from catalyst_kb.sync_runs where id = $1::text",
               [id]
             )
           );
@@ -125,6 +139,8 @@ export function createSourceStore(
           row && {
             mode: row.mode,
             state: row.state,
+            approvalRequestId: row.approval_request_id,
+            definitionKey: row.definition_key,
             progress:
               row.cursor_after === null
                 ? undefined
@@ -141,6 +157,11 @@ export function createSourceStore(
       maxDocuments: number
     ) {
       return change(async (sql) => {
+        const active = await sql.run(
+          "select id from catalyst_kb.sync_runs where id=$1::text and state='running'",
+          [payload.syncRunId]
+        );
+        if (!active.length) return { queued: [], limited: false };
         // Admission shares add_files' writer lock: concurrent sources cannot exceed the cap.
         await sql.run("lock table catalyst_kb.documents in share row exclusive mode");
         await sql.run("lock table catalyst_kb.source_items in share row exclusive mode");
@@ -148,7 +169,7 @@ export function createSourceStore(
           .array(z.object({ n: z.number().int() }))
           .parse(
             await sql.run(
-              `select ((select count(*) from catalyst_kb.source_items where state <> 'withdrawn') + (select count(*) from catalyst_kb.documents where source_item_id is null and withdrawn_at is null))::int as n`
+              `select ((select coalesce(sum(items),0) from catalyst_kb.source_counts where state <> 'withdrawn') + (select count(*) from catalyst_kb.documents where source_item_id is null and withdrawn_at is null))::int as n`
             )
           );
         // Take content locks before any count delta in this page. An index completion takes
@@ -160,6 +181,7 @@ export function createSourceStore(
         let held = count?.n ?? 0;
         const queued: string[] = [];
         let limited = false;
+        let changed = false;
         for (const raw of items) {
           const item = documentSourceItemSchema.parse(raw);
           const id = sourceItemId(payload.sourceId, item.id);
@@ -167,7 +189,7 @@ export function createSourceStore(
             .array(itemSchema)
             .parse(
               await sql.run(
-                "select id, item_id, version, name, path, mime, size, state, attempts, document_id, origin_link, enqueued_run_id from catalyst_kb.source_items where id = $1::text",
+                "select id, item_id, version, name, path, mime, size, state, attempts, document_id, origin_link, enqueued_run_id, fetch_job_id from catalyst_kb.source_items where id = $1::text",
                 [id]
               )
             );
@@ -186,16 +208,17 @@ export function createSourceStore(
                   ? "knowledge_file_format_unavailable"
                   : null;
           const same = old?.version === item.version && old.state !== "withdrawn";
+          changed ||= !same || old?.name !== item.name || old.path !== item.path;
           await sql.run(
             `insert into catalyst_kb.source_items
-            (id, source_id, item_id, version, path, name, mime, size, modified_at, origin_link, state, failure_code)
-            values ($1::text,$2::text,$3::text,$4::text,$5::text,$6::text,$7::text,$8::bigint,$9::timestamptz,$10::text,$11::text,$12::text)
-            on conflict (source_id,item_id) do update set version=excluded.version, path=excluded.path, name=excluded.name, mime=excluded.mime, size=excluded.size, modified_at=excluded.modified_at, origin_link=excluded.origin_link,
+            (id, source_id, item_id, version, path, name, mime, size, modified_at, origin_link, state, failure_code, parents, seen_run_id)
+            values ($1::text,$2::text,$3::text,$4::text,$5::text,$6::text,$7::text,$8::bigint,$9::timestamptz,$10::text,$11::text,$12::text,$14::jsonb,$15::text)
+            on conflict (source_id,item_id) do update set parents=excluded.parents, seen_run_id=excluded.seen_run_id,withdrawn_at=null,purged_at=null,version=excluded.version, path=excluded.path, name=excluded.name, mime=excluded.mime, size=excluded.size, modified_at=excluded.modified_at, origin_link=excluded.origin_link,
             state=case when $13::boolean then source_items.state else excluded.state end,
             failure_code=case when $13::boolean then source_items.failure_code else excluded.failure_code end,
             attempts=case when $13::boolean then source_items.attempts else 0 end,
             enqueued_run_id=case when $13::boolean then source_items.enqueued_run_id else null end,
-            fetch_job_id=case when $13::boolean then source_items.fetch_job_id else null end,
+            fetch_job_id=case when $13::boolean and source_items.enqueued_run_id=$15::text then source_items.fetch_job_id else null end,
             changed_at=case when source_items.version <> excluded.version or source_items.path <> excluded.path or source_items.name <> excluded.name then now() else source_items.changed_at end`,
             [
               id,
@@ -210,7 +233,9 @@ export function createSourceStore(
               item.originLink ?? null,
               failure ? "failed" : "discovered",
               failure,
-              same
+              same,
+              JSON.stringify(item.parents),
+              payload.syncRunId
             ]
           );
           if (old?.document_id && same)
@@ -242,11 +267,16 @@ export function createSourceStore(
         ]);
         // The feed position and the listed page commit together. Listing progress belongs to
         // the run, so a full pass never mistakes its page token for a change-feed cursor.
-        if (progress.feedCursor !== undefined)
+        if (
+          progress.feedCursor !== undefined &&
+          (progress.listing !== true || progress.complete) &&
+          !limited
+        )
           await sql.run(
-            `insert into catalyst_kb.source_cursors (source_id,cursor) values ($1::text,$2::text) on conflict(source_id) do update set cursor=excluded.cursor,updated_at=now()`,
-            [payload.sourceId, progress.feedCursor]
+            `insert into catalyst_kb.source_cursors (source_id,cursor,definition_key) values ($1::text,$2::text,(select definition_key from catalyst_kb.sync_runs where id=$3::text)) on conflict(source_id) do update set cursor=excluded.cursor,definition_key=excluded.definition_key,updated_at=now()`,
+            [payload.sourceId, progress.feedCursor, payload.syncRunId]
           );
+        await refreshSourceFreshness(sql, payload.sourceId, changed);
         return { queued, limited };
       });
     },
@@ -266,7 +296,7 @@ export function createSourceStore(
     async queued(payload: KnowledgeSyncJobPayload, ids: string[]) {
       return change(async (sql) => {
         await sql.run(
-          "update catalyst_kb.source_items set enqueued_run_id=$2::text where id=any($1::text[]) and source_id=$3::text",
+          "update catalyst_kb.source_items set enqueued_run_id=$2::text where id=any($1::text[]) and source_id=$3::text and exists(select 1 from catalyst_kb.sync_runs where id=$2::text and state='running')",
           [ids, payload.syncRunId, payload.sourceId]
         );
       });
@@ -279,7 +309,7 @@ export function createSourceStore(
               `update catalyst_kb.source_items set fetch_job_id=$3::text
          where id=$1::text and source_id=$2::text and state='discovered'
            and (fetch_job_id is null or fetch_job_id=$3::text)
-         returning id,item_id,version,name,path,mime,size,state,attempts,document_id,origin_link,enqueued_run_id`,
+         returning id,item_id,version,name,path,mime,size,state,attempts,document_id,origin_link,enqueued_run_id,fetch_job_id`,
               [id, sourceId, jobId]
             )
           )[0]
@@ -322,7 +352,7 @@ export function createSourceStore(
             .array(itemSchema)
             .parse(
               await sql.run(
-                "select id,item_id,version,name,path,mime,size,state,attempts,document_id,origin_link,enqueued_run_id from catalyst_kb.source_items where id=$1::text and source_id=$2::text",
+                "select id,item_id,version,name,path,mime,size,state,attempts,document_id,origin_link,enqueued_run_id,fetch_job_id from catalyst_kb.source_items where id=$1::text and source_id=$2::text",
                 [id, sourceId]
               )
             )[0]
@@ -345,19 +375,37 @@ export function createSourceStore(
       payload: KnowledgeSyncJobPayload,
       item: SourceItem,
       document: KnowledgeFetchedDocument,
-      byteSize: number
+      byteSize: number,
+      jobId: string
     ) {
       return change(async (sql) => {
         await sql.run("lock table catalyst_kb.documents in share row exclusive mode");
+        // Content completion updates open-change projections on its items. Lock both
+        // hashes before the item, matching the indexer's content -> item order.
+        await sql.run(
+          "select sha256 from catalyst_kb.contents where sha256=any(array[$1::text,(select d.content_sha256 from catalyst_kb.documents d where d.source_item_id=$2::text)]) order by sha256 for share",
+          [document.contentSha256, item.id]
+        );
         const [held] = z
           .array(itemSchema)
           .parse(
             await sql.run(
-              "select id,item_id,version,name,path,mime,size,state,attempts,document_id,origin_link,enqueued_run_id from catalyst_kb.source_items where id=$1::text for update",
+              "select id,item_id,version,name,path,mime,size,state,attempts,document_id,origin_link,enqueued_run_id,fetch_job_id from catalyst_kb.source_items where id=$1::text for update",
               [item.id]
             )
           );
-        if (!held || held.version !== item.version || held.state !== "discovered") return false;
+        if (
+          !held ||
+          held.version !== item.version ||
+          held.state !== "discovered" ||
+          held.fetch_job_id !== jobId
+        )
+          return false;
+        const active = await sql.run(
+          "select id from catalyst_kb.sync_runs where id=$1::text and state='running'",
+          [payload.syncRunId]
+        );
+        if (!active.length) return false;
         // A cleanup that won before this transaction must never be given a new document.
         const copy = await stores.files.getManagedFile({
           clientInstanceId: runtime.clientInstanceId,
@@ -387,7 +435,7 @@ export function createSourceStore(
           ]
         );
         await sql.run(
-          "update catalyst_kb.source_items set state='fetched',fetch_job_id=null,attempts=attempts+1,failure_code=null,document_id=$2::text,fetched_at=now(),changed_at=now() where id=$1::text",
+          "update catalyst_kb.source_items set state='fetched',fetch_job_id=null,attempts=attempts+1,failure_code=null,document_id=$2::text,fetched_at=now(),changed_at=now(),withdrawn_at=null,purged_at=null where id=$1::text",
           [item.id, document.id]
         );
         await sql.run(
@@ -424,8 +472,9 @@ export function createSourceStore(
     },
     async finish(payload: KnowledgeSyncJobPayload, failureCode?: string) {
       return change(async (sql) => {
+        await refreshSourceFreshness(sql, payload.sourceId, false);
         const finished = await sql.run(
-          `update catalyst_kb.sync_runs set state=$2::text,failure_code=$3::text,ended_at=now() where id=$1::text and state='running' and ($3::text is not null or (cursor_after::jsonb->>'complete'='true' and not exists (select 1 from catalyst_kb.source_items where source_id=$4::text and state='discovered'))) returning id`,
+          `update catalyst_kb.sync_runs set state=$2::text,failure_code=$3::text,ended_at=now() where id=$1::text and state='running' and ($3::text is not null or (cursor_after::jsonb->>'complete'='true' and (cursor_after::jsonb->>'listing' is distinct from 'true' or cursor_after::jsonb->>'reconciled'='true') and not exists (select 1 from catalyst_kb.source_items where source_id=$4::text and state='discovered'))) returning id`,
           [
             payload.syncRunId,
             failureCode ? "failed" : "done",
@@ -451,12 +500,12 @@ export function sourceTransaction<T>(
   runtime: DataStoreRuntime,
   payload: KnowledgeSyncJobPayload,
   control: JobControl,
-  work: (store: KnowledgeSourceStore) => Promise<T>
+  work: (store: KnowledgeSourceStore, stores: PlatformStores) => Promise<T>
 ): Promise<T> {
   return createSourceStore(runtime, payload.knowledgeBaseId, control.signal).change(async (sql) => {
     await sql.run("lock table catalyst_kb.documents in share row exclusive mode");
     return control.transaction((stores) =>
-      work(createSourceStore(runtime, payload.knowledgeBaseId, control.signal, stores, sql))
+      work(createSourceStore(runtime, payload.knowledgeBaseId, control.signal, stores, sql), stores)
     );
   });
 }
@@ -498,6 +547,7 @@ export function syncResult(raw: unknown): KnowledgeSyncResult {
     bytesFetched: row.bytes_fetched,
     startedAt: row.started_at.toISOString(),
     ...(row.ended_at ? { endedAt: row.ended_at.toISOString() } : {}),
+    ...(row.reason === "cursor_expired" ? { reason: row.reason } : {}),
     ...(row.failure_code ? { failureCode: row.failure_code } : {})
   });
 }

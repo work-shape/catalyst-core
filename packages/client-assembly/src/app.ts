@@ -403,6 +403,14 @@ export async function createClientInstanceExecutionAssembly(
     platformInstructions: PLATFORM_INSTRUCTIONS
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
+  for (const handler of moduleAssembly.approvalRequestHandlers) {
+    if (approvalRequestHandlers.has(handler.kind))
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `The ${handler.kind} approval kind is platform-owned`
+      );
+    approvalRequestHandlers.set(handler.kind, handler);
+  }
   const reconnectNotice = connections?.reconnectNotice;
   if (reconnectNotice) {
     if (approvalRequestHandlers.has(reconnectNotice.kind)) {

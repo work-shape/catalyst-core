@@ -17,6 +17,7 @@ import {
 } from "@work-shape/catalyst-config-schema";
 import {
   createKnowledgeBases,
+  createSourceWithdrawalApproval,
   knowledgeModule,
   knowledgeOperationName,
   type KnowledgeBases,
@@ -211,6 +212,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
   });
   return {
     assetKinds: [workflowAssetKind(knowledgeBases)],
+    approvalRequestHandlers: [createSourceWithdrawalApproval(parts.stores, parts.clientInstanceId)],
     operationSources: (runtime) => [
       knowledgeBases.operationSource(
         runtime.files,
@@ -233,6 +235,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
                   ? KNOWLEDGE_DOCUMENT_FORMATS
                   : KNOWLEDGE_TEXT_FORMATS,
                 maxDocuments: parts.config.knowledge.maxDocuments,
+                withdrawShareConfirm: parts.config.knowledge.withdrawShareConfirm,
                 async openSource(name, signal) {
                   const connections = parts.connections;
                   if (!connections)

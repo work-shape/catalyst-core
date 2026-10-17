@@ -160,15 +160,14 @@ describe("source sync operations (KB 74, 75)", () => {
     expect(required(running).id).not.toBe(required(before).id);
   });
 
-  it("refuses omitted and changes modes with not_supported_yet, and malformed modes as invalid", async () => {
+  it("accepts omitted and changes modes, and refuses malformed modes", async () => {
     const world = await setup();
     for (const payload of [{ source: SOURCE }, { source: SOURCE, mode: "changes" }]) {
       const response = await world.instance.api.call("knowledge_bases.sync", {
         params: { knowledgeBase: KB },
         payload
       });
-      expect(response.statusCode, response.body).toBe(422);
-      expect(response.body).toContain("not_supported_yet");
+      expect(response.statusCode, response.body).toBe(202);
     }
     for (const mode of ["initial", "garbage", 1, null]) {
       const response = await world.instance.api.call("knowledge_bases.sync", {
@@ -177,7 +176,7 @@ describe("source sync operations (KB 74, 75)", () => {
       });
       expect(response.statusCode, response.body).toBe(422);
     }
-    expect(await world.sql`select id from catalyst_kb.sync_runs`).toEqual([]);
+    expect(await world.sql`select mode from catalyst_kb.sync_runs`).toEqual([{ mode: "changes" }]);
   });
 
   it("hides owned principals from all administration paths and never authorizes an absent principal", async () => {
@@ -537,7 +536,7 @@ describe("source sync operations (KB 74, 75)", () => {
     const [run] = await world.sql`select id from catalyst_kb.sync_runs where state='running'`;
     await world.drain(String(required(run).id));
   });
-  it("creates the principal and grant in the publish transaction; a failed publish leaves neither, and removal stays refused", async () => {
+  it("creates the principal and grant in the publish transaction; a failed publish leaves neither, and removal revokes its source grants", async () => {
     const world = await setup();
     const definition = {
       name: "publish-source",
@@ -621,7 +620,15 @@ describe("source sync operations (KB 74, 75)", () => {
           replaced: definition
         })
       )
-    ).rejects.toMatchObject({ details: { reason: "not_supported_yet" } });
+    ).resolves.toBeUndefined();
+    expect(
+      await world.instance.stores.access.listGrants({
+        clientInstanceId,
+        holderKind: "service_principal",
+        holderId: principal.id,
+        action: "connection.use"
+      })
+    ).toEqual([]);
     const denied = createActorAccess(
       { clientInstanceId, kind: "user", id: "publisher", roles: [], permissionRefs: [] },
       { holderActive: true, grants: [] }

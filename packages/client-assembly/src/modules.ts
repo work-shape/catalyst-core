@@ -175,6 +175,9 @@ export async function assembleModules(parts: ModuleAssemblyParts): Promise<Assem
     assemblies.push((await seam(parts, [...assemblies])) ?? {});
   }
   return {
+    approvalRequestHandlers: assemblies.flatMap(
+      (assembly) => assembly.approvalRequestHandlers ?? []
+    ),
     assetKinds: assemblies.flatMap((assembly) => assembly.assetKinds ?? []),
     tools: assemblies.flatMap((assembly) => assembly.tools ?? []),
     async start(runtime): Promise<StartedModules> {

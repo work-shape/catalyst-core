@@ -8,7 +8,7 @@ import type {
   KnowledgeLocateOutput,
   KnowledgeRetryInput
 } from "@work-shape/catalyst-core";
-export type KnowledgeListingMode = Exclude<KnowledgeSyncResult["mode"], "changes">;
+export type KnowledgeListingMode = KnowledgeSyncResult["mode"];
 
 /** The source engine port used by operations, on the owned database's pools. */
 export interface KnowledgeSources {

@@ -56,7 +56,7 @@ const removalJob = defineJobKind({
 /** An omitted document list means retirement; queued in the asset deletion transaction. */
 export async function enqueueKnowledgeRemoval(
   stores: Pick<PlatformStores, "jobs">,
-  runtime: KnowledgeRuntime,
+  runtime: Pick<KnowledgeRuntime, "clientInstanceId">,
   target: BuiltinKnowledgeTarget,
   documentIds?: readonly string[]
 ): Promise<void> {

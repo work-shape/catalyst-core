@@ -1,3 +1,4 @@
+import { createSourcePolicyHandler } from "./source-policy-job";
 import type { RegisteredJobHandler } from "@work-shape/catalyst-core";
 import type { DataStoreRuntime } from "../../runtime";
 import { createKnowledgeSyncHandler } from "./sync-job";
@@ -9,5 +10,9 @@ export function createKnowledgeSourceJobs(
   input: KnowledgeSourceJobsInput
 ): RegisteredJobHandler[] {
   const runtime = { data, input };
-  return [createKnowledgeSyncHandler(runtime), createKnowledgeFetchHandler(runtime)];
+  return [
+    createKnowledgeSyncHandler(runtime),
+    createKnowledgeFetchHandler(runtime),
+    createSourcePolicyHandler(runtime)
+  ];
 }

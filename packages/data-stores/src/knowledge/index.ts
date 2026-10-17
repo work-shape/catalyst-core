@@ -1,3 +1,5 @@
+import { sourceBoundaryKey } from "./source-boundary";
+import { sourcePolicyJob } from "./builtin/source-policy-job";
 import { knowledgePublishQuestion } from "./publish-question";
 import type { KnowledgeSources } from "./source-port";
 import { publishSourcePrincipal } from "./source-principal";
@@ -186,6 +188,33 @@ export function createKnowledgeBases(input: {
       });
       const result = await runtime.backend.publish(stores, { target, replaced: previous, access });
       await keepKnowledgeCheck(runtime, stores, { assetId, revision }, result);
+      const changedSources = (before.success ? (before.data.sources ?? []) : []).filter((old) => {
+        const next = definition.sources?.find((source) => source.id === old.id);
+        return !next || sourceBoundaryKey(next) !== sourceBoundaryKey(old);
+      });
+      if (changedSources.length) {
+        await stores.jobs.enqueue(
+          sourcePolicyJob,
+          {
+            knowledgeBaseId: assetId,
+            knowledgeBase: definition.name,
+            revision,
+            sourceIds: changedSources.map((source) => source.id)
+          },
+          { clientInstanceId: input.clientInstanceId, subject: assetId, concurrencyKey: assetId }
+        );
+        for (const old of changedSources)
+          await stores.audit.appendAuditEvent({
+            clientInstanceId: input.clientInstanceId,
+            type: definition.sources?.some((source) => source.id === old.id)
+              ? "knowledge_base.source_narrowed"
+              : "knowledge_base.source_removed",
+            status: "success",
+            subject: assetId,
+            correlationId: `${assetId}:${revision}`,
+            metadata: { source: old.id }
+          });
+      }
       if (principal)
         for (const source of definition.sources ?? []) {
           if (before.success && before.data.sources?.some((old) => old.id === source.id)) continue;

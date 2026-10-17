@@ -11,7 +11,7 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 import { getTestJobs } from "./support/test-instance";
 
 // The synced source migrations (SRC-0 and SRC-1a) bring a store made
-// at level 1 to level 4 at the next start, without a publish, and leaves its rows as they
+// at level 1 to level 5 at the next start, without a publish, and leaves its rows as they
 // were, and the `sources` entry of a Knowledge Base is saved with a draft but not published
 // until SRC-1a syncs it. `schedule` is withdrawn. Spec: data-stores-and-knowledge-bases.md, Synced sources, check 71.
 
@@ -70,10 +70,10 @@ describe("catalyst_kb source migrations", () => {
     expect(published.statusCode, published.body).toBe(200);
   };
 
-  it("brings a store at level 1 to level 4 with its documents, contents and chunks unchanged", async () => {
+  it("brings a store at level 1 to level 5 with its documents, contents and chunks unchanged", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
     await writeAndPublish(instance, 1);
-    const made = await settle(instance, 4);
+    const made = await settle(instance, 5);
     const url = new URL(await fileTestDatabaseUrl());
     url.pathname = `/${made.location.database}`;
     const store = postgres(url.toString(), { max: 1, onnotice: () => undefined });
@@ -84,8 +84,13 @@ describe("catalyst_kb source migrations", () => {
         drop function catalyst_kb.source_content_count_changed();
         drop table catalyst_kb.source_counts;
         drop function catalyst_kb.source_item_count_changed() cascade;
+        drop function catalyst_kb.source_open_change() cascade;
         drop function catalyst_kb.source_projection(text,text);
         drop function catalyst_kb.move_source_count(text,text,text,text,text,bigint);
+        drop trigger source_document_purged on catalyst_kb.documents;
+        drop function catalyst_kb.source_document_purged();
+        drop trigger source_freshness_changed on catalyst_kb.contents;
+        drop function catalyst_kb.source_freshness_changed();
         alter table catalyst_kb.documents drop column source_item_id;
         drop table catalyst_kb.source_cursors, catalyst_kb.sync_runs, catalyst_kb.source_items;
         delete from catalyst_kb.migrations where number >= 2;`);
@@ -120,19 +125,20 @@ describe("catalyst_kb source migrations", () => {
       } finally {
         await platform.end();
       }
-      const migrated = await settle(instance, 4);
+      const migrated = await settle(instance, 5);
 
       expect(migrated.migrations.map(({ number, name }) => ({ number, name }))).toEqual([
         { number: 1, name: "documents" },
         { number: 2, name: "sources" },
         { number: 3, name: "source_fetch_claims" },
-        { number: 4, name: "source_counts" }
+        { number: 4, name: "source_counts" },
+        { number: 5, name: "source_withdrawal" }
       ]);
       expect(
         (await store`select number from catalyst_kb.migrations order by number`).map(
           (row) => row.number
         )
-      ).toEqual([1, 2, 3, 4]);
+      ).toEqual([1, 2, 3, 4, 5]);
       expect(await rowsOf()).toEqual(before);
       // A document added by hand names no item.
       expect(await store`select source_item_id from catalyst_kb.documents`).toEqual([
@@ -159,7 +165,7 @@ describe("catalyst_kb source migrations", () => {
       ).toContainEqual(
         expect.objectContaining({
           subject: made.id,
-          metadata: expect.objectContaining({ level: 4, appliedCount: 3 })
+          metadata: expect.objectContaining({ level: 5, appliedCount: 4 })
         })
       );
 
@@ -228,7 +234,7 @@ describe("the sources entry of a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 4 });
+      expect(record).toMatchObject({ status: "ready", level: 5 });
     });
   });
 

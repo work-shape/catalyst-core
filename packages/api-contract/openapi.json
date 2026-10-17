@@ -17266,7 +17266,10 @@
                   },
                   "mode": {
                     "type": "string",
-                    "const": "full"
+                    "enum": [
+                      "changes",
+                      "full"
+                    ]
                   }
                 },
                 "required": [

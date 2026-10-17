@@ -75,6 +75,7 @@ export const modelBindingConfigSchema = z
 export const knowledgeConfigSchema = z
   .object({
     defaultEmbeddingBinding: z.string().min(1).optional(),
+    withdrawShareConfirm: z.number().min(0).max(1).default(0.2),
     maxDocuments: z.number().int().positive().max(1_000_000).default(10_000),
     maxPagesPerDocument: z
       .number()

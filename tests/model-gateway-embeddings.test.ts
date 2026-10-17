@@ -78,7 +78,8 @@ describe("embedding bindings in release config", () => {
     expect(config.knowledge).toEqual({
       defaultEmbeddingBinding: "embedding",
       maxDocuments: 10_000,
-      maxPagesPerDocument: 500
+      maxPagesPerDocument: 500,
+      withdrawShareConfirm: 0.2
     });
   });
 
@@ -87,7 +88,11 @@ describe("embedding bindings in release config", () => {
       releaseConfig({ modelBindings: [{ id: "chat", providerId: "azure" }], knowledge: undefined })
     );
 
-    expect(config.knowledge).toEqual({ maxDocuments: 10_000, maxPagesPerDocument: 500 });
+    expect(config.knowledge).toEqual({
+      maxDocuments: 10_000,
+      maxPagesPerDocument: 500,
+      withdrawShareConfirm: 0.2
+    });
   });
 
   it("reads 500 pages per document by default, takes a raised limit and refuses one above 5,000", () => {

@@ -1,3 +1,4 @@
+import { SOURCE_WITHDRAWAL_SCHEMA } from "./source-withdrawal-schema";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { DataStoreAppliedMigration, DataStoreRecord } from "@work-shape/catalyst-core";
@@ -250,7 +251,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
       add column enqueued_run_id text,
       add column fetch_job_id text;`
   },
-  { number: 4, name: "source_counts", sql: SOURCE_COUNTS }
+  { number: 4, name: "source_counts", sql: SOURCE_COUNTS },
+  { number: 5, name: "source_withdrawal", sql: SOURCE_WITHDRAWAL_SCHEMA }
 ];
 
 /** The level the store of a built-in Knowledge Base is at when its tables are this release's. */

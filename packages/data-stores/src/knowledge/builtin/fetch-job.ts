@@ -1,3 +1,4 @@
+import { sourceBoundaryKey } from "../source-boundary";
 import { sourceAuthority, type SourceAuthority } from "../source-principal";
 import { enqueueOriginalRelease, hasStoredKnowledgeExtraction } from "../original-release";
 import { removeAbandonedSourceSpools, sourceSpool } from "./source-spool";
@@ -235,7 +236,13 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
         payload.knowledgeBaseId,
         control.signal
       ).run(payload.syncRunId);
-      if (active?.state === "failed") return;
+      if (!active || active.state === "failed") return;
+      if (active.definitionKey !== sourceBoundaryKey(found.source)) {
+        await sourceTransaction(runtime.data, payload, control, (store) =>
+          store.finish(payload, "knowledge_source_refused")
+        );
+        return;
+      }
       const signal = AbortSignal.any([control.signal, AbortSignal.timeout(FETCH_BATCH_TIMEOUT_MS)]);
       const store = createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal);
       let authority: SourceAuthority;
@@ -349,6 +356,12 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
               await queueAgain(runtime, control, payload, payload.sourceItemIds.slice(index), wait);
               return;
             }
+            if (code === "forbidden" || code === "not_found") {
+              await sourceTransaction(runtime.data, payload, control, (store) =>
+                store.withdraw(payload, [item.id])
+              );
+              continue;
+            }
             if (code === "unauthorized") {
               await store.release([id], job.id);
               await sourceTransaction(runtime.data, payload, control, (store) =>
@@ -377,9 +390,9 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
           let adopted = false;
           try {
             const current = await sourceTarget(runtime, payload);
-            if (current && JSON.stringify(current.source) === JSON.stringify(found.source)) {
+            if (current && sourceBoundaryKey(current.source) === sourceBoundaryKey(found.source)) {
               adopted = await sourceTransaction(runtime.data, payload, control, (store) =>
-                store.fetched(payload, item, document, document.byteSize)
+                store.fetched(payload, item, document, document.byteSize, job.id)
               );
             }
           } catch (error) {

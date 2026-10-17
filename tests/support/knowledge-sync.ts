@@ -15,8 +15,6 @@ import {
   type KnowledgeExtractor,
   StoreBackedAuditRecorder,
   KNOWLEDGE_BASE_ASSET_KIND,
-  knowledgeSyncJob,
-  knowledgeSourceKey,
   type ConnectorContext,
   type DocumentSourceCapability,
   type KnowledgeFiles,
@@ -63,7 +61,8 @@ export function useKnowledgeSync() {
   async function setup(
     wrap: (source: DocumentSourceCapability) => DocumentSourceCapability = (source) => source,
     extractor?: KnowledgeExtractor,
-    withFileRoute = false
+    withFileRoute = false,
+    developmentAuth?: unknown
   ) {
     const logs: unknown[] = [];
     const logger: Logger = {
@@ -81,7 +80,7 @@ export function useKnowledgeSync() {
       },
       child: () => logger
     };
-    const instance = await start(true, undefined, undefined, undefined, {
+    const instance = await start(true, undefined, developmentAuth, undefined, {
       embedding: true,
       apiAccess: true,
       ...(extractor ? { documents: true as const } : {}),
@@ -119,7 +118,7 @@ export function useKnowledgeSync() {
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(4);
+      expect(row?.level).toBe(5);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());
@@ -197,7 +196,12 @@ export function useKnowledgeSync() {
     const capability = wrap(fixture.capability);
     const objects = createFilesystemObjectStorage(instance.filesRoot);
     const files: KnowledgeFiles = { objects, open: async () => undefined };
+    const embedding = {
+      defaultBinding: "embedding",
+      models: [{ bindingId: "embedding", model: "test", dimensions: 8 }]
+    };
     const dataStores = createDataStores({
+      embedding,
       clientInstanceId,
       stores: instance.stores,
       databaseUrl: await fileTestDatabaseUrl(),
@@ -216,10 +220,8 @@ export function useKnowledgeSync() {
       clientInstanceId,
       stores: instance.stores,
       backend: dataStores.knowledgeBackend,
-      embedding: {
-        defaultBinding: "embedding",
-        models: [{ bindingId: "embedding", model: "test", dimensions: 8 }]
-      },
+      sources: dataStores.knowledgeSources,
+      embedding,
       documentFormats: extractor ? KNOWLEDGE_DOCUMENT_FORMATS : KNOWLEDGE_TEXT_FORMATS,
       maxDocuments: 10000,
       logger
@@ -261,17 +263,12 @@ export function useKnowledgeSync() {
     });
     cleanups.push(() => worker.stop());
     let runNumber = 0;
-    async function sync(mode: "initial" | "full" = "initial") {
+    async function sync(mode: "initial" | "full" | "changes" = "initial") {
       const syncRunId = `sync-${++runNumber}`;
-      await sql`insert into catalyst_kb.sync_runs (id, source_id, mode, operation_run_id) values (${syncRunId}, ${SOURCE}, ${mode}, 'operation')`;
-      await instance.stores.jobs.enqueue(
-        knowledgeSyncJob,
+      await dataStores.knowledgeSources.start(
         { knowledgeBaseId: record.id, sourceId: SOURCE, syncRunId, operationRunId: "operation" },
-        {
-          clientInstanceId,
-          subject: record.id,
-          concurrencyKey: knowledgeSourceKey(record.id, SOURCE)
-        }
+        mode,
+        new AbortController().signal
       );
       return syncRunId;
     }
@@ -297,7 +294,74 @@ export function useKnowledgeSync() {
         { timeout: 180_000 }
       );
     }
+    async function publishSources(
+      sources: {
+        id: string;
+        connection: string;
+        folders: string[];
+        include?: string[];
+        exclude?: string[];
+      }[]
+    ) {
+      const asset = required(
+        await instance.stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: KNOWLEDGE_BASE_ASSET_KIND,
+          name: KB
+        })
+      );
+      const config = { ...definition, sources };
+      const put = await instance.api.call("assets.put", {
+        params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB },
+        payload: { config, expectedRevision: asset.revision }
+      });
+      expect(put.statusCode, put.body).toBe(200);
+      const updated = required(
+        await instance.stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: KNOWLEDGE_BASE_ASSET_KIND,
+          name: KB
+        })
+      );
+      const revision = required(
+        await instance.stores.configAssets.getConfigAssetRevision({
+          clientInstanceId,
+          kind: KNOWLEDGE_BASE_ASSET_KIND,
+          name: KB,
+          revision: updated.revision
+        })
+      );
+      const { createActorAccess } = await import("@work-shape/catalyst-core");
+      const access = createActorAccess(
+        {
+          clientInstanceId,
+          kind: "user",
+          id: "publisher",
+          roles: ["superadmin"],
+          permissionRefs: []
+        },
+        { holderActive: true, grants: [] }
+      );
+      await instance.stores.transaction(async (stores) => {
+        await knowledge.publish(stores, {
+          access,
+          assetId: record.id,
+          revision: updated.revision,
+          config,
+          replaced: asset.publishedConfig
+        });
+        await stores.configAssets.publishConfigAssetRevision({
+          clientInstanceId,
+          kind: KNOWLEDGE_BASE_ASSET_KIND,
+          name: KB,
+          assetId: record.id,
+          revision: updated.revision,
+          revisionId: revision.id
+        });
+      });
+    }
     return {
+      publishSources,
       ...fixture,
       dataStores,
       openSource,

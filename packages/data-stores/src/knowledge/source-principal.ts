@@ -45,18 +45,22 @@ export async function publishSourcePrincipal(
   const { clientInstanceId, assetId, sources, previous, access } = input;
   for (const old of previous) {
     const next = sources.find((source) => source.id === old.id);
-    if (!next || JSON.stringify(next) !== JSON.stringify(old))
+    if (next && next.connection !== old.connection)
       throw new AppError(
         "VALIDATION_FAILED",
-        "Changing a source boundary or removing a source is not supported yet; the published source is kept.",
-        { reason: "not_supported_yet" },
+        "A source keeps its Connection. Remove it and add a source with a new id for another Connection.",
+        { reason: "knowledge_source_connection_changed" },
         { exposeMessage: true }
       );
   }
   const connections = await Promise.all(
     sources.map(async (source) => {
       const asset = await sourceConnection(stores, clientInstanceId, source.connection);
-      if (!previous.some((old) => old.id === source.id))
+      if (
+        !previous.some(
+          (old) => old.id === source.id && JSON.stringify(old) === JSON.stringify(source)
+        )
+      )
         access.require(CONNECTION_ACTIONS.use, {
           kind: CONNECTION_ASSET_KIND,
           assetId: asset.id,
@@ -72,16 +76,29 @@ export async function publishSourcePrincipal(
       return asset;
     })
   );
-  if (!sources.length) return undefined;
   const owner = { kind: "knowledge_base", assetId };
+  const existing = await stores.apiAccess.findServicePrincipalByOwner({ clientInstanceId, owner });
+  if (!sources.length && !existing) return undefined;
   const principal =
-    (await stores.apiAccess.findServicePrincipalByOwner({ clientInstanceId, owner })) ??
+    existing ??
     (await stores.apiAccess.createServicePrincipal({
       clientInstanceId,
       owner,
       displayLabel: `Knowledge Base ${input.name}`,
       name: `kb-${createHash("sha256").update(assetId).digest("hex").slice(0, 48)}`
     }));
+  const grants = await stores.access.listGrants({
+    clientInstanceId,
+    holderKind: "service_principal",
+    holderId: principal.id,
+    action: CONNECTION_ACTIONS.use
+  });
+  for (const grant of grants)
+    if (
+      grant.scopeKind === "asset" &&
+      !connections.some((connection) => connection.id === grant.scopeId)
+    )
+      await stores.access.deleteGrant({ clientInstanceId, grantId: grant.id });
   for (const connection of connections) {
     const held = await stores.access.listGrants({
       clientInstanceId,

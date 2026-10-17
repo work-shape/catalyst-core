@@ -96,7 +96,7 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 4 });
+      expect(record).toMatchObject({ status: "ready", level: 5 });
       return required(record);
     });
   }
@@ -310,9 +310,20 @@ describe("adding files to a Knowledge Base", () => {
     const { instance, record } = await instanceWithFiles();
     await inDatabase(record.location.database, (sql) =>
       sql.unsafe(`
+        drop trigger source_content_count_changed on catalyst_kb.contents;
+        drop function catalyst_kb.source_content_count_changed();
+        drop table catalyst_kb.source_counts;
+        drop function catalyst_kb.source_item_count_changed() cascade;
+        drop function catalyst_kb.source_open_change() cascade;
+        drop function catalyst_kb.source_projection(text,text);
+        drop function catalyst_kb.move_source_count(text,text,text,text,text,bigint);
+        drop trigger source_document_purged on catalyst_kb.documents;
+        drop function catalyst_kb.source_document_purged();
+        drop trigger source_freshness_changed on catalyst_kb.contents;
+        drop function catalyst_kb.source_freshness_changed();
         alter table catalyst_kb.documents drop column source_item_id;
         drop table catalyst_kb.source_cursors, catalyst_kb.sync_runs, catalyst_kb.source_items;
-        delete from catalyst_kb.migrations where number = 2;`)
+        delete from catalyst_kb.migrations where number >= 2;`)
     );
     await instance.stores.dataStores.putDataStore({
       ...record,
@@ -344,10 +355,10 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(current).toMatchObject({ status: "ready", level: 4 });
+      expect(current).toMatchObject({ status: "ready", level: 5 });
       return required(current);
     });
-    expect(upgraded.migrations.map(({ number }) => number)).toEqual([1, 2, 3, 4]);
+    expect(upgraded.migrations.map(({ number }) => number)).toEqual([1, 2, 3, 4, 5]);
 
     const added = await addFiles(instance, [source]);
     expect(added.statusCode, added.body).toBe(200);
