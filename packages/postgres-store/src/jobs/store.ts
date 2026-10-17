@@ -604,8 +604,8 @@ export type JobEnding =
   | { status: "failed" | "dead" | "cancelled"; errorCode: string; errorMessage: string }
   /** Another attempt after the kind's backoff. */
   | { status: "retry"; kind: JobKind; errorCode: string; errorMessage: string }
-  /** Queued again, due at once, with the attempt given back. */
-  | { status: "released" };
+  /** Queued again after an optional source-requested wait, with the attempt given back. */
+  | { status: "released"; delayMs?: number };
 
 /** Ends an attempt on a row the transaction has locked. */
 export async function endJobAttempt(
@@ -658,7 +658,7 @@ export async function endJobAttempt(
         .update(platformJobs)
         .set({
           status: "queued",
-          runAfter: sql`now()`,
+          runAfter: sql`now() + ${delay(ending.delayMs ?? 0)}`,
           attempts: sql`greatest(${platformJobs.attempts} - 1, 0)`,
           ...noLease
         })

@@ -1,3 +1,4 @@
+import { retryAfterSeconds } from "../retry-after";
 import type { IncomingMessage } from "node:http";
 import {
   CONNECTION_CREDENTIAL_WORDS,
@@ -412,7 +413,11 @@ export function createHttpApiConnectorType(): ConnectorTypeDefinition {
         // The body of a refusal is not read: its status is all that is taken from it. A
         // redirect is a refusal too, since nothing follows it.
         response.destroy();
-        throw connectionCallError(reasonOfStatus(status));
+        throw connectionCallError(
+          reasonOfStatus(status),
+          undefined,
+          retryAfterSeconds(response.headers["retry-after"])
+        );
       }
       const result = resultOf(await bodyOf(response, HTTP_API_RESULT_MAX_BYTES, context.signal));
       if (holdsCredential(result, context.credentialFor(context.target))) {

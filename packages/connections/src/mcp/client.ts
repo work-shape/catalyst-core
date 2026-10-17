@@ -1,3 +1,4 @@
+import { retryAfterSeconds } from "../retry-after";
 import { Agent as HttpAgent, type IncomingMessage } from "node:http";
 import { Agent as HttpsAgent } from "node:https";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -189,6 +190,7 @@ const toolResultSchema = z.object({
 /** What a session remembers of its failures. The first reason is the one that is told. */
 interface SessionState {
   reason: ConnectionCallReason | undefined;
+  retryAfterSeconds?: number;
   /** A sentence of this package for the reason, where the default one says too little. */
   message: string | undefined;
   remainingBytes: number;
@@ -204,7 +206,7 @@ function fail(state: SessionState, reason: ConnectionCallReason, message?: strin
     state.reason = reason;
     state.message = message;
   }
-  return connectionCallError(state.reason, state.message);
+  return connectionCallError(state.reason, state.message, state.retryAfterSeconds);
 }
 
 function reasonOfStatus(status: number): ConnectionCallReason {
@@ -454,6 +456,7 @@ function pinnedFetch(
         discard(response);
         // Ending a session is a courtesy. A server that refuses it fails nothing.
         if (method === "DELETE") return new Response(null, { status: 405 });
+        state.retryAfterSeconds = retryAfterSeconds(response.headers["retry-after"]);
         throw fail(state, reasonOfStatus(status));
       }
 
@@ -586,7 +589,11 @@ export async function withMcpSession<Result>(
     if (state.reason === undefined && isAppError(error) && connectionCallReasonOf(error)) {
       throw error;
     }
-    throw connectionCallError(reason, state.reason === reason ? state.message : undefined);
+    throw connectionCallError(
+      reason,
+      state.reason === reason ? state.message : undefined,
+      state.reason === reason ? state.retryAfterSeconds : undefined
+    );
   } finally {
     // A server that keeps sessions is told this one is over, and its answer changes nothing.
     // The end has a short time of its own, inside the session's: a server that never answers

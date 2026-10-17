@@ -4,6 +4,7 @@ import {
   JOB_WITHDRAWN_ERROR_CODE,
   JOB_WORKER_REPORT_INTERVAL_MS,
   JobLeaseLostError,
+  JobDeferredError,
   JobWithdrawnError,
   NonRetryableJobError,
   createPlatformId,
@@ -274,6 +275,8 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         } else if (stopping && !draining) {
           // The worker asked the handler to stop; that is no failure of the job.
           outcome = { type: "ended", ending: { status: "released" } };
+        } else if (error instanceof JobDeferredError) {
+          outcome = { type: "ended", ending: { status: "released", delayMs: error.delayMs } };
         } else {
           if (!(error instanceof JobLeaseLostError)) {
             // The reason says why where the code alone does not: a discovery refused by the

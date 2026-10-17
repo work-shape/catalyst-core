@@ -233,14 +233,26 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
 
 /**
  * The error of a refused or failed Connection call. It carries the reason and nothing else:
- * no upstream body, no address, no header and no setting. `message` is a sentence of the
+ * no upstream body, no address, no raw header and no setting. Numeric retry advice may
+ * travel with it. `message` is a sentence of the
  * platform's own code, never text an outside system sent.
  */
-export function connectionCallError(reason: ConnectionCallReason, message?: string): AppError {
+export function connectionCallError(
+  reason: ConnectionCallReason,
+  message?: string,
+  retryAfterSeconds?: number
+): AppError {
   return new AppError(
     CONNECTION_CALL_REASONS[reason],
     `${reason}: ${message ?? CONNECTION_CALL_MESSAGES[reason]}`,
-    { reason }
+    {
+      reason,
+      ...(retryAfterSeconds !== undefined &&
+      Number.isFinite(retryAfterSeconds) &&
+      retryAfterSeconds >= 0
+        ? { retryAfterSeconds }
+        : {})
+    }
   );
 }
 

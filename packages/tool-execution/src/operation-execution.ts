@@ -708,7 +708,11 @@ export async function failRun(
   });
   await context.emit("operation.failed", "after", { status: "failed", reason: safe.code });
   // The envelope drops the details of a 5xx, a timeout among them. The fixed reason stays.
-  const details = detailsRecord(safe.details) ?? (reason ? { reason } : undefined);
+  const retry = z
+    .object({ retryAfterSeconds: z.number().finite().nonnegative() })
+    .safeParse(isAppError(error) ? error.details : undefined);
+  const original = detailsRecord(safe.details) ?? (reason ? { reason } : undefined);
+  const details = retry.success ? { ...original, ...retry.data } : original;
   return {
     result: {
       status: "failed",

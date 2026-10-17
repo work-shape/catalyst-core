@@ -3,9 +3,14 @@ import { connectionCallError } from "@work-shape/catalyst-core";
 import { WORKFLOW_STEP_JOB_MAX_ATTEMPTS } from "@work-shape/catalyst-workflows";
 import { operationOf } from "./support/connection-operations";
 import { withTestSql } from "./support/test-sql";
-import type { workflowFixture, WorkflowFixture } from "./support/workflow-instance";
+import {
+  publishedDefinitions,
+  type workflowFixture,
+  type WorkflowFixture
+} from "./support/workflow-instance";
 import {
   answer,
+  notifyClients,
   holdingFirst,
   reach,
   readyWorkflows,
@@ -263,4 +268,126 @@ describe("a changing call that carries its key to the outside system", () => {
       error: { reason: "upstream_conflict" }
     });
   }, 90_000);
+});
+
+describe("a reading call's retries", () => {
+  async function finishRead(t: WorkflowFixture, id: string) {
+    for (const until = Date.now() + 30_000; Date.now() < until;) {
+      const run = await t.finish(id, t.worker(), 1).catch(() => undefined);
+      if (run) return run;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error("The reading run did not end");
+  }
+
+  it("queues a 429 until Retry-After, gives back its attempt, then reads successfully", async () => {
+    const t = await ready();
+    let reads = 0;
+    const times: number[] = [];
+    t.setBehaviour(async (operation, input) => {
+      if (operation === "echo") {
+        reads += 1;
+        times.push(Date.now());
+        if (reads === 1) throw connectionCallError("upstream_rate_limited", undefined, 1);
+      }
+      return answer(operation, input);
+    });
+    const run = await finishRead(t, (await start(t)).id);
+    expect(run.status).toBe("done");
+    expect(reads).toBe(2);
+    expect((times[1] ?? 0) - (times[0] ?? 0)).toBeGreaterThanOrEqual(1_000);
+    expect((await stepRunsOf(t, run.id)).find((step) => step.key === "clients")).toMatchObject({
+      attempt: 1,
+      status: "done"
+    });
+  });
+
+  it("continues when a timed out read succeeds on its next attempt", async () => {
+    const t = await ready();
+    let reads = 0;
+    t.setBehaviour(async (operation, input) => {
+      if (operation === "echo" && ++reads === 1) throw connectionCallError("upstream_timeout");
+      return answer(operation, input);
+    });
+    const run = await finishRead(t, (await start(t)).id);
+    expect(run.status).toBe("done");
+    expect(reads).toBe(2);
+    expect((await stepRunsOf(t, run.id)).find((step) => step.key === "clients")).toMatchObject({
+      attempt: 2
+    });
+  });
+
+  it("retries only the failing read item inside a loop", async () => {
+    const definitions = publishedDefinitions();
+    definitions.publish(
+      notifyClients({}, [
+        {
+          id: "lookup",
+          name: "Read client",
+          type: "operation",
+          operation: "connection.crm.echo",
+          input: { text: { ref: { step: "each_client", path: "id" } } }
+        }
+      ])
+    );
+    const t = await ready({ definitions: definitions.source });
+    const reads = new Map<string, number>();
+    t.setBehaviour(async (operation, input) => {
+      const text =
+        typeof input === "object" && input !== null && !Array.isArray(input)
+          ? input.text
+          : undefined;
+      if (operation === "echo" && typeof text === "string" && text.startsWith("client-")) {
+        const count = (reads.get(text) ?? 0) + 1;
+        reads.set(text, count);
+        if (text === "client-anna" && count === 1) throw connectionCallError("upstream_timeout");
+      }
+      return answer(operation, input);
+    });
+    const run = await finishRead(t, (await start(t)).id);
+    expect(run.status).toBe("done");
+    expect([...reads.values()].sort()).toEqual([1, 1, 2]);
+    expect(reads.get("client-anna")).toBe(2);
+    expect(writesOf(t)).toHaveLength(3);
+  });
+
+  it.each(["upstream_timeout", "connection_unavailable", "upstream_error"] as const)(
+    "tries %s three times with backoff, then keeps its error code",
+    async (reason) => {
+      const t = await ready();
+      const times: number[] = [];
+      t.setBehaviour(async (operation, input) => {
+        if (operation === "echo") {
+          times.push(Date.now());
+          throw connectionCallError(reason);
+        }
+        return answer(operation, input);
+      });
+      const run = await finishRead(t, (await start(t)).id);
+      expect(run.status).toBe("failed");
+      expect(run.error?.code).toBe(connectionCallError(reason).code);
+      expect(times).toHaveLength(3);
+      expect((times[1] ?? 0) - (times[0] ?? 0)).toBeGreaterThanOrEqual(2_000);
+      expect((times[2] ?? 0) - (times[1] ?? 0)).toBeGreaterThanOrEqual(4_000);
+    }
+  );
+
+  it.each(["input_invalid", "output_invalid", "upstream_unauthorized"] as const)(
+    "does not retry %s",
+    async (reason) => {
+      const t = await ready();
+      let reads = 0;
+      t.setBehaviour(async (operation, input) => {
+        if (operation === "echo") {
+          reads += 1;
+          throw connectionCallError(reason);
+        }
+        return answer(operation, input);
+      });
+      const run = await finishRead(t, (await start(t)).id);
+      expect(run.status).toBe("failed");
+      expect(run.error?.code).toBe(connectionCallError(reason).code);
+      expect(reads).toBe(1);
+    }
+  );
 });

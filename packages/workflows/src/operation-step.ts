@@ -1,5 +1,7 @@
 import {
   AppError,
+  CONNECTION_TRANSIENT_CALL_REASONS,
+  JobDeferredError,
   isAppError,
   isAuthenticatedServicePrincipal,
   operationDenialError,
@@ -346,6 +348,30 @@ export async function callStepOperation(input: {
       );
     }
     case "failed": {
+      if (!changing) {
+        const reason = failureReasonSchema.safeParse(result.error.details);
+        const transient =
+          result.error.code === "RATE_LIMITED" ||
+          ["TIMEOUT", "INTERNAL"].includes(result.error.code) ||
+          (reason.success &&
+            [...CONNECTION_TRANSIENT_CALL_REASONS].some((value) => value === reason.data.reason));
+        const retry = z
+          .object({ retryAfterSeconds: z.number().finite().nonnegative() })
+          .safeParse(result.error.details);
+        // A source's rate limit spends no attempt. The run deadline still bounds the wait.
+        if (transient && (result.error.code === "RATE_LIMITED" || retry.success)) {
+          const remainingMs = Math.max(0, Date.parse(run.deadlineAt) - input.wait.now().getTime());
+          throw new JobDeferredError(
+            Math.min(
+              retry.success ? retry.data.retryAfterSeconds * 1000 : input.wait.pollMs,
+              remainingMs
+            )
+          );
+        }
+        if (transient && stepRun.attempt < WORKFLOW_STEP_JOB_MAX_ATTEMPTS) {
+          throw new Error(`The reading call of '${operation}' failed for now and is made again`);
+        }
+      }
       // A call that carried its key outside and failed for a reason that passes is made
       // again by the next attempt of the step's job, which counts it. The last attempt fails
       // the step like every other failure.

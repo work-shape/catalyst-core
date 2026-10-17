@@ -1,3 +1,4 @@
+import { retryAfterSecondsOf } from "./retry-after";
 import {
   AppError,
   CONNECTION_CALL_REASONS,
@@ -247,7 +248,7 @@ function safeCallError(
       { exposeMessage: true }
     );
   }
-  return connectionCallError(reason);
+  return connectionCallError(reason, undefined, retryAfterSecondsOf(error));
 }
 
 /** The health a failed call leaves behind, for the reasons that say the Connection is broken. */
@@ -581,6 +582,7 @@ function inSentence(error: unknown, named: Named): unknown {
     details !== null &&
     "cause" in details &&
     details.cause === EGRESS_UNRESOLVED;
+  const retryAfterSeconds = retryAfterSecondsOf(error);
   return connectionCallFailure(
     reason,
     named.displayName,
@@ -588,7 +590,8 @@ function inSentence(error: unknown, named: Named): unknown {
       ...(typeof refused?.host === "string" && typeof refused.port === "number"
         ? { host: refused.host, port: refused.port }
         : {}),
-      ...(unresolved ? { cause: EGRESS_UNRESOLVED } : {})
+      ...(unresolved ? { cause: EGRESS_UNRESOLVED } : {}),
+      ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds })
     },
     named.effect
   );

@@ -314,6 +314,15 @@ export class NonRetryableJobError extends AppError {
   }
 }
 
+/** A source asked the job to wait. Queue it durably without spending a failed attempt. */
+export class JobDeferredError extends Error {
+  constructor(readonly delayMs: number) {
+    super("The source asked the job to wait");
+    this.name = "JobDeferredError";
+    if (!Number.isFinite(delayMs) || delayMs < 0) throw new RangeError("Invalid job delay");
+  }
+}
+
 /**
  * A handler throws this when it finds its subject withdrawn: whoever queued the job cancelled
  * it before this attempt did any of its work. The job becomes `cancelled`, never `succeeded`.

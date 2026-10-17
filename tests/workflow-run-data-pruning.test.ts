@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { WORKFLOW_RUN_JOB_KINDS } from "@work-shape/catalyst-core";
+import { WORKFLOW_RUN_JOB_KINDS, connectionCallError } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestJobs } from "./support/test-instance";
@@ -145,7 +145,9 @@ describe("the values of a Workflow Run", () => {
   it("go for a failed run as for one that is done, and its error stays", async () => {
     const time = clock();
     const t = await ready({ now: time.now });
-    t.setBehaviour(() => Promise.reject(new Error("The outside system is down")));
+    // Retention needs a terminal failure; a transient read now queues another attempt.
+    const failure = connectionCallError("output_invalid");
+    t.setBehaviour(() => Promise.reject(failure));
     const run = await t.finish((await start(t)).id);
     expect(run.status).toBe("failed");
 
@@ -155,7 +157,7 @@ describe("the values of a Workflow Run", () => {
     expect(after).toMatchObject({ status: "failed", error: run.error });
     expect(after.dataPrunedAt).toBeDefined();
     const failed = (await stepRunsOf(t, run.id)).filter((stepRun) => stepRun.status === "failed");
-    expect(failed.map((stepRun) => stepRun.error?.code)).toEqual(["INTERNAL"]);
+    expect(failed.map((stepRun) => stepRun.error?.code)).toEqual([failure.code]);
   });
 });
 
