@@ -228,8 +228,9 @@ function membersView(
     currentUserId?: string;
     members?: WorkspaceMember[] | undefined;
     accessRequests?: WorkspaceAccessRequestItem[] | undefined;
-    membersLoadFailed?: boolean;
-    accessRequestsLoadFailed?: boolean;
+    membersLoadProblem?: { message: string; refused: boolean; retry?: () => void };
+    accessRequestsLoadProblem?: { message: string; refused: boolean; retry?: () => void };
+    actionProblem?: { message: string; refused: boolean; section: "members" | "requests" };
   } = {}
 ): string {
   return render(
@@ -238,15 +239,13 @@ function membersView(
       workspace: collaborationWorkspace,
       currentUserId: input.currentUserId ?? "user_1",
       members: "members" in input ? input.members : members,
-      membersLoadFailed: input.membersLoadFailed ?? false,
-      onRetryMembers: noop,
+      membersLoadProblem: input.membersLoadProblem,
       accessRequests: "accessRequests" in input ? input.accessRequests : [],
-      accessRequestsLoadFailed: input.accessRequestsLoadFailed ?? false,
-      onRetryAccessRequests: noop,
+      accessRequestsLoadProblem: input.accessRequestsLoadProblem,
       memberCandidates: [],
       memberCandidatesLoading: false,
       pending: false,
-      errorMessage: undefined,
+      actionProblem: input.actionProblem,
       onMemberCandidateSearchChange: noop,
       onAddMember: noop,
       onChangeMemberRole: noop,
@@ -353,15 +352,24 @@ describe("Workspace pages of Settings", () => {
     }
   });
 
-  it("shows Requests above Members, each with its count, and no tabs", () => {
+  // UXA-5: Requests stood above Members, also with nobody asking. Round 2: Members stood twice,
+  // as the page's title and as its first section's, with Add member beside the second.
+  it("shows Members first under the page's title, Add member in its head, and Requests below", () => {
     const markup = membersView(sharedCollaborationWorkspace, { accessRequests: [accessRequest] });
-    const headings = [...markup.matchAll(/<h2[^>]*>([^<]*)<\/h2>/gu)].map((match) => match[1]);
+    const headings = [...markup.matchAll(/<h([12])[^>]*>([^<]*)<\/h\1>/gu)].map(
+      (match) => `h${match[1]} ${match[2]}`
+    );
+    const header = markup.slice(0, markup.indexOf("</header>"));
 
-    expect(headings).toEqual(["Anfragen", "Mitglieder"]);
+    expect(headings).toEqual(["h1 Mitglieder", "h2 Anfragen"]);
+    expect(header).toContain("Mitglied hinzufügen");
+    // Who gives Builder and Publisher, in the words a refusal uses for whom to ask.
+    expect(header).toContain("beides vergibt jemand, der die Instanz verwaltet.");
+    expect(markup.indexOf("collaboration-workspace-member-row")).toBeLessThan(
+      markup.indexOf("Anfragen</h2>")
+    );
     expect(markup).not.toContain('role="tab"');
-    expect(markup).toContain("Mitglied hinzufügen");
     expect(markup).toMatch(/Anfragen<\/h2><span[^>]*>1<\/span>/u);
-    expect(markup).toMatch(/Mitglieder<\/h2><span[^>]*>2<\/span>/u);
   });
 
   it("shows member email and role controls for an owner", () => {
@@ -393,21 +401,30 @@ describe("Workspace pages of Settings", () => {
     expect(markup).not.toContain('aria-label="Felix Pahlke entfernen"');
   });
 
-  it("lists access requests with approve and decline actions", () => {
+  // Round 2: the date stood at the row's end and took a phone's room from the name.
+  it("lists access requests with the date after the email, and approve and decline actions", () => {
     const markup = membersView(sharedCollaborationWorkspace, { accessRequests: [accessRequest] });
 
     expect(markup).toContain("Jonas Weber");
-    expect(markup).toContain("jonas@example.com");
-    expect(markup).toContain("Angefragt am");
+    expect(markup).toContain("jonas@example.com · Angefragt am 20.08.2026");
+    // The email breaks inside its column, and its length does not widen the column under
+    // Decline at 390: `wrap-anywhere` lowers the narrowest width, `break-words` does not.
+    expect(markup).toContain('<span class="wrap-anywhere">jonas@example.com · Angefragt');
+    expect(markup).not.toContain("<time");
     expect(markup).toContain("Genehmigen");
     expect(markup).toContain("Ablehnen");
   });
 
-  it("keeps the Requests section, with its sentence, while nobody asks", () => {
+  it("has no Requests section while nobody asks, also in a workspace people can find", () => {
+    expect(sharedCollaborationWorkspace.visibility).toBe("discoverable");
     const markup = membersView(sharedCollaborationWorkspace);
 
-    expect(markup).toContain("Anfragen");
-    expect(markup).toContain("Keine offenen Zugriffsanfragen.");
+    expect(markup).not.toContain("Anfragen");
+    expect(markup).toContain("Mitglieder");
+    // Nor while the requests load: no section waits for an answer that may be empty.
+    expect(membersView(sharedCollaborationWorkspace, { accessRequests: undefined })).not.toContain(
+      "Anfragen"
+    );
   });
 
   it("has no Requests section for a workspace nobody can ask to join", () => {
@@ -420,12 +437,77 @@ describe("Workspace pages of Settings", () => {
   it("reports a failed load inside the section that failed", () => {
     const markup = membersView(sharedCollaborationWorkspace, {
       members: undefined,
-      membersLoadFailed: true
+      membersLoadProblem: {
+        message: "Mitglieder konnten nicht geladen werden.",
+        refused: false,
+        retry: noop
+      }
     });
 
     expect(markup).toContain('role="alert"');
+    expect(markup).toContain('data-tone="danger"');
     expect(markup).toContain("Erneut versuchen");
-    expect(markup).toContain("Keine offenen Zugriffsanfragen.");
+    expect(markup).toContain("Mitglieder konnten nicht geladen werden.");
+    expect(markup).not.toContain("Anfragen");
+  });
+
+  it("shows Requests, after Members, with its problem when the requests could not be read", () => {
+    const refusal =
+      "Du darfst das nicht sehen. Frag jemanden, der die Instanz verwaltet, zum Beispiel Mara.";
+    const markup = membersView(sharedCollaborationWorkspace, {
+      accessRequests: undefined,
+      accessRequestsLoadProblem: { message: refusal, refused: true }
+    });
+    const headings = [...markup.matchAll(/<h2[^>]*>([^<]*)<\/h2>/gu)].map((match) => match[1]);
+
+    expect(headings).toEqual(["Anfragen"]);
+    expect(markup.indexOf("collaboration-workspace-member-row")).toBeLessThan(
+      markup.indexOf("Anfragen</h2>")
+    );
+    expect(markup).toContain(refusal);
+    // Information, not an error: somebody with more rights has to act.
+    expect(markup).toContain('data-tone="info"');
+    // A refusal offers no retry: trying again would not help.
+    expect(markup).not.toContain("Erneut versuchen");
+    expect(markup).not.toContain("collaboration-workspace-request-row");
+  });
+
+  // Round 2: a refused Approve stood at the top of the page, two sections away from it.
+  it("says a refused change at the top of the section it was made in, as information", () => {
+    const said = "Du darfst Anfragen in diesem Arbeitsbereich nicht genehmigen.";
+    const markup = membersView(sharedCollaborationWorkspace, {
+      accessRequests: [accessRequest],
+      actionProblem: { message: said, refused: true, section: "requests" }
+    });
+    const requests = markup.slice(markup.indexOf("Anfragen</h2>"));
+
+    expect(markup.split(said)).toHaveLength(2);
+    expect(requests.indexOf(said)).toBeGreaterThan(-1);
+    expect(requests.indexOf(said)).toBeLessThan(
+      requests.indexOf("collaboration-workspace-request-row")
+    );
+    expect(requests).toContain('data-tone="info"');
+
+    const removal = "Mara Ruiz ist die letzte Besitzerin.";
+    const members = membersView(sharedCollaborationWorkspace, {
+      accessRequests: [accessRequest],
+      actionProblem: { message: removal, refused: false, section: "members" }
+    });
+    expect(members.indexOf(removal)).toBeGreaterThan(members.indexOf("</header>"));
+    expect(members.indexOf(removal)).toBeLessThan(
+      members.indexOf("collaboration-workspace-member-row")
+    );
+    expect(members).toContain('data-tone="danger"');
+  });
+
+  it("says a change to a request no longer listed above the members", () => {
+    const said = "Diese Anfrage gibt es nicht mehr.";
+    const markup = membersView(sharedCollaborationWorkspace, {
+      actionProblem: { message: said, refused: false, section: "requests" }
+    });
+
+    expect(markup).toContain(said);
+    expect(markup.indexOf(said)).toBeLessThan(markup.indexOf("collaboration-workspace-member-row"));
   });
 
   it("keeps the browser address autofill out of the add-member input", () => {

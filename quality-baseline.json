@@ -33,7 +33,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-misused-promises",
       "scope": "packages/chat-ui",
-      "count": 8,
+      "count": 6,
       "owner": "G-5c"
     },
     {

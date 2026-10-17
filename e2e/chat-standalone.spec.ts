@@ -2925,7 +2925,7 @@ test("the Settings pages and Studio are route-backed", async ({ page }) => {
   await page.goto("/settings/instance/usage");
   await expect(page).toHaveURL(/\/settings\/instance\/usage$/u);
   await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toBeVisible();
-  await expect(page.getByText("Billable this month")).toBeVisible();
+  await expect(page.getByTestId("usage-month-budget")).toBeVisible();
 
   await page.getByRole("button", { name: "Studio", exact: true }).click();
   await expect(page).toHaveURL(/\/build\/agents$/u);
@@ -3698,7 +3698,7 @@ test("admin sees billed usage and can manage users", async ({ page }) => {
   ).toBeVisible();
   await settingsPages(page).getByRole("button", { name: "Usage", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/instance\/usage$/u);
-  await expect(page.getByText("Billable this month")).toBeVisible();
+  await expect(page.getByTestId("usage-month-budget")).toBeVisible();
   await expect(page.getByTestId("monthly-usage")).toBeVisible();
 
   await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
@@ -3823,7 +3823,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await settingsGear(page).click();
   await expect(settingsPages(page)).toBeVisible();
   await settingsPages(page).getByRole("button", { name: "Usage", exact: true }).click();
-  await expect(page.getByText("Billable this month")).toBeVisible();
+  await expect(page.getByTestId("usage-month-budget")).toBeVisible();
   await expect(page.getByText("Billable today")).toBeVisible();
   await expect(page.getByTestId("daily-usage")).toBeVisible();
   await expect(page.getByTestId("monthly-usage")).toBeVisible();

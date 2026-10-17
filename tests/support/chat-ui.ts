@@ -48,7 +48,10 @@ export {
   settingsGoToTargets,
   visibleSettingsPages
 } from "../../packages/chat-ui/src/admin/settings/catalog";
-export { ConnectCodeConfirm } from "../../packages/chat-ui/src/admin/settings/pages/api-keys";
+export {
+  ApiKeysPage,
+  ConnectCodeConfirm
+} from "../../packages/chat-ui/src/admin/settings/pages/api-keys";
 export {
   ConnectLocalAgentPage,
   ConnectLocalAgentView,
@@ -59,7 +62,10 @@ export {
 } from "../../packages/chat-ui/src/admin/settings/pages/connect-local-agent";
 export { LanguageAppearanceView } from "../../packages/chat-ui/src/admin/settings/pages/language-appearance";
 export { WorkspaceGeneralView } from "../../packages/chat-ui/src/admin/settings/pages/workspace-general";
-export { WorkspaceMembersView } from "../../packages/chat-ui/src/admin/settings/pages/workspace-members";
+export {
+  WorkspaceMembersPage,
+  WorkspaceMembersView
+} from "../../packages/chat-ui/src/admin/settings/pages/workspace-members";
 export { collaborationWorkspacesAvailableFor } from "../../packages/chat-ui/src/chat-workspace";
 export { ApprovalDecisionLine } from "../../packages/chat-ui/src/chat/approvals/approval-decision-line";
 export { ApprovalRequestCardView } from "../../packages/chat-ui/src/chat/approvals/approval-request-card";

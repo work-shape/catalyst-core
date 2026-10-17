@@ -111,6 +111,7 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceMembersDescription:
       "Members use this workspace's agents and apps and work in its conversations. Builders may also view and edit what it owns, and Publishers publish it; an instance admin gives both.",
     collaborationWorkspaceMembersLoadFailed: "Members could not be loaded.",
+    collaborationWorkspaceMembersLoadRefused: "You may not see the members of this workspace.",
     collaborationWorkspaceNameLabel: "Name",
     collaborationWorkspaceNamePlaceholder: "For example: Product team",
     collaborationWorkspaceNameRequired: "A workspace name is required.",
@@ -121,6 +122,11 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspacePersonalName: "Personal workspace",
     collaborationWorkspacePersonalNameOf: "{name}'s workspace",
     collaborationWorkspacePersonalNameOfSibilant: "{name}'s workspace",
+    collaborationWorkspaceRefusedAddMember: "You can't add members to this workspace.",
+    collaborationWorkspaceRefusedApproveRequest: "You can't approve requests in this workspace.",
+    collaborationWorkspaceRefusedChangeRole: "You can't change memberships in this workspace.",
+    collaborationWorkspaceRefusedDeclineRequest: "You can't decline requests in this workspace.",
+    collaborationWorkspaceRefusedRemoveMember: "You can't remove members from this workspace.",
     collaborationWorkspaceRemoveMember: "Remove {name}",
     collaborationWorkspaceRemoveMemberConfirm: "Remove",
     collaborationWorkspaceRemoveMemberDescription:
@@ -129,8 +135,9 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceRequestAccess: "Request access",
     collaborationWorkspaceRequestPending: "Request pending",
     collaborationWorkspaceRequestedOn: "Requested {date}",
-    collaborationWorkspaceRequestsEmpty: "No open access requests.",
     collaborationWorkspaceRequestsLoadFailed: "Access requests could not be loaded.",
+    collaborationWorkspaceRequestsLoadRefused:
+      "You may not see the requests to join this workspace.",
     collaborationWorkspaceRoleAdmin: "Admin",
     collaborationWorkspaceRoleLabel: "Membership of {name}",
     collaborationWorkspaceRoleMember: "Member",
@@ -277,8 +284,10 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceMemberCandidatesLabel: "Mitgliedervorschläge",
     collaborationWorkspaceMemberCandidatesLoading: "Personen werden gesucht…",
     collaborationWorkspaceMembersDescription:
-      "Mitglieder verwenden die Agenten und Apps dieses Arbeitsbereichs und arbeiten in seinen Unterhaltungen. Builder dürfen zusätzlich ansehen und bearbeiten, was ihm gehört, Publisher es veröffentlichen; beides vergibt ein Instanzadministrator.",
+      "Mitglieder verwenden die Agenten und Apps dieses Arbeitsbereichs und arbeiten in seinen Unterhaltungen. Builder dürfen zusätzlich ansehen und bearbeiten, was ihm gehört, Publisher es veröffentlichen; beides vergibt jemand, der die Instanz verwaltet.",
     collaborationWorkspaceMembersLoadFailed: "Mitglieder konnten nicht geladen werden.",
+    collaborationWorkspaceMembersLoadRefused:
+      "Du darfst die Mitglieder dieses Arbeitsbereichs nicht sehen.",
     collaborationWorkspaceNameLabel: "Name",
     collaborationWorkspaceNamePlaceholder: "Zum Beispiel: Produktteam",
     collaborationWorkspaceNameRequired: "Ein Name für den Arbeitsbereich ist erforderlich.",
@@ -289,6 +298,16 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspacePersonalName: "Persönlicher Arbeitsbereich",
     collaborationWorkspacePersonalNameOf: "{name}s Arbeitsbereich",
     collaborationWorkspacePersonalNameOfSibilant: "{name}' Arbeitsbereich",
+    collaborationWorkspaceRefusedAddMember:
+      "Du darfst diesem Arbeitsbereich keine Mitglieder hinzufügen.",
+    collaborationWorkspaceRefusedApproveRequest:
+      "Du darfst Anfragen in diesem Arbeitsbereich nicht genehmigen.",
+    collaborationWorkspaceRefusedChangeRole:
+      "Du darfst Mitgliedschaften in diesem Arbeitsbereich nicht ändern.",
+    collaborationWorkspaceRefusedDeclineRequest:
+      "Du darfst Anfragen in diesem Arbeitsbereich nicht ablehnen.",
+    collaborationWorkspaceRefusedRemoveMember:
+      "Du darfst keine Mitglieder aus diesem Arbeitsbereich entfernen.",
     collaborationWorkspaceRemoveMember: "{name} entfernen",
     collaborationWorkspaceRemoveMemberConfirm: "Entfernen",
     collaborationWorkspaceRemoveMemberDescription:
@@ -297,8 +316,9 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceRequestAccess: "Zugriff anfragen",
     collaborationWorkspaceRequestPending: "Anfrage ausstehend",
     collaborationWorkspaceRequestedOn: "Angefragt am {date}",
-    collaborationWorkspaceRequestsEmpty: "Keine offenen Zugriffsanfragen.",
     collaborationWorkspaceRequestsLoadFailed: "Zugriffsanfragen konnten nicht geladen werden.",
+    collaborationWorkspaceRequestsLoadRefused:
+      "Du darfst die Beitrittsanfragen dieses Arbeitsbereichs nicht sehen.",
     collaborationWorkspaceRoleAdmin: "Administrator",
     collaborationWorkspaceRoleLabel: "Mitgliedschaft von {name}",
     collaborationWorkspaceRoleMember: "Mitglied",

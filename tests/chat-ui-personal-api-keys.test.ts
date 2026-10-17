@@ -1,19 +1,9 @@
 // @vitest-environment happy-dom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createRoot } from "react-dom/client";
 import { act, createElement } from "react";
-import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
-import { createApiClient } from "@work-shape/catalyst-api-client";
-import { apiOperations, safeConfigSchema } from "@work-shape/catalyst-api-contract";
-import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
-import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
-import { createTestConfig } from "./support/fixtures";
-import { CONDITION_WAIT_MS, required } from "./support/assertions";
-import {
-  SettingsPageProvider,
-  type SettingsPageContextValue
-} from "@work-shape/catalyst-chat-ui/settings-page-context";
+import { ApiError, createApiClient } from "@work-shape/catalyst-api-client";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { required } from "./support/assertions";
 import { describe, expect, it, vi } from "vitest";
 import type { PersonalApiKey, PlatformContext } from "@work-shape/catalyst-api-client";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
@@ -32,6 +22,7 @@ import {
   personalKeyState,
   settingsCatalog,
   visibleSettingsPages,
+  ApiKeysPage,
   ConnectCodeConfirm,
   ConnectLocalAgentPage,
   ConnectLocalAgentView,
@@ -42,9 +33,18 @@ import {
 } from "./support/chat-ui";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
-import { personalWorkspace, settingsUser } from "./chat-ui-settings-fixtures";
+import {
+  mountPage,
+  personalWorkspace,
+  SETTINGS_INSTANCE_URL,
+  settingsPageContext,
+  settingsUser,
+  waitForText
+} from "./chat-ui-settings-fixtures";
 
 const now = new Date("2026-10-13T12:00:00.000Z");
+/** What the key fields of a connect code offer in these tests. */
+const cliOffer = { actions: ["agent.read", "agent.write"], namespaces: [] };
 
 function key(overrides: Partial<PersonalApiKey> = {}): PersonalApiKey {
   return {
@@ -194,7 +194,7 @@ describe("You > API keys", () => {
               createdAt: "2026-10-13T11:58:00.000Z",
               expiresAt: "2026-10-13T12:13:00.000Z"
             },
-            offer: { actions: ["agent.read", "agent.write"], namespaces: [] },
+            offer: cliOffer,
             pending: false,
             onConfirm: async () => undefined
           })
@@ -233,11 +233,313 @@ describe("You > API keys", () => {
   });
 });
 
+/** A refusal as the API answers it: a missing right, or the instance's policy. */
+function refusal(code: "FORBIDDEN" | "POLICY_DENIED"): ApiError {
+  return new ApiError(403, "Forbidden", {
+    error: { code, message: "You may not do this. Settings > Instance > Access" }
+  });
+}
+
+/** The button whose text is `label`, in the page or the dialog. */
+function buttonNamed(label: string, within: ParentNode = document): HTMLButtonElement {
+  return required(
+    [...within.querySelectorAll<HTMLButtonElement>("button")].find(
+      (candidate) => candidate.textContent === label
+    )
+  );
+}
+
+/** The buttons with words of a dialog, without its icon-only close button in the head. */
+function footerButtons(dialog: HTMLElement): string[] {
+  return [...dialog.querySelectorAll("button")]
+    .map((button) => button.textContent ?? "")
+    .filter((text) => text !== "");
+}
+
+/** The banner or error that says exactly `said`. */
+function noticeSaying(said: string): HTMLElement {
+  return required(
+    [...document.querySelectorAll<HTMLElement>('[role="status"], [role="alert"]')].find(
+      (notice) => notice.textContent === said
+    )
+  );
+}
+
+describe("You > API keys, for a person and an admin alike", () => {
+  // UXA-5: the page opened with Connect the CLI; a person's own keys stood below it.
+  it("opens with the person's own keys and puts Connect the CLI second", async () => {
+    const answer: typeof fetch = async (input, init) => {
+      const path = new URL(new Request(input, init).url).pathname;
+      return path === apiOperations["me.api_keys.list"].buildPath({})
+        ? Response.json({ items: [key()] })
+        : Response.json(platformContext());
+    };
+    const mounted = await mountPage(
+      settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: answer })),
+      "en",
+      createElement(ApiKeysPage)
+    );
+    try {
+      await waitForText(mounted.container, "fabian-mbp");
+      const headings = [...mounted.container.querySelectorAll("h2")].map(
+        (heading) => heading.textContent
+      );
+      expect(headings).toEqual(["Your keys", "Connect the CLI"]);
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  // The refusal stood under the fields in the scrolling body, below the fold where Create key
+  // was pressed, so the person saw nothing happen. Round 2: it was a red error, and Create key
+  // sent the same refused key again.
+  it("a refused new key says whom to ask beside Create key, which waits for a changed field", async () => {
+    const posts: string[] = [];
+    const answer: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (path !== apiOperations["me.api_keys.list"].buildPath({})) {
+        return Response.json(platformContext());
+      }
+      if (request.method !== "POST") return Response.json({ items: [] });
+      posts.push(await request.text());
+      return Response.json({ error: { code: "FORBIDDEN", message: "Forbidden" } }, { status: 403 });
+    };
+    const mounted = await mountPage(
+      settingsPageContext(
+        createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: answer }),
+        settingsUser({ instanceAdminName: "Mara" })
+      ),
+      "en",
+      createElement(ApiKeysPage)
+    );
+    const said = "You may not issue this key. Ask an instance admin, for example Mara.";
+    const name = () => required(document.querySelector<HTMLInputElement>("dialog input"));
+    const type = async (value: string) => {
+      await act(async () => {
+        const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        setValue?.call(name(), value);
+        name().dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+    try {
+      await waitForText(mounted.container, "No personal API keys yet.");
+      await act(async () => {
+        buttonNamed("New key").click();
+      });
+      await type("laptop");
+      await act(async () => {
+        required(document.querySelector<HTMLElement>('dialog [role="checkbox"]')).click();
+      });
+      await act(async () => {
+        buttonNamed("Create key").click();
+      });
+      await waitForText(document.body, said);
+      const refusal = noticeSaying(said);
+      expect(refusal.getAttribute("data-tone")).toBe("info");
+      expect(refusal.parentElement?.contains(buttonNamed("Create key"))).toBe(true);
+      expect(posts).toHaveLength(1);
+
+      // The same key again would be refused again.
+      expect(buttonNamed("Create key").disabled).toBe(true);
+      await act(async () => {
+        required(document.querySelector<HTMLFormElement>("dialog form")).requestSubmit();
+      });
+      expect(posts).toHaveLength(1);
+
+      // A changed field is a new key to ask for.
+      await type("laptop-2");
+      expect(buttonNamed("Create key").disabled).toBe(false);
+      expect(document.body.textContent).not.toContain(said);
+      await act(async () => {
+        buttonNamed("Create key").click();
+      });
+      await waitForText(document.body, said);
+      expect(posts).toHaveLength(2);
+      expect(posts[1]).toContain("laptop-2");
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  // Round 2: a refused Revoke still offered Revoke and Cancel, so the person could ask again
+  // for what had just been refused.
+  it("a refused revoke says whom to ask and leaves one Close", async () => {
+    const revokes: string[] = [];
+    const answer: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (path === apiOperations["me.api_keys.list"].buildPath({})) {
+        return Response.json({ items: [key()] });
+      }
+      if (path === apiOperations["me.api_keys.revoke"].buildPath({ params: { keyId: "cred_1" } })) {
+        revokes.push(path);
+        return Response.json(
+          { error: { code: "FORBIDDEN", message: "Forbidden" } },
+          { status: 403 }
+        );
+      }
+      return Response.json(platformContext());
+    };
+    const mounted = await mountPage(
+      settingsPageContext(
+        createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: answer }),
+        settingsUser({ instanceAdminName: "Mara" })
+      ),
+      "en",
+      createElement(ApiKeysPage)
+    );
+    const said = "You may not revoke this key. Ask an instance admin, for example Mara.";
+    try {
+      await waitForText(mounted.container, "fabian-mbp");
+      await act(async () => {
+        buttonNamed("Revoke").click();
+      });
+      const dialog = required(document.querySelector<HTMLDialogElement>("dialog[open]"));
+      expect(footerButtons(dialog)).toEqual(["Cancel", "Revoke"]);
+      await act(async () => {
+        buttonNamed("Revoke", dialog).click();
+      });
+      await waitForText(dialog, said);
+      expect(revokes).toHaveLength(1);
+      expect(noticeSaying(said).getAttribute("data-tone")).toBe("info");
+      expect(footerButtons(dialog)).toEqual(["Close"]);
+      await act(async () => {
+        buttonNamed("Close", dialog).click();
+      });
+      expect(document.querySelector("dialog[open]")).toBeNull();
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  it("a failed revoke is an error and offers Revoke again", async () => {
+    const answer: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (path === apiOperations["me.api_keys.list"].buildPath({})) {
+        return Response.json({ items: [key()] });
+      }
+      if (path === apiOperations["me.api_keys.revoke"].buildPath({ params: { keyId: "cred_1" } })) {
+        return Response.json(
+          { error: { code: "TIMEOUT", message: "The instance did not answer in time." } },
+          { status: 504 }
+        );
+      }
+      return Response.json(platformContext());
+    };
+    const mounted = await mountPage(
+      settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: answer })),
+      "en",
+      createElement(ApiKeysPage)
+    );
+    try {
+      await waitForText(mounted.container, "fabian-mbp");
+      await act(async () => {
+        buttonNamed("Revoke").click();
+      });
+      const dialog = required(document.querySelector<HTMLDialogElement>("dialog[open]"));
+      await act(async () => {
+        buttonNamed("Revoke", dialog).click();
+      });
+      await waitForText(dialog, "The instance did not answer in time.");
+      const failure = required(dialog.querySelector('[role="alert"]'));
+      expect(failure.textContent).toBe("The instance did not answer in time.");
+      expect(footerButtons(dialog)).toEqual(["Cancel", "Revoke"]);
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  it("a refused list of keys names whom to ask", async () => {
+    const answer: typeof fetch = async (input, init) => {
+      const path = new URL(new Request(input, init).url).pathname;
+      return path === apiOperations["me.api_keys.list"].buildPath({})
+        ? Response.json({ error: { code: "FORBIDDEN", message: "Forbidden" } }, { status: 403 })
+        : Response.json(platformContext());
+    };
+    const mounted = await mountPage(
+      settingsPageContext(
+        createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: answer }),
+        settingsUser({ instanceAdminName: "Mara" })
+      ),
+      "en",
+      createElement(ApiKeysPage)
+    );
+    try {
+      await waitForText(
+        mounted.container,
+        "You may not see your keys. Ask an instance admin, for example Mara."
+      );
+      const refusal = noticeSaying(
+        "You may not see your keys. Ask an instance admin, for example Mara."
+      );
+      expect(refusal.getAttribute("data-tone")).toBe("info");
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  // A refusal sent the person to Settings > Instance > Access, a page only an admin opens.
+  it.each([
+    {
+      locale: "en" as const,
+      code: "FORBIDDEN" as const,
+      instanceAdminName: "Mara",
+      said: "You may not issue this key. Ask an instance admin, for example Mara."
+    },
+    {
+      locale: "de" as const,
+      code: "POLICY_DENIED" as const,
+      instanceAdminName: undefined,
+      said: "Du darfst diesen Schlüssel nicht ausstellen. Frag jemanden, der die Instanz verwaltet."
+    }
+  ])(
+    "a refused confirmation names whom to ask, never a page ($locale)",
+    async ({ locale, code, instanceAdminName, said }) => {
+      const mounted = await mountPage(
+        settingsPageContext(
+          createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: fetch }),
+          settingsUser({ instanceAdminName })
+        ),
+        locale,
+        createElement(ConnectCodeConfirm, {
+          code: "BCDF-GHJK",
+          request: {
+            createdAt: "2026-10-13T11:58:00.000Z",
+            expiresAt: "2026-10-13T12:13:00.000Z"
+          },
+          offer: cliOffer,
+          pending: false,
+          onConfirm: () => Promise.reject(refusal(code))
+        })
+      );
+      try {
+        const box = required(mounted.container.querySelector<HTMLElement>('[role="checkbox"]'));
+        await act(async () => {
+          box.click();
+        });
+        const confirm = required(
+          mounted.container.querySelector<HTMLButtonElement>('button[type="submit"]')
+        );
+        await act(async () => {
+          confirm.click();
+        });
+        await waitForText(mounted.container, said);
+        expect(mounted.container.textContent).not.toContain("Settings >");
+        expect(noticeSaying(said).getAttribute("data-tone")).toBe("info");
+        // The same key would be refused again: Confirm waits for a changed field.
+        expect(confirm.disabled).toBe(true);
+      } finally {
+        await mounted.unmount();
+      }
+    }
+  );
+});
+
 // You > Connect a local agent: one command per tool that installs the CLI version the instance
 // names, one on npm, and runs `catalyst setup` against the instance. Platform Access acceptance
 // check 52 (CONNECT-1a). Fails without the change: the page did not exist.
-
-const URL_OF_INSTANCE = "https://chat.example.com";
 
 function renderConnect(
   tool: LocalAgentTool,
@@ -273,20 +575,20 @@ describe("You > Connect a local agent", () => {
 
   it("gives each tool one command with the instance's CLI version and address", () => {
     expect(LOCAL_AGENT_TOOLS).toEqual(["claude-code", "codex", "other"]);
-    expect(localAgentCommand("claude-code", "1.4.0", URL_OF_INSTANCE)).toBe(
+    expect(localAgentCommand("claude-code", "1.4.0", SETTINGS_INSTANCE_URL)).toBe(
       "npm install --global @work-shape/catalyst-cli@1.4.0 && catalyst setup claude-code --instance https://chat.example.com"
     );
-    expect(localAgentCommand("codex", "1.4.0", URL_OF_INSTANCE)).toContain(
+    expect(localAgentCommand("codex", "1.4.0", SETTINGS_INSTANCE_URL)).toContain(
       "catalyst setup codex --instance"
     );
-    expect(localAgentCommand("other", "1.4.0", URL_OF_INSTANCE)).toContain(
+    expect(localAgentCommand("other", "1.4.0", SETTINGS_INSTANCE_URL)).toContain(
       "catalyst setup other --instance"
     );
   });
 
   it("shows the command of the chosen tool with a copy button, in English and German", () => {
     for (const tool of LOCAL_AGENT_TOOLS) {
-      const command = localAgentCommand(tool, "1.4.0", URL_OF_INSTANCE);
+      const command = localAgentCommand(tool, "1.4.0", SETTINGS_INSTANCE_URL);
       const english = renderConnect(tool, "en", ready(command));
       expect(english).toContain("Connect a local agent");
       expect(english).toContain(command.replaceAll("&", "&amp;"));
@@ -319,7 +621,6 @@ describe("You > Connect a local agent", () => {
   it.each([undefined, "1.4.0"])(
     "opening, switching tools and copying issues no key or code (CLI %s)",
     async (cliVersion) => {
-      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
       const calls: string[] = [];
       const context = { ...platformContext(), release: { version: "1.4.0", cliVersion } };
       const record: typeof fetch = async (input, init) => {
@@ -329,37 +630,12 @@ describe("You > Connect a local agent", () => {
       };
       // Also record a direct fetch, so bypassing the API client cannot issue a key unseen.
       vi.stubGlobal("fetch", record);
-      const client = createApiClient({ baseUrl: URL_OF_INSTANCE, fetchImpl: record });
-      const config = createTestConfig();
-      const settings: SettingsPageContextValue = {
-        apiBaseUrl: URL_OF_INSTANCE,
-        authScope: "connect-test",
-        client,
-        user: settingsUser(),
-        config: safeConfigSchema.parse(
-          createSafeConfigView(
-            config,
-            { version: 0, agents: [], skills: [] },
-            resolveInstanceModules(config, []).snapshot
-          )
-        ),
-        locales: ["en", "de"],
-        locale: "en",
-        selectLocale: () => undefined,
-        showContextIndicator: false,
-        setShowContextIndicator: () => undefined,
-        themePreference: "light",
-        selectThemePreference: () => undefined,
-        workspace: undefined,
-        activeWorkspace: personalWorkspace(),
-        onAccountDeleted: () => undefined,
-        onWorkspaceLeft: () => undefined,
-        onWorkspaceDeleted: () => undefined
-      };
-      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-      const container = document.createElement("div");
-      document.body.append(container);
-      const root = createRoot(container);
+      const mounted = await mountPage(
+        settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: record })),
+        "en",
+        createElement(ConnectLocalAgentPage)
+      );
+      const { container } = mounted;
       const copied: string[] = [];
       const clipboard = vi
         .spyOn(navigator.clipboard, "writeText")
@@ -367,36 +643,9 @@ describe("You > Connect a local agent", () => {
           copied.push(value);
         });
       try {
-        await act(async () => {
-          root.render(
-            createElement(
-              QueryClientProvider,
-              { client: queryClient },
-              createElement(
-                SettingsPageProvider,
-                { value: settings },
-                createElement(
-                  TranslationProvider,
-                  { locale: "en", children: null },
-                  createElement(
-                    UiRoot,
-                    { mode: "light", labels: uiLabelsEn },
-                    createElement(ConnectLocalAgentPage)
-                  )
-                )
-              )
-            )
-          );
-        });
-        await vi.waitFor(
-          async () => {
-            await act(async () => {
-              expect(container.textContent).toContain(
-                cliVersion ? "npm install" : "The command is not available yet"
-              );
-            });
-          },
-          { timeout: CONDITION_WAIT_MS }
+        await waitForText(
+          container,
+          cliVersion ? "npm install" : "The command is not available yet"
         );
         for (const tool of LOCAL_AGENT_TOOLS) {
           const label = { "claude-code": "Claude Code", codex: "Codex", other: "Other" }[tool];
@@ -414,12 +663,12 @@ describe("You > Connect a local agent", () => {
           );
           if (cliVersion) {
             expect(container.textContent).toContain(
-              localAgentCommand(tool, cliVersion, URL_OF_INSTANCE)
+              localAgentCommand(tool, cliVersion, SETTINGS_INSTANCE_URL)
             );
             await act(async () => {
               required(copy).click();
             });
-            expect(copied.at(-1)).toBe(localAgentCommand(tool, cliVersion, URL_OF_INSTANCE));
+            expect(copied.at(-1)).toBe(localAgentCommand(tool, cliVersion, SETTINGS_INSTANCE_URL));
           } else {
             expect(copy).toBeNull();
           }
@@ -427,13 +676,8 @@ describe("You > Connect a local agent", () => {
           expect(calls).toEqual([`${operation.method} ${operation.buildPath({})}`]);
         }
       } finally {
-        await act(async () => {
-          root.unmount();
-        });
-        queryClient.clear();
-        container.remove();
         clipboard.mockRestore();
-        vi.unstubAllGlobals();
+        await mounted.unmount();
       }
     }
   );

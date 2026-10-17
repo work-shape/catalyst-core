@@ -10,6 +10,9 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.newDescription":
       "Choose what the key may do. You can only give it what you may do yourself.",
     "personalApiKeys.create": "Create key",
+    "personalApiKeys.issueRefused": "You may not issue this key.",
+    "personalApiKeys.listRefused": "You may not see your keys.",
+    "personalApiKeys.revokeRefused": "You may not revoke this key.",
     "personalApiKeys.created": "Key {name} created",
     "personalApiKeys.createdDescription":
       "Set it as CATALYST_API_KEY where the CLI or your script runs, with the instance address beside it.",
@@ -62,6 +65,9 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.newDescription":
       "Wähle, was der Schlüssel darf. Du kannst ihm nur geben, was du selbst darfst.",
     "personalApiKeys.create": "Schlüssel erstellen",
+    "personalApiKeys.issueRefused": "Du darfst diesen Schlüssel nicht ausstellen.",
+    "personalApiKeys.listRefused": "Du darfst deine Schlüssel nicht sehen.",
+    "personalApiKeys.revokeRefused": "Du darfst diesen Schlüssel nicht widerrufen.",
     "personalApiKeys.created": "Schlüssel {name} erstellt",
     "personalApiKeys.createdDescription":
       "Setze ihn als CATALYST_API_KEY dort, wo die CLI oder dein Skript läuft, zusammen mit der Adresse der Instanz.",

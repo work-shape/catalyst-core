@@ -21275,6 +21275,9 @@
           "emailVerified": {
             "type": "boolean"
           },
+          "instanceAdminName": {
+            "type": "string"
+          },
           "roles": {
             "type": "array",
             "items": {

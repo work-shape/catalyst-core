@@ -1,4 +1,4 @@
-import { CalendarDays, Database, DollarSign, Search, ShieldCheck } from "lucide-react";
+import { CalendarDays, DollarSign, Search, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type {
   ModelUsageDailyBucket,
@@ -32,6 +32,12 @@ import {
   type TranslationKey
 } from "../../shared/i18n";
 
+/** Why the summary could not be read; a refusal is no failure and is said as information. */
+interface UsageLoadProblem {
+  message: string;
+  refused: boolean;
+}
+
 export function UsageView({
   usage,
   error
@@ -39,7 +45,7 @@ export function UsageView({
   /** Absent while the summary loads. */
   usage: UsageSummary | undefined;
   /** Why the summary could not be loaded. */
-  error?: string;
+  error?: UsageLoadProblem;
 }) {
   const i18n = useTranslation();
   const { t, locale } = i18n;
@@ -50,24 +56,12 @@ export function UsageView({
       calls: (window?.modelCallCount ?? 0).toLocaleString(locale),
       tokens: (window?.totalTokens ?? 0).toLocaleString(locale)
     });
-  const header = (
-    <PageHeader
-      title={t("settings.usage")}
-      description={
-        usage
-          ? t("settings.usageSummary", {
-              calls: usage.currentMonth.modelCallCount.toLocaleString(locale),
-              tokens: usage.currentMonth.totalTokens.toLocaleString(locale)
-            })
-          : undefined
-      }
-    />
-  );
+  const header = <PageHeader title={t("settings.usage")} />;
   if (error) {
     return (
       <>
         {header}
-        <Banner tone="danger">{error}</Banner>
+        <Banner tone={error.refused ? "info" : "danger"}>{error.message}</Banner>
       </>
     );
   }
@@ -79,12 +73,15 @@ export function UsageView({
       </>
     );
   }
-  // Nothing was ever recorded: one sentence, and no charts with empty axes.
+  // Nothing was ever recorded: the month, then one sentence, and no charts with empty axes.
   if (usage.allTime.modelCallCount === 0 && recentEvents.length === 0) {
     return (
       <>
         {header}
-        <EmptyState>{t("settings.usageMonthlyEmpty")}</EmptyState>
+        <div className="grid min-w-0 grid-cols-1 content-start gap-4">
+          <UsageMonthCard usage={usage} />
+          <EmptyState>{t("settings.usageMonthlyEmpty")}</EmptyState>
+        </div>
       </>
     );
   }
@@ -92,44 +89,31 @@ export function UsageView({
     <>
       {header}
       <div className="grid min-w-0 grid-cols-1 content-start gap-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <UsageMetric
-            icon={<DollarSign size={15} />}
-            label={t("settings.usageBillableMonth")}
-            value={formatBillableCost(usage?.currentMonth.cost, i18n)}
-            detail={callsAndTokens(usage?.currentMonth)}
-          />
+        <UsageMonthCard usage={usage} />
+        <div className="grid gap-3 md:auto-cols-fr md:grid-flow-col">
           <UsageMetric
             icon={<DollarSign size={15} />}
             label={t("settings.usageBillableToday")}
-            value={formatBillableCost(usage?.today.cost, i18n)}
-            detail={callsAndTokens(usage?.today)}
+            value={formatBillableCost(usage.today.cost, i18n)}
+            detail={callsAndTokens(usage.today)}
           />
           {showWebSearchCosts ? (
             <UsageMetric
               icon={<Search size={15} />}
               label={t("settings.usageWebSearchBillable")}
-              value={formatWebSearchBillableCost(usage?.currentMonth.cost, i18n)}
+              value={formatWebSearchBillableCost(usage.currentMonth.cost, i18n)}
               detail={t("settings.usageSearchesMonthCount", {
-                count: (usage?.currentMonth.webSearchCallCount ?? 0).toLocaleString(locale)
+                count: usage.currentMonth.webSearchCallCount.toLocaleString(locale)
               })}
             />
-          ) : (
-            <UsageMetric
-              icon={<Database size={15} />}
-              label={t("settings.usageTokensMonth")}
-              value={(usage?.currentMonth.totalTokens ?? 0).toLocaleString(locale)}
-            />
-          )}
+          ) : null}
           <UsageMetric
             icon={<DollarSign size={15} />}
             label={t("settings.usageBillableAllTime")}
-            value={formatBillableCost(usage?.allTime.cost, i18n)}
-            detail={callsAndTokens(usage?.allTime)}
+            value={formatBillableCost(usage.allTime.cost, i18n)}
+            detail={callsAndTokens(usage.allTime)}
           />
         </div>
-
-        <SpendBudgetCard usage={usage} />
 
         <DailyUsageCard
           days={usage?.dailyUsage ?? []}
@@ -300,38 +284,63 @@ const BUDGET_TEXT_KEYS: Record<
   }
 };
 
-function SpendBudgetCard({ usage }: { usage: UsageSummary | undefined }) {
-  const { t } = useTranslation();
-  const currency = usage?.spendBudget.currency ?? usage?.today.cost.currency;
+/**
+ * The month in one answer: what it cost against the monthly budget, with its calls and tokens
+ * under it, then how each configured budget stands, up to the block once one is reached.
+ */
+function UsageMonthCard({ usage }: { usage: UsageSummary }) {
+  const i18n = useTranslation();
+  const { t, locale } = i18n;
+  const month = usage.currentMonth;
+  const currency = usage.spendBudget.currency ?? month.cost.currency;
+  const spentMicros = month.cost.billableCostMicros;
+  const monthlyLimitMicros = usage.spendBudget.monthlyLimitMicros;
   const budgets = [
     {
-      period: "day" as const,
-      spentMicros: usage?.today.cost.billableCostMicros,
-      limitMicros: usage?.spendBudget.dailyLimitMicros
+      period: "month" as const,
+      spentMicros,
+      limitMicros: monthlyLimitMicros
     },
     {
-      period: "month" as const,
-      spentMicros: usage?.currentMonth.cost.billableCostMicros,
-      limitMicros: usage?.spendBudget.monthlyLimitMicros
+      period: "day" as const,
+      spentMicros: usage.today.cost.billableCostMicros,
+      limitMicros: usage.spendBudget.dailyLimitMicros
     }
   ].filter((budget): budget is SpendBudgetProgressInput => budget.limitMicros !== undefined);
+  const cost =
+    spentMicros === undefined || currency === undefined
+      ? t("settings.usageCostNotKnownYet")
+      : monthlyLimitMicros === undefined
+        ? formatMicrosCost(spentMicros, currency, i18n)
+        : t("settings.usageBudgetSpent", {
+            spent: formatMicrosCost(spentMicros, currency, i18n),
+            limit: formatMicrosCost(monthlyLimitMicros, currency, i18n)
+          });
 
   return (
-    <Card data-testid="spend-budget-progress">
-      <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-base">{t("settings.usageBudgets")}</CardTitle>
-        <p className="text-xs text-muted-foreground">{t("settings.usageBudgetsDescription")}</p>
+    <Card padding="md" data-testid="usage-month-budget">
+      <CardHeader>
+        <CardTitle>{t("settings.usageThisMonth")}</CardTitle>
       </CardHeader>
-      <CardContent className="p-4 pt-2">
+      <CardContent className="grid gap-5">
+        <div className="grid gap-1">
+          <p className="text-title" data-testid="usage-month-cost">
+            {cost}
+          </p>
+          <p className="text-caption text-muted-foreground">
+            {t("settings.usageCallsAndTokens", {
+              calls: month.modelCallCount.toLocaleString(locale),
+              tokens: month.totalTokens.toLocaleString(locale)
+            })}
+          </p>
+        </div>
         {budgets.length ? (
           <div className="grid gap-5 md:grid-cols-2">
             {budgets.map((budget) => (
               <SpendBudgetProgress key={budget.period} {...budget} currency={currency} />
             ))}
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">{t("settings.usageBudgetsEmpty")}</p>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -359,6 +368,12 @@ function SpendBudgetProgress({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-medium">{label}</p>
+            {/* The headline cannot say the budget beside an unknown cost, so it stands here. */}
+            {currency === undefined ? null : (
+              <p className="text-xs text-muted-foreground" data-testid="usage-budget-limit">
+                {formatMicrosCost(limitMicros, currency, i18n)}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">{t("settings.usageBudgetIncomplete")}</p>
           </div>
           <Badge>{t("settings.usageIncomplete")}</Badge>
@@ -377,12 +392,15 @@ function SpendBudgetProgress({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium">{label}</p>
-          <p className="text-xs text-muted-foreground">
-            {t("settings.usageBudgetSpent", {
-              spent: formatMicrosCost(spentMicros, currency, i18n),
-              limit: formatMicrosCost(limitMicros, currency, i18n)
-            })}
-          </p>
+          {/* The month's spend against its budget is the card's headline. */}
+          {period === "day" ? (
+            <p className="text-xs text-muted-foreground">
+              {t("settings.usageBudgetSpent", {
+                spent: formatMicrosCost(spentMicros, currency, i18n),
+                limit: formatMicrosCost(limitMicros, currency, i18n)
+              })}
+            </p>
+          ) : null}
         </div>
         <Badge tone={reached ? "accent" : "neutral"}>
           {reached

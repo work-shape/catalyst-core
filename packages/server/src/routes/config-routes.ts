@@ -10,6 +10,7 @@ import { agentConnections } from "../connections/agent-connections";
 import type { Route } from "../http/route";
 import { resolveRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
+import { readInstanceAdminName } from "../users/instance-admin-contact";
 
 export function registerConfigRoutes(route: Route, options: ChatServerOptions): void {
   route(apiOperations["health.get"], () => ({
@@ -20,10 +21,13 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
 
   route(apiOperations["ready.get"], () => readDatabaseReadiness(options.stores));
 
-  route(apiOperations["me.get"], ({ user, access }) => ({
-    ...user,
-    permissions: allowedLegacyPermissions(access)
-  }));
+  route(apiOperations["me.get"], async ({ user, access }) => {
+    return {
+      ...user,
+      permissions: allowedLegacyPermissions(access),
+      instanceAdminName: await readInstanceAdminName(options.stores.users, options.clientInstanceId)
+    };
+  });
 
   route(apiOperations["branding.get"], ({ request }) =>
     createClientBranding(options.config, {

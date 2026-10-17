@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { PersonalApiKey } from "@work-shape/catalyst-api-client";
 import {
   Badge,
+  Banner,
   Button,
-  ConfirmDialog,
   Dialog,
   EmptyState,
   InlineError,
@@ -16,12 +16,30 @@ import {
   TableRow
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
+import { apiErrorMessage } from "../../shared/workspace-utils";
 import { copyStateFor, type RecordedSecretCopy } from "./api-access-model";
 import { copySecretField, SecretFields, type RevealedSecret } from "./api-access-secret-fields";
 import { formatDateTime } from "../../shared/locale-format";
 import { personalKeyState, type PersonalKeyState } from "./personal-api-keys-model";
 
 const stateTone = { active: "accent", revoked: "neutral", expired: "neutral" } as const;
+
+/** Why a key could not be read, issued or revoked. A refusal needs somebody with more rights. */
+export interface KeyProblem {
+  message: string;
+  refused: boolean;
+}
+
+/** A refusal is information, since trying again does not help; a failure is an error. */
+export function KeyProblemNotice({ problem }: { problem: KeyProblem }) {
+  return problem.refused ? (
+    <Banner tone="info" className="w-full">
+      {problem.message}
+    </Banner>
+  ) : (
+    <InlineError className="w-full">{problem.message}</InlineError>
+  );
+}
 
 /**
  * Personal API keys as a table, with Revoke behind one question. The owner's column is shown
@@ -32,7 +50,8 @@ export function PersonalApiKeysTable({
   loading,
   showOwner = false,
   revoking,
-  onRevoke
+  onRevoke,
+  revokeProblem
 }: {
   keys: readonly PersonalApiKey[];
   loading: boolean;
@@ -40,10 +59,12 @@ export function PersonalApiKeysTable({
   revoking: boolean;
   /** Left out for a reader who may not revoke. A failure is thrown and said in the dialog. */
   onRevoke?(key: PersonalApiKey): Promise<unknown>;
+  /** What the dialog says about a thrown failure; by default its message. */
+  revokeProblem?(error: unknown): KeyProblem;
 }) {
   const { t, locale } = useTranslation();
   const [toRevoke, setToRevoke] = useState<PersonalApiKey>();
-  const [revokeError, setRevokeError] = useState<string>();
+  const [revokeError, setRevokeError] = useState<KeyProblem>();
   const stateLabel: Record<PersonalKeyState, string> = {
     active: t("apiAccessActive"),
     revoked: t("apiAccessRevoked"),
@@ -127,22 +148,52 @@ export function PersonalApiKeysTable({
         </TableBody>
       </Table>
       {onRevoke && toRevoke ? (
-        <ConfirmDialog
+        // The question of a confirm dialog, until it is refused: then the answer stands and only
+        // Close is left, since asking again would be refused again.
+        <Dialog
           open
+          size="sm"
           title={t("personalApiKeys.revokeTitle", { name: toRevoke.name })}
-          confirmLabel={t("apiAccessRevoke")}
-          loading={revoking}
           onClose={close}
-          onConfirm={() => {
-            setRevokeError(undefined);
-            onRevoke(toRevoke).then(close, (caught: unknown) =>
-              setRevokeError(caught instanceof Error ? caught.message : t("settings.requestFailed"))
-            );
-          }}
+          footer={
+            revokeError?.refused ? (
+              <Button type="button" variant="outline" onClick={close}>
+                {t("close")}
+              </Button>
+            ) : (
+              <>
+                <Button type="button" variant="outline" disabled={revoking} onClick={close}>
+                  {t("cancel")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  loading={revoking}
+                  onClick={() => {
+                    setRevokeError(undefined);
+                    onRevoke(toRevoke).then(close, (caught: unknown) =>
+                      setRevokeError(
+                        revokeProblem?.(caught) ?? {
+                          message:
+                            apiErrorMessage(caught, t("settings.requestFailed")) ??
+                            t("settings.requestFailed"),
+                          refused: false
+                        }
+                      )
+                    );
+                  }}
+                >
+                  {t("apiAccessRevoke")}
+                </Button>
+              </>
+            )
+          }
         >
-          <p>{t("apiAccessRevokeDescription")}</p>
-          {revokeError ? <InlineError>{revokeError}</InlineError> : null}
-        </ConfirmDialog>
+          <div className="grid gap-4">
+            <p className="text-body text-muted-foreground">{t("apiAccessRevokeDescription")}</p>
+            {revokeError ? <KeyProblemNotice problem={revokeError} /> : null}
+          </div>
+        </Dialog>
       ) : null}
     </>
   );

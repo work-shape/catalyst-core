@@ -6,6 +6,7 @@ import { resolveRequestLocale } from "./request-context";
 import type { ResolvedChatServerOptions } from "../types";
 import { PasswordSetupWorkflow } from "../users/password-setup-service";
 import { UserAccountWorkflow } from "../users/user-account-service";
+import { readInstanceAdminName } from "../users/instance-admin-contact";
 
 export function registerUserAccountRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const userAccount = new UserAccountWorkflow(options);
@@ -39,7 +40,8 @@ export function registerUserAccountRoutes(route: Route, options: ResolvedChatSer
     return {
       ...updated,
       // A profile change moves no right, so the answer loaded for this request still holds.
-      permissions: allowedLegacyPermissions(access)
+      permissions: allowedLegacyPermissions(access),
+      instanceAdminName: await readInstanceAdminName(options.stores.users, options.clientInstanceId)
     };
   });
 

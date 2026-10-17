@@ -1,6 +1,5 @@
 import { keysetFilter } from "./paging";
 import {
-  type StorePage,
   AppError,
   type AuditEvent,
   type AuditEventInput,
@@ -23,7 +22,7 @@ import {
   userInDeletionError,
   type UserStore
 } from "@work-shape/catalyst-core";
-import { and, eq, inArray, isNull, sql as drizzleSql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql as drizzleSql } from "drizzle-orm";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
 import {
@@ -257,7 +256,7 @@ async function refreshLinkedSignIn(tx: PostgresTransaction, input: ResolveUserId
 
 async function listUsers(
   db: PostgresConnection,
-  input: { clientInstanceId: ClientInstanceId; page?: StorePage; excludeSuperadmins?: boolean }
+  input: Parameters<UserStore["listUsers"]>[0]
 ): Promise<UserRecord[]> {
   const rows = await db
     .select()
@@ -709,12 +708,31 @@ export function createPostgresUsersStore(db: PostgresConnection): UserStore {
     async getUser(input: Parameters<UserStore["getUser"]>[0]): Promise<UserRecord | undefined> {
       return getUserRecord(db, input.clientInstanceId, input.userId);
     },
-    async listUsers(input: {
-      clientInstanceId: ClientInstanceId;
-      page?: StorePage;
-      excludeSuperadmins?: boolean;
-    }): Promise<UserRecord[]> {
+    async listUsers(input: Parameters<UserStore["listUsers"]>[0]): Promise<UserRecord[]> {
       return listUsers(db, input);
+    },
+    async getInstanceAdminName({ clientInstanceId }) {
+      // The existing product_users_client_idx bounds the lookup to this instance. Read only
+      // the name: listUsers also loads identities and grants that help text must not need.
+      const [admin] = await db
+        .select({ displayLabel: productUsers.displayLabel })
+        .from(productUsers)
+        .where(
+          and(
+            eq(productUsers.clientInstanceId, clientInstanceId),
+            drizzleSql`${productUsers.roles} @> '["superadmin"]'::jsonb`,
+            eq(productUsers.status, "active"),
+            isNull(productUsers.deletionRequestedAt),
+            isNotNull(productUsers.lastAuthenticatedAt)
+          )
+        )
+        .orderBy(
+          desc(productUsers.lastAuthenticatedAt),
+          drizzleSql`${productUsers.displayLabel} COLLATE "C"`,
+          drizzleSql`${productUsers.id} COLLATE "C"`
+        )
+        .limit(1);
+      return admin?.displayLabel;
     },
     async createUser(input: CreateUserInput): Promise<UserRecord> {
       return createUser(db, input);

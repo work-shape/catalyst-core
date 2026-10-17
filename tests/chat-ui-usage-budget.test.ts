@@ -1,15 +1,226 @@
+// @vitest-environment happy-dom
+
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UsageSummary } from "@work-shape/catalyst-api-client";
 import { UsageView } from "@work-shape/catalyst-chat-ui/control-plane";
 import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { createApiClient } from "@work-shape/catalyst-api-client";
+import { administration } from "@work-shape/catalyst-chat-ui/admin";
+import { required } from "./support/assertions";
+import {
+  mountPage,
+  SETTINGS_INSTANCE_URL,
+  settingsPageContext,
+  settingsUser,
+  waitForText
+} from "./chat-ui-settings-fixtures";
+
+/** Instance > Usage as the Settings area shows it, against an instance that answers `answer`. */
+async function mountUsagePage(answer: Response, locale: "en" | "de", instanceAdminName?: string) {
+  const page = required(administration.pages?.find((candidate) => candidate.id === "usage"));
+  const respond: typeof fetch = async () => answer.clone();
+  return mountPage(
+    settingsPageContext(
+      createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: respond }),
+      settingsUser({ instanceAdminName })
+    ),
+    locale,
+    createElement(page.component)
+  );
+}
+
+describe("Usage opens with the month's single answer (UXA-5)", () => {
+  /** The month's card, once the page has read the summary. */
+  async function monthCard(mounted: { container: HTMLElement }, title: string) {
+    await waitForText(mounted.container, title);
+    const first = required(mounted.container.querySelector<HTMLElement>("[data-card]"));
+    expect(first.getAttribute("data-testid")).toBe("usage-month-budget");
+    return first;
+  }
+  const cost = (card: HTMLElement) =>
+    required(card.querySelector('[data-testid="usage-month-cost"]')).textContent;
+
+  // The budget stood in a tile beside a tokens tile, the tokens again in a tile below and in
+  // the head, and the spend against the budget only in a card further down.
+  it.each([
+    { locale: "en" as const, said: "€100.00 of €400.00", tokens: "1,234,567", title: "This month" },
+    {
+      locale: "de" as const,
+      // The German currency format puts a no-break space before the sign.
+      said: "100,00\u00a0€ von 400,00\u00a0€",
+      tokens: "1.234.567",
+      title: "Dieser Monat"
+    }
+  ])(
+    "says what the month cost of its budget, with the tokens second, once ($locale)",
+    async ({ locale, said, tokens, title }) => {
+      const usage = createUsageSummary();
+      usage.currentMonth.totalTokens = 1_234_567;
+      const mounted = await mountUsagePage(Response.json(usage), locale);
+      try {
+        const card = await monthCard(mounted, title);
+        expect(cost(card)).toBe(said);
+        expect(card.textContent).toContain(tokens);
+        // Nowhere else on the page: no tokens tile, no figure in the head, no budget card.
+        expect(mounted.container.textContent?.split(tokens)).toHaveLength(2);
+        expect(mounted.container.querySelector("header p")).toBeNull();
+        expect(mounted.container.querySelector('[data-testid="spend-budget-progress"]')).toBeNull();
+      } finally {
+        await mounted.unmount();
+      }
+    }
+  );
+
+  it("says the cost is not known yet while nothing is priced, also before anything was used", async () => {
+    const usage = createUsageSummary();
+    usage.spendBudget = { monthlyLimitMicros: 400_000_000 };
+    usage.currentMonth.cost = { ...usage.currentMonth.cost, currency: undefined };
+    delete usage.currentMonth.cost.billableCostMicros;
+    usage.currentMonth.totalTokens = 4_321;
+    usage.allTime.modelCallCount = 0;
+    const mounted = await mountUsagePage(Response.json(usage), "en");
+    try {
+      await waitForText(mounted.container, "No usage recorded yet.");
+      const card = await monthCard(mounted, "This month");
+      expect(cost(card)).toBe("Cost not known yet");
+      expect(card.textContent).toContain("4,321 tokens");
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  it.each([
+    {
+      locale: "en" as const,
+      title: "This month",
+      unknown: "Cost not known yet",
+      limit: "€437.00"
+    },
+    {
+      locale: "de" as const,
+      title: "Dieser Monat",
+      unknown: "Kosten noch nicht bekannt",
+      limit: "437,00\u00a0€"
+    }
+  ])(
+    "shows the configured monthly budget beside a cost not known yet ($locale)",
+    async ({ locale, title, unknown, limit }) => {
+      const usage = createUsageSummary();
+      usage.spendBudget = { currency: "EUR", monthlyLimitMicros: 437_000_000 };
+      usage.currentMonth.cost = { ...usage.currentMonth.cost, currency: undefined };
+      delete usage.currentMonth.cost.billableCostMicros;
+      const mounted = await mountUsagePage(Response.json(usage), locale);
+      try {
+        const card = await monthCard(mounted, title);
+        expect(cost(card)).toBe(unknown);
+        const budget = required(card.querySelector('[data-testid="usage-budget-limit"]'));
+        expect(budget.textContent).toBe(limit);
+      } finally {
+        await mounted.unmount();
+      }
+    }
+  );
+
+  it("says the month's cost alone where no monthly budget is set", async () => {
+    const usage = createUsageSummary();
+    usage.spendBudget = { currency: "EUR" };
+    const mounted = await mountUsagePage(Response.json(usage), "en");
+    try {
+      const card = await monthCard(mounted, "This month");
+      expect(cost(card)).toBe("€100.00");
+      expect(card.querySelector('[role="progressbar"]')).toBeNull();
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  // The block on new model calls stood in the budget card, which the month's card replaces.
+  it("says in the month's card that the budget is reached and new calls are blocked", async () => {
+    const usage = createUsageSummary();
+    usage.spendBudget = { currency: "EUR", monthlyLimitMicros: 400_000_000 };
+    usage.currentMonth.cost = { ...usage.currentMonth.cost, billableCostMicros: 450_000_000 };
+    const mounted = await mountUsagePage(Response.json(usage), "en");
+    try {
+      const card = await monthCard(mounted, "This month");
+      expect(cost(card)).toBe("€450.00 of €400.00");
+      // A known cost says the budget in its headline, and nowhere again.
+      expect(card.querySelector('[data-testid="usage-budget-limit"]')).toBeNull();
+      expect(card.textContent).toContain("Limit reached");
+      expect(card.textContent).toContain("New model calls are blocked for the rest of this month.");
+      const bar = required(card.querySelector('[role="progressbar"]'));
+      expect(bar.getAttribute("aria-label")).toBe("Monthly budget used");
+      expect(bar.getAttribute("aria-valuenow")).toBe("100");
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  // A refusal showed the server's English sentence, with no one to ask.
+  it.each([
+    {
+      locale: "en" as const,
+      instanceAdminName: "Mara",
+      said: "You may not see the usage of this instance. Ask an instance admin, for example Mara."
+    },
+    {
+      locale: "de" as const,
+      instanceAdminName: "Mara",
+      said: "Du darfst die Nutzung dieser Instanz nicht sehen. Frag jemanden, der die Instanz verwaltet, zum Beispiel Mara."
+    },
+    {
+      locale: "en" as const,
+      instanceAdminName: undefined,
+      said: "You may not see the usage of this instance. Ask an instance admin."
+    },
+    {
+      locale: "de" as const,
+      instanceAdminName: undefined,
+      said: "Du darfst die Nutzung dieser Instanz nicht sehen. Frag jemanden, der die Instanz verwaltet."
+    }
+  ])(
+    "a refusal names whom to ask ($locale, $instanceAdminName)",
+    async ({ locale, instanceAdminName, said }) => {
+      const refused = Response.json(
+        { error: { code: "FORBIDDEN", message: "Settings > Instance > Access" } },
+        { status: 403 }
+      );
+      const mounted = await mountUsagePage(refused, locale, instanceAdminName);
+      try {
+        await waitForText(mounted.container, said);
+        expect(mounted.container.textContent).not.toContain("Settings >");
+        // Information, not an error: somebody with more rights has to act.
+        const banner = required(mounted.container.querySelector("[data-tone]"));
+        expect(banner.getAttribute("data-tone")).toBe("info");
+      } finally {
+        await mounted.unmount();
+      }
+    }
+  );
+
+  it("a failure that is no refusal names nobody", async () => {
+    const failed = Response.json(
+      { error: { code: "TIMEOUT", message: "The instance did not answer in time." } },
+      { status: 504 }
+    );
+    const mounted = await mountUsagePage(failed, "en", "Mara");
+    try {
+      await waitForText(mounted.container, "The instance did not answer in time.");
+      expect(mounted.container.textContent).not.toContain("Mara");
+      const banner = required(mounted.container.querySelector("[data-tone]"));
+      expect(banner.getAttribute("data-tone")).toBe("danger");
+    } finally {
+      await mounted.unmount();
+    }
+  });
+});
 
 describe("usage spend budget progress", () => {
   it("shows daily and monthly progress against currency-denominated limits", () => {
     const markup = renderToStaticMarkup(createElement(UsageView, { usage: createUsageSummary() }));
 
-    expect(markup).toContain("Spend budgets");
+    expect(markup).not.toContain("Spend budgets");
     expect(markup).toContain("Daily budget");
     expect(markup).toContain("Monthly budget");
     expect(markup).toContain("20% used");
@@ -32,7 +243,7 @@ describe("usage spend budget progress", () => {
       })
     );
     expect(markup).toContain("Nutzung");
-    expect(markup).toContain("Kosten diesen Monat");
+    expect(markup).toContain("Dieser Monat");
     expect(markup).toContain("25.000");
     expect(markup).not.toContain("Billable");
   });

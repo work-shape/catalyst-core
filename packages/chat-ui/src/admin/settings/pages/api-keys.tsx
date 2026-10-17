@@ -11,7 +11,6 @@ import {
   Button,
   Dialog,
   Field,
-  InlineError,
   Input,
   KeyValue,
   KeyValueList,
@@ -29,8 +28,10 @@ import type { RevealedSecret } from "../../control-plane/api-access-secret-field
 import { formatDateTime } from "../../../shared/locale-format";
 import { PersonalKeyFields } from "../../control-plane/personal-api-key-fields";
 import {
+  KeyProblemNotice,
   PersonalApiKeysTable,
-  PersonalKeyRevealDialog
+  PersonalKeyRevealDialog,
+  type KeyProblem
 } from "../../control-plane/personal-api-keys-list";
 import {
   connectCodeOfSearch,
@@ -42,9 +43,10 @@ import {
   personalKeyRequest,
   type PersonalKeyDraft
 } from "../../control-plane/personal-api-keys-model";
-import { useTranslation } from "../../../shared/i18n";
+import { useTranslation, type TranslationKey } from "../../../shared/i18n";
 import { apiErrorMessage } from "../../../shared/workspace-utils";
-import { useSettingsPage } from "../../../shared/settings-page-context";
+import { useOptionalSettingsPage, useSettingsPage } from "../../../shared/settings-page-context";
+import { isRefusal, refusalAskingInstanceAdmin } from "../ask-instance-admin";
 
 /** What the key fields offer: the actions and the Namespaces. */
 interface KeyOffer {
@@ -53,12 +55,13 @@ interface KeyOffer {
 }
 
 /**
- * You > API keys: the person's own keys, issuing one, and confirming the connect code the CLI
- * shows. The CLI sends the person here as `?code=ABCD-EFGH`.
+ * You > API keys: the person's own keys first, issuing one, and below them confirming the connect
+ * code the CLI shows. The CLI sends the person here as `?code=ABCD-EFGH`.
  */
 export function ApiKeysPage() {
   const { apiBaseUrl, authScope, client, user } = useSettingsPage();
   const { t } = useTranslation();
+  const keyProblem = useKeyProblem();
   const api = { apiBaseUrl, authScope, client };
   const keysQuery = useOwnApiKeysQuery({ ...api, enabled: true });
   const contextQuery = usePlatformContextQuery({ ...api, enabled: true });
@@ -88,6 +91,19 @@ export function ApiKeysPage() {
           </Button>
         }
       />
+      <Section layout="stacked" title={t("personalApiKeys.yourKeys")}>
+        {keysQuery.error ? (
+          <KeyListProblem problem={keyProblem(keysQuery.error, "personalApiKeys.listRefused")} />
+        ) : (
+          <PersonalApiKeysTable
+            keys={keysQuery.data ?? []}
+            loading={keysQuery.isPending}
+            revoking={mutations.revoke.isPending}
+            onRevoke={(key) => mutations.revoke.mutateAsync(key.id)}
+            revokeProblem={(caught) => keyProblem(caught, "personalApiKeys.revokeRefused")}
+          />
+        )}
+      </Section>
       <Section
         layout="stacked"
         title={t("personalApiKeys.connectTitle")}
@@ -101,20 +117,6 @@ export function ApiKeysPage() {
           }
           confirming={mutations.confirmConnectCode.isPending}
         />
-      </Section>
-      <Section layout="stacked" title={t("personalApiKeys.yourKeys")}>
-        {keysQuery.error ? (
-          <Banner tone="danger">
-            {apiErrorMessage(keysQuery.error, t("settings.requestFailed"))}
-          </Banner>
-        ) : (
-          <PersonalApiKeysTable
-            keys={keysQuery.data ?? []}
-            loading={keysQuery.isPending}
-            revoking={mutations.revoke.isPending}
-            onRevoke={(key) => mutations.revoke.mutateAsync(key.id)}
-          />
-        )}
       </Section>
       {newKeyOpen ? (
         <NewKeyDialog
@@ -153,18 +155,19 @@ function NewKeyDialog({
   onSubmit(body: CreatePersonalApiKeyRequest): Promise<void>;
 }) {
   const { t } = useTranslation();
+  const keyProblem = useKeyProblem();
   const [draft, setDraft] = useState(() => initialPersonalKeyDraft());
-  const [error, setError] = useState<string>();
-  const request = personalKeyRequest(draft);
+  const [problem, setProblem] = useState<KeyProblem>();
+  // The same key would be refused again: Create key waits for a changed field.
+  const request = problem?.refused ? undefined : personalKeyRequest(draft);
   const formId = useId();
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    const body = personalKeyRequest(draft);
-    if (!body) return;
-    setError(undefined);
-    onSubmit(body).catch((caught: unknown) =>
-      setError(apiErrorMessage(caught, t("settings.requestFailed")))
+    if (!request) return;
+    setProblem(undefined);
+    onSubmit(request).catch((caught: unknown) =>
+      setProblem(keyProblem(caught, "personalApiKeys.issueRefused"))
     );
   }
 
@@ -176,6 +179,9 @@ function NewKeyDialog({
       onClose={onClose}
       footer={
         <>
+          {/* In the pinned footer, a full line above the buttons: the fields scroll, so a problem
+              under them would stand below the fold where Create key was pressed. */}
+          {problem ? <KeyProblemNotice problem={problem} /> : null}
           <Button type="button" variant="outline" onClick={onClose}>
             {t("cancel")}
           </Button>
@@ -192,10 +198,9 @@ function NewKeyDialog({
           namespaces={offer.namespaces}
           onChange={(next) => {
             setDraft(next);
-            setError(undefined);
+            setProblem(undefined);
           }}
         />
-        {error ? <InlineError>{error}</InlineError> : null}
       </form>
     </Dialog>
   );
@@ -215,6 +220,7 @@ function ConnectCli({
 }) {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
+  const keyProblem = useKeyProblem();
   const [code, setCode] = useState(initialCode);
   const [confirmedCode, setConfirmedCode] = useState<string>();
   const complete = isCompleteConnectCode(code);
@@ -255,15 +261,42 @@ function ConnectCli({
           }}
         />
       ) : (
-        <InlineError>{connectCodeError(lookup.error, t)}</InlineError>
+        <KeyProblemNotice problem={connectCodeProblem(lookup.error, t, keyProblem)} />
       )}
     </div>
   );
 }
 
-function connectCodeError(error: unknown, t: ReturnType<typeof useTranslation>["t"]): string {
-  if (error instanceof ApiError && error.status === 404) return t("personalApiKeys.codeUnknown");
-  return apiErrorMessage(error, t("settings.requestFailed")) ?? t("settings.requestFailed");
+type KeyProblemOf = (error: unknown, refusal: TranslationKey) => KeyProblem;
+
+/** What a refused or failed answer says on this page. A refusal names whom to ask. */
+function useKeyProblem(): KeyProblemOf {
+  const { t } = useTranslation();
+  const instanceAdminName = useOptionalSettingsPage()?.user.instanceAdminName;
+  return (error, refusal) =>
+    isRefusal(error)
+      ? { message: refusalAskingInstanceAdmin(t(refusal), t, instanceAdminName), refused: true }
+      : {
+          message:
+            apiErrorMessage(error, t("settings.requestFailed")) ?? t("settings.requestFailed"),
+          refused: false
+        };
+}
+
+/** A list that could not be read: a refusal as information, a failure as a danger. */
+function KeyListProblem({ problem }: { problem: KeyProblem }) {
+  return <Banner tone={problem.refused ? "info" : "danger"}>{problem.message}</Banner>;
+}
+
+function connectCodeProblem(
+  error: unknown,
+  t: ReturnType<typeof useTranslation>["t"],
+  keyProblem: KeyProblemOf
+): KeyProblem {
+  if (error instanceof ApiError && error.status === 404) {
+    return { message: t("personalApiKeys.codeUnknown"), refused: false };
+  }
+  return keyProblem(error, "personalApiKeys.issueRefused");
 }
 
 /**
@@ -285,18 +318,21 @@ export function ConnectCodeConfirm({
   onConfirm(body: ConfirmConnectCodeRequest): Promise<void>;
 }) {
   const { t, locale } = useTranslation();
+  const keyProblem = useKeyProblem();
   const [draft, setDraft] = useState<PersonalKeyDraft>(() =>
     initialPersonalKeyDraft(request.clientLabel ?? t("personalApiKeys.cliName"))
   );
-  const [error, setError] = useState<string>();
-  const body = personalKeyRequest(draft);
+  const [problem, setProblem] = useState<KeyProblem>();
+  // The same key would be refused again: Confirm waits for a changed field.
+  const body = problem?.refused ? undefined : personalKeyRequest(draft);
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    const confirmed = personalKeyRequest(draft);
-    if (!confirmed) return;
-    setError(undefined);
-    onConfirm(confirmed).catch((caught: unknown) => setError(connectCodeError(caught, t)));
+    if (!body) return;
+    setProblem(undefined);
+    onConfirm(body).catch((caught: unknown) =>
+      setProblem(connectCodeProblem(caught, t, keyProblem))
+    );
   }
 
   return (
@@ -321,10 +357,10 @@ export function ConnectCodeConfirm({
         namespaces={offer.namespaces}
         onChange={(next) => {
           setDraft(next);
-          setError(undefined);
+          setProblem(undefined);
         }}
       />
-      {error ? <InlineError>{error}</InlineError> : null}
+      {problem ? <KeyProblemNotice problem={problem} /> : null}
       <div>
         <Button type="submit" loading={pending} disabled={!body}>
           {t("personalApiKeys.confirm")}
