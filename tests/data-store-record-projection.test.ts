@@ -210,7 +210,9 @@ describe("REC-1a records projection through the public operation source", () => 
         // The public operation is customer-only. Point its test definition at the owned
         // database to exercise the very same writer after the owned upgrade path.
         const owned = await recordOf(w, w.kbId);
-        await w.source.unsafe(schema.text);
+        // The hosted platform role is named catalyst, which is also a schema. Customer
+        // tables belong to public, regardless of the bootstrap connection's search path.
+        await w.source.unsafe(`set search_path=public; ${schema.text}`);
         await w.source.unsafe(
           `grant select,insert,update,delete on objekt to "${owned.roles.app}"`
         );
