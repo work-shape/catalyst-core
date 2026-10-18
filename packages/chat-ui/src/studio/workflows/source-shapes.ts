@@ -85,6 +85,13 @@ export interface WorkflowsSource {
   drafts?: WorkflowDraftsSource;
   /** Absent where the source has no technical accounts, such as samples. */
   publishRights?: WorkflowPublishRightsSource;
+  /**
+   * The instance's sentence on what publishing one revision makes live (PUBQ-1), as the asset
+   * read answers it: `publishNarrative` or nothing. Absent where the source words none.
+   */
+  publishNarrative?: {
+    read(workflow: string, revision: number, signal: AbortSignal): Promise<unknown>;
+  };
 }
 
 /**

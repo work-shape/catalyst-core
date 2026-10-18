@@ -5,7 +5,11 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApiClient } from "@work-shape/catalyst-api-client";
-import { apiOperations, safeConfigSchema } from "@work-shape/catalyst-api-contract";
+import {
+  apiOperations,
+  safeConfigSchema,
+  type AppActions
+} from "@work-shape/catalyst-api-contract";
 import {
   buildAssetKinds,
   BuildAssetKindsProvider,
@@ -32,9 +36,44 @@ import { createTestConfig } from "./support/fixtures";
 // instance, as an agent names skills. The choosers of the agent page and of the Knowledge Base
 // page ask the instance for both, and for no other workspace; an asset of the instance asks
 // for the instance's own alone. The instance still decides each reference when it is saved.
+// REF-OWNER: the agent page offers the actions of Apps of the agent's owner and of the
+// instance, and no other workspace's, out of the one answer of `apps.actions.list`.
 
 const URL_OF_INSTANCE = "https://chat.example.com";
 const OWNER = "cw_owner";
+
+/** One published App with one action an agent can carry, owned by `workspaceId` or the instance. */
+function publishedApp(name: string, workspaceId?: string): AppActions["apps"][number] {
+  return {
+    name,
+    title: name,
+    scope: workspaceId === undefined ? { kind: "instance" } : { kind: "workspace", workspaceId },
+    view: "published",
+    revision: 1,
+    actions: [
+      {
+        name: "load",
+        effect: "reading",
+        toolName: `app.${name}.load`,
+        inputSchema: { type: "object" },
+        policy: "confirm",
+        agentTool: true,
+        kind: "workflow",
+        workflow: { name: "load" }
+      }
+    ]
+  };
+}
+
+/** The Apps the reader may read: the instance's, the agent's workspace's and another's. */
+const APP_ACTIONS: AppActions = {
+  apps: [
+    publishedApp("shared"),
+    publishedApp("own", OWNER),
+    publishedApp("elsewhere", "cw_elsewhere")
+  ],
+  truncated: false
+};
 
 /** What the instance answers: Knowledge Bases on, and an empty list for every kind. */
 function contextWithKnowledge() {
@@ -78,6 +117,7 @@ async function openPage(asset: BuildAsset, kindPath: string) {
     const url = new URL(request.url);
     if (url.pathname === apiOperations["platform.context.get"].path)
       return Response.json(contextWithKnowledge());
+    if (url.pathname === apiOperations["apps.actions.list"].path) return Response.json(APP_ACTIONS);
     const list = new RegExp(
       `^${apiOperations["assets.list"].path.replace(":kind", "([a-z_]+)")}$`,
       "u"
@@ -191,13 +231,24 @@ async function openPage(asset: BuildAsset, kindPath: string) {
     vi.unstubAllGlobals();
   });
   /** The owners the lists of one kind were asked for, once the page has asked for them. */
-  return async (kind: string, count: number) => {
+  const owners = async (kind: string, count: number) => {
     await vi.waitFor(
       () => expect(lists.filter((list) => list.kind === kind).length).toBeGreaterThanOrEqual(count),
       { timeout: CONDITION_WAIT_MS }
     );
     return [...new Set(lists.filter((list) => list.kind === kind).map((list) => list.workspaceId))];
   };
+  /** The Apps whose actions the page offers, once it offers the instance's. */
+  const offeredApps = async () => {
+    await vi.waitFor(
+      () => expect(container.querySelector('[data-app-tools="shared"]')).not.toBeNull(),
+      { timeout: CONDITION_WAIT_MS }
+    );
+    return [...container.querySelectorAll("[data-app-tools]")].map((group) =>
+      group.getAttribute("data-app-tools")
+    );
+  };
+  return Object.assign(owners, { offeredApps });
 }
 
 function agent(owner: string | undefined): BuildAsset {
@@ -254,5 +305,17 @@ describe("the Data Stores a Knowledge Base may read", () => {
   it("are asked for on the instance alone for a Knowledge Base of the instance", async () => {
     const owners = await openPage(knowledgeBase(undefined), "knowledge-bases");
     expect(await owners("data_store", 1)).toEqual([null]);
+  });
+});
+
+describe("the Apps whose actions an agent may name", () => {
+  it("are the agent's workspace's and the instance's, and no other workspace's", async () => {
+    const page = await openPage(agent(OWNER), "agents");
+    expect((await page.offeredApps()).sort()).toEqual(["own", "shared"]);
+  });
+
+  it("are the instance's alone for an agent of the instance", async () => {
+    const page = await openPage(agent(undefined), "agents");
+    expect(await page.offeredApps()).toEqual(["shared"]);
   });
 });

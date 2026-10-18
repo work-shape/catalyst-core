@@ -17,6 +17,8 @@ export interface ConfirmDialogProps {
   tone?: ConfirmDialogTone;
   /** The action is running: the confirm button shows a spinner and both buttons are held. */
   loading?: boolean;
+  /** The action cannot be taken yet, as while what the dialog asks about is still read. */
+  confirmDisabled?: boolean;
   onConfirm(): void;
   /** Called by Cancel, Escape, the close button and a click beside the dialog. */
   onClose(): void;
@@ -30,6 +32,7 @@ export function ConfirmDialog({
   confirmLabel,
   tone = "danger",
   loading = false,
+  confirmDisabled = false,
   onConfirm,
   onClose
 }: ConfirmDialogProps) {
@@ -44,7 +47,13 @@ export function ConfirmDialog({
           <Button type="button" variant="outline" disabled={loading} onClick={onClose}>
             {labels.cancel}
           </Button>
-          <Button type="button" variant={tone} loading={loading} onClick={onConfirm}>
+          <Button
+            type="button"
+            variant={tone}
+            loading={loading}
+            disabled={confirmDisabled}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </Button>
         </>

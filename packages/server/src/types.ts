@@ -46,6 +46,7 @@ import type { ConnectionManagementPort } from "./connections/connection-manageme
 import type { SystemModelGateway } from "./guardrails/system-model-call";
 import type { ApprovalRequestWorkflowOptions } from "./approvals/approval-request-service";
 import type { AssetRepoCommitClient } from "./assets/asset-repo-jobs";
+import type { PublishNarrator } from "./publish-narrative/publish-narrator";
 
 export interface ConversationRetentionOptions {
   batchSize?: number;
@@ -70,6 +71,11 @@ export interface OperationCalls {
   deps: RunOperationDeps;
   /** The approval kinds the caller gave, with `operation_call` added. */
   approvalRequestHandlers: ApprovalRequestHandlerRegistry;
+  /**
+   * The publish question's sentence and warnings (PUBQ-1), for an asset read and a held
+   * publish's review alike. Absent where the call path was built without it.
+   */
+  publishNarrator?: PublishNarrator;
 }
 
 export interface ChatServerOptions {

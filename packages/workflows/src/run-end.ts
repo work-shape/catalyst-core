@@ -45,12 +45,14 @@ export function createRunEnd(options: {
       ...end
     });
     if (!ended) return false;
-    await options.datasetEnd(tx, { ...run, status: end.status }, end.output);
+    if (end.status !== "continued")
+      await options.datasetEnd(tx, { ...run, status: end.status }, end.output);
     await cancelWaiting(tx, run);
     await tx.jobs.withdraw(workflowDeadlineJobKind, {
       clientInstanceId,
       dedupeKey: workflowDeadlineKey(run.id)
     });
+    if (end.status === "continued") return true;
     for (const child of await tx.workflowRuns.listChildRuns({ clientInstanceId, id: run.id })) {
       if (isWorkflowRunEnded(child.status)) continue;
       const locked = await tx.workflowRuns.lockRun({ clientInstanceId, id: child.id });

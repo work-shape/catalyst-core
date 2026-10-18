@@ -1,4 +1,9 @@
-import type { ConfigAssetStore, JsonObject, PlatformAction } from "@work-shape/catalyst-core";
+import type {
+  ApprovalPreviewViewer,
+  ConfigAssetStore,
+  JsonObject,
+  PlatformAction
+} from "@work-shape/catalyst-core";
 
 /**
  * A kind of held call whose request the holders of its own right decide, and which knows what
@@ -19,8 +24,14 @@ export interface HeldCallApprovalKind {
   /**
    * What a request shows of what the call is about: for one opened request all of it, with
    * `stale` where it moved; for a row of a list what the subject itself says, reading nothing.
+   * `viewer` is who reads it, in their language; without it the review names what anyone who
+   * decides may read.
    */
-  review(subject: JsonObject, inList: boolean): Promise<JsonObject | undefined>;
+  review(
+    subject: JsonObject,
+    inList: boolean,
+    viewer?: ApprovalPreviewViewer
+  ): Promise<JsonObject | undefined>;
   /**
    * The fields of a subject that say what it is about. A newer request whose subject holds
    * the same replaces the one that still waits.

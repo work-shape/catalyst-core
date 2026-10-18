@@ -33,6 +33,7 @@ export { dataStoresModule };
 function workflowAssetKind(dataStores: DataStores): WorkflowAssetKind {
   return {
     ...dataStores.assetKind,
+    references: () => [],
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,
@@ -217,6 +218,7 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
     knowledgeBackend: dataStores.knowledgeBackend,
     knowledgeSourceJobs: dataStores.knowledgeSourceJobs,
     knowledgeSources: dataStores.knowledgeSources,
+    publishNarrativeData: dataStores.publishNarrativeData,
     operationSources: () => [dataStores.operationSource],
     start: ({ files }) => {
       if (files) {

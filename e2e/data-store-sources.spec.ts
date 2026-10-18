@@ -305,6 +305,7 @@ test("a store's page names the Workflow that fills it with its Connection and ac
         name: workflow,
         manifest: {
           id: workflow,
+          kind: "data",
           name: "Nachtimport",
           description: "Copies the clients of Exampledata every night.",
           runAs: account,
@@ -488,6 +489,9 @@ test("a store's page names the Workflow that fills it with its Connection and ac
     const openPublish = async () => {
       await page.goto(`/w/${workspaceId}/app-drafts/${app}`);
       await edit.getByRole("button", { name: /^(?:Publish|Veröffentlichen)$/u }).click();
+      // The plain sentence leads (PUBQ-1); the lines on stored data stand behind Details.
+      await expect(page.getByRole("dialog").getByTestId("publish-narrative-summary")).toBeVisible();
+      await page.getByRole("dialog").getByRole("button", { name: "Details", exact: true }).click();
       await expect(page.getByRole("dialog").locator('[data-field="data-stored"]')).toBeVisible();
     };
     await openPublish();
@@ -525,6 +529,7 @@ test("a store's page names the Workflow that fills it with its Connection and ac
       "The action list_kunden reads from it."
     );
     await expect(publishDialog).not.toContainText("by_name");
+    await publishDialog.getByRole("button", { name: "Details", exact: true }).click();
     await shootOne(page, "ds-13b-publish-older-revision", async () => {
       await expect(publishDialog.locator('[data-field="data-stored"]')).toBeVisible();
     });

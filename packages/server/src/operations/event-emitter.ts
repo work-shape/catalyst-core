@@ -10,6 +10,7 @@ import {
   type AuditEventStatus,
   type AuditRecorder,
   type JsonObject,
+  type GuardrailFilter,
   type PlatformEventContext,
   type PlatformEventEmitter
 } from "@work-shape/catalyst-core";
@@ -34,17 +35,11 @@ export function createAuditingEventEmitter(
         if (!guardrails || !isGuardrailEvent(name)) {
           return PLATFORM_EVENT_ALLOW;
         }
-        const { origin } = context;
         const answers = await guardrails.answer(
           {
             event: name,
             subject: context.subject,
-            match: {
-              ...context.filterBy,
-              origin: origin.kind,
-              ...(origin.kind === "agent" ? { agent: origin.agentName } : {}),
-              ...(context.workspaceId ? { workspace: context.workspaceId } : {})
-            },
+            match: guardrailMatch(context),
             fields: async () => (await context.checkable?.()) ?? {},
             ...(context.aboutGuardrails ? { aboutGuardrails: true } : {})
           },
@@ -109,4 +104,17 @@ function withoutUndefined(values: Record<string, JsonObject[string] | undefined>
   return Object.fromEntries(
     Object.entries(values).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]]))
   );
+}
+
+/** The same origin and effective workspace narrow live calls and dry publish previews. */
+export function guardrailMatch(
+  context: Pick<PlatformEventContext, "origin" | "workspaceId" | "filterBy">
+): GuardrailFilter {
+  const { origin } = context;
+  return {
+    ...context.filterBy,
+    origin: origin.kind,
+    ...(origin.kind === "agent" ? { agent: origin.agentName } : {}),
+    ...(context.workspaceId ? { workspace: context.workspaceId } : {})
+  };
 }

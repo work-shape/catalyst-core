@@ -518,6 +518,12 @@ export const structureGallery: GalleryGroup = {
                     <p className="text-muted-foreground">{text.disclosureErrorTwo}</p>
                   </DisclosureContent>
                 </Disclosure>
+                <Disclosure variant={variant}>
+                  <DisclosureTrigger>{text.disclosureKeptMounted}</DisclosureTrigger>
+                  <DisclosureContent keepMounted data-gallery-kept-mounted="">
+                    <p className="text-muted-foreground">{text.disclosureKeptMountedBody}</p>
+                  </DisclosureContent>
+                </Disclosure>
                 <Disclosure variant={variant} disabled>
                   <DisclosureTrigger>{text.disabled}</DisclosureTrigger>
                   <DisclosureContent>{text.disclosureAdvancedBody}</DisclosureContent>

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { appActionsSchema } from "@work-shape/catalyst-api-contract";
+import { appActionSchema, appActionsSchema } from "@work-shape/catalyst-api-contract";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus } from "./support/app-instance";
 import {
@@ -82,7 +82,9 @@ describe("the draft of an App in safe mode", () => {
     const response = await t.call(userId, "apps.actions.list", { query: { app: "orders" } });
     expectStatus(response, 200);
     const actions = appActionsSchema.parse(response.json()).apps[0]?.actions ?? [];
-    return Object.fromEntries(actions.map((entry) => [entry.name, entry.target]));
+    return Object.fromEntries(
+      actions.map((entry) => [entry.name, appActionSchema.parse(entry).target])
+    );
   };
 
   // Acceptance check 7.

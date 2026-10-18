@@ -5,6 +5,11 @@ import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { useAppPublishData } from "../../studio/apps/app-data";
 import { AppPublishData } from "../../studio/apps/app-publish-data";
 import {
+  narrativeHolds,
+  PublishDetails,
+  PublishNarrativeReadLead
+} from "../../shared/publish-narrative";
+import {
   parseOperationCallPreview,
   type PublishChange,
   type PublishReview,
@@ -56,6 +61,8 @@ export function PublishApproveHold({
   children: (held: boolean) => ReactNode;
 }) {
   const review = parseOperationCallPreview(item.preview)?.review;
+  // A narrative this client cannot read whole holds Approve: its warnings come before the click.
+  if (review?.narrative && narrativeHolds(review.narrative)) return children(true);
   return review && reviewReadsStoredData(review) ? (
     <StoredDataHold app={review.name} revision={review.revision}>
       {children}
@@ -87,13 +94,68 @@ function StoredDataHold({
 export function PublishReviewBody({
   actor,
   review,
-  headline = true
+  headline = true,
+  technical
 }: {
   actor: string;
   review: PublishReview;
   /** Without it the review starts with its lists: a confirmation says who asks in its own words. */
   headline?: boolean;
+  /**
+   * The call itself (operation, origin, expiry, whole input), last in "Details" beside the
+   * lists, so a publish that leads with its sentence has one fold. Shown only with a sentence.
+   */
+  technical?: ReactNode;
 }) {
+  const { t } = useTranslation();
+  const effect = (
+    <p className="text-caption text-muted-foreground" data-testid="publish-review-effect">
+      {t("operations.publishEffect")}
+    </p>
+  );
+  const lists = <PublishReviewLists review={review} />;
+  return (
+    <section className="grid min-w-0 gap-4" data-testid="publish-review">
+      {headline ? (
+        <div className="grid min-w-0 gap-1.5">
+          <p className="font-medium text-foreground" data-testid="operation-call-headline">
+            {t("operations.publishHeadline", {
+              actor,
+              kind: t(publishKindPhrase(review.kind)),
+              title: review.title
+            })}
+          </p>
+          {review.narrative ? null : effect}
+        </div>
+      ) : null}
+      {review.stale ? (
+        <Banner tone="warning" role="note" data-testid="publish-review-stale">
+          {t(STALE[review.stale])}
+        </Banner>
+      ) : null}
+      {/* The same sentence the Publish dialog leads with, then the lists behind "Details". */}
+      {review.narrative ? <PublishNarrativeReadLead read={review.narrative} /> : null}
+      {review.narrative ? (
+        // What approving does in general is a detail of the sentence on this publish.
+        <PublishDetails>
+          {headline ? effect : null}
+          {lists}
+          {technical ? (
+            <section className="grid min-w-0 gap-2" data-testid="publish-details-technical">
+              <h4 className="text-label">{t("operations.callDetails")}</h4>
+              {technical}
+            </section>
+          ) : null}
+        </PublishDetails>
+      ) : (
+        lists
+      )}
+    </section>
+  );
+}
+
+/** The lists of the review, as they stood before its sentence. */
+function PublishReviewLists({ review }: { review: PublishReview }) {
   const { t } = useTranslation();
   const none = <span className="text-muted-foreground">{t("operations.publishNone")}</span>;
   const names = (list: readonly string[]) => (list.length === 0 ? none : list.join(", "));
@@ -111,73 +173,54 @@ export function PublishReviewBody({
       </ul>
     );
   return (
-    <section className="grid min-w-0 gap-4" data-testid="publish-review">
-      {headline ? (
-        <div className="grid min-w-0 gap-1.5">
-          <p className="font-medium text-foreground" data-testid="operation-call-headline">
-            {t("operations.publishHeadline", {
-              actor,
-              kind: t(publishKindPhrase(review.kind)),
-              title: review.title
+    <KeyValueList layout="stacked">
+      <KeyValue label={t("operations.publishVersion")} data-field="version">
+        {review.liveRevision === undefined
+          ? t("operations.publishFirst", { number: review.revision })
+          : t("operations.publishReplaces", {
+              number: review.revision,
+              live: review.liveRevision
             })}
-          </p>
-          <p className="text-caption text-muted-foreground">{t("operations.publishEffect")}</p>
-        </div>
+      </KeyValue>
+      <KeyValue label={t("operations.publishFiles")} data-field="files">
+        {changes(review.files)}
+      </KeyValue>
+      {review.changing ? (
+        <KeyValue label={t("operations.publishChanging")} data-field="changing">
+          {changes(review.changing)}
+        </KeyValue>
       ) : null}
-      {review.stale ? (
-        <Banner tone="warning" role="note" data-testid="publish-review-stale">
-          {t(STALE[review.stale])}
-        </Banner>
+      {review.kind === "app" ? (
+        <KeyValue label={t("operations.publishHosts")} data-field="hosts">
+          {names(review.hostsAdded)}
+        </KeyValue>
       ) : null}
-      <KeyValueList layout="stacked">
-        <KeyValue label={t("operations.publishVersion")} data-field="version">
-          {review.liveRevision === undefined
-            ? t("operations.publishFirst", { number: review.revision })
-            : t("operations.publishReplaces", {
-                number: review.revision,
-                live: review.liveRevision
-              })}
+      <KeyValue label={t("operations.publishConnections")} data-field="connections">
+        {names(review.connections)}
+      </KeyValue>
+      {review.kind === "app" ? (
+        <KeyValue label={t("operations.publishDataStores")} data-field="data-stores">
+          {names(
+            review.dataStores.map((store) =>
+              store.minSchema === undefined
+                ? store.name
+                : t("operations.publishDataStoreLevel", {
+                    name: store.name,
+                    level: store.minSchema
+                  })
+            )
+          )}
         </KeyValue>
-        <KeyValue label={t("operations.publishFiles")} data-field="files">
-          {changes(review.files)}
+      ) : null}
+      {/* Who sees which stored data, read for the version this request would make live. */}
+      {reviewReadsStoredData(review) ? (
+        <AppPublishData app={review.name} revision={review.revision} />
+      ) : null}
+      {review.runAs ? (
+        <KeyValue label={t("operations.publishRunsAs")} data-field="runs-as">
+          {review.runAs}
         </KeyValue>
-        {review.changing ? (
-          <KeyValue label={t("operations.publishChanging")} data-field="changing">
-            {changes(review.changing)}
-          </KeyValue>
-        ) : null}
-        {review.kind === "app" ? (
-          <KeyValue label={t("operations.publishHosts")} data-field="hosts">
-            {names(review.hostsAdded)}
-          </KeyValue>
-        ) : null}
-        <KeyValue label={t("operations.publishConnections")} data-field="connections">
-          {names(review.connections)}
-        </KeyValue>
-        {review.kind === "app" ? (
-          <KeyValue label={t("operations.publishDataStores")} data-field="data-stores">
-            {names(
-              review.dataStores.map((store) =>
-                store.minSchema === undefined
-                  ? store.name
-                  : t("operations.publishDataStoreLevel", {
-                      name: store.name,
-                      level: store.minSchema
-                    })
-              )
-            )}
-          </KeyValue>
-        ) : null}
-        {/* Who sees which stored data, read for the version this request would make live. */}
-        {reviewReadsStoredData(review) ? (
-          <AppPublishData app={review.name} revision={review.revision} />
-        ) : null}
-        {review.runAs ? (
-          <KeyValue label={t("operations.publishRunsAs")} data-field="runs-as">
-            {review.runAs}
-          </KeyValue>
-        ) : null}
-      </KeyValueList>
-    </section>
+      ) : null}
+    </KeyValueList>
   );
 }

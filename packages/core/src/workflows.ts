@@ -268,6 +268,11 @@ export type WorkflowStep =
       collect?: WorkflowReference;
       /** Dataset rows per iteration; the item limit counts iterations. */
       batch?: number;
+      /** Checkpoint at a complete item boundary. `position` names the successor input field.
+       * `after` requests a fresh history after this many items, even below the run limits.
+       * Without `after`, the duration and step-run budget decide when to continue.
+       */
+      continueAsNew?: { position: string; after?: number; cursor?: string };
       steps: readonly WorkflowStep[];
     })
   /** Runs one script file of the step files folder on its input as JSON and returns JSON. */
@@ -373,6 +378,13 @@ export const workflowLoopOptionsSchema = z.object({
   onItemFailure: z.enum(WORKFLOW_LOOP_ITEM_FAILURE_MODES).default("stop"),
   concurrency: z.number().int().min(1).max(WORKFLOW_LOOP_MAX_CONCURRENCY).default(1),
   batch: z.number().int().positive().optional(),
+  continueAsNew: z
+    .strictObject({
+      position: z.string().min(1),
+      after: z.number().int().positive().optional(),
+      cursor: z.string().optional()
+    })
+    .optional(),
   collect: z.strictObject({ step: z.string().min(1), path: z.string() }).optional()
 });
 
@@ -417,7 +429,7 @@ export const workflowPaginateSchema = z.union([
     sizeParam: z.string().min(1).optional(),
     size: z.number().int().min(1).optional(),
     start: z.number().int().min(0).optional(),
-    cursor: z.string().min(1).optional()
+    cursor: z.string().optional()
   })
 ]);
 
@@ -562,7 +574,7 @@ export { WORKFLOW_RUN_STATUSES } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number];
 
-/** The statuses of a run without `limit_reached`: a usage limit stops a run, not one step. */
+/** Step statuses omit `limit_reached` and `continued`, which end whole run histories. */
 export { WORKFLOW_STEP_RUN_STATUSES } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkflowStepRunStatus = (typeof WORKFLOW_STEP_RUN_STATUSES)[number];
@@ -633,6 +645,13 @@ export interface WorkflowRunIdentity {
   /** Unique per Workflow among its open and `done` runs. See `workflowRunKeySchema`. */
   runKey?: string;
   labels?: WorkflowRunLabels;
+  /** One logical run, with bounded histories numbered from 1. The base runKey is unchanged. */
+  continuation?: {
+    rootRunId: WorkflowRunId;
+    previousRunId?: WorkflowRunId;
+    successorRunId?: WorkflowRunId;
+    number: number;
+  };
 }
 
 /**
@@ -670,7 +689,7 @@ export interface WorkflowStepRunCall {
 
 /** What a run page needs of a run beside its status. Types; the engine slices fill them. */
 export interface WorkflowRunRecordView {
-  /** Failed loop items captured once at finalization; absent on older runs. */
+  /** Failed loop items across this and preceding continuation parts, captured at finalization; absent on older runs. */
   failedItemCount?: number;
   /** True only for a completed data run whose write steps handled no items. */
   empty?: boolean;

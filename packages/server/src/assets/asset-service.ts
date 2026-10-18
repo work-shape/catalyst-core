@@ -557,7 +557,8 @@ export class AssetWorkflow {
           stored.set,
           view,
           drafted,
-          new Set([assetKey(kind.kind, name ?? "")])
+          new Set([assetKey(kind.kind, name ?? "")]),
+          call.runtime?.locale ?? this.options.config.localization.defaultLocale
         );
     // What is stored and read-only is refused before the definition is read, as a put is.
     const readOnly = storedWritableIssues(kind, current);
@@ -569,10 +570,16 @@ export class AssetWorkflow {
             call.access,
             view.set,
             found,
-            () => {
+            async () => {
               const { scope } = target;
               const write = { type: "upsert", kind: kind.kind, name: name ?? "", scope } as const;
-              assertReferencesWithinOwners(kinds, [{ ...write, config: prepared }], stored.assets);
+              await assertReferencesWithinOwners(
+                kinds,
+                [{ ...write, config: prepared }],
+                stored.assets,
+                call.runtime?.locale ?? this.options.config.localization.defaultLocale,
+                this.options
+              );
             },
             {
               names: kind.kind === "agent" && name !== undefined ? [name] : [],
@@ -658,7 +665,8 @@ export class AssetWorkflow {
       stored.set,
       view,
       written,
-      new Set([assetKey(kind.kind, name)])
+      new Set([assetKey(kind.kind, name)]),
+      call.runtime?.locale ?? this.options.config.localization.defaultLocale
     );
     if (issues.length > 0) {
       throw new AppError("VALIDATION_FAILED", INVALID_ASSET_SET_MESSAGE, { issues });
@@ -685,11 +693,15 @@ export class AssetWorkflow {
     const within = target.kind.withinWrite?.bind(target.kind);
     try {
       if (within === undefined || write === undefined) {
-        return await applyValidatedConfigAssetMutations(this.options, {
-          clientInstanceId: this.options.clientInstanceId,
-          actor,
-          ...batch
-        });
+        return await applyValidatedConfigAssetMutations(
+          this.options,
+          {
+            clientInstanceId: this.options.clientInstanceId,
+            actor,
+            ...batch
+          },
+          call.runtime?.locale
+        );
       }
       // The kind's part of the write commits with the revision or not at all.
       const followUps: AssetWriteFollowUp[] = [];
@@ -701,7 +713,8 @@ export class AssetWorkflow {
               ...this.options,
               configAssets: { ...this.options.configAssets, store: stores.configAssets }
             },
-            { clientInstanceId: this.options.clientInstanceId, actor, ...batch }
+            { clientInstanceId: this.options.clientInstanceId, actor, ...batch },
+            call.runtime?.locale
           );
           const followUp = await within({
             clientInstanceId: this.options.clientInstanceId,

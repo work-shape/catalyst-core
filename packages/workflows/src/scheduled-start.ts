@@ -29,6 +29,8 @@ export type RunOrigin = Pick<WorkflowRun, "trigger" | "startedBy" | "correlation
     | "itemIndex"
     | "itemLabel"
     | "runKey"
+    | "labels"
+    | "continuation"
   > & {
     actor: AuditActor;
     /** The bounds of the parent of a child run: the child counts against its root's slots. */

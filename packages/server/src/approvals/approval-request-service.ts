@@ -1,5 +1,5 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import type { StorePage } from "@work-shape/catalyst-core";
+import type { LocaleCode, StorePage } from "@work-shape/catalyst-core";
 import {
   AppError,
   GRANT_SCOPE_KINDS,
@@ -53,6 +53,11 @@ export interface ApprovalRequestWorkflowOptions {
   auditRecorder: AuditRecorder;
   /** Runs the guardrails of `approval_request.before_create` before a request is filed. */
   guardrails?: GuardrailRunner;
+  /**
+   * The language of the person who opens a request: their account's, else the one their
+   * request names, else the instance's. A kind words its review in it. Absent: the request's.
+   */
+  readerLocale?(userId: string, requested: LocaleCode | undefined): Promise<LocaleCode>;
   onDecided?(request: ApprovalRequest): void | Promise<void>;
 }
 
@@ -126,7 +131,15 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     requestId: string
   ): Promise<ApprovalRequestView> {
     const request = await this.visibleRequest(user, access, requestId);
-    return this.view(user, { access, inList: false }, context, request);
+    const locale = this.options.readerLocale
+      ? await this.options.readerLocale(user.id, context.locale)
+      : context.locale;
+    return this.view(
+      user,
+      { access, inList: false, ...(locale ? { locale } : {}) },
+      context,
+      request
+    );
   }
 
   async listRequests(

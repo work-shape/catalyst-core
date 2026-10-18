@@ -439,7 +439,7 @@
     "/api/v1/app-actions": {
       "get": {
         "operationId": "apps.actions.list",
-        "summary": "List the named actions of one App or of every published App the caller reads, with what a call of each would come to for the caller",
+        "summary": "List the named actions of one App or of every published App the caller reads or uses, with what a call of each would come to for the caller",
         "tags": [
           "Apps"
         ],
@@ -758,6 +758,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "continued",
                         "queued",
                         "running",
                         "waiting",
@@ -20288,6 +20289,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "continued",
                         "queued",
                         "running",
                         "waiting",
@@ -20347,6 +20349,38 @@
                     },
                     "runKey": {
                       "type": "string"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "continuation": {
+                      "type": "object",
+                      "properties": {
+                        "rootRunId": {
+                          "type": "string"
+                        },
+                        "previousRunId": {
+                          "type": "string"
+                        },
+                        "successorRunId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "rootRunId",
+                        "number"
+                      ]
                     },
                     "operationRunId": {
                       "type": "string"
@@ -20631,6 +20665,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "continued",
                         "queued",
                         "running",
                         "waiting",
@@ -20690,6 +20725,38 @@
                     },
                     "runKey": {
                       "type": "string"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "continuation": {
+                      "type": "object",
+                      "properties": {
+                        "rootRunId": {
+                          "type": "string"
+                        },
+                        "previousRunId": {
+                          "type": "string"
+                        },
+                        "successorRunId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "rootRunId",
+                        "number"
+                      ]
                     },
                     "operationRunId": {
                       "type": "string"
@@ -21580,6 +21647,7 @@
                               "status": {
                                 "type": "string",
                                 "enum": [
+                                  "continued",
                                   "queued",
                                   "running",
                                   "waiting",
@@ -21975,6 +22043,7 @@
                           "status": {
                             "type": "string",
                             "enum": [
+                              "continued",
                               "queued",
                               "running",
                               "waiting",
@@ -22034,6 +22103,38 @@
                           },
                           "runKey": {
                             "type": "string"
+                          },
+                          "labels": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "continuation": {
+                            "type": "object",
+                            "properties": {
+                              "rootRunId": {
+                                "type": "string"
+                              },
+                              "previousRunId": {
+                                "type": "string"
+                              },
+                              "successorRunId": {
+                                "type": "string"
+                              },
+                              "number": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "rootRunId",
+                              "number"
+                            ]
                           },
                           "operationRunId": {
                             "type": "string"
@@ -22346,6 +22447,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "continued",
                         "queued",
                         "running",
                         "waiting",
@@ -22405,6 +22507,38 @@
                     },
                     "runKey": {
                       "type": "string"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "continuation": {
+                      "type": "object",
+                      "properties": {
+                        "rootRunId": {
+                          "type": "string"
+                        },
+                        "previousRunId": {
+                          "type": "string"
+                        },
+                        "successorRunId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "rootRunId",
+                        "number"
+                      ]
                     },
                     "operationRunId": {
                       "type": "string"
@@ -22740,6 +22874,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "continued",
                         "queued",
                         "running",
                         "waiting",
@@ -22799,6 +22934,38 @@
                     },
                     "runKey": {
                       "type": "string"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "continuation": {
+                      "type": "object",
+                      "properties": {
+                        "rootRunId": {
+                          "type": "string"
+                        },
+                        "previousRunId": {
+                          "type": "string"
+                        },
+                        "successorRunId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "rootRunId",
+                        "number"
+                      ]
                     },
                     "operationRunId": {
                       "type": "string"
@@ -27329,6 +27496,9 @@
                 "title": {
                   "type": "string"
                 },
+                "scope": {
+                  "$ref": "#/components/schemas/AssetScope"
+                },
                 "view": {
                   "$ref": "#/components/schemas/AppMode"
                 },
@@ -27340,13 +27510,40 @@
                 "actions": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/AppAction"
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/AppAction"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "effect": {
+                            "type": "string",
+                            "enum": [
+                              "reading",
+                              "changing"
+                            ]
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "effect"
+                        ]
+                      }
+                    ]
                   }
                 }
               },
               "required": [
                 "name",
                 "title",
+                "scope",
                 "view",
                 "revision",
                 "actions"
@@ -28219,6 +28416,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "publishNarrative": {
+            "$ref": "#/components/schemas/PublishNarrative"
           },
           "contentRevision": {
             "type": "integer",
@@ -34411,6 +34611,24 @@
         },
         "required": [
           "revision"
+        ]
+      },
+      "PublishNarrative": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "summary",
+          "warnings"
         ]
       },
       "PutAssetRequest": {

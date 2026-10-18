@@ -22,6 +22,7 @@ import {
   type Logger,
   type ModuleSnapshot,
   type PlatformStores,
+  type PublishNarrativeStoredData,
   type ToolDecisionRunner,
   type ToolOperationRunner
 } from "@work-shape/catalyst-core";
@@ -52,6 +53,8 @@ export interface InstanceOperationCallsInput {
   operations?: ChatServerOptions["operations"];
   /** What a conversation about an asset is offered beyond its agent's definition. */
   conversationOffer?: ConversationOfferSource;
+  /** Who sees which stored data, for the publish question's sentence. */
+  publishStoredData?: PublishNarrativeStoredData;
 }
 
 export interface InstanceOperationCalls {
@@ -89,6 +92,7 @@ export function createInstanceOperationCalls(
     configAssets: input.configAssets,
     operations: input.operations,
     guardrails,
+    ...(input.publishStoredData ? { publishStoredData: input.publishStoredData } : {}),
     approvalRequests: {
       store: store.approvals,
       handlers: input.approvalRequestHandlers,

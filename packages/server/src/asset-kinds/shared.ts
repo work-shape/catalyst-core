@@ -110,10 +110,13 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   /** The active account's label for this revision. No account ids or internal names. */
   readRunsAs?(config: JsonObject): Promise<string | undefined>;
   /**
-   * The assets a definition of the kind names by name, for the rule that an asset names what
-   * a workspace owns only when its own owner is that workspace. Left out: it names none.
+   * Every asset the definition names, including operation targets. The common save and
+   * publish checks use this one inventory for reference resolution and owner boundaries.
+   * Kinds with no references return an empty list.
    */
   references?(definition: unknown): readonly { kind: string; name: string }[];
+  /** Workspace targets an instance-owned source may name; every Workflow call checks its principal. */
+  readonly crossOwnerReferences?: readonly string[];
   /** Adjusts what an interactive save sends before it is validated. */
   prepareInteractiveUpsert(input: {
     current: unknown;

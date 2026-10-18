@@ -1,19 +1,14 @@
+import { assetOfOperation } from "./operation-reference";
 import { guardrailConfigSchema, guardrailNameSchema } from "@work-shape/catalyst-config-schema";
 import {
   ASSET_OWNER_KINDS,
   AppError,
-  DATA_STORE_ASSET_KIND,
-  DATA_STORE_OPERATION_PREFIX,
   GUARDRAIL_ACTIONS,
   GUARDRAIL_ASSET_KIND,
   GUARDRAIL_NAME_MAX_LENGTH,
   GUARDRAIL_NAME_PATTERN,
   GUARDRAIL_NAME_RULE,
   GUARDRAIL_READ_ONLY_REASON,
-  KNOWLEDGE_BASE_ASSET_KIND,
-  KNOWLEDGE_OPERATION_PREFIX,
-  WORKFLOW_ASSET_KIND,
-  WORKFLOW_OPERATION_PREFIX,
   asCollaborationWorkspaceId,
   assetScopesEqual,
   defineAssetKind,
@@ -42,27 +37,6 @@ function readOnly(): AppError {
     `${GUARDRAIL_READ_ONLY_REASON}: a Guardrail of release config is read-only here. Change it in release config`,
     { reason: GUARDRAIL_READ_ONLY_REASON }
   );
-}
-
-/** The kind of asset each operation prefix names one of, by its name after the prefix. */
-const OPERATION_ASSET_KINDS: readonly (readonly [prefix: string, kind: string])[] = [
-  [DATA_STORE_OPERATION_PREFIX, DATA_STORE_ASSET_KIND],
-  [WORKFLOW_OPERATION_PREFIX, WORKFLOW_ASSET_KIND],
-  [KNOWLEDGE_OPERATION_PREFIX, KNOWLEDGE_BASE_ASSET_KIND]
-];
-
-/**
- * The asset an operation filter names, as `data_store.kunden.insert` names the Data Store
- * `kunden`: nothing for a prefix of every asset of a kind, `data_store.*`, which a workspace
- * guardrail narrows to its workspace by its reach.
- */
-function assetOfOperation(operation: string): { kind: string; name: string } | undefined {
-  for (const [prefix, kind] of OPERATION_ASSET_KINDS) {
-    if (!operation.startsWith(prefix)) continue;
-    const name = operation.slice(prefix.length).split(".")[0];
-    return name === undefined || name === "" || name === "*" ? undefined : { kind, name };
-  }
-  return undefined;
 }
 
 /**
@@ -215,6 +189,8 @@ export function createGuardrailAssetKind(): WorkflowAssetKind {
         }
       })
     }),
+    // A filter governs an event; it consumes no asset. Reach is checked separately below.
+    references: () => [],
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,

@@ -29,6 +29,7 @@ export interface PreparedStart {
   published: WorkflowDefinitionRevision;
   trigger: Extract<WorkflowStep, { type: "trigger" }>;
   input: JsonObject;
+  checkpoint?: import("@work-shape/catalyst-core").NewWorkflowRun["checkpoint"];
   principal: WorkflowRun["principal"];
 }
 

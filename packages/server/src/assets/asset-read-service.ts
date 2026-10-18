@@ -14,7 +14,6 @@ import {
   type ActorAccess,
   type AgentAvailability,
   type AssetScope,
-  type ConfigAssetKey,
   type ConfigAssetRecord,
   type FileSet,
   type JsonObject,
@@ -24,7 +23,7 @@ import {
   type StorePage
 } from "@work-shape/catalyst-core";
 import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
-import { accessResource, decide, type AssetCall } from "./asset-access";
+import { accessResource, decide, listedTo, readsAppDraft, type AssetCall } from "./asset-access";
 import { isReleaseSync } from "./asset-write-rules";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { AddresseeNames, WorkflowAssetKind } from "../asset-kinds/shared";
@@ -36,6 +35,7 @@ import {
   type AssetTarget
 } from "./asset-target";
 import type { AssetWorkflowOptions } from "../types";
+import { unavailablePublishNarrative } from "../publish-narrative/publish-narrator";
 
 /**
  * Who is told of an agent's pending draft: a holder of `agent.write` on it, and the holder of
@@ -109,7 +109,8 @@ export class AssetReadWorkflow {
                   summarizeAsset(
                     kind,
                     asset.name,
-                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id))
+                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id)) ||
+                      kind.lifecycle === "active"
                       ? revisions.active
                       : revisions.published
                   ).title
@@ -192,16 +193,36 @@ export class AssetReadWorkflow {
             })
           ).get(asset.id)
         : undefined;
+    // Only a kind with a publish question reads the reader's language: an App, a Workflow, a
+    // Knowledge Base.
+    const asksPublish =
+      !publishedOnly &&
+      (target.kind.publishQuestion !== undefined || target.kind.publishReach !== undefined);
+    const locale = asksPublish ? await this.readerLocale(call) : undefined;
     const publishQuestion =
-      !publishedOnly && target.kind.publishQuestion
+      locale && target.kind.publishQuestion
         ? await target.kind.publishQuestion({
             assetId: asset.id,
             scope: asset.scope,
             config: content.config,
-            locale: await this.readerLocale(call),
+            locale,
             names: this.addresseeNames()
           })
         : undefined;
+    // The sentence the publish question leads with, for the revision this read returns (PUBQ-1).
+    const publishNarrative = locale
+      ? await this.options.operationCalls?.publishNarrator
+          ?.narrate({
+            kind: target.kind.kind,
+            name: asset.name,
+            scope: asset.scope,
+            revision: content.contentRevision ?? asset.revision,
+            config: content.config,
+            locale,
+            access: call.access
+          })
+          .catch(() => unavailablePublishNarrative(locale))
+      : undefined;
     const agentStatus =
       target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;
     // What the caller may do here, decided as each write decides it, so the page offers no
@@ -222,6 +243,7 @@ export class AssetReadWorkflow {
       ...content,
       ...(runsAs === undefined ? {} : { runsAs }),
       ...(publishQuestion?.length ? { publishQuestion } : {}),
+      ...(publishNarrative ? { publishNarrative } : {}),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
       allowed,
@@ -353,7 +375,12 @@ export class AssetReadWorkflow {
     return {
       id: record.id,
       kind: record.kind,
-      ...summarizeAsset(kind, record.name, record.publishedConfig, locale),
+      ...summarizeAsset(
+        kind,
+        record.name,
+        kind.lifecycle === "active" ? record.config : record.publishedConfig,
+        locale
+      ),
       scope: record.scope,
       ...(namespace ? { namespace } : {}),
       revision: record.publishedRevision ?? record.revision,
@@ -572,18 +599,7 @@ function isPublished(kind: WorkflowAssetKind, asset: ConfigAssetRecord | undefin
  * Whether a list of the kind shows the caller this asset: whoever reads it is shown all of it,
  * a holder of the use right its published view.
  */
-export function listedTo(
-  kind: WorkflowAssetKind,
-  access: ActorAccess,
-  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published">
-): boolean {
-  const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
-  return (
-    access.authorize(kind.actions.read, resource).allowed ||
-    readsAppDraft(kind, access, resource) ||
-    showsPublishedView(kind, access, resource, asset.published === true)
-  );
-}
+export { listedTo } from "./asset-access";
 
 /**
  * The rule of every kind with a published revision: whoever holds its read right or its use
@@ -627,20 +643,6 @@ function summarizeAsset(
     }
     throw error;
   }
-}
-
-/** App draft writers and publishers read the same draft in the list as in assets.get. */
-function readsAppDraft(
-  kind: WorkflowAssetKind,
-  access: ActorAccess,
-  resource: AssetTarget["resource"]
-): boolean {
-  return (
-    kind.kind === "app" &&
-    (access.authorize(kind.actions.write, resource).allowed ||
-      (kind.actions.publish !== undefined &&
-        access.authorize(kind.actions.publish, resource).allowed))
-  );
 }
 
 /** List and detail answers use the write paths' in-memory authorization decision. */

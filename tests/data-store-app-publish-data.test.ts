@@ -213,6 +213,38 @@ describe("the stored data an App's publish would show", () => {
       audience,
       truncated: false
     });
+    // PUBQ-1 consumes the same revision, audience and provenance through its metadata port.
+    // No row estimate, statement, parameter or value enters the generated sentence's facts.
+    expect(
+      await world.dataStores.publishNarrativeData.appRevision(asPublisher, "kunden", 2)
+    ).toEqual({
+      audience: { workspace: audience.workspace, holders: 1 },
+      stores: [
+        {
+          title: "Findings",
+          unavailable: false,
+          fillers: [{ title: "Nachtimport", connections: ["Exampledata"] }]
+        }
+      ],
+      truncated: false
+    });
+    expect(
+      await world.dataStores.publishNarrativeData.storeReaders(accessOf(admin), ["findings"])
+    ).toEqual([
+      {
+        store: "findings",
+        title: "Findings",
+        readers: [
+          {
+            kind: "app",
+            title: "Kunden",
+            audience: { workspace: audience.workspace, holders: 1 }
+          }
+        ],
+        hidden: 0,
+        truncated: false
+      }
+    ]);
     // An older revision names its own actions, not the draft's and not the live one's by chance.
     expect(await world.dataStores.appSources(asPublisher, "kunden", 1)).toMatchObject({
       stores: [{ actions: ["list"] }],

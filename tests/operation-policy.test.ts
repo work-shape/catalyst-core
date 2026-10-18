@@ -348,7 +348,7 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
     expect(resolve({ ...step, definition: { ...changing, policyFloor: "confirm" } })).toEqual({
       value: "approval",
       next: "await_approval",
-      source: "instance_default"
+      source: "policy_floor"
     });
     expect(
       resolve({

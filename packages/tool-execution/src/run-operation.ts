@@ -43,7 +43,11 @@ import {
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
-import { approvedByCaller, resolveGuardedPolicy } from "./operation-policy-call";
+import {
+  approvedByCaller,
+  resolveGuardedPolicy,
+  operationWorkspace
+} from "./operation-policy-call";
 import { recordedResult } from "./operation-recorded-result";
 import { hashInput } from "./input-hash";
 
@@ -159,7 +163,7 @@ export async function runOperation(
   const frozen: OperationCall = {
     ...call,
     input,
-    workspaceId: call.workspaceId ?? resource?.workspaceId
+    workspaceId: operationWorkspace(call, resource)
   };
   // The hash is kept and shown with the run, so it is never taken over a secret of the input.
   const withoutSecrets = definition.inputWithoutSecrets?.(input);

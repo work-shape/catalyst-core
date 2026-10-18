@@ -14,6 +14,7 @@ import {
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
+import { usePublishNarrative, type PublishNarrativeRead } from "../../shared/publish-narrative";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import {
   appDataLines,
@@ -151,7 +152,8 @@ export function useAppActions(app: string, enabled: boolean): AppActionsRead {
       status: "ready",
       view: listed.view,
       revision: listed.revision,
-      actions: listed.actions
+      // A reader gets every action in full; a summary is what a holder of use alone gets.
+      actions: listed.actions.flatMap((action) => ("kind" in action ? [action] : []))
     };
   }
   return query.isError || query.data
@@ -224,6 +226,27 @@ export function useAppPublishData(app: string, revision: number): AppPublishData
     revision,
     t,
     locale
+  );
+}
+
+/**
+ * The instance's sentence on what publishing one revision of an App makes live (PUBQ-1),
+ * read for that revision's number while the question is open.
+ */
+export function useAppPublishNarrative(
+  workspaceId: string,
+  app: string,
+  revision: number
+): PublishNarrativeRead {
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  return usePublishNarrative([apiBaseUrl, APP_ASSET_KIND, workspaceId, app, revision], (signal) =>
+    client.assets
+      .get({
+        params: { kind: APP_ASSET_KIND, name: app },
+        query: { workspaceId, revision: String(revision) },
+        signal
+      })
+      .then((asset) => asset.publishNarrative)
   );
 }
 

@@ -78,3 +78,9 @@ export type {
 export * from "./tool-operation";
 export * from "./waiting-operation";
 export * from "./waiting-tool-call";
+
+export {
+  resolveGuardedPolicy,
+  operationWorkspace,
+  type OperationPolicyContext
+} from "./operation-policy-call";

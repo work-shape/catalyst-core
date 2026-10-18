@@ -854,6 +854,7 @@ export const DATABASE_RELATION_TYPES = [
 export type DatabaseRelationType = (typeof DATABASE_RELATION_TYPES)[number];
 
 export const WORKFLOW_RUN_STATUSES = [
+  "continued",
   "queued",
   "running",
   "waiting",
@@ -1034,6 +1035,7 @@ export const WORKFLOW_STEP_RUN_STATUSES = [
 export type WorkflowStepRunStatus = (typeof WORKFLOW_STEP_RUN_STATUSES)[number];
 
 export const WORKFLOW_ENDED_STATUSES = [
+  "continued",
   "done",
   "failed",
   "cancelled",

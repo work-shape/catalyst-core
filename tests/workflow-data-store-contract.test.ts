@@ -238,6 +238,7 @@ describe("the names of a Workflow", () => {
   it("fixes the states of a run and of a step run", () => {
     expect(WORKFLOW_RUN_MODES).toEqual(["live", "test"]);
     expect(WORKFLOW_RUN_STATUSES).toEqual([
+      "continued",
       "queued",
       "running",
       "waiting",
@@ -247,11 +248,11 @@ describe("the names of a Workflow", () => {
       "limit_reached"
     ]);
     expect(WORKFLOW_STEP_RUN_STATUSES).toEqual(
-      WORKFLOW_RUN_STATUSES.filter((status) => status !== "limit_reached")
+      WORKFLOW_RUN_STATUSES.filter((status) => status !== "limit_reached" && status !== "continued")
     );
     expectTypeOf<WorkflowRunMode>().toEqualTypeOf<"live" | "test">();
     expectTypeOf<WorkflowStepRunStatus>().toEqualTypeOf<
-      Exclude<WorkflowRunStatus, "limit_reached">
+      Exclude<WorkflowRunStatus, "limit_reached" | "continued">
     >();
     expectTypeOf<WorkflowRunId>().not.toEqualTypeOf<WorkflowStepRunId>();
   });

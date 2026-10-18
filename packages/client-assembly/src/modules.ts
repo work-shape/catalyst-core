@@ -182,6 +182,7 @@ export async function assembleModules(parts: ModuleAssemblyParts): Promise<Assem
     ),
     assetKinds: assemblies.flatMap((assembly) => assembly.assetKinds ?? []),
     tools: assemblies.flatMap((assembly) => assembly.tools ?? []),
+    ...firstPublishNarrativeData(assemblies),
     async start(runtime): Promise<StartedModules> {
       for (const assembly of assemblies) {
         for (const source of assembly.operationSources?.(runtime) ?? []) {
@@ -277,4 +278,12 @@ export function assertCommandWorkerServesModuleJobKinds(
       );
     }
   }
+}
+
+/** The stored-data answer of the publish question: the first module that offers one. */
+function firstPublishNarrativeData(
+  assemblies: readonly ModuleAssembly[]
+): Pick<AssembledModules, "publishNarrativeData"> {
+  const found = assemblies.find((assembly) => assembly.publishNarrativeData)?.publishNarrativeData;
+  return found ? { publishNarrativeData: found } : {};
 }

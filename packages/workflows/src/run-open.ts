@@ -1,3 +1,4 @@
+import { workflowLabels } from "./run-labels";
 import { checkDatasetSchemas } from "./dataset-values";
 import { WorkflowStepFailure } from "./step-failure";
 import { datasetReferences } from "./dataset-schema";
@@ -139,6 +140,8 @@ export function createRunOpening(options: {
       mode,
       definition: published.manifest,
       input,
+      ...(prepared.checkpoint ? { checkpoint: prepared.checkpoint } : {}),
+      labels: started.labels ?? workflowLabels(published.manifest, input),
       principal,
       createdAt: createdAt.toISOString(),
       ...origin,
@@ -151,12 +154,14 @@ export function createRunOpening(options: {
       ).toISOString()
     });
     if (!run) return undefined;
-    const references = datasetReferences(input);
+    const references = datasetReferences({ input, checkpoint: prepared.checkpoint ?? null });
     for (const ref of references) {
       const row = await tx.workflowRunDatasets.get({ clientInstanceId, id: ref.$dataset });
       if (!row || row.state !== "complete")
         throw new AppError("NOT_FOUND", "The dataset has expired", { reason: "dataset_expired" });
-      const sourceRunId = run.parentRunId ?? datasetAccess?.sourceRunId;
+      // A successor inherits only what its predecessor could read, including datasets
+      // explicitly handed down by its parent. Parent access alone is not chain access.
+      const sourceRunId = datasetAccess?.sourceRunId ?? run.parentRunId;
       if (sourceRunId) {
         if (
           !(await tx.workflowRunDatasets.canRead({

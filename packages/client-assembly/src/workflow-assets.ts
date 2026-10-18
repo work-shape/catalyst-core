@@ -46,6 +46,7 @@ import {
   workflowStepFilesRefusal,
   workflowKindIssues,
   workflowLimitIssues,
+  workflowContinuationIssues,
   workflowRunPrincipal,
   type WorkflowDefinitionResult,
   type WorkflowLimitContext,
@@ -218,6 +219,45 @@ export function createWorkflowAssetKind(
           : { description: workflow.manifest.description })
       })
     }),
+    crossOwnerReferences: ["app", "data_store", "knowledge_base"],
+    references: (config) => {
+      // onFailure is a declared reference even before the engine executes failure Workflows.
+      // Inventory the rest through the bounded engine parser without that unsupported field.
+      const raw = z
+        .object({ onFailure: z.string().optional() })
+        .loose()
+        .safeParse(manifestOfConfigSchema.safeParse(config).data?.manifest);
+      if (
+        !raw.success ||
+        Buffer.byteLength(JSON.stringify(raw.data), "utf8") > WORKFLOW_MANIFEST_MAX_BYTES
+      )
+        return [];
+      const { onFailure, ...manifest } = raw.data;
+      const parsed = parseStoredManifest(manifest);
+      if (!parsed.ok) return [];
+      const references: { kind: string; name: string }[] = [];
+      const operation = (name: string) => {
+        const connection = parseConnectionOperationName(name);
+        if (connection) references.push({ kind: "connection", name: connection.connection });
+        const match = /^(data_store|knowledge|workflow|app)\.([^.]+)\./u.exec(name);
+        const kind = match?.[1];
+        const asset = match?.[2];
+        if (kind && asset)
+          references.push({ kind: kind === "knowledge" ? "knowledge_base" : kind, name: asset });
+      };
+      for (const { step } of indexWorkflowSteps(parsed.manifest).values()) {
+        if (step.type === "workflow")
+          references.push({ kind: WORKFLOW_ASSET_KIND, name: step.workflow });
+        if (step.type === "operation") operation(step.operation);
+        if (step.type === "notify" && step.link?.kind === "app")
+          references.push({ kind: "app", name: step.link.app });
+      }
+      for (const tool of parsed.manifest.tools ?? []) operation(tool);
+      const failure = onFailure;
+      if (failure?.startsWith("workflow."))
+        references.push({ kind: WORKFLOW_ASSET_KIND, name: failure.slice("workflow.".length) });
+      return references;
+    },
     async readRunsAs(config) {
       const runAs = runAsOfConfigSchema.safeParse(config).data?.manifest.runAs;
       if (typeof runAs !== "string") return undefined;
@@ -243,6 +283,9 @@ export function createWorkflowAssetKind(
       const parsed = workflowConfigSchema.parse(config);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      const continuation = await workflowContinuationIssues(result.manifest, options.registry?.());
+      if (continuation.length > 0)
+        throw workflowDefinitionRefusal(result.manifest.id, continuation);
       const kindIssues = workflowKindIssues(result.manifest);
       if (kindIssues.length > 0) throw workflowDefinitionRefusal(parsed.name, kindIssues);
       // A limit above the operator's ceiling is refused here, by name, and never clamped.
@@ -328,6 +371,9 @@ export function createWorkflowAssetKind(
       const config = workflowConfigSchema.parse(input.config);
       const result = parseStoredManifest(config.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(config.name, result.issues);
+      const continuation = await workflowContinuationIssues(result.manifest, options.registry?.());
+      if (continuation.length > 0)
+        throw workflowDefinitionRefusal(result.manifest.id, continuation);
       const kindIssues = workflowKindIssues(result.manifest);
       if (kindIssues.length > 0) throw workflowDefinitionRefusal(config.name, kindIssues);
       await createWorkflowLiveCheck(

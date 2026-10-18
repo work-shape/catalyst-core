@@ -247,15 +247,15 @@ describe("the skill for writing a Workflow", () => {
     it("says of onFailure and labels what the parser says", () => {
       expect(codes(manifest({ onFailure: "notify" }))).toEqual([]);
       expect(codes(manifest({ onFailure: "workflow.cleanup" }))).toEqual(["not_supported_yet"]);
-      expect(codes(manifest({ labels: { client: { value: "acme" } } }))).toEqual([
-        "not_supported_yet"
-      ]);
+      const labels = { client: { value: "acme" } };
+      const labelled = manifest({ labels });
+      expect(labelled.ok ? labelled.manifest.labels : labelled.issues).toEqual(labels);
       const [, fields = ""] = content.split("## What a manifest is");
       expect(fields.split("## ")[0]).toContain("- `onFailure`: optional. `notify`, the default");
       const notRun = content.split("## What this engine does not run yet")[1] ?? "";
-      expect(notRun).toContain(
-        "- `labels` on the manifest, and `onFailure: workflow.<id>` (EW-13);"
-      );
+      expect(fields.split("## ")[0]).toContain("- `labels`: optional mapping");
+      expect(notRun).toContain("- `onFailure: workflow.<id>` on the manifest;");
+      expect(notRun).not.toContain("`labels`");
       // What it said before NOTIFY-b ran `notify`.
       expect(content).not.toContain("`labels` and `onFailure` on the manifest");
       const mappings = content.split("## Mappings and references")[1]?.split("## ")[0] ?? "";
