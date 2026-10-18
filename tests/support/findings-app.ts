@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 import { expect } from "vitest";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { WorkflowAssetKind } from "@work-shape/catalyst-server";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import { loadSecretKeyring } from "@work-shape/catalyst-connections";
@@ -25,8 +26,9 @@ import { createTestInstance } from "./test-instance";
 // An App that reads a Data Store, on real rows and a real database of the store: the Data
 // Store `findings` with its one migration, published as the asset workflow publishes one, and
 // the App `findings` whose statements list its rows and add one. What an assembled instance
-// wires between the two is wired here: the operations of the stores in the call path, and the
-// kind `data_store` among the kinds an App's manifest is checked against.
+// wires between the two is wired here: the operations of the stores in the call path, the
+// kind `data_store` among the kinds an App's manifest is checked against, and the route that
+// says where an App's data comes from.
 
 const silent: Logger = {
   debug() {},
@@ -188,6 +190,13 @@ export async function setupFindingsApp(): Promise<FindingsWorld> {
       const { dataStores: _dropped, ...manifest } = built.manifest;
       return { ...built, manifest };
     },
+    // As the assembly registers it: the right is asked of the App, inside the read.
+    register: (routes) =>
+      routes.operation(apiOperations["data_stores.app_sources"], {
+        authorize: () => ({ allowed: true }),
+        module: "dataStores",
+        execute: (input, { access }) => dataStores.appSources(access, input.app, input.revision)
+      }),
     server(_stores, config) {
       const { snapshot } = resolveInstanceModules(config, []);
       const modules: ModuleSnapshot = {

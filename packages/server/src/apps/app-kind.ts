@@ -12,6 +12,7 @@ import {
   CONNECTION_ASSET_KIND,
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
+  appReachesDataStore,
   dataStoreRefusalError,
   defineAssetKind,
   type ActorAccess,
@@ -220,10 +221,12 @@ async function requireDataStores(input: {
       asset?.status === "active" && asset.publishedRevisionId !== undefined
         ? await stores.dataStores.getDataStore({ clientInstanceId, id: asset.id })
         : undefined;
-    const inScope =
-      asset?.scope.kind !== "workspace" ||
-      (scope.kind === "workspace" && asset.scope.workspaceId === scope.workspaceId);
-    if (!record || record.status === "retired" || !inScope) {
+    if (
+      !asset ||
+      !record ||
+      record.status === "retired" ||
+      !appReachesDataStore(scope, asset.scope)
+    ) {
       throw dataStoreRefusalError("data_store_unavailable", name);
     }
     if (minSchema !== undefined && record.level < minSchema) {
@@ -236,7 +239,7 @@ async function requireDataStores(input: {
       kind: DATA_STORE_ASSET_KIND,
       assetId: record.id,
       name,
-      ...(asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+      ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
     };
     for (const action of actions) {
       if (action.dataStore === name) {

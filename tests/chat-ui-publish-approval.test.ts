@@ -1,5 +1,7 @@
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { renderItem } from "./chat-ui-inbox-harness";
+import { appPublishDataKey } from "@work-shape/catalyst-chat-ui/apps";
+import { INBOX_API_BASE_URL, renderItem } from "./chat-ui-inbox-harness";
 
 // GR-PUB-1 in the interface: the Inbox item of a publish that waits for an approver. The switch
 // of the guardrail the release ships is in `chat-ui-guardrails-list.test.ts`.
@@ -61,5 +63,88 @@ describe("the Inbox item of a publish that waits", () => {
     expect(publish({ stale: "draft_moved" })).toMatch(
       /data-testid="publish-review-stale".*The draft changed since the request was made/u
     );
+  });
+
+  it("names who would see which stored data for the version it publishes, not the live one: check 67", () => {
+    const answered = new QueryClient();
+    const store = (actions: string[]) => ({
+      name: "findings",
+      title: "Findings",
+      fillers: [
+        { kind: "workflow", name: "nightly", title: "Nachtimport", connections: ["Exampledata"] }
+      ],
+      actions,
+      rows: { estimate: 312, tables: 2, measuredAt: "2026-10-18T03:00:00Z" }
+    });
+    answered.setQueryData(appPublishDataKey(INBOX_API_BASE_URL, "offers", 2), {
+      stores: [store(["list_findings"])],
+      revision: 2,
+      audience: { workspace: { title: "Kai Spezis", members: 14 }, holders: [], hiddenHolders: 0 },
+      truncated: false
+    });
+    // What the live version 1 shows is cached too, and is not what this request makes live.
+    answered.setQueryData(appPublishDataKey(INBOX_API_BASE_URL, "offers", 1), {
+      stores: [store(["live_only_action"])],
+      revision: 1,
+      audience: { workspace: { title: "Live Team", members: 3 }, holders: [], hiddenHolders: 0 },
+      truncated: false
+    });
+    const markup = renderItem(
+      {
+        kind: "app_publish",
+        summary: "assets.publish",
+        preview,
+        canDecide: true
+      },
+      { locale: "en", queryClient: answered }
+    );
+    expect(markup).toMatch(/data-field="data-audience".*Everyone in Kai Spezis \(14 people\)/u);
+    expect(markup).toMatch(/data-data-store="findings".*The action list_findings reads from it\./u);
+    expect(markup).toContain("about 312 rows in 2 tables when last measured");
+    expect(markup).toContain("which the Workflow “Nachtimport” copies from Exampledata.");
+    expect(markup).not.toContain("live_only_action");
+    expect(markup).not.toContain("Live Team");
+
+    // A Workflow's publish and an App that reads no store have no such lines; neither has a
+    // request whose App is gone.
+    expect(publish({ kind: "workflow" })).not.toContain("data-audience");
+    expect(publish({ dataStores: [] })).not.toContain("data-audience");
+    expect(publish({ stale: "gone" })).not.toContain("data-audience");
+    // Until the answer is there the lines are being read.
+    expect(publish()).toContain('data-field="data-audience"');
+  });
+
+  it("holds Approve until the lines on stored data are there, as Publish waits in the dialog", () => {
+    const button = (markup: string, decision: string) =>
+      markup.match(new RegExp(`<button[^>]*data-decision="${decision}"[^>]*>`, "u"))?.[0] ?? "";
+    const held = (markup: string) => button(markup, "approve").includes(' disabled=""');
+    const answer = {
+      stores: [{ name: "findings", title: "Findings", fillers: [], actions: ["list_findings"] }],
+      revision: 2,
+      audience: { workspace: { title: "Kai Spezis", members: 14 }, holders: [], hiddenHolders: 0 },
+      truncated: false
+    };
+    const item = { kind: "app_publish", summary: "assets.publish", preview, canDecide: true };
+    const answered = (data: unknown) => {
+      const client = new QueryClient();
+      client.setQueryData(appPublishDataKey(INBOX_API_BASE_URL, "offers", 2), data);
+      return renderItem(item, { locale: "en", queryClient: client });
+    };
+
+    // While they load: Approve is held, Decline is not.
+    const loading = publish();
+    expect(button(loading, "approve")).not.toBe("");
+    expect(held(loading)).toBe(true);
+    expect(button(loading, "reject")).not.toContain(' disabled=""');
+    // After their read failed: an answer that does not describe this version is one.
+    const failed = answered({ ...answer, revision: 1 });
+    expect(failed).toContain('data-testid="app-publish-data-failed"');
+    expect(held(failed)).toBe(true);
+    expect(held(answered({ ...answer, audience: undefined }))).toBe(true);
+    // Once they are there.
+    expect(held(answered(answer))).toBe(false);
+    // A publish that shows no such lines waits for nothing.
+    expect(held(publish({ kind: "workflow" }))).toBe(false);
+    expect(held(publish({ dataStores: [] }))).toBe(false);
   });
 });

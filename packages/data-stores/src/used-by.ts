@@ -13,6 +13,7 @@ import {
   KNOWLEDGE_BASE_ASSET_KIND,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  appReachesDataStore,
   parseConnectionOperationName,
   workflowStepsDeep,
   type ActorAccess,
@@ -42,8 +43,21 @@ import type { PublishedStore } from "./verbs";
 /** How long the read may take, in milliseconds. It reads no database of a store. */
 const DATA_STORE_USED_BY_TIMEOUT_MS = 15_000;
 
-/** The kind of an App and the rights that show one, as the kind `app` registers them. */
-const APP = { kind: "app", read: "app.read", use: "app.use" } as const;
+/** The kind of an App and its rights, as the kind `app` registers them. */
+const APP = {
+  kind: "app",
+  read: "app.read",
+  use: "app.use",
+  write: "app.write",
+  publish: "app.publish",
+  approve: "app.approve"
+} as const;
+
+/**
+ * Who may read what one stored revision of an App would show: whoever may change it, publish
+ * it, or decide a held publish of it.
+ */
+const APP_REVISION_RIGHTS = [APP.write, APP.publish, APP.approve] as const;
 
 const sourceSchema = z.object({
   /** The id of the Connection whose operations the definition calls. */
@@ -460,13 +474,56 @@ const appSourcesSchema = z.object({
           title: z.string(),
           connections: z.array(z.string())
         })
-      )
+      ),
+      /**
+       * No store the App may reach stands under the name: none, a retired one, or one of
+       * another workspace, which a publish refuses. Nothing of such a store is told: `title` is
+       * the name the App declares, and it has no fillers and no measurement.
+       */
+      unavailable: z.literal(true).optional(),
+      /** Of one revision: the names of its reading `sql` actions on the store. */
+      actions: z.array(z.string()).optional(),
+      /**
+       * Of one revision: the store's last measurement, for the whole store. It bounds what the
+       * actions may select and is not what they select: they take parameters.
+       */
+      rows: z
+        .object({ estimate: z.number().int(), tables: z.number().int(), measuredAt: z.string() })
+        .optional()
     })
   ),
+  /** The revision described, where one was asked for. */
+  revision: z.number().int().optional(),
+  /** Of one revision: who may use the App, and so sees what its `sql` actions select. */
+  audience: audienceSchema.optional(),
   truncated: z.boolean()
 });
 
+type AppSources = z.infer<typeof appSourcesSchema>;
+
 const storeTitleSchema = z.object({ title: z.string().min(1) });
+
+/** The reading `sql` actions of a revision's config by store, each name once, in manifest order. */
+function readingActionsByStore(config: unknown): Map<string, string[]> {
+  const parsed = appConfigSchema.safeParse(config);
+  const byStore = new Map<string, string[]>();
+  if (!parsed.success) return byStore;
+  for (const action of parsed.data.manifest.actions) {
+    const sql = readingSqlActionSchema.safeParse(action);
+    if (!sql.success || sql.data.effect === "changing") continue;
+    const names = byStore.get(sql.data.dataStore) ?? [];
+    if (!names.includes(sql.data.name)) names.push(sql.data.name);
+    byStore.set(sql.data.dataStore, names);
+  }
+  return byStore;
+}
+
+const readingSqlActionSchema = z.object({
+  kind: z.literal("sql"),
+  name: z.string(),
+  dataStore: z.string(),
+  effect: z.string()
+});
 
 /**
  * Where the data of one published App comes from, for whoever uses it: each store its reading
@@ -474,12 +531,22 @@ const storeTitleSchema = z.object({ title: z.string().min(1) });
  * Connections it calls. It is what the App declares, so its user reads every name of it, as on
  * the App itself; an account is never named. An App the caller may neither use nor read is not
  * there for it.
+ *
+ * With `revision`, the same of that stored revision, whether or not it is published, for
+ * whoever may change, publish or approve the App (DS-13b): what a publish of it would show and
+ * to whom. Each store also carries the reading actions on it and its last measurement, and the
+ * answer carries the App's audience. It reads no database of a store and no statement leaves.
+ *
+ * A store is described only where a publish of the App would reach it, by the rule the publish
+ * asks (`appReachesDataStore`): a draft may name any store, and naming one tells nothing of it.
+ * Any other is named as the App declares it and marked unavailable.
  */
 export async function appDataSources(
   runtime: DataStoreRuntime,
   access: ActorAccess,
-  app: string
-): Promise<z.infer<typeof appSourcesSchema>> {
+  app: string,
+  revision?: number
+): Promise<AppSources> {
   const { clientInstanceId, stores } = runtime;
   const published = (kind: string, names?: readonly string[]) =>
     stores.configAssets.listPublishedConfigAssets({
@@ -488,37 +555,62 @@ export async function appDataSources(
       ...(names ? { names } : {}),
       limit: names ? names.length : DATA_STORE_USED_BY_MAX_ASSETS + 1
     });
-  const [record] = await published(APP.kind, [app]);
-  if (
-    record?.status !== "active" ||
-    ![APP.use, APP.read].some((right) => access.authorize(right, assetResource(record)).allowed)
-  ) {
-    throw new AppError("NOT_FOUND", "App is not available");
+  const [record, config] =
+    revision === undefined
+      ? await publishedApp(runtime, access, app)
+      : await storedRevision(runtime, access, app, revision);
+  const actionsByStore = readingActionsByStore(config);
+  const read = [...actionsByStore.keys()];
+  const audience = revision === undefined ? undefined : await appAudience(runtime, access, record);
+  const described = {
+    ...(revision === undefined ? {} : { revision }),
+    ...(audience ? { audience: audience.audience } : {})
+  };
+  if (read.length === 0) {
+    return { stores: [], ...described, truncated: audience?.truncated ?? false };
   }
-  const config = appConfigSchema.safeParse(record.publishedConfig);
-  const read = config.success
-    ? [
-        ...new Set(
-          config.data.manifest.actions.flatMap((action) => {
-            const parsed = appActionSchema.safeParse(action);
-            return parsed.success && parsed.data.kind === "sql" && parsed.data.effect !== "changing"
-              ? [parsed.data.dataStore]
-              : [];
-          })
-        )
-      ]
-    : [];
-  if (read.length === 0) return { stores: [], truncated: false };
   const [storeAssets, apps, workflows] = await Promise.all([
     published(DATA_STORE_ASSET_KIND, read),
     published(APP.kind),
     published(WORKFLOW_ASSET_KIND)
   ]);
+  // Only the stores a publish of the App would reach, by the publish's own rule.
+  const inReach = storeAssets.filter(
+    (asset) => asset.status === "active" && appReachesDataStore(record.scope, asset.scope)
+  );
+  // Point reads of the selected stores only; no operation discovery or store database calls.
+  const standing = (
+    await Promise.all(
+      inReach.map((asset) => stores.dataStores.getDataStore({ clientInstanceId, id: asset.id }))
+    )
+  ).flatMap((store) => (store && store.status !== "retired" ? [store] : []));
+  const reachable = new Set(standing.map((store) => store.name));
   const titles = new Map(
-    storeAssets.flatMap((asset) => {
+    inReach.flatMap((asset) => {
       const parsed = storeTitleSchema.safeParse(asset.publishedConfig);
-      return parsed.success ? [[asset.name, parsed.data.title] as const] : [];
+      return parsed.success && reachable.has(asset.name)
+        ? [[asset.name, parsed.data.title] as const]
+        : [];
     })
+  );
+  const rowsOf = new Map(
+    standing.flatMap((store) =>
+      revision === undefined ||
+      store.rowEstimate === undefined ||
+      store.tableCount === undefined ||
+      store.sizeMeasuredAt === undefined
+        ? []
+        : [
+            [
+              store.name,
+              {
+                estimate: store.rowEstimate,
+                tables: store.tableCount,
+                measuredAt: store.sizeMeasuredAt
+              }
+            ] as const
+          ]
+    )
   );
   const active = (assets: readonly ConfigAssetRecord[]) =>
     assets.slice(0, DATA_STORE_USED_BY_MAX_ASSETS).filter((asset) => asset.status === "active");
@@ -532,23 +624,111 @@ export async function appDataSources(
       return use?.writes ? [{ kind: APP.kind, asset, use }] : [];
     })
   ];
-  const byStore = read.map((store) => ({ store, fillers: fillersOf(store) }));
+  const byStore = read.map((store) => ({
+    store,
+    fillers: reachable.has(store) ? fillersOf(store) : []
+  }));
   const connections = await connectionTitles(
     runtime,
     undefined,
     byStore.flatMap(({ fillers }) => fillers.flatMap(({ use }) => use.connections))
   );
   return {
-    stores: byStore.map(({ store, fillers }) => ({
-      name: store,
-      title: titles.get(store) ?? store,
-      fillers: fillers.map(({ kind, asset, use }) => ({
-        kind,
-        name: asset.name,
-        title: use.title,
-        connections: use.connections.map((connection) => connections.get(connection) ?? connection)
-      }))
-    })),
-    truncated: Math.max(apps.length, workflows.length) > DATA_STORE_USED_BY_MAX_ASSETS
+    stores: byStore.map(({ store, fillers }) => {
+      const rows = rowsOf.get(store);
+      return {
+        name: store,
+        title: titles.get(store) ?? store,
+        ...(reachable.has(store) ? {} : { unavailable: true as const }),
+        fillers: fillers.map(({ kind, asset, use }) => ({
+          kind,
+          name: asset.name,
+          title: use.title,
+          connections: use.connections.map(
+            (connection) => connections.get(connection) ?? connection
+          )
+        })),
+        ...(revision === undefined
+          ? {}
+          : { actions: actionsByStore.get(store) ?? [], ...(rows ? { rows } : {}) })
+      };
+    }),
+    ...described,
+    truncated:
+      Math.max(apps.length, workflows.length) > DATA_STORE_USED_BY_MAX_ASSETS ||
+      (audience?.truncated ?? false)
   };
+}
+
+/** The published App and its published config, for whoever may use or read it. */
+async function publishedApp(
+  runtime: DataStoreRuntime,
+  access: ActorAccess,
+  app: string
+): Promise<[ConfigAssetRecord, unknown]> {
+  const [record] = await runtime.stores.configAssets.listPublishedConfigAssets({
+    clientInstanceId: runtime.clientInstanceId,
+    kind: APP.kind,
+    names: [app],
+    limit: 1
+  });
+  if (!mayAsk(access, record, [APP.use, APP.read])) throw appNotAvailable();
+  return [record, record.publishedConfig];
+}
+
+/** One stored revision of an App and its config, for whoever may change, publish or approve it. */
+async function storedRevision(
+  runtime: DataStoreRuntime,
+  access: ActorAccess,
+  app: string,
+  revision: number
+): Promise<[ConfigAssetRecord, unknown]> {
+  const { clientInstanceId, stores } = runtime;
+  const record = await stores.configAssets.getConfigAsset({
+    clientInstanceId,
+    kind: APP.kind,
+    name: app
+  });
+  if (!mayAsk(access, record, APP_REVISION_RIGHTS)) throw appNotAvailable();
+  const stored = await stores.configAssets.getConfigAssetRevision({
+    clientInstanceId,
+    kind: APP.kind,
+    name: app,
+    revision
+  });
+  // A revision number outlives a delete and a new App of the name: it must be this App's.
+  if (stored?.assetId !== record.id) {
+    throw new AppError("NOT_FOUND", "App revision is not available");
+  }
+  return [record, stored.config];
+}
+
+/** Whether the App stands and the caller holds one of the rights on it. */
+function mayAsk(
+  access: ActorAccess,
+  record: ConfigAssetRecord | undefined,
+  rights: readonly string[]
+): record is ConfigAssetRecord {
+  if (record?.status !== "active") return false;
+  const resource = assetResource(record);
+  return rights.some((right) => access.authorize(right, resource).allowed);
+}
+
+function appNotAvailable(): AppError {
+  return new AppError("NOT_FOUND", "App is not available");
+}
+
+/**
+ * Who may use an App, as the store's page names the audience of each App on it: the members of
+ * the workspace that owns it, and the holders of `app.use` by a grant, named only to a caller
+ * who administers users.
+ */
+async function appAudience(
+  runtime: DataStoreRuntime,
+  access: ActorAccess,
+  app: ConfigAssetRecord
+): Promise<{ audience: z.infer<typeof audienceSchema>; truncated: boolean }> {
+  const audiences = createAudienceReader(runtime, access);
+  const audience = await audiences.of(APP.use, assetResource(app));
+  return { audience, truncated: audiences.truncated() };
 }

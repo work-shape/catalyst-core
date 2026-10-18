@@ -7,6 +7,7 @@ import {
   type PlatformContext
 } from "@work-shape/catalyst-api-contract";
 import { ConfigApiError, type ConfigApi } from "./api";
+import { appPublishData } from "./app-publish-data";
 import {
   APP_STATE_FILE,
   folderIsEmpty,
@@ -326,8 +327,10 @@ async function publish(
   }
   const live = candidate.publishedRevision === undefined ? undefined : await get("published");
   const review = publishReview(candidate, live);
-  if (values.json) writeErr(options, formatReview(app, review));
-  else writeOut(options, formatReview(app, review));
+  const storedData = await appPublishData(target.api, app, candidate);
+  const question = [formatReview(app, review), storedData].filter(Boolean).join("\n");
+  if (values.json) writeErr(options, question);
+  else writeOut(options, question);
   const answer = await askBeforePublish(options, {
     kind: APP_KIND,
     command: APP_KIND,

@@ -4,7 +4,7 @@ import {
   DATA_STORE_SCALAR_TYPES
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
-import type { AssetKindActions } from "./asset-kinds";
+import type { AssetKindActions, AssetScope } from "./asset-kinds";
 import type { DataStoreRecord } from "./data-store-records";
 import { AppError, isAppError, type AppErrorCode } from "./errors";
 import type { OperationScope } from "./identity";
@@ -365,6 +365,19 @@ export interface DataStoreHandle {
 export interface DataStoreCallOptions {
   /** Aborting it cancels the statement on the server. */
   signal?: AbortSignal;
+}
+
+/**
+ * Whether an App owned by `app` may reach a Data Store owned by `store`: a store on the
+ * instance, or one of the App's own workspace. A publish refuses any other store as
+ * `data_store_unavailable`, and what describes a revision before a publish names no more of it
+ * than that. Spec: apps-and-pages.md, Named actions.
+ */
+export function appReachesDataStore(app: AssetScope, store: AssetScope): boolean {
+  return (
+    store.kind !== "workspace" ||
+    (app.kind === "workspace" && store.workspaceId === app.workspaceId)
+  );
 }
 
 /**

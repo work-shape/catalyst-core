@@ -275,7 +275,8 @@ const dataStoreUsedByResponseSchema = z.object({
 /**
  * Where the data of one App comes from, as the App declares it: each store its reading
  * statements name, and each published Workflow or App that adds rows to that store with the
- * Connections it copies from. Its users read it; it never names an account.
+ * Connections it copies from. Its users read it; it never names an account. With `revision`,
+ * the same of that stored revision with who would see it: the publish question (DS-13b).
  */
 const appDataSourcesResponseSchema = z.object({
   stores: z.array(
@@ -290,10 +291,37 @@ const appDataSourcesResponseSchema = z.object({
           /** The names people read of the Connections it calls. */
           connections: z.array(z.string())
         })
-      )
+      ),
+      /**
+       * No store the App may reach stands under this name: none, a retired one, or one of
+       * another workspace, which a publish refuses. `title` is then the declared name, and no
+       * filler or measurement is given.
+       */
+      unavailable: z.literal(true).optional(),
+      /** With `revision`: the names of the revision's reading `sql` actions on this store. */
+      actions: z.array(z.string()).optional(),
+      /**
+       * With `revision`: the store's last measurement, the planner's estimate of all its rows. It
+       * is not a count and not what the actions select, which depends on their parameters.
+       * Absent where the store was never measured.
+       */
+      rows: z
+        .object({
+          estimate: z.number().int(),
+          tables: z.number().int(),
+          measuredAt: z.string()
+        })
+        .optional()
     })
   ),
-  /** More published assets exist than one read looks through. */
+  /** The revision described, where the request named one. */
+  revision: z.number().int().optional(),
+  /**
+   * With `revision`: who may use the App, and so sees what its `sql` actions select.
+   * `workspace.members` counts people; `hiddenHolders` counts holders by a grant, not people.
+   */
+  audience: dataStoreAudienceSchema.optional(),
+  /** More published assets or grant rows exist than one read looks through. */
   truncated: z.boolean()
 });
 
@@ -404,8 +432,11 @@ export const dataStoreOperations = {
     method: "GET",
     path: "/api/v1/app-data-sources",
     summary:
-      "Read where the data of one published App comes from: the Data Stores its statements read, and the Workflows and Apps that fill them from which Connections. Whoever uses the App reads it",
-    query: z.strictObject({ app: z.string().min(1).max(63) }),
+      "Read where the data of one published App comes from: the Data Stores its statements read, and the Workflows and Apps that fill them from which Connections. Whoever uses the App reads it. With a revision, the same of that stored revision with who may use the App and each store's last measurement, for whoever may change, publish or approve it",
+    query: z.strictObject({
+      app: z.string().min(1).max(63),
+      revision: z.coerce.number().int().positive().optional()
+    }),
     response: json(appDataSourcesResponseSchema),
     errors: ["NOT_FOUND"]
   }),

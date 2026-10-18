@@ -65,7 +65,7 @@ const dataStoreRoutes =
     routes.operation(apiOperations["data_stores.app_sources"], {
       authorize: () => ({ allowed: true }),
       module: dataStoresModule.name,
-      execute: (input, { access }) => dataStores.appSources(access, input.app)
+      execute: (input, { access }) => dataStores.appSources(access, input.app, input.revision)
     });
   };
 

@@ -127,3 +127,75 @@ export function appDataLines(sources: AppDataSources, t: Translate, locale: stri
     );
   });
 }
+
+/** What one stored revision of an App would show and to whom: the answer asked with a revision. */
+export interface AppPublishData {
+  /** Who may use the App, as the store's page names an App's audience. */
+  audience: string;
+  stores: {
+    name: string;
+    title: string;
+    /** Which reading actions of the revision read from the store. */
+    actions: string;
+    /**
+     * What bounds what they show: the store's last measurement of all its rows, never what the
+     * actions select, which depends on what they are asked. For a store the App may not reach,
+     * that it is not available.
+     */
+    rows: string;
+    /** Where the store's rows come from: a sentence for each Workflow or App that fills it. */
+    sources: string[];
+  }[];
+  truncated: boolean;
+}
+
+/**
+ * The publish question's lines on stored data (DS-13b), for the answer asked with a revision:
+ * who may use the App, and for each store its reading actions name, which actions, how many rows
+ * the whole store held when last measured, and where they come from. Nothing for an answer
+ * that does not describe the revision asked for: one without an audience, or of another
+ * revision. The question is then not asked on it.
+ */
+export function appPublishData(
+  sources: AppDataSources,
+  revision: number,
+  t: Translate,
+  locale: string
+): AppPublishData | undefined {
+  if (sources.audience === undefined || sources.revision !== revision) return undefined;
+  const count = (value: number) => new Intl.NumberFormat(locale).format(value);
+  return {
+    audience: audienceLine(sources.audience, t, locale),
+    stores: sources.stores.map((store) => {
+      const actions = store.actions ?? [];
+      return {
+        name: store.name,
+        title: store.title,
+        actions: t(actions.length === 1 ? "apps.publishDataActionOne" : "apps.publishDataActions", {
+          count: count(actions.length),
+          actions: joinNames(actions, locale)
+        }),
+        rows: store.unavailable
+          ? t("apps.publishDataUnavailable")
+          : store.rows
+            ? t("apps.publishDataRows", {
+                rows: t(
+                  store.rows.estimate === 1 ? "dataStores.rowEstimate" : "dataStores.rowEstimates",
+                  { count: count(store.rows.estimate) }
+                ),
+                tables: t(
+                  store.rows.tables === 1 ? "dataStores.tableCount" : "dataStores.tableCounts",
+                  { count: count(store.rows.tables) }
+                )
+              })
+            : t("apps.publishDataRowsUnknown"),
+        // A store nothing fills is named by its title already.
+        sources:
+          store.fillers.length === 0
+            ? []
+            : appDataLines({ stores: [store], truncated: false }, t, locale)
+      };
+    }),
+    truncated: sources.truncated
+  };
+}

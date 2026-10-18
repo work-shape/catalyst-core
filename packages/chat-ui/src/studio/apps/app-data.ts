@@ -13,9 +13,14 @@ import {
 } from "@work-shape/catalyst-api-client";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { PendingApprovalError } from "../build-area/build-refusals";
-import { appDataLines } from "../build-area/data-store-provenance-model";
+import {
+  appDataLines,
+  appPublishData,
+  type AppDataSources,
+  type AppPublishData
+} from "../build-area/data-store-provenance-model";
 import { keepPageAddress, retryUnlessGone, type PageAddressState } from "../pages/page-address";
 import { appPreviewProblem, type AppPreviewProblem } from "./app-model";
 
@@ -42,13 +47,14 @@ export interface AppList {
   retry(): void;
 }
 
+/** Under the key of every asset read, so a write from Build drops these too. */
+function appKeys(apiBaseUrl: string) {
+  return [...workspaceQueryKeys.assets(apiBaseUrl, APP_AUTH_SCOPE), APP_ASSET_KIND] as const;
+}
+
 function useAppKeys() {
   const { apiBaseUrl } = useWorkspaceApiClient();
-  // Under the key of every asset read, so a write from Build drops these too.
-  return useMemo(
-    () => [...workspaceQueryKeys.assets(apiBaseUrl, APP_AUTH_SCOPE), APP_ASSET_KIND] as const,
-    [apiBaseUrl]
-  );
+  return useMemo(() => appKeys(apiBaseUrl), [apiBaseUrl]);
 }
 
 /**
@@ -169,6 +175,61 @@ export function useAppDataSources(app: string, enabled = true): readonly string[
     retry: false
   });
   return read.data ? appDataLines(read.data, t, locale) : undefined;
+}
+
+/** What one stored revision of an App would show and to whom, as a screen asked for it. */
+export type AppPublishDataRead =
+  | { status: "loading" }
+  /** The read failed, or its answer does not describe the revision asked for. */
+  | { status: "failed"; retry(): void }
+  | { status: "ready"; data: AppPublishData };
+
+/**
+ * What a screen shows for the answer about one revision: an answer without an audience, or of
+ * another revision, is a failure to retry and never lines to publish on.
+ */
+export function appPublishDataRead(
+  answer: { data: AppDataSources | undefined; failed: boolean; retry(): void },
+  revision: number,
+  t: TranslationContextValue["t"],
+  locale: string
+): AppPublishDataRead {
+  if (answer.data) {
+    const data = appPublishData(answer.data, revision, t, locale);
+    return data ? { status: "ready", data } : { status: "failed", retry: answer.retry };
+  }
+  return answer.failed ? { status: "failed", retry: answer.retry } : { status: "loading" };
+}
+
+/**
+ * Who would see which stored data if one revision of an App were made live (DS-13b): asked
+ * by the revision's number, so a publish of the draft, a first publish and a publish of an
+ * older revision each name what that revision reads, never what is live now. One request per
+ * App and revision while the question is open.
+ */
+export function useAppPublishData(app: string, revision: number): AppPublishDataRead {
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  const { locale, t } = useTranslation();
+  const query = useQuery({
+    queryKey: appPublishDataKey(apiBaseUrl, app, revision),
+    queryFn: ({ signal }) => client.data_stores.app_sources({ query: { app, revision }, signal }),
+    retry: retryUnlessGone
+  });
+  return appPublishDataRead(
+    {
+      data: query.data,
+      failed: query.isError,
+      retry: () => void query.refetch().catch(() => undefined)
+    },
+    revision,
+    t,
+    locale
+  );
+}
+
+/** The key the answer for one revision is held under, below the key of every App read. */
+export function appPublishDataKey(apiBaseUrl: string, app: string, revision: number) {
+  return [...appKeys(apiBaseUrl), "publish-data", app, revision] as const;
 }
 
 /**

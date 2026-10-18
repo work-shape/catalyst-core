@@ -24,7 +24,7 @@ import { useTranslation } from "../../shared/i18n";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../../shared/routes";
 import { AppDraftActions } from "./actions-view";
-import { useApp, useAppWrites } from "./app-data";
+import { useApp, useAppPublishData, useAppWrites, type AppPublishDataRead } from "./app-data";
 import { AppDraftFiles } from "./app-draft-files";
 import { AppDeleteDialog, AppFrame, AppHeader, NameList } from "./app-header";
 import {
@@ -33,6 +33,7 @@ import {
   appDraftRevision,
   appDraftShown,
   appManifestSummary,
+  appReadsStoredData,
   appRefusalText,
   appTitle,
   type AppManifestSummary,
@@ -40,6 +41,7 @@ import {
 } from "./app-model";
 import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { AppPreview, AppPreviewNotice } from "./app-preview";
+import { AppPublishDataView, AppStoredDataFact } from "./app-publish-data";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { RevisionsDrawer } from "./revisions-drawer";
 
@@ -73,6 +75,17 @@ function storeDetailsOpen(open: boolean): void {
 interface PublishAsk {
   revision: number;
   summary: AppManifestSummary;
+  /** Its manifest has a reading `sql` action: the question names who sees which stored data. */
+  readsStoredData: boolean;
+}
+
+/** What the config of the revision a publish names asks the question to say. */
+function askToPublish(revision: number, config: unknown): PublishAsk {
+  return {
+    revision,
+    summary: appManifestSummary(config),
+    readsStoredData: appReadsStoredData(config)
+  };
 }
 
 /**
@@ -187,6 +200,7 @@ export function AppEdit({ app }: { app: string }) {
         publishedRevision={published}
         view={view}
         onViewChange={setView}
+        draftConfig={asset?.config}
         detailsOpen={detailsOpen}
         onDetailsOpenChange={(open) => {
           setDetailsOpen(open);
@@ -200,7 +214,7 @@ export function AppEdit({ app }: { app: string }) {
           asset && draft !== undefined
             ? () => {
                 setError(undefined);
-                setPublishAsk({ revision: draft, summary: appManifestSummary(asset.config) });
+                setPublishAsk(askToPublish(draft, asset.config));
               }
             : undefined
         }
@@ -269,7 +283,8 @@ export function AppEdit({ app }: { app: string }) {
         {view === "actions" ? <AppDraftActions app={app} rights={rights} writes={writes} /> : null}
       </AppEditFrame>
       {publishAsk ? (
-        <PublishDialog
+        <AskedPublishDialog
+          app={app}
           name={name}
           workspace={workspace}
           ask={publishAsk}
@@ -339,10 +354,7 @@ export function AppEdit({ app }: { app: string }) {
             rights.publish
               ? (revision: ConfigAssetRevision) => {
                   setError(undefined);
-                  setPublishAsk({
-                    revision: revision.revision,
-                    summary: appManifestSummary(revision.config)
-                  });
+                  setPublishAsk(askToPublish(revision.revision, revision.config));
                 }
               : undefined
           }
@@ -376,6 +388,7 @@ export function AppEditFrame({
   draftRevision,
   publishedRevision,
   view,
+  draftConfig,
   detailsOpen = false,
   children,
   onViewChange,
@@ -398,6 +411,11 @@ export function AppEditFrame({
   publishedRevision?: number;
   /** The side that is shown. Left out, the head has no switch. */
   view?: AppDraftView;
+  /**
+   * The draft's config. A reading `sql` action adds the line on how the App reads stored data
+   * once published, under the head, so it takes its room from the frame and not the preview.
+   */
+  draftConfig?: unknown;
   /** Files and Actions are among the tabs: the technical details are open. */
   detailsOpen?: boolean;
   children: ReactNode;
@@ -517,6 +535,7 @@ export function AppEditFrame({
               </span>
             </Banner>
           ) : null}
+          <AppStoredDataFact config={draftConfig} />
         </>
       }
     >
@@ -545,19 +564,7 @@ export function AppEditFrame({
   );
 }
 
-/**
- * Asks once before a revision becomes what the workspace is served, and says what that
- * revision reaches: the Connections it uses and the hosts outside the instance it calls.
- */
-export function PublishDialog({
-  name,
-  workspace,
-  ask,
-  loading,
-  error,
-  onConfirm,
-  onClose
-}: {
+type PublishDialogProps = {
   name: string;
   workspace: AppsWorkspace;
   ask: PublishAsk;
@@ -565,8 +572,46 @@ export function PublishDialog({
   error: string | undefined;
   onConfirm(): void;
   onClose(): void;
+};
+
+/**
+ * The Publish dialog for the revision it asks about. Where that revision reads stored data,
+ * the lines on who sees it are read for that revision's number, whether it is the draft, the
+ * first publish or an older revision from the revisions drawer.
+ */
+function AskedPublishDialog({ app, ...props }: PublishDialogProps & { app: string }) {
+  return props.ask.readsStoredData ? (
+    <PublishDialogWithData app={app} {...props} />
+  ) : (
+    <PublishDialog {...props} />
+  );
+}
+
+function PublishDialogWithData({ app, ...props }: PublishDialogProps & { app: string }) {
+  return <PublishDialog {...props} storedData={useAppPublishData(app, props.ask.revision)} />;
+}
+
+/**
+ * Asks once before a revision becomes what the workspace is served, and says what that
+ * revision reaches: the Connections it uses, the hosts outside the instance it calls and, where
+ * it reads stored data, who sees which (DS-13b). Publish waits until those lines are there: the
+ * question is not asked without them.
+ */
+export function PublishDialog({
+  name,
+  workspace,
+  ask,
+  loading,
+  error,
+  storedData,
+  onConfirm,
+  onClose
+}: PublishDialogProps & {
+  /** The lines on stored data, read for `ask.revision`. Absent where it reads none. */
+  storedData?: AppPublishDataRead;
 }) {
   const { t } = useTranslation();
+  const waitsForData = storedData !== undefined && storedData.status !== "ready";
   return (
     <Dialog
       open
@@ -579,7 +624,7 @@ export function PublishDialog({
           <Button variant="outline" disabled={loading} onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button loading={loading} onClick={onConfirm}>
+          <Button loading={loading} disabled={waitsForData} onClick={onConfirm}>
             {t("apps.publish")}
           </Button>
         </>
@@ -593,6 +638,7 @@ export function PublishDialog({
           <KeyValue label={t("apps.publishHosts")}>
             <NameList names={ask.summary.hosts} />
           </KeyValue>
+          {storedData ? <AppPublishDataView read={storedData} /> : null}
         </KeyValueList>
         {error ? <InlineError>{error}</InlineError> : null}
       </div>

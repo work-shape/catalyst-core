@@ -476,7 +476,8 @@ describe("the draft of an App (layout 3)", () => {
               actions: [{ name: "kunden_lesen", effect: "reading" }],
               externalHosts: ["api.example.com"]
             }
-          })
+          }),
+          readsStoredData: false
         },
         loading: false,
         error: undefined,

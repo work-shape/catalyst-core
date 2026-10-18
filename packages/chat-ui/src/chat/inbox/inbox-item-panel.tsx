@@ -245,6 +245,7 @@ function InboxItemFoot({
   }
 
   const KindFoot = kind?.Foot;
+  const ApproveHold = kind?.ApproveHold;
   return (
     // Stays at the surface's lower edge while a long proposal scrolls behind it; the negative
     // margins span the surface's own padding.
@@ -258,6 +259,18 @@ function InboxItemFoot({
       {canDecide ? (
         KindFoot ? (
           <KindFoot item={item} actions={actions} />
+        ) : ApproveHold ? (
+          <ApproveHold item={item}>
+            {(held) => (
+              <InboxDecisionForm
+                decisions={inboxDecisionsOf(kind, item)}
+                actions={actions}
+                comment={comment}
+                onCommentChange={onCommentChange}
+                approveHeld={held}
+              />
+            )}
+          </ApproveHold>
         ) : (
           <InboxDecisionForm
             decisions={inboxDecisionsOf(kind, item)}
@@ -333,12 +346,15 @@ function InboxDecisionForm({
   decisions,
   actions,
   comment,
-  onCommentChange
+  onCommentChange,
+  approveHeld = false
 }: {
   decisions: InboxDecisionEntries;
   actions: InboxItemActions;
   comment: string;
   onCommentChange(comment: string): void;
+  /** The kind holds Approve until the item has read what the approver must see. */
+  approveHeld?: boolean;
 }) {
   const { t } = useTranslation();
   const commentRef = useRef<HTMLTextAreaElement>(null);
@@ -367,7 +383,7 @@ function InboxDecisionForm({
         variant={approves ? "primary" : "outline"}
         // Accepting stands apart at the row's end, so it is never hit in passing.
         className={approves ? "ml-auto" : undefined}
-        disabled={actions.pending}
+        disabled={actions.pending || (approves && approveHeld)}
         data-decision={entry.decision}
         onClick={() => decide(entry.decision)}
       >

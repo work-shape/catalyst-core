@@ -230,7 +230,7 @@ async function shootTwo(page: Page, name: string, ready: () => Promise<void>): P
   await page.reload();
 }
 
-test("a store's page names the Workflow that fills it with its Connection and account, and who reads it; the App on it says where its data was copied from", async ({
+test("a store's page names the Workflow that fills it with its Connection and account, and who reads it; the App on it says where its data was copied from, and its Publish dialog who would see it", async ({
   page,
   // It plants a Connection no release config names.
   releaseConnections: _releaseConnections
@@ -447,6 +447,89 @@ test("a store's page names the Workflow that fills it with its Connection and ac
     );
     await shootTwo(page, "ds-13a-app-details-several", openDetails);
     await page.unroute("**/api/v1/app-data-sources?*");
+
+    // DS-13b, check 67: the Publish dialog names who would see which stored data, for the
+    // revision it publishes. The draft, revision 2, reads the store with a second action.
+    const drafted = await requestWithOrigin(page, "put", `${apiOrigin}/api/v1/assets/app/${app}`, {
+      data: {
+        workspaceId,
+        expectedRevision: 1,
+        files: [
+          {
+            path: "app.yaml",
+            text: JSON.stringify({
+              id: app,
+              name: "Kundenliste",
+              kit: "1.1.0",
+              entry: "index.html",
+              dataStores: [{ name: store, minSchema: 1 }],
+              actions: [
+                { name: "list_kunden", file: "actions/list_kunden.sql", effect: "reading" },
+                { name: "by_name", file: "actions/by_name.sql", effect: "reading" }
+              ]
+            })
+          },
+          { path: "index.html", text: "<!doctype html><title>Kundenliste</title><p>Kunden</p>" },
+          {
+            path: "actions/list_kunden.sql",
+            text: "-- The clients, by name.\n-- @param limit integer\nselect name from kunden order by name limit $limit\n"
+          },
+          {
+            path: "actions/by_name.sql",
+            text: "-- One client.\n-- @param name text\nselect name from kunden where name = $name\n"
+          }
+        ]
+      },
+      timeout: 90_000
+    });
+    expect(drafted.ok(), await drafted.text()).toBe(true);
+    const edit = page.getByTestId("app-edit");
+    const publishDialog = page.getByRole("dialog", { name: "Publish “Kundenliste”?" });
+    const openPublish = async () => {
+      await page.goto(`/w/${workspaceId}/app-drafts/${app}`);
+      await edit.getByRole("button", { name: /^(?:Publish|Veröffentlichen)$/u }).click();
+      await expect(page.getByRole("dialog").locator('[data-field="data-stored"]')).toBeVisible();
+    };
+    await openPublish();
+    await expect(publishDialog.locator('[data-field="data-audience"]')).toContainText(
+      `Everyone in ${workspaceTitle} (1 person)`
+    );
+    const storeLine = publishDialog.locator(`[data-data-store="${store}"]`);
+    await expect(storeLine).toContainText(`Kunden ${tag}`);
+    await expect(storeLine).toContainText("2 actions read from it:");
+    await expect(storeLine).toContainText("list_kunden");
+    await expect(storeLine).toContainText("by_name");
+    // The rows are named as what bounds what the actions show, never as what they select.
+    await expect(storeLine.locator("[data-data-store-rows]")).toContainText(
+      "What they show depends on their inputs."
+    );
+    await expect(storeLine).toContainText(
+      `Shows data from “Kunden ${tag}”, which the Workflow “Nachtimport” copies from Exampledata.`
+    );
+    await expect(publishDialog).not.toContainText("select name");
+    await shootTwo(page, "ds-13b-publish-dialog", openPublish);
+    await openPublish();
+    await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(publishDialog).toBeHidden();
+    await expect(edit.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+
+    // Publishing an older revision again names what that revision reads, not what is live.
+    await edit.getByRole("button", { name: "More actions" }).click();
+    await page.getByRole("menuitem", { name: "Revisions" }).click();
+    const revisions = page.getByRole("dialog", { name: "Revisions" });
+    await revisions
+      .locator('[data-revision="1"]')
+      .getByRole("button", { name: "Publish this revision" })
+      .click();
+    await expect(publishDialog.locator(`[data-data-store="${store}"]`)).toContainText(
+      "The action list_kunden reads from it."
+    );
+    await expect(publishDialog).not.toContainText("by_name");
+    await shootOne(page, "ds-13b-publish-older-revision", async () => {
+      await expect(publishDialog.locator('[data-field="data-stored"]')).toBeVisible();
+    });
+    await publishDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(publishDialog).toBeHidden();
   } finally {
     await removeConnection(connection.id);
     if (principalId) {

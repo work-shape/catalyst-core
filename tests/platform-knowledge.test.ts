@@ -205,7 +205,7 @@ describe("connecting a local agent, as an agent knows it", () => {
 describe("the decision table between a View, an App and a Workflow", () => {
   const PAGE = "references/apps/app-or-workflow.md";
   const SENTENCE =
-    "An App shows data and lets the person using it do one thing at a time. Anything that is a process (several steps, a schedule, history, notifications, rules business users change) is a Workflow the App starts with a button. A read that must respect the viewer's rights stays in the App.";
+    "An App shows data and lets the person using it do one thing at a time. Anything that is a process (several steps, a schedule, history, notifications, rules business users change) is a Workflow the App starts with a button. A live read through a Connection respects the viewer's rights. Stored data read through an App is shared with its audience.";
 
   it("is one page of platform-docs with the sentence, the table and the Buchhaltungscheck row", () => {
     const pages = (platformDocsSkill.resources ?? []).filter((resource) =>
@@ -213,19 +213,34 @@ describe("the decision table between a View, an App and a Workflow", () => {
     );
     expect(pages.map((page) => page.path)).toEqual([PAGE]);
     const content = pages[0]?.content ?? "";
-    expect(content).toContain(
-      "| What | Use when | Not when | Runs as | Who sees the result | The sign to switch |"
-    );
-    for (const row of [
+    const table = content
+      .split("\n")
+      .filter((line) => line.startsWith("|"))
+      .map((line) =>
+        line
+          .split("|")
+          .slice(1, -1)
+          .map((cell) => cell.trim())
+      );
+    expect(table[0]).toEqual([
+      "What",
+      "Use when",
+      "Not when",
+      "Runs as",
+      "Who sees the result",
+      "The sign to switch"
+    ]);
+    expect(table.slice(2).map((row) => row[0])).toEqual([
       "View (`show_view`)",
-      "App (`workspace.open`",
+      "App (`workspace.open`, then `app.save`)",
       "App action (`sql`, `connection`, `decision`, `workflow`)",
-      "`code` action |",
-      "Workflow |"
-    ]) {
-      expect(content).toContain(`| ${row}`);
-    }
-    expect(content).toContain("| Worked row: the Buchhaltungscheck |");
+      "`code` action",
+      "Workflow",
+      "Worked row: the Buchhaltungscheck"
+    ]);
+    expect(content).toContain(
+      "A published `sql` action on a Data Store uses the store's app role, with the store right checked against the publisher"
+    );
     expect(content).toContain("A `code` action that needs a dependent call becomes a Workflow");
     expect(content).toContain("`http_api` Connection");
     expect(content).toContain("`externalHosts`");

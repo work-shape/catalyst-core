@@ -160,6 +160,21 @@ export const apps = defineTranslations({
     "apps.publish": "Publish",
     "apps.publishBody": "Everyone in {workspace} gets revision {number} when they open the app.",
     "apps.publishConnections": "Connections it uses",
+    "apps.publishDataActionOne": "The action {actions} reads from it.",
+    "apps.publishDataActions": "{count} actions read from it: {actions}.",
+    "apps.publishDataAudience": "Who sees its stored data",
+    "apps.publishDataFailed": "Who sees its stored data could not be loaded.",
+    "apps.publishDataNote":
+      "These actions read with the data store's own app role. Rights on the store are checked for whoever publishes the app, not for each viewer, so everyone who may use the app sees what the actions select. Instance admins always see everything.",
+    "apps.publishDataRows":
+      "What they show depends on their inputs. The whole store held {rows} in {tables} when last measured.",
+    "apps.publishDataRowsUnknown":
+      "What they show depends on their inputs. The store has not been measured yet.",
+    "apps.publishDataUnavailable":
+      "No data store of this name is available to the app, so it cannot be published as it is.",
+    "apps.publishDataStores": "Stored data it shows",
+    "apps.storedDataFact":
+      "When published, this app reads stored data with the data store's own app role. Rights on the store are then checked for whoever publishes the app, not for each viewer, so everyone who may use it sees what its actions select.",
     "apps.publishFailed": "The app could not be published.",
     "apps.revisionFilesRemoved":
       "The files of this revision are not stored any more, so it cannot be published or shown.",
@@ -369,6 +384,21 @@ export const apps = defineTranslations({
     "apps.publish": "Veröffentlichen",
     "apps.publishBody": "Alle in {workspace} bekommen Revision {number}, wenn sie die App öffnen.",
     "apps.publishConnections": "Verbindungen, die sie nutzt",
+    "apps.publishDataActionOne": "Die Aktion {actions} liest daraus.",
+    "apps.publishDataActions": "{count} Aktionen lesen daraus: {actions}.",
+    "apps.publishDataAudience": "Wer ihre gespeicherten Daten sieht",
+    "apps.publishDataFailed": "Wer ihre gespeicherten Daten sieht, konnte nicht geladen werden.",
+    "apps.publishDataNote":
+      "Diese Aktionen lesen mit der eigenen App-Rolle des Datenspeichers. Rechte am Speicher werden bei der Person geprüft, die die App veröffentlicht, nicht bei jeder Person, die sie ansieht. Deshalb sehen alle, die die App nutzen dürfen, was die Aktionen auswählen. Instanz-Admins sehen immer alles.",
+    "apps.publishDataRows":
+      "Was sie zeigen, hängt von ihren Eingaben ab. Der ganze Speicher hatte bei der letzten Messung {rows} in {tables}.",
+    "apps.publishDataRowsUnknown":
+      "Was sie zeigen, hängt von ihren Eingaben ab. Der Speicher wurde noch nicht gemessen.",
+    "apps.publishDataUnavailable":
+      "Für die App ist kein Datenspeicher dieses Namens verfügbar, deshalb lässt sie sich so nicht veröffentlichen.",
+    "apps.publishDataStores": "Gespeicherte Daten, die sie zeigt",
+    "apps.storedDataFact":
+      "Nach dem Veröffentlichen liest diese App gespeicherte Daten mit der eigenen App-Rolle des Datenspeichers. Rechte am Speicher werden dann bei der Person geprüft, die die App veröffentlicht, nicht bei jeder Person, die sie ansieht. Deshalb sehen alle, die sie nutzen dürfen, was ihre Aktionen auswählen.",
     "apps.publishFailed": "Die App konnte nicht veröffentlicht werden.",
     "apps.revisionFilesRemoved":
       "Die Dateien dieser Revision sind nicht mehr gespeichert. Sie lässt sich weder veröffentlichen noch anzeigen.",

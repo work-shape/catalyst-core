@@ -8,9 +8,16 @@ import {
   Zap,
   type LucideIcon
 } from "lucide-react";
-import { createContext, createElement, useContext, type ComponentType } from "react";
+import {
+  createContext,
+  createElement,
+  useContext,
+  type ComponentType,
+  type ReactNode
+} from "react";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import { OperationCallBody } from "../approvals/operation-call-body";
+import { PublishApproveHold } from "../approvals/publish-review";
 import {
   SKILL_ASSET_KIND,
   isInboxConfirmation,
@@ -79,6 +86,14 @@ export interface InboxItemKind {
   decisions?: InboxDecisionEntries | ((item: ApprovalRequestView) => InboxDecisionEntries);
   /** Replaces the foot for a kind whose answers are not these three. */
   Foot?: ComponentType<{ item: ApprovalRequestView; actions: InboxItemActions }>;
+  /**
+   * Holds Approve while the item still reads what the approver must see first, or that read
+   * failed: `children` is called with whether it is held. The other decisions stay open.
+   */
+  ApproveHold?: ComponentType<{
+    item: ApprovalRequestView;
+    children: (held: boolean) => ReactNode;
+  }>;
 }
 
 /** The three decisions in the frame's own words, for a kind that names none. */
@@ -229,6 +244,7 @@ function publishKind(kind: string, label: TranslationKey, icon: LucideIcon): Inb
     },
     heading: (_item, t) => t(label),
     rowDetail: (item) => parseOperationCallPreview(item.preview)?.review?.title,
+    ApproveHold: PublishApproveHold,
     decisions: [
       { decision: "reject", label: "operations.callDecline" },
       { decision: "approve", label: "operations.publishApprove" }

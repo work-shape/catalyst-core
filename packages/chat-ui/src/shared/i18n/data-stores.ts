@@ -73,6 +73,8 @@ export const dataStores = defineTranslations({
     "dataStores.processedByDescription": "The workflows that process what this store holds.",
     "dataStores.processedByTitle": "Processed by",
     "dataStores.readByAdmins": "Instance admins always see everything.",
+    "dataStores.readByAppsFact":
+      "Apps read with this store's own app role. Rights on the store are checked for whoever publishes each app, not for each viewer, so everyone who may use an app sees what its actions select.",
     "dataStores.readByDescription": "Who can see the rows.",
     "dataStores.readByTitle": "Read by",
     "dataStores.readersStore": "Direct access",
@@ -228,6 +230,8 @@ export const dataStores = defineTranslations({
       "Die Workflows, die verarbeiten, was dieser Speicher hält.",
     "dataStores.processedByTitle": "Verarbeitet von",
     "dataStores.readByAdmins": "Instanz-Admins sehen immer alles.",
+    "dataStores.readByAppsFact":
+      "Apps lesen mit der eigenen App-Rolle dieses Speichers. Rechte am Speicher werden bei der Person geprüft, die eine App veröffentlicht, nicht bei jeder Person, die sie ansieht. Deshalb sehen alle, die eine App nutzen dürfen, was ihre Aktionen auswählen.",
     "dataStores.readByDescription": "Wer die Zeilen sehen kann.",
     "dataStores.readByTitle": "Gelesen von",
     "dataStores.readersStore": "Direkter Zugriff",

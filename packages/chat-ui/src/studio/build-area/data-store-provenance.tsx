@@ -125,6 +125,7 @@ export function DataStoreReaders({ store, workspaceId, source }: ProvenanceProps
   return (
     <UsedByRead store={store} source={source}>
       {(used) => {
+        const appsRead = used.apps.some((app) => app.reads) || used.hidden.apps > 0;
         return (
           <>
             <List aria-label={t("dataStores.readByTitle")}>
@@ -168,6 +169,12 @@ export function DataStoreReaders({ store, workspaceId, source }: ProvenanceProps
               />
             </List>
             <HiddenLine count={used.hidden.reads} />
+            {/* An App's readers are no holders of the store's rights: say so where Apps read it. */}
+            {appsRead ? (
+              <p className="text-caption text-muted-foreground" data-data-store-apps-fact="">
+                {t("dataStores.readByAppsFact")}
+              </p>
+            ) : null}
             <p className="text-caption text-muted-foreground" data-data-store-admins="">
               {t("dataStores.readByAdmins")}
             </p>

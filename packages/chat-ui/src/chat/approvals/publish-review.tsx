@@ -1,6 +1,15 @@
+import type { ReactNode } from "react";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import { Badge, Banner, KeyValue, KeyValueList } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
-import type { PublishChange, PublishReview, PublishStale } from "./operation-call-preview";
+import { useAppPublishData } from "../../studio/apps/app-data";
+import { AppPublishData } from "../../studio/apps/app-publish-data";
+import {
+  parseOperationCallPreview,
+  type PublishChange,
+  type PublishReview,
+  type PublishStale
+} from "./operation-call-preview";
 
 const STALE: Record<PublishStale, TranslationKey> = {
   gone: "operations.publishStaleGone",
@@ -27,11 +36,53 @@ export function publishKindPhrase(kind: string): TranslationKey {
 }
 
 /**
+ * Whether the review of a held publish names who sees which stored data (DS-13b): an App that
+ * lists a Data Store, while it still stands.
+ */
+function reviewReadsStoredData(review: PublishReview): boolean {
+  return review.kind === "app" && review.dataStores.length > 0 && review.stale !== "gone";
+}
+
+/**
+ * Holds Approve of a held publish until the lines on who sees which stored data are there, as
+ * Publish waits for them in the App's Publish dialog: not while they load, and not after their
+ * read failed. The read is the one the item's body shows, so it is asked once.
+ */
+export function PublishApproveHold({
+  item,
+  children
+}: {
+  item: ApprovalRequestView;
+  children: (held: boolean) => ReactNode;
+}) {
+  const review = parseOperationCallPreview(item.preview)?.review;
+  return review && reviewReadsStoredData(review) ? (
+    <StoredDataHold app={review.name} revision={review.revision}>
+      {children}
+    </StoredDataHold>
+  ) : (
+    children(false)
+  );
+}
+
+function StoredDataHold({
+  app,
+  revision,
+  children
+}: {
+  app: string;
+  revision: number;
+  children: (held: boolean) => ReactNode;
+}) {
+  return children(useAppPublishData(app, revision).status !== "ready");
+}
+
+/**
  * A publish that waits for an approver (GR-PUB-1): who wants to make which version live, what
  * approving does, and the review against the live version: the files that differ, the changing
  * actions or steps that are new or changed, the outside hosts it adds, the Connections, Data
- * Stores and account it uses. A request whose draft or live version moved says it cannot be
- * approved.
+ * Stores and account it uses, and for an App who sees which stored data (DS-13b). A request
+ * whose draft or live version moved says it cannot be approved.
  */
 export function PublishReviewBody({
   actor,
@@ -116,6 +167,10 @@ export function PublishReviewBody({
               )
             )}
           </KeyValue>
+        ) : null}
+        {/* Who sees which stored data, read for the version this request would make live. */}
+        {reviewReadsStoredData(review) ? (
+          <AppPublishData app={review.name} revision={review.revision} />
         ) : null}
         {review.runAs ? (
           <KeyValue label={t("operations.publishRunsAs")} data-field="runs-as">

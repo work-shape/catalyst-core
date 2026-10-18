@@ -160,9 +160,14 @@ export interface DataStores {
   list(access: ActorAccess): ReturnType<typeof listDataStores>;
   /**
    * Where the data of one published App comes from, for whoever uses or reads it. `NOT_FOUND`
-   * for an App the caller may neither use nor read.
+   * for an App the caller may neither use nor read. With `revision`, what that stored revision
+   * would show and to whom, for whoever may change, publish or approve the App.
    */
-  appSources(access: ActorAccess, app: string): ReturnType<typeof appDataSources>;
+  appSources(
+    access: ActorAccess,
+    app: string,
+    revision?: number
+  ): ReturnType<typeof appDataSources>;
   /** Describes the operations to an agent that lists them as tools. */
   readonly toolSource: DataToolSource;
   readonly jobHandlers: readonly RegisteredJobHandler[];
@@ -263,7 +268,7 @@ export function createDataStores(input: {
     retire: (bound, assetId) => retireDataStore(runtime, bound, assetId),
     operationSource: createDataStoreOperationSource(runtime),
     list: (access) => listDataStores(runtime, access),
-    appSources: (access, app) => appDataSources(runtime, access, app),
+    appSources: (access, app, revision) => appDataSources(runtime, access, app, revision),
     toolSource: createDataStoreToolSource(runtime),
     jobHandlers: jobs.handlers,
     schedules: jobs.schedules,

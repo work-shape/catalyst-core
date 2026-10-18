@@ -181,6 +181,20 @@ export function appManifestSummary(config: unknown): AppManifestSummary {
   };
 }
 
+/**
+ * Whether one App revision has a reading `sql` action, whose rows everyone who may use the App
+ * sees: its publish question then names who that is (DS-13b).
+ */
+export function appReadsStoredData(config: unknown): boolean {
+  const actions = field(field(config, "manifest"), "actions");
+  return (
+    Array.isArray(actions) &&
+    actions.some(
+      (action: unknown) => field(action, "kind") === "sql" && field(action, "effect") === "reading"
+    )
+  );
+}
+
 /** What stands in place of an App that is not shown. */
 export type AppPreviewProblem =
   /** The App is there and nothing of it has been published. */

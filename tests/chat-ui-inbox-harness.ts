@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
@@ -18,7 +19,8 @@ import {
   type InboxCounts,
   type InboxItemActions,
   type InboxItemKind,
-  type InboxTab
+  type InboxTab,
+  WorkspaceApiClientProvider
 } from "./support/chat-ui";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
@@ -104,20 +106,34 @@ export function render(node: ReactNode, locale: "de" | "en" = "de"): string {
   return renderToStaticMarkup(createElement(TranslationProvider, { children: null, locale }, node));
 }
 
+/** The address the items are rendered against: what a test caches an item's reads under. */
+export const INBOX_API_BASE_URL = "https://catalyst.test";
+
 export function renderItem(
   overrides: Partial<ApprovalRequestView> = {},
   options: {
     actions?: InboxItemActions;
     locale?: "de" | "en";
     kinds?: readonly InboxItemKind[];
+    /** What an item's own reads find answered. Without it they are still loading. */
+    queryClient?: QueryClient;
   } = {}
 ): string {
   const view = createElement(InboxItemView, {
     state: { status: "ready", request: item(overrides) },
     actions: options.actions ?? idleActions
   });
-  return render(
-    options.kinds ? createElement(InboxItemKindsProvider, { value: options.kinds }, view) : view,
-    options.locale
+  // An item may read for itself, as the held publish of an App does, inside the workspace's
+  // client like the Inbox it stands in.
+  const reads = createElement(
+    QueryClientProvider,
+    { client: options.queryClient ?? new QueryClient() },
+    createElement(WorkspaceApiClientProvider, {
+      apiBaseUrl: INBOX_API_BASE_URL,
+      children: options.kinds
+        ? createElement(InboxItemKindsProvider, { value: options.kinds }, view)
+        : view
+    })
   );
+  return render(reads, options.locale);
 }

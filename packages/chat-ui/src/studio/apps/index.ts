@@ -12,11 +12,17 @@ export {
   keptWhileItServes,
   readAppActionInput
 } from "./app-actions-model";
-export type { AppActionsRead } from "./app-data";
+export {
+  appPublishDataKey,
+  appPublishDataRead,
+  type AppActionsRead,
+  type AppPublishDataRead
+} from "./app-data";
 export { AppEditFrame, appDraftIsAhead, PublishDialog } from "./app-edit";
 export { AppDeleteDialog, AppDetailsDialog, appLink } from "./app-header";
 export {
   appManifestSummary,
+  appReadsStoredData,
   appPreviewProblem,
   appPreviewProblemText,
   appDraftShown,
@@ -29,6 +35,7 @@ export {
   type AppRights
 } from "./app-model";
 export { AppPreviewNotice, appPreviewState } from "./app-preview";
+export { AppPublishDataView, AppStoredDataFact } from "./app-publish-data";
 export { AppToolsGroup, appToolsView, type AppToolsRead } from "./app-tools-group";
 export { AppViewFrame } from "./app-view";
 export { AppsHostProvider, type AppsHost } from "./apps-host";

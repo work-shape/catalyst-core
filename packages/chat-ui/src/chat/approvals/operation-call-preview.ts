@@ -103,6 +103,8 @@ export interface PublishChange {
  */
 export interface PublishReview {
   kind: string;
+  /** The id of what is published. */
+  name: string;
   title: string;
   revision: number;
   /** The live revision it replaces. Absent before the first publish. */
@@ -266,6 +268,7 @@ function parseReview(value: unknown): PublishReview | undefined {
   const stale = staleReasons.find((reason) => reason === value.stale);
   return {
     kind,
+    name,
     title: readText(value.title) ?? name,
     revision: value.revision,
     ...(typeof value.liveRevision === "number" ? { liveRevision: value.liveRevision } : {}),

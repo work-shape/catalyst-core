@@ -831,7 +831,7 @@
     "/api/v1/app-data-sources": {
       "get": {
         "operationId": "data_stores.app_sources",
-        "summary": "Read where the data of one published App comes from: the Data Stores its statements read, and the Workflows and Apps that fill them from which Connections. Whoever uses the App reads it",
+        "summary": "Read where the data of one published App comes from: the Data Stores its statements read, and the Workflows and Apps that fill them from which Connections. Whoever uses the App reads it. With a revision, the same of that stored revision with who may use the App and each store's last measurement, for whoever may change, publish or approve it",
         "tags": [
           "Data Stores"
         ],
@@ -856,6 +856,16 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 63
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
             }
           }
         ],
@@ -910,6 +920,39 @@
                                 "connections"
                               ]
                             }
+                          },
+                          "unavailable": {
+                            "type": "boolean",
+                            "const": true
+                          },
+                          "actions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rows": {
+                            "type": "object",
+                            "properties": {
+                              "estimate": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "tables": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "measuredAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "estimate",
+                              "tables",
+                              "measuredAt"
+                            ]
                           }
                         },
                         "required": [
@@ -918,6 +961,70 @@
                           "fillers"
                         ]
                       }
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "audience": {
+                      "type": "object",
+                      "properties": {
+                        "workspace": {
+                          "type": "object",
+                          "properties": {
+                            "title": {
+                              "type": "string"
+                            },
+                            "members": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "title",
+                            "members"
+                          ]
+                        },
+                        "holders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "service_principal",
+                                  "role",
+                                  "group"
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "name",
+                              "title"
+                            ]
+                          }
+                        },
+                        "hiddenHolders": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "holders",
+                        "hiddenHolders"
+                      ]
                     },
                     "truncated": {
                       "type": "boolean"
