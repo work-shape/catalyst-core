@@ -1,4 +1,3 @@
-import { supersedeWaitingSource } from "./source-supersession";
 import { sourceTarget } from "./source-runtime";
 import { sourceBoundaryKey } from "../source-boundary";
 import { withdrawSourceItems, refreshSourceFreshness } from "./source-withdrawal";
@@ -108,15 +107,6 @@ export function createSourceStore(
       if (!target) throw new AppError("CONFLICT", "The published source is unavailable");
       const definitionKey = sourceBoundaryKey(target.source);
       return change(async (sql) => {
-        const superseded = await supersedeWaitingSource(sql, stores, runtime, payload);
-        if (superseded) {
-          await createSourceStore(runtime, knowledgeBaseId, signal, stores, sql).finish(
-            superseded,
-            "knowledge_source_refused"
-          );
-          // A replacement must re-list everything, even when requested as a changes poll.
-          mode = "full";
-        }
         // Return and lock the winner in the same statement. A finishing run cannot leave
         // a gap between a uniqueness refusal and a separate lookup of the running row.
         const [row] = z

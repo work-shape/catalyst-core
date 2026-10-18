@@ -1,3 +1,4 @@
+import { supersedeWaitingSource } from "./source-supersession";
 import type { KnowledgeSources, KnowledgeListingMode } from "../source-port";
 import { z } from "zod";
 import {
@@ -56,6 +57,13 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
           runtime.stores,
           sql
         );
+        // An explicit sync replaces a held pass. Item retries keep its confirmation
+        // and decision; they are still work belonging to that same pass.
+        const superseded = await supersedeWaitingSource(sql, runtime.stores, runtime, payload);
+        if (superseded) {
+          await bound.finish(superseded, "knowledge_source_refused");
+          mode = "full";
+        }
         const run = await bound.start(payload, mode);
         if (run.operationRunId === payload.operationRunId)
           await runtime.stores.transaction(async (stores) => {
