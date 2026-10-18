@@ -6,7 +6,13 @@ import {
   type PlatformContext
 } from "@work-shape/catalyst-api-client";
 import { APP_MODES } from "@work-shape/catalyst-core";
-import { resolveBuildRights } from "../../shared/build-rights";
+import {
+  assetRightsBy,
+  assetRightsOn,
+  NO_ASSET_RIGHTS,
+  resolveBuildRights,
+  type AssetRights
+} from "../../shared/build-rights";
 import type { TranslationKey } from "../../shared/i18n";
 
 /** The four rights of an App, by the names the instance decides them under. */
@@ -20,21 +26,11 @@ export const APP_RIGHT_NAMES = {
 /**
  * What the reader may do with the Apps of a workspace, as far as the browser can know it.
  * Opening a published App needs none of these: every member of the App's workspace may.
+ * `read` reads an App's record: its name, its description, its manifest and its revisions.
  */
-export interface AppRights {
-  /** Reads an App's record: its name, its description, its manifest and its revisions. */
-  read: boolean;
-  write: boolean;
-  publish: boolean;
-  delete: boolean;
-}
+export type AppRights = AssetRights;
 
-export const NO_APP_RIGHTS: AppRights = {
-  read: false,
-  write: false,
-  publish: false,
-  delete: false
-};
+export const NO_APP_RIGHTS: AppRights = NO_ASSET_RIGHTS;
 
 /**
  * The reader's rights on the Apps of the open workspace, as the instance names them for that
@@ -51,37 +47,11 @@ export function resolveAppRights(
   }
   // No session: its legacy keys name agents and skills, never Apps.
   const rights = resolveBuildRights(undefined, context);
-  const holds = (verb: keyof AppRights) =>
-    rights.holdsInWorkspace(APP_ASSET_KIND, verb, workspaceId);
-  return {
-    read: holds("read"),
-    write: holds("write"),
-    publish: holds("publish"),
-    delete: holds("delete")
-  };
+  return assetRightsBy((verb) => rights.holdsInWorkspace(APP_ASSET_KIND, verb, workspaceId));
 }
 
-/**
- * The reader's rights on one App: what the instance says with the App's record or its row of
- * the list the reader may do to it, decided with every grant and deny there is, those on the
- * App itself included. Until the App arrives, and from an instance that says nothing, the
- * workspace's rights stand.
- */
-export function appRightsOn(
-  rights: AppRights,
-  app: Pick<AssetSummary, "allowed"> | undefined
-): AppRights {
-  const allowed = app?.allowed;
-  if (allowed === undefined) {
-    return rights;
-  }
-  return {
-    read: allowed.includes("read"),
-    write: allowed.includes("write"),
-    publish: allowed.includes("publish"),
-    delete: allowed.includes("delete")
-  };
-}
+/** The reader's rights on one App, by its record or its row of the list: `assetRightsOn`. */
+export const appRightsOn = assetRightsOn;
 
 /**
  * Whether the Apps row of the sidebar shows: the module is on and the instance says the row is

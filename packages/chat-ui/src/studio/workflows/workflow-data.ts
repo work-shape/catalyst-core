@@ -185,7 +185,9 @@ function runsOf(runs: WorkflowRunsSource | undefined): WorkflowRunsSource {
 export function useWorkflowRuns(
   workflow: string,
   pageSize: number,
-  keyPrefix?: string
+  keyPrefix?: string,
+  /** False while the list is not to be read, such as for a reader known not to read the runs. */
+  enabled = true
 ): WorkflowRunList {
   const { runs } = useWorkflowsSource();
   const keys = useWorkflowKeys();
@@ -201,7 +203,7 @@ export function useWorkflowRuns(
         },
         signal
       ),
-    enabled: runs !== undefined,
+    enabled: enabled && runs !== undefined,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor,
     retry: retryUnlessGone,

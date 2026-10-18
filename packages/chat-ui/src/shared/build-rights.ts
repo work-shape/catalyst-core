@@ -10,7 +10,51 @@ export const AGENT_ASSET_KIND = "agent";
 export const CONNECTION_ASSET_KIND = "connection";
 
 /** `publish` is named by a kind with a draft and a published revision only. */
-type AssetVerb = "read" | "write" | "delete" | "publish";
+export type AssetVerb = "read" | "write" | "delete" | "publish";
+
+/**
+ * What the reader may do with the assets of one kind, or with one asset of it, as far as the
+ * browser can know it. The instance decides every call itself; this only chooses what a page
+ * offers.
+ */
+export interface AssetRights {
+  read: boolean;
+  write: boolean;
+  publish: boolean;
+  delete: boolean;
+}
+
+/** No right on the assets of a kind. */
+export const NO_ASSET_RIGHTS: AssetRights = {
+  read: false,
+  write: false,
+  publish: false,
+  delete: false
+};
+
+/** The four rights, each as `holds` answers it for its verb. */
+export function assetRightsBy(holds: (verb: AssetVerb) => boolean): AssetRights {
+  return {
+    read: holds("read"),
+    write: holds("write"),
+    publish: holds("publish"),
+    delete: holds("delete")
+  };
+}
+
+/**
+ * The reader's rights on one asset: what the instance says with the asset's record or its row
+ * of a list the reader may do to it, decided with every grant and deny there is, those on the
+ * asset itself included. Until the asset arrives, and from an instance that says nothing, the
+ * rights on its owner stand.
+ */
+export function assetRightsOn(
+  rights: AssetRights,
+  asset: { allowed?: readonly AssetVerb[] } | undefined
+): AssetRights {
+  const allowed = asset?.allowed;
+  return allowed === undefined ? rights : assetRightsBy((verb) => allowed.includes(verb));
+}
 
 /** A Namespace the reader holds a right in, as the picker and the filter name it. */
 export interface BuildNamespace {

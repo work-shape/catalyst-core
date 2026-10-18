@@ -23,7 +23,7 @@ import {
   type StorePage
 } from "@work-shape/catalyst-core";
 import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
-import { accessResource, decide, listedTo, readsAppDraft, type AssetCall } from "./asset-access";
+import { accessResource, decide, listedTo, readsAssetDraft, type AssetCall } from "./asset-access";
 import { isReleaseSync } from "./asset-write-rules";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { AddresseeNames, WorkflowAssetKind } from "../asset-kinds/shared";
@@ -90,7 +90,7 @@ export class AssetReadWorkflow {
     // Whoever reads the asset is shown all of it; a holder of the use right its published view.
     const reads = (resource: AssetTarget["resource"]) =>
       call.access.authorize(kind.actions.read, resource).allowed ||
-      readsAppDraft(kind, call.access, resource);
+      readsAssetDraft(kind, call.access, resource);
     const [namespaces, defaultName, records] = await Promise.all([
       this.namespaces(scope),
       this.defaultName(kind, scope),
