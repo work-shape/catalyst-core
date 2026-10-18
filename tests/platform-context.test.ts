@@ -14,6 +14,7 @@ import {
   setupAccessInstance as setup,
   storeTestServicePrincipal
 } from "./support/access-instance";
+import { personalKeyServer, issuePersonalKey, personalKeyToken } from "./support/personal-api-keys";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // `platform.context.get` is the first read of an outside editor: where it is, which kinds
@@ -445,5 +446,196 @@ describe("platform.references.get", () => {
     // The context is a registered read, and an allowed one leaves no run either.
     await t.expectOk(t.admin.id, "platform.context.get");
     expect((await runs()).length).toBe(before);
+  });
+});
+
+describe("credential discovery (ADISC-1 check 70)", () => {
+  const setupKeys = () =>
+    setup({
+      modules: { personalApiKeys: { enabled: true } },
+      server: (stores) => personalKeyServer(stores)
+    });
+
+  it("narrows an admin's instanceActions while retaining the existing key issuance choices", async () => {
+    const t = await setupKeys();
+    const owner = platformContextSchema.parse(
+      (await t.expectOk(t.admin.id, "platform.context.get")).json()
+    );
+    const narrowed = platformContextSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "platform.context.get", {
+          headers: { [SCOPES_HEADER]: "config_assets:read" }
+        })
+      ).json()
+    );
+    expect(narrowed.instanceActions).toEqual([]);
+    expect(narrowed.useActions).toEqual(owner.useActions);
+    expect(narrowed.authoringActions).toEqual(owner.authoringActions);
+    const key = await issuePersonalKey(t, ["skill.read"], t.admin.id);
+    const headers = await personalKeyToken(t, key.secret);
+    const context = platformContextSchema.parse(
+      (await t.instance.call("platform.context.get", { headers })).json()
+    );
+    expect(context.instanceActions).toEqual([]);
+    expect(context.actions).toEqual(["skill.read"]);
+    // Existing issuance choices still come from the evaluator, not the operation scope filter.
+    expect(context.useActions).toEqual([]);
+    expect(context.authoringActions).toEqual(["skill.read"]);
+    expect(
+      (await t.instance.call("assets.list", { headers, params: { kind: "skill" } })).statusCode
+    ).toBe(200);
+  });
+
+  it("lists only callable actions for workspace and single-skill keys and a service principal", async () => {
+    const t = await setupKeys();
+    const workspace = await t.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Readable workspace",
+      creatorUserId: t.admin.id
+    });
+    await t.grant(t.kai.id, "skill.read", { workspaceId: workspace.id });
+    await applyAtCurrentRevisions(t.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "workspace-guide",
+          scope: { kind: "workspace", workspaceId: workspace.id },
+          config: {
+            name: "workspace-guide",
+            title: "Guide",
+            description: "Guide",
+            content: "Read me"
+          }
+        },
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "one-guide",
+          config: { name: "one-guide", title: "Guide", description: "Guide", content: "Read one" }
+        }
+      ]
+    });
+    const workspaceKey = await issuePersonalKey(t, ["skill.read"]);
+    const workspaceHeaders = await personalKeyToken(t, workspaceKey.secret);
+    const workspaceContext = platformContextSchema.parse(
+      (await t.instance.call("platform.context.get", { headers: workspaceHeaders })).json()
+    );
+    expect(workspaceContext.actions).toEqual([]);
+    expect(workspaceContext.instanceActions).toEqual([]);
+    expect(workspaceContext.assetActions).toEqual(["skill.read"]);
+    expect(workspaceContext.workspaces).toEqual([
+      {
+        id: workspace.id,
+        name: workspace.name,
+        kind: "shared",
+        member: false,
+        actions: ["skill.read"]
+      }
+    ]);
+    for (const action of workspaceContext.workspaces.flatMap((row) => row.actions)) {
+      expect(action).toBe("skill.read");
+      expect(
+        (
+          await t.instance.call("assets.list", {
+            headers: workspaceHeaders,
+            params: { kind: "skill" },
+            query: { workspaceId: workspace.id }
+          })
+        ).statusCode
+      ).toBe(200);
+    }
+    const one = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "skill",
+      name: "one-guide"
+    });
+    if (!one) throw new Error("Missing fixture skill");
+    await t.grant(t.lena.id, "skill.read", { assetId: one.id });
+    const assetKey = await issuePersonalKey(t, ["skill.read"], t.lena.id);
+    const assetHeaders = await personalKeyToken(t, assetKey.secret);
+    const assetContext = platformContextSchema.parse(
+      (await t.instance.call("platform.context.get", { headers: assetHeaders })).json()
+    );
+    expect(assetContext.actions).toEqual([]);
+    expect(assetContext.instanceActions).toEqual([]);
+    expect(assetContext.workspaces).toEqual([]);
+    expect(assetContext.assetActions).toEqual(["skill.read"]);
+    expect(
+      (
+        await t.instance.call("assets.get", {
+          headers: assetHeaders,
+          params: { kind: "skill", name: "one-guide" }
+        })
+      ).statusCode
+    ).toBe(200);
+
+    await storeTestServicePrincipal("sp_discovery");
+    const serviceHeaders = {
+      [SERVICE_HEADER]: "sp_discovery",
+      [SCOPES_HEADER]: "config_assets:read"
+    };
+    const service = platformContextSchema.parse(
+      (await t.instance.call("platform.context.get", { headers: serviceHeaders })).json()
+    );
+    expect(service.instanceActions).toEqual([]);
+    expect(service.actions).toEqual(["agent.read", "skill.read"]);
+    for (const action of service.actions) {
+      expect(
+        (
+          await t.instance.call("assets.list", {
+            headers: serviceHeaders,
+            params: { kind: action.slice(0, action.indexOf(".")) }
+          })
+        ).statusCode
+      ).toBe(200);
+    }
+  });
+
+  it("hides skill names from a key without skill.read and rejects its next call after revocation", async () => {
+    const t = await setupKeys();
+    const sentinel = "hidden-sentinel-adisc-one";
+    await applyAtCurrentRevisions(t.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "skill",
+          name: sentinel,
+          config: { name: sentinel, title: sentinel, description: sentinel, content: sentinel }
+        }
+      ]
+    });
+    const key = await issuePersonalKey(t, ["agent.read"], t.admin.id);
+    const headers = await personalKeyToken(t, key.secret);
+    const context = await t.instance.call("platform.context.get", { headers });
+    const list = await t.instance.call("assets.list", { headers, params: { kind: "skill" } });
+    const show = await t.instance.call("assets.get", {
+      headers,
+      params: { kind: "skill", name: sentinel }
+    });
+    expect(list.statusCode, list.body).toBe(200);
+    expect(list.json()).toMatchObject({ items: [] });
+    expect(show.statusCode, show.body).toBe(404);
+    expect(JSON.stringify([context.json(), list.json(), show.json()])).not.toContain(sentinel);
+    const assistant = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "agent",
+      name: "assistant"
+    });
+    if (!assistant) throw new Error("Missing fixture agent");
+    await t.grant(t.kai.id, "agent.read", { assetId: assistant.id });
+    const ungrantedKey = await issuePersonalKey(t, ["agent.read"]);
+    const ungrantedHeaders = await personalKeyToken(t, ungrantedKey.secret);
+    const ungranted = await t.instance.call("assets.get", {
+      headers: ungrantedHeaders,
+      params: { kind: "skill", name: sentinel }
+    });
+    expect(ungranted.statusCode, ungranted.body).toBe(404);
+    expect(ungranted.body).not.toContain(sentinel);
+    await t.expectOk(t.admin.id, "me.api_keys.revoke", { params: { keyId: key.key.id } });
+    expect((await t.instance.call("platform.context.get", { headers })).statusCode).toBe(401);
   });
 });
