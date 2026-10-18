@@ -23,16 +23,16 @@ const noop = () => undefined;
 
 const english = {
   summary:
-    "Nachtimport runs every day at 02:00 AM as the account “nachtimport-runner”, reads from Exampledata, adds rows to Findings, and uses Outlook for “Mail an Mandanten”.",
+    "Nachtimport runs as the account “nachtimport-runner” every day at 2:00 AM, reads from Exampledata, adds rows to Findings, and uses Outlook for “Mail an Mandanten”.",
   warnings: [
     "The step “Mail an Mandanten” will stop: the guardrail “Outgoing mail” asks for approval, and a published run cannot wait for one."
   ]
 };
 const german = {
   summary:
-    "Nachtimport läuft jeden Tag um 02:00 als das Konto „nachtimport-runner“, liest aus Exampledata, fügt Zeilen zu Findings hinzu und verwendet Outlook für „Mail an Mandanten“.",
+    "Nachtimport läuft jeden Tag um 02:00 Uhr unter dem Konto „nachtimport-runner“, liest aus Exampledata, fügt Zeilen in Findings hinzu und nutzt Outlook für „Mail an Mandanten“.",
   warnings: [
-    "Der Schritt „Mail an Mandanten“ wird anhalten: Die Leitplanke „Ausgehende Mail“ verlangt eine Freigabe, und ein veröffentlichter Lauf kann nicht auf sie warten."
+    "Der Schritt „Mail an Mandanten“ wird angehalten: Die Leitplanke „Ausgehende Mail“ verlangt eine Freigabe, und ein veröffentlichter Lauf kann nicht auf sie warten."
   ]
 };
 /** Whether a button's tag holds the `disabled` attribute, not a `disabled:` class. */
@@ -306,6 +306,13 @@ describe("the Inbox item of a held publish", () => {
     expect(fold).toContain("Version 6, in place of version 4");
     expect(fold).toMatch(/data-field="connections".*exampledata/u);
     expect(fold).toMatch(/data-field="runs-as".*nachtimport-runner/u);
+    // One fold: the call's technical details stand last inside Details, not in a fold beside.
+    expect(markup).not.toContain('data-testid="operation-call-details"');
+    expect(fold).toMatch(/data-testid="publish-details-technical".*Technical details/u);
+    expect(at(markup, 'data-testid="publish-details-technical"')).toBeGreaterThan(
+      at(markup, 'data-field="runs-as"')
+    );
+    expect(fold).toMatch(/data-field="operation".*assets\.publish/u);
     expect(at(markup, "Approve and publish")).toBeGreaterThan(summary);
     expect(approveHeld(markup)).toBe(false);
   });
@@ -314,6 +321,8 @@ describe("the Inbox item of a held publish", () => {
     const markup = item({ publishNarrative: german }, "de");
     expect(at(markup, german.warnings[0] ?? "")).toBeGreaterThan(at(markup, german.summary));
     expect(details(markup)).toContain(">Details<");
+    expect(details(markup)).toContain("Technische Details");
+    expect(markup).not.toContain('data-testid="operation-call-details"');
     expect(markup).toContain("Freigeben und veröffentlichen");
   });
 
@@ -327,6 +336,8 @@ describe("the Inbox item of a held publish", () => {
   it("shows a request from before PUBQ-1 as it did, with its lists open", () => {
     const markup = item({});
     expect(markup).not.toContain('data-testid="publish-details"');
+    // Its call keeps the fold it had.
+    expect(markup).toContain('data-testid="operation-call-details"');
     expect(at(markup, 'data-testid="publish-review-effect"')).toBeLessThan(
       at(markup, "Version 6, in place of version 4")
     );

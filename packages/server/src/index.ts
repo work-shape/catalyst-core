@@ -291,11 +291,7 @@ export async function createChatServer(
 }
 
 export { GuardrailRunner } from "./guardrails/guardrail-runner";
-export type {
-  GuardrailCheckInput,
-  GuardrailInForce,
-  GuardrailRunnerOptions
-} from "./guardrails/guardrail-runner";
+export type { GuardrailCheckInput, GuardrailRunnerOptions } from "./guardrails/guardrail-runner";
 export { createPublishNarrator } from "./publish-narrative/publish-narrator";
 export type {
   PublishNarrateInput,

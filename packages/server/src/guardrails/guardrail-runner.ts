@@ -78,15 +78,6 @@ export interface GuardrailOfAsset {
   revision: number;
 }
 
-/** A guardrail in force at an event, as a question names it before anything runs. */
-export interface GuardrailInForce {
-  name: string;
-  displayName: string;
-  outcome: GuardrailAnswer["outcome"];
-  /** It runs a check, so whether it answers its outcome depends on the content it reads. */
-  checked: boolean;
-}
-
 /** What a before-event hands the guardrails bound to it. */
 export interface GuardrailEventInput {
   event: GuardrailEvent;
@@ -189,30 +180,7 @@ export class GuardrailRunner {
     input: GuardrailEventInput,
     context: GuardrailCallContext
   ): Promise<GuardrailAnswer[]> {
-    const floor = Object.entries(this.options.config.guardrails)
-      .filter(
-        ([, guardrail]) => guardrail.on === input.event && applies(guardrail.filter, input.match)
-      )
-      .map(([name, guardrail]): Bound => ({
-        name,
-        guardrail,
-        pattern: this.patternOf(`release:${name}`, guardrail)
-      }));
-    const aboutGuardrails =
-      input.aboutGuardrails === true ||
-      (input.event === "asset.before_write" && input.subject.kind === GUARDRAIL_ASSET_KIND);
-    const assets = aboutGuardrails
-      ? []
-      : (await this.publishedGuardrails())
-          .filter(
-            ({ guardrail, scope }) =>
-              guardrail.on === input.event &&
-              reaches(scope, input.match) &&
-              applies(guardrail.filter, input.match)
-          )
-          .map((asset) => this.boundOf(asset));
-    const shipped = aboutGuardrails ? [] : await this.shippedGuardrails(input.event);
-    const bound = [...floor, ...assets, ...shipped];
+    const bound = await this.boundAt(input);
     if (bound.length === 0) {
       return [];
     }
@@ -268,39 +236,66 @@ export class GuardrailRunner {
     return answer ?? answerOf(bound, "allow", "");
   }
 
-  /**
-   * The guardrails in force at an event for what `match` names, as `answer` would bind them:
-   * the release floor, the published guardrails that reach it and the shipped guardrails
-   * nobody switched off. No check runs, no content is read and no hit is kept, so a publish
-   * question can name what a run would meet. `checked` says the answer depends on content.
-   */
-  async inForce(event: GuardrailEvent, match: GuardrailFilter): Promise<GuardrailInForce[]> {
+  private async boundAt(
+    input: Pick<GuardrailEventInput, "event" | "match" | "aboutGuardrails" | "subject">
+  ): Promise<Bound[]> {
     const floor = Object.entries(this.options.config.guardrails)
-      .filter(([, guardrail]) => guardrail.on === event && applies(guardrail.filter, match))
-      .map(([name, guardrail]) => ({
-        name,
-        displayName: guardrail.displayName ?? name,
-        outcome: guardrail.outcome,
-        checked: true
-      }));
-    const assets = (await this.publishedGuardrails())
       .filter(
-        ({ guardrail, scope }) =>
-          guardrail.on === event && reaches(scope, match) && applies(guardrail.filter, match)
+        ([, guardrail]) => guardrail.on === input.event && applies(guardrail.filter, input.match)
       )
-      .map(({ guardrail }) => ({
-        name: guardrail.name,
-        displayName: guardrail.displayName,
-        outcome: guardrail.outcome,
-        checked: true
+      .map(([name, guardrail]): Bound => ({
+        name,
+        guardrail,
+        pattern: this.patternOf(`release:${name}`, guardrail)
       }));
-    const shipped = (await this.shippedGuardrails(event)).map((entry) => ({
-      name: entry.name,
-      displayName: entry.guardrail.displayName ?? entry.name,
-      outcome: entry.guardrail.outcome,
-      checked: false
-    }));
+    const aboutGuardrails =
+      input.aboutGuardrails === true ||
+      (input.event === "asset.before_write" && input.subject.kind === GUARDRAIL_ASSET_KIND);
+    const assets = aboutGuardrails
+      ? []
+      : (await this.publishedGuardrails())
+          .filter(
+            ({ guardrail, scope }) =>
+              guardrail.on === input.event &&
+              reaches(scope, input.match) &&
+              applies(guardrail.filter, input.match)
+          )
+          .map((asset) => this.boundOf(asset));
+    const shipped = aboutGuardrails ? [] : await this.shippedGuardrails(input.event);
     return [...floor, ...assets, ...shipped];
+  }
+
+  /**
+   * The runtime check without effects: patterns read known literals normally; references and
+   * model judges retain a conditional answer. It records no hit and calls no model.
+   */
+  async preview(
+    input: GuardrailEventInput,
+    dynamic: boolean
+  ): Promise<(GuardrailAnswer & { checked: boolean })[]> {
+    const bound = await this.boundAt(input);
+    const answers = await this.evaluateBound(
+      bound,
+      dynamic
+        ? {
+            ...input,
+            fields: async () =>
+              Object.fromEntries(Object.keys(await input.fields()).map((field) => [field, null]))
+          }
+        : input,
+      { correlationId: "publish-preview" },
+      true
+    );
+    return answers.map((answer) => ({
+      ...answer,
+      checked: bound.some(
+        (entry) =>
+          entry.name === answer.guardrailName &&
+          answer.origin === (entry.asset ? "asset" : entry.shipped ? "shipped" : "release") &&
+          !entry.shipped &&
+          (dynamic || entry.guardrail.check.kind === "model_judge")
+      )
+    }));
   }
 
   /** Whether a guardrail applies to an event by its filter and its reach. */
@@ -366,7 +361,8 @@ export class GuardrailRunner {
   private async evaluateBound(
     bound: readonly Bound[],
     input: Pick<GuardrailEventInput, "event" | "fields">,
-    context: GuardrailCallContext
+    context: GuardrailCallContext,
+    preview = false
   ): Promise<GuardrailAnswer[]> {
     const fields = await input.fields();
     // By the bound entry: a floor guardrail and an asset may share a name.
@@ -387,7 +383,11 @@ export class GuardrailRunner {
           const content = checked(fields, input.event, entry);
           return content.length === 0
             ? []
-            : [this.judge(entry, content, context).then((answer) => [entry, answer] as const)];
+            : [
+                preview
+                  ? Promise.resolve([entry, answerOf(entry, entry.guardrail.outcome, "")] as const)
+                  : this.judge(entry, content, context).then((answer) => [entry, answer] as const)
+              ];
         })
       );
       for (const [entry, answer] of judged) results.set(entry, answer);

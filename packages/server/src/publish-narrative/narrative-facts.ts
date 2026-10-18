@@ -6,6 +6,8 @@ import {
   DATA_STORE_OPERATION_VERBS,
   NOTIFY_CHANNELS,
   parseConnectionOperationName,
+  workflowStartOperationName,
+  WORKFLOW_START_KEY_INPUT,
   workflowStepsDeep
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
@@ -48,6 +50,14 @@ export interface WorkflowFacts {
     name: string;
     operation: string;
     target: OperationTarget;
+  }[];
+  /** Calls made through runtime operation admission, including child Workflow starts. */
+  calls: readonly {
+    id: string;
+    name: string;
+    operation: string;
+    input: unknown;
+    dynamic: boolean;
   }[];
   notifySteps: readonly {
     name: string;
@@ -158,6 +168,33 @@ export function workflowFacts(config: unknown, name: string): WorkflowFacts | un
           ]
         : []
     ),
+    calls: steps.flatMap((step) => {
+      const operation =
+        step.type === "operation" && typeof step.operation === "string"
+          ? step.operation
+          : step.type === "workflow" && typeof step.workflow === "string"
+            ? workflowStartOperationName(step.workflow)
+            : undefined;
+      if (!operation) return [];
+      const mapping = z
+        .record(
+          z.string(),
+          z.object({ value: z.unknown().optional(), ref: z.unknown().optional() })
+        )
+        .safeParse(step.input ?? {});
+      const input = Object.fromEntries(
+        Object.entries(mapping.data ?? {}).map(([key, source]) => [key, source.value])
+      );
+      let dynamic =
+        !mapping.success ||
+        Object.values(mapping.data ?? {}).some((source) => source.ref !== undefined);
+      if (step.type === "workflow" && step.key !== undefined) {
+        // A key's references are resolved only during the run, like the child's other input.
+        dynamic = true;
+        input[WORKFLOW_START_KEY_INPUT] = undefined;
+      }
+      return [{ id: step.id, name: text(step.name, step.id), operation, input, dynamic }];
+    }),
     notifySteps: steps.flatMap((step) => {
       if (step.type !== "notify") return [];
       const to = recipients.safeParse(step.to).data;

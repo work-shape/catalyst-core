@@ -94,12 +94,18 @@ function StoredDataHold({
 export function PublishReviewBody({
   actor,
   review,
-  headline = true
+  headline = true,
+  technical
 }: {
   actor: string;
   review: PublishReview;
   /** Without it the review starts with its lists: a confirmation says who asks in its own words. */
   headline?: boolean;
+  /**
+   * The call itself (operation, origin, expiry, whole input), last in "Details" beside the
+   * lists, so a publish that leads with its sentence has one fold. Shown only with a sentence.
+   */
+  technical?: ReactNode;
 }) {
   const { t } = useTranslation();
   const effect = (
@@ -134,6 +140,12 @@ export function PublishReviewBody({
         <PublishDetails>
           {headline ? effect : null}
           {lists}
+          {technical ? (
+            <section className="grid min-w-0 gap-2" data-testid="publish-details-technical">
+              <h4 className="text-label">{t("operations.callDetails")}</h4>
+              {technical}
+            </section>
+          ) : null}
         </PublishDetails>
       ) : (
         lists

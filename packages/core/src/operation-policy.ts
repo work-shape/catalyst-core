@@ -229,6 +229,11 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
         };
       }
       if (hasNobodyToAsk(input.origin)) {
+        // A published run would pass a confirm without this floor, even when the default
+        // already met it. Name the floor that actually prevents that pass (PUBQ-1).
+        if (input.publishedRun && holdsForPublishedRun(definition.policyFloor)) {
+          source = "policy_floor";
+        }
         return { value: "approval", next: "await_approval", source };
       }
       if (input.personAbsent) {

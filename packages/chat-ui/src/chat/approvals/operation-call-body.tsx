@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   Banner,
@@ -143,12 +144,27 @@ export function OperationCallBody({
 
   // A publish that waits shows what it makes live, and the call itself only in the fold.
   const review = pending ? call.review : undefined;
+  const technical = (
+    <TechnicalDetailsContent
+      call={call}
+      pending={pending}
+      showsOperation={skill !== undefined || review !== undefined}
+      fullInput={operationCallFullInput(request.payload)}
+    />
+  );
+  // A publish that leads with its sentence has one fold, "Details", and the call goes in it.
+  const merged = review?.narrative !== undefined;
 
   return (
     <div className="grid min-w-0 gap-4" data-testid="operation-call" data-run-id={call.runId}>
       {confirmation && pending ? <ConfirmationLead call={call} /> : null}
       {review ? (
-        <PublishReviewBody actor={actor} review={review} headline={!confirmation} />
+        <PublishReviewBody
+          actor={actor}
+          review={review}
+          headline={!confirmation}
+          technical={merged ? technical : undefined}
+        />
       ) : confirmation ? null : pending ? (
         <div className="grid min-w-0 gap-1.5">
           <p className="font-medium text-foreground" data-testid="operation-call-headline">
@@ -211,14 +227,10 @@ export function OperationCallBody({
           <CallInputs call={call} hiddenFields={hiddenFields} />
         </>
       )}
-      <TechnicalDetails
-        call={call}
-        pending={pending}
-        showsOperation={skill !== undefined || review !== undefined}
-        fullInput={operationCallFullInput(request.payload)}
+      {merged ? null : (
         // A reader who is told to read the rest finds it open.
-        defaultOpen={hiddenFields > 0}
-      />
+        <TechnicalDetails defaultOpen={hiddenFields > 0}>{technical}</TechnicalDetails>
+      )}
     </div>
   );
 }
@@ -340,17 +352,36 @@ export function CallInputs({
 
 /** What few readers need to decide and some need to check, folded away under one line. */
 function TechnicalDetails({
+  defaultOpen,
+  children
+}: {
+  defaultOpen: boolean;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Disclosure defaultOpen={defaultOpen} data-testid="operation-call-details">
+      <DisclosureTrigger data-testid="operation-call-details-open">
+        {t("operations.callDetails")}
+      </DisclosureTrigger>
+      <DisclosureContent>
+        <div className="pt-1">{children}</div>
+      </DisclosureContent>
+    </Disclosure>
+  );
+}
+
+/** The operation, where the call came from, when it expires and its whole input. */
+function TechnicalDetailsContent({
   call,
   pending,
   showsOperation,
-  fullInput,
-  defaultOpen
+  fullInput
 }: {
   call: OperationCallPreview;
   pending: boolean;
   showsOperation: boolean;
   fullInput: string | undefined;
-  defaultOpen: boolean;
 }) {
   const { locale, t } = useTranslation();
   const host = useApprovalRevisionHost();
@@ -364,50 +395,43 @@ function TechnicalDetails({
     .filter(Boolean)
     .join(", ");
   return (
-    <Disclosure defaultOpen={defaultOpen} data-testid="operation-call-details">
-      <DisclosureTrigger data-testid="operation-call-details-open">
-        {t("operations.callDetails")}
-      </DisclosureTrigger>
-      <DisclosureContent>
-        <div className="grid min-w-0 gap-3 pt-1">
-          <KeyValueList>
-            {showsOperation ? (
-              <KeyValue label={t("operations.operation")} data-field="operation">
-                <span className="font-mono text-code wrap-anywhere">{call.operation}</span>
-              </KeyValue>
-            ) : null}
-            <KeyValue label={t("operations.origin")} data-field="origin">
-              {origin}
-            </KeyValue>
-            {toolName ? (
-              <KeyValue label={t("operations.fieldToolName")} data-field="tool">
-                <span className="font-mono text-code wrap-anywhere">{toolName}</span>
-              </KeyValue>
-            ) : null}
-            {call.expiresAt && pending ? (
-              <KeyValue label={t("operations.callExpires")} data-field="expiresAt">
-                {formatApprovalDate(call.expiresAt, locale)}
-                <span className="block text-caption text-muted-foreground">
-                  {t("operations.callExpiresHint")}
-                </span>
-              </KeyValue>
-            ) : null}
-          </KeyValueList>
-          {fullInput === undefined ? null : (
-            <div className="grid min-w-0 gap-1">
-              <span className="text-caption text-muted-foreground">
-                {t("operations.callFullInput")}
-              </span>
-              <CodeBlock
-                code={fullInput}
-                label={t("operations.callFullInput")}
-                className="max-h-96"
-                data-testid="operation-call-full-input"
-              />
-            </div>
-          )}
+    <div className="grid min-w-0 gap-3" data-testid="operation-call-technical">
+      <KeyValueList>
+        {showsOperation ? (
+          <KeyValue label={t("operations.operation")} data-field="operation">
+            <span className="font-mono text-code wrap-anywhere">{call.operation}</span>
+          </KeyValue>
+        ) : null}
+        <KeyValue label={t("operations.origin")} data-field="origin">
+          {origin}
+        </KeyValue>
+        {toolName ? (
+          <KeyValue label={t("operations.fieldToolName")} data-field="tool">
+            <span className="font-mono text-code wrap-anywhere">{toolName}</span>
+          </KeyValue>
+        ) : null}
+        {call.expiresAt && pending ? (
+          <KeyValue label={t("operations.callExpires")} data-field="expiresAt">
+            {formatApprovalDate(call.expiresAt, locale)}
+            <span className="block text-caption text-muted-foreground">
+              {t("operations.callExpiresHint")}
+            </span>
+          </KeyValue>
+        ) : null}
+      </KeyValueList>
+      {fullInput === undefined ? null : (
+        <div className="grid min-w-0 gap-1">
+          <span className="text-caption text-muted-foreground">
+            {t("operations.callFullInput")}
+          </span>
+          <CodeBlock
+            code={fullInput}
+            label={t("operations.callFullInput")}
+            className="max-h-96"
+            data-testid="operation-call-full-input"
+          />
         </div>
-      </DisclosureContent>
-    </Disclosure>
+      )}
+    </div>
   );
 }

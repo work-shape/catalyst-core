@@ -17,15 +17,23 @@ import {
   guardrailDenial,
   type GuardrailNamed
 } from "./before-events";
-import type { RunContext } from "./operation-execution";
+import type { RunContext, RunOperationDeps } from "./operation-execution";
+
+/** The read-only inputs shared by runtime admission and publish previews. */
+export interface OperationPolicyContext {
+  definition: RunContext["definition"];
+  call: Pick<OperationCall, "input" | "origin" | "workspaceId" | "draft" | "workflowDeleted">;
+  resource: RunContext["resource"];
+  deps: Pick<RunOperationDeps, "policy">;
+  runtime: RunContext["runtime"];
+  emit: RunContext["emit"];
+}
 
 // What the policy asks of one call: what it is resolved from, and what the guardrails of the
 // call's before-events add to it.
 
 /** What the policy is resolved from for this call, before a guardrail answered. */
-async function policyInputOf(
-  context: Pick<RunContext, "definition" | "call" | "resource" | "deps" | "runtime">
-): Promise<PolicyInput> {
+async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInput> {
   const { definition, call, resource, deps, runtime } = context;
   const callFloor = await definition.policyFloorOf?.(call.origin, call.input);
   const workerCall =
@@ -71,14 +79,16 @@ function stricterPolicy(left: PolicyValue, right: PolicyValue | undefined): Poli
  * approval is executed.
  */
 export async function resolveGuardedPolicy(
-  context: RunContext
+  context: OperationPolicyContext
 ): Promise<
-  { policy: PolicyResolution; approvalAskedBy?: GuardrailNamed } | { denial: OperationDenial }
+  | { policy: PolicyResolution; approvalAskedBy?: GuardrailNamed }
+  | { denial: OperationDenial; policy: PolicyResolution }
 > {
   const { definition } = context;
   const policyInput = await policyInputOf(context);
   const before = resolvePolicy(policyInput);
-  if (before.next === "refuse") return { denial: policyDenial(before, definition.name) };
+  if (before.next === "refuse")
+    return { denial: policyDenial(before, definition.name), policy: before };
   const answers = await askBeforeEvents(context);
   const guardrailOutcome = strictestOutcome(answers.map((answer) => answer.outcome));
   const policy = resolvePolicy({ ...policyInput, guardrailOutcome });
@@ -88,6 +98,7 @@ export async function resolveGuardedPolicy(
     return { policy, ...(asking ? { approvalAskedBy: asking } : {}) };
   }
   return {
+    policy,
     denial:
       policy.source === "guardrail"
         ? guardrailDenial(answers, definition.events?.before ?? "operation.before_call")
@@ -137,4 +148,12 @@ export function approvedByCaller(
     call.draft === undefined &&
     access.authorize(approval.action).allowed
   );
+}
+
+/** A call carries its own workspace only when its surface supplies one. */
+export function operationWorkspace(
+  call: Pick<OperationCall, "workspaceId">,
+  resource: OperationPolicyContext["resource"]
+): OperationCall["workspaceId"] {
+  return call.workspaceId ?? resource?.workspaceId;
 }

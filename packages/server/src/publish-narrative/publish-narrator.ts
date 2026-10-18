@@ -1,6 +1,9 @@
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import {
   CONNECTION_ACTIONS,
+  isGuardrailEvent,
+  PLATFORM_EVENT_ALLOW,
+  strictestOutcome,
   CONNECTION_ASSET_KIND,
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
@@ -8,7 +11,6 @@ import {
   WORKFLOW_ASSET_KIND,
   asCollaborationWorkspaceId,
   asUserId,
-  isGuardrailEvent,
   type AccessResource,
   type ActorAccess,
   type AssetKindRegistry,
@@ -16,8 +18,6 @@ import {
   type ClientInstanceId,
   type ConfigAssetRecord,
   type ConfigAssetStore,
-  type GuardrailEvent,
-  type GuardrailFilter,
   type JsonObject,
   type LocaleCode,
   type OperationDefinition,
@@ -27,8 +27,14 @@ import {
   type PublishNarrativeStoredData
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import {
+  operationWorkspace,
+  resolveGuardedPolicy,
+  type RunOperationDeps
+} from "@work-shape/catalyst-tool-execution";
+import { guardrailMatch } from "../operations/event-emitter";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
-import type { GuardrailInForce } from "../guardrails/guardrail-runner";
+import type { GuardrailRunner } from "../guardrails/guardrail-runner";
 import {
   appSummary,
   oneLine,
@@ -42,7 +48,7 @@ import { appFacts, workflowFacts, type AppFacts, type WorkflowFacts } from "./na
 
 // The plain sentence the publish question leads with, and the warning for each step a guardrail
 // in force will stop (PUBQ-1). It is computed from the revision's config and what the instance
-// knows of the names in it: no step runs, no check of a guardrail runs, no row is read. The
+// knows of the names in it: no step runs, no model is called, no hit is kept and no row is read. The
 // Publish dialog, the draft bar, the CLI prompt and a held publish's Inbox item show the same.
 // Spec: events-workflows-and-guardrails.md, The publish question.
 
@@ -74,12 +80,12 @@ export interface PublishNarratorOptions {
   };
   /** The registered kinds, for the account a Workflow runs as. */
   kinds?: Pick<AssetKindRegistry<WorkflowAssetKind>, "get">;
-  /** The guardrails in force. Without them no warning is given. */
-  guardrails?: {
-    inForce(event: GuardrailEvent, match: GuardrailFilter): Promise<GuardrailInForce[]>;
-  };
+  /** Runtime guardrails, dry-evaluated without model calls or recorded hits. */
+  guardrails?: Pick<GuardrailRunner, "preview">;
   /** The definition of an operation a step calls, where this process registers it. */
-  resolve(operation: string): Promise<Pick<OperationDefinition, "effect" | "events"> | undefined>;
+  resolve(operation: string): Promise<OperationDefinition | undefined>;
+  /** The same central settings and defaults used by operation admission. */
+  policy?: RunOperationDeps["policy"];
   /** Who sees which stored data (DS-13b). Absent where the stored-data module is off. */
   storedData?: PublishNarrativeStoredData;
 }
@@ -261,7 +267,7 @@ async function narrateWorkflow(
   const names = namers(options, input.access);
   const definitions = new Map(
     await Promise.all(
-      once(facts.operationSteps.map((step) => step.operation)).map(
+      once(facts.calls.map((step) => step.operation)).map(
         async (operation) => [operation, await options.resolve(operation)] as const
       )
     )
@@ -330,46 +336,70 @@ async function narrateWorkflow(
   };
   return {
     summary: workflowSummary(sentence, input.locale),
-    warnings: stopWarnings(await stepStops(options, input.scope, facts, definitions), input.locale)
+    warnings: stopWarnings(await stepStops(options, facts, definitions), input.locale)
   };
 }
 
 /**
- * The steps a guardrail in force will stop when the published revision runs: a published run
- * cannot wait for an approval, so a `require_approval` stops its step as a `block` does
- * (WF-AUTO-1). A step meets the guardrails of `operation.before_call` and of its operation's
- * own before-event, with the run's origin and the Workflow's workspace. A guardrail that checks
- * content is said as "may": whether it matches is known only when the step runs.
+ * Dry admission of every declared call. Runtime and preview share effective workspace,
+ * policy resolution, before-event enumeration and guardrail binding. Content checks remain
+ * conditional: no judge, hit, approval, operation run or step is executed by a preview.
  */
 async function stepStops(
   options: PublishNarratorOptions,
-  scope: AssetScope,
   facts: WorkflowFacts,
-  definitions: ReadonlyMap<string, Pick<OperationDefinition, "events"> | undefined>
+  definitions: ReadonlyMap<string, OperationDefinition | undefined>
 ): Promise<StepStop[]> {
-  const { guardrails } = options;
-  if (!guardrails) return [];
-  const where: GuardrailFilter = {
-    origin: "workflow",
-    ...(scope.kind === "workspace" ? { workspace: scope.workspaceId } : {})
-  };
-  const asked = new Map<string, Promise<GuardrailInForce[]>>();
-  const inForce = (event: GuardrailEvent, match: GuardrailFilter) => {
-    const key = `${event}\u0000${match.operation ?? ""}`;
-    let found = asked.get(key);
-    if (!found) {
-      found = guardrails.inForce(event, match);
-      asked.set(key, found);
-    }
-    return found;
-  };
   const stops: StepStop[] = [];
-  for (const step of facts.operationSteps) {
-    const own = definitions.get(step.operation)?.events?.before;
-    const met = [
-      ...(await inForce("operation.before_call", { ...where, operation: step.operation })),
-      ...(own !== undefined && isGuardrailEvent(own) ? await inForce(own, where) : [])
-    ];
+  for (const step of facts.calls) {
+    const definition = definitions.get(step.operation);
+    if (!definition) continue;
+    const parsed = await definition.inputSchema.safeParseAsync(step.input);
+    // Literal inputs use the same parsed value as runtime. References have no value until
+    // the run; constant resources (Connections, stores, child Workflows) can still name it.
+    if (!parsed.success && !step.dynamic) continue;
+    const input = !step.dynamic && parsed.success ? parsed.data : step.input;
+    const resource = definition.resource(input);
+    const call = {
+      input,
+      origin: { kind: "workflow" as const, workflowRunId: "publish-preview", stepRunId: step.id },
+      workspaceId: operationWorkspace({}, resource)
+    };
+    const met: Awaited<ReturnType<GuardrailRunner["preview"]>> = [];
+    const result = await resolveGuardedPolicy({
+      definition,
+      call,
+      resource,
+      runtime: {},
+      deps: {
+        policy: options.policy ?? {
+          instanceDefaults: { reading: "allow", changing: "confirm" },
+          centralSettings: () => []
+        }
+      },
+      emit: async (event, _phase, _payload, before = {}) => {
+        if (!isGuardrailEvent(event) || !options.guardrails) return PLATFORM_EVENT_ALLOW;
+        const guardrails = await options.guardrails.preview(
+          {
+            event,
+            match: guardrailMatch({ ...call, filterBy: before.filterBy }),
+            aboutGuardrails: before.aboutGuardrails,
+            subject:
+              before.subject ??
+              (resource
+                ? { kind: resource.kind, id: resource.id }
+                : { kind: "operation", id: definition.name }),
+            fields: async () => (await before.checkable?.()) ?? {}
+          },
+          step.dynamic
+        );
+        met.push(...guardrails);
+        return {
+          outcome: strictestOutcome(guardrails.map((answer) => answer.outcome)),
+          guardrails
+        };
+      }
+    });
     for (const guardrail of met) {
       if (guardrail.outcome !== "require_approval" && guardrail.outcome !== "block") continue;
       stops.push({
@@ -377,6 +407,18 @@ async function stepStops(
         guardrail: oneLine(guardrail.displayName),
         outcome: guardrail.outcome,
         checked: guardrail.checked
+      });
+    }
+    const { policy } = result;
+    if (policy.source !== "guardrail" && policy.next !== "run") {
+      stops.push({
+        step: oneLine(step.name),
+        guardrail: "",
+        source: policy.source,
+        outcome: policy.value === "deny" ? "block" : "require_approval",
+        checked:
+          step.dynamic &&
+          (definition.policyFloorOf !== undefined || definition.policyTargets !== undefined)
       });
     }
   }

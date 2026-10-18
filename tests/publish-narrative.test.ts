@@ -1,284 +1,40 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
 import {
-  asClientInstanceId,
   asCollaborationWorkspaceId,
-  isJsonObject,
-  unknownToJsonValue,
   INSTANCE_ASSET_SCOPE,
-  type AccessDecision,
-  type ActorAccess,
   type AssetScope,
-  type ConfigAssetRecord,
-  type GuardrailConfig,
   type JsonObject,
-  type LocaleCode,
-  type OperationEffect,
-  type PublishNarrativeStoredData
+  type LocaleCode
 } from "@work-shape/catalyst-core";
-import type { ReleaseGuardrailConfig } from "@work-shape/catalyst-config-schema";
-import { GuardrailRunner, createPublishNarrator } from "@work-shape/catalyst-server";
-import { createTestConfig } from "./support/fixtures";
+
+import { createPublishNarrator } from "@work-shape/catalyst-server";
+
+import {
+  clientInstanceId,
+  WORKSPACE,
+  workspaceScope,
+  everything,
+  nothing,
+  operationDefinition,
+  nightlyImport,
+  APP,
+  storedData,
+  ibanApproval,
+  narrator,
+  narrateWorkflow
+} from "./support/publish-narrative";
 
 // PUBQ-1: the publish question leads with one generated sentence of what runs, when, as which
 // account, what it reads, writes and sends and who sees it, and warns before the click of each
 // step a guardrail in force will stop under WF-AUTO-1. The sentence names and counts; it never
-// runs a step, a check, or reads a row.
-
-const clientInstanceId = asClientInstanceId("ci_pubq");
-const WORKSPACE = asCollaborationWorkspaceId("cw_kai");
-const workspaceScope: AssetScope = { kind: "workspace", workspaceId: WORKSPACE };
-
-function jsonObject(value: unknown): JsonObject {
-  const converted = unknownToJsonValue(value);
-  if (!isJsonObject(converted)) throw new Error("Expected a JSON object");
-  return converted;
-}
-
-function record(
-  kind: string,
-  name: string,
-  config: JsonObject,
-  scope: AssetScope = workspaceScope
-): ConfigAssetRecord {
-  return {
-    id: `asset_${kind}_${name}`,
-    clientInstanceId,
-    kind,
-    name,
-    scope,
-    status: "active",
-    activeRevisionId: `rev_${name}`,
-    revision: 1,
-    config,
-    publishedRevisionId: `rev_${name}`,
-    publishedRevision: 1,
-    publishedConfig: config,
-    createdAt: "2026-10-18T00:00:00.000Z",
-    updatedAt: "2026-10-18T00:00:00.000Z"
-  };
-}
-
-const ASSETS = [
-  record("connection", "exampledata", { displayName: "Exampledata" }),
-  record("connection", "outlook", { displayName: "Outlook" }),
-  record("data_store", "findings", { title: "Findings" }),
-  record("data_store", "ledger", { title: "Ledger" }),
-  record("data_store", "facts", { title: "Facts" }),
-  // A Workflow's visible name is its manifest's `name`, never its id.
-  record("workflow", "child_fetch", { manifest: { id: "child_fetch", name: "Belege holen" } })
-];
-
-const PEOPLE: Record<string, string> = { usr_anna: "Anna Berg", usr_ben: "Ben Kurz" };
-
-const allowed: AccessDecision = { allowed: true, source: "grant" };
-const everything: ActorAccess = {
-  authorize: () => allowed,
-  require: () => undefined,
-  holdsGrantAt: () => true,
-  denials: () => []
-};
-const nothing: ActorAccess = {
-  ...everything,
-  authorize: () => ({ allowed: false, reason: "no_grant" })
-};
-
-const EFFECTS: Record<string, OperationEffect> = {
-  "connection.exampledata.list_clients": "reading",
-  "connection.exampledata.list_postings": "reading",
-  "connection.outlook.send_mail": "changing"
-};
-
-/** The Exampledata Workflow of check 75: it reads Exampledata, inserts into Findings, mails a Mandant. */
-function nightlyImport(): JsonObject {
-  return {
-    name: "nachtimport",
-    title: "Nachtimport",
-    manifest: {
-      id: "nachtimport",
-      name: "Nachtimport",
-      runAs: "nachtimport-runner",
-      inputs: { type: "object" },
-      outputs: { type: "object" },
-      steps: [
-        {
-          id: "start",
-          name: "Start",
-          type: "trigger",
-          triggers: [{ kind: "schedule", cron: "0 2 * * *" }]
-        },
-        {
-          id: "clients",
-          name: "Mandanten lesen",
-          type: "operation",
-          operation: "connection.exampledata.list_clients",
-          input: {}
-        },
-        {
-          id: "postings",
-          name: "Buchungen lesen",
-          type: "operation",
-          operation: "connection.exampledata.list_postings",
-          input: {}
-        },
-        {
-          id: "store",
-          name: "Befunde speichern",
-          type: "operation",
-          operation: "data_store.findings.insert",
-          input: {}
-        },
-        {
-          id: "mail",
-          name: "Mail an Mandanten",
-          type: "operation",
-          operation: "connection.outlook.send_mail",
-          input: { to: { ref: { step: "clients", path: "email" } } }
-        }
-      ]
-    }
-  };
-}
-
-const APP: "app" = "app";
-
-/** The App Findings on the store, used by the 14 people of Kai Spezis. */
-const storedData: PublishNarrativeStoredData = {
-  appRevision: () =>
-    Promise.resolve({
-      audience: { workspace: { title: "Kai Spezis", members: 14 }, holders: 0 },
-      stores: [
-        {
-          title: "Findings",
-          unavailable: false,
-          fillers: [{ title: "Nachtimport", connections: ["Exampledata"] }]
-        }
-      ],
-      truncated: false
-    }),
-  storeReaders: (_access, stores) =>
-    Promise.resolve(
-      stores.map((store) => ({
-        store,
-        title: "Findings",
-        readers: [
-          {
-            kind: APP,
-            title: "Findings",
-            audience: { workspace: { title: "Kai Spezis", members: 14 }, holders: 0 }
-          }
-        ],
-        hidden: 0,
-        truncated: false
-      }))
-    )
-};
-
-const ibanApproval: GuardrailConfig = {
-  name: "mail-iban-approval",
-  displayName: "E-Mail senden: IBAN → Freigabe",
-  on: "operation.before_call",
-  filter: { operation: "connection.outlook.send_mail" },
-  check: { kind: "pattern", pattern: "(?i)DE\\d{20}", reason: "Eine IBAN braucht eine Freigabe." },
-  outcome: "require_approval",
-  origin: "asset"
-};
-
-function narrator(input: {
-  guardrails?: readonly { guardrail: GuardrailConfig; scope?: AssetScope }[];
-  floor?: Record<string, ReleaseGuardrailConfig>;
-  shippedOff?: boolean;
-  stored?: PublishNarrativeStoredData;
-}) {
-  const base = createTestConfig();
-  const runner = new GuardrailRunner({
-    clientInstanceId,
-    config: { ...base, guardrails: { ...base.guardrails, ...input.floor } },
-    modelGateway: {
-      complete: () => Promise.reject(new Error("The publish question runs no check")),
-      capabilities: () => {
-        throw new Error("The publish question runs no check");
-      }
-    },
-    hits: { recordHits: () => Promise.reject(new Error("The publish question keeps no hit")) },
-    assets: {
-      listPublishedConfigAssets: () =>
-        Promise.resolve(
-          (input.guardrails ?? []).map(({ guardrail, scope }) =>
-            record(
-              "guardrail",
-              guardrail.name,
-              jsonObject(guardrail),
-              scope ?? INSTANCE_ASSET_SCOPE
-            )
-          )
-        )
-    },
-    shipped: {
-      listShippedGuardrailSwitches: () =>
-        Promise.resolve(
-          input.shippedOff
-            ? [
-                {
-                  name: "publishing-needs-approval",
-                  enabled: false,
-                  switchedBy: { id: "usr_admin", label: "Admin" },
-                  switchedAt: "2026-10-18T00:00:00.000Z"
-                }
-              ]
-            : []
-        )
-    }
-  });
-  return createPublishNarrator({
-    clientInstanceId,
-    stores: {
-      configAssets: {
-        getConfigAsset: ({ kind, name }) =>
-          Promise.resolve(ASSETS.find((asset) => asset.kind === kind && asset.name === name))
-      },
-      workspaces: {
-        getWorkspace: (_instance, id) =>
-          Promise.resolve(id === WORKSPACE ? { name: "Kai Spezis" } : undefined)
-      },
-      users: {
-        getUser: ({ userId }) => {
-          const displayLabel = PEOPLE[userId];
-          return Promise.resolve(displayLabel === undefined ? undefined : { displayLabel });
-        }
-      }
-    },
-    guardrails: runner,
-    resolve: (operation) => {
-      const effect = EFFECTS[operation];
-      return Promise.resolve(effect ? { effect } : undefined);
-    },
-    ...(input.stored === undefined ? { storedData } : { storedData: input.stored })
-  });
-}
-
-async function narrateWorkflow(
-  locale: LocaleCode,
-  options: Parameters<typeof narrator>[0] = { guardrails: [{ guardrail: ibanApproval }] },
-  config: JsonObject = nightlyImport()
-) {
-  const narrative = await narrator(options).narrate({
-    kind: "workflow",
-    name: "nachtimport",
-    scope: workspaceScope,
-    revision: 3,
-    config,
-    locale,
-    access: everything
-  });
-  if (!narrative) throw new Error("A Workflow revision is narrated");
-  return narrative;
-}
+// runs a step, calls a model, records a hit, or reads a row.
 
 describe("PUBQ-1 the publish question's sentence", () => {
   it("check 75: names the schedule, the account, Exampledata, Findings, the mail and the App's audience, and warns of the mail step before the click", async () => {
     const narrative = await narrateWorkflow("en");
     expect(narrative.summary).toBe(
-      "Nachtimport runs every day at 02:00 AM as the account “nachtimport-runner”, reads from Exampledata, adds rows to Findings, and uses Outlook for “Mail an Mandanten”. The App “Findings” shows the rows of Findings to the 14 people of “Kai Spezis”."
+      "Nachtimport runs as the account “nachtimport-runner” every day at 2:00 AM, reads from Exampledata, adds rows to Findings, and uses Outlook for “Mail an Mandanten”. The App “Findings” shows the rows of Findings to the 14 people of “Kai Spezis”."
     );
     expect(narrative.warnings).toEqual([
       "The step “Mail an Mandanten” may stop: the guardrail “E-Mail senden: IBAN → Freigabe” asks for approval when what it checks matches, and a published run cannot wait for one."
@@ -288,10 +44,10 @@ describe("PUBQ-1 the publish question's sentence", () => {
   it("check 75 in German: the same sentence and warning in the reader's language", async () => {
     const narrative = await narrateWorkflow("de");
     expect(narrative.summary).toBe(
-      "Nachtimport läuft jeden Tag um 02:00 als Konto „nachtimport-runner“, liest aus Exampledata, fügt Zeilen in Findings hinzu und nutzt Outlook für „Mail an Mandanten“. Die App „Findings“ zeigt die Zeilen von Findings den 14 Personen von „Kai Spezis“."
+      "Nachtimport läuft jeden Tag um 02:00 Uhr unter dem Konto „nachtimport-runner“, liest aus Exampledata, fügt Zeilen in Findings hinzu und nutzt Outlook für „Mail an Mandanten“. Die App „Findings“ zeigt den 14 Personen von „Kai Spezis“ die Zeilen von Findings."
     );
     expect(narrative.warnings).toEqual([
-      "Der Schritt „Mail an Mandanten“ kann anhalten: Die Leitplanke „E-Mail senden: IBAN → Freigabe“ verlangt eine Freigabe, wenn das Geprüfte zutrifft, und ein veröffentlichter Lauf kann nicht auf sie warten."
+      "Der Schritt „Mail an Mandanten“ kann angehalten werden: Die Leitplanke „E-Mail senden: IBAN → Freigabe“ verlangt eine Freigabe, wenn sie beim Geprüften anschlägt, und ein veröffentlichter Lauf kann nicht auf sie warten."
     ]);
   });
 
@@ -333,6 +89,176 @@ describe("PUBQ-1 the publish question's sentence", () => {
     expect(narrative.warnings).toEqual([]);
   });
 
+  it.each([{ operation: "workflow.*" }, { origin: "workflow" as const }])(
+    "warns on child Workflow starts for filter %j",
+    async (filter) => {
+      const result = await narrateWorkflow(
+        "en",
+        {
+          guardrails: [
+            { guardrail: { ...ibanApproval, filter, check: { kind: "pattern", pattern: "." } } }
+          ]
+        },
+        {
+          manifest: {
+            name: "Parent",
+            steps: [
+              { id: "start", type: "trigger", triggers: [{ kind: "manual" }] },
+              {
+                id: "child",
+                name: "Fetch child",
+                type: "workflow",
+                workflow: "child_fetch",
+                input: {}
+              }
+            ]
+          }
+        }
+      );
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain("Fetch child");
+      expect(result.warnings[0]).toContain("will stop");
+    }
+  );
+
+  it("uses a workspace store's resource for an instance Workflow, and never a Workflow workspace for a Connection", async () => {
+    const review = narrator({
+      guardrails: [
+        {
+          guardrail: {
+            ...ibanApproval,
+            filter: { origin: "workflow" },
+            check: { kind: "pattern", pattern: "." }
+          },
+          scope: workspaceScope
+        }
+      ]
+    });
+    const run = (scope: AssetScope) =>
+      review.narrate({
+        kind: "workflow",
+        name: "nightly",
+        scope,
+        revision: 1,
+        config: nightlyImport(),
+        locale: "en",
+        access: everything
+      });
+    for (const scope of [INSTANCE_ASSET_SCOPE, workspaceScope]) {
+      const result = await run(scope);
+      expect(result?.warnings).toHaveLength(1);
+      expect(result?.warnings[0]).toContain("Befunde speichern");
+      expect(result?.warnings.join(" ")).not.toContain("Mail an Mandanten");
+    }
+  });
+
+  it("evaluates a literal pattern with runtime semantics and keeps reference-dependent warnings conditional", async () => {
+    const config = (to: JsonObject) => ({
+      manifest: {
+        name: "Mailer",
+        steps: [
+          {
+            id: "mail",
+            name: "Mail",
+            type: "operation",
+            operation: "connection.outlook.send_mail",
+            input: { to }
+          }
+        ]
+      }
+    });
+    const options = {
+      guardrails: [
+        { guardrail: { ...ibanApproval, check: { kind: "pattern" as const, pattern: "IBAN" } } }
+      ]
+    };
+    expect(
+      (await narrateWorkflow("en", options, config({ value: "no account" }))).warnings
+    ).toEqual([]);
+    expect((await narrateWorkflow("en", options, config({ value: "IBAN" }))).warnings[0]).toContain(
+      "will stop"
+    );
+    expect(
+      (await narrateWorkflow("en", options, config({ ref: { step: "previous" } }))).warnings[0]
+    ).toContain("may stop");
+  });
+
+  it("previews a model judge conditionally without a model call or a recorded hit", async () => {
+    const onModel = vi.fn();
+    const onHit = vi.fn();
+    const result = await narrateWorkflow("en", {
+      onModel,
+      onHit,
+      guardrails: [
+        {
+          guardrail: {
+            ...ibanApproval,
+            check: { kind: "model_judge", modelBindingId: "judge", instruction: "Review the mail." }
+          }
+        }
+      ]
+    });
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("may stop");
+    expect(onModel).not.toHaveBeenCalled();
+    expect(onHit).not.toHaveBeenCalled();
+  });
+
+  it("asks operation-owned before-events with the runtime's subject filter", async () => {
+    const operation = "connection.outlook.send_mail";
+    const result = await narrateWorkflow("en", {
+      definitions: [
+        {
+          ...operationDefinition(operation),
+          beforeEvents: () => [
+            {
+              name: "asset.before_write",
+              subject: { kind: "app", id: "offers" },
+              checkable: () => ({ content: "review" })
+            }
+          ]
+        }
+      ],
+      guardrails: [
+        {
+          guardrail: {
+            ...ibanApproval,
+            on: "asset.before_write",
+            filter: { kind: "app" },
+            check: { kind: "pattern", pattern: "." }
+          }
+        }
+      ]
+    });
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("Mail an Mandanten");
+  });
+
+  it.each(["central_setting", "policy_floor"] as const)(
+    "names approval from %s through the runtime policy evaluation",
+    async (source) => {
+      const operation = "connection.outlook.send_mail";
+      const result = await narrateWorkflow("en", {
+        definitions: [
+          {
+            ...operationDefinition(operation),
+            ...(source === "policy_floor" ? { policyFloor: "confirm" as const } : {})
+          }
+        ],
+        policy: {
+          instanceDefaults: { reading: "allow", changing: "confirm" },
+          centralSettings: () =>
+            source === "central_setting" ? [{ operation, value: "approval" }] : []
+        }
+      });
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain("Mail an Mandanten");
+      expect(result.warnings[0]).toContain(
+        source === "central_setting" ? "instance policy" : "operation’s minimum policy"
+      );
+    }
+  );
+
   it("does not count the shipped publish guardrail, which binds publishes and no step", async () => {
     expect((await narrateWorkflow("en", {})).warnings).toEqual([]);
   });
@@ -362,7 +288,7 @@ describe("PUBQ-1 the publish question's sentence", () => {
       { ...config, manifest: { ...manifest, steps } }
     );
     expect(narrative.summary).toBe(
-      "Nachtimport runs every day at 02:00 AM as the account “nachtimport-runner”, reads from Exampledata, adds rows to Findings, and sends nothing. 2 more Apps or knowledge bases you may not see read Findings."
+      "Nachtimport runs as the account “nachtimport-runner” every day at 2:00 AM, reads from Exampledata, adds rows to Findings, and sends nothing. 2 more Apps or knowledge bases you may not see read Findings."
     );
   });
 
@@ -390,9 +316,88 @@ describe("PUBQ-1 the publish question's sentence", () => {
         }
       }
     );
-    expect(narrative.summary).toContain("runs when someone starts it");
+    expect(narrative.summary).toContain(
+      "runs as the account “nachtimport-runner” when someone starts it and uses Exampledata"
+    );
     expect(narrative.summary).toContain("uses Exampledata for “Archivieren”");
     expect(narrative.summary).not.toContain("sends nothing");
+  });
+
+  it("sets a started-by-hand clause apart from the account, and writes clock times per locale", async () => {
+    const config = nightlyImport();
+    const manifest = config.manifest;
+    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) throw new Error();
+    const archive = {
+      id: "x",
+      name: "Archivieren",
+      type: "operation",
+      operation: "connection.exampledata.archive",
+      input: {}
+    };
+    const manual = (runAs: boolean, trigger: JsonObject = { kind: "manual" }) => {
+      const kept = Object.entries(manifest).filter(([key]) => runAs || key !== "runAs");
+      return {
+        ...config,
+        manifest: {
+          ...Object.fromEntries(kept),
+          steps: [{ id: "start", name: "Start", type: "trigger", triggers: [trigger] }, archive]
+        }
+      };
+    };
+    const summary = async (locale: LocaleCode, input: JsonObject) =>
+      (await narrateWorkflow(locale, {}, input)).summary;
+
+    expect(await summary("en", manual(true))).toBe(
+      "Nachtimport runs as the account “nachtimport-runner” when someone starts it and uses Exampledata for “Archivieren”."
+    );
+    expect(await summary("de", manual(true))).toBe(
+      "Nachtimport läuft, wenn jemand ihn startet, unter dem Konto „nachtimport-runner“ und nutzt Exampledata für „Archivieren“."
+    );
+    // Without an account the clause still closes before "und".
+    expect(await summary("de", manual(false))).toBe(
+      "Nachtimport läuft, wenn jemand ihn startet, und nutzt Exampledata für „Archivieren“."
+    );
+    expect(await summary("en", manual(false))).toBe(
+      "Nachtimport runs when someone starts it and uses Exampledata for “Archivieren”."
+    );
+    const evening = { kind: "schedule", cron: "30 18 * * 1" };
+    expect(await summary("en", manual(true, evening))).toContain(
+      "runs as the account “nachtimport-runner” every Monday at 6:30 PM and uses"
+    );
+    expect(await summary("de", manual(true, evening))).toContain(
+      "läuft jeden Montag um 18:30 Uhr unter dem Konto „nachtimport-runner“ und nutzt"
+    );
+  });
+
+  it("names holders alone in the case the sentence asks for, and never as others", async () => {
+    const narrate = (locale: LocaleCode, holders: number) =>
+      narrator({
+        stored: {
+          ...storedData,
+          appRevision: () =>
+            Promise.resolve({ audience: { holders }, stores: [], truncated: false })
+        }
+      }).narrate({
+        kind: "app",
+        name: "findings",
+        scope: workspaceScope,
+        revision: 2,
+        config: { title: "Findings", manifest: { actions: [] } },
+        locale,
+        access: everything
+      });
+    expect((await narrate("de", 1))?.summary).toBe(
+      "Findings öffnet sich für einen Inhaber mit eigenem Recht. Sie ändert nichts."
+    );
+    expect((await narrate("de", 3))?.summary).toBe(
+      "Findings öffnet sich für 3 Inhaber mit eigenem Recht. Sie ändert nichts."
+    );
+    expect((await narrate("en", 1))?.summary).toBe(
+      "Findings opens for one holder with its own right. It changes nothing."
+    );
+    for (const holders of [1, 3]) {
+      expect((await narrate("de", holders))?.summary).not.toMatch(/weitere/u);
+    }
   });
 
   it("names a Connection the reader may not see by the name the revision gives it", async () => {
@@ -611,7 +616,7 @@ describe("PUBQ-1 the publish question's sentence", () => {
     );
     expect(complete).not.toMatch(/nobody|may omit/u);
     expect((await workflow("de", false)).summary).toContain(
-      "Die App „Leer“ zeigt die Zeilen von Findings nur Instanz-Admins."
+      "Die App „Leer“ zeigt nur Instanz-Admins die Zeilen von Findings."
     );
     expect((await app("en", false))?.summary).toBe(
       "Findings opens for instance admins only. It changes nothing."
@@ -629,7 +634,7 @@ describe("PUBQ-1 the publish question's sentence", () => {
     expect(incomplete).not.toMatch(/only|nobody|No App or knowledge base reads/u);
     const german = (await workflow("de", true)).summary;
     expect(german).toContain(
-      "Die App „Leer“ zeigt die Zeilen von Findings Instanz-Admins und möglicherweise weiteren."
+      "Die App „Leer“ zeigt Instanz-Admins und möglicherweise weiteren die Zeilen von Findings."
     );
     expect(german).toContain("Diese Übersicht nennt vielleicht nicht alle Leser von Findings.");
     expect(german).not.toContain("nur Instanz-Admins");
@@ -672,7 +677,7 @@ describe("PUBQ-1 the publish question's sentence", () => {
     );
     expect((await narrate("en", 1))?.summary).toContain("and one holder with its own right.");
     expect((await narrate("de", 2))?.summary).toContain(
-      "Findings öffnet sich für die 14 Personen von „Kai Spezis“ und 2 weitere mit eigenem Recht."
+      "Findings öffnet sich für die 14 Personen von „Kai Spezis“ und 2 weitere Inhaber mit eigenem Recht."
     );
     for (const locale of ["en", "de"] as const) {
       expect((await narrate(locale, 2))?.summary).not.toMatch(/grant|Berechtigung/iu);

@@ -72,14 +72,19 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
         }
       : {})
   };
+  const policy: RunOperationDeps["policy"] = {
+    instanceDefaults: options.config.policy.defaults,
+    centralSettings: () => options.operations?.centralPolicySettings?.() ?? []
+  };
   // The sentence a publish question opens with, the same for a read and a held publish. It
-  // runs no step and no check: it names the guardrails in force a published run would meet.
+  // dry-evaluates runtime admission without executing a step, calling a model or keeping hits.
   const publishNarrator = createPublishNarrator({
     clientInstanceId,
     stores: options.stores,
     ...(options.configAssets ? { kinds: options.configAssets.kinds } : {}),
     ...(options.guardrails ? { guardrails: options.guardrails } : {}),
     resolve: (operation) => deps.registry.resolve(operation),
+    policy,
     ...(options.publishStoredData ? { storedData: options.publishStoredData } : {})
   });
   // A held publish is decided by the holders of the kind's `approve` right.
@@ -132,10 +137,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       options.operations?.events ??
       createAuditingEventEmitter(options.auditRecorder, options.guardrails),
     audit: options.auditRecorder,
-    policy: {
-      instanceDefaults: options.config.policy.defaults,
-      centralSettings: () => options.operations?.centralPolicySettings?.() ?? []
-    },
+    policy,
     approvals: options.operations?.approvals ?? filer,
     approvedToolCall: (run, runtime) =>
       run.approvalRequestId

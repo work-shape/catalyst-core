@@ -5,6 +5,7 @@ import type {
   PublishNarrativeStoreReaders
 } from "@work-shape/catalyst-core";
 import type { NotifyChannel, WorkflowTriggerFact } from "./narrative-facts";
+import { policyStopWarning } from "./policy-warning-copy";
 
 // The words of the publish question's sentence and warnings, in English and German. Every value
 // here is a name or a count the narrator resolved; nothing here reads a row.
@@ -66,8 +67,10 @@ export interface AppSentence {
 export interface StepStop {
   step: string;
   guardrail: string;
+  /** A runtime policy that stops the step without a guardrail. */
+  source?: import("@work-shape/catalyst-core").PolicySource;
   outcome: "require_approval" | "block";
-  /** The guardrail checks content: it stops the step only when what it reads matches. */
+  /** The stop depends on a runtime check or input not yet available. */
   checked: boolean;
 }
 
@@ -76,7 +79,18 @@ export function oneLine(value: string): string {
   return value.replace(/[\s\p{Cc}]+/gu, " ").trim();
 }
 
-type Case = "nominative" | "dative";
+/** After "für" and "for", or as the one who is shown or answered. */
+type Case = "accusative" | "dative";
+
+/**
+ * When a Workflow runs, in words. `opensClause` and `closesClause` say whether the words start
+ * or end with a clause of their own ("when someone starts it"): German sets those off by commas.
+ */
+interface When {
+  words: string;
+  opensClause: boolean;
+  closesClause: boolean;
+}
 
 interface Copy {
   quote(name: string): string;
@@ -87,12 +101,15 @@ interface Copy {
     monthly(day: number, time: string): string;
     other(cron: string): string;
   };
+  /** How a clock time reads in a schedule: "2:00 AM", "02:00". */
+  clock: Intl.DateTimeFormatOptions;
+  /** These three are clauses of their own. */
   manual: string;
   parent: string;
-  otherTrigger(name: string): string;
   noTrigger: string;
-  account(label: string): string;
-  runs(title: string, when: string, account: string, doing: string): string;
+  otherTrigger(name: string): string;
+  /** The sentence: who runs when, as which account, then everything it does, joined by "and". */
+  runs(title: string, when: When, account: string | undefined, doing: readonly string[]): string;
   reads(names: string): string;
   adds(names: string): string;
   changes(names: string): string;
@@ -141,6 +158,8 @@ interface Copy {
 
 const EN_N = new Intl.NumberFormat("en");
 const DE_N = new Intl.NumberFormat("de");
+const EN_AND = new Intl.ListFormat("en", { type: "conjunction" });
+const DE_AND = new Intl.ListFormat("de", { type: "conjunction" });
 
 const EN: Copy = {
   quote: (name) => `“${name}”`,
@@ -150,12 +169,17 @@ const EN: Copy = {
     monthly: (day, time) => `on the ${day}${ordinal(day)} of every month at ${time}`,
     other: (cron) => `on the schedule “${cron}”`
   },
+  clock: { hour: "numeric", minute: "2-digit" },
   manual: "when someone starts it",
   parent: "when another Workflow starts it",
-  otherTrigger: (name) => `on the trigger “${name}”`,
   noTrigger: "when it is started",
-  account: (label) => ` as the account “${label}”`,
-  runs: (title, when, account, doing) => `${title} runs ${when}${account}, ${doing}.`,
+  otherTrigger: (name) => `on the trigger “${name}”`,
+  // The account comes before "when …": after it, it would read as part of that clause.
+  runs: (title, when, account, doing) =>
+    `${title} ${EN_AND.format([
+      `runs${account === undefined ? "" : ` as the account “${account}”`} ${when.words}`,
+      ...doing
+    ])}.`,
   reads: (names) => `reads from ${names}`,
   adds: (names) => `adds rows to ${names}`,
   changes: (names) => `adds, changes or removes rows in ${names}`,
@@ -239,17 +263,23 @@ const EN: Copy = {
 const DE: Copy = {
   quote: (name) => `„${name}“`,
   schedule: {
-    daily: (time) => `jeden Tag um ${time}`,
-    weekly: (day, time) => `jeden ${day} um ${time}`,
-    monthly: (day, time) => `am ${day}. jedes Monats um ${time}`,
+    daily: (time) => `jeden Tag um ${time} Uhr`,
+    weekly: (day, time) => `jeden ${day} um ${time} Uhr`,
+    monthly: (day, time) => `am ${day}. jedes Monats um ${time} Uhr`,
     other: (cron) => `nach dem Zeitplan „${cron}“`
   },
+  clock: { hour: "2-digit", minute: "2-digit" },
   manual: "wenn jemand ihn startet",
   parent: "wenn ein anderer Workflow ihn startet",
-  otherTrigger: (name) => `beim Auslöser „${name}“`,
   noTrigger: "wenn er gestartet wird",
-  account: (label) => ` als Konto „${label}“`,
-  runs: (title, when, account, doing) => `${title} läuft ${when}${account}, ${doing}.`,
+  otherTrigger: (name) => `beim Auslöser „${name}“`,
+  runs: (title, when, account, doing) => {
+    // A "wenn" clause stands between commas: „N“ läuft, wenn jemand ihn startet, unter dem
+    // Konto „K“ und liest … The list's own comma after it closes the clause as well.
+    const runs = `läuft${when.opensClause ? "," : ""} ${when.words}${account === undefined ? "" : `${when.closesClause ? "," : ""} unter dem Konto „${account}“`}`;
+    const closes = when.closesClause && account === undefined && doing.length === 1;
+    return `${title} ${DE_AND.format([closes ? `${runs},` : runs, ...doing])}.`;
+  },
   reads: (names) => `liest aus ${names}`,
   adds: (names) => `fügt Zeilen in ${names} hinzu`,
   changes: (names) => `fügt Zeilen in ${names} hinzu, ändert oder löscht sie`,
@@ -272,7 +302,7 @@ const DE: Copy = {
       : `${DE_N.format(count)} ${alone ? "" : "weitere "}Arbeitsbereiche`,
   starts: (names) => `startet ${names}`,
   agent: (steps, tools) =>
-    `lässt ${steps === 1 ? "einen Agenten" : `${DE_N.format(steps)} Agenten`} arbeiten${tools > 0 ? `, mit ${tools === 1 ? "einem Werkzeug" : `${DE_N.format(tools)} Werkzeugen`}` : ""}`,
+    `lässt ${steps === 1 ? "einen Agenten" : `${DE_N.format(steps)} Agenten`}${tools > 0 ? ` mit ${tools === 1 ? "einem Werkzeug" : `${DE_N.format(tools)} Werkzeugen`}` : ""} arbeiten`,
   sendsNothing: "sendet nichts",
   callsNothing: "ruft nichts außerhalb des Workflows auf",
   audience: (audience, grammaticalCase, incomplete) => {
@@ -285,12 +315,14 @@ const DE: Copy = {
           ? `${dative ? "der einen Person" : "die eine Person"} von „${audience.workspace.title}“`
           : `${dative ? "den" : "die"} ${DE_N.format(audience.workspace.members)} Personen von „${audience.workspace.title}“`
         : undefined;
+    // "weitere" only beside the workspace's people: alone, nobody else was named.
+    const besides = members !== undefined;
     const holders =
       audience.holders === 0
         ? undefined
         : audience.holders === 1
-          ? `${dative ? "einem weiteren Inhaber" : "ein weiterer Inhaber"} mit eigenem Recht`
-          : `${DE_N.format(audience.holders)} ${dative ? "weiteren" : "weitere"} mit eigenem Recht`;
+          ? `${dative ? "einem" : "einen"} ${besides ? "weiteren " : ""}Inhaber mit eigenem Recht`
+          : `${DE_N.format(audience.holders)} ${besides ? (dative ? "weiteren " : "weitere ") : ""}${dative ? "Inhabern" : "Inhaber"} mit eigenem Recht`;
     if (members && holders) return `${members} und ${holders}`;
     // Instanz-Admins haben jedes Recht durch ihre Rolle und werden nie gezählt.
     return (
@@ -301,7 +333,7 @@ const DE: Copy = {
         : "nur Instanz-Admins")
     );
   },
-  appShows: (app, store, audience) => `Die App „${app}“ zeigt die Zeilen von ${store} ${audience}.`,
+  appShows: (app, store, audience) => `Die App „${app}“ zeigt ${audience} die Zeilen von ${store}.`,
   knowledgeAnswers: (base, store, audience) =>
     `Die Wissensbasis „${base}“ antwortet ${audience} aus ${store}.`,
   hiddenReaders: (count, store) =>
@@ -327,11 +359,11 @@ const DE: Copy = {
   stop: ({ step, guardrail, outcome, checked }) =>
     outcome === "block"
       ? checked
-        ? `Der Schritt „${step}“ kann abgelehnt werden: Die Leitplanke „${guardrail}“ blockiert ihn, wenn das Geprüfte zutrifft.`
+        ? `Der Schritt „${step}“ kann abgelehnt werden: Die Leitplanke „${guardrail}“ blockiert ihn, wenn sie beim Geprüften anschlägt.`
         : `Der Schritt „${step}“ wird abgelehnt: Die Leitplanke „${guardrail}“ blockiert ihn.`
       : checked
-        ? `Der Schritt „${step}“ kann anhalten: Die Leitplanke „${guardrail}“ verlangt eine Freigabe, wenn das Geprüfte zutrifft, und ein veröffentlichter Lauf kann nicht auf sie warten.`
-        : `Der Schritt „${step}“ wird anhalten: Die Leitplanke „${guardrail}“ verlangt eine Freigabe, und ein veröffentlichter Lauf kann nicht auf sie warten.`
+        ? `Der Schritt „${step}“ kann angehalten werden: Die Leitplanke „${guardrail}“ verlangt eine Freigabe, wenn sie beim Geprüften anschlägt, und ein veröffentlichter Lauf kann nicht auf sie warten.`
+        : `Der Schritt „${step}“ wird angehalten: Die Leitplanke „${guardrail}“ verlangt eine Freigabe, und ein veröffentlichter Lauf kann nicht auf sie warten.`
 };
 
 const COPY: Record<LocaleCode, Copy> = { en: EN, de: DE };
@@ -375,11 +407,11 @@ function scheduleWords(cron: string, locale: LocaleCode): string {
     Number(minute) <= 59 &&
     Number(hour) <= 23;
   if (!plain) return copy.other(oneLine(cron));
-  // A clock time has no day: any day in UTC gives the same words.
-  const time = new Date(Date.UTC(2026, 0, 1, Number(hour), Number(minute))).toLocaleTimeString(
-    locale,
-    { hour: "2-digit", minute: "2-digit", timeZone: "UTC" }
-  );
+  // A clock time has no day: any day in UTC gives the same words. Some ICU versions put a narrow
+  // no-break space before "AM"; the sentence reads the same on every runtime with a plain one.
+  const time = new Date(Date.UTC(2026, 0, 1, Number(hour), Number(minute)))
+    .toLocaleTimeString(locale, { ...COPY[locale].clock, timeZone: "UTC" })
+    .replace(/\u202f/gu, " ");
   if (day === "*" && weekday === "*") return copy.daily(time);
   if (day === "*" && NUMBER.test(weekday) && Number(weekday) <= 7) {
     // 4 January 2026 is a Sunday, which cron counts as 0 and as 7.
@@ -405,20 +437,23 @@ export function workflowSummary(input: WorkflowSentence, locale: LocaleCode): st
   const copy = COPY[locale];
   const { and, or } = lists(locale);
   const quoted = (names: readonly string[]) => and.format(names.map((name) => copy.quote(name)));
-  const when =
+  const triggers =
     input.triggers.length === 0
-      ? copy.noTrigger
-      : or.format(
-          input.triggers.map((trigger) =>
-            trigger.kind === "schedule"
-              ? scheduleWords(trigger.cron, locale)
-              : trigger.kind === "manual"
-                ? copy.manual
-                : trigger.kind === "parent"
-                  ? copy.parent
-                  : copy.otherTrigger(oneLine(trigger.name))
-          )
+      ? [{ words: copy.noTrigger, clause: true }]
+      : input.triggers.map((trigger) =>
+          trigger.kind === "schedule"
+            ? { words: scheduleWords(trigger.cron, locale), clause: false }
+            : trigger.kind === "manual"
+              ? { words: copy.manual, clause: true }
+              : trigger.kind === "parent"
+                ? { words: copy.parent, clause: true }
+                : { words: copy.otherTrigger(oneLine(trigger.name)), clause: false }
         );
+  const when: When = {
+    words: or.format(triggers.map((trigger) => trigger.words)),
+    opensClause: triggers[0]?.clause === true,
+    closesClause: triggers.at(-1)?.clause === true
+  };
   const notices = input.notifies.flatMap((notice) => {
     const named = notice.people.length > 0 || notice.workspaces.length > 0;
     const recipients = [
@@ -450,11 +485,13 @@ export function workflowSummary(input: WorkflowSentence, locale: LocaleCode): st
   const sentence = copy.runs(
     input.title,
     when,
-    input.account === undefined ? "" : copy.account(input.account),
+    input.account,
     doing.length === 0
-      ? copy.callsNothing
-      : // The list's last item takes the sentence's "and": "reads …, adds … and sends nothing".
-        and.format(sendsNothing ? [...doing, copy.sendsNothing] : doing)
+      ? [copy.callsNothing]
+      : // The list's last item takes the sentence's "and": "runs …, reads … and sends nothing".
+        sendsNothing
+        ? [...doing, copy.sendsNothing]
+        : doing
   );
   const readers = (input.readers ?? []).flatMap((store) => {
     const shown = store.readers.map((reader) =>
@@ -490,7 +527,7 @@ export function appSummary(input: AppSentence, locale: LocaleCode): string {
         ? copy.appOpensAdminsOnly(input.title)
         : copy.appOpens(
             input.title,
-            copy.audience(counted, "nominative", input.truncated === true)
+            copy.audience(counted, "accusative", input.truncated === true)
           );
   const stores = input.stores.map((store) => {
     if (store.unavailable) return copy.storeUnavailable(store.title);
@@ -521,5 +558,13 @@ export function appSummary(input: AppSentence, locale: LocaleCode): string {
 
 /** The warnings, one per step and guardrail. */
 export function stopWarnings(stops: readonly StepStop[], locale: LocaleCode): string[] {
-  return [...new Set(stops.map((stop) => COPY[locale].stop(stop)))];
+  return [
+    ...new Set(
+      stops.map((stop) =>
+        stop.source === undefined
+          ? COPY[locale].stop(stop)
+          : policyStopWarning({ ...stop, source: stop.source }, locale)
+      )
+    )
+  ];
 }
