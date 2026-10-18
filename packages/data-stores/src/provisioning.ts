@@ -1,6 +1,7 @@
 import { RECORD_FIELDS_SCHEMA } from "./records/schema";
 import { callRecordsSetup } from "./calls";
 import { z } from "zod";
+import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import type { DataStoreCondition, DataStoreRecord } from "@work-shape/catalyst-core";
 import type { DataStoreRole } from "./credentials";
 import { platformIsSuperuser, writeStoreRoles } from "./roles";
@@ -13,6 +14,25 @@ import { quoteIdentifier, type DataStoreServer } from "./server";
 const DATA_STORE_PROVISION_STEP_TIMEOUT_MS = 120_000;
 
 type StoreDatabase = Pick<DataStoreRecord, "id" | "location" | "roles">;
+
+/**
+ * Waits, in the transaction of `sql`, until no other transaction writes grants onto the catalog
+ * rows of `database`: the database's own row, its schemas, its tables and its routines. A grant
+ * or revoke rewrites such a row also where nothing changes, and two at once fail the second
+ * with "tuple concurrently updated" (XX000). The lock ends with the transaction and is one per
+ * database, so the grants of different stores never wait for each other.
+ */
+export async function takeGrantTurn(
+  sql: PostgresChangeStatements,
+  database: string
+): Promise<void> {
+  await sql.run(
+    `select pg_catalog.pg_advisory_xact_lock(
+       pg_catalog.hashtextextended('catalyst data store grants ' || $1::pg_catalog.text, 0)
+     )::pg_catalog.text as held`,
+    [database]
+  );
+}
 
 /**
  * What tells of another session or ends one: the functions that read the sessions of the
@@ -116,6 +136,8 @@ export async function ensureStoreSchema(
       signal
     },
     async (sql) => {
+      // The grants on schema `public` share its row with those of the Knowledge Bases on the store.
+      await takeGrantTurn(sql, record.location.database);
       if (superuser) {
         const functions = z
           .array(z.object({ signature: z.string() }))
@@ -189,9 +211,16 @@ export async function provisionDataStore(
       }
       await sql.script(
         `revoke all on database ${database} from public;
-         grant connect on database ${database} to ${app}, ${migration};
-         revoke connect on database ${platformDatabase} from public;`
+         grant connect on database ${database} to ${app}, ${migration};`
       );
+    }
+  );
+  // Every store writes this grant onto the one catalog row of the platform's database.
+  await server.executor.change(
+    { ...server.asPlatform(server.platformDatabase), ...step },
+    async (sql) => {
+      await takeGrantTurn(sql, server.platformDatabase);
+      await sql.script(`revoke connect on database ${platformDatabase} from public`);
     }
   );
   // The platform's database is the platform's to close and was closed above.
@@ -306,10 +335,12 @@ export async function ensureVectorExtension(
       timeoutMs: DATA_STORE_PROVISION_STEP_TIMEOUT_MS,
       signal
     },
-    (sql) =>
-      sql.script(
+    async (sql) => {
+      await takeGrantTurn(sql, record.location.database);
+      await sql.script(
         `create extension if not exists vector with schema public;
          ${row.trusted ? `revoke create on database ${database} from ${roles};` : ""}`
-      )
+      );
+    }
   );
 }

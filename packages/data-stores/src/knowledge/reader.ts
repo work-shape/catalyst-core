@@ -3,6 +3,7 @@ import type {
   DataStoreKnowledgeTarget,
   DataStoreRecord
 } from "@work-shape/catalyst-core";
+import { takeGrantTurn } from "../provisioning";
 import { asStoreRole, writeReaderRole } from "../roles";
 import type { DataStoreRuntime } from "../runtime";
 import { quoteIdentifier } from "../server";
@@ -25,6 +26,9 @@ const READER_STEP_TIMEOUT_MS = 120_000;
 
 type Store = Pick<DataStoreRecord, "id" | "location" | "roles">;
 
+// Every statement below writes onto a catalog row the store's other Knowledge Bases write onto
+// too, so each transaction first takes the store's turn at its grants.
+
 /** As the platform's role on the store's database, in one transaction. */
 function asPlatformOn(
   runtime: Pick<DataStoreRuntime, "server">,
@@ -39,7 +43,10 @@ function asPlatformOn(
       timeoutMs: READER_STEP_TIMEOUT_MS,
       ...(signal ? { signal } : {})
     },
-    (sql) => sql.script(script)
+    async (sql) => {
+      await takeGrantTurn(sql, store.location.database);
+      await sql.script(script);
+    }
   );
 }
 
@@ -58,7 +65,10 @@ function asOwnerOf(
         timeoutMs: READER_STEP_TIMEOUT_MS,
         ...(signal ? { signal } : {})
       },
-      (sql) => sql.script(script)
+      async (sql) => {
+        await takeGrantTurn(sql, store.location.database);
+        await sql.script(script);
+      }
     )
   );
 }
