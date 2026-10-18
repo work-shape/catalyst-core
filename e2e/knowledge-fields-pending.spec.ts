@@ -151,7 +151,12 @@ test.describe("a document whose fields wait for the budget", () => {
     const created = await requestWithOrigin(page, "put", assetUrl, {
       data: {
         expectedRevision: null,
-        config: { name, title: "Eingangsrechnungen", description: "", methods: ["keyword"] }
+        config: {
+          name,
+          title: "Eingangsrechnungen",
+          description: "Rechnungen unserer Lieferanten mit Rechnungsnummer, Datum und Betrag.",
+          methods: ["keyword"]
+        }
       }
     });
     expect(created.ok(), await created.text()).toBe(true);
