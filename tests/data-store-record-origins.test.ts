@@ -8,6 +8,68 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 describe("records proposals on an assembled instance", () => {
   const { start, put, publish, person, settle } = useDataStoreInstance();
 
+  it.each(["en", "de"] as const)(
+    "refuses all chat row writes on a published records table in %s",
+    async (locale) => {
+      const instance = await start(true, "allow");
+      expect(
+        (
+          await put(instance, [
+            {
+              path: "store.yaml",
+              text: "id: findings\nrecords:\n  - table: findings\n    key: { column: id, fromField: id }\n    precedence: [deed]\n    review: { always: [] }\n"
+            },
+            {
+              path: "migrations/0001_init.sql",
+              text: "create table findings (id integer primary key, amount numeric);"
+            }
+          ])
+        ).statusCode
+      ).toBe(200);
+      expect((await publish(instance, 1)).statusCode).toBe(200);
+      const record = await settle(instance, 1);
+      const actor = await person(instance, "records-row-admin", ["user", "admin", "superadmin"]);
+      const url = new URL(await fileTestDatabaseUrl());
+      url.pathname = `/${record.location.database}`;
+      const sql = postgres(url.toString(), { max: 1 });
+      try {
+        await sql`insert into findings values (1, 42)`;
+        for (const [verb, input] of [
+          ["insert", { table: "findings", rows: [{ id: 2, amount: 99 }] }],
+          ["update", { table: "findings", rows: [{ key: { id: 1 }, set: { amount: 99 } }] }],
+          ["delete_rows", { table: "findings", keys: [{ id: 1 }] }]
+        ] as const) {
+          const answer = await runOperation(
+            {
+              operation: `data_store.findings.${verb}`,
+              effect: "changing",
+              input,
+              actor,
+              origin: { kind: "user" },
+              correlationId: "records-row-guard"
+            },
+            instance.execution.operationCalls.deps,
+            { locale }
+          );
+          expect(answer.result).toMatchObject({
+            status: "failed",
+            error: {
+              details: { reason: "record_managed_table" },
+              message: expect.stringContaining(
+                locale === "de" ? "Records-Prüfung" : "records review"
+              )
+            }
+          });
+          expect([...(await sql`select id, amount::integer from findings`)]).toEqual([
+            { id: 1, amount: 42 }
+          ]);
+        }
+      } finally {
+        await sql.end();
+      }
+    }
+  );
+
   it.each(["agent", "app", "cli"] as const)(
     "refuses records proposals from %s before table checks or store changes",
     async (kind) => {

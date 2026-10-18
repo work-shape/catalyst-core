@@ -30,6 +30,8 @@ export interface ToolDecisionWait {
   operationRunId: OperationRunId;
   /** The registered operation the call is. */
   operationId: string;
+  /** Human target title supplied by the operation, separate from the executable input. */
+  targetTitle?: string;
   mode: ToolDecisionMode;
   /** The validated input as it is executed after the decision. A call whose input holds a secret never waits. */
   frozenInput: JsonValue;
@@ -42,6 +44,8 @@ export interface ToolDecisionRequested {
   toolName: string;
   operationRunId: OperationRunId;
   operationId: string;
+  /** Human target title supplied by the operation, separate from the executable input. */
+  targetTitle?: string;
   mode: ToolDecisionMode;
   /** The frozen input as the person is shown it. */
   inputPreview: JsonValue;

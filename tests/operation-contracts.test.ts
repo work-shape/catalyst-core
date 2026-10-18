@@ -343,6 +343,7 @@ describe("operation contracts", () => {
         }
       | {
           status: "pending_confirmation";
+          targetTitle?: string;
           runId: OperationRunId;
           expiresAt: ISODateString;
           preview: unknown;
@@ -351,6 +352,7 @@ describe("operation contracts", () => {
         }
       | {
           status: "pending_approval";
+          targetTitle?: string;
           runId: OperationRunId;
           approvalRequestId: string;
           expiresAt: ISODateString;

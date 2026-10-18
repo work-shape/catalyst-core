@@ -1,0 +1,313 @@
+import {
+  POSTGRES_STATEMENT_TIMEOUT_MS,
+  PostgresExecutorError
+} from "@work-shape/catalyst-postgres-connector";
+import {
+  AppError,
+  dataStoreInsertConflictSchema,
+  dataStoreInsertResultSchema,
+  type DataStoreInsertResult,
+  type JsonObject
+} from "@work-shape/catalyst-core";
+import { z } from "zod";
+import { catalogTarget, readTables } from "./catalog";
+import { quoteIdentifier } from "./server";
+import { storeSizeBytes } from "./size";
+import { changeWhole, reclaim, storeFull, tableUnknown, type StoreVerb } from "./verbs";
+import {
+  DATA_STORE_INSERT_MAX_ROWS,
+  DATA_STORE_INSERT_MAX_BYTES,
+  rowValuesSchema,
+  tableNameSchema,
+  refuseRecordManagedTable
+} from "./row-write-input";
+
+const insertInputSchema = z.strictObject({
+  table: tableNameSchema,
+  rows: z.array(rowValuesSchema).min(1).max(DATA_STORE_INSERT_MAX_ROWS),
+  onConflict: dataStoreInsertConflictSchema
+});
+
+/** The columns the rows of one insert name: those of its first row, which every row shares. */
+function sharedColumns(rows: readonly JsonObject[]): string[] {
+  const columns = Object.keys(rows[0] ?? {});
+  const differing = rows.findIndex((row) => {
+    const keys = Object.keys(row);
+    return keys.length !== columns.length || !columns.every((column) => column in row);
+  });
+  if (columns.length === 0 || differing !== -1) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      columns.length === 0
+        ? "A row names at least one column"
+        : `Row ${differing + 1} names other columns than row 1. All rows of one insert name the same columns; a column that is left out of all of them takes its default.`,
+      { reason: "rows_differ" }
+    );
+  }
+  return columns;
+}
+
+const insertedRow = z.object({ count: z.number().int() });
+
+/**
+ * The unique indexes of a table, each with its keys as the database writes them (a column or
+ * an expression) and the columns a row must hold for the key to be worked out: those the key
+ * names, and for a column the database computes, the columns it computes it from. A column an
+ * index only carries (`include`) is no key.
+ */
+const UNIQUE_INDEXES = `
+  select i.indnullsnotdistinct as nulls_not_distinct,
+    i.indimmediate as immediate,
+    i.indpred is not null as partial,
+    array(
+      select pg_catalog.pg_get_indexdef(i.indexrelid, key, true)
+      from pg_catalog.generate_series(1, i.indnkeyatts) key order by key
+    ) as keys,
+    array(
+      select distinct base.attname::text
+      from pg_catalog.pg_attribute used
+      left join pg_catalog.pg_attrdef def
+        on def.adrelid = used.attrelid and def.adnum = used.attnum and used.attgenerated <> ''
+      left join pg_catalog.pg_depend derived
+        on derived.refclassid = 'pg_catalog.pg_class'::regclass
+        and derived.refobjid = used.attrelid and derived.refobjsubid > 0
+        and ((derived.classid = 'pg_catalog.pg_attrdef'::regclass and derived.objid = def.oid)
+          or (derived.classid = 'pg_catalog.pg_class'::regclass
+            and derived.objid = used.attrelid and derived.objsubid = used.attnum
+            and used.attgenerated <> ''))
+        and derived.refobjsubid <> used.attnum
+      join pg_catalog.pg_attribute base
+        on base.attrelid = used.attrelid
+        and base.attnum = coalesce(derived.refobjsubid, used.attnum)
+      where used.attrelid = i.indrelid and used.attnum > 0 and (
+        used.attnum = any ((i.indkey::int2[])[0:i.indnkeyatts - 1])
+        or (0 = any (i.indkey::int2[]) and exists (
+          select 1 from pg_catalog.pg_depend expression
+          where expression.classid = 'pg_catalog.pg_class'::regclass
+            and expression.objid = i.indexrelid and expression.refobjid = i.indrelid
+            and expression.refobjsubid = used.attnum)))
+    ) as needs
+  from pg_catalog.pg_index i
+  join pg_catalog.pg_class c on c.oid = i.indrelid
+  join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relname = $1 and i.indisunique
+`;
+
+const uniqueIndexRow = z.object({
+  nulls_not_distinct: z.boolean(),
+  immediate: z.boolean(),
+  partial: z.boolean(),
+  keys: z.array(z.string()),
+  needs: z.array(z.string())
+});
+
+type CatalogTable = Awaited<ReturnType<typeof readTables>>[number];
+type UniqueIndex = z.infer<typeof uniqueIndexRow>;
+
+/**
+ * The unique indexes `skip` may go by, or the refusal. The rule is one: a row is left out
+ * only on a unique key that holds for all rows, is not deferrable, and whose columns every
+ * row of the call gives. A key the call leaves to a default may be another one every time, an
+ * index over a part of the rows binds no row for certain, and Postgres skips on no deferrable
+ * constraint at all.
+ */
+function skipKeys(
+  table: CatalogTable,
+  given: readonly string[],
+  indexes: readonly UniqueIndex[]
+): UniqueIndex[] {
+  if (indexes.some((index) => !index.immediate)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `The table '${table.name}' has a deferrable unique constraint, on which Postgres skips no row. Make the constraint not deferrable, or leave onConflict out.`,
+      { reason: "skip_deferrable_key" }
+    );
+  }
+  const usable = indexes.filter(
+    (index) =>
+      !index.partial &&
+      index.needs.length > 0 &&
+      index.needs.every((column) => given.includes(column))
+  );
+  if (usable.length === 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'skip' needs a unique constraint of the table '${table.name}' that holds for all rows, is not deferrable, and whose columns every row of the call gives. The table has none. Give the columns of such a key in every row, or leave onConflict out.`,
+      { reason: "skip_without_key" }
+    );
+  }
+  return usable;
+}
+
+/**
+ * The statement that answers the number of the first row whose key is empty in every index
+ * `skip` goes by, or nothing: such a row never conflicts and would be added again. The
+ * database itself works each key out for each row, so an expression that comes to nothing
+ * counts as empty. The keys are the catalog's text and the rows one bound value.
+ */
+function emptyKeyStatement(
+  table: CatalogTable,
+  given: readonly string[],
+  indexes: readonly UniqueIndex[]
+): string {
+  // Names of this statement's own that no column of the table has: a key names its columns
+  // without their table.
+  const free = (name: string): string =>
+    table.columns.some((column) => column.name === name) ? free(`${name}_`) : name;
+  const [value, row] = [free("sent_value"), free("sent_row")].map(quoteIdentifier);
+  const sent = table.columns
+    .filter((column) => given.includes(column.name))
+    .map((column) => `${quoteIdentifier(column.name)} ${column.nativeType}`)
+    .join(", ");
+  const computed = table.columns
+    .flatMap((column) =>
+      column.generation === undefined
+        ? []
+        : [`(${column.generation}) as ${quoteIdentifier(column.name)}`]
+    )
+    .join(", ");
+  const bound = indexes
+    .map((index) =>
+      index.nulls_not_distinct
+        ? "true"
+        : index.keys.map((key) => `(${key}) is not null`).join(" and ")
+    )
+    .map((condition) => `(${condition})`)
+    .join(" or ");
+  return `
+    select pg_catalog.min(sent.${row})::pg_catalog.int4 as row
+    from pg_catalog.jsonb_array_elements($1::pg_catalog.jsonb)
+      with ordinality as sent(${value}, ${row}),
+      lateral pg_catalog.jsonb_to_record(sent.${value}) as given(${sent})
+      ${computed === "" ? "" : `, lateral (select ${computed}) as computed`}
+    where not (${bound})`;
+}
+
+export const insert: StoreVerb = {
+  verb: "insert",
+  effect: "changing",
+  // An added row is removed again with a statement, and nothing outside is told of it.
+  changeClass: "reversible",
+  inputSchema: insertInputSchema,
+  outputSchema: dataStoreInsertResultSchema,
+  use: `Adds rows to one table. Use it to record new rows; it changes and removes nothing that is stored. Name the table and send each row as an object of column name to value. All rows of one call name the same columns, and a column that is left out takes its default. "onConflict" says what happens to a row that a unique constraint of the table refuses: "fail", the default, adds no row of the call; "skip" leaves that row out and adds the others, which makes sending the same rows again safe. One call adds at most ${DATA_STORE_INSERT_MAX_ROWS} rows and ${DATA_STORE_INSERT_MAX_BYTES} bytes.`,
+  async run({ runtime, store, target, keyed, context }, call) {
+    const input = insertInputSchema.parse(call);
+    refuseRecordManagedTable(store, input.table, context?.runtime.locale ?? runtime.defaultLocale);
+    const { record } = store;
+    const columns = sharedColumns(input.rows);
+    const rows = JSON.stringify(input.rows);
+    const bytes = Buffer.byteLength(rows);
+    if (bytes > DATA_STORE_INSERT_MAX_BYTES) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `The rows have ${bytes} bytes. One insert carries at most ${DATA_STORE_INSERT_MAX_BYTES} bytes of rows (DATA_STORE_INSERT_MAX_BYTES); send them in several calls.`,
+        { reason: "rows_too_large", cap: "DATA_STORE_INSERT_MAX_BYTES", actual: bytes }
+      );
+    }
+    const [table] = await readTables(runtime.server.executor, target, input.table);
+    if (!table) throw tableUnknown(input.table);
+    // The names and types that go into the statement are the catalog's, never a caller's text.
+    const typeOf = new Map(
+      table.columns.flatMap((column) =>
+        column.generated ? [] : [[column.name, column.nativeType] as const]
+      )
+    );
+    const unknown = columns.find((column) => !typeOf.has(column));
+    if (unknown !== undefined) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `The table '${table.name}' has no column '${unknown}' that an insert sets`,
+        { reason: "column_unknown" }
+      );
+    }
+    const keys =
+      input.onConflict === "skip"
+        ? skipKeys(
+            table,
+            columns,
+            z.array(uniqueIndexRow).parse(
+              (
+                await runtime.server.executor.query({
+                  ...catalogTarget(target),
+                  sql: UNIQUE_INDEXES,
+                  parameters: [table.name]
+                })
+              ).rows
+            )
+          )
+        : [];
+    const names = columns.map(quoteIdentifier).join(", ");
+    // The rows are one bound value. Postgres reads each column of it by the column's type.
+    const statement = `
+      with inserted as (
+        insert into public.${quoteIdentifier(table.name)} (${names})
+        select ${names}
+        from pg_catalog.jsonb_to_recordset($1::pg_catalog.jsonb)
+          as rows(${columns.map((column) => `${quoteIdentifier(column)} ${typeOf.get(column)}`).join(", ")})
+        ${input.onConflict === "skip" ? "on conflict do nothing" : ""}
+        returning 1
+      )
+      select pg_catalog.count(*)::pg_catalog.int4 as count from inserted`;
+    const full = (sizeBytes: number) => storeFull(record, sizeBytes);
+    // The size is the server's own word for the files of the store, read on a connection of
+    // the platform's own, which nothing the store runs can have touched. It is read before
+    // the rows are written and again once they are: whoever calls and from whichever
+    // process, a store at its limit takes no further row.
+    const size = () => storeSizeBytes(runtime.server, record.location.database, target.signal);
+    const before = await size();
+    if (before >= record.sizeLimitBytes) throw full(before);
+    // Everything of one insert is one transaction as the app role, and a refusal rolls it
+    // back. Whatever a change throws leaves it as a failure of the database, so the refusal
+    // is kept here and raised once the change has rolled back.
+    let refusal: AppError | undefined;
+    const refuse = (error: AppError): never => {
+      refusal = error;
+      throw error;
+    };
+    let wrote = false;
+    try {
+      return await changeWhole(
+        { runtime, keyed },
+        { ...target, timeoutMs: POSTGRES_STATEMENT_TIMEOUT_MS },
+        async (sql) => {
+          if (keys.length > 0) {
+            const [empty] = await sql.run(emptyKeyStatement(table, columns, keys), [rows]);
+            const row = z.object({ row: z.number().nullable() }).parse(empty).row;
+            if (row !== null) {
+              refuse(
+                new AppError(
+                  "VALIDATION_FAILED",
+                  `Row ${row} would be added again by a repeated call: its key is empty in every unique constraint of the table '${table.name}' that the call gives the columns of. Set the key in every row, or make the constraint NULLS NOT DISTINCT.`,
+                  { reason: "nullable_key", row }
+                )
+              );
+            }
+          }
+          wrote = true;
+          const [counted] = await sql.run(statement, [rows]);
+          // What the store left to the end of the transaction, such as a deferred trigger,
+          // happens now, before the size is read again: a default or a trigger may write far
+          // more than the rows that were sent. An insert that took the store past its limit
+          // is rolled back, so no row that is kept lies beyond it.
+          await sql.script("set constraints all immediate");
+          const after = await size();
+          if (after > record.sizeLimitBytes) refuse(full(after));
+          const inserted = insertedRow.parse(counted).count;
+          return {
+            table: table.name,
+            inserted,
+            skipped: input.rows.length - inserted
+          } satisfies DataStoreInsertResult;
+        }
+      );
+    } catch (error) {
+      // Rows that were written and not kept still fill the files, which would keep the store
+      // at its limit: the refusal for size and the statement that ran out of time give them back.
+      const sizeRefusal = refusal !== undefined && refusal.code === "CONFLICT";
+      const timedOut = error instanceof PostgresExecutorError && error.kind === "timeout";
+      if (wrote && (sizeRefusal || timedOut)) await reclaim(runtime, record);
+      throw refusal ?? error;
+    }
+  }
+};

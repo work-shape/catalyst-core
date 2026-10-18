@@ -481,6 +481,27 @@ export const EVENTS = {
       properties: { name: { type: "string" } }
     }
   },
+  "data_store.rows_written": {
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    name: "data_store.rows_written",
+    subject: "data_store",
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["store", "table", "operationRunId"],
+      properties: {
+        store: { type: "string" },
+        table: { type: "string" },
+        operationRunId: { type: "string" },
+        inserted: { type: "integer" },
+        skipped: { type: "integer" },
+        updated: { type: "integer" },
+        deleted: { type: "integer" }
+      }
+    }
+  },
   "data_store.migrated": {
     ...LEGACY_AUDIT,
     name: "data_store.migrated",
