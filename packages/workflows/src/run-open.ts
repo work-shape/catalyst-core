@@ -1,3 +1,4 @@
+import { workflowLabels } from "./run-labels";
 import { checkDatasetSchemas } from "./dataset-values";
 import { WorkflowStepFailure } from "./step-failure";
 import { datasetReferences } from "./dataset-schema";
@@ -139,6 +140,8 @@ export function createRunOpening(options: {
       mode,
       definition: published.manifest,
       input,
+      ...(prepared.checkpoint ? { checkpoint: prepared.checkpoint } : {}),
+      labels: started.labels ?? workflowLabels(published.manifest, input),
       principal,
       createdAt: createdAt.toISOString(),
       ...origin,
@@ -151,7 +154,7 @@ export function createRunOpening(options: {
       ).toISOString()
     });
     if (!run) return undefined;
-    const references = datasetReferences(input);
+    const references = datasetReferences({ input, checkpoint: prepared.checkpoint ?? null });
     for (const ref of references) {
       const row = await tx.workflowRunDatasets.get({ clientInstanceId, id: ref.$dataset });
       if (!row || row.state !== "complete")

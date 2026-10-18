@@ -256,9 +256,6 @@ export function stepOperationRefusal(
  */
 function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
   const issues: WorkflowDefinitionIssue[] = [];
-  for (const field of ["labels"] as const) {
-    if (manifest[field] !== undefined) issues.push(notSupported(field, `'${field}'`));
-  }
   if (manifest.onFailure !== undefined && manifest.onFailure !== "notify") {
     issues.push(notSupported("onFailure", "onFailure: workflow.<id> (EW-13 failure Workflow)"));
   }

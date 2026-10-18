@@ -1,3 +1,4 @@
+import { checkpointFrame } from "./continuation-checkpoint";
 import type { WorkflowLimitContext } from "./run-limits";
 import { checkDatasetValues, loopFailureRowSchema } from "./dataset-values";
 import { datasetReference } from "./datasets";
@@ -519,7 +520,14 @@ export function createStepExecutor(options: StepExecutorOptions) {
         }
         case "loop": {
           if (step.collect !== undefined) throw notSupportedFailure("'collect' on a loop");
-          const items = await resolveReference(scope, step.items);
+          const checkpoint = await stores.workflowRuns.readCheckpoint({
+            clientInstanceId,
+            id: run.id
+          });
+          const items =
+            checkpoint?.stepId === step.id
+              ? checkpoint.items
+              : await resolveReference(scope, step.items);
           // Allocate the checkpoint before the settling transaction. If writing its parts
           // is interrupted later, cleanup still owns the prefix even if that end rolls back.
           if (step.onItemFailure === "continue" && options.datasets) {
@@ -549,7 +557,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
             const canonical = dataset.offset === undefined ? datasetReference(record) : dataset;
             const total = Math.ceil(canonical.rowCount / (step.batch ?? 1));
             // The run's own bound, as for a list: its Workflow's `limits.loopItems`.
-            if (total > attempt.run.limits.loopItems)
+            if (!step.continueAsNew && total > attempt.run.limits.loopItems)
               throw new WorkflowStepFailure(
                 "loop_too_long",
                 `A loop runs over at most ${attempt.run.limits.loopItems} items`
@@ -566,7 +574,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           }
           // The run's own bound: its Workflow's `limits.loopItems`, or the default.
           const loopItems = attempt.run.limits.loopItems;
-          if (items.length > loopItems) {
+          if (!step.continueAsNew && items.length > loopItems) {
             throw new WorkflowStepFailure(
               "loop_too_long",
               `A loop runs over at most ${loopItems} items`

@@ -54,11 +54,11 @@ Click **Start now** ("Jetzt starten") on a published Workflow, fill in what it a
 
 An administrator gives these rights under **Settings > Instance > Access** ("Einstellungen › Instanz › Zugriff"), for one Workflow:
 
-| Right | What the Access page says |
-| --- | --- |
-| View workflows | See the Workflow, its steps and its runs. |
-| Use workflows | Start the Workflow. It then runs with the Workflow's own rights, not with this person's. |
-| Edit workflows | Change the draft of the Workflow. A draft does not run until it is published. |
+| Right             | What the Access page says                                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| View workflows    | See the Workflow, its steps and its runs.                                                                            |
+| Use workflows     | Start the Workflow. It then runs with the Workflow's own rights, not with this person's.                             |
+| Edit workflows    | Change the draft of the Workflow. A draft does not run until it is published.                                        |
 | Publish workflows | Make a draft the version that runs. Publishing also needs every right of the service principal the Workflow runs as. |
 
 Administrators hold every right. A test run needs the right to edit the Workflow.
@@ -77,3 +77,16 @@ what to do when an iteration itself fails. A batch loop requires a dataset, rath
 inline list. It shares the parent's objects, permissions and expiry; it does not copy rows.
 A view adds `offset` to the dataset reference and reports its own `rowCount`. Its `bytes` is
 the parent's upper bound; consumers enforce byte limits against the rows actually read.
+
+## Continue a long run
+
+A long loop can continue in a fresh run when it reaches its step or duration budget.
+Set `continueAsNew: { position: offset }` on the loop and declare `offset` as an optional
+integer in the Workflow's inputs. The next run receives the next row offset. You can
+request a smaller history with `after`, for example `{ position: offset, after: 1000 }`.
+
+The runs list groups these histories into one expandable run. Each part has its own
+status and a numbered key. Work and usage count once across the parts. Labels and the
+failure policy stay with the original run. A change published between parts applies
+to the next part, and the list marks the version change. If the new version refuses
+the carried input, that part fails and names the field that needs attention.

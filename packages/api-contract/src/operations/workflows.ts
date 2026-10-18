@@ -97,6 +97,14 @@ export const workflowRunSchema = z.object({
    * are open or `done` a key exists once. Missing on a run started without one.
    */
   runKey: z.string().optional(),
+  labels: z.record(z.string(), z.string()).optional(),
+  continuation: z
+    .object({
+      rootRunId: z.string(),
+      previousRunId: z.string().optional(),
+      number: z.number().int().positive()
+    })
+    .optional(),
   /** The Operation Run of the call that started the run. */
   operationRunId: z.string().optional(),
   parentRunId: z.string().optional(),

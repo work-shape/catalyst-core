@@ -1,7 +1,10 @@
+import { createStepBeginning } from "./step-begin";
+import { createRunReads } from "./run-reads";
+import { createRunFinisher } from "./run-finish";
+import { createContinuation } from "./continue-as-new";
 import { settleNoticeStep } from "./notice-step";
 import { createFailureNotices } from "./failure-notices";
 import { createLoopProgress } from "./loop-progress";
-import { datasetReferences } from "./dataset-schema";
 import { createStepClaim } from "./step-claim";
 import { createWorkflowDatasets } from "./datasets";
 import { createDatasetLifetime } from "./dataset-lifetime";
@@ -9,7 +12,6 @@ import {
   AppError,
   asUserId,
   auditActorFromIdentity,
-  createPlatformId,
   defineJobHandler,
   isAuthenticatedServicePrincipal,
   isWorkflowRunEnded,
@@ -28,10 +30,8 @@ import {
   type WorkflowRunError,
   type WorkflowRunKeyFilter,
   type WorkflowRunView,
-  type WorkflowStep,
   type WorkflowStepRun,
   type WorkflowStepRunFilter,
-  type WorkflowStepRunPlacement,
   type WorkflowStepRunRef,
   type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
@@ -62,7 +62,6 @@ import {
   type TestWorkflowRunInput
 } from "./run-open";
 import { createStartCheck } from "./run-start";
-import { withEveryBodyStep, datasetMetadata } from "./run-view";
 import { createScheduleTrigger } from "./schedule-trigger";
 import { createScheduledStart } from "./scheduled-start";
 import { createStepExecutor, type StepEnd, type WorkflowCodeRunner } from "./step-execution";
@@ -171,11 +170,6 @@ export interface WorkflowEngine {
   pruneRunData: WorkflowDataPruning["prune"];
 }
 
-/** Where a new step run stands in its run: its path, and its place in the tree of the run. */
-interface StepPlace extends WorkflowStepRunPlacement {
-  key: string;
-}
-
 export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEngine {
   const { clientInstanceId, stores, definitions, operationCalls } = options;
   const limits: WorkflowRunLimits = { ...WORKFLOW_RUN_LIMITS, ...options.limits };
@@ -224,29 +218,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     datasetEnd: datasetLifetime.end
   });
 
-  /** Ends a run the engine ends itself, and writes that it ended. Never a value of the run. */
-  async function finishRun(
-    tx: PlatformStores,
-    run: WorkflowRun,
-    end: Parameters<typeof endRun>[2]
-  ): Promise<void> {
-    const audit = { actor: principalActor(run), correlationId: run.correlationId };
-    if (!(await endRun(tx, run, end, audit))) return;
-    await tx.audit.appendAuditEvent({
-      clientInstanceId,
-      type: "workflow_run.ended",
-      status: end.status === "done" ? "success" : "failed",
-      ...audit,
-      subject: run.id,
-      metadata: {
-        workflow: run.workflow,
-        definitionRevisionId: run.definitionRevisionId,
-        status: end.status,
-        stepRunCount: run.stepRunCount,
-        ...(end.error ? { errorCode: end.error.code } : {})
-      }
-    });
-  }
+  const finishRun = createRunFinisher({
+    clientInstanceId,
+    endRun,
+    fillLoop: (...args) => fillLoop(...args)
+  });
 
   /**
    * What a step run that failed does to its run. A loop around it that continues past a failed
@@ -293,57 +269,26 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     });
   }
 
-  /**
-   * Creates the step run of a step and the job that executes it. A run that has created as
-   * many step runs as it may ends as `limit_reached` instead, and this answers false: whoever
-   * begins several steps in one transaction begins none after that.
-   */
-  async function beginStep(
-    tx: PlatformStores,
-    run: WorkflowRun,
-    step: WorkflowStep,
-    place: StepPlace
-  ): Promise<boolean> {
-    if (run.stepRunCount >= run.limits.stepRuns) {
-      await finishRun(tx, run, {
-        status: "limit_reached",
-        error: {
-          code: "step_limit",
-          message: `The run reached its limit of ${run.limits.stepRuns} steps`
-        }
-      });
-      return false;
-    }
-    // The run was read when its row was locked: what this transaction adds is counted here.
-    run.stepRunCount += 1;
-    // A step run is created between two steps, and so between two items of a loop. `claim`
-    // starts none of a run that was cancelled or is past its time.
-    const stepRun = await tx.workflowRuns.createStepRun({
-      id: createPlatformId<"WorkflowStepRunId">("wfs"),
-      clientInstanceId,
-      runId: run.id,
-      stepId: step.id,
-      stepType: step.type,
-      createdAt: now().toISOString(),
-      ...place
-    });
-    await tx.jobs.enqueue(
-      workflowStepJobKind,
-      { stepRunId: stepRun.id },
-      {
-        clientInstanceId,
-        subject: stepRun.id,
-        dedupeKey: subjectDedupeKey(workflowStepJobKind.kind, stepRun.id),
-        // The runs of the root Workflow and their children share its slots, counted at the
-        // claim of every worker of the instance.
-        ...stepJobConcurrency(run),
-        correlationId: run.correlationId
-      }
-    );
-    return true;
-  }
+  const beginStep = createStepBeginning({
+    clientInstanceId,
+    now,
+    finishRun,
+    advance,
+    continueRun: (...args) => continueRun(...args)
+  });
+
+  const continueRun = createContinuation({
+    clientInstanceId,
+    definitions,
+    now,
+    prepare: (...args) => prepareStart(...args),
+    open: (...args) => openRun(...args),
+    finish: finishRun,
+    retireData: (tx, run) => datasetLifetime.end(tx, { ...run, status: "continued" }, undefined)
+  });
 
   const fillLoop = createLoopProgress({
+    continueRun,
     clientInstanceId,
     now,
     datasets,
@@ -565,6 +510,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       await tx.workflowRuns.markLoopWaiting({
         ...ref,
         items: end.items,
+        ...(loop?.type === "loop" && loop.steps[0] ? { firstStepId: loop.steps[0].id } : {}),
         ...(end.total === undefined ? {} : { total: end.total }),
         ...(last === undefined ? {} : { lastStepId: last })
       });
@@ -797,62 +743,6 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return stores.workflowRuns.readRunView({ clientInstanceId, id: input.runId });
     },
 
-    async readRun(runId) {
-      const run = await stores.workflowRuns.readRunView({ clientInstanceId, id: runId });
-      if (!run) return undefined;
-      const output = await stores.workflowRuns.readRunOutput({ clientInstanceId, id: run.id });
-      const rows = await stores.workflowRunDatasets.getMany({
-        clientInstanceId,
-        ids: output ? datasetReferences(output.value).map((ref) => ref.$dataset) : []
-      });
-      return { ...run, ...(rows.length ? { datasets: rows.map(datasetMetadata) } : {}) };
-    },
-
-    listRuns: ({ workflow, key, page }) =>
-      stores.workflowRuns.listRuns({
-        clientInstanceId,
-        workflow,
-        ...(key ? { key } : {}),
-        ...(page ? { page } : {})
-      }),
-
-    async listStepRuns({ runId, filter, page }) {
-      const run = await stores.workflowRuns.readRun({ clientInstanceId, id: runId });
-      if (!run) return [];
-      let stepRuns = await stores.workflowRuns.listStepRuns({
-        clientInstanceId,
-        runId: run.id,
-        ...(filter ? { filter } : {}),
-        ...(page ? { page } : {})
-      });
-      const rows = await stores.workflowRunDatasets.listForSteps({
-        clientInstanceId,
-        stepRunIds: stepRuns.map((step) => step.id)
-      });
-      stepRuns = stepRuns.map((step) => {
-        const datasets = rows.filter((row) => row.stepRunId === step.id).map(datasetMetadata);
-        return datasets.length ? { ...step, datasets } : step;
-      });
-      if (!stepRuns.some((stepRun) => stepRun.bodyCounts)) return stepRuns;
-      const definition = await stores.workflowRuns.readRunDefinition({
-        clientInstanceId,
-        id: run.id
-      });
-      // What a loop ran with is bounded by the slots of the Workflow, and those of a process.
-      const slots = Math.min(options.stepSlots, run.limits.concurrency?.slots ?? options.stepSlots);
-      return definition ? withEveryBodyStep(stepRuns, definition, slots) : stepRuns;
-    },
-
-    async listWorkflows() {
-      const summaries = await definitions.list();
-      const last = await stores.workflowRuns.listLastRuns({
-        clientInstanceId,
-        workflows: summaries.map((summary) => summary.id)
-      });
-      return summaries.map((summary) => {
-        const lastRun = last.get(summary.id);
-        return { ...summary, kind: summary.kind ?? "process", ...(lastRun ? { lastRun } : {}) };
-      });
-    }
+    ...createRunReads({ clientInstanceId, stores, definitions, stepSlots: options.stepSlots })
   };
 }

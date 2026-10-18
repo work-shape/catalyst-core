@@ -758,6 +758,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "continued",
                         "queued",
                         "running",
                         "waiting",
@@ -20288,6 +20289,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "continued",
                         "queued",
                         "running",
                         "waiting",
@@ -20347,6 +20349,35 @@
                     },
                     "runKey": {
                       "type": "string"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "continuation": {
+                      "type": "object",
+                      "properties": {
+                        "rootRunId": {
+                          "type": "string"
+                        },
+                        "previousRunId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "rootRunId",
+                        "number"
+                      ]
                     },
                     "operationRunId": {
                       "type": "string"
@@ -20631,6 +20662,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "continued",
                         "queued",
                         "running",
                         "waiting",
@@ -20690,6 +20722,35 @@
                     },
                     "runKey": {
                       "type": "string"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "continuation": {
+                      "type": "object",
+                      "properties": {
+                        "rootRunId": {
+                          "type": "string"
+                        },
+                        "previousRunId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "rootRunId",
+                        "number"
+                      ]
                     },
                     "operationRunId": {
                       "type": "string"
@@ -21580,6 +21641,7 @@
                               "status": {
                                 "type": "string",
                                 "enum": [
+                                  "continued",
                                   "queued",
                                   "running",
                                   "waiting",
@@ -21975,6 +22037,7 @@
                           "status": {
                             "type": "string",
                             "enum": [
+                              "continued",
                               "queued",
                               "running",
                               "waiting",
@@ -22034,6 +22097,35 @@
                           },
                           "runKey": {
                             "type": "string"
+                          },
+                          "labels": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "continuation": {
+                            "type": "object",
+                            "properties": {
+                              "rootRunId": {
+                                "type": "string"
+                              },
+                              "previousRunId": {
+                                "type": "string"
+                              },
+                              "number": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "rootRunId",
+                              "number"
+                            ]
                           },
                           "operationRunId": {
                             "type": "string"
@@ -22346,6 +22438,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "continued",
                         "queued",
                         "running",
                         "waiting",
@@ -22405,6 +22498,35 @@
                     },
                     "runKey": {
                       "type": "string"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "continuation": {
+                      "type": "object",
+                      "properties": {
+                        "rootRunId": {
+                          "type": "string"
+                        },
+                        "previousRunId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "rootRunId",
+                        "number"
+                      ]
                     },
                     "operationRunId": {
                       "type": "string"
@@ -22740,6 +22862,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "continued",
                         "queued",
                         "running",
                         "waiting",
@@ -22799,6 +22922,35 @@
                     },
                     "runKey": {
                       "type": "string"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "continuation": {
+                      "type": "object",
+                      "properties": {
+                        "rootRunId": {
+                          "type": "string"
+                        },
+                        "previousRunId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "rootRunId",
+                        "number"
+                      ]
                     },
                     "operationRunId": {
                       "type": "string"

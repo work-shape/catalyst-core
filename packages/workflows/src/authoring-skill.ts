@@ -79,6 +79,8 @@ const STEP_REFERENCE: {
   loop: {
     does: `Runs its \`steps\` in order once for each item of a list or dataset of at most ${WORKFLOW_LOOP_MAX_ITEMS} items, or the Workflow's \`limits.loopItems\`. Its output is the counts { total, done, failed } and never the results of its items: what an item produces is kept by a step inside the loop, such as a changing operation.`,
     fields: {
+      continueAsNew:
+        "{ position: <input field>, after?: <items per history> }: continue on the published revision at a complete item boundary, carrying the next offset as that input field. Without after, continue at the run budget or deadline. Declare the position field in inputs; successors validate it again. Labels and onFailure stay those of the first run.",
       items:
         "A reference to the list or dataset: { step, path }, without `ref:` around it. The list is a field of the output of an earlier step.",
       steps:
@@ -535,7 +537,7 @@ A definition that holds one of these is refused when it is saved, with the code
 - the step types ${workflowStepTypesNotRun()
     .map((type) => `\`${type}\``)
     .join(", ")};
-- \`labels\` on the manifest, and \`onFailure: workflow.<id>\` (EW-13);
+- \`onFailure: workflow.<id>\` on the manifest;
 - \`collect\` on a loop (EW-13);
 - datasets in agent inputs (EW-14b).
 

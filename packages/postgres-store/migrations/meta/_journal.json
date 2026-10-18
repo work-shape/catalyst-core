@@ -808,10 +808,17 @@
       "breakpoints": true
     },
     {
-      "idx": 115,
+      "idx": 116,
       "version": "7",
-      "when": 1792303101295,
-      "tag": "0115_workflow_failure_counts",
+      "when": 1792299454221,
+      "tag": "0116_workflow_continue_as_new",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1792299593188,
+      "tag": "0117_workflow_continuation_indexes",
       "breakpoints": true
     }
   ]

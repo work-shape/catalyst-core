@@ -68,12 +68,15 @@ export function createFailureNotices(options: {
         if (!root || root.parentRunId || !isWorkflowRunEnded(root.status)) return;
         const count = await tx.workflowNotices.failureCount({ clientInstanceId, rootRunId });
         if (count === 0) return;
+        const first = root.continuation
+          ? await tx.workflowRuns.readRun({ clientInstanceId, id: root.continuation.rootRunId })
+          : root;
         const publisher =
           root.mode === "test"
             ? root.startedBy.id
             : await tx.workflowNotices.publisher({
                 clientInstanceId,
-                revisionId: root.definitionRevisionId
+                revisionId: first?.definitionRevisionId ?? root.definitionRevisionId
               });
         if (!publisher) return; // Folder definitions have no publisher; assets record it at publish.
         const user = await tx.users.getUser({ clientInstanceId, userId: asUserId(publisher) });

@@ -3,3 +3,37 @@
 The Workflow engine of Workshape Catalyst: the module `workflows`, switched with `modules.workflows.enabled`. The names and shapes other packages read are in `@work-shape/catalyst-core` (`src/workflows.ts`); the design is in `docs/planning/specs/events-workflows-and-guardrails.md`.
 
 The probes that the suite does not run (a loop over 10,000 items in `tests/probes`, and `tests/workflow-worker-kill.test.ts` with its waits in real time under `WORKFLOW_PROBE_REAL_TIME=1`): `pnpm --filter @work-shape/catalyst-workflows probes`, with the test Postgres in `POSTGRES_STORE_TEST_DATABASE_URL`.
+
+## Continue-as-new (EW-CAN; check 112)
+
+A loop opts in with `continueAsNew: { position: "offset" }`. `position` names a field
+in the Workflow's `inputs`: declare it as an optional integer for the initial start.
+The engine writes the number of rows completed to that field in the successor's input,
+including earlier histories. With `batch`, it counts rows rather than batches.
+`after: 1000` optionally requests a new history after 1,000 complete iterations;
+otherwise the step-run budget and active duration decide when it continues.
+
+Each history starts its trigger and fixed steps on the revision published at that
+moment. The checkpointed loop resumes its remaining immutable dataset view or inline
+items. Checkpoints are internal values, never included in list/read responses. A
+history admits a complete next item only when its step budget has room, drains items
+already admitted, then commits `continued` and the successor together. New items stop
+at a deadline; admitted items finish their current boundary. No process sleeps while
+waiting for a successor. Dataset grants transfer before the old history releases them.
+
+The public product contract is `WorkflowRunIdentity.continuation` in catalyst-core and
+the matching API schema: `{ rootRunId, previousRunId?, number }`, numbered from 1. The
+base `runKey` stays unchanged for idempotent starts; the interface shows `<key>/<number>`.
+`continued` releases the per-history key, while its successor holds it. A failed or
+cancelled final history releases it as usual. Each step and its usage stay on exactly
+one history; totals add the histories, rather than duplicating usage events. Labels
+are evaluated from the first trigger and retained, as is the original `onFailure`.
+A child continuation transfers the parent's wait; a linked run transfers non-owning
+waiters without granting ownership. Only the final history wakes those waiters.
+
+The successor input is checked against the newly published revision. If it no longer
+fits, a failed successor records `continuation_invalid` and names the field, with no
+input value in its error or audit event. Publishing new instructions does not change
+the history already executing. This is the continuation contract for Workflow-fed
+Knowledge Bases (KBW-1); consumers pass positions through declared inputs and use the
+sequence identity instead of parsing a key or copying another run's history.
