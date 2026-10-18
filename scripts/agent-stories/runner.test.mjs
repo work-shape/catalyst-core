@@ -1,0 +1,327 @@
+import { requireIdle } from "./idle.mjs";
+import { UsageWatchdog } from "./watchdog.mjs";
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { plan, exitCode } from "./catalog.mjs";
+import { LIMITS, usageTotal, budgetStop, evidence, validateReceipt } from "./safety.mjs";
+import { appOracle, workflowOracle, consentOracle, createdOracle } from "./oracles.mjs";
+import { Processes } from "./processes.mjs";
+
+test("selection is validated before effects; union is exactly three fresh cases", () => {
+  const p = plan(["--stories", "S2,S5,S14,S2"]);
+  assert.equal(p.cases.length, 3);
+  assert.equal(new Set(p.cases.map((c) => c.id)).size, 3);
+  for (const input of ["", ",", "S18", "S1,,S2", "tool:"])
+    assert.throws(() => plan(["--stories", input]));
+  assert.equal(plan(["--stories", "S1"]).cases.length, 0);
+  const mixed = plan(["--stories", "S1,S2"]);
+  assert.equal(mixed.cases.length, 1);
+  assert.equal(exitCode(mixed, [{ status: "pass" }]), 2);
+  assert.equal(
+    exitCode(
+      p,
+      p.cases.map(() => ({ status: "pass" }))
+    ),
+    0
+  );
+  assert.equal(exitCode(p, [{ status: "fail" }]), 1);
+  assert.ok(p.coverage.every((c) => c.manual.length > 0));
+});
+test("owner/code/build/config/migration/module/worker/entrypoint/ports drift refuses before caller mutation", () => {
+  const receipt = {
+    owner: "owned",
+    uid: 1,
+    host: "host",
+    root: "/private",
+    head: "sha",
+    dirty: "sha",
+    builds: "sha",
+    capabilities: { head: "sha", dirty: "sha" },
+    config: "sha",
+    migrations: "sha",
+    modules: "sha",
+    workers: ["worker"],
+    entrypoint: "normal server",
+    image: "pinned",
+    imageId: "sha",
+    ports: { api: 30000 },
+    status: "idle"
+  };
+  for (const key of Object.keys(receipt).filter((k) => k !== "status")) {
+    let mutations = 0;
+    assert.throws(() => {
+      validateReceipt({ ...receipt, [key]: "changed" }, receipt);
+      mutations++;
+    });
+    assert.equal(mutations, 0);
+  }
+  for (const changed of [{ status: "busy" }, { activeJobs: 1 }, { activeRuns: 1 }, { pending: 1 }])
+    assert.throws(() => validateReceipt({ ...receipt, ...changed }, receipt));
+  validateReceipt(receipt, receipt);
+});
+test("all-call accounting keeps unsettled reservation and immutable invocation totals over midnight", () => {
+  const rows = [
+    {
+      status: "settled",
+      total_tokens: 5,
+      counted_tokens: 5,
+      customer_billable_cost: { status: "settled", totalCostMicros: 20 }
+    },
+    { status: "pending", total_tokens: 0, counted_tokens: 200, counted_cost_micros: 300 },
+    { status: "abandoned", total_tokens: 0, counted_tokens: 100, counted_cost_micros: 150 }
+  ];
+  const total = usageTotal(rows);
+  assert.equal(total.tokens, 305);
+  assert.equal(total.micros, 470);
+  assert.equal(total.pending, 2);
+  assert.equal(budgetStop(total, 10, 10), "deadline");
+  assert.equal(budgetStop(total, 0, 10, 0, { tokens: 300, micros: 1000 }), "tokens");
+  assert.equal(budgetStop(total, 0, 10, 600, { tokens: 1000, micros: 1000 }), "spend");
+  assert.equal(budgetStop({ ...total, missingCosts: true }, 0, 10), "missing_cost");
+  assert.equal(usageTotal([{ status: "settled", total_tokens: 2 }]).missingCosts, true);
+  assert.equal(usageTotal([{ status: "pending", total_tokens: 0 }]).missingCosts, true);
+  assert.equal(budgetStop({ ...total, tokens: LIMITS.tokens }, 0, 10), "tokens");
+});
+test("allowlist drops auth and raw events and removes a canary even from allowed text", () => {
+  const secret = "synthetic-CANARY-credential-4938";
+  const encoded = JSON.stringify(
+    evidence(
+      {
+        id: "safe",
+        headers: { cookie: secret },
+        env: { key: secret },
+        rawSSE: secret,
+        config: { password: secret },
+        prompt: `synthetic ${secret}`,
+        message: secret,
+        tokens: 3
+      },
+      [secret]
+    )
+  );
+  assert.ok(!encoded.includes(secret));
+  assert.ok(!encoded.includes("headers"));
+  assert.ok(!encoded.includes("password"));
+  assert.equal(JSON.parse(encoded).tokens, 3);
+});
+test("supervisor removes its own child on failure", async () => {
+  const p = new Processes(process.cwd());
+  const held = p.start(process.execPath, ["-e", "setInterval(()=>{},1000)"], "held");
+  await assert.rejects(() => p.run(process.execPath, ["-e", "process.exit(9)"], "failed"));
+  await p.stop();
+  assert.throws(() => process.kill(held.child.pid, 0));
+});
+test("SIGTERM cleanup drains owned child without touching a neighbouring process", async () => {
+  const folder = await mkdtemp(resolve(tmpdir(), "agent-stories-process-"));
+  const probe = resolve(folder, "probe.mjs");
+  const pidFile = resolve(folder, "pid");
+  const moduleUrl = new URL("./processes.mjs", import.meta.url).href;
+  await writeFile(
+    probe,
+    `import {Processes} from ${JSON.stringify(moduleUrl)};import {writeFileSync} from 'node:fs';const p=new Processes(process.cwd());const h=p.start(process.execPath,['-e','setInterval(()=>{},1000)'],'held');writeFileSync(${JSON.stringify(pidFile)},String(h.child.pid));process.on('SIGTERM',()=>{void p.stop().then(()=>process.exit(143));});`
+  );
+  const neighbour = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
+    stdio: "ignore"
+  });
+  const child = spawn(process.execPath, [probe], { stdio: "ignore" });
+  try {
+    let pid;
+    while (!pid) {
+      pid = await readFile(pidFile, "utf8").catch(() => null);
+      if (!pid) await new Promise((r) => setTimeout(r, 10));
+    }
+    const done = once(child, "exit");
+    child.kill("SIGTERM");
+    await done;
+    assert.throws(() => process.kill(Number(pid), 0));
+    process.kill(neighbour.pid, 0);
+  } finally {
+    child.kill();
+    neighbour.kill();
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+const app = {
+  invalidRows: 0,
+  validRows: 1,
+  reloadedRows: 1,
+  freshRows: 1,
+  otherRows: 0,
+  storageCommitted: true,
+  errors: 0
+};
+const workflow = {
+  status: "done",
+  mode: "test",
+  revision: "r",
+  expectedRevision: "r",
+  tester: "u",
+  expectedTester: "u",
+  total: 42,
+  notify: [{ status: "done", target: "dry_run", operation: "notify" }],
+  deliveries: 0,
+  published: false,
+  liveRuns: 0
+};
+const consent = {
+  beforeAssets: 0,
+  beforeRevisions: 0,
+  beforeFiles: 0,
+  reconnectAssets: 0,
+  reconnectRevisions: 0,
+  reconnectFiles: 0,
+  deniedAssets: 0,
+  deniedRevisions: 0,
+  deniedFiles: 0,
+  pendingStatus: "pending_confirmation",
+  deniedStatus: "denied",
+  allowedAssets: 1,
+  allowedRevisions: 1,
+  allowedExecutions: 1,
+  replayRevisions: 1,
+  replayExecutions: 1,
+  instructionMatches: true,
+  ownerMatches: true
+};
+test("App oracle consumes broken form/persistence/privacy observations as failures", () => {
+  appOracle(app);
+  for (const broken of [
+    { invalidRows: 1 },
+    { validRows: 0 },
+    { reloadedRows: 0 },
+    { freshRows: 0 },
+    { otherRows: 1 },
+    { errors: 1 },
+    { storageCommitted: false }
+  ])
+    assert.throws(() => appOracle({ ...app, ...broken }));
+});
+test("Workflow oracle consumes delivery, missing notify and nonexistent principal failures", () => {
+  workflowOracle(workflow);
+  for (const broken of [
+    { deliveries: 1 },
+    { notify: [] },
+    { status: "failed" },
+    { mode: "live" },
+    { total: 0 },
+    { notify: [{ status: "done", target: "live", operation: "notify" }] }
+  ])
+    assert.throws(() => workflowOracle({ ...workflow, ...broken }));
+});
+test("consent oracle consumes bypass and duplicate-execution observations as failures", () => {
+  consentOracle(consent);
+  for (const broken of [
+    { beforeAssets: 1 },
+    { beforeFiles: 1 },
+    { reconnectRevisions: 1 },
+    { deniedAssets: 1 },
+    { allowedRevisions: 2 },
+    { replayExecutions: 2 },
+    { replayRevisions: 2 }
+  ])
+    assert.throws(() => consentOracle({ ...consent, ...broken }));
+});
+test("seeded asset and wrong actor/run cannot masquerade as generated work", () => {
+  const row = {
+    id: "asset",
+    kind: "app",
+    actorId: "user",
+    conversationId: "conversation",
+    runId: "run",
+    createdAt: "2026-10-19T12:00:01Z"
+  };
+  const expected = {
+    actorId: "user",
+    conversationId: "conversation",
+    runId: "run",
+    startedAt: "2026-10-19T12:00:00Z",
+    seededIds: [],
+    kind: "app"
+  };
+  createdOracle(row, expected);
+  for (const change of [
+    { actorId: "setup" },
+    { runId: "old" },
+    { createdAt: "2020-01-01T00:00:00Z" }
+  ])
+    assert.throws(() => createdOracle({ ...row, ...change }, expected));
+  assert.throws(() => createdOracle(row, { ...expected, seededIds: ["asset"] }));
+});
+
+test("deadline/token/spend stops cancel exactly once and retain unsettled usage", async () => {
+  for (const [kind, now, row] of [
+    ["deadline", 10, { tokens: 1, micros: 1 }],
+    ["tokens", 0, { tokens: 300, micros: 1 }],
+    ["spend", 0, { tokens: 1, micros: 500 }]
+  ]) {
+    const cancellations = [];
+    const w = new UsageWatchdog({
+      deadline: 10,
+      limits: { tokens: 300, micros: 500 },
+      cancel: async (reason) => {
+        cancellations.push(reason);
+      }
+    });
+    const rows = [
+      {
+        id: "new",
+        status: "pending",
+        total_tokens: 0,
+        counted_tokens: row.tokens,
+        counted_cost_micros: row.micros
+      }
+    ];
+    await w.sample(rows, now);
+    await w.sample(rows, now + 1);
+    assert.deepEqual(cancellations, [kind]);
+    assert.equal(w.usage.reservedTokens, row.tokens);
+    assert.equal(w.usage.reservedMicros, row.micros);
+  }
+});
+
+test("ordinary Playwright discovery stays isolated even with a key", async () => {
+  const child = spawn(
+    resolve("node_modules/.bin/playwright"),
+    ["test", "--list", "e2e/app-sandbox.spec.ts"],
+    {
+      env: { ...process.env, OPENAI_API_KEY: "synthetic-canary-never-call" },
+      stdio: ["ignore", "pipe", "pipe"]
+    }
+  );
+  let output = "";
+  child.stdout.on("data", (c) => {
+    output += c;
+  });
+  child.stderr.on("data", (c) => {
+    output += c;
+  });
+  const [code] = await once(child, "exit");
+  assert.equal(code, 0, output);
+  assert.ok(!output.includes(".story.mjs"));
+  assert.ok(!output.includes("live-skill-consent"));
+  assert.match(output, /app-sandbox.spec.ts/u);
+});
+
+test("warm reuse permits a future passive tick but refuses future model jobs and unknown work", () => {
+  const job = {
+    kind: "usage.reconcile",
+    status: "queued",
+    dedupe_key: "schedule:usage.reconcile",
+    run_after: "2026-12-01T00:00:00Z"
+  };
+  requireIdle({ runs: 0, pending: 0, jobs: [job] }, 0);
+  for (const change of [
+    { kind: "conversation.generate_title" },
+    { kind: "unknown" },
+    { status: "running" },
+    { run_after: "1970-01-01T00:00:00Z" }
+  ])
+    assert.throws(() => requireIdle({ runs: 0, pending: 0, jobs: [{ ...job, ...change }] }, 0));
+  assert.throws(() => requireIdle({ runs: 1, pending: 0, jobs: [] }, 0));
+  assert.throws(() => requireIdle({ runs: 0, pending: 1, jobs: [] }, 0));
+});
