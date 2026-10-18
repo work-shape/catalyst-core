@@ -170,7 +170,7 @@ export function createDataStoreKnowledgeBackend(
       const read = async () =>
         rowsOf(
           await runtime.server.executor.query({
-            ...runtime.server.asReader(record, target.assetId),
+            ...runtime.server.asReader(record, target.assetId, runtime.stores.connections),
             ...(signal ? { signal } : {}),
             sql: statement.sql,
             ...(statement.parameters ? { parameters: statement.parameters } : {})

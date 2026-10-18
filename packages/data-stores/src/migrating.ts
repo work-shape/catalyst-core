@@ -2,6 +2,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { z } from "zod";
 import {
   isAppError,
+  type ConnectionsStore,
   type DataStoreAppliedMigration,
   type DataStoreRecord,
   type DataStoreRecordsRule
@@ -129,6 +130,7 @@ export async function applyMigration(
   record: StoreDatabase,
   migration: DataStoreMigration,
   held: {
+    secretRows: ConnectionsStore;
     ledgerKey: string;
     superuser: boolean;
     sizeLimitBytes: number;
@@ -148,7 +150,7 @@ export async function applyMigration(
   try {
     await server.executor.change(
       {
-        ...server.asRole(record, "migration"),
+        ...server.asRole(record, "migration", held.secretRows),
         timeoutMs: DATA_STORE_ROLE_LIMITS.migration.statementTimeoutMs,
         signal
       },

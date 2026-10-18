@@ -558,12 +558,20 @@ async function runVerb(
     // Let the verb refuse direct proposals before role repair or call-record DDL touches the store.
     if (verb.verb === "records.propose" && context.origin.kind !== "workflow")
       return await verb.run(
-        { runtime, store, target: runtime.server.asRole(record, "app"), context },
+        {
+          runtime,
+          store,
+          target: runtime.server.asRole(record, "app", runtime.stores.connections),
+          context
+        },
         input
       );
     // The app role as the platform gave it, before anything runs as that role.
     return await asStoreRole(runtime, record, signal, async () => {
-      const target = { ...runtime.server.asRole(record, "app"), ...(signal ? { signal } : {}) };
+      const target = {
+        ...runtime.server.asRole(record, "app", runtime.stores.connections),
+        ...(signal ? { signal } : {})
+      };
       if (keyed || verb.verb === "load" || verb.verb === "records.propose")
         await ensureCallRecords(runtime, record, signal);
       if (verb.verb === "load" && runtime.datasets?.authorize)

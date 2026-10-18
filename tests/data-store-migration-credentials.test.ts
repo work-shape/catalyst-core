@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createPostgresStores } from "@work-shape/catalyst-postgres-store";
 import { CONDITION_WAIT_MS, waitUntil } from "./support/assertions";
-import { databaseUrlFor } from "./support/postgres-concurrency-harness";
+import { createTestInstance } from "./support/test-instance";
 import { init, manifest, useDataStoreWorld } from "./support/data-store-world";
 
 // Provisioning opens a migration-role socket. Restart the runtime before the next publish:
@@ -14,9 +13,8 @@ describe("migration credentials with one Platform Store connection", () => {
     const world = await published(`cold_${rollback}`);
     await world.dataStores.close();
     const applicationName = `migration_credentials_${rollback}`;
-    const stores = await createPostgresStores({
-      databaseUrl: databaseUrlFor(db.databaseUrl, applicationName),
-      poolSize: 1
+    const { stores } = await createTestInstance({
+      postgres: { applicationName, poolSize: 1 }
     });
     const cold = world.restart(stores);
     try {
