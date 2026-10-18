@@ -855,6 +855,13 @@
       "when": 1792336880441,
       "tag": "0121_workflow_retention_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1792347094594,
+      "tag": "0122_app_user_storage",
+      "breakpoints": true
     }
   ]
 }
