@@ -148,7 +148,6 @@ function runRead(run: RunResource, stepRuns: readonly StepRunResource[]): Workfl
     silentSince: undefined,
     stepsFailed: false,
     stepRuns: stepRuns.map(toWorkflowStepRun),
-    stepRunsCut: false,
     retry: noop
   };
 }
@@ -226,6 +225,23 @@ describe("the list of Workflows", () => {
     expect(markup).toContain(t("workflows.description"));
     expect(markup).not.toContain("<button");
     expect(render(listPage([]), "de")).toContain(de("workflows.emptyReadOnly"));
+  });
+
+  // DISCOVERY-PAGING: a page may come back empty with more to read. The list is empty only once
+  // read to its end; before that it offers the next page, not its empty state.
+  it("offers the next page, not the empty state, where an empty page has more after it", () => {
+    const view = listPage([]);
+    const markup = render(
+      createElement(WorkflowsPageView, {
+        ...view.props,
+        onNew: noop,
+        list: { ...view.props.list, hasMore: true }
+      })
+    );
+    expect(markup).toContain("data-workflows-more");
+    expect(markup).toContain(t("workflows.showMore"));
+    expect(markup).not.toContain(t("workflows.empty"));
+    expect(markup).not.toContain(t("workflows.emptyReadOnly"));
   });
 
   it("offers a builder the agent with two examples on the empty list", () => {
@@ -914,7 +930,6 @@ describe("the page of a run", () => {
     silentSince: undefined,
     stepsFailed: false,
     stepRuns: undefined,
-    stepRunsCut: false,
     retry: noop
   };
 

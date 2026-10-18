@@ -5,6 +5,7 @@ import { sendToolCall } from "./page-surface-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { shootLocales } from "./surface-shots";
 import { expect, test } from "./test";
+import { showWorkflowsUntil } from "./workflow-list-paging";
 
 // "New" opens the dock and creates nothing; the agent's first save creates the asset and takes
 // the person to its page (NAV-2, navigation checks 30 and 36, Platform Access check 44). The
@@ -126,9 +127,12 @@ test("New workflow opens the dock, and the agent's first save creates the draft 
   });
   await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
 
-  // Back on the list, the draft is there.
+  // Back on the list, the draft is there: behind the published Workflows, reached through the
+  // list's own "Show more" (DISCOVERY-PAGING).
   await page.goto(listPath);
-  await expect(page.getByText(title).first()).toBeVisible();
+  const draft = page.getByRole("list", { name: "Workflows" }).getByText(title).first();
+  await showWorkflowsUntil(page, draft);
+  await expect(draft).toBeVisible();
 });
 
 /** A Workflow definition of the e2e instance: one manual start and one result. */

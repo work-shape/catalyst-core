@@ -4,6 +4,7 @@ import {
   AppError,
   WORKFLOW_MANIFEST_FILE,
   type ConfigAssetStore,
+  type StorePage,
   type WorkflowKind,
   type WorkflowManifest
 } from "@work-shape/catalyst-core";
@@ -43,8 +44,29 @@ export interface WorkflowDefinitionSource {
   /** The published cron texts even when the rest of the definition cannot be run.
    * Database-backed sources keep refused definitions scheduled until repaired or withdrawn. */
   readScheduleCrons?(id: string): Promise<string[]>;
-  /** The Workflows that have a published definition, by id. */
-  list(): Promise<WorkflowDefinitionSummary[]>;
+  /** A page of published definitions in byte order of id, after the exclusive id cursor. */
+  list(page?: StorePage): Promise<WorkflowDefinitionSummary[]>;
+}
+
+/** Bounds a discovery read; callers keep the exclusive id to reach every definition. */
+export const WORKFLOW_DEFINITION_PAGE_SIZE = 200;
+
+/** Operation discovery consumes every page; an empty/short page ends the walk. */
+export async function* workflowDefinitionPages(source: WorkflowDefinitionSource) {
+  let after: StorePage["after"];
+  while (true) {
+    const items = await source.list({
+      limit: WORKFLOW_DEFINITION_PAGE_SIZE,
+      ...(after ? { after } : {})
+    });
+    const last = items.at(-1);
+    if (last && typeof after?.[0] === "string" && last.id <= after[0]) {
+      throw new Error("Workflow definition discovery cursor did not advance");
+    }
+    yield items;
+    if (items.length < WORKFLOW_DEFINITION_PAGE_SIZE || !last) return;
+    after = [last.id];
+  }
 }
 
 /** A source that knows no Workflow: what an instance has until definitions are stored. */
@@ -112,9 +134,11 @@ export function createWorkflowFolderSource(root: string): WorkflowDefinitionSour
         manifest: result.manifest
       };
     },
-    async list() {
+    async list(page = { limit: WORKFLOW_DEFINITION_PAGE_SIZE }) {
       const summaries: WorkflowDefinitionSummary[] = [];
       for (const folder of (await readdir(root)).sort()) {
+        if (typeof page.after?.[0] === "string" && folder <= page.after[0]) continue;
+        if (summaries.length >= page.limit) break;
         const text = await textOf(folder);
         const result = text === undefined ? undefined : readWorkflowManifest(text);
         // A folder whose file cannot be run is no Workflow anybody can start.

@@ -356,7 +356,8 @@ function DataStoreChoice({
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const read = source.useDataStores(search, owner);
-  const stores = read.status === "ready" ? read.data : [];
+  const stores = read.status === "ready" ? read.data.items : [];
+  const more = read.status === "ready" ? read.data.more : undefined;
   const chosen = stores.find((store) => store.name === value);
   const error =
     read.status === "failed" || read.status === "refused"
@@ -370,6 +371,7 @@ function DataStoreChoice({
         search
         label={t("knowledge.chooseDataStore")}
         onSearchChange={(text) => setSearch(text.trim())}
+        more={more && { loading: more.loading, onLoad: more.load }}
         options={stores.map((store) => ({
           value: store.name,
           label: store.title || store.name,

@@ -96,11 +96,11 @@ function plantedSource(overrides: Partial<KnowledgeBaseSource> = {}) {
     check: unused,
     query: unused,
     search: unused,
-    useDataStores: () => ready([]),
+    useDataStores: () => ready({ items: [] }),
     useStoreTables: () => ready([]),
-    useKnowledgeBases: () => ready([]),
+    useKnowledgeBases: () => ready({ items: [] }),
     useDocuments: () => ready({ documents }),
-    useOpenableFiles: () => ready([]),
+    useOpenableFiles: () => ready({ items: [] }),
     retry,
     remove,
     addFiles,
@@ -482,7 +482,9 @@ describe("the Documents section", () => {
   });
 
   it("says only what happened last: a removal after an add replaces the added notice", async () => {
-    const source = plantedSource({ useOpenableFiles: () => ready([file("Reiseregeln.md")]) });
+    const source = plantedSource({
+      useOpenableFiles: () => ready({ items: [file("Reiseregeln.md")] })
+    });
     show(
       createElement(KnowledgeDocuments, {
         source,
@@ -765,12 +767,14 @@ describe("the Add dialog", () => {
     openDialog(
       plantedSource({
         useOpenableFiles: () =>
-          ready([
-            file("handbuch.md"),
-            file("gross.pdf", { bytes: 25 * MiB + 1 }),
-            file("genau.pdf", { bytes: 25 * MiB }),
-            file("tabelle.xlsx")
-          ])
+          ready({
+            items: [
+              file("handbuch.md"),
+              file("gross.pdf", { bytes: 25 * MiB + 1 }),
+              file("genau.pdf", { bytes: 25 * MiB }),
+              file("tabelle.xlsx")
+            ]
+          })
       })
     );
 
@@ -788,7 +792,7 @@ describe("the Add dialog", () => {
 
   it("stops at 20 files and adds exactly the chosen ones", async () => {
     const files = Array.from({ length: 22 }, (_, index) => file(`notiz-${index}.txt`));
-    const source = plantedSource({ useOpenableFiles: () => ready(files) });
+    const source = plantedSource({ useOpenableFiles: () => ready({ items: files }) });
     openDialog(source);
     const submit = () => document.querySelector<HTMLButtonElement>("[data-knowledge-add-submit]");
 
@@ -815,7 +819,7 @@ describe("the Add dialog", () => {
   it("says a refusal of the instance in plain words", async () => {
     openDialog(
       plantedSource({
-        useOpenableFiles: () => ready([file("handbuch.md")]),
+        useOpenableFiles: () => ready({ items: [file("handbuch.md")] }),
         addFiles: async () => ({
           ok: false,
           refused: false,

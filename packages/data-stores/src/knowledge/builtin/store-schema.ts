@@ -1,5 +1,5 @@
 import { RECORD_PROJECTION_SCHEMA } from "../../records/projection-schema";
-import { takeGrantTurn } from "../../provisioning";
+import { takeGrantTurn } from "../../grant-turn";
 import { KNOWLEDGE_FIELD_SCHEMA } from "./field-schema";
 import { RECORD_FIELDS_SCHEMA, RECORD_FIELDS_CONTENT_HASH } from "../../records/schema";
 import { SOURCE_WITHDRAWAL_SCHEMA } from "./source-withdrawal-schema";

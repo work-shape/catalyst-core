@@ -99,3 +99,33 @@ export function storePage(query: unknown, order: readonly string[], scope: strin
   const after = readCursor(cursor, scope, order);
   return { limit: limit + 1, ...(after ? { after } : {}) };
 }
+
+/**
+ * Fill a visible page through bounded store reads. Filtering first keeps hidden names out of
+ * cursors, including when the first store page contains nothing the caller may see.
+ */
+export async function readablePage<Row>(
+  page: StorePage,
+  read: (page: StorePage) => Promise<Row[]>,
+  readable: (row: Row) => boolean,
+  key: (row: Row) => readonly (string | number)[]
+): Promise<Row[]> {
+  const visible: Row[] = [];
+  let after = page.after;
+  while (visible.length < page.limit) {
+    const rows = await read({ limit: page.limit, ...(after ? { after } : {}) });
+    for (const row of rows) {
+      if (readable(row)) visible.push(row);
+      if (visible.length === page.limit) return visible;
+    }
+    if (rows.length < page.limit) return visible;
+    const last = rows.at(-1);
+    if (!last) return visible;
+    const next = key(last);
+    if (JSON.stringify(after) === JSON.stringify(next)) {
+      throw new AppError("INTERNAL", "List source did not advance its cursor");
+    }
+    after = next;
+  }
+  return visible;
+}

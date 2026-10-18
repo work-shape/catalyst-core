@@ -2,11 +2,14 @@ import { Library } from "lucide-react";
 import { Chip, Picker, PickerButton } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { KnowledgeChoice } from "./knowledge-base-source";
+import type { MoreRead } from "./paged-items";
 
 /** The Knowledge Bases an agent can be given, as far as the instance was asked for them. */
 export interface KnowledgeBaseChoice {
-  /** The Knowledge Bases that match what the reader typed, a page of them. */
+  /** The Knowledge Bases that match what the reader typed, the pages read so far. */
   options: readonly KnowledgeChoice[];
+  /** Present while more match: the chooser's last row reads the next page. */
+  more?: MoreRead;
   /** The reader typed into the search: the instance is asked for the ones that match. */
   onSearch(text: string): void;
 }
@@ -58,6 +61,7 @@ export function AgentKnowledge({
             label={t("knowledge.agentChoose")}
             note={t("knowledge.agentNote")}
             onSearchChange={choice.onSearch}
+            more={choice.more && { loading: choice.more.loading, onLoad: choice.more.load }}
             options={choice.options.map((option) => ({
               value: option.name,
               label: option.title || option.name,

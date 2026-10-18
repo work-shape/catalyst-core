@@ -347,7 +347,7 @@ describe("adding files to a Knowledge Base", () => {
     await inDatabase(
       undefined,
       (sql) => sql`update platform_jobs set run_after = now()
-        where kind = 'data_store.upgrade_owned' and client_instance_id = ${clientInstanceId}
+        where kind = 'data_store.upgrade_owned_tick' and client_instance_id = ${clientInstanceId}
         and status = 'queued'`
     );
     const jobs = getTestJobs(instance.api);

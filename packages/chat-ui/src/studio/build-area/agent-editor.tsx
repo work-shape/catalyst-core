@@ -1,52 +1,31 @@
 import { Send, Star, Undo2 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type {
-  AdministeredCollaborationWorkspace,
-  AgentDraft,
-  ConfigAssetReferences
-} from "@work-shape/catalyst-api-client";
+import type { AgentDraft, ConfigAssetReferences } from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Button,
-  Checkbox,
-  Chip,
   ConfirmDialog,
   DropdownMenuItem,
   Field,
   FormNotice,
   Input,
-  Picker,
-  PickerButton,
-  RadioGroup,
-  Select,
-  SkillIcon,
   Switch,
   Textarea
 } from "@work-shape/catalyst-ui";
 import { actionLabel } from "../../admin/access/right-words";
 import { useTranslation } from "../../shared/i18n";
-import { modelDisplayLabel } from "../../shared/model-label";
-import { reasoningEffortLabel } from "../../shared/reasoning-effort-label";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
-import {
-  CheckboxGroup,
-  FieldRefusals,
-  InitialPromptsEditor,
-  LocalizedField
-} from "./asset-form-fields";
+import { FieldRefusals, InitialPromptsEditor, LocalizedField } from "./asset-form-fields";
 import {
   agentAvailabilityFormsEqual,
   agentAvailabilityToForm,
   agentConfigToForm,
   agentMissingTranslations,
-  agentModelReasoningEffort,
-  agentModelRows,
   countChangedFields,
   editedAgentConfig,
   selectAgentModelBinding,
   setAgentModelReasoningEffort,
   setAgentModelUserSelectable,
-  type AgentAvailabilityForm,
   type AgentFormState
 } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
@@ -56,7 +35,10 @@ import type { ConnectionToolChoice } from "./connection-tools";
 import { heldToolCount, toolPackages } from "./instance-tools";
 import { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 import { ToolPackagesSection } from "./tool-packages-section";
+import { AgentAvailabilityFields, type AgentAvailabilityChoice } from "./agent-availability-fields";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
+import { AgentModels, modelBindingLabel } from "./agent-models";
+import { AgentSkills, type SkillChoice } from "./agent-skills";
 import {
   AgentDraftBadge,
   AgentDraftNotice,
@@ -67,27 +49,6 @@ import {
 import type { AgentDraftSource } from "./agent-draft-source";
 import type { DraftDecision } from "./build-data";
 import { PlatformInstructions } from "./platform-instructions";
-import type { SkillFacts } from "./skill-facts";
-
-/**
- * Where an agent can be chosen. It is stored beside the agent's definition and saved with it
- * through the page's save bar, whichever agent fields the instance lets people change.
- */
-export interface AgentAvailabilityChoice {
-  saved: AgentAvailabilityForm | undefined;
-  workspaces: readonly AdministeredCollaborationWorkspace[];
-  workspacesError?: string;
-  /** Answers with what went wrong, if anything did. */
-  save(availability: AgentAvailabilityForm): Promise<string | undefined>;
-}
-
-/** The skills an agent can be given, as far as the instance was asked for them. */
-export interface SkillChoice {
-  /** The skills that match what the reader typed, a page of them. */
-  options: readonly ({ name: string; title: string } & SkillFacts)[];
-  /** The reader typed into the search: the instance is asked for the skills that match. */
-  onSearch(text: string): void;
-}
 
 export function AgentEditor({
   frame,
@@ -436,59 +397,12 @@ export function AgentEditor({
       refusalField: "skills",
       body: (
         <>
-          {form.skillNames.length === 0 ? (
-            <p className="text-body text-muted-foreground">{t("build.noSkillsChosen")}</p>
-          ) : (
-            <ul aria-label={t("configSkills")} className="flex flex-wrap gap-2">
-              {form.skillNames.map((name) => (
-                <li key={name}>
-                  <Chip
-                    leading={<SkillIcon icon={skillsByName.get(name)?.icon} size="sm" />}
-                    onRemove={
-                      canEdit("skillNames")
-                        ? () =>
-                            update({
-                              skillNames: form.skillNames.filter((entry) => entry !== name)
-                            })
-                        : undefined
-                    }
-                  >
-                    {skillsByName.get(name)?.title || name}
-                  </Chip>
-                </li>
-              ))}
-            </ul>
-          )}
-          {canEdit("skillNames") ? (
-            <div>
-              <Picker
-                multiple
-                search
-                wrapDescriptions
-                className="w-120"
-                label={t("build.chooseSkills")}
-                note={t("build.skillsNote")}
-                onSearchChange={skillChoice.onSearch}
-                // A skill without a summary shows its title alone. Its id is never shown and
-                // is still found by the search.
-                options={skillChoice.options.map((skill) => ({
-                  value: skill.name,
-                  label: skill.title || skill.name,
-                  description: skill.summary,
-                  keywords: skill.name,
-                  leading: <SkillIcon icon={skill.icon} />
-                }))}
-                value={form.skillNames}
-                onValueChange={(skillNames) => update({ skillNames })}
-              >
-                <PickerButton
-                  label={t("configSkills")}
-                  placeholder={t("build.chooseSkills")}
-                  value={undefined}
-                />
-              </Picker>
-            </div>
-          ) : null}
+          <AgentSkills
+            choice={skillChoice}
+            value={form.skillNames}
+            editable={canEdit("skillNames")}
+            onChange={(skillNames) => update({ skillNames })}
+          />
           {proposed.value("skillNames")}
           <FieldRefusals messages={refusalsOf(outcome, "skills")} />
         </>
@@ -767,200 +681,3 @@ export function AgentEditor({
 const NO_CONNECTION_TOOLS: ConnectionToolChoice = { read: { status: "unknown" } };
 /** The same for the actions of Apps. */
 const NO_APP_TOOLS: AppToolsRead = { status: "unknown" };
-
-/**
- * Where an agent can be chosen, as the fields of its section. The section's heading names it,
- * and the page's save bar saves it with the agent.
- */
-function AgentAvailabilityFields({
-  form,
-  locked,
-  disabled,
-  workspaces,
-  workspacesError,
-  refusals,
-  onChange
-}: {
-  form: AgentAvailabilityForm;
-  /** The default agent is offered everywhere, and stays so until another agent is the default. */
-  locked: boolean;
-  disabled: boolean;
-  workspaces: readonly AdministeredCollaborationWorkspace[];
-  workspacesError?: string;
-  refusals: readonly string[];
-  onChange(form: AgentAvailabilityForm): void;
-}) {
-  const { t } = useTranslation();
-  const fixed = locked || disabled;
-  const workspaceNames = new Map(workspaces.map((workspace) => [workspace.id, workspace.name]));
-  // Ids the list no longer returns stay visible, so saving never drops them unseen.
-  const workspaceIds = [
-    ...workspaces.map((workspace) => workspace.id),
-    ...form.collaborationWorkspaceIds.filter((id) => !workspaceNames.has(id))
-  ];
-  const nothingSelected =
-    form.mode === "selected" &&
-    !form.personalWorkspaces &&
-    form.collaborationWorkspaceIds.length === 0;
-  const update = (patch: Partial<AgentAvailabilityForm>) => onChange({ ...form, ...patch });
-
-  return (
-    <>
-      <RadioGroup
-        variant="plain"
-        label={t("configAvailability")}
-        labelHidden
-        hint={locked ? t("configAvailabilityDefaultLocked") : undefined}
-        disabled={fixed}
-        value={form.mode}
-        onValueChange={(mode) => update({ mode })}
-        options={[
-          {
-            value: "all",
-            label: t("configAvailabilityAll"),
-            description: t("configAvailabilityAllHint")
-          },
-          { value: "selected", label: t("configAvailabilitySelected") }
-        ]}
-      />
-
-      {form.mode === "selected" ? (
-        <>
-          <Checkbox
-            checked={form.personalWorkspaces}
-            disabled={fixed}
-            label={t("configAvailabilityPersonal")}
-            description={t("configAvailabilityPersonalHint")}
-            onCheckedChange={(personalWorkspaces) => update({ personalWorkspaces })}
-          />
-          <CheckboxGroup
-            label={t("collaborationWorkspaceSharedHeading")}
-            options={workspaceIds}
-            optionLabel={(id) => workspaceNames.get(id) ?? id}
-            selected={form.collaborationWorkspaceIds}
-            disabled={fixed}
-            emptyHint={workspacesError ?? t("configAvailabilityNoSharedWorkspaces")}
-            hint={nothingSelected ? t("configAvailabilityHiddenHint") : undefined}
-            onChange={(collaborationWorkspaceIds) => update({ collaborationWorkspaceIds })}
-          />
-        </>
-      ) : null}
-
-      <FieldRefusals messages={refusals} />
-    </>
-  );
-}
-
-/**
- * The agent's models: which one runs the agent, and which ones its users may pick instead.
- * Read-only, the list below the default holds only the models people may choose.
- */
-function AgentModels({
-  form,
-  modelBindings,
-  reasoningEfforts,
-  editable,
-  setByModelManagers,
-  onSelectDefault,
-  onSetUserSelectable,
-  onSetReasoningEffort
-}: {
-  form: AgentFormState;
-  modelBindings: readonly { id: string; model: string; label?: string }[];
-  reasoningEfforts: readonly string[];
-  editable: boolean;
-  /** The reader may change the agent but not its models: the default model says who may. */
-  setByModelManagers: boolean;
-  onSelectDefault(modelBindingId: string): void;
-  onSetUserSelectable(modelBindingId: string, userSelectable: boolean): void;
-  onSetReasoningEffort(modelBindingId: string, reasoningEffort: string): void;
-}) {
-  const { t } = useTranslation();
-  const rows = agentModelRows(form, modelBindings).map((row) => ({
-    ...row,
-    label: modelBindingLabel(
-      modelBindings.find((binding) => binding.id === row.bindingId) ?? {
-        id: row.bindingId,
-        model: row.model
-      },
-      modelBindings
-    )
-  }));
-  const others = rows.filter((row) => !row.isDefault && (editable || row.userSelectable));
-  const effortSelect = (bindingId: string, label: string) => (
-    <Select
-      size="sm"
-      aria-label={`${label}: ${t("configReasoningEffort")}`}
-      value={agentModelReasoningEffort(form, bindingId)}
-      disabled={!editable}
-      onChange={(event) => onSetReasoningEffort(bindingId, event.target.value)}
-    >
-      <option value="">{t("configModelDefault")}</option>
-      {reasoningEfforts.map((effort) => (
-        <option key={effort} value={effort}>
-          {reasoningEffortLabel(effort, t)}
-        </option>
-      ))}
-    </Select>
-  );
-
-  return (
-    <>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label={t("build.defaultModel")}
-          hint={setByModelManagers ? t("build.modelSetByModelManagers") : undefined}
-        >
-          <Select
-            value={form.modelBindingId}
-            disabled={!editable}
-            onChange={(event) => onSelectDefault(event.target.value)}
-          >
-            <option value="">{t("configInstanceDefault")}</option>
-            {rows.map((row) => (
-              <option key={row.bindingId} value={row.bindingId}>
-                {row.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label={t("configReasoningEffort")} hint={t("build.reasoningEffortHint")}>
-          {effortSelect(form.modelBindingId, t("build.defaultModel"))}
-        </Field>
-      </div>
-      {others.length > 0 ? (
-        <fieldset className="grid min-w-0 gap-2">
-          <legend className="pb-2 text-label">{t("build.selectableModels")}</legend>
-          {others.map((row) => (
-            <div
-              key={row.bindingId}
-              data-model-binding={row.bindingId}
-              className="flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-1"
-            >
-              <Checkbox
-                checked={row.userSelectable}
-                disabled={!editable}
-                label={row.label}
-                onCheckedChange={(checked) => onSetUserSelectable(row.bindingId, checked)}
-              />
-              {row.userSelectable ? (
-                <div className="w-40 shrink-0">{effortSelect(row.bindingId, row.label)}</div>
-              ) : null}
-            </div>
-          ))}
-        </fieldset>
-      ) : null}
-    </>
-  );
-}
-
-function modelBindingLabel(
-  binding: { id: string; model: string; label?: string },
-  bindings: readonly { id: string; model: string }[]
-): string {
-  const duplicateModel = bindings.some(
-    (candidate) => candidate.id !== binding.id && candidate.model === binding.model
-  );
-  const label = modelDisplayLabel(binding);
-  return duplicateModel ? `${label} (${binding.id})` : label;
-}

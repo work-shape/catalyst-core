@@ -264,12 +264,17 @@ describe("the names of a Workflow", () => {
     expect(WORKFLOW_RUN_JOB_KINDS).toEqual({
       executeStep: "workflow_run.execute_step",
       fireSchedule: "workflow_run.fire_schedule",
+      repairSchedules: "workflow_run.repair_schedules",
       pruneData: "workflow_run.prune_data",
       deleteDatasets: "workflow_run.delete_datasets"
     });
+    expect(platformModules.find((module) => module.name === "workflows")?.jobKinds).toEqual(
+      expect.arrayContaining(Object.values(WORKFLOW_RUN_JOB_KINDS))
+    );
     expectTypeOf<WorkflowRunJobKind>().toEqualTypeOf<
       | "workflow_run.execute_step"
       | "workflow_run.fire_schedule"
+      | "workflow_run.repair_schedules"
       | "workflow_run.prune_data"
       | "workflow_run.delete_datasets"
     >();
@@ -477,6 +482,10 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       migrate: "data_store.migrate",
       measureSize: "data_store.measure_size",
       upgradeOwned: "data_store.upgrade_owned",
+      measureSizeTick: "data_store.measure_size_tick",
+      upgradeOwnedTick: "data_store.upgrade_owned_tick",
+      measureSizePage: "data_store.measure_size_page",
+      upgradeOwnedPage: "data_store.upgrade_owned_page",
       drop: "data_store.drop"
     });
     expectTypeOf<DataStoreJobKind>().toEqualTypeOf<
@@ -484,6 +493,10 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       | "data_store.migrate"
       | "data_store.measure_size"
       | "data_store.upgrade_owned"
+      | "data_store.measure_size_tick"
+      | "data_store.upgrade_owned_tick"
+      | "data_store.measure_size_page"
+      | "data_store.upgrade_owned_page"
       | "data_store.drop"
     >();
   });
@@ -656,6 +669,7 @@ describe("the modules workflows and dataStores", () => {
         WORKFLOW_RUN_JOB_KINDS.executeStep,
         "workflow_run.deadline",
         WORKFLOW_RUN_JOB_KINDS.fireSchedule,
+        WORKFLOW_RUN_JOB_KINDS.repairSchedules,
         "workflow_run.run_code",
         "workflow_run.sweep_code",
         WORKFLOW_RUN_JOB_KINDS.pruneData,

@@ -18,6 +18,7 @@ import {
 import { cn } from "../cn";
 import { useFieldControl } from "../forms/field-control";
 import { fieldFrameClassName, fieldHeights, type FieldSize } from "../forms/input";
+import { Spinner } from "../feedback/spinner";
 import { useScrollEdgeFade } from "../scroll-edge-fade";
 import { useOverlayContainer, useUiLabels } from "../ui-root";
 import { menuGroupHeadingClassName, menuRowClassName } from "./dropdown-menu";
@@ -52,6 +53,13 @@ export interface PickerCreateRow {
   onSelect(search: string): void;
 }
 
+export interface PickerMoreRow {
+  /** The next page is on its way: the row shows that it waits and cannot be chosen again. */
+  loading: boolean;
+  /** Asks for the next page of options. The picker stays open and keeps what is typed. */
+  onLoad(): void;
+}
+
 interface PickerBaseProps {
   /** The one element that opens the picker, usually a Button. */
   children: ReactNode;
@@ -80,6 +88,11 @@ interface PickerBaseProps {
   openOnHover?: boolean;
   /** A last row, pinned under the list, that creates a new object. */
   create?: PickerCreateRow;
+  /**
+   * A row at the end of the list, for a caller that hands the options over a page at a time:
+   * choosing it asks for the next page. Left out once the last page is there.
+   */
+  more?: PickerMoreRow;
   /**
    * One sentence pinned under the list that says what the listed objects are, such as that a
    * skill adds no tools. It is read out with the picker.
@@ -111,6 +124,7 @@ export type PickerProps = PickerSingleProps | PickerMultipleProps;
 
 // cmdk needs a value per row; no option can carry this one.
 const CREATE_ROW_VALUE = "\u0000create";
+const MORE_ROW_VALUE = "\u0000more";
 
 /** A pause this long between two keys starts a new word for the type-ahead. */
 const TYPE_AHEAD_RESET_MS = 700;
@@ -144,6 +158,7 @@ export function Picker(props: PickerProps) {
     wrapDescriptions = false,
     openOnHover = false,
     create,
+    more,
     note,
     open,
     defaultOpen = false,
@@ -435,6 +450,18 @@ export function Picker(props: PickerProps) {
                       {labels.noResults}
                     </p>
                   ) : null}
+                  {more === undefined ? null : (
+                    <Command.Item
+                      value={MORE_ROW_VALUE}
+                      disabled={more.loading}
+                      className={cn(pickerRowClassName, "text-muted-foreground")}
+                      onSelect={more.onLoad}
+                      data-picker-more=""
+                    >
+                      <span className="min-w-0 flex-1 truncate">{labels.showMore}</span>
+                      {more.loading ? <Spinner size="sm" /> : null}
+                    </Command.Item>
+                  )}
                 </div>
                 {note === undefined ? null : (
                   <p

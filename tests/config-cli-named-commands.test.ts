@@ -497,7 +497,35 @@ describe("named CLI operation faces", () => {
     });
     expect(result.code, result.err).toBe(0);
     expect(JSON.parse(result.out)).toEqual({ apps: [], truncated: false });
-    expect(query).toBe("");
+    expect(query).toBe(`?limit=${MAX_LIST_LIMIT}`);
+  });
+
+  it("app actions reaches all 201 Apps across cursor pages", async () => {
+    const apps = Array.from({ length: 201 }, (_, index) => ({
+      name: `app-${index}`,
+      title: `App ${index}`,
+      scope: { kind: "workspace", workspaceId: "workspace-1" },
+      view: "published",
+      revision: 1,
+      actions: []
+    }));
+    const cursors: (string | null)[] = [];
+    const result = await run(["app", "actions", "--json"], {
+      fetchImpl: apiFetch((request) => {
+        const query = new URL(request.url).searchParams;
+        expect(query.get("limit")).toBe(String(MAX_LIST_LIMIT));
+        cursors.push(query.get("cursor"));
+        const first = query.get("cursor") === null;
+        return Response.json({
+          apps: first ? apps.slice(0, 200) : apps.slice(200),
+          truncated: first,
+          ...(first ? { nextCursor: "last-app" } : {})
+        });
+      })
+    });
+    expect(result.code, result.err).toBe(0);
+    expect(cursors).toEqual([null, "last-app"]);
+    expect(JSON.parse(result.out)).toEqual({ apps, truncated: false });
   });
 
   it.each(cases.filter((entry) => entry.items !== undefined))(

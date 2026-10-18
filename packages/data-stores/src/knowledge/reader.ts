@@ -3,7 +3,7 @@ import type {
   DataStoreKnowledgeTarget,
   DataStoreRecord
 } from "@work-shape/catalyst-core";
-import { takeGrantTurn } from "../provisioning";
+import { takeGrantTurn } from "../grant-turn";
 import { asStoreRole, writeReaderRole, type StoreRoleRuntime } from "../roles";
 import type { DataStoreRuntime } from "../runtime";
 import { quoteIdentifier } from "../server";

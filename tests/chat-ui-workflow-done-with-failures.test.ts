@@ -149,7 +149,6 @@ function read(
     stepsFailed: false,
     stepRuns: stepRuns?.map(toWorkflowStepRun),
     entryLoops: entryLoops.map(toWorkflowStepRun),
-    stepRunsCut: false,
     retry: noop
   };
 }
@@ -469,7 +468,11 @@ describe("the frame read of a run over the instance", () => {
     const { client } = recordedApiClient(({ operation }) =>
       operation === "workflows.list_step_runs" ? { items: wire } : undefined
     );
-    const frame = createInstanceSource(client, "k").runs?.listFrameStepRuns("wr_1", signal);
+    const frame = createInstanceSource(client, "k").runs?.listFrameStepRuns(
+      "wr_1",
+      undefined,
+      signal
+    );
     if (frame === undefined) throw new Error("The source has no runs.");
     return frame;
   }
@@ -489,8 +492,7 @@ describe("the frame read of a run over the instance", () => {
       {
         ...read(run({ failedDescendantCount: 0 }), []),
         stepRuns: frame.stepRuns,
-        entryLoops: frame.entryLoops,
-        stepRunsCut: !frame.complete
+        entryLoops: frame.entryLoops
       },
       workflowWith([innerLoop([send])])
     );

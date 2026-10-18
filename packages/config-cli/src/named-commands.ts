@@ -20,6 +20,7 @@ interface NamedCommand {
   usage: string;
   param?: string;
   optionalName?: boolean;
+  listField?: "apps";
   from?: boolean;
 }
 
@@ -74,7 +75,8 @@ const commands: Readonly<Record<string, NamedCommand>> = {
   "app actions": {
     operation: apiOperations["apps.actions.list"],
     usage: "app actions [<name>]",
-    optionalName: true
+    optionalName: true,
+    listField: "apps"
   },
   "keys list": { operation: apiOperations["me.api_keys.list"], usage: "keys list" },
   "instance workspaces": {
@@ -151,20 +153,26 @@ export async function runNamedCommand(
     const query: Record<string, string> =
       command.optionalName && name !== undefined ? { app: name } : {};
     let result: unknown;
-    if (command.operation.response.kind === "page") {
+    const listField =
+      command.operation.response.kind === "page"
+        ? "items"
+        : name === undefined
+          ? command.listField
+          : undefined;
+    if (listField !== undefined) {
       const items: unknown[] = [];
       let cursor: string | undefined;
       do {
         const page = await call(api, command.operation, {
           params,
-          query: { limit: MAX_LIST_LIMIT, ...(cursor === undefined ? {} : { cursor }) }
+          query: { ...query, limit: MAX_LIST_LIMIT, ...(cursor === undefined ? {} : { cursor }) }
         });
-        if (!isRecord(page) || !Array.isArray(page.items))
+        if (!isRecord(page) || !Array.isArray(page[listField]))
           throw new Error("Invalid list response.");
-        items.push(...page.items);
+        items.push(...page[listField]);
         cursor = typeof page.nextCursor === "string" ? page.nextCursor : undefined;
       } while (cursor !== undefined);
-      result = items;
+      result = listField === "apps" ? { apps: items, truncated: false } : items;
     } else {
       result = await call(api, command.operation, { params, query, body });
     }

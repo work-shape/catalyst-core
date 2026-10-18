@@ -157,10 +157,12 @@ export interface WorkflowEngine {
     page?: StorePage;
   }): Promise<WorkflowStepRunView[]>;
   /** The Workflows with a published definition, each with its latest run where it has one. */
-  listWorkflows(): Promise<(WorkflowDefinitionSummary & { lastRun?: WorkflowLastRun })[]>;
+  listWorkflows(
+    page?: StorePage
+  ): Promise<(WorkflowDefinitionSummary & { lastRun?: WorkflowLastRun })[]>;
   /**
-   * Makes sure every published Workflow with a `schedule` trigger has the job of its next due
-   * time. A process calls it when it starts, and whoever publishes a definition calls it then.
+   * Repairs the first page at startup and persists the remaining pages as repair jobs.
+   * Answers the due times queued in the first page; later pages run on the shared executor.
    */
   planSchedules(): Promise<{ workflow: string; dueAt: string }[]>;
   /**
@@ -688,6 +690,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       stepHandler,
       deadlineHandler,
       schedule.handler,
+      schedule.repairHandler,
       pruning.handler
     ],
     jobSchedules: [pruning.schedule],

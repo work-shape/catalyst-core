@@ -439,7 +439,7 @@
     "/api/v1/app-actions": {
       "get": {
         "operationId": "apps.actions.list",
-        "summary": "List the named actions of one App or of every published App the caller reads or uses, with what a call of each would come to for the caller",
+        "summary": "List the actions of one App, or a cursor page of published Apps the caller reads or uses, with call previews. Follow nextCursor until absent to reach every App.",
         "tags": [
           "Apps"
         ],
@@ -456,6 +456,26 @@
           }
         ],
         "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
           {
             "name": "app",
             "in": "query",
@@ -21541,7 +21561,7 @@
     "/api/v1/workflows": {
       "get": {
         "operationId": "workflows.list",
-        "summary": "List the published Workflows the caller may read or use, each with its latest run and whether it can be started",
+        "summary": "List a cursor page of published Workflows the caller may read or use, with latest runs and start readiness. Follow nextCursor until absent to reach every Workflow.",
         "tags": [
           "Workflows"
         ],
@@ -21562,7 +21582,28 @@
             ]
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "The result",
@@ -21691,6 +21732,9 @@
                           "actions"
                         ]
                       }
+                    },
+                    "nextCursor": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -27563,6 +27607,9 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "nextCursor": {
+            "type": "string"
           }
         },
         "required": [

@@ -317,13 +317,16 @@ export const workflowOperations = {
     method: "GET",
     path: "/api/v1/workflows",
     summary:
-      "List the published Workflows the caller may read or use, each with its latest run and whether it can be started",
+      "List a cursor page of published Workflows the caller may read or use, with latest runs and start readiness. Follow nextCursor until absent to reach every Workflow.",
     tag: "Workflows",
     auth: "principal",
     scope: "config_assets:read",
     requires: [],
     effect: "reading",
-    response: json(z.object({ items: z.array(workflowSummarySchema) })),
+    query: listQuerySchema,
+    response: json(
+      z.object({ items: z.array(workflowSummarySchema), nextCursor: z.string().optional() })
+    ),
     errors: [],
     rateClass: "read"
   }),

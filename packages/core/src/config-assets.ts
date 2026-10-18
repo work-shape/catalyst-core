@@ -460,6 +460,8 @@ export interface ConfigAssetStore {
     kind: ConfigAssetKind;
     /** Only the assets of these names. */
     names?: readonly string[];
+    /** Exclusive name cursor in the same byte order as the list. */
+    afterName?: string;
     limit: number;
   }): Promise<ConfigAssetRecord[]>;
   getConfigAsset(input: {
