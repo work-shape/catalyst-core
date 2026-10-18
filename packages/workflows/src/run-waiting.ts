@@ -1,4 +1,9 @@
-import type { ClientInstanceId, PlatformStores, WorkflowRun } from "@work-shape/catalyst-core";
+import type {
+  ClientInstanceId,
+  PlatformStores,
+  WorkflowRun,
+  WorkflowRunId
+} from "@work-shape/catalyst-core";
 import { workflowDeadlineJobKind, workflowDeadlineKey } from "./run-deadline";
 
 // Time a run spends waiting counts toward no limit (EW-LIM). A run waits while every open step
@@ -21,9 +26,12 @@ export function createRunWaiting(options: { clientInstanceId: ClientInstanceId; 
   const { clientInstanceId, now } = options;
 
   /** Locks a run behind its root and its parent. Nothing where the run does not exist. */
-  async function lockChain(tx: PlatformStores, runId: string): Promise<LockedRunChain | undefined> {
-    // The lineage of a run never changes, so it is read before the locks.
-    const known = await tx.workflowRuns.readRun({ clientInstanceId, id: runId });
+  async function lockChain(
+    tx: PlatformStores,
+    runId: WorkflowRunId
+  ): Promise<LockedRunChain | undefined> {
+    // The store takes the shared root, parent, child lock order, including Lauf roots.
+    const known = await tx.workflowRuns.lockRun({ clientInstanceId, id: runId });
     if (!known) return undefined;
     const above = [
       ...new Set(
@@ -34,13 +42,12 @@ export function createRunWaiting(options: { clientInstanceId: ClientInstanceId; 
     ];
     const ancestors: WorkflowRun[] = [];
     for (const id of above) {
-      const locked = await tx.workflowRuns.lockRun({ clientInstanceId, id });
+      const locked = await tx.workflowRuns.readRun({ clientInstanceId, id });
       // The Lauf root serializes cancellation and successor claims; it is historical,
       // not a waiting parent whose deadline should move with this run.
       if (locked && (id === known.rootRunId || id === known.parentRunId)) ancestors.unshift(locked);
     }
-    const run = await tx.workflowRuns.lockRun({ clientInstanceId, id: known.id });
-    return run ? { run, ancestors } : undefined;
+    return { run: known, ancestors };
   }
 
   /**
@@ -68,9 +75,9 @@ export function createRunWaiting(options: { clientInstanceId: ClientInstanceId; 
       const moved = await tx.workflowRuns.endRunWait({ clientInstanceId, id: run.id, at });
       if (!moved) break;
       if (moved.id === chain.run.id) current = moved;
-      // A deadline job that is still queued finds the deadline moved and waits for it; one
-      // that ended while the run waited is queued again here.
-      await tx.jobs.enqueue(
+      // Retain a wake even while the old deadline attempt runs. A queued job that
+      // comes early reads the new deadline and defers to it.
+      await tx.jobs.runAgainAfter(
         workflowDeadlineJobKind,
         { runId: moved.id },
         {

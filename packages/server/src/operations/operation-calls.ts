@@ -94,6 +94,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     ...(options.configAssets ? { kinds: options.configAssets.kinds } : {}),
     store: options.stores.configAssets,
     files: options.stores.pages,
+    workspaces: options.stores.workspaces,
     narrator: publishNarrator,
     defaultLocale: options.config.localization.defaultLocale,
     effectOf: async (operation) => (await deps.registry.resolve(operation))?.effect

@@ -73,6 +73,7 @@ const OPTIONS = {
   field: { type: "string" },
   asset: { type: "string" },
   confirm: { type: "string" },
+  audience: { type: "string" },
   yes: { type: "boolean", default: false },
   withdraw: { type: "string" },
   published: { type: "boolean", default: false },
@@ -699,7 +700,7 @@ async function guardrailDryRunBeforePublish(
 const APP_FLAGS = {
   pull: ["revision", "published"],
   push: [],
-  publish: ["revision", "yes"],
+  publish: ["revision", "yes", "audience"],
   status: []
 } as const satisfies Record<keyof typeof APP_VERBS, readonly OptionName[]>;
 

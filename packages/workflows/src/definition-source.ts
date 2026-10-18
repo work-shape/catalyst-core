@@ -40,6 +40,9 @@ export interface WorkflowDefinitionSource {
     /** Database-backed sources use these readers while a publish holds its transaction. */
     configAssets?: Pick<ConfigAssetStore, "getConfigAsset">
   ): Promise<WorkflowDefinitionRevision | undefined>;
+  /** The published cron texts even when the rest of the definition cannot be run.
+   * Database-backed sources keep refused definitions scheduled until repaired or withdrawn. */
+  readScheduleCrons?(id: string): Promise<string[]>;
   /** The Workflows that have a published definition, by id. */
   list(): Promise<WorkflowDefinitionSummary[]>;
 }

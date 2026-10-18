@@ -142,7 +142,7 @@ async function mountRunPage({
   document.body.append(container);
   const root = createRoot(container);
   const host: WorkflowsHost = {
-    rights: { read: true, write, publish: false },
+    rights: { instance: { read: true, write, publish: false, delete: false } },
     viewerId: "user_1",
     workspace: { id: "cw_1", name: "Office" },
     showRoute: () => undefined,

@@ -85,6 +85,8 @@ describe("Workflow run key migrations (EW-13k)", () => {
     createdDatabases.push(url);
     const before = migrationsUntil({ name: "workflow_continue_as_new", including: false });
     const expanded = migrationsUntil({ name: "workflow_continuation_validate", including: true });
+    // This proof owns the continuation indexes, not migrations added by later features.
+    const indexed = migrationsUntil({ name: "workflow_continuation_indexes", including: true });
     const sql = postgres(url, { max: 1, onnotice() {} });
     const writerSql = postgres(url, { max: 1, onnotice() {} });
     const blocker = postgres(url, { max: 1, onnotice() {} });
@@ -158,7 +160,10 @@ describe("Workflow run key migrations (EW-13k)", () => {
       // Cancel only that build's PID in this test-owned database, after its invalid index exists.
       await blocker`begin`;
       await blocker`update workflow_runs set principal_label = 'held writer' where id = 'volume_1'`;
-      migration = migrateDatabase({ databaseUrl: url }).then(
+      migration = migrateDatabase({
+        databaseUrl: url,
+        migrationsDirectory: indexed.directory
+      }).then(
         (applied) => ({ applied, error: undefined }),
         (error: unknown) => ({ applied: undefined, error })
       );
@@ -198,7 +203,9 @@ describe("Workflow run key migrations (EW-13k)", () => {
       const writesBeforeRecovery = writes;
       await blocker`rollback`;
       const expectedIndexMigration = await entryNamed("workflow_continuation_indexes");
-      expect(await migrateDatabase({ databaseUrl: url })).toEqual([expectedIndexMigration.tag]);
+      expect(
+        await migrateDatabase({ databaseUrl: url, migrationsDirectory: indexed.directory })
+      ).toEqual([expectedIndexMigration.tag]);
       await waitUntil(
         () => writes > writesBeforeRecovery || writerError !== undefined,
         "the writer spans recovery"
@@ -222,7 +229,9 @@ describe("Workflow run key migrations (EW-13k)", () => {
       const [duplicates] = await sql<{ count: number }[]>`
         select count(*)::int as count from workflow_runs where status = 'running' and run_key = 'held-key'`;
       expect(duplicates?.count).toBe(1);
-      expect(await migrateDatabase({ databaseUrl: url })).toEqual([]);
+      expect(
+        await migrateDatabase({ databaseUrl: url, migrationsDirectory: indexed.directory })
+      ).toEqual([]);
       console.info(
         `EW-CAN migration proof: 300,000 seeded runs; ${writes} fresh starts; ${rejectedKeys} held-key and ${rejectedParents} parent-step starts rejected; ${acceptedDuplicates} duplicates admitted; cancelled build recovered, both indexes valid.`
       );
@@ -234,6 +243,7 @@ describe("Workflow run key migrations (EW-13k)", () => {
       await Promise.all([writerSql.end(), blocker.end(), sql.end()]);
       before.remove();
       expanded.remove();
+      indexed.remove();
     }
   });
 });

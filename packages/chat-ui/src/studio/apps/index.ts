@@ -18,7 +18,20 @@ export {
   type AppActionsRead,
   type AppPublishDataRead
 } from "./app-data";
-export { AppEdit, AppEditFrame, appDraftIsAhead, PublishDialog } from "./app-edit";
+export {
+  AppEdit,
+  AppEditFrame,
+  appDraftIsAhead,
+  PublishDialog,
+  SharePublishDialog
+} from "./app-edit";
+export { AppSavedLine } from "./app-saved-line";
+export { AppAudienceChange, appPublishMaySend } from "./app-publish-question";
+export {
+  appPublishCall,
+  appPublishConfirmationReady,
+  AppPublishConfirmationView
+} from "./app-publish-confirmation";
 export { AppDeleteDialog, AppDetailsDialog, appLink } from "./app-header";
 export {
   appManifestSummary,
@@ -36,7 +49,7 @@ export {
 } from "./app-model";
 export { AppPreviewNotice, appPreviewState } from "./app-preview";
 export { AppPublishDataView, AppStoredDataFact } from "./app-publish-data";
-export { AppToolsGroup, appToolsView, type AppToolsRead } from "./app-tools-group";
+export { AppToolsGroup, appsOfOwner, appToolsView, type AppToolsRead } from "./app-tools-group";
 export { AppView, AppViewFrame } from "./app-view";
 export { AppsHostProvider, type AppsHost } from "./apps-host";
 export { appRowRoute, AppsPage, AppsPageView } from "./apps-page";

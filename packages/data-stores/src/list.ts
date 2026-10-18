@@ -1,3 +1,4 @@
+import { knowledgeStoreNeedsMigration } from "./knowledge/builtin/store-schema";
 import {
   DATA_STORE_ACTIONS,
   KNOWLEDGE_BASE_ACTIONS,
@@ -35,7 +36,11 @@ function measured(record: DataStoreRecord) {
   return {
     id: record.id,
     name: record.name,
-    status: record.status === "ready" ? ("ready" as const) : ("provisioning" as const),
+    status:
+      record.status === "ready" &&
+      (!record.ownerKnowledgeBaseId || !knowledgeStoreNeedsMigration(record))
+        ? ("ready" as const)
+        : ("provisioning" as const),
     level: record.level,
     ...(record.sizeBytes === undefined ? {} : { sizeBytes: record.sizeBytes }),
     sizeLimitBytes: record.sizeLimitBytes,

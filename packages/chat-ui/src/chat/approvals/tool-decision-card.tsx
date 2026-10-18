@@ -14,6 +14,12 @@ import {
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import {
+  appPublishCall,
+  useAppPublishConfirmation,
+  type AppPublishCall,
+  type AppPublishConfirmationAsk
+} from "../../studio/apps/app-publish-confirmation";
 import { workspaceRoutePath } from "../../shared/routes";
 import { useApprovalRevisionHost } from "./approval-revision-host";
 import { ApprovalRequestCard } from "./approval-request-card";
@@ -91,14 +97,32 @@ function ToolConfirmation({
       />
     );
   }
-  return (
-    <ToolDecisionCardView
+  const shown = run.isPending ? { ...answer, pending: true } : answer;
+  // An agent's publish of an App asks "For whom?" first (SHARE-1).
+  const appCall = appPublishCall(decision);
+  return appCall ? (
+    <AppPublishDecisionCard
+      call={appCall}
       decision={decision}
       title={title}
       toolName={toolName}
-      answer={run.isPending ? { ...answer, pending: true } : answer}
+      answer={shown}
     />
+  ) : (
+    <ToolDecisionCardView decision={decision} title={title} toolName={toolName} answer={shown} />
   );
+}
+
+/** The confirmation of an agent's App publish: the person's "For whom?" is what Allow sends. */
+function AppPublishDecisionCard({
+  call,
+  ...props
+}: Parameters<typeof ToolDecisionCardView>[0] & { call: AppPublishCall }) {
+  const ask = useAppPublishConfirmation(
+    call,
+    props.answer.pending || props.answer.decided !== undefined
+  );
+  return <ToolDecisionCardView {...props} ask={ask} />;
 }
 
 /**
@@ -169,12 +193,15 @@ export function ToolDecisionCardView({
   decision,
   title,
   toolName,
-  answer
+  answer,
+  ask
 }: {
   decision: ToolDecision;
   title: string;
   toolName: string;
   answer: ToolDecisionAnswer;
+  /** A question the call asks before Allow, as "For whom?" of an App publish. */
+  ask?: AppPublishConfirmationAsk;
 }) {
   const { locale, t } = useTranslation();
   const [reasonOpen, setReasonOpen] = useState(false);
@@ -182,7 +209,17 @@ export function ToolDecisionCardView({
   // The answer shows until the run records it, which takes the card away in every tab.
   const outcome = takenOutcome(answer.decided);
   const outcomeReason = answer.decided?.reason;
-  const rows = toolDecisionInputRows(decision.inputPreview);
+  // Where the card asks "For whom?", the person's answer stands for the agent's suggestion.
+  const rows = toolDecisionInputRows(decision.inputPreview).filter(
+    (row) => ask === undefined || row.key !== "audience"
+  );
+
+  const inputs = (
+    <CallInputs
+      call={{ inputs: rows, inputFieldCount: rows.length, inputRemoved: false }}
+      hiddenFields={0}
+    />
+  );
 
   function deny(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -220,13 +257,14 @@ export function ToolDecisionCardView({
           ) : null}
         </Banner>
       ) : null}
-      <CallInputs
-        call={{ inputs: rows, inputFieldCount: rows.length, inputRemoved: false }}
-        hiddenFields={0}
-      />
+      {ask && !outcome ? ask.node : null}
+      {/* A call that asks its own question, as an App publish asks "For whom?", says in that
+          question what it does: its raw inputs are technical details then. */}
+      {ask ? null : inputs}
       <Disclosure data-testid="tool-decision-details">
         <DisclosureTrigger>{t("operations.callDetails")}</DisclosureTrigger>
         <DisclosureContent>
+          {ask ? <div className="pt-1">{inputs}</div> : null}
           <KeyValueList className="pt-1">
             <KeyValue label={t("operations.operation")} data-field="operation">
               <span className="font-mono text-code wrap-anywhere">{decision.operationId}</span>
@@ -255,8 +293,13 @@ export function ToolDecisionCardView({
             <Button
               type="button"
               size="sm"
-              disabled={answer.pending}
-              onClick={() => answer.decide({ decision: "confirm" })}
+              disabled={answer.pending || (ask !== undefined && !ask.ready)}
+              onClick={() =>
+                answer.decide({
+                  decision: "confirm",
+                  ...(ask?.audience === undefined ? {} : { audience: ask.audience })
+                })
+              }
             >
               {t("toolDecisionAllow")}
             </Button>

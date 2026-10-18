@@ -26,6 +26,7 @@ import {
 } from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "../types";
 import { listedWorkflowActions, workflowOf } from "../workflows/workflow-listing";
+import { accessResource, readsAssetDraft } from "../assets/asset-access";
 
 // Where a caller is: the instance, its release, the asset kinds and what the caller may do with
 // them. `platform.context.get` answers it, and so does the agent's tool that projects it.
@@ -181,8 +182,8 @@ function heldKeyActions(
 /**
  * The section rows of the sidebar that belong to no workspace and are there for this caller.
  * The Workflows row stands for whoever may build a Workflow, so the first one has a place to
- * go, and otherwise only while `workflows.list` names one to this caller: the list's own
- * check is asked of each published Workflow until one passes.
+ * go, and otherwise while either the engine lists a published Workflow or the asset list
+ * shows a draft to its publisher. Both lists' own checks are asked until one passes.
  */
 async function visibleSections(
   options: ContextOptions,
@@ -198,15 +199,23 @@ async function visibleSections(
   if (writes) {
     return ["workflows"];
   }
+  const kind = options.configAssets.kinds.get(WORKFLOW_ASSET_KIND);
   const listed = await options.configAssets.store.listConfigAssetPage({
     clientInstanceId: options.clientInstanceId,
     kind: WORKFLOW_ASSET_KIND,
     scope: INSTANCE_ASSET_SCOPE,
     limit: 1,
     readable: (asset) =>
-      asset.published === true &&
-      listedWorkflowActions(caller.access, caller.actor, workflowOf(asset.name, asset.id)).length >
-        0
+      (kind !== undefined &&
+        hasAuthScope(caller.actor, SCOPE_OF_VERB.read) &&
+        readsAssetDraft(
+          kind,
+          caller.access,
+          accessResource(asset.kind, asset.name, asset.scope, asset.id)
+        )) ||
+      (asset.published === true &&
+        listedWorkflowActions(caller.access, caller.actor, workflowOf(asset.name, asset.id))
+          .length > 0)
   });
   return listed.length > 0 ? ["workflows"] : [];
 }

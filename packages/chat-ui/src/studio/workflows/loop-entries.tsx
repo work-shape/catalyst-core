@@ -4,6 +4,7 @@ import {
   Button,
   List,
   ListRow,
+  LoadError,
   SegmentedControl,
   SegmentedControlItem,
   SkeletonList,
@@ -19,7 +20,7 @@ import type {
   WorkflowStepTarget,
   WorkflowStepView
 } from "./workflow-views";
-import { LoadError, RunStateBadge } from "./workflows-frame";
+import { RunStateBadge } from "./workflows-frame";
 
 type EntryFilter = "failed" | "running" | "all";
 

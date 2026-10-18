@@ -1,3 +1,4 @@
+import { lockWorkflowRun } from "./postgres-workflow-run-lock-order";
 import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   AppError,
@@ -49,16 +50,10 @@ export function createPostgresWorkflowRunDatasetsStore(
     async create(input) {
       return db.transaction(async (tx) => {
         // All writers and endings take the run, then step, then dataset, then byte counters.
-        const [run] = await tx
-          .select()
-          .from(workflowRuns)
-          .where(
-            and(
-              eq(workflowRuns.clientInstanceId, input.clientInstanceId),
-              eq(workflowRuns.id, input.runId)
-            )
-          )
-          .for("update");
+        const run = await lockWorkflowRun(tx, {
+          clientInstanceId: input.clientInstanceId,
+          id: input.runId
+        });
         const [step] = await tx
           .select()
           .from(workflowStepRuns)
@@ -165,16 +160,10 @@ export function createPostgresWorkflowRunDatasetsStore(
       await db.transaction(async (tx) => {
         const found = await createPostgresWorkflowRunDatasetsStore(tx).get(input);
         if (!found) throw expired();
-        const [run] = await tx
-          .select({ status: workflowRuns.status })
-          .from(workflowRuns)
-          .where(
-            and(
-              eq(workflowRuns.clientInstanceId, input.clientInstanceId),
-              eq(workflowRuns.id, found.runId)
-            )
-          )
-          .for("update");
+        const run = await lockWorkflowRun(tx, {
+          clientInstanceId: input.clientInstanceId,
+          id: found.runId
+        });
         await tx
           .select({ id: workflowStepRuns.id })
           .from(workflowStepRuns)

@@ -390,8 +390,9 @@ describe("the draft of an App (layout 3)", () => {
     expect(appDraftIsAhead(1, undefined)).toBe(true);
     expect(frame(ALL, { draftRevision: 2, publishedRevision: 2 })).not.toContain("Discard");
     expect(frame(ALL, { draftRevision: 1 })).not.toContain("Discard");
-    // A draft that is what is published has nothing to publish.
-    expect(publishButton(frame(ALL, { draftRevision: 2, publishedRevision: 2 }))).toContain(
+    // A draft that is what is published may still be published for another audience
+    // (SHARE-1): the dialog holds Publish until the choice differs from the live one.
+    expect(publishButton(frame(ALL, { draftRevision: 2, publishedRevision: 2 }))).not.toContain(
       'disabled=""'
     );
   });

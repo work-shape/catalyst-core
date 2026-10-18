@@ -46,6 +46,7 @@ async function publishAsset(
   const published = await requestWithOrigin(page, "post", `${address}/publish`, {
     data: {
       revision,
+      ...(kind === "app" ? { audience: "workspace" } : {}),
       ...("workspaceId" in body ? { workspaceId: body.workspaceId } : {})
     },
     timeout: 90_000
@@ -305,6 +306,7 @@ test("a store's page names the Workflow that fills it with its Connection and ac
         name: workflow,
         manifest: {
           id: workflow,
+          kind: "data",
           name: "Nachtimport",
           description: "Copies the clients of Exampledata every night.",
           runAs: account,
@@ -514,7 +516,8 @@ test("a store's page names the Workflow that fills it with its Connection and ac
     await openPublish();
     await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(publishDialog).toBeHidden();
-    await expect(edit.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+    // The same live revision may be shared with a different audience (SHARE-1).
+    await expect(edit.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
 
     // Publishing an older revision again names what that revision reads, not what is live.
     await edit.getByRole("button", { name: "More actions" }).click();

@@ -1,16 +1,25 @@
 import postgres from "postgres";
+import { randomBytes } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   DECISION_EXPIRED_REASON,
+  createFileSetId,
+  createPlatformId,
   asAgentRunId,
+  asCollaborationWorkspaceId,
   asClientInstanceId,
   asConversationId,
   type AgentRunStatus,
   type CentralPolicySetting,
+  type AppAudience,
   type OperationRun
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import { required, waitUntil } from "./support/assertions";
 import { injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
@@ -54,34 +63,63 @@ function person(id: string) {
   };
 }
 
-function startInstance(restarted: boolean, startAgentRunJobs = true): Promise<TestInstance> {
+async function startInstance(
+  restarted: boolean,
+  startAgentRunJobs = true,
+  appPublish = false
+): Promise<TestInstance> {
   const config = createTestConfig({
     tools: [{ name: change.name, enabled: true }],
-    toolNames: [change.name],
+    toolNames: appPublish ? [change.name, "assets.publish"] : [change.name],
     developmentAuth: {
       enabled: true,
       users: [person("user-1"), person("stranger")],
       defaultUserId: "user-1"
     }
   });
+  let filesRoot: string | undefined;
+  if (appPublish) {
+    config.modules.apps = { enabled: true };
+    config.modules.assetManagement = { enabled: true };
+    config.guardrails["share-publish-review"] = {
+      on: "app.before_publish",
+      outcome: "require_approval",
+      check: { kind: "pattern", fields: ["name"], pattern: ".+", reason: "Publish review" }
+    };
+    config.executionWorkspaces.enabled = true;
+
+    config.administration.agentConfiguration.enabled = true;
+    filesRoot = await mkdtemp(join(tmpdir(), "share-1-agent-"));
+    config.infrastructure.objectStorage.files = { provider: "filesystem", root: filesRoot };
+    config.infrastructure.objectStorage.workspaces = {
+      provider: "filesystem",
+      root: join(filesRoot, "workspaces")
+    };
+  }
   config.infrastructure.models = {
     local: { provider: TOOL_CALLING_MODEL_PROVIDER, model: "local" }
   };
-  return createTestInstance({
+  const instance = await createTestInstance({
     config,
     startAgentRunJobs,
-    env: {},
+    env: appPublish ? { CHAT_SESSION_TOKEN_SECRET: randomBytes(32).toString("hex") } : {},
     capabilities: [model.capability],
     tools: [change],
     // An admin set the call to its person's confirmation.
     operations: { centralPolicySettings: () => [confirmChange] },
     ...(restarted ? { seedAssets: false } : {})
   });
+  const close = instance.close.bind(instance);
+  instance.close = async () => {
+    await close();
+    if (filesRoot) await rm(filesRoot, { recursive: true, force: true });
+  };
+  return instance;
 }
 
-async function fixture() {
+async function fixture(appPublish = false) {
   executed.length = 0;
-  let app = await startInstance(false);
+  let app = await startInstance(false, true, appPublish);
   const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
   const agentRun = async (runId: string) =>
     required(
@@ -123,11 +161,15 @@ async function fixture() {
     decide(
       operationRunId: string,
       decision: "confirm" | "decline",
-      options: { reason?: string; as?: string } = {}
+      options: { reason?: string; as?: string; audience?: AppAudience } = {}
     ) {
       return app.call("operations.decide", {
         params: { runId: operationRunId },
-        payload: { decision, ...(options.reason ? { reason: options.reason } : {}) },
+        payload: {
+          decision,
+          ...(options.reason ? { reason: options.reason } : {}),
+          ...(options.audience ? { audience: options.audience } : {})
+        },
         ...(options.as ? { headers: { "x-dev-user-id": options.as } } : {})
       });
     },
@@ -157,7 +199,7 @@ async function fixture() {
     /** Stops the instance and starts it again on what it left in the database. */
     async restart(startAgentRunJobs = true) {
       await app.close();
-      app = await startInstance(true, startAgentRunJobs);
+      app = await startInstance(true, startAgentRunJobs, appPublish);
     }
   };
 }
@@ -175,6 +217,85 @@ function lastModelInput(): string[] {
 }
 
 describe("an agent's call that waits for its person's decision", () => {
+  it("check 80: an agent cannot widen an App before the person's click, and publishes the person's chosen audience", async () => {
+    const f = await fixture(true);
+    const createdWorkspace = await f.app.call("workspaces.create", {
+      payload: { name: "Share agent", visibility: "private" }
+    });
+    expect(createdWorkspace.statusCode, createdWorkspace.body).toBe(200);
+    const workspaceId = asCollaborationWorkspaceId(
+      z.object({ id: z.string() }).parse(createdWorkspace.json()).id
+    );
+    const assetId = createPlatformId<"ConfigAssetId">("cfg");
+    const fileSetId = createFileSetId();
+    await f.app.stores.pages.createAssetFileSet({
+      clientInstanceId: f.clientInstanceId,
+      assetId,
+      fileSet: {
+        id: fileSetId,
+        kitVersion: "1.0.0",
+        manifest: { id: "agent-choice", entry: "index.html" },
+        sourceFiles: [],
+        builtFiles: [
+          { path: "index.html", sha256: "a".repeat(64), bytes: 1, contentType: "text/html" }
+        ],
+        createdAt: new Date().toISOString()
+      }
+    });
+    await applyAtCurrentRevisions(f.app.stores.configAssets, {
+      clientInstanceId: f.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "app",
+          name: "agent-choice",
+          assetId,
+          fileSetId,
+          draft: true,
+          scope: { kind: "workspace", workspaceId },
+          config: {
+            name: "agent-choice",
+            title: "Agent choice",
+            manifest: {
+              id: "agent-choice",
+              name: "Agent choice",
+              kit: "1.0.0",
+              entry: "index.html"
+            }
+          }
+        }
+      ]
+    });
+    const stored = () =>
+      f.app.stores.configAssets.getConfigAsset({
+        clientInstanceId: f.clientInstanceId,
+        kind: "app",
+        name: "agent-choice"
+      });
+    const first = await f.app.call("assets.publish", {
+      params: { kind: "app", name: "agent-choice" },
+      payload: { revision: 1, audience: "self", workspaceId }
+    });
+    expect(first.statusCode, first.body).toBe(200);
+    const before = await stored();
+    const said = await f.say(
+      `/tool assets.publish ${JSON.stringify({ kind: "app", name: "agent-choice", revision: 1, audience: "instance", workspaceId })}`
+    );
+    const waiting = await f.waitingCall(said.runId);
+    expect((await stored())?.appAvailability).toEqual(before?.appAvailability);
+    expect(await f.requested(said.runId)).toMatchObject({
+      mode: "confirm",
+      inputPreview: { audience: "instance" }
+    });
+    expect((await f.decide(waiting.id, "confirm", { audience: "workspace" })).statusCode).toBe(200);
+    await f.until(said.runId, "completed");
+    expect(await f.callsOf(said.runId)).toMatchObject([
+      { status: "done", decision: { mode: "approved", edited: true } }
+    ]);
+    expect((await stored())?.appAvailability?.audience).toBe("workspace");
+    await f.app.close();
+  });
+
   it("pauses the run, survives a restart and executes the call once it is confirmed", async () => {
     const f = await fixture();
     const said = await f.say('/tool demo.change {"text":"one"}');

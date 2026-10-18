@@ -10,6 +10,7 @@ import {
   type AuthenticatedIdentity,
   type CollaborationWorkspaceId,
   type ConversationId,
+  type ConfigAssetKey,
   type OperationAuthorization,
   type OperationCallRuntime,
   type OperationRunId,
@@ -43,10 +44,12 @@ export function accessResource(
   kind: string,
   name: string,
   scope: AssetScope,
-  assetId: string | undefined
+  assetId: string | undefined,
+  appAvailability?: AccessResource["appAvailability"]
 ): AccessResource {
   return {
     kind,
+    ...(appAvailability ? { appAvailability } : {}),
     ...(name === "" ? {} : { name }),
     ...(assetId === undefined ? {} : { assetId }),
     ...(scope.kind === "workspace" ? { workspaceId: scope.workspaceId } : {})
@@ -101,7 +104,8 @@ export function mayOpenAssetFileSet(
     asset.workspaceId === undefined
       ? INSTANCE_ASSET_SCOPE
       : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(asset.workspaceId) },
-    asset.id
+    asset.id,
+    asset.appAvailability
   );
   if (access.authorize(kind.actions.write, resource).allowed) {
     return true;
@@ -141,4 +145,40 @@ export function errorIssues(error: AppError): AssetSetIssue[] {
         ...(code === undefined ? {} : { code })
       }))
     : [{ message: error.message }];
+}
+
+/** What a chooser offers is also what a write may reference; use alone exposes no draft. */
+export function listedTo(
+  kind: WorkflowAssetKind,
+  access: ActorAccess,
+  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published" | "appAvailability">
+): boolean {
+  const resource = accessResource(
+    asset.kind,
+    asset.name,
+    asset.scope,
+    asset.id,
+    asset.appAvailability
+  );
+  return (
+    access.authorize(kind.actions.read, resource).allowed ||
+    readsAssetDraft(kind, access, resource) ||
+    ((kind.lifecycle === "active" || asset.published === true) &&
+      kind.actions.use !== undefined &&
+      access.authorize(kind.actions.use, resource).allowed)
+  );
+}
+
+/** App and Workflow builders read the same draft in the list as in assets.get. */
+export function readsAssetDraft(
+  kind: WorkflowAssetKind,
+  access: ActorAccess,
+  resource: AccessResource
+): boolean {
+  return (
+    (kind.kind === "app" || kind.kind === "workflow") &&
+    (access.authorize(kind.actions.write, resource).allowed ||
+      (kind.actions.publish !== undefined &&
+        access.authorize(kind.actions.publish, resource).allowed))
+  );
 }

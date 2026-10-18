@@ -139,6 +139,8 @@ export interface UserStore {
     clientInstanceId: ClientInstanceId;
     userId: UserId;
   }): Promise<UserRecord | undefined>;
+  /** Active people in the instance, counted without loading identities or grants. */
+  countActiveUsers(input: { clientInstanceId: ClientInstanceId }): Promise<number>;
   listUsers(input: {
     clientInstanceId: ClientInstanceId;
     page?: StorePage;

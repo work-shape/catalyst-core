@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   lastDueWithin,
   nextDueAfter,
@@ -6,6 +6,10 @@ import {
   parseWorkflowManifest,
   workflowScheduleJobKind
 } from "@work-shape/catalyst-workflows";
+import postgres from "postgres";
+import type { PlatformStores } from "@work-shape/catalyst-core";
+import { deferred, waitUntil } from "./support/assertions";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import { clientInstanceId } from "./support/access-instance";
 import {
   publishedDefinitions,
@@ -185,6 +189,7 @@ describe("the runs a schedule starts", () => {
   let open: WorkflowFixture | undefined;
   let clock = at("2030-03-10T10:30:20Z");
   afterEach(async () => {
+    vi.restoreAllMocks();
     await open?.instance.close();
     open = undefined;
     clock = at("2030-03-10T10:30:20Z");
@@ -322,6 +327,70 @@ describe("the runs a schedule starts", () => {
     // The second look is no skipped due time: the time has its run.
     expect(await skipped(t)).toEqual([]);
     expect(await queued(t)).toEqual(["notify-clients"]);
+  });
+
+  it("serializes concurrent admissions for different due times of one Workflow", async () => {
+    const { t } = await ready([hourly]);
+    const read = deferred<void>();
+    const release = deferred<void>();
+    let reads = 0;
+    let secondFinished = false;
+    const original = t.stores.transaction.bind(t.stores);
+    vi.spyOn(t.stores, "transaction").mockImplementation(
+      <T>(work: (tx: PlatformStores) => Promise<T>) =>
+        original((tx) =>
+          work({
+            ...tx,
+            workflowRuns: {
+              ...tx.workflowRuns,
+              async readScheduleState(input) {
+                const number = ++reads;
+                const state = await tx.workflowRuns.readScheduleState(input);
+                if (number === 1) {
+                  read.resolve();
+                  await release.promise;
+                } else {
+                  secondFinished = true;
+                }
+                return state;
+              }
+            }
+          })
+        )
+    );
+    const handlers = t.workflows.jobHandlers.filter(
+      (handler) => handler.kind.kind === workflowScheduleJobKind.kind
+    );
+    await due(t, "2030-03-10T10:00:00.000Z");
+    const one = t.worker(handlers).runDue();
+    await read.promise;
+    await due(t, "2030-03-10T11:00:00.000Z");
+    const two = t.worker(handlers).runDue();
+    const db = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
+    try {
+      // Observe a real blocked admission, or the broken implementation's completed read.
+      // No sleep decides whether the two transactions actually overlapped.
+      await waitUntil(async () => {
+        if (secondFinished) return true;
+        const [row] = await db<{ count: number }[]>`
+          select count(*)::int as count from pg_stat_activity
+          where datname = current_database() and wait_event = 'advisory'`;
+        return reads === 2 && (row?.count ?? 0) > 0;
+      }, "the second admission waits on the first transaction");
+      expect(secondFinished).toBe(false);
+    } finally {
+      release.resolve();
+      await Promise.all([one, two]);
+      await db.end();
+    }
+    expect(await runsOf(t)).toHaveLength(1);
+    expect(await skipped(t)).toEqual([
+      {
+        workflow: "notify-clients",
+        scheduledFor: "2030-03-10T11:00:00.000Z",
+        reason: "overlap"
+      }
+    ]);
   });
 
   it("skips a due time that meets the open run of an earlier one, and says so", async () => {

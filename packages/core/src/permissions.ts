@@ -1,3 +1,4 @@
+import type { AppAvailability } from "./app-audience";
 import {
   ACCESS_SOURCES,
   ACTIONS,
@@ -128,6 +129,7 @@ export interface Namespace {
 }
 
 export interface AccessResource {
+  appAvailability?: AppAvailability;
   kind?: string;
   name?: string;
   assetId?: string;
@@ -491,7 +493,25 @@ export function evaluateAccess(input: {
     return refused ?? allowed ?? { allowed: false, reason: "no_grant" };
   }
   if (isPlatformAction(input.action)) {
-    return evaluateRegisteredAction(granting, input.action, input.resource);
+    const decision = evaluateRegisteredAction(granting, input.action, input.resource);
+    const availability = input.resource?.appAvailability;
+    if (input.action === "app.use" && availability) {
+      // Availability narrows every use, including a direct asset grant. Explicit denies still
+      // win, and the credential's own scope is applied by boundedActorAccess afterwards.
+      if (!decision.allowed && decision.reason === "denied") return decision;
+      if (availability.audience === "self") {
+        return input.holder.kind === "user" &&
+          availability.userId === input.holder.id &&
+          (decision.allowed ||
+            evaluateRegisteredAction(granting, "app.write", input.resource).allowed)
+          ? { allowed: true, source: "membership" }
+          : { allowed: false, reason: "no_grant" };
+      }
+      if (availability.audience === "instance" && input.holder.kind === "user") {
+        return { allowed: true, source: "membership" };
+      }
+    }
+    return decision;
   }
   return { allowed: false, reason: "unknown_action" };
 }

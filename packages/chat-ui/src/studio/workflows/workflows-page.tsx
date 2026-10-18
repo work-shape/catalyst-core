@@ -14,6 +14,7 @@ import {
   Chip,
   EmptyState,
   FilterBar,
+  LoadError,
   Page,
   PageHeader,
   SkeletonList
@@ -25,9 +26,9 @@ import { BuildWithAgentEmptyState, type BuildWithAgentCopy } from "../build-with
 import { RouteLink } from "../route-link";
 import { useStartRun } from "./start-run";
 import { useRunsAvailable, useWorkflowList, type WorkflowList } from "./workflow-data";
-import { doneWithFailedRuns, listedToReader, startOffered } from "./workflow-model";
+import { doneWithFailedRuns, listedToReader, runsReadable, startOffered } from "./workflow-model";
 import type { WorkflowListItem } from "./workflow-views";
-import { LoadError, RunStateBadge, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
+import { RunStateBadge, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
 /** Two Workflows a business builds: one on a schedule, one that acts on what it finds. */
@@ -63,10 +64,13 @@ export function WorkflowsPage() {
     name: starting?.name,
     form: starting?.startForm
   });
-  const write = host?.rights.write === true;
+  const rights = host?.rights;
   const rows = useMemo(
-    () => list.rows?.filter((workflow) => listedToReader(workflow, { write })),
-    [list.rows, write]
+    () =>
+      rights === undefined
+        ? undefined
+        : list.rows?.filter((workflow) => listedToReader(workflow, rights)),
+    [list.rows, rights]
   );
   // The ages are counted from when the list last arrived.
   const now = useMemo(() => new Date(), [rows]);
@@ -80,6 +84,7 @@ export function WorkflowsPage() {
         list={{ ...list, rows }}
         now={now}
         runsAvailable={runsAvailable}
+        readsRuns={(workflow) => runsReadable(host.rights, workflow)}
         onOpenRoute={host.showRoute}
         {...(host.startNew ? { onNew: host.startNew } : {})}
         onStart={(workflow) => {
@@ -98,6 +103,7 @@ export function WorkflowsPageView({
   list,
   now,
   runsAvailable,
+  readsRuns = () => true,
   onOpenRoute,
   onNew,
   onStart
@@ -107,6 +113,8 @@ export function WorkflowsPageView({
   now: Date;
   /** The instance runs Workflows: a card offers a start where the reader may make one. */
   runsAvailable: boolean;
+  /** The reader may read a Workflow's runs: its card leads to them. Starting it is apart. */
+  readsRuns?(workflow: WorkflowListItem): boolean;
   onOpenRoute: OpenRoute;
   /**
    * "New workflow": the dock opens with a conversation whose first save creates the Workflow,
@@ -186,6 +194,7 @@ export function WorkflowsPageView({
                       workspaceId={workspaceId}
                       now={now}
                       canStart={runsAvailable && startOffered(workflow)}
+                      runsShown={runsAvailable && readsRuns(workflow)}
                       onOpenRoute={onOpenRoute}
                       onStart={() => onStart(workflow)}
                     />
@@ -230,6 +239,7 @@ function WorkflowCard({
   workspaceId,
   now,
   canStart,
+  runsShown,
   onOpenRoute,
   onStart
 }: {
@@ -237,6 +247,8 @@ function WorkflowCard({
   workspaceId: string;
   now: Date;
   canStart: boolean;
+  /** The reader may read the Workflow's runs. */
+  runsShown: boolean;
   onOpenRoute: OpenRoute;
   onStart(): void;
 }) {
@@ -312,8 +324,8 @@ function WorkflowCard({
             {t("workflows.startNow")}
           </Button>
         ) : null}
-        {/* A Workflow that ran has runs to look through. */}
-        {lastRun === undefined ? null : (
+        {/* A Workflow that ran has runs to look through, for who may read them. */}
+        {lastRun === undefined || !runsShown ? null : (
           <div className="ml-auto flex items-center gap-1">
             <RouteLink
               route={{ kind: "workflow-runs", ...address }}

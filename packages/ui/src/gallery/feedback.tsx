@@ -5,6 +5,7 @@ import { Banner, type BannerTone } from "../feedback/banner";
 import { EmptyState } from "../feedback/empty-state";
 import { FormNotice } from "../feedback/form-notice";
 import { InlineError } from "../feedback/inline-error";
+import { LoadError } from "../feedback/load-error";
 import { NotFound } from "../feedback/not-found";
 import { Progress } from "../feedback/progress";
 import { Skeleton, SkeletonChips, SkeletonList, SkeletonPage } from "../feedback/skeleton";
@@ -95,6 +96,15 @@ export const feedbackGallery: GalleryGroup = {
       name: "InlineError",
       components: ["InlineError"],
       render: (text) => <InlineError className="max-w-sm">{text.errorMessage}</InlineError>
+    },
+    {
+      name: "LoadError",
+      components: ["LoadError"],
+      render: (text) => (
+        <LoadError className="max-w-sm" onRetry={() => undefined}>
+          {text.loadFailed}
+        </LoadError>
+      )
     },
     {
       name: "Banner",

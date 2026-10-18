@@ -1,3 +1,4 @@
+import type { AppAudience } from "./app-audience";
 import type { AgentRun } from "./agent-runtime";
 import type { RuntimeCallContext } from "./identity";
 import type { ClientInstanceId, OperationRunId } from "./ids";
@@ -38,6 +39,8 @@ export interface DecideWaitingToolCallInput {
   operationRunId: string;
   /** Only the person the run works for decides. */
   deciderUserId: string;
+  /** Only a person confirming an App publish may replace its proposed audience. */
+  audience?: AppAudience;
   decision: OperationRunDecision & { mode: "confirmed" | "declined" };
   /** How a declined call's run ends. */
   declined?: { error: OperationRunError; denial: OperationDenial };

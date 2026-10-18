@@ -1,3 +1,5 @@
+import { appAudienceReview } from "../apps/app-audience";
+import type { AppAudience } from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
   resolveStoredAgentReferences
@@ -14,7 +16,6 @@ import {
   type ActorAccess,
   type AgentAvailability,
   type AssetScope,
-  type ConfigAssetKey,
   type ConfigAssetRecord,
   type FileSet,
   type JsonObject,
@@ -24,7 +25,7 @@ import {
   type StorePage
 } from "@work-shape/catalyst-core";
 import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
-import { accessResource, decide, type AssetCall } from "./asset-access";
+import { accessResource, decide, listedTo, readsAssetDraft, type AssetCall } from "./asset-access";
 import { isReleaseSync } from "./asset-write-rules";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { AddresseeNames, WorkflowAssetKind } from "../asset-kinds/shared";
@@ -72,6 +73,18 @@ export class AssetReadWorkflow {
     this.host = host;
   }
 
+  /** Instance availability permits consumption from another workspace, while every right
+   * is still evaluated on the App's owning workspace. Writes keep their strict owner address. */
+  private async readTarget(address: AssetAddress): Promise<AssetTarget> {
+    const target = await this.host.target(address);
+    const other = target.other;
+    return address.kind === "app" &&
+      other?.appAvailability?.audience === "instance" &&
+      other.scope.kind === "workspace"
+      ? this.host.target({ ...address, workspaceId: other.scope.workspaceId })
+      : target;
+  }
+
   /**
    * One page of the assets of a kind in one scope, each one the caller may read. The right is
    * decided per asset by the one resolver, so a list never shows what `assets.get` refuses.
@@ -91,7 +104,7 @@ export class AssetReadWorkflow {
     // Whoever reads the asset is shown all of it; a holder of the use right its published view.
     const reads = (resource: AssetTarget["resource"]) =>
       call.access.authorize(kind.actions.read, resource).allowed ||
-      readsAppDraft(kind, call.access, resource);
+      readsAssetDraft(kind, call.access, resource);
     const [namespaces, defaultName, records] = await Promise.all([
       this.namespaces(scope),
       this.defaultName(kind, scope),
@@ -110,7 +123,8 @@ export class AssetReadWorkflow {
                   summarizeAsset(
                     kind,
                     asset.name,
-                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id))
+                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id)) ||
+                      kind.lifecycle === "active"
                       ? revisions.active
                       : revisions.published
                   ).title
@@ -163,12 +177,15 @@ export class AssetReadWorkflow {
     access: ActorAccess,
     input: AssetAddress & { revision?: string; files?: boolean }
   ): Promise<OperationAuthorization> {
-    const target = await this.host.target(input);
+    const target = await this.readTarget(input);
     return decide(access, this.readAction(access, target, input).action, target.resource);
   }
 
-  async get(call: AssetCall, address: AssetAddress & { revision?: string; files?: boolean }) {
-    const target = await this.host.target(address);
+  async get(
+    call: AssetCall,
+    address: AssetAddress & { revision?: string; files?: boolean; audience?: AppAudience }
+  ) {
+    const target = await this.readTarget(address);
     const read = this.readAction(call.access, target, address);
     call.access.require(read.action, target.resource);
     const asset = requireActive(target);
@@ -209,6 +226,17 @@ export class AssetReadWorkflow {
             names: this.addresseeNames()
           })
         : undefined;
+    const appAudience =
+      target.kind.kind === "app" && locale
+        ? await appAudienceReview(
+            this.options,
+            asset,
+            call.access,
+            locale,
+            address.audience,
+            call.actor
+          )
+        : undefined;
     // The sentence the publish question leads with, for the revision this read returns (PUBQ-1).
     const publishNarrative = locale
       ? await this.options.operationCalls?.publishNarrator
@@ -219,7 +247,8 @@ export class AssetReadWorkflow {
             revision: content.contentRevision ?? asset.revision,
             config: content.config,
             locale,
-            access: call.access
+            access: call.access,
+            ...(appAudience ? { audienceLabel: appAudience.label } : {})
           })
           .catch(() => unavailablePublishNarrative(locale))
       : undefined;
@@ -244,6 +273,7 @@ export class AssetReadWorkflow {
       ...(runsAs === undefined ? {} : { runsAs }),
       ...(publishQuestion?.length ? { publishQuestion } : {}),
       ...(publishNarrative ? { publishNarrative } : {}),
+      ...(appAudience ? { appAudience } : {}),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
       allowed,
@@ -375,7 +405,12 @@ export class AssetReadWorkflow {
     return {
       id: record.id,
       kind: record.kind,
-      ...summarizeAsset(kind, record.name, record.publishedConfig, locale),
+      ...summarizeAsset(
+        kind,
+        record.name,
+        kind.lifecycle === "active" ? record.config : record.publishedConfig,
+        locale
+      ),
       scope: record.scope,
       ...(namespace ? { namespace } : {}),
       revision: record.publishedRevision ?? record.revision,
@@ -594,18 +629,7 @@ function isPublished(kind: WorkflowAssetKind, asset: ConfigAssetRecord | undefin
  * Whether a list of the kind shows the caller this asset: whoever reads it is shown all of it,
  * a holder of the use right its published view.
  */
-export function listedTo(
-  kind: WorkflowAssetKind,
-  access: ActorAccess,
-  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published">
-): boolean {
-  const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
-  return (
-    access.authorize(kind.actions.read, resource).allowed ||
-    readsAppDraft(kind, access, resource) ||
-    showsPublishedView(kind, access, resource, asset.published === true)
-  );
-}
+export { listedTo } from "./asset-access";
 
 /**
  * The rule of every kind with a published revision: whoever holds its read right or its use
@@ -649,20 +673,6 @@ function summarizeAsset(
     }
     throw error;
   }
-}
-
-/** App draft writers and publishers read the same draft in the list as in assets.get. */
-function readsAppDraft(
-  kind: WorkflowAssetKind,
-  access: ActorAccess,
-  resource: AssetTarget["resource"]
-): boolean {
-  return (
-    kind.kind === "app" &&
-    (access.authorize(kind.actions.write, resource).allowed ||
-      (kind.actions.publish !== undefined &&
-        access.authorize(kind.actions.publish, resource).allowed))
-  );
 }
 
 /** List and detail answers use the write paths' in-memory authorization decision. */

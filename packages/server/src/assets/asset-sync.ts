@@ -294,7 +294,14 @@ async function checkBatch(
       defaultChange
         ? withDefaultAgentName(withItems(set), defaultChange.agentName)
         : withItems(set);
-    const tellable = findIssuesOfChange(kinds.kinds, stored.set, view, left, written);
+    const tellable = findIssuesOfChange(
+      kinds.kinds,
+      stored.set,
+      view,
+      left,
+      written,
+      call.runtime?.locale ?? options.config.localization.defaultLocale
+    );
     stopIfRefused(placeIssues(tellable, ready()));
   }
 
@@ -383,28 +390,32 @@ async function checkBatch(
 async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checked: CheckedBatch) {
   const { planned, ready, storedDefault, defaultChange, mutations } = checked;
   const byKey = new Map(ready.map((entry) => [assetKey(entry.kind.kind, entry.name), entry]));
-  const result = await applyValidatedConfigAssetMutations(options, {
-    clientInstanceId: options.clientInstanceId,
-    actor: auditActorFromIdentity(call.actor),
-    baseRevisions: Object.fromEntries(
-      // Every item named a revision: the batch was refused before the policy otherwise.
-      [...byKey].map(([key, entry]) => [
-        key,
-        entry.absent ? null : (entry.item.expectedRevision ?? null)
-      ])
-    ),
-    baseAssetIds: Object.fromEntries(
-      [...byKey].flatMap(([key, entry]) =>
-        entry.item.expectedAssetId === undefined ? [] : [[key, entry.item.expectedAssetId]]
-      )
-    ),
-    ...(defaultChange ? { baseDefaultAgentName: storedDefault } : {}),
-    ...syncInitialAvailability(
-      call.access,
-      storedDefault === null && defaultChange?.agentName !== undefined
-    ),
-    mutations
-  }).catch(async (error: unknown) => {
+  const result = await applyValidatedConfigAssetMutations(
+    options,
+    {
+      clientInstanceId: options.clientInstanceId,
+      actor: auditActorFromIdentity(call.actor),
+      baseRevisions: Object.fromEntries(
+        // Every item named a revision: the batch was refused before the policy otherwise.
+        [...byKey].map(([key, entry]) => [
+          key,
+          entry.absent ? null : (entry.item.expectedRevision ?? null)
+        ])
+      ),
+      baseAssetIds: Object.fromEntries(
+        [...byKey].flatMap(([key, entry]) =>
+          entry.item.expectedAssetId === undefined ? [] : [[key, entry.item.expectedAssetId]]
+        )
+      ),
+      ...(defaultChange ? { baseDefaultAgentName: storedDefault } : {}),
+      ...syncInitialAvailability(
+        call.access,
+        storedDefault === null && defaultChange?.agentName !== undefined
+      ),
+      mutations
+    },
+    call.runtime?.locale
+  ).catch(async (error: unknown) => {
     // Another write got between the check above and the store's lock. Nothing was written.
     const replaced =
       isAppError(error) && error.code === "CONFLICT"

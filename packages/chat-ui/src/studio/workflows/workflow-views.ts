@@ -12,6 +12,7 @@ import {
 // screens' own shapes. The data module maps what the instance answers onto these, so no screen
 // reads a type of the API contract.
 
+import type { AssetVerb } from "../../shared/build-rights";
 import type { StartForm } from "./start-form";
 
 /** A Workflow as a row of the list. */
@@ -35,6 +36,14 @@ export interface WorkflowListItem {
   refusedFor: readonly WorkflowStartIssue[];
   /** The reader holds the right to start it. */
   mayStart: boolean;
+  /**
+   * What the reader may do to this Workflow's asset, as the instance decides it with every grant
+   * and deny there is, those on this Workflow included. Absent where the instance said nothing:
+   * the rights on its owner stand then. Starting it is `mayStart`'s.
+   */
+  allowed?: readonly AssetVerb[];
+  /** The workspace that owns it, where one does. Absent for the instance's own. */
+  ownerWorkspaceId?: string;
   /** What a start asks for: the fields of the published revision's inputs. */
   startForm: StartForm;
   /** The latest run, where the instance names it on the list. */
@@ -127,6 +136,14 @@ export interface WorkflowView {
   refusedFor: readonly WorkflowStartIssue[];
   /** The reader holds the right to start this Workflow, as its entry of the list says. */
   mayStart: boolean;
+  /**
+   * What the reader may do to this Workflow's asset, as the instance decides it with every grant
+   * and deny there is, those on this Workflow included. Absent where the instance said nothing:
+   * the rights on its owner stand then. Starting it is `mayStart`'s.
+   */
+  allowed?: readonly AssetVerb[];
+  /** The workspace that owns it, where one does. Absent for the instance's own. */
+  ownerWorkspaceId?: string;
   /**
    * The draft, where the instance showed it to the reader: the steps above are then the
    * draft's. Absent for a reader who is answered the published revision.

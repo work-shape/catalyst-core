@@ -453,34 +453,52 @@ describe("continue-as-new", () => {
     expect(wire.json()).toMatchObject({ continuation: next.continuation, labels: next.labels });
   });
 
-  it("records a failed successor on its published revision and names the incompatible input field", async () => {
-    const { t, definitions } = await ready();
-    await start(t);
-    const worker = t.worker();
-    for (let pass = 0; pass < 10; pass++) {
-      await worker.runDue();
-      if (writesOf(t).length === 1) break;
+  it.each(["offset", "Sensitive Person"])(
+    "records a failed successor by input position for %s without retaining data keys",
+    async (field) => {
+      const { t, definitions } = await ready();
+      await t.expectOk(t.root.id, "workflows.start", {
+        params: { workflow: "notify-clients" },
+        payload: {
+          input: {
+            note: "Quarterly figures are ready",
+            ...(field === "offset" ? {} : { [field]: "invalid" })
+          }
+        }
+      });
+      const worker = t.worker();
+      for (let pass = 0; pass < 10; pass++) {
+        await worker.runDue();
+        if (writesOf(t).length === 1) break;
+      }
+      const revision = definitions.publish({
+        ...definition(),
+        inputs: {
+          type: "object",
+          properties: {
+            note: { type: "string" },
+            offset: { type: field === "offset" ? "string" : "integer" }
+          },
+          required: ["offset"],
+          additionalProperties: { type: "integer" }
+        }
+      });
+      const chain = await finishChain(t);
+      expect(chain.find((run) => run.continuation?.number === 2)).toMatchObject({
+        status: "failed",
+        definitionRevisionId: revision,
+        error: {
+          code: "continuation_invalid",
+          message: "The successor input does not fit at field 2"
+        }
+      });
+      expect(JSON.stringify(chain.map((run) => run.error)).includes("Sensitive Person")).toBe(
+        false
+      );
+      expect(chain.find((run) => run.continuation?.number === 1)?.status).toBe("continued");
+      expect(writesOf(t)).toHaveLength(2);
     }
-    const revision = definitions.publish({
-      ...definition(),
-      inputs: {
-        type: "object",
-        properties: { note: { type: "string" }, offset: { type: "string" } },
-        required: ["offset"]
-      }
-    });
-    const chain = await finishChain(t);
-    expect(chain.find((run) => run.continuation?.number === 2)).toMatchObject({
-      status: "failed",
-      definitionRevisionId: revision,
-      error: {
-        code: "continuation_invalid",
-        message: "The successor input does not fit at '/offset'"
-      }
-    });
-    expect(chain.find((run) => run.continuation?.number === 1)?.status).toBe("continued");
-    expect(writesOf(t)).toHaveLength(2);
-  });
+  );
 
   it("drains concurrent admitted items before the checkpoint and preserves item order without duplicate calls", async () => {
     const manifest = definition(2);

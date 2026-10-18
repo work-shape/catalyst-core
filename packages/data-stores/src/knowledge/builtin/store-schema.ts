@@ -1,3 +1,5 @@
+import { RECORD_PROJECTION_SCHEMA } from "../../records/projection-schema";
+import { takeGrantTurn } from "../../provisioning";
 import { KNOWLEDGE_FIELD_SCHEMA } from "./field-schema";
 import { RECORD_FIELDS_SCHEMA, RECORD_FIELDS_CONTENT_HASH } from "../../records/schema";
 import { SOURCE_WITHDRAWAL_SCHEMA } from "./source-withdrawal-schema";
@@ -295,7 +297,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
       alter table catalyst_kb.sync_runs validate constraint sync_runs_state_check;`
   },
   { number: 10, name: "field_extraction_budget", sql: KNOWLEDGE_FIELD_SCHEMA },
-  { number: 11, name: "record_content_hash_upgrade", sql: RECORD_FIELDS_CONTENT_HASH }
+  { number: 11, name: "record_content_hash_upgrade", sql: RECORD_FIELDS_CONTENT_HASH },
+  { number: 12, name: "record_projection_frame", sql: RECORD_PROJECTION_SCHEMA }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */
@@ -313,7 +316,7 @@ const appliedRow = z.object({ number: z.number().int() });
  */
 export async function applyKnowledgeStoreSchema(
   server: DataStoreServer,
-  record: Pick<DataStoreRecord, "location">,
+  record: Pick<DataStoreRecord, "location" | "roles">,
   signal: AbortSignal
 ): Promise<{
   migrations: DataStoreAppliedMigration[];
@@ -327,6 +330,9 @@ export async function applyKnowledgeStoreSchema(
       signal
     },
     async (sql) => {
+      // Schema creation and ACL updates race before the migrations table can be locked.
+      await takeGrantTurn(sql, record.location.database);
+      await sql.run("select set_config('catalyst.records_app_role', $1, true)", [record.roles.app]);
       await sql.script(
         `create schema if not exists catalyst_kb;
          revoke all on schema catalyst_kb from public;

@@ -152,7 +152,7 @@ export class AppActionList {
   /**
    * The actions of the App the call names: of its draft for whoever writes the App, of the
    * published revision for every other reader. Without a name, the actions of the published
-   * revision of every App the caller reads, at most `APP_ACTIONS_LIST_MAX_APPS` Apps.
+   * revision of every App the caller reads or uses, at most `APP_ACTIONS_LIST_MAX_APPS` Apps.
    */
   async list(
     caller: { actor: AuthenticatedIdentity; access: ActorAccess },
@@ -182,19 +182,37 @@ export class AppActionList {
       truncated = assets.length > APP_ACTIONS_LIST_MAX_APPS;
       revisions = assets
         .slice(0, APP_ACTIONS_LIST_MAX_APPS)
-        .filter((asset) => reads(asset, APP_ACTIONS.read))
+        .filter((asset) => reads(asset, APP_ACTIONS.read) || reads(asset, APP_ACTIONS.use))
         .flatMap((asset) => listedRevision(asset, "published") ?? []);
     }
-    const actions = revisions.flatMap((revision) => revision.actions);
+    // Use-only catalog entries never resolve configuration or preview a call.
+    const actions = revisions
+      .filter((revision) => reads(revision.asset, APP_ACTIONS.read))
+      .flatMap((revision) => revision.actions);
     const [environment, connections, dataStores, agentTools] = await Promise.all([
       preloadedEnvironment(this.environment, actions),
       this.connections(caller.access, actions),
       this.dataStoreTitles(caller.access, actions),
-      this.agentTools(revisions)
+      this.agentTools(revisions.filter((revision) => reads(revision.asset, APP_ACTIONS.read)))
     ]);
     const apps: AppActions["apps"] = [];
     for (const revision of revisions) {
       const { asset } = revision;
+      if (!reads(asset, APP_ACTIONS.read)) {
+        apps.push({
+          name: asset.name,
+          title: revision.title,
+          scope: asset.scope,
+          view: revision.view,
+          revision: revision.revision,
+          actions: revision.actions.map((action) => ({
+            name: action.name,
+            effect: action.effect,
+            ...(action.description === undefined ? {} : { description: action.description })
+          }))
+        });
+        continue;
+      }
       const resource = appResourceOf(scoped(asset));
       const host = appRevisionHost(asset.name, resource, revision.view, revision.dataStores);
       const targetOf = await this.draftTargets(caller.actor, revision);
@@ -215,6 +233,7 @@ export class AppActionList {
       apps.push({
         name: asset.name,
         title: revision.title,
+        scope: asset.scope,
         view: revision.view,
         revision: revision.revision,
         actions: await Promise.all(
@@ -398,10 +417,16 @@ export class AppActionList {
 }
 
 /** The App with its workspace as a right is decided on it. */
-function scoped(asset: ConfigAssetRecord): { id: string; name: string; workspaceId?: string } {
+function scoped(asset: ConfigAssetRecord): {
+  id: string;
+  name: string;
+  workspaceId?: string;
+  appAvailability?: ConfigAssetRecord["appAvailability"];
+} {
   return {
     id: asset.id,
     name: asset.name,
+    ...(asset.appAvailability ? { appAvailability: asset.appAvailability } : {}),
     ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
   };
 }

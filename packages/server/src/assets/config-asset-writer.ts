@@ -2,6 +2,7 @@ import {
   AppError,
   ObjectNotFound,
   type AssetScope,
+  type LocaleCode,
   type ConfigAssetRecord,
   type ConfigAssetState,
   type ConfigAssetStore,
@@ -17,7 +18,7 @@ import type { AssetWorkflowOptions } from "../types";
 
 export type ConfigAssetWriterOptions = Pick<
   AssetWorkflowOptions,
-  "config" | "configAssets" | "clientInstanceId" | "pages"
+  "config" | "configAssets" | "clientInstanceId" | "pages" | "stores"
 >;
 
 /**
@@ -67,7 +68,8 @@ export async function applyValidatedConfigAssetMutations(
      * a state no other write can change any more.
      */
     underLock?(): Promise<void>;
-  }
+  },
+  locale: LocaleCode = options.config.localization.defaultLocale
 ) {
   const { kinds } = options.configAssets;
   for (const mutation of input.mutations) {
@@ -86,7 +88,7 @@ export async function applyValidatedConfigAssetMutations(
     })
   ]);
   const mutations = withRevisionFiles(options, input.mutations, assets);
-  const validate = (stored: { state: ConfigAssetState; assets: ConfigAssetRecord[] }) => {
+  const validate = async (stored: { state: ConfigAssetState; assets: ConfigAssetRecord[] }) => {
     validateMutations(kinds.kinds, mutations, stored);
     // A draft cannot lend an unpublished reference removal to a live delete in the batch.
     const live = mutations.filter(
@@ -94,10 +96,10 @@ export async function applyValidatedConfigAssetMutations(
     );
     if (live.length !== mutations.length && live.some((mutation) => mutation.type === "delete"))
       validateMutations(kinds.kinds, live, stored);
-    assertReferencesWithinOwners(kinds.kinds, mutations, stored.assets);
+    await assertReferencesWithinOwners(kinds.kinds, mutations, stored.assets, locale, options);
     assertDefaultOwnedByInstance(kinds.kinds, mutations, stored.assets);
   };
-  validate({ state, assets });
+  await validate({ state, assets });
   const read = new Set(assets.map((asset) => asset.activeRevisionId));
   // The `files` store, which holds the bundle of a write that adds a commit to a repository.
   const objects = options.pages?.objects;
@@ -124,7 +126,7 @@ export async function applyValidatedConfigAssetMutations(
         ids.length === read.size &&
         ids.every((id) => read.has(id));
       if (!unchanged) {
-        validate({ state: locked.state, assets: await locked.listActiveConfigAssets() });
+        await validate({ state: locked.state, assets: await locked.listActiveConfigAssets() });
       }
       await underLock?.();
     }

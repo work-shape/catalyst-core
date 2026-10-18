@@ -1,3 +1,5 @@
+import { requireAppAudience } from "../apps/app-audience";
+import type { AppAudience } from "@work-shape/catalyst-core";
 import { upsertAsset, type AssetUpsert } from "./asset-upsert";
 import { AgentDraftWorkflow } from "./agent-drafts";
 import {
@@ -82,6 +84,7 @@ import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import { assertReferencesWithinOwners } from "./asset-owner-references";
 import { liveRevision } from "./asset-live-revision";
+import { appPublishReview } from "../apps/app-publish-reach";
 import { publishApproval, publishFromAPerson } from "../approvals/publish-approval";
 import type { AssetWorkflowOptions } from "../types";
 
@@ -153,9 +156,10 @@ export class AssetWorkflow {
    */
   async authorizePublish(
     caller: { actor: AuthenticatedIdentity; access: ActorAccess; origin: OperationOrigin },
-    address: AssetAddress & { revision: number }
+    address: AssetAddress & { revision: number; audience?: AppAudience }
   ): Promise<OperationAuthorization> {
     const { access, origin } = caller;
+    if (address.kind === "app") requireAppAudience(access, address.audience);
     if (address.kind === "agent")
       return this.agentDrafts.authorizePublish(
         { ...caller, audit: this.options.auditRecorder, correlationId: "" },
@@ -179,9 +183,24 @@ export class AssetWorkflow {
    * and the caller's own click where they hold it. None for a kind whose publish is not held.
    */
   async publishApproval(
-    input: AssetAddress & { revision: number }
+    input: AssetAddress & { revision: number; audience?: AppAudience }
   ): Promise<OperationApproval | undefined> {
-    return publishApproval(await this.target(input), input.revision);
+    const target = await this.target(input);
+    const asset = target.asset;
+    const revision =
+      target.kind.kind === "app"
+        ? await this.options.configAssets.store.getConfigAssetRevision({
+            clientInstanceId: this.options.clientInstanceId,
+            kind: input.kind,
+            name: input.name,
+            revision: input.revision
+          })
+        : undefined;
+    const widens =
+      asset && revision?.config
+        ? appPublishReview(asset, target.kind, revision.config, input.audience).publishWidens
+        : undefined;
+    return publishApproval(target, input.revision, input.audience, undefined, widens);
   }
 
   async authorizeDelete(
@@ -557,7 +576,8 @@ export class AssetWorkflow {
           stored.set,
           view,
           drafted,
-          new Set([assetKey(kind.kind, name ?? "")])
+          new Set([assetKey(kind.kind, name ?? "")]),
+          call.runtime?.locale ?? this.options.config.localization.defaultLocale
         );
     // What is stored and read-only is refused before the definition is read, as a put is.
     const readOnly = storedWritableIssues(kind, current);
@@ -569,10 +589,16 @@ export class AssetWorkflow {
             call.access,
             view.set,
             found,
-            () => {
+            async () => {
               const { scope } = target;
               const write = { type: "upsert", kind: kind.kind, name: name ?? "", scope } as const;
-              assertReferencesWithinOwners(kinds, [{ ...write, config: prepared }], stored.assets);
+              await assertReferencesWithinOwners(
+                kinds,
+                [{ ...write, config: prepared }],
+                stored.assets,
+                call.runtime?.locale ?? this.options.config.localization.defaultLocale,
+                this.options
+              );
             },
             {
               names: kind.kind === "agent" && name !== undefined ? [name] : [],
@@ -658,7 +684,8 @@ export class AssetWorkflow {
       stored.set,
       view,
       written,
-      new Set([assetKey(kind.kind, name)])
+      new Set([assetKey(kind.kind, name)]),
+      call.runtime?.locale ?? this.options.config.localization.defaultLocale
     );
     if (issues.length > 0) {
       throw new AppError("VALIDATION_FAILED", INVALID_ASSET_SET_MESSAGE, { issues });
@@ -685,11 +712,15 @@ export class AssetWorkflow {
     const within = target.kind.withinWrite?.bind(target.kind);
     try {
       if (within === undefined || write === undefined) {
-        return await applyValidatedConfigAssetMutations(this.options, {
-          clientInstanceId: this.options.clientInstanceId,
-          actor,
-          ...batch
-        });
+        return await applyValidatedConfigAssetMutations(
+          this.options,
+          {
+            clientInstanceId: this.options.clientInstanceId,
+            actor,
+            ...batch
+          },
+          call.runtime?.locale
+        );
       }
       // The kind's part of the write commits with the revision or not at all.
       const followUps: AssetWriteFollowUp[] = [];
@@ -701,7 +732,8 @@ export class AssetWorkflow {
               ...this.options,
               configAssets: { ...this.options.configAssets, store: stores.configAssets }
             },
-            { clientInstanceId: this.options.clientInstanceId, actor, ...batch }
+            { clientInstanceId: this.options.clientInstanceId, actor, ...batch },
+            call.runtime?.locale
           );
           const followUp = await within({
             clientInstanceId: this.options.clientInstanceId,

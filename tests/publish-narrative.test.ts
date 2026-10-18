@@ -708,4 +708,47 @@ describe("PUBQ-1 the publish question's sentence", () => {
     );
     expect(await plain.narrate({ ...input, kind: "skill" })).toBeUndefined();
   });
+
+  it("names the chosen audience mid-sentence in lower case, without doubling German “für”", async () => {
+    const plain = createPublishNarrator({
+      clientInstanceId,
+      stores: {
+        configAssets: { getConfigAsset: () => Promise.resolve(undefined) },
+        workspaces: { getWorkspace: () => Promise.resolve({ name: "Vertrieb" }) },
+        users: { getUser: () => Promise.resolve(undefined) }
+      },
+      resolve: () => Promise.resolve(undefined)
+    });
+    const summary = async (locale: LocaleCode, audienceLabel: string) =>
+      (
+        await plain.narrate({
+          kind: "app",
+          name: "findings",
+          scope: workspaceScope,
+          revision: 1,
+          config: { title: "Findings", manifest: { actions: [] } },
+          locale,
+          access: everything,
+          audienceLabel
+        })
+      )?.summary;
+    expect(await summary("en", "Only the builder")).toMatch(
+      /^Findings opens for only the builder\./u
+    );
+    expect(await summary("en", "Everyone in Sales")).toMatch(
+      /^Findings opens for everyone in Sales\./u
+    );
+    expect(await summary("en", "Everyone in the instance")).toMatch(
+      /^Findings opens for everyone in the instance\./u
+    );
+    expect(await summary("de", "Nur für den Ersteller")).toMatch(
+      /^Findings öffnet sich nur für den Ersteller\./u
+    );
+    expect(await summary("de", "Alle in Vertrieb")).toMatch(
+      /^Findings öffnet sich für alle in Vertrieb\./u
+    );
+    expect(await summary("de", "Alle in der Instanz")).toMatch(
+      /^Findings öffnet sich für alle in der Instanz\./u
+    );
+  });
 });

@@ -62,6 +62,8 @@ export interface UiLabels {
   sectionHasError: string;
   /** Names the "…" button of a `PageHeader`, whose menu holds the actions the row has no room for. */
   moreActions: string;
+  /** The button of a `LoadError` that reads again what could not be loaded. */
+  tryAgain: string;
 }
 
 export const uiLabelsEn: UiLabels = {
@@ -107,7 +109,8 @@ export const uiLabelsEn: UiLabels = {
   chartLoadFailed: "The chart could not be loaded.",
   onThisPage: "On this page",
   sectionHasError: "Has an error",
-  moreActions: "More actions"
+  moreActions: "More actions",
+  tryAgain: "Try again"
 };
 
 export const uiLabelsDe: UiLabels = {
@@ -153,5 +156,6 @@ export const uiLabelsDe: UiLabels = {
   chartLoadFailed: "Das Diagramm konnte nicht geladen werden.",
   onThisPage: "Auf dieser Seite",
   sectionHasError: "Enthält einen Fehler",
-  moreActions: "Weitere Aktionen"
+  moreActions: "Weitere Aktionen",
+  tryAgain: "Erneut versuchen"
 };

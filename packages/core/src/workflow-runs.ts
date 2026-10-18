@@ -398,7 +398,8 @@ export interface WorkflowRunsStore {
   listLinkedStepRuns(ref: WorkflowRunRef): Promise<WorkflowStepRunId[]>;
   /**
    * What a due time of a Workflow's schedule meets: whether a run for it exists, and whether
-   * a run an earlier due time started has not ended.
+   * a run an earlier due time started has not ended. Called inside the admission transaction;
+   * serializes admissions for this instance and Workflow until that transaction ends.
    */
   readScheduleState(input: {
     clientInstanceId: ClientInstanceId;
@@ -526,9 +527,9 @@ export interface WorkflowRunsStore {
   /** The step runs of a run that have not ended. */
   listOpenStepRuns(ref: WorkflowRunRef): Promise<WorkflowStepRun[]>;
   /**
-   * The runs whose values are due to be removed: ended before the moment and still with
-   * their values, oldest first and at most `limit` of them. A run that has not ended is never
-   * among them, however old it is: what carries it on reads its values.
+   * Runs due for pruning or repair by the current retention owner, oldest first and at
+   * most `limit` of them. Includes already marked rows pruned by an older owner. An open
+   * run is never among them, however old it is: what carries it on reads its values.
    */
   listRunsWithDataEndedBefore(input: {
     clientInstanceId: ClientInstanceId;
@@ -536,14 +537,14 @@ export interface WorkflowRunsStore {
     limit: number;
   }): Promise<WorkflowRunId[]>;
   /**
-   * Removes the input and the output of at most `limit` step runs of one run that still have
-   * one, in one statement. A loop keeps how many items it had and which step ended an item,
-   * so its counts read as before. Answers how many step runs it took them from.
+   * Removes every value (including staged code, raw outcomes, logs and item labels) of
+   * at most `limit` step runs of one run, in one statement. A loop keeps its item count and
+   * last step name so counts read as before. Answers how many step runs it took them from.
    */
   pruneStepRunData(ref: WorkflowRunRef & { limit: number }): Promise<number>;
   /**
-   * Removes the input and the result of a run that has ended and marks it as pruned. Answers
-   * whether this call did.
+   * Removes all run values and stamps the current retention version, only after every
+   * step is clear. Preserves the first prune time on repair. Answers whether this call did.
    */
   markRunDataPruned(ref: WorkflowRunRef & { prunedAt: ISODateString }): Promise<boolean>;
   /**

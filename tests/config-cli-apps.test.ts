@@ -267,6 +267,8 @@ describe("catalyst app commands", () => {
         "app",
         "publish",
         "offers",
+        "--audience",
+        "workspace",
         "--workspace",
         t.workspaceId,
         "--yes"
@@ -281,6 +283,8 @@ describe("catalyst app commands", () => {
         "app",
         "publish",
         "offers",
+        "--audience",
+        "workspace",
         "--workspace",
         t.workspaceId
       );
@@ -295,7 +299,15 @@ describe("catalyst app commands", () => {
       );
       expect((await run("app", "push", "offers")).code).toBe(0);
 
-      const asked = await run("app", "publish", "offers", "--workspace", t.workspaceId);
+      const asked = await run(
+        "app",
+        "publish",
+        "offers",
+        "--audience",
+        "workspace",
+        "--workspace",
+        t.workspaceId
+      );
       expect(asked.code).toBe(1);
       expect(asked.out).not.toContain("Publish revision 2 of App 'offers' in place of revision 1.");
       expect(asked.out).not.toContain("External hosts it calls:\n  api.example.org  (added)");
@@ -306,7 +318,7 @@ describe("catalyst app commands", () => {
       const declined = await cliAs(t.instance, t.admin.id, cwd, async (question) => {
         questions.push(question);
         return questions.length === 1 ? "d" : "n";
-      })("app", "publish", "offers", "--workspace", t.workspaceId);
+      })("app", "publish", "offers", "--audience", "workspace", "--workspace", t.workspaceId);
       expect(declined).toMatchObject({ code: 1, err: "Nothing was published.\n" });
       const publishQuestion =
         "Publish revision 2 of app 'offers'? If approval is required, this files a request in the Inbox. [y/N; d=Details] ";
@@ -319,6 +331,8 @@ describe("catalyst app commands", () => {
         "app",
         "publish",
         "offers",
+        "--audience",
+        "workspace",
         "--workspace",
         t.workspaceId,
         "--json"
@@ -372,6 +386,8 @@ describe("catalyst app commands", () => {
         "app",
         "publish",
         "offers",
+        "--audience",
+        "workspace",
         "--workspace",
         t.workspaceId,
         "--yes"
@@ -431,6 +447,77 @@ export const Route = createFileRoute("/history")({
       expect(pushed.code).toBe(1);
       expect(pushed.err).toContain("A file of an App holds at most 2.0 MiB.");
       expect(pushed.err).toContain("- assets/video.bin: 2.0 MiB");
+    } finally {
+      await t.close();
+    }
+  });
+});
+
+describe("SHARE-1 CLI audience", () => {
+  it("check 80: asks For whom before the publish review and sends only the person's choice", async () => {
+    const t = await setupAppInstance({ explicitCredentials: true, build: passThroughBuild });
+    try {
+      const cwd = await temporaryDirectory();
+      await writeFolder(join(cwd, "offers"), { "app.yaml": manifest(), "index.html": "<p>1</p>" });
+      expect(
+        (
+          await cliAs(t.instance, t.admin.id, cwd)(
+            "app",
+            "push",
+            "offers",
+            "--workspace",
+            t.workspaceId
+          )
+        ).code
+      ).toBe(0);
+      const questions: string[] = [];
+      const result = await cliAs(t.instance, t.admin.id, cwd, async (question) => {
+        questions.push(question);
+        return question.startsWith("For whom?") ? "self" : "y";
+      })("app", "publish", "offers", "--workspace", t.workspaceId);
+      expect(result, result.err).toMatchObject({ code: 0 });
+      expect(questions[0]).toContain("For whom?");
+      expect(questions[0]).toContain("Sales");
+      expect(questions[1]).toContain("Publish revision");
+      expect(result.out).toContain("only me");
+      expect(
+        (
+          await t.stores.configAssets.getConfigAsset({
+            clientInstanceId: t.admin.clientInstanceId,
+            kind: "app",
+            name: "offers"
+          })
+        )?.appAvailability?.audience
+      ).toBe("self");
+      const unattended = await cliAs(t.instance, t.admin.id, cwd)(
+        "app",
+        "publish",
+        "offers",
+        "--workspace",
+        t.workspaceId,
+        "--yes"
+      );
+      expect(unattended.code).toBe(2);
+      expect(unattended.err).toContain("--audience self|workspace|instance");
+      // The same live revision with another audience is a publish, never "already published".
+      const shared = await cliAs(t.instance, t.admin.id, cwd, async () => "y")(
+        "app",
+        "publish",
+        "offers",
+        "--audience",
+        "workspace",
+        "--workspace",
+        t.workspaceId
+      );
+      expect(shared, shared.err).toMatchObject({ code: 0 });
+      expect(shared.out).not.toContain("published one already");
+      expect(
+        await t.stores.configAssets.getConfigAsset({
+          clientInstanceId: t.admin.clientInstanceId,
+          kind: "app",
+          name: "offers"
+        })
+      ).toMatchObject({ publishedRevision: 1, appAvailability: { audience: "workspace" } });
     } finally {
       await t.close();
     }
