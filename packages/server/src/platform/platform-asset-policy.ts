@@ -46,11 +46,11 @@ export function createPlatformAssetPolicy(options: AssetWorkflowOptions, workflo
     ): Promise<PolicyValue | undefined> {
       const central = await centralFloor(["assets.put"], target);
       const kind = options.configAssets.kinds.get(target.kind);
-      // Existing agents save a shared draft; creating one, or a skill, is live at once.
-      // No central allow or personal Always allow can lower this confirmation floor.
-      const savesDraft =
-        kind?.lifecycle === "draft_published" || (target.kind === "agent" && hasExpectedRevision);
-      return savesDraft ? central : stricterOf(central, "confirm");
+      // Creating an agent or skill is live at once, so no central allow or personal Always allow
+      // can lower its confirmation floor. A save with an expected revision writes an existing
+      // agent's shared draft, and put() refuses it for every other kind without a draft.
+      const writesLive = kind?.lifecycle !== "draft_published" && !hasExpectedRevision;
+      return writesLive ? stricterOf(central, "confirm") : central;
     }
   };
 }

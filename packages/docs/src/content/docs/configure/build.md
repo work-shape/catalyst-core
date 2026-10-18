@@ -3,7 +3,7 @@ title: Agents and skills in Studio
 description: Create, edit, restore and delete agents and skills in Studio, connect outside systems, and read the other lists Studio holds.
 ---
 
-**Studio** is the area of the interface where agents and skills are made. It stands in the main rail as a row of its own and opens at `/build`. The old address `/admin/config` leads there. Beside **Agents** (German: **Agenten**) and **Skills**, Studio lists **Connections** (**Verbindungen**), **Data stores** (**Datenspeicher**) and **Guardrails** (**Leitplanken**), each for a person who may read one. Apps and Workflows are not in Studio: each has a row of its own in the main rail.
+**Studio** is the area of the interface where agents and skills are made. It stands in the main rail as a row of its own and opens at `/build`. The old address `/admin/config` leads there. Beside **Agents** (German: **Agenten**) and **Skills**, Studio lists **Connections** (**Verbindungen**), **Data stores** (**Datenspeicher**), **Knowledge bases** (**Wissensbasen**) and **Guardrails** (**Leitplanken**), each for a person who may read one. Apps and Workflows are not in Studio: each has a row of its own in the main rail.
 
 Studio works on the [asset API](/reference/api/assets/): it reads a list page by page, reads one asset when its page opens and writes one asset at a time. It never loads the whole set of agents and skills.
 
@@ -106,8 +106,9 @@ an HTML preview, generated SQL or a saved migration does not prove a record was 
 changed or found. A draft is not published, a simulated test is not a live write, and a call
 waiting for Allow has saved nothing.
 
-An agent has no direct tool on a Data Store's rows. For real records, build an App or Workflow
-that writes records, publish it and use it. The Data Store page under **Studio > Data stores**
+An agent changes or reads a Data Store's rows only with a `data_store.<store>.<verb>` tool
+that its definition lists, and reports a write only from that tool's successful result. Without
+such a tool, for real records build an App or Workflow that writes records, publish it and use it. The Data Store page under **Studio > Data stores**
 (German: **Studio > Datenspeicher**) shows the store and its rows. Migrations define the schema;
 they must not stand in for interactive row inserts or updates. A structured Knowledge Base
 may read described tables with `knowledge.query` where that tool is available.
@@ -115,15 +116,15 @@ may read described tables with `knowledge.query` where that tool is available.
 Creating an agent or skill from chat is live at once and requires confirmation of the exact
 call. Existing agents save a shared draft that a person publishes; existing skills are changed
 on their page or through a skill change request. The save's `workspaceId` is the actual owner,
-not a name prefix such as `hr-`. Without a workspace id the owner is the instance. To build in
+not a name prefix such as `team-`. Without a workspace id the owner is the instance. To build in
 another workspace, switch to it before starting its Build conversation.
 
 A newly created agent is available nowhere. Open **Studio > Agents > the agent > Available in >
 Selected workspaces**, choose the requested shared workspace, then **Save changes**. In German:
 **Studio > Agenten > the agent > Verfügbar in > Ausgewählte Arbeitsbereiche**, choose the workspace,
 then **Änderungen speichern**. **Personal workspaces** includes every person's personal workspace;
-it is not a selector for one person's workspace. An agent editor must perform this step if you
-lack the right. Changes to an existing agent's draft also need **Publish** (**Veröffentlichen**).
+it is not a selector for one person's workspace. Availability belongs to the instance: a person who may change
+agents across the instance performs this step if you lack the right. Changes to an existing agent's draft also need **Publish** (**Veröffentlichen**).
 
 For orientation, point to the places enabled for the person: **Workflows**, **Apps**, **Inbox**
 (**Eingang**), and Studio's **Agents**, **Skills**, **Connections** (**Verbindungen**),

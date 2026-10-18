@@ -89,7 +89,8 @@ describe("the platform's knowledge of an agent", () => {
       [
         "successful tool result proves that exact action and target",
         "hand-written table",
-        "no direct tool to insert, change or query",
+        "only with a data_store.<store>.<verb> tool in your tool list",
+        "Without such a tool, say so before offering sample rows",
         "App or Workflow that writes records",
         "never use a migration",
         "Pending confirmation means nothing has been saved"
@@ -99,7 +100,7 @@ describe("the platform's knowledge of an agent", () => {
       "actual owner",
       [
         "report the workspaceId returned by the save",
-        "hr- is not an owner",
+        "team- is not an owner",
         "must switch to that workspace"
       ]
     ],
@@ -134,7 +135,7 @@ describe("the platform's knowledge of an agent", () => {
     expect(guide).toContain(
       "The Build Agent reports only actions confirmed by successful tool results"
     );
-    expect(guide).toContain("An agent has no direct tool on a Data Store's rows");
+    expect(guide).toContain("only with a `data_store.<store>.<verb>` tool");
     expect(guide).toContain("The save's `workspaceId` is the actual owner");
     expect(guide).toContain("A newly created agent is available nowhere");
     expect(guide).toContain("**Wissen**");
