@@ -13,6 +13,7 @@ import type { AccessResource, ActorAccess, Permission, PlatformAction } from "./
 import type { JobsStore } from "./jobs";
 import type { OperationRunStore } from "./operation-runs";
 import type { ConfigAssetStore } from "./config-assets";
+import type { LocaleCode } from "./localization";
 
 export * from "./approval-request";
 
@@ -37,6 +38,8 @@ export interface ApprovalPreviewViewer {
   access: ActorAccess;
   /** The request is one row of a list. A kind then reads nothing that a row does not show. */
   inList: boolean;
+  /** The reader's language, for what a kind words itself. The instance's where absent. */
+  locale?: LocaleCode;
 }
 
 export interface ApprovalRequestContext {

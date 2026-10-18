@@ -8,7 +8,9 @@ import {
   type ConfigAssetRevisionRecord,
   type ConfigAssetStore,
   type ClientInstanceId,
+  type ApprovalPreviewViewer,
   type JsonObject,
+  type LocaleCode,
   type OperationApproval,
   type OperationAuthorization,
   type OperationEffect,
@@ -22,6 +24,7 @@ import { APP_ACTIONS, APP_ASSET_KIND } from "../apps/app-kind";
 import type { AssetTarget } from "../assets/asset-target";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
 import type { HeldCallApprovalKind } from "./held-call-kind";
+import type { PublishNarrator } from "../publish-narrative/publish-narrator";
 
 // A publish that a guardrail holds waits as a request of its own kind, `app_publish` or
 // `workflow_publish`, which the holders of the kind's `approve` right decide and nobody else.
@@ -152,6 +155,10 @@ export interface PublishApprovalKindsOptions {
   files: Pick<PagesStore, "getAssetFileSet">;
   /** The effect of an operation a Workflow step calls, where it is registered. */
   effectOf(operation: string): Promise<OperationEffect | undefined>;
+  /** The publish question's sentence and warnings (PUBQ-1). Without it the review omits them. */
+  narrator?: PublishNarrator;
+  /** The instance's language, for a reader whose own is not known. */
+  defaultLocale?: LocaleCode;
 }
 
 /** The held-call kinds of a publish: one for each kind of asset whose publish can be held. */
@@ -166,7 +173,7 @@ export function publishApprovalKinds(options: PublishApprovalKindsOptions): Held
       const moved = await publishMoved(clientInstanceId, parsed.data, store);
       return moved && MOVED_SENTENCES[moved](parsed.data.name);
     },
-    async review(subject, inList): Promise<JsonObject | undefined> {
+    async review(subject, inList, viewer): Promise<JsonObject | undefined> {
       const parsed = publishSubjectSchema.safeParse(subject);
       if (!parsed.success) return undefined;
       // A row of a list reads nothing: it names what is published as it was filed.
@@ -176,7 +183,7 @@ export function publishApprovalKinds(options: PublishApprovalKindsOptions): Held
       }
       const moved = await publishMoved(clientInstanceId, parsed.data, options.store);
       return {
-        ...(await publishReview(options, parsed.data)),
+        ...(await publishReview(options, parsed.data, viewer)),
         ...(moved ? { stale: moved } : {})
       };
     },
@@ -194,7 +201,8 @@ export function publishApprovalKinds(options: PublishApprovalKindsOptions): Held
  */
 async function publishReview(
   options: PublishApprovalKindsOptions,
-  subject: PublishSubject
+  subject: PublishSubject,
+  viewer: ApprovalPreviewViewer | undefined
 ): Promise<JsonObject> {
   const { clientInstanceId, store } = options;
   const kind = options.kinds?.get(subject.kind);
@@ -208,6 +216,24 @@ async function publishReview(
   const next = await read(subject.revision);
   const live = subject.liveRevision === null ? undefined : await read(subject.liveRevision);
   const reach = kind?.publishReach?.(configOf(next), live ? configOf(live) : undefined);
+  // The same sentence the Publish dialog and the CLI lead with, for the frozen revision, in
+  // the approver's language and naming what the approver may be shown (PUBQ-1).
+  const asset =
+    next && viewer && options.narrator
+      ? await store.getConfigAsset({ clientInstanceId, kind: subject.kind, name: subject.name })
+      : undefined;
+  const narrative =
+    next && viewer && options.narrator && asset?.id === subject.assetId
+      ? await options.narrator.narrate({
+          kind: subject.kind,
+          name: subject.name,
+          scope: asset.scope,
+          revision: subject.revision,
+          config: next.config,
+          locale: viewer.locale ?? options.defaultLocale ?? "en",
+          access: viewer.access
+        })
+      : undefined;
   const calls = reach
     ? await Promise.all(
         reach.calls.map(async (call) => ({
@@ -224,6 +250,7 @@ async function publishReview(
     revision: subject.revision,
     liveRevision: subject.liveRevision,
     files: await changedFiles(options, subject, next, live),
+    ...(narrative ? { publishNarrative: { ...narrative } } : {}),
     ...(reach
       ? {
           // Only what changes something: a reading call reaches nothing new.

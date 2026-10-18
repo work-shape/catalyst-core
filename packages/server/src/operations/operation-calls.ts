@@ -21,6 +21,8 @@ import { createNoticeHandler } from "../notices/notice-kind";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
 import { createAuditingEventEmitter } from "./event-emitter";
 import type { GuardrailRunner } from "../guardrails/guardrail-runner";
+import { createPublishNarrator } from "../publish-narrative/publish-narrator";
+import type { PublishNarrativeStoredData } from "@work-shape/catalyst-core";
 
 export type OperationCallsOptions = Pick<
   Omit<ResolvedChatServerOptions, "operationCalls">,
@@ -45,6 +47,8 @@ export type OperationCallsOptions = Pick<
   configAssets?: Pick<ResolvedChatServerOptions["configAssets"], "kinds">;
   /** The tools an agent's definition lists. Without it this process serves no agent. */
   agentToolNames?: RunOperationDeps["agentToolNames"];
+  /** Who sees which stored data, for the publish question's sentence. Absent without the module. */
+  publishStoredData?: PublishNarrativeStoredData;
 };
 
 /** Builds the call path of one process. See `OperationCalls`. */
@@ -68,12 +72,24 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
         }
       : {})
   };
+  // The sentence a publish question opens with, the same for a read and a held publish. It
+  // runs no step and no check: it names the guardrails in force a published run would meet.
+  const publishNarrator = createPublishNarrator({
+    clientInstanceId,
+    stores: options.stores,
+    ...(options.configAssets ? { kinds: options.configAssets.kinds } : {}),
+    ...(options.guardrails ? { guardrails: options.guardrails } : {}),
+    resolve: (operation) => deps.registry.resolve(operation),
+    ...(options.publishStoredData ? { storedData: options.publishStoredData } : {})
+  });
   // A held publish is decided by the holders of the kind's `approve` right.
   const held = publishApprovalKinds({
     clientInstanceId,
     ...(options.configAssets ? { kinds: options.configAssets.kinds } : {}),
     store: options.stores.configAssets,
     files: options.stores.pages,
+    narrator: publishNarrator,
+    defaultLocale: options.config.localization.defaultLocale,
     effectOf: async (operation) => (await deps.registry.resolve(operation))?.effect
   });
   const handlers = [
@@ -164,5 +180,5 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       policy: deps.policy
     })
   );
-  return { registry, deps, approvalRequestHandlers };
+  return { registry, deps, approvalRequestHandlers, publishNarrator };
 }

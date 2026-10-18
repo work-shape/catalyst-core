@@ -176,6 +176,43 @@ describe("publishing needs an instance admin's approval", () => {
     );
   });
 
+  it("PUBQ-1: a held publish's Inbox item leads with the same sentence as the Publish dialog, in the approver's language", async () => {
+    await created("narrated");
+    const held = heldSchema.parse((await t.publish(t.kai.id, "narrated", 1)).json());
+    const narrativeSchema = z.object({ summary: z.string().min(1), warnings: z.array(z.string()) });
+    const reviewed = async () =>
+      narrativeSchema.parse(
+        z
+          .object({ review: z.object({ publishNarrative: z.unknown() }) })
+          .parse((await request(t.admin.id, held.approvalRequestId)).preview).review
+          .publishNarrative
+      );
+    const asked = async () =>
+      narrativeSchema.parse(
+        z
+          .object({ publishNarrative: z.unknown() })
+          .parse(
+            (
+              await t.expectOk(t.admin.id, "assets.get", {
+                params: { kind: "app", name: "narrated" },
+                query: { workspaceId: t.workspaceId, revision: "1" }
+              })
+            ).json()
+          ).publishNarrative
+      );
+    const english = await reviewed();
+    expect(english.summary).toMatch(/^Offers opens for /u);
+    expect(english).toEqual(await asked());
+    await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, locale: "de" });
+    try {
+      const german = await reviewed();
+      expect(german.summary).toMatch(/^Offers öffnet sich für /u);
+      expect(german).toEqual(await asked());
+    } finally {
+      await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, locale: null });
+    }
+  });
+
   it("publishes exactly the held revision once an admin approves, as the member with the admin as approver", async () => {
     await created("rates");
     const held = heldSchema.parse((await t.publish(t.kai.id, "rates", 1)).json());

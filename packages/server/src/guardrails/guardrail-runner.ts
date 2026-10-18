@@ -78,6 +78,15 @@ export interface GuardrailOfAsset {
   revision: number;
 }
 
+/** A guardrail in force at an event, as a question names it before anything runs. */
+export interface GuardrailInForce {
+  name: string;
+  displayName: string;
+  outcome: GuardrailAnswer["outcome"];
+  /** It runs a check, so whether it answers its outcome depends on the content it reads. */
+  checked: boolean;
+}
+
 /** What a before-event hands the guardrails bound to it. */
 export interface GuardrailEventInput {
   event: GuardrailEvent;
@@ -257,6 +266,41 @@ export class GuardrailRunner {
       context
     );
     return answer ?? answerOf(bound, "allow", "");
+  }
+
+  /**
+   * The guardrails in force at an event for what `match` names, as `answer` would bind them:
+   * the release floor, the published guardrails that reach it and the shipped guardrails
+   * nobody switched off. No check runs, no content is read and no hit is kept, so a publish
+   * question can name what a run would meet. `checked` says the answer depends on content.
+   */
+  async inForce(event: GuardrailEvent, match: GuardrailFilter): Promise<GuardrailInForce[]> {
+    const floor = Object.entries(this.options.config.guardrails)
+      .filter(([, guardrail]) => guardrail.on === event && applies(guardrail.filter, match))
+      .map(([name, guardrail]) => ({
+        name,
+        displayName: guardrail.displayName ?? name,
+        outcome: guardrail.outcome,
+        checked: true
+      }));
+    const assets = (await this.publishedGuardrails())
+      .filter(
+        ({ guardrail, scope }) =>
+          guardrail.on === event && reaches(scope, match) && applies(guardrail.filter, match)
+      )
+      .map(({ guardrail }) => ({
+        name: guardrail.name,
+        displayName: guardrail.displayName,
+        outcome: guardrail.outcome,
+        checked: true
+      }));
+    const shipped = (await this.shippedGuardrails(event)).map((entry) => ({
+      name: entry.name,
+      displayName: entry.guardrail.displayName ?? entry.name,
+      outcome: entry.guardrail.outcome,
+      checked: false
+    }));
+    return [...floor, ...assets, ...shipped];
   }
 
   /** Whether a guardrail applies to an event by its filter and its reach. */

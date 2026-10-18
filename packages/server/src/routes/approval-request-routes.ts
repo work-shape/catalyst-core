@@ -1,4 +1,5 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { asUserId } from "@work-shape/catalyst-core";
 import { ApprovalRequestWorkflow } from "../approvals/approval-request-service";
 import type { Route } from "../http/route";
 import { requirePathParam } from "./request-context";
@@ -9,7 +10,15 @@ export function registerApprovalRequestRoutes(route: Route, options: ChatServerO
   const workflow = new ApprovalRequestWorkflow({
     ...options.approvalRequests,
     clientInstanceId: options.clientInstanceId,
-    auditRecorder: options.auditRecorder
+    auditRecorder: options.auditRecorder,
+    // A held publish's review leads with a sentence in the language of who opens it (PUBQ-1).
+    readerLocale: async (userId, requested) =>
+      (await options.stores.users.getUser({
+        clientInstanceId: options.clientInstanceId,
+        userId: asUserId(userId)
+      }))?.locale ??
+      requested ??
+      options.config.localization.defaultLocale
   });
 
   // A card in a thread reads and withdraws with chat scopes; the review queue and every

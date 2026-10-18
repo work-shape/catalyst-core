@@ -1,6 +1,7 @@
 import type { DataStores } from "@work-shape/catalyst-data-stores";
 import type { InstanceConnections } from "./connections";
 import type {
+  PublishNarrativeStoredData,
   AuditRecorder,
   ApprovalRequestHandler,
   Authorizer,
@@ -92,6 +93,8 @@ export interface ModuleAssembly {
   readonly knowledgeBackend?: KnowledgeBackend;
   readonly knowledgeSources?: DataStores["knowledgeSources"];
   readonly knowledgeSourceJobs?: DataStores["knowledgeSourceJobs"];
+  /** Who sees which stored data, for the publish question's sentence (PUBQ-1). */
+  readonly publishNarrativeData?: PublishNarrativeStoredData;
   /** The operations of each Asset of the kind. Built here and resolved when one is called. */
   operationSources?(runtime: ModuleRuntime): readonly OperationSource[];
   start?(runtime: ModuleRuntime): ModuleRuntimeAssembly | Promise<ModuleRuntimeAssembly>;
@@ -112,6 +115,8 @@ export interface AssembledModules {
   readonly approvalRequestHandlers: readonly ApprovalRequestHandler[];
   readonly assetKinds: readonly WorkflowAssetKind[];
   readonly tools: readonly ToolAssemblyDefinition[];
+  /** The first module's answer on stored data for the publish question, where one is on. */
+  readonly publishNarrativeData?: PublishNarrativeStoredData;
   /** Adds every module's operation sources to the call path, then starts each module. */
   start(runtime: ModuleRuntime): Promise<StartedModules>;
 }

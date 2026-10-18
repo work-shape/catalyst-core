@@ -27,6 +27,7 @@ import {
   type ActorAccess,
   type ClientInstanceId,
   type DataToolSource,
+  type PublishNarrativeStoredData,
   type JobRetry,
   type JobSchedule,
   type JsonObject,
@@ -50,6 +51,7 @@ import type { KnowledgeEmbedding } from "./knowledge/definition";
 import { createKnowledgeBackend } from "./knowledge/backends";
 import { listDataStores } from "./list";
 import { appDataSources } from "./used-by";
+import { createPublishNarrativeData } from "./publish-narrative-data";
 import { createDataStoreOperationSource, createDataStoreToolSource } from "./operations";
 import { ensureVectorExtension } from "./provisioning";
 import type { DataStoreDatasetReader, DataStoreLimits, DataStoreRuntime } from "./runtime";
@@ -168,6 +170,8 @@ export interface DataStores {
     app: string,
     revision?: number
   ): ReturnType<typeof appDataSources>;
+  /** What the publish question's sentence says of stored data (PUBQ-1). It reads no store. */
+  readonly publishNarrativeData: PublishNarrativeStoredData;
   /** Describes the operations to an agent that lists them as tools. */
   readonly toolSource: DataToolSource;
   readonly jobHandlers: readonly RegisteredJobHandler[];
@@ -270,6 +274,7 @@ export function createDataStores(input: {
     operationSource: createDataStoreOperationSource(runtime),
     list: (access) => listDataStores(runtime, access),
     appSources: (access, app, revision) => appDataSources(runtime, access, app, revision),
+    publishNarrativeData: createPublishNarrativeData(runtime),
     toolSource: createDataStoreToolSource(runtime),
     jobHandlers: jobs.handlers,
     schedules: jobs.schedules,
