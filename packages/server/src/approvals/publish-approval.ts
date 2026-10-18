@@ -1,5 +1,8 @@
+import { appAudienceSchema } from "@work-shape/catalyst-api-contract";
+import type { AppAudience } from "@work-shape/catalyst-core";
 import {
   WORKFLOW_ACTIONS,
+  asCollaborationWorkspaceId,
   callerCanConfirm,
   WORKFLOW_ASSET_KIND,
   WORKFLOW_MANIFEST_FILE,
@@ -16,6 +19,7 @@ import {
   type OperationEffect,
   type OperationOrigin,
   type PagesStore,
+  type PlatformStores,
   type PlatformAction,
   type PolicyValue
 } from "@work-shape/catalyst-core";
@@ -48,6 +52,8 @@ export const PUBLISH_APPROVAL_KINDS: readonly string[] = Object.values(PUBLISH_A
 
 /** What a held publish is about, frozen when it is filed: the asset and its two pointers then. */
 const publishSubjectSchema = z.object({
+  audience: appAudienceSchema.optional(),
+  liveAudience: appAudienceSchema.optional(),
   kind: z.string().min(1),
   name: z.string().min(1),
   /** The name people read, when the request was filed. */
@@ -69,19 +75,26 @@ type PublishSubject = z.infer<typeof publishSubjectSchema>;
  */
 export function publishApproval(
   target: AssetTarget,
-  revision: number
+  revision: number,
+  audience?: AppAudience
 ): OperationApproval | undefined {
   const approval = PUBLISH_APPROVALS[target.kind.kind];
   const { asset } = target;
   if (approval === undefined || asset?.status !== "active") return undefined;
   const subject: PublishSubject = {
     kind: target.kind.kind,
+    ...(target.kind.kind === "app"
+      ? { audience: audience ?? asset.appAvailability?.audience ?? "workspace" }
+      : {}),
     name: target.name,
     title: titleOf(target.kind, asset) ?? target.name,
     assetId: asset.id,
     revision,
     draftRevision: asset.revision,
-    liveRevision: asset.publishedRevision ?? null
+    liveRevision: asset.publishedRevision ?? null,
+    ...(target.kind.kind === "app"
+      ? { liveAudience: asset.appAvailability?.audience ?? "workspace" }
+      : {})
   };
   return {
     kind: approval.kind,
@@ -146,11 +159,17 @@ async function publishMoved(
   });
   if (!asset || asset.id !== subject.assetId || asset.status !== "active") return "gone";
   if (asset.revision !== subject.draftRevision) return "draft_moved";
-  if ((asset.publishedRevision ?? null) !== subject.liveRevision) return "live_moved";
+  if (
+    (asset.publishedRevision ?? null) !== subject.liveRevision ||
+    (subject.liveAudience !== undefined &&
+      (asset.appAvailability?.audience ?? "workspace") !== subject.liveAudience)
+  )
+    return "live_moved";
   return undefined;
 }
 
 export interface PublishApprovalKindsOptions {
+  workspaces?: Pick<PlatformStores["workspaces"], "getWorkspace">;
   clientInstanceId: ClientInstanceId;
   /** The registered kinds, which say what a revision reaches. Without them the review omits it. */
   kinds?: AssetKindRegistry<WorkflowAssetKind>;
@@ -225,18 +244,35 @@ async function publishReview(
     next && viewer && options.narrator
       ? await store.getConfigAsset({ clientInstanceId, kind: subject.kind, name: subject.name })
       : undefined;
+  const workspaceName =
+    asset?.scope.kind === "workspace" && options.workspaces
+      ? (
+          await options.workspaces.getWorkspace(
+            clientInstanceId,
+            asCollaborationWorkspaceId(asset.scope.workspaceId)
+          )
+        )?.name
+      : undefined;
   const narrative =
     next && viewer && options.narrator && asset?.id === subject.assetId
-      ? await options.narrator
-          .narrate({
-            kind: subject.kind,
-            name: subject.name,
-            scope: asset.scope,
-            revision: subject.revision,
-            config: next.config,
-            locale: viewer.locale ?? options.defaultLocale ?? "en",
-            access: viewer.access
-          })
+      ? await options.narrator.narrate({
+          kind: subject.kind,
+          name: subject.name,
+          scope: asset.scope,
+          revision: subject.revision,
+          config: next.config,
+          locale: viewer.locale ?? options.defaultLocale ?? "en",
+          access: viewer.access,
+          ...(subject.audience
+            ? {
+                audienceLabel: audienceLabel(
+                  subject.audience,
+                  viewer.locale ?? options.defaultLocale ?? "en",
+                  workspaceName
+                )
+              }
+            : {})
+        })
           .catch(() => unavailablePublishNarrative(viewer.locale ?? options.defaultLocale ?? "en"))
       : undefined;
   const calls = reach
@@ -252,6 +288,18 @@ async function publishReview(
     kind: subject.kind,
     name: subject.name,
     title: subject.title,
+    ...(subject.audience
+      ? {
+          audience: {
+            selected: subject.audience,
+            label: audienceLabel(
+              subject.audience,
+              viewer?.locale ?? options.defaultLocale ?? "en",
+              workspaceName
+            )
+          }
+        }
+      : {}),
     revision: subject.revision,
     liveRevision: subject.liveRevision,
     files: await changedFiles(options, subject, next, live),
@@ -334,3 +382,14 @@ async function changedFiles(
 const configFilesSchema = z.object({
   files: z.array(z.object({ path: z.string(), content: z.string() }))
 });
+
+function audienceLabel(audience: AppAudience, locale: LocaleCode, workspaceName?: string): string {
+  if (audience === "workspace" && workspaceName)
+    return locale === "de" ? `Alle in ${workspaceName}` : `Everyone in ${workspaceName}`;
+  const labels = {
+    self: { en: "Only the builder", de: "Nur für den Ersteller" },
+    workspace: { en: "Everyone in the owning workspace", de: "Alle im besitzenden Arbeitsbereich" },
+    instance: { en: "Everyone in the instance", de: "Alle in der Instanz" }
+  };
+  return labels[audience][locale];
+}

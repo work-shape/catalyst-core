@@ -1,4 +1,5 @@
 import {
+  APP_AUDIENCES,
   ASSET_NAME_REFUSAL_REASONS,
   ASSET_SYNC_CHANGE_TYPES
 } from "@work-shape/catalyst-asset-schemas";
@@ -166,6 +167,8 @@ export const assetVerbSchema = z.enum(["write", "delete", "publish"]);
  * warning for each step a guardrail in force will or may stop when the revision runs live.
  * Names and counts only, never a row value. A held publish's review carries the same object.
  */
+export const appAudienceSchema = z.enum(APP_AUDIENCES);
+
 export const publishNarrativeSchema = z.object({
   summary: z.string(),
   /** Empty where no guardrail in force stops a step, and for an App. */
@@ -190,6 +193,14 @@ export const assetSchema = z.object({
    * warnings for the revision this read returns.
    */
   publishNarrative: publishNarrativeSchema.optional(),
+  appAudience: z
+    .object({
+      selected: appAudienceSchema,
+      choices: z.array(appAudienceSchema),
+      label: z.string(),
+      workspaceName: z.string().optional()
+    })
+    .optional(),
   /**
    * The revision `config` and `files` are of, for a kind with a draft and a published revision:
    * the draft where the call names none.
@@ -255,6 +266,7 @@ export const assetRevisionSelectorSchema = z
   .regex(/^(?:draft|published|[1-9]\d{0,8})$/u, "draft, published, or a revision number");
 
 export const getAssetQuerySchema = assetScopeQuerySchema.extend({
+  audience: appAudienceSchema.optional(),
   revision: assetRevisionSelectorSchema.optional(),
   /** `true` adds the source files of the revision, for a kind whose revisions hold files. */
   files: z.enum(["true", "false"]).optional()
@@ -326,6 +338,7 @@ export const assetWriteResponseSchema = z.object({
 });
 
 export const publishAssetRequestSchema = z.object({
+  audience: appAudienceSchema.optional(),
   /** Confirmation of the Knowledge Base processing count and cost; stale reviews are refused. */
   confirmProcessing: z
     .string()

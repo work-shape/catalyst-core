@@ -389,6 +389,9 @@ export class GuardrailRunner {
     const results = new Map<Bound, GuardrailAnswer>();
     for (const entry of bound) {
       if (entry.shipped) {
+        // SHARE-1 / GR-PUB-2: the shipped App gate holds a wider reach, including a wider
+        // audience. A separately configured always-ask guardrail still runs normally.
+        if (input.event === "app.before_publish" && fields.publish_widens === "false") continue;
         results.set(entry, answerOf(entry, entry.guardrail.outcome, entry.shipped.reason));
       } else if (entry.pattern) {
         const answer = matchPattern(entry, entry.pattern, checked(fields, input.event, entry));

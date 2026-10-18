@@ -2656,6 +2656,14 @@
             }
           },
           {
+            "name": "audience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AppAudience"
+            }
+          },
+          {
             "name": "revision",
             "in": "query",
             "required": false,
@@ -27140,6 +27148,14 @@
           "truncated"
         ]
       },
+      "AppAudience": {
+        "type": "string",
+        "enum": [
+          "self",
+          "workspace",
+          "instance"
+        ]
+      },
       "AppErrorCode": {
         "type": "string",
         "enum": [
@@ -28000,6 +28016,31 @@
           },
           "publishNarrative": {
             "$ref": "#/components/schemas/PublishNarrative"
+          },
+          "appAudience": {
+            "type": "object",
+            "properties": {
+              "selected": {
+                "$ref": "#/components/schemas/AppAudience"
+              },
+              "choices": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AppAudience"
+                }
+              },
+              "label": {
+                "type": "string"
+              },
+              "workspaceName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "selected",
+              "choices",
+              "label"
+            ]
           },
           "contentRevision": {
             "type": "integer",
@@ -34138,6 +34179,9 @@
       "PublishAssetRequest": {
         "type": "object",
         "properties": {
+          "audience": {
+            "$ref": "#/components/schemas/AppAudience"
+          },
           "confirmProcessing": {
             "type": "string",
             "pattern": "^[a-f0-9]{64}$"

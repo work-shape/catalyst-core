@@ -1,3 +1,5 @@
+import { appAudienceReview } from "../apps/app-audience";
+import type { AppAudience } from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
   resolveStoredAgentReferences
@@ -70,6 +72,18 @@ export class AssetReadWorkflow {
   constructor(options: AssetWorkflowOptions, host: AssetReadHost) {
     this.options = options;
     this.host = host;
+  }
+
+  /** Instance availability permits consumption from another workspace, while every right
+   * is still evaluated on the App's owning workspace. Writes keep their strict owner address. */
+  private async readTarget(address: AssetAddress): Promise<AssetTarget> {
+    const target = await this.host.target(address);
+    const other = target.other;
+    return address.kind === "app" &&
+      other?.appAvailability?.audience === "instance" &&
+      other.scope.kind === "workspace"
+      ? this.host.target({ ...address, workspaceId: other.scope.workspaceId })
+      : target;
   }
 
   /**
@@ -159,12 +173,15 @@ export class AssetReadWorkflow {
     access: ActorAccess,
     input: AssetAddress & { revision?: string; files?: boolean }
   ): Promise<OperationAuthorization> {
-    const target = await this.host.target(input);
+    const target = await this.readTarget(input);
     return decide(access, this.readAction(access, target, input).action, target.resource);
   }
 
-  async get(call: AssetCall, address: AssetAddress & { revision?: string; files?: boolean }) {
-    const target = await this.host.target(address);
+  async get(
+    call: AssetCall,
+    address: AssetAddress & { revision?: string; files?: boolean; audience?: AppAudience }
+  ) {
+    const target = await this.readTarget(address);
     const read = this.readAction(call.access, target, address);
     call.access.require(read.action, target.resource);
     const asset = requireActive(target);
@@ -205,18 +222,22 @@ export class AssetReadWorkflow {
             names: this.addresseeNames()
           })
         : undefined;
+    const appAudience =
+      target.kind.kind === "app" && locale
+        ? await appAudienceReview(this.options, asset, call.access, locale, address.audience)
+        : undefined;
     // The sentence the publish question leads with, for the revision this read returns (PUBQ-1).
     const publishNarrative = locale
-      ? await this.options.operationCalls?.publishNarrator
-          ?.narrate({
-            kind: target.kind.kind,
-            name: asset.name,
-            scope: asset.scope,
-            revision: content.contentRevision ?? asset.revision,
-            config: content.config,
-            locale,
-            access: call.access
-          })
+      ? await this.options.operationCalls?.publishNarrator?.narrate({
+          kind: target.kind.kind,
+          name: asset.name,
+          scope: asset.scope,
+          revision: content.contentRevision ?? asset.revision,
+          config: content.config,
+          locale,
+          access: call.access,
+          ...(appAudience ? { audienceLabel: appAudience.label } : {})
+        })
           .catch(() => unavailablePublishNarrative(locale))
       : undefined;
     const agentStatus =
@@ -253,6 +274,7 @@ export class AssetReadWorkflow {
       ...(runsAs === undefined ? {} : { runsAs }),
       ...(publishQuestion?.length ? { publishQuestion } : {}),
       ...(publishNarrative ? { publishNarrative } : {}),
+      ...(appAudience ? { appAudience } : {}),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
       allowed,
@@ -606,9 +628,15 @@ function isPublished(kind: WorkflowAssetKind, asset: ConfigAssetRecord | undefin
 export function listedTo(
   kind: WorkflowAssetKind,
   access: ActorAccess,
-  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published">
+  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published" | "appAvailability">
 ): boolean {
-  const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
+  const resource = accessResource(
+    asset.kind,
+    asset.name,
+    asset.scope,
+    asset.id,
+    asset.appAvailability
+  );
   return (
     access.authorize(kind.actions.read, resource).allowed ||
     showsPublishedView(kind, access, resource, asset.published === true)

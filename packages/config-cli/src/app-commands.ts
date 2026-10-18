@@ -41,6 +41,7 @@ interface AppCommandValues {
   workspace?: string;
   revision?: string;
   published: boolean;
+  audience?: string;
   yes: boolean;
   json: boolean;
 }
@@ -62,8 +63,9 @@ export const APP_VERBS = {
       "Send the folder as the App's next draft revision, or create the App; build errors name file:line (assets.put)"
   },
   publish: {
-    usage: "publish <app> [--revision <n>] [--yes]",
-    summary: "Show what the draft makes live, then ask before publishing it (assets.publish)"
+    usage: "publish <app> [--revision <n>] [--audience self|workspace|instance] [--yes]",
+    summary:
+      "Choose who may use the App, show what the revision makes live, then ask before publishing it (assets.publish)"
   },
   status: {
     usage: "status <app> [dir]",
@@ -297,23 +299,46 @@ async function publish(
 ): Promise<number> {
   if (values.revision !== undefined) revisionNumber(values.revision);
   const target = await openApp(options, values, undefined);
+  let audience = readAudience(values.audience);
   const get = (revision: string, files = false) =>
     target.api.read((client) =>
       client.assets.get({
         params: { kind: APP_KIND, name: app },
         query: {
           workspaceId: target.workspaceId,
+          ...(audience ? { audience } : {}),
           revision,
           ...(files ? { files: "true" as const } : {})
         }
       })
     );
-  const candidate = await get(values.revision ?? "draft");
+  let candidate = await get(values.revision ?? "draft");
+  const offered = candidate.appAudience;
+  if (!audience) {
+    if (values.yes || !options.prompt)
+      throw new AppUsageError(
+        "Choose who may use the App with --audience self|workspace|instance. Nothing was published."
+      );
+    const choices = offered?.choices ?? ["self", "workspace"];
+    const labels = choices.map((choice) =>
+      choice === "self"
+        ? "self = Only me"
+        : choice === "workspace"
+          ? `workspace = ${offered?.workspaceName ?? "Owning workspace"}`
+          : "instance = Whole instance"
+    );
+    audience = readAudience(await options.prompt(`For whom? ${labels.join("; ")}: `));
+    if (!audience || !choices.includes(audience))
+      throw new AppUsageError("Choose one of the offered audiences. Nothing was published.");
+    candidate = await get(values.revision ?? "draft");
+  }
+  if (offered && !offered.choices.includes(audience))
+    throw new AppUsageError("You may not publish to that audience. Nothing was published.");
   const number = candidate.contentRevision ?? candidate.revision;
   if (values.revision !== undefined && number !== revisionNumber(values.revision)) {
     throw new Error(`The instance answered revision ${number} for --revision ${values.revision}.`);
   }
-  if (candidate.publishedRevision === number) {
+  if (candidate.publishedRevision === number && offered?.selected === audience) {
     writeOut(
       options,
       values.json
@@ -332,7 +357,7 @@ async function publish(
   }
   const live = candidate.publishedRevision === undefined ? undefined : await get("published");
   const review = publishReview(candidate, live);
-  const storedData = await appPublishData(target.api, app, candidate);
+  const storedData = await appPublishData(target.api, app, candidate, candidate.appAudience?.label);
   const question = [formatReview(app, review), storedData].filter(Boolean).join("\n");
   const say = (text: string) => (values.json ? writeErr(options, text) : writeOut(options, text));
   const narrative = values.yes ? undefined : candidate.publishNarrative;
@@ -369,7 +394,7 @@ async function publish(
     (client, idempotencyKey) =>
       client.assets.publish({
         params: { kind: APP_KIND, name: app },
-        body: { revision: number, workspaceId: target.workspaceId },
+        body: { revision: number, workspaceId: target.workspaceId, audience },
         idempotencyKey,
         ...(answer === "unattended" ? { unattended: true } : {})
       }),
@@ -718,4 +743,10 @@ function pendingApproval(
   if (json) writeOut(options, JSON.stringify({ status: "pending_approval", run }, null, 2));
   else writeErr(options, waitingPublishLine(run, hint));
   return EXIT.pending;
+}
+
+function readAudience(value: string | undefined): "self" | "workspace" | "instance" | undefined {
+  if (value === undefined) return undefined;
+  if (value === "self" || value === "workspace" || value === "instance") return value;
+  throw new AppUsageError("--audience must be self, workspace or instance. Nothing was published.");
 }

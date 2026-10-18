@@ -1,3 +1,4 @@
+import type { AppAvailability } from "@work-shape/catalyst-core";
 import {
   AppError,
   type AgentRun,
@@ -708,7 +709,8 @@ export function mapConfigAsset(
   row: ConfigAssetRow | undefined,
   revision: ConfigAssetRevisionRow | undefined,
   /** The revision the published pointer names, where the reader joined it. */
-  published?: Pick<ConfigAssetRevisionRow, "id" | "revision" | "fileSetId" | "config"> | null
+  published?: Pick<ConfigAssetRevisionRow, "id" | "revision" | "fileSetId" | "config"> | null,
+  appAvailability?: AppAvailability | null
 ): ConfigAssetRecord {
   if (!row || !revision || revision.id !== row.activeRevisionId) {
     throw new AppError("INTERNAL", "Expected config asset with its active revision");
@@ -723,6 +725,7 @@ export function mapConfigAsset(
     name: row.name,
     scope: mapAssetScope(row),
     status: row.status,
+    ...(appAvailability ? { appAvailability } : {}),
     activeRevisionId: row.activeRevisionId,
     revision: revision.revision,
     config: revision.config,

@@ -1,3 +1,5 @@
+import { requireAppAudience, requireAppBuilder } from "../apps/app-audience";
+import type { AppAudience } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import { clearLiveOnceSwitches } from "./asset-after-write";
 import {
@@ -431,7 +433,7 @@ export class AssetDraftWorkflow {
    */
   async publish(
     call: AssetCall,
-    input: AssetAddress & { revision: number; confirmProcessing?: string }
+    input: AssetAddress & { revision: number; confirmProcessing?: string; audience?: AppAudience }
   ) {
     const target = await this.host.target(input);
     const { kind, name } = target;
@@ -439,6 +441,14 @@ export class AssetDraftWorkflow {
     call.access.require(right, target.resource);
     await this.host.authorizeEditing(call, "put");
     const asset = requireActive(target);
+    const audience =
+      kind.kind === "app"
+        ? (input.audience ?? asset.appAvailability?.audience ?? "workspace")
+        : undefined;
+    if (audience) {
+      requireAppAudience(call.access, audience);
+      requireAppBuilder(asset, audience);
+    }
     const revision = await liveRevision(this.options, call, target, input.revision);
     const { config } = revision;
     // The set as it would be were this revision the asset's content, checked as a write of it.
@@ -458,6 +468,7 @@ export class AssetDraftWorkflow {
         assetId: asset.id,
         revision: input.revision,
         revisionId: revision.id,
+        ...(audience ? { audience } : {}),
         // A kind that reads its files itself has no built files to serve.
         ...(kind.representation === "files" && !kind.manifestOfFiles
           ? { requireFiles: true as const }
@@ -470,6 +481,7 @@ export class AssetDraftWorkflow {
           await onPublish({
             actor: call.actor,
             revisionId: revision.id,
+            ...(audience ? { audience } : {}),
             clientInstanceId: this.options.clientInstanceId,
             access: call.access,
             assetId: moved.assetId,
@@ -487,6 +499,7 @@ export class AssetDraftWorkflow {
       kind: kind.kind,
       name,
       revision: published.revision,
+      ...(audience ? { audience } : {}),
       ...(published.replacedRevision === undefined
         ? {}
         : { replacedRevision: published.replacedRevision })

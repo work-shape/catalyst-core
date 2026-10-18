@@ -47,6 +47,7 @@ export interface NoticeRecipientsSentence {
 
 /** What an App revision does, with every name as people read it. */
 export interface AppSentence {
+  audienceLabel?: string;
   title: string;
   /** Who may use it. Absent where the stored-data module is off. */
   audience?: PublishNarrativeAudience;
@@ -522,8 +523,9 @@ export function appSummary(input: AppSentence, locale: LocaleCode): string {
   const copy = COPY[locale];
   const { and } = lists(locale);
   const counted = input.audience;
-  const opens =
-    counted === undefined && input.workspace !== undefined
+  const opens = input.audienceLabel
+    ? copy.appOpens(input.title, input.audienceLabel)
+    : counted === undefined && input.workspace !== undefined
       ? copy.appOpensInWorkspace(input.title, input.workspace)
       : counted !== undefined && adminsOnly(counted) && input.truncated !== true
         ? copy.appOpensAdminsOnly(input.title)

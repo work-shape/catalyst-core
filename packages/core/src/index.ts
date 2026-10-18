@@ -18,6 +18,7 @@ export * from "./subagents";
 export * from "./child-agent-runs";
 
 export * from "./app-actions";
+export * from "./app-audience";
 export * from "./config-asset-concurrency";
 export * from "./connection-oauth";
 export * from "./connection-sign-in-end";

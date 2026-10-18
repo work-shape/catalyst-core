@@ -1,3 +1,4 @@
+import { asCollaborationWorkspaceId } from "@work-shape/catalyst-core";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   AppError,
@@ -12,6 +13,8 @@ import type { ConfigAssetRow } from "./rows";
 import {
   configAssetRevisions,
   configAssets,
+  configAssetAvailability,
+  configAssetWorkspaceAvailability,
   configAssetState,
   fileSets,
   permissionGrants
@@ -129,6 +132,35 @@ export async function publishConfigAssetRevision(
         `Revision ${input.revision} of ${input.kind} '${input.name}' has no built files to serve, so it is not published. Write the files again and publish the new revision.`,
         { reason: "revision_files_removed", revision: input.revision }
       );
+    }
+    if (input.audience !== undefined) {
+      if (input.kind !== "app")
+        throw new AppError("VALIDATION_FAILED", "Only Apps have a publish audience");
+      await tx
+        .insert(configAssetAvailability)
+        .values({
+          assetId: asset.id,
+          clientInstanceId: input.clientInstanceId,
+          mode: input.audience === "instance" ? "all" : "selected",
+          personalWorkspaces: input.audience === "self",
+          updatedAt: new Date()
+        })
+        .onConflictDoUpdate({
+          target: configAssetAvailability.assetId,
+          set: {
+            mode: input.audience === "instance" ? "all" : "selected",
+            personalWorkspaces: input.audience === "self",
+            updatedAt: new Date()
+          }
+        });
+      await tx
+        .delete(configAssetWorkspaceAvailability)
+        .where(eq(configAssetWorkspaceAvailability.assetId, asset.id));
+      if (input.audience === "workspace" && asset.scopeId)
+        await tx.insert(configAssetWorkspaceAvailability).values({
+          assetId: asset.id,
+          collaborationWorkspaceId: asCollaborationWorkspaceId(asset.scopeId)
+        });
     }
     const [replaced] = asset.publishedRevisionId
       ? await tx

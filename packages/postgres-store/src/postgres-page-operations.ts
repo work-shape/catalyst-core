@@ -1,3 +1,4 @@
+import { appAvailabilityColumn } from "./app-availability";
 import { and, asc, count, desc, eq, isNull, lt, max, or, sql, type SQL } from "drizzle-orm";
 import {
   CONVERSATION_MAX_PAGES,
@@ -329,6 +330,7 @@ async function getServedAssetFileSet(
       kind: configAssets.kind,
       name: configAssets.name,
       scopeId: configAssets.scopeId,
+      appAvailability: appAvailabilityColumn,
       activeRevisionId: configAssets.activeRevisionId,
       publishedRevisionId: configAssets.publishedRevisionId,
       publishedFileSetId: publishedRevisions.fileSetId,
@@ -365,6 +367,7 @@ async function getServedAssetFileSet(
       kind: asset.kind,
       name: asset.name,
       ...(asset.scopeId ? { workspaceId: asset.scopeId } : {}),
+      ...(asset.appAvailability ? { appAvailability: asset.appAvailability } : {}),
       activeRevisionId: asset.activeRevisionId,
       ...(asset.publishedRevisionId ? { publishedRevisionId: asset.publishedRevisionId } : {}),
       ...(asset.publishedFileSetId ? { publishedFileSetId: asset.publishedFileSetId } : {}),

@@ -1,3 +1,5 @@
+import { requireAppAudience } from "../apps/app-audience";
+import type { AppAudience } from "@work-shape/catalyst-core";
 import { upsertAsset, type AssetUpsert } from "./asset-upsert";
 import { AgentDraftWorkflow } from "./agent-drafts";
 import {
@@ -153,9 +155,10 @@ export class AssetWorkflow {
    */
   async authorizePublish(
     caller: { actor: AuthenticatedIdentity; access: ActorAccess; origin: OperationOrigin },
-    address: AssetAddress & { revision: number }
+    address: AssetAddress & { revision: number; audience?: AppAudience }
   ): Promise<OperationAuthorization> {
     const { access, origin } = caller;
+    if (address.kind === "app") requireAppAudience(access, address.audience);
     if (address.kind === "agent")
       return this.agentDrafts.authorizePublish(
         { ...caller, audit: this.options.auditRecorder, correlationId: "" },
@@ -179,9 +182,9 @@ export class AssetWorkflow {
    * and the caller's own click where they hold it. None for a kind whose publish is not held.
    */
   async publishApproval(
-    input: AssetAddress & { revision: number }
+    input: AssetAddress & { revision: number; audience?: AppAudience }
   ): Promise<OperationApproval | undefined> {
-    return publishApproval(await this.target(input), input.revision);
+    return publishApproval(await this.target(input), input.revision, input.audience);
   }
 
   async authorizeDelete(

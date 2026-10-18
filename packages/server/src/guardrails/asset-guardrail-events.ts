@@ -1,3 +1,4 @@
+import { appAudienceWidens, type AppAudience } from "@work-shape/catalyst-core";
 import {
   DATA_STORE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
@@ -159,6 +160,29 @@ export async function publishEvents(
     return [];
   }
   const revision = await callersRevision(options, input);
+  const asset =
+    input.kind === "app"
+      ? await options.configAssets.store.getConfigAsset({
+          clientInstanceId: options.clientInstanceId,
+          kind: input.kind,
+          name: input.name
+        })
+      : undefined;
+  const kind = input.kind === "app" ? options.configAssets.kinds.get(input.kind) : undefined;
+  const reach = revision && kind?.publishReach?.(revision.config, asset?.publishedConfig);
+  const before =
+    asset?.publishedConfig && kind?.publishReach?.(asset.publishedConfig, asset.publishedConfig);
+  const widening =
+    asset && reach
+      ? !asset.publishedRevisionId ||
+        reach.calls.some((call) => call.effect === "changing") ||
+        reach.hostsAdded.length > 0 ||
+        reach.connections.some((name) => !before?.connections.includes(name)) ||
+        appAudienceWidens(
+          input.audience ?? asset.appAvailability?.audience ?? "workspace",
+          asset.appAvailability?.audience ?? "workspace"
+        )
+      : undefined;
   if (!revision) {
     // Nothing of the caller's to make live: the publish itself refuses it.
     return [];
@@ -169,7 +193,8 @@ export async function publishEvents(
       subject: { kind: input.kind, id: revision.assetId, name: input.name },
       checkable: async (): Promise<GuardrailFields> => ({
         name: input.name,
-        content: await revisionText(options, revision)
+        content: await revisionText(options, revision),
+        ...(widening === undefined ? {} : { publish_widens: String(widening) })
       })
     }
   ];
@@ -213,6 +238,7 @@ interface RevisionAddress {
   kind: string;
   name: string;
   revision: number;
+  audience?: AppAudience;
   workspaceId?: string | undefined;
 }
 

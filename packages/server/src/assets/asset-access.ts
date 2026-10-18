@@ -43,10 +43,12 @@ export function accessResource(
   kind: string,
   name: string,
   scope: AssetScope,
-  assetId: string | undefined
+  assetId: string | undefined,
+  appAvailability?: AccessResource["appAvailability"]
 ): AccessResource {
   return {
     kind,
+    ...(appAvailability ? { appAvailability } : {}),
     ...(name === "" ? {} : { name }),
     ...(assetId === undefined ? {} : { assetId }),
     ...(scope.kind === "workspace" ? { workspaceId: scope.workspaceId } : {})
@@ -101,7 +103,8 @@ export function mayOpenAssetFileSet(
     asset.workspaceId === undefined
       ? INSTANCE_ASSET_SCOPE
       : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(asset.workspaceId) },
-    asset.id
+    asset.id,
+    asset.appAvailability
   );
   if (access.authorize(kind.actions.write, resource).allowed) {
     return true;

@@ -1,3 +1,4 @@
+import { appAvailabilityColumn } from "./app-availability";
 import { and, eq, ilike, inArray, like, or, sql, type SQLWrapper } from "drizzle-orm";
 import type { ConfigAssetRecord, ConfigAssetStore } from "@work-shape/catalyst-core";
 import { containsPattern, prefixPattern } from "./like-pattern";
@@ -22,9 +23,14 @@ export async function listConfigAssetPage(
     eq(configAssets.kind, input.kind),
     eq(configAssets.status, "active"),
     input.scope.kind === "workspace"
-      ? and(
-          eq(configAssets.scopeKind, "workspace"),
-          eq(configAssets.scopeId, input.scope.workspaceId)
+      ? or(
+          input.kind === "app"
+            ? sql`${appAvailabilityColumn}->>'audience' = 'instance'`
+            : undefined,
+          and(
+            eq(configAssets.scopeKind, "workspace"),
+            eq(configAssets.scopeId, input.scope.workspaceId)
+          )
         )
       : eq(configAssets.scopeKind, "instance")
   ];
@@ -56,6 +62,7 @@ export async function listConfigAssetPage(
   while (ids.length < input.limit) {
     const keys = await db
       .select({
+        appAvailability: appAvailabilityColumn,
         id: configAssets.id,
         kind: configAssets.kind,
         name: configAssets.name,
@@ -80,6 +87,7 @@ export async function listConfigAssetPage(
     for (const key of keys) {
       if (ids.length >= input.limit) break;
       const asset = {
+        ...(key.appAvailability ? { appAvailability: key.appAvailability } : {}),
         id: key.id,
         kind: key.kind,
         name: key.name,
@@ -111,7 +119,12 @@ export async function listConfigAssetPage(
     return [];
   }
   const rows = await db
-    .select({ asset: configAssets, revision: configAssetRevisions, published: publishedColumns })
+    .select({
+      asset: configAssets,
+      revision: configAssetRevisions,
+      published: publishedColumns,
+      appAvailability: appAvailabilityColumn
+    })
     .from(configAssets)
     .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
     .leftJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
@@ -119,6 +132,6 @@ export async function listConfigAssetPage(
   const byId = new Map(rows.map((row) => [row.asset.id, row]));
   return ids.flatMap((id) => {
     const row = byId.get(id);
-    return row ? [mapConfigAsset(row.asset, row.revision, row.published)] : [];
+    return row ? [mapConfigAsset(row.asset, row.revision, row.published, row.appAvailability)] : [];
   });
 }
