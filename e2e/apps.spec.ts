@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FrameLocator, Page } from "@playwright/test";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { z } from "zod";
 import {
   overviewRoute,
@@ -38,7 +39,6 @@ const DRAFT_HEADING = "Revenue forecast";
 const HELD_HOST = "rates.example.com";
 
 const idSchema = z.object({ id: z.string() });
-const contextSchema = z.looseObject({ actions: z.array(z.string()) });
 
 async function signIn(page: Page, person: { email: string; password: string }): Promise<void> {
   const signedIn = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
@@ -391,18 +391,46 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await page.keyboard.press("Escape");
   await expect(revisions).toBeHidden();
 
-  // A builder who may write and not publish finds Publish held, with the right named.
-  // No grant gives the write right without the publish right yet: every holder of one holds
-  // both through the role. So the instance's answer about the builder's rights is passed on
-  // without `app.publish`, as it will say it once such a grant exists.
-  await builderPage.route(`${apiOrigin}/api/v1/context`, async (route) => {
-    const answer = await route.fetch();
-    const context = contextSchema.parse(await answer.json());
-    await route.fulfill({
-      response: answer,
-      json: { ...context, actions: context.actions.filter((action) => action !== "app.publish") }
-    });
-  });
+  // A builder who may write and not publish finds Publish held, with the right named. The
+  // instance's answers to this builder, in this workspace and for this App, are passed on
+  // without the publish right, as a grant of write without publish answers them.
+  const contextOperation = apiOperations["platform.context.get"];
+  await builderPage.route(
+    (url) => url.origin === apiOrigin && url.pathname === contextOperation.path,
+    async (route) => {
+      const answer = await route.fetch();
+      const context = contextOperation.response.schema.parse(await answer.json());
+      await route.fulfill({
+        response: answer,
+        json: {
+          ...context,
+          actions: context.actions.filter((action) => action !== "app.publish"),
+          workspaces: context.workspaces.map((each) =>
+            each.id === workspaceId
+              ? { ...each, actions: each.actions.filter((action) => action !== "app.publish") }
+              : each
+          )
+        }
+      });
+    }
+  );
+  const assetOperation = apiOperations["assets.get"];
+  const assetPath = assetOperation.path.replace(":kind", "app").replace(":name", appId);
+  await builderPage.route(
+    (url) => url.origin === apiOrigin && url.pathname === assetPath,
+    async (route) => {
+      if (route.request().method() !== assetOperation.method) {
+        await route.continue();
+        return;
+      }
+      const answer = await route.fetch();
+      const asset = assetOperation.response.schema.parse(await answer.json());
+      await route.fulfill({
+        response: answer,
+        json: { ...asset, allowed: asset.allowed?.filter((verb) => verb !== "publish") }
+      });
+    }
+  );
   await builderPage.goto(draftPathOf(appPath));
   const builderEdit = builderPage.getByTestId("app-edit");
   await expect(builderEdit).toContainText("Draft · revision 2");
