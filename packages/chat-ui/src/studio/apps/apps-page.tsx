@@ -43,6 +43,7 @@ import {
   appBuilder,
   appDraftShown,
   appRefusalText,
+  appRightsOn,
   appRowActions,
   appState,
   type AppRights,
@@ -260,7 +261,7 @@ export function AppsPageView({
                     <AppCard
                       app={app}
                       workspace={workspace}
-                      rights={rights}
+                      rights={appRightsOn(rights, app)}
                       now={now}
                       locale={locale}
                       onOpenRoute={onOpenRoute}
@@ -303,7 +304,7 @@ function menuAction(action: AppRowAction): action is AppMenuAction {
 /**
  * One App: what it is called and what it is for, where it stands, when it last changed, and
  * the way into it. The main action is the first of the footer, and the whole card opens it;
- * what a builder does beside it stands at the other end.
+ * what a builder does beside it stands at the other end. `rights` are the reader's on this App.
  */
 function AppCard({
   app,

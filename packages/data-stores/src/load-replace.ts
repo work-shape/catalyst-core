@@ -31,8 +31,8 @@ export function replacementStatements(
           `${left}.${quoteIdentifier(column)} is not distinct from ${right}.${quoteIdentifier(column)}`
       )
       .join(" and ");
-  // A replacement holds each group until commit, in one lock order. A later load then
-  // replaces the first load's rows rather than leaving both loads' rows behind.
+  // A replacement holds each group until commit. An unscoped load takes its table lock first:
+  // sorting here orders only this chunk, while later chunks may visit groups in any order.
   return {
     lock: `
       select pg_catalog.count(pg_catalog.pg_advisory_xact_lock(held.id)::pg_catalog.text)::pg_catalog.int4 as held

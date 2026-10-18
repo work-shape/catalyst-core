@@ -90,7 +90,8 @@ export class AssetReadWorkflow {
     const [after] = page?.after ?? [];
     // Whoever reads the asset is shown all of it; a holder of the use right its published view.
     const reads = (resource: AssetTarget["resource"]) =>
-      call.access.authorize(kind.actions.read, resource).allowed;
+      call.access.authorize(kind.actions.read, resource).allowed ||
+      readsAppDraft(kind, call.access, resource);
     const [namespaces, defaultName, records] = await Promise.all([
       this.namespaces(scope),
       this.defaultName(kind, scope),
@@ -136,12 +137,15 @@ export class AssetReadWorkflow {
     });
     return records.map((record) => {
       const namespace = findNamespaceOfAssetName(namespaces, record.name);
-      if (!reads(accessResource(record.kind, record.name, record.scope, record.id))) {
-        return this.publishedSummary(kind, record, namespace?.prefix, locale);
+      const resource = accessResource(record.kind, record.name, record.scope, record.id);
+      const allowed = allowedOn(kind, call, resource);
+      if (!reads(resource)) {
+        return { ...this.publishedSummary(kind, record, namespace?.prefix, locale), allowed };
       }
       return {
         id: record.id,
         kind: record.kind,
+        allowed,
         ...summarizeAsset(kind, record.name, record.config, locale),
         scope: record.scope,
         ...(namespace ? { namespace: namespace.prefix } : {}),
@@ -223,20 +227,7 @@ export class AssetReadWorkflow {
       target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;
     // What the caller may do here, decided as each write decides it, so the page offers no
     // action the instance refuses and hides none it allows (AD-4).
-    const { write, delete: remove, publish } = target.kind.actions;
-    const allowed = (
-      [
-        ["write", write],
-        ["delete", remove],
-        // Only a person publishes: a key or a service publishes nothing.
-        ["publish", isAuthenticatedServicePrincipal(call.actor) ? undefined : publish]
-      ] as const
-    )
-      .filter(
-        ([, action]) =>
-          action !== undefined && call.access.authorize(action, target.resource).allowed
-      )
-      .map(([verb]) => verb);
+    const allowed = allowedOn(target.kind, call, target.resource);
     return {
       ...(agentStatus ?? {}),
       ...(draftSummary ? { agentDraft: draftSummary } : {}),
@@ -611,6 +602,7 @@ export function listedTo(
   const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
   return (
     access.authorize(kind.actions.read, resource).allowed ||
+    readsAppDraft(kind, access, resource) ||
     showsPublishedView(kind, access, resource, asset.published === true)
   );
 }
@@ -657,4 +649,34 @@ function summarizeAsset(
     }
     throw error;
   }
+}
+
+/** App draft writers and publishers read the same draft in the list as in assets.get. */
+function readsAppDraft(
+  kind: WorkflowAssetKind,
+  access: ActorAccess,
+  resource: AssetTarget["resource"]
+): boolean {
+  return (
+    kind.kind === "app" &&
+    (access.authorize(kind.actions.write, resource).allowed ||
+      (kind.actions.publish !== undefined &&
+        access.authorize(kind.actions.publish, resource).allowed))
+  );
+}
+
+/** List and detail answers use the write paths' in-memory authorization decision. */
+function allowedOn(kind: WorkflowAssetKind, call: AssetCall, resource: AssetTarget["resource"]) {
+  const { read, write, delete: remove, publish } = kind.actions;
+  return (
+    [
+      ["read", read],
+      ["write", write],
+      ["delete", remove],
+      // Only a person publishes: a key or a service publishes nothing.
+      ["publish", isAuthenticatedServicePrincipal(call.actor) ? undefined : publish]
+    ] as const
+  )
+    .filter(([, action]) => action !== undefined && call.access.authorize(action, resource).allowed)
+    .map(([verb]) => verb);
 }

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   workflowRightsLacking,
+  workflowNeededRightResource,
+  asCollaborationWorkspaceId,
+  asClientInstanceId,
+  asUserId,
+  createActorAccess,
+  type PermissionGrant,
   type OperationResource,
   type WorkflowInputMapping,
   type WorkflowManifest,
@@ -64,7 +70,7 @@ function manifest(steps: WorkflowStep[], tools?: string[]): WorkflowManifest {
 const rightsOf = (definition: WorkflowManifest) =>
   workflowNeededRights(definition, {
     operations,
-    workflowAssets: new Map([["export", "workflow-export"]])
+    workflowAssets: new Map([["export", { id: "workflow-export", scope: { kind: "instance" } }]])
   }).map(({ action, asset, steps, neededFor }) => [action, asset.name, steps, neededFor]);
 
 describe("the rights a Workflow's account needs", () => {
@@ -95,7 +101,7 @@ describe("the rights a Workflow's account needs", () => {
     ]);
     const [, , child] = workflowNeededRights(definition, {
       operations,
-      workflowAssets: new Map([["export", "workflow-export"]])
+      workflowAssets: new Map([["export", { id: "workflow-export", scope: { kind: "instance" } }]])
     });
     expect(child?.asset).toEqual({ kind: "workflow", name: "export", assetId: "workflow-export" });
   });
@@ -134,6 +140,77 @@ describe("the rights a Workflow's account needs", () => {
     expect(rightsOf(manifest([agent], tools))).toEqual([
       ["knowledge_base.use", "handbook", ["answer"], "run"]
     ]);
+  });
+
+  it("carries operation and child owners through the derivation and the needed-right evaluator", () => {
+    const workspaceId = asCollaborationWorkspaceId("workspace-owner");
+    const rights = workflowNeededRights(
+      manifest([
+        step("read", "data_store.owned.query"),
+        { id: "child", name: "Child", type: "workflow", workflow: "owned-child", input: {} }
+      ]),
+      {
+        operations: new Map([
+          [
+            "data_store.owned.query",
+            {
+              action: "data_store.read",
+              resource: () => ({ ...resource("data_store", "owned"), workspaceId })
+            }
+          ]
+        ]),
+        workflowAssets: new Map([
+          ["owned-child", { id: "workflow-child", scope: { kind: "workspace", workspaceId } }]
+        ])
+      }
+    );
+    expect(rights.map(workflowNeededRightResource)).toEqual([
+      { kind: "data_store", name: "owned", assetId: "data_store-owned", workspaceId },
+      { kind: "workflow", name: "owned-child", assetId: "workflow-child", workspaceId }
+    ]);
+    const clientInstanceId = asClientInstanceId("instance");
+    const holder = {
+      kind: "user",
+      id: "reader",
+      clientInstanceId,
+      roles: [],
+      permissionRefs: []
+    } as const;
+    const grant = (
+      action: string,
+      scopeKind: "workspace" | "instance",
+      effect: "allow" | "deny"
+    ): PermissionGrant => ({
+      id: `${action}-${scopeKind}-${effect}`,
+      clientInstanceId,
+      holderKind: "user",
+      holderId: holder.id,
+      action,
+      scopeKind,
+      effect,
+      ...(scopeKind === "workspace" ? { scopeId: workspaceId } : {}),
+      grantedBy: asUserId("admin"),
+      createdAt: "2026-10-18T00:00:00.000Z"
+    });
+    const access = (grants: PermissionGrant[]) =>
+      createActorAccess(holder, { holderActive: true, grants });
+    expect(
+      workflowRightsLacking(
+        rights,
+        access(rights.map(({ action }) => grant(action, "workspace", "allow")))
+      )
+    ).toEqual([]);
+    expect(
+      workflowRightsLacking(
+        rights,
+        access(
+          rights.flatMap(({ action }) => [
+            grant(action, "instance", "allow"),
+            grant(action, "workspace", "deny")
+          ])
+        )
+      )
+    ).toEqual(rights);
   });
 
   it("answers the rights the account's access does not allow", () => {

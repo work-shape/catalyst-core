@@ -146,6 +146,7 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
       .catch(datasetReadFailure);
   };
   const dataStores = createDataStores({
+    defaultLocale: parts.config.localization.defaultLocale,
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
     databaseUrl: await secrets.resolve(PLATFORM_SECRET_NAMES.databaseUrl),

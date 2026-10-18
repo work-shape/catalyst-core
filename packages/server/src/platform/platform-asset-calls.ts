@@ -55,6 +55,7 @@ import {
   requireReadableSubject,
   subjectUnavailable
 } from "../conversations/platform-asset-subject";
+import { resolveOperationResource } from "../operations/operation-resource";
 import { findWorkspaceFiles } from "../workspaces/workspace-files";
 import type { AssetWorkflowOptions } from "../types";
 
@@ -878,7 +879,11 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         .sort((left, right) => (left.name < right.name ? -1 : 1));
       const visible = async (definition: OperationDefinition): Promise<boolean> => {
         try {
-          const resource = definition.resource({});
+          const { resource, resourceNotFound } = await resolveOperationResource(
+            options,
+            definition.resource({})
+          );
+          if (resourceNotFound) return false;
           if (definition.action !== null) {
             return call.access.authorize(definition.action, resource).allowed;
           }

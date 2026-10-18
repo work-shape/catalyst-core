@@ -545,6 +545,8 @@ export async function createClientInstanceExecutionAssembly(
     context: infrastructure.context
   });
   const modulesStarted = await moduleAssembly.start({
+    knowledgeFieldExtractor: capabilityContributions.find((part) => part.knowledgeFieldExtractor)
+      ?.knowledgeFieldExtractor,
     notices: createInstanceNotices({ config, clientInstanceId, mail: noticeMail }),
     operationCalls,
     authorizer,

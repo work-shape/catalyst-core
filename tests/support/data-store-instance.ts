@@ -77,6 +77,7 @@ export interface DataStoreInstance {
 type StoreFiles = readonly { path: string; text: string }[];
 
 interface KnowledgeOptions {
+  defaultLocale?: "de" | "en";
   apiAccess?: true;
   knowledgeWorker?: "in_process" | "separate";
   embedding?: true;
@@ -208,6 +209,9 @@ export function useDataStoreInstance(): {
     });
     const settings = {
       ...base,
+      ...(options.defaultLocale
+        ? { localization: { defaultLocale: options.defaultLocale, supportedLocales: ["en", "de"] } }
+        : {}),
       modules: {
         assetManagement: { enabled: true },
         dataStores: { enabled: dataStores },

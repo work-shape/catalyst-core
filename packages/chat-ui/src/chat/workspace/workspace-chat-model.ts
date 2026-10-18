@@ -514,8 +514,11 @@ export function useWorkspaceChatModel({
         (collaborationWorkspacesAvailable && instanceModules?.workflows?.enabled === true))
   });
   const appRights = useMemo(
-    () => (appsEnabled ? resolveAppRights(platformContextQuery.data) : NO_APP_RIGHTS),
-    [appsEnabled, platformContextQuery.data]
+    () =>
+      appsEnabled
+        ? resolveAppRights(platformContextQuery.data, activeCollaborationWorkspaceId)
+        : NO_APP_RIGHTS,
+    [appsEnabled, platformContextQuery.data, activeCollaborationWorkspaceId]
   );
   const workflowsOpen = workflowsAccess({
     modules: instanceModules,

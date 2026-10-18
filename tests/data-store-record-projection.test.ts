@@ -108,7 +108,7 @@ describe("REC-1a records projection through the public operation source", () => 
       replaced: undefined,
       access: accessOf(actorOf(world.clientInstanceId))
     });
-    await settle(world, kbId, 9);
+    await settle(world, kbId, 10);
     const source = connect((await recordOf(world, kbId)).location.database);
     const target = connect(world.record.location.database);
     async function item(
@@ -356,6 +356,7 @@ describe("REC-1a records projection through the public operation source", () => 
             {
               clientInstanceId: w.clientInstanceId,
               registry,
+              resolveResource: (resource) => Promise.resolve({ resource }),
               runs: db.store.operationRuns,
               authorizer: { forActor: async () => accessOf(actor) },
               events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },

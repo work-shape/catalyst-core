@@ -243,7 +243,7 @@ describe("one shared agent draft (Platform Access 45, 62, 63, 65; Access 45)", (
       allowedSchema.parse((await t.ok(t.app.call("assets.get", { params: AGENT }, OTHER))).json())
         .allowed;
     await grant("agent.read");
-    expect(await allowed()).toEqual([]);
+    expect(await allowed()).toEqual(["read"]);
     expect(
       (await t.app.call("agents.draft.get", { params: { name: AGENT.name } }, OTHER)).statusCode
     ).toBe(404);
@@ -259,7 +259,7 @@ describe("one shared agent draft (Platform Access 45, 62, 63, 65; Access 45)", (
     expect(discarded.statusCode).toBe(404);
     expect(await t.draft()).toMatchObject({ revision: 1 });
     await grant("agent.write");
-    expect(await allowed()).toEqual(["write"]);
+    expect(await allowed()).toEqual(["read", "write"]);
     expect(await t.draft(OTHER)).toMatchObject({ revision: 1 });
     const denied = await t.publish(1, OTHER);
     expect(denied.statusCode).toBe(403);
@@ -267,7 +267,7 @@ describe("one shared agent draft (Platform Access 45, 62, 63, 65; Access 45)", (
     expect(await t.draft()).toMatchObject({ revision: 1 });
     await grant("agent.publish");
     // Studio reads what the caller may do on this asset from the instance, not from its own rules.
-    expect(await allowed()).toEqual(["write", "publish"]);
+    expect(await allowed()).toEqual(["read", "write", "publish"]);
     await t.ok(t.publish(1, OTHER));
     expect(await t.draft()).toBeNull();
   }, 120_000);
@@ -291,7 +291,7 @@ describe("one shared agent draft (Platform Access 45, 62, 63, 65; Access 45)", (
         payload: { roles: ["user", "admin"] }
       })
     );
-    expect(await allowed()).toEqual(["write", "delete", "publish"]);
+    expect(await allowed()).toEqual(["read", "write", "delete", "publish"]);
     await t.ok(
       t.app.call("permissions.grant", {
         payload: {
@@ -304,7 +304,7 @@ describe("one shared agent draft (Platform Access 45, 62, 63, 65; Access 45)", (
         }
       })
     );
-    expect(await allowed()).toEqual(["write", "delete"]);
+    expect(await allowed()).toEqual(["read", "write", "delete"]);
     const denied = await t.publish(1, OTHER);
     expect(denied.statusCode).toBe(403);
     expect(await t.draft()).toMatchObject({ revision: 1 });

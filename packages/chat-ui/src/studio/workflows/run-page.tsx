@@ -381,6 +381,10 @@ export function WorkflowRunPageView({
         <p className="p-(--layout-gutter) text-body text-muted-foreground">
           {t(PROBLEM_SENTENCES[read.problem])}
         </p>
+      ) : read.stepsFailed ? (
+        <div className="p-(--layout-gutter)">
+          <LoadError onRetry={read.retry}>{t("workflows.run.stepsFailedToLoad")}</LoadError>
+        </div>
       ) : (
         <>
           {run === undefined ? null : (

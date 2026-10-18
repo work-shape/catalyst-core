@@ -13,6 +13,7 @@ import {
   defineJobKind,
   defineSchedule,
   isAppError,
+  isOperationTimeout,
   isOperationRunId,
   JOB_UNCLAIMED_MS,
   JOB_WORKER_CHECK_INTERVAL_MS,
@@ -543,21 +544,22 @@ export function createAssetRepoCommitClient(
           }).catch(() => false);
         }
         if (noWorker || input.signal?.aborted || Date.now() >= deadline) {
-          const gaveUp: AssetRepoCommitResult = input.signal?.aborted
-            ? { status: "failed", reason: "stopped", message: "The save was stopped." }
-            : noWorker
-              ? {
-                  status: "failed",
-                  reason: "no_worker",
-                  message:
-                    "No workspace command worker takes commits to repositories on this instance. An operator has to start that worker. Nothing was saved."
-                }
-              : {
-                  status: "failed",
-                  reason: "timeout",
-                  message:
-                    "The commit was not made in time: the workers are busy, or it did not end. Nothing was saved. Save again."
-                };
+          const gaveUp: AssetRepoCommitResult =
+            input.signal?.aborted && !isOperationTimeout(input.signal)
+              ? { status: "failed", reason: "stopped", message: "The save was stopped." }
+              : noWorker && !isOperationTimeout(input.signal)
+                ? {
+                    status: "failed",
+                    reason: "no_worker",
+                    message:
+                      "No workspace command worker takes commits to repositories on this instance. An operator has to start that worker. Nothing was saved."
+                  }
+                : {
+                    status: "failed",
+                    reason: "timeout",
+                    message:
+                      "The commit was not made in time: the workers are busy, or it did not end. Nothing was saved. Save again."
+                  };
           // The commit finds a result on its row and answers nothing. Where it was faster,
           // its result is the answer.
           if (await saves.answerAssetRepoSave({ ...address, result: gaveUp })) {

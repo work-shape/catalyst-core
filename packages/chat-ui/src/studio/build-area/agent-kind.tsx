@@ -113,7 +113,12 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   const context = usePlatformContextQuery({ ...api, enabled: true }).data;
   const knowledgeOn = context?.kinds.some((kind) => kind.kind === "knowledge_base") ?? false;
   const [knowledgeSearch, setKnowledgeSearch] = useState("");
-  const knowledgeRead = useKnowledgeBaseSource().useKnowledgeBases(knowledgeSearch, knowledgeOn);
+  // Of its own owner and of the instance, as its skills.
+  const knowledgeRead = useKnowledgeBaseSource().useKnowledgeBases(
+    knowledgeSearch,
+    knowledgeOn,
+    owner
+  );
   const administeredWorkspacesQuery = useAdministeredCollaborationWorkspacesQuery({
     ...api,
     enabled: instanceWrite && asset !== undefined

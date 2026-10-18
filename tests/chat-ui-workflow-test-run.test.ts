@@ -226,6 +226,7 @@ describe("the page of a test run", () => {
           run: toWorkflowRun(testRun()),
           problem: undefined,
           silentSince: undefined,
+          stepsFailed: false,
           stepRuns: steps,
           stepRunsCut: false,
           retry: noop

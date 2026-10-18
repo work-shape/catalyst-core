@@ -24,6 +24,7 @@ import {
   type GuardrailDefinition
 } from "./guardrail-files";
 import {
+  CANONICAL_FORM_VERSION,
   canonicalizeSkillConfig,
   serializeAgentYaml,
   serializeSkillMarkdown,
@@ -611,7 +612,11 @@ export async function recordBaseline(
     for (const asset of assetEntries(bundle)) {
       const written = revisions[asset.key];
       if (written !== undefined) {
-        baseline.assets[asset.key] = { ...written, hash: assetHash(asset.contents) };
+        baseline.assets[asset.key] = {
+          ...written,
+          canonicalFormVersion: CANONICAL_FORM_VERSION,
+          hash: assetHash(asset.contents)
+        };
       }
     }
     const deleted: Record<string, DeletedAssetBaseline> = fullPull ? {} : { ...previous?.deleted };
