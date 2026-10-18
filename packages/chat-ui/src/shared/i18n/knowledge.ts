@@ -330,8 +330,7 @@ export const knowledge = defineTranslations({
     "knowledge.documentsRefused": "Du darfst die Dokumente dieser Wissensbasis nicht sehen.",
     "knowledge.documentsMore": "Mehr zeigen",
     "knowledge.documentPending": "Wird indexiert",
-    "knowledge.processingWaiting":
-      "Verarbeitung wartet: Der Dienst für Wissensbasen meldet sich nicht.",
+    "knowledge.processingWaiting": "Verarbeitung wartet auf den Dienst für Wissensbasen.",
     "knowledge.documentIndexed": "Durchsuchbar",
     "knowledge.documentFailed": "Fehlgeschlagen",
     "knowledge.originalReleased": "Original liegt in der Quelle",

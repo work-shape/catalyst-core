@@ -704,9 +704,7 @@ describe("processing that waits for a worker", () => {
       "Processing is waiting: the knowledge base service is not responding."
     );
     show(createElement(KnowledgeDocuments, props), "de");
-    expect(notice()?.textContent).toBe(
-      "Verarbeitung wartet: Der Dienst für Wissensbasen meldet sich nicht."
-    );
+    expect(notice()?.textContent).toBe("Verarbeitung wartet auf den Dienst für Wissensbasen.");
   });
 
   it("says nothing while a worker takes them, and nothing for an instance that does not say", () => {
