@@ -1,3 +1,4 @@
+import { RELEASED_KIT_VERSIONS } from "@work-shape/catalyst-app-build";
 import { ASSET_GET_FILES_MAX_BYTES } from "@work-shape/catalyst-api-contract";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -473,6 +474,33 @@ describe("the skills that ship with the platform", () => {
     expect(kept.config.content).toBe("Ours.");
     expect(kept.config).not.toHaveProperty("origin");
   });
+});
+
+// The authoring skill is the first source an agent consults, including on diagnosis.
+it("teaches the App sandbox before sending an agent to the detailed guide", () => {
+  for (const rule of [
+    "allow-scripts allow-forms allow-downloads",
+    "without allow-same-origin",
+    "form-action 'none'",
+    "localStorage",
+    "storage.get/set",
+    "Data Stores",
+    "Network"
+  ])
+    expect(platformDocsSkill.content).toContain(rule);
+  const guide = platformDocsSkill.resources?.find(
+    (resource) => resource.path === "references/apps/build.md"
+  );
+  expect(guide?.content).toContain("SecurityError");
+  expect(guide?.content).toContain("event.preventDefault()");
+  if (typeof guide?.content !== "string") throw new Error("The App guide must be text");
+  // Every new-App manifest and font URL must name the kit the instance builds by default.
+  const versions = [
+    ...guide.content.matchAll(/^kit:\s*(\S+)/gmu),
+    ...guide.content.matchAll(/\/app-runtime\/kit\/([^/]+)\/fonts/gu)
+  ];
+  expect(versions.length).toBeGreaterThan(0);
+  for (const match of versions) expect(match[1]).toBe(RELEASED_KIT_VERSIONS.at(-1));
 });
 
 // Platform Access check 72: one authorized assets.get must carry the entire skill.

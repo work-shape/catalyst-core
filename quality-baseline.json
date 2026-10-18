@@ -12,7 +12,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-floating-promises",
       "scope": "packages/chat-ui",
-      "count": 61,
+      "count": 60,
       "owner": "G-5c"
     },
     {

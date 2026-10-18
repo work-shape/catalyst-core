@@ -264,6 +264,12 @@ async function listUsers(
     .where(
       and(
         eq(productUsers.clientInstanceId, input.clientInstanceId),
+        input.text === undefined
+          ? undefined
+          : drizzleSql`(position(lower(${input.text}) in lower(${productUsers.displayLabel})) > 0
+              OR position(lower(${input.text}) in lower(coalesce(${productUsers.email}, ''))) > 0)`,
+        input.activeOnly ? eq(productUsers.status, "active") : undefined,
+        input.activeOnly ? isNull(productUsers.deletionRequestedAt) : undefined,
         keysetFilter(
           input.page,
           [

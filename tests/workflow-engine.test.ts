@@ -544,6 +544,8 @@ describe("starting a Workflow that cannot run", () => {
       { status: 409, code: "CONFLICT" }
     );
     expect(inactive.details).toMatchObject({ reason: "principal_inactive" });
+    expect(inactive.message).toContain("technical account 'workflow-runner'");
+    expect(inactive.message).toContain("Settings > API access");
     expect(
       await t.stores.audit.listAuditEvents({ clientInstanceId, type: "workflow_run.started" })
     ).toEqual([]);

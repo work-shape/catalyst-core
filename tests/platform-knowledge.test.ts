@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { RELEASED_KIT_VERSIONS } from "@work-shape/catalyst-app-build";
 import {
   createPlatformTools,
   platformDocsSkill,
@@ -159,6 +160,13 @@ describe("the platform's knowledge of an agent", () => {
     expect(offer.toolNames).toEqual(expect.arrayContaining([...PLATFORM_TOOLS, "read_skill"]));
     expect(offer.orientation).toContain("platform.assets.list");
     expect(offer.orientation).toContain("'platform-docs'");
+    // Personal work must not inherit a company's domain prefix (ACCEPT-1c C12).
+    expect(offer.orientation).toContain(
+      "Naming: give a new asset a short name for what it does, with no prefix."
+    );
+    expect(offer.orientation).toContain("A person's own workspace is no name prefix");
+    expect(offer.orientation).toContain("only where the person chose that area for the asset");
+    expect(offer.orientation).not.toMatch(/\bhr-|Personalwesen/u);
     expect(offer.skillNames).toContain("platform-docs");
     expect(offer.skillNames).not.toContain("platform-guide");
 
@@ -189,7 +197,9 @@ describe("the shipped skill platform-docs", () => {
     expect(guide?.content).toContain(
       "Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load."
     );
-    expect(guide?.content).toContain("/app-runtime/kit/1.5.0/fonts/fonts.css");
+    expect(guide?.content).toContain(
+      `/app-runtime/kit/${RELEASED_KIT_VERSIONS.at(-1)}/fonts/fonts.css`
+    );
   });
   it("carries every page of the platform's docs as a reference that its index names", async () => {
     const pages = (await readdir(docsRoot, { recursive: true }))

@@ -83,9 +83,42 @@ describe("a call a Page asks the interface to make", () => {
     };
   }
 
+  it("serializes personal writes, rejects foreign frames and answers a failed write without server text", async () => {
+    const mutations: unknown[] = [];
+    const { made, posted, page, from, message } = bridge({
+      can: () => Promise.resolve(undefined),
+      run: () => Promise.reject(new Error("not asked")),
+      workflowRun: () => Promise.reject(new Error("not asked")),
+      writeStorage: async (mutation) => {
+        mutations.push(mutation);
+        if (mutations.length === 1) throw new Error("private provider text");
+      }
+    });
+    const first = {
+      type: "storage_write",
+      session: "s-1",
+      requestId: "r-1",
+      mutation: { type: "set", key: "note", value: "first" }
+    };
+    made.receive(from({}, message(first)));
+    made.receive(from(page, message({ ...first, session: "another-session" })));
+    expect(mutations).toEqual([]);
+    made.receive(from(page, message(first)));
+    made.receive(
+      from(page, message({ ...first, requestId: "r-2", mutation: { type: "remove", key: "note" } }))
+    );
+    await settled();
+    expect(mutations).toEqual([first.mutation, { type: "remove", key: "note" }]);
+    expect(posted.map((item) => item.message)).toEqual([
+      message({ type: "storage_result", session: "s-1", requestId: "r-1", ok: false }),
+      message({ type: "storage_result", session: "s-1", requestId: "r-2", ok: true })
+    ]);
+  });
+
   it("is made once, and its answer goes to the Page under the id the Page gave it", async () => {
     const ran: unknown[] = [];
     const { made, posted, page, from, message } = bridge({
+      writeStorage: () => Promise.resolve(),
       can: () => Promise.resolve({ load: "allow", save: "deny" }),
       run: (call) => {
         ran.push(call);
@@ -124,6 +157,7 @@ describe("a call a Page asks the interface to make", () => {
 
   it("is answered to nobody when the frame shows another document by then", async () => {
     const { made, posted, page, from, message, setFrame } = bridge({
+      writeStorage: () => Promise.resolve(),
       can: () => Promise.resolve(undefined),
       run: () => Promise.resolve({ ok: false, error: { code: "failed", message: "No" } }),
       workflowRun: () => Promise.reject(new Error("not asked"))
@@ -145,6 +179,7 @@ describe("a call a Page asks the interface to make", () => {
   it("refuses the retired free call of a Connection at once, names the named action as the fix, and calls nothing", async () => {
     const ran: unknown[] = [];
     const { made, posted, page, from, message } = bridge({
+      writeStorage: () => Promise.resolve(),
       can: () => Promise.resolve(undefined),
       run: (call) => {
         ran.push(call);
@@ -193,6 +228,7 @@ describe("a call a Page asks the interface to make", () => {
     const read: string[] = [];
     const run = { id: "wfr-1", workflow: "visit-log-entries", status: "done" as const, output: 1 };
     const { made, posted, page, from, message } = bridge({
+      writeStorage: () => Promise.resolve(),
       can: () => Promise.resolve(undefined),
       run: () => Promise.reject(new Error("not asked")),
       workflowRun: (runId) => {
@@ -285,6 +321,13 @@ describe("the calls of a frame", () => {
       {
         apps: {
           sessions: {
+            write_storage: () =>
+              Promise.resolve({
+                status: "done" as const,
+                output: { saved: true as const },
+                operationRunId: "storage-1",
+                replayed: false
+              }),
             context: () => Promise.resolve({ can: { load: "allow" as const } }),
             call_action: record("call_action"),
             get_workflow_run: (request: unknown) => {

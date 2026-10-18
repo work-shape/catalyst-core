@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { PageBuildLimits } from "@work-shape/catalyst-app-build";
+import { RELEASED_KIT_VERSIONS, type PageBuildLimits } from "@work-shape/catalyst-app-build";
 import {
   createPageBuildClient,
   createPageBundleJobs,
@@ -315,6 +315,18 @@ describe("workspace.open", () => {
       }
     });
     expect(tool.description).toMatch(/^Show an HTML file or a folder/u);
+    expect(tool.description).toContain(`which is ${RELEASED_KIT_VERSIONS.at(-1)} for a new App`);
+    for (const rule of [
+      "allow-scripts allow-forms allow-downloads",
+      "without allow-same-origin",
+      "form-action 'none'",
+      "localStorage",
+      "storage.get/set",
+      "Data Stores",
+      "Network",
+      "SecurityError"
+    ])
+      expect(tool.description).toContain(rule);
     expect(tool.description).toContain(
       "Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load."
     );
@@ -436,7 +448,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
       pageId: page.id
     });
     expect(stored).toMatchObject({
-      kitVersion: "1.5.0",
+      kitVersion: "1.6.0",
       manifest: { id: "index", entry: "index.html" }
     });
     expect(stored?.builtFiles.map((file) => file.path)).toContain("index.html");

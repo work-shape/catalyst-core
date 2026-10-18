@@ -499,8 +499,8 @@ describe("the page of a Workflow", () => {
       }
       expect(markup).toContain(
         locale === "de"
-          ? "Das technische Konto „Booking checks“ ist deaktiviert."
-          : "The technical account “Booking checks” is disabled."
+          ? "Dieser Workflow läuft als Technisches Konto „Booking checks“, das ausgeschaltet ist. Ein Administrator schaltet es unter Einstellungen › API-Zugang ein."
+          : "This workflow runs as the technical account “Booking checks”, which is switched off. An administrator switches it on under Settings › API access."
       );
     }
   });

@@ -1,4 +1,5 @@
 import { ToolDecisionsProvider } from "../approvals/tool-decision-context";
+import { conversationStart } from "../dock/subject-starters";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { AssistantRuntimeProvider, useComposer, useComposerRuntime } from "@assistant-ui/react";
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
@@ -88,6 +89,7 @@ function AssistantRuntimePane({
     selectedConversationRetainedUntil,
     selectedConversationSubject,
     docked,
+    dockKind,
     agentOpens,
     openRoute,
     messagesLoaded,
@@ -436,7 +438,19 @@ function AssistantRuntimePane({
                   </>
                 )
               }
-              subjectKind={conversationSubject?.subject.kind}
+              start={conversationStart(
+                conversationSubject === undefined
+                  ? undefined
+                  : {
+                      kind: conversationSubject.subject.kind,
+                      // Until its record arrives the title is the asset's id, which is not said.
+                      title:
+                        conversationSubject.title === conversationSubject.subject.name
+                          ? undefined
+                          : conversationSubject.title
+                    },
+                dockKind
+              )}
               retainedUntil={selectedConversationRetainedUntil}
               draftAttachments={draftAttachments}
               localUploadingAttachments={localUploadingAttachments}

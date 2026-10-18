@@ -50,6 +50,7 @@
       "@work-shape/catalyst-chat-ui/tool-display-panel": [
         "packages/chat-ui/src/chat/tools/tool-display-panel.tsx"
       ],
+      "@work-shape/catalyst-chat-ui/views": ["packages/chat-ui/src/chat/views/index.ts"],
       "@work-shape/catalyst-api-contract/openapi.json": ["packages/api-contract/openapi.json"],
       "@work-shape/catalyst-chat-ui/asset-tool-lines": [
         "packages/chat-ui/src/chat/conversation/asset-tool-lines.ts"

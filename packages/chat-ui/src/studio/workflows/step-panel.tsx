@@ -25,10 +25,12 @@ import {
 import { formatMoment } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import { FailureBanner } from "./failure-banner";
+import { recipientsLine } from "./recipient-names";
 import type { LiveOnceControl } from "./test-run";
 import { StepDatasets } from "./step-datasets";
 import { simulatedCall, stepDatasets, stepOutputRows } from "./step-output";
 import { countsLine } from "./workflow-canvas-model";
+import { stepFallbackSentence } from "./workflow-model";
 import type {
   WorkflowDatasetView,
   WorkflowLoopCounts,
@@ -38,6 +40,7 @@ import type {
   WorkflowStepView
 } from "./workflow-views";
 import { RunStateBadge, durationText } from "./workflows-frame";
+import { useRecipientNames } from "./workflows-host";
 
 /** How many lines of what a step returned are shown. */
 const OUTPUT_PREVIEW_LINES = 40;
@@ -270,7 +273,14 @@ function StepDescription({
   onOpenChild: (() => void) | undefined;
 }) {
   const { locale, t } = useTranslation();
-  const sentence = step.description ?? summary;
+  const recipientNames = useRecipientNames();
+  const recipients =
+    step.kind === "notify" ? recipientsLine(step.to, recipientNames, { t, locale }) : undefined;
+  // A Notify node's line names its recipients, which the panel lists in a row of their own.
+  const fallback = stepFallbackSentence(step);
+  const sentence =
+    step.description ??
+    (recipients === undefined ? summary : fallback === undefined ? undefined : t(fallback));
   const worksOn =
     step.source === undefined
       ? undefined
@@ -300,11 +310,16 @@ function StepDescription({
     ...(step.concurrency === undefined
       ? []
       : [{ label: t("workflows.panel.atOnce"), value: step.concurrency.toLocaleString(locale) }]),
+    ...(recipients === undefined
+      ? []
+      : [{ label: t("workflows.panel.recipients"), value: recipients }]),
     ...(step.kind === "notify"
       ? [
           {
-            label: t("workflows.panel.goesTo"),
-            value: t(step.channel === "mail" ? "workflows.panel.mail" : "workflows.panel.inbox")
+            label: t("workflows.panel.delivered"),
+            value: t(
+              step.channel === "mail" ? "workflows.panel.viaMail" : "workflows.panel.viaInbox"
+            )
           }
         ]
       : []),

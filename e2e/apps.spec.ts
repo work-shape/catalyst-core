@@ -228,6 +228,15 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   }
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishDialog).toBeHidden();
+  // The head says what was published, not that a draft is open (ACCEPT-FIX-2 C5).
+  await expect(edit).toContainText("Published · revision 1");
+  await expect(edit).not.toContainText("Draft · revision 1");
+  if (shotsDir) {
+    await page.screenshot({
+      path: join(shotsDir, "app-published-head-light-en-1440.png"),
+      animations: "disabled"
+    });
+  }
   // The live revision can still be shared with a different audience.
   await expect(publish).toBeEnabled();
   await publish.click();

@@ -7,6 +7,7 @@ import type {
 } from "@work-shape/catalyst-ui";
 import { formatElapsed, formatMoment } from "../../shared/locale-format";
 import type { TranslationContextValue } from "../../shared/i18n";
+import { NO_RECIPIENT_NAMES, recipientsLine, type RecipientNames } from "./recipient-names";
 import { scheduleInWords } from "./schedule-words";
 import { failureHappened, stepFallbackSentence } from "./workflow-model";
 import type {
@@ -221,7 +222,16 @@ function stepIcon(step: WorkflowStepView): Pick<FlowGraphNode, "icon" | "iconFal
   }
 }
 
-function stepSummary(step: WorkflowStepView, { t, locale }: CanvasText): string | undefined {
+function stepSummary(
+  step: WorkflowStepView,
+  { t, locale }: CanvasText,
+  recipients: RecipientNames
+): string | undefined {
+  if (step.kind === "notify") {
+    // workflow-canvas.md, Notify: the node says who receives it.
+    const line = recipientsLine(step.to, recipients, { t, locale });
+    if (line !== undefined) return line;
+  }
   if (step.kind === "trigger") {
     return step.starts?.onSchedule === true && step.starts.byHand
       ? t("workflows.canvas.orByHand")
@@ -251,7 +261,9 @@ export type WorkflowGraph = FlowGraph & { groups: FlowGraphGroup[] };
 export function workflowGraph(
   steps: readonly WorkflowStepView[],
   text: CanvasText,
-  run?: CanvasRun
+  run?: CanvasRun,
+  /** The names of who a Notify step reaches, as far as the reader may read them. */
+  recipients: RecipientNames = NO_RECIPIENT_NAMES
 ): WorkflowGraph {
   const { t, locale } = text;
   const nodes: FlowGraphNode[] = [];
@@ -359,7 +371,9 @@ export function workflowGraph(
   const one = (step: WorkflowStepView, place: Place): Ends => {
     // In a run the start says who started it, so how else it could start is left out.
     const summary =
-      run !== undefined && step.kind === "trigger" ? undefined : stepSummary(step, text);
+      run !== undefined && step.kind === "trigger"
+        ? undefined
+        : stepSummary(step, text, recipients);
     const described = summary === undefined ? {} : { summary };
     const state = ran(step, place);
     const stepRun = place.repeated || place.skipped ? undefined : stepRuns.get(step.id);

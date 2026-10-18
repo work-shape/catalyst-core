@@ -31,6 +31,13 @@ export const PLATFORM_ASSET_LIST_MAX = 50;
 
 /** What this instance has and what the person the agent acts for may do on it. */
 export interface PlatformContextRead {
+  /** The person the agent acts for; use this id for a request to notify "me". */
+  caller?: { id: string; displayLabel: string; email?: string };
+  /** Active shared technical accounts the caller may see. Never invented defaults. */
+  workflowPrincipals?: { name: string; displayLabel: string }[];
+  /** Name/email matches within the caller's directory rights, or just the caller. */
+  people?: { id: string; displayLabel: string; email?: string }[];
+  peopleTruncated?: boolean;
   instance: { name: string };
   /** The modules that are on. */
   modules: string[];
@@ -60,7 +67,10 @@ export type PlatformFileFound = FoundFile & {
 
 /** What carries the tools out, for the person of `context`. */
 export interface PlatformDiscoveryCalls {
-  readContext(context: ToolExecutionContext): Promise<PlatformContextRead>;
+  readContext(
+    context: ToolExecutionContext,
+    input?: { person?: string }
+  ): Promise<PlatformContextRead>;
   /**
    * The assets the person may read, of one kind or of every kind that exists here, whose name
    * contains `text`, owned by the instance or by the workspace of the conversation. At most
@@ -91,6 +101,14 @@ const searchText = (max: number) =>
     .regex(/^[^\u0000]*$/u, "must not contain a NUL character");
 
 const contextOutputSchema = z.object({
+  caller: z
+    .object({ id: z.string(), displayLabel: z.string(), email: z.string().optional() })
+    .optional(),
+  workflowPrincipals: z.array(z.object({ name: z.string(), displayLabel: z.string() })).optional(),
+  people: z
+    .array(z.object({ id: z.string(), displayLabel: z.string(), email: z.string().optional() }))
+    .optional(),
+  peopleTruncated: z.boolean().optional(),
   instance: z.object({ name: z.string() }),
   modules: z.array(z.string()),
   kinds: z.array(z.object({ kind: z.string(), plural: z.string(), hasDraft: z.boolean() })),
@@ -145,12 +163,17 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
       description: [
         "Read what this instance can do and what the user may do on it: the modules that are on, the kinds of asset that exist (agent, skill, workflow, app, data_store, knowledge_base, connection, as far as they are on), and the user's rights.",
         "'actions' are rights on every asset of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'namespaces' are rights on the assets whose names start with a prefix.",
-        "Call it before you say whether something can be built here or whether the user may change it."
+        "Call it before you say whether something can be built here or whether the user may change it.",
+        "For a new Workflow, choose runAs only from workflowPrincipals: these are active accounts this user may see. If empty, explain that an administrator sets up an account under Settings > API access; never guess a principal name. caller identifies the person you act for: use caller.id to notify 'me', without asking them for an id. Give person to resolve a recipient by name or email within this user's directory rights. An empty result means no known match; ask for a clearer name, never an internal id. If several match, ask which person by name/email."
       ].join(" "),
-      inputSchema: z.object({}),
+      inputSchema: z.object({
+        person: searchText(200)
+          .optional()
+          .describe("Part of a notification recipient's name or email. Never an internal id.")
+      }),
       outputSchema: contextOutputSchema,
-      async execute(_input, toolContext) {
-        const read = await calls.readContext(toolContext);
+      async execute(input, toolContext) {
+        const read = await calls.readContext(toolContext, input);
         return toolSuccess(read, {
           auditSummary: {
             action: context.name,

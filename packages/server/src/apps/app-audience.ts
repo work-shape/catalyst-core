@@ -12,6 +12,7 @@ import {
   type LocaleCode
 } from "@work-shape/catalyst-core";
 import type { AssetWorkflowOptions } from "../types";
+import { workspaceDisplayName } from "../publish-narrative/workspace-name";
 
 /** Only an instance publish right may offer or dispatch an instance audience. An asset or
  * workspace grant cannot stand in for it. This same gate runs again when a held call resumes. */
@@ -43,6 +44,20 @@ export async function appAudienceReview(
           asCollaborationWorkspaceId(asset.scope.workspaceId)
         )
       : undefined;
+  // The workspace by the name the interface shows: a Personal Workspace after its owner.
+  const workspaceName = workspace
+    ? await workspaceDisplayName(
+        workspace,
+        locale,
+        async (userId) =>
+          (
+            await options.stores.users.getUser({
+              clientInstanceId: options.clientInstanceId,
+              userId: asUserId(userId)
+            })
+          )?.displayLabel
+      )
+    : undefined;
   const live = asset.publishedRevisionId
     ? (asset.appAvailability?.audience ?? "workspace")
     : undefined;
@@ -65,8 +80,8 @@ export async function appAudienceReview(
           ? "Alle in der Instanz"
           : "Everyone in the instance"
         : locale === "de"
-          ? `Alle in ${workspace?.name ?? "diesem Arbeitsbereich"}`
-          : `Everyone in ${workspace?.name ?? "this workspace"}`;
+          ? `Alle in ${workspaceName ?? "diesem Arbeitsbereich"}`
+          : `Everyone in ${workspaceName ?? "this workspace"}`;
   const livePerson =
     live === "self" &&
     asset.appAvailability?.userId &&
@@ -106,7 +121,7 @@ export async function appAudienceReview(
     label: labelOf(selected),
     ...(live && liveLabel ? { live, liveLabel } : {}),
     ...(people === undefined ? {} : { people }),
-    ...(workspace ? { workspaceName: workspace.name } : {})
+    ...(workspaceName === undefined ? {} : { workspaceName })
   };
 }
 

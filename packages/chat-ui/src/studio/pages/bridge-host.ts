@@ -146,6 +146,7 @@ export function createPageBridge(input: {
   calls?(): FrameCalls | undefined;
 }): PageBridge {
   let page: PageWindow | undefined;
+  let storageWrites = Promise.resolve();
   /** Posts to the window that sent a message, while it is still the frame's one child. */
   const post = (to: PageWindow, message: AppBridgeHostMessage) => {
     const frame = input.frame();
@@ -181,6 +182,30 @@ export function createPageBridge(input: {
             );
           })
           // The frame was replaced while the answer was on its way: nobody is left to tell.
+          .catch(() => undefined);
+      } else if (message.type === "storage_write") {
+        // A synchronous localStorage call still arrives in order. Wait for each durable
+        // write before starting the next, including after a refusal.
+        const calls = input.calls?.();
+        storageWrites = storageWrites
+          .then(async () => {
+            let ok = false;
+            try {
+              if (calls) {
+                await calls.writeStorage(message.mutation);
+                ok = true;
+              }
+            } catch {
+              /* The App receives a fixed failure, never server text or credentials. */
+            }
+            post(source, {
+              [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
+              type: "storage_result",
+              session: input.session,
+              requestId: message.requestId,
+              ok
+            });
+          })
           .catch(() => undefined);
       } else if (message.type === "navigate") {
         input.onNavigate(message.path);

@@ -131,11 +131,12 @@ describe("the two halves of the bridge", () => {
   });
 
   // Fails before kit 1.4.0: every released kit offered `connections.call` to a new Page.
-  it("ship the newest kit, 1.5.0, without a call of a Connection", () => {
-    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.5.0");
-    const kit = loadAppKitFiles().get("1.5.0")?.get("kit.js")?.bytes.toString("utf8");
+  it("ship kit 1.6.0 with personal JSON storage and without a free call of a Connection", () => {
+    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.6.0");
+    const kit = loadAppKitFiles().get("1.6.0")?.get("kit.js")?.bytes.toString("utf8");
     expect(kit).not.toMatch(/connection/u);
     expect(kit).toMatch(/\bas actions\b/u);
+    expect(kit).toMatch(/\bas storage\b/u);
   });
 
   it("agree on what the interface sends: the client reads what the schema allows", () => {

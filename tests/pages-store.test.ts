@@ -147,6 +147,7 @@ describe("the file sets of a Page", () => {
       "deletePageBuild",
       "ensurePage",
       "finishPageBuild",
+      "getAppUserStorage",
       "getAssetFileSet",
       "getPage",
       "getPageBuild",
@@ -154,7 +155,8 @@ describe("the file sets of a Page", () => {
       "getServedFileSet",
       "listConversationPageIds",
       "listPageFileSets",
-      "listPages"
+      "listPages",
+      "mutateAppUserStorage"
     ]);
     const saved = await save("Offer");
     const sameId = db.store.pages.createPageFileSet({

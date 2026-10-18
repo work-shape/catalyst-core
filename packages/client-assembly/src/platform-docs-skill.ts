@@ -30,6 +30,7 @@ const content = [
   "",
   "The product documentation of this platform's release, one reference file per page. Read the page that answers the question with read_skill, naming this skill and the page's path as `resourcePath`. A link in a page such as `/configure/build/` is the reference `references/configure/build.md`.",
   "",
+  "Before building or diagnosing an App, read references/apps/build.md. Sandbox rules: allow-scripts allow-forms allow-downloads without allow-same-origin; preventDefault in submit handlers and form-action 'none' blocks form targets. Saved Apps have a per-person localStorage shim; prefer kit 1.6.0 storage.get/set for small JSON state and Data Stores for shared records. Network is restricted to reviewed manifest hosts on published Apps; credentials and platform calls go through named actions, never direct fetch or CDNs.",
   "The docs describe the product. What exists on this instance and what the user may do here, ask the platform's tools.",
   ...[
     ...new Set([...SECTION_HEADINGS.keys(), ...generated.pages.map(({ path }) => sectionOf(path))])

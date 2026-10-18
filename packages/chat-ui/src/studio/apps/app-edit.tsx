@@ -41,7 +41,7 @@ import {
   type AppPublishDataRead
 } from "./app-data";
 import { AppDraftFiles } from "./app-draft-files";
-import { AppDeleteDialog, AppFrame, AppHeader, NameList } from "./app-header";
+import { AppDeleteDialog, AppFrame, AppHeader, AppStateBadge, NameList } from "./app-header";
 import {
   APP_RIGHT_NAMES,
   appDescription,
@@ -55,6 +55,7 @@ import {
   type AppManifestSummary,
   type AppRights
 } from "./app-model";
+import { HeadAgentAction } from "../head-agent-action";
 import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { AppPreview, AppPreviewNotice } from "./app-preview";
 import { AppPublishDataView, AppStoredDataFact } from "./app-publish-data";
@@ -520,11 +521,18 @@ export function AppEditFrame({
             description={description}
             state={
               known ? (
-                <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
-                  {publishedRevision === undefined
-                    ? t("apps.draftNotPublished")
-                    : t("apps.draftRevision", { number: draftRevision })}
-                </Badge>
+                // A draft that is what is published says so, as the list and the App do.
+                publishedRevision !== undefined && !ahead ? (
+                  <AppStateBadge
+                    state={{ kind: "published", revision: publishedRevision, draftAhead: false }}
+                  />
+                ) : (
+                  <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
+                    {publishedRevision === undefined
+                      ? t("apps.draftNotPublished")
+                      : t("apps.draftRevision", { number: draftRevision })}
+                  </Badge>
+                )
               ) : (
                 <Badge size="sm">{t("apps.draft")}</Badge>
               )
@@ -534,27 +542,27 @@ export function AppEditFrame({
             backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
             onBack={onBack}
             secondaryActions={
-              known
-                ? [
-                    ...(editWithAgent.action === undefined ? [] : [editWithAgent.action]),
-                    ...(ahead && publishedRevision !== undefined
-                      ? [{ label: t("apps.discard"), onSelect: () => onDiscard?.() }]
-                      : [])
-                  ]
+              known && ahead && publishedRevision !== undefined
+                ? [{ label: t("apps.discard"), onSelect: () => onDiscard?.() }]
                 : undefined
             }
             tabs={tabs}
             primaryAction={
               known ? (
-                // A live App may be published again for another audience (SHARE-1): the
-                // dialog then waits for a choice that differs from the live one.
-                <Button
-                  disabled={!rights.publish || (!ahead && publishedRevision === undefined)}
-                  aria-describedby={missingRight ? missingRightId : undefined}
-                  onClick={onPublish}
-                >
-                  {t("apps.publish")}
-                </Button>
+                <span className="flex items-center gap-2">
+                  {editWithAgent.action === undefined ? null : (
+                    <HeadAgentAction action={editWithAgent.action} />
+                  )}
+                  {/* A live App may be published again for another audience (SHARE-1): the
+                    dialog then waits for a choice that differs from the live one. */}
+                  <Button
+                    disabled={!rights.publish || (!ahead && publishedRevision === undefined)}
+                    aria-describedby={missingRight ? missingRightId : undefined}
+                    onClick={onPublish}
+                  >
+                    {t("apps.publish")}
+                  </Button>
+                </span>
               ) : undefined
             }
             menu={
@@ -798,7 +806,7 @@ export function PublishDialog({
             onChange={(next) => audience?.onChange(next)}
           />
         ) : null}
-        <AppAudienceChange offer={offer} selected={selected} />
+        <AppAudienceChange offer={offer} selected={selected} workspaceName={workspace.name} />
         <div className="grid gap-3">
           <PublishNarrativeReadLead read={narrative} />
           {narrative.status === "none" && offer === undefined ? (

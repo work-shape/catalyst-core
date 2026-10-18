@@ -38,6 +38,7 @@ import { AssetWorkflow } from "../assets/asset-service";
 import { listCallableOperations } from "./platform-callable-operations";
 import { createPlatformAssetPolicy } from "./platform-asset-policy";
 import { readPlatformContext } from "./platform-context";
+import { workflowAuthoringContext } from "./workflow-authoring-context";
 import {
   CREATED_FROM_CHAT,
   accessOf,
@@ -739,13 +740,19 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       return [assetWriteEvent({ kind: target.kind, name: target.name, ...contentOf(input) })];
     },
 
-    async readContext(context) {
+    async readContext(context, input) {
       const call = await callOf(context);
       const read = await readPlatformContext(options, call);
       const kinds = existingKinds();
       const existing = new Set<string>(kinds.flatMap((kind) => Object.values(kind.actions)));
       const ofExisting = (actions: string[]) => actions.filter((action) => existing.has(action));
       return {
+        ...(await workflowAuthoringContext(
+          options,
+          call,
+          input,
+          options.modules.isEnabled("workflows")
+        )),
         instance: { name: read.instance.name },
         modules: options.modules.modules.filter((module) => module.enabled).map(({ name }) => name),
         kinds: kinds.map((kind) => ({

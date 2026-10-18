@@ -239,13 +239,31 @@ describe("the panel of a step that failed", () => {
     const failed = run({ status: "failed", ...ended, error: { code, message: "x" } });
     const markup = panel("clients", failed, [startStep, failedStep(code)]);
     const happened = markup.indexOf(t(`workflows.reason.${reason}`));
-    const advice = markup.indexOf(t(`workflows.advice.${reason}`));
+    const advice = markup.indexOf(
+      t(`workflows.advice.${reason}`, { place: "Settings › API access" })
+    );
     const details = markup.indexOf(t("workflows.technicalDetails"));
     expect(happened).toBeGreaterThan(-1);
     // What to do stands after what happened and above the technical details.
     expect(advice).toBeGreaterThan(happened);
     expect(details).toBeGreaterThan(advice);
     expect(markup).not.toContain(code);
+  });
+
+  // ACCEPT-1c B4: a run stopped by its technical account says where an administrator changes it.
+  it("says where the technical account is changed, in both languages", () => {
+    const failed = run({
+      status: "failed",
+      ...ended,
+      error: { code: "principal_inactive", message: "x" }
+    });
+    const steps = [startStep, failedStep("principal_inactive")];
+    expect(panel("clients", failed, steps)).toContain(
+      "An administrator restores the account or switches it on under Settings › API access, or you choose another active account in the workflow."
+    );
+    expect(panel("clients", failed, steps, { locale: "de" })).toContain(
+      "Ein Administrator stellt das Konto unter Einstellungen › API-Zugang wieder her oder schaltet es ein, oder du wählst im Workflow ein anderes aktives Konto."
+    );
   });
 
   it("says the same on the step's node of the drawing, and in German", () => {

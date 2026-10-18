@@ -4,7 +4,7 @@ import {
   OPERATION_EFFECTS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
-import { appActionPermissionSchema } from "./app-bridge";
+import { appActionPermissionSchema, appStorageMutationSchema } from "./app-bridge";
 import { operationTargetSchema } from "./operation-runs";
 import { assetScopeSchema } from "./assets";
 import { listQuerySchema } from "./shared";
@@ -172,6 +172,12 @@ const pageSessionProof = {
   fileSetId: z.string().min(1).max(200),
   token: z.string().min(1).max(512)
 };
+
+export const appStorageWriteResponseSchema = z.object({ saved: z.literal(true) }).strict();
+
+export const appStorageWriteRequestSchema = z
+  .object({ ...pageSessionProof, mutation: appStorageMutationSchema })
+  .strict();
 
 export const appSessionContextRequestSchema = z.object(pageSessionProof).strict();
 

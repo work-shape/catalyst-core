@@ -55,6 +55,20 @@ export function appPublishCall(decision: {
   };
 }
 
+/**
+ * The name the card gives the App's workspace. The open workspace is named as the interface
+ * shows it, a Personal Workspace after its owner; the name the instance stores, which is the
+ * same "Personal workspace" for everyone, names only a workspace other than the open one.
+ */
+export function appWorkspaceName(
+  workspaceId: string | undefined,
+  open: { id: string; name: string } | undefined,
+  stored: string | undefined
+): string {
+  if (open && (workspaceId === undefined || workspaceId === open.id)) return open.name;
+  return stored ?? open?.name ?? "";
+}
+
 /** What the confirmation card holds for an App publish: the question, and what Allow sends. */
 export interface AppPublishConfirmationAsk {
   node: ReactNode;
@@ -96,6 +110,7 @@ export function AppPublishConfirmationView({
 }: {
   offer: AppAudienceOffer | undefined;
   selected: AppAudience | undefined;
+  /** The name of the App's workspace as the interface shows it. */
   workspaceName: string;
   narrative: PublishNarrativeRead;
   /** The lines on stored data. Absent where the revision reads none. */
@@ -111,14 +126,14 @@ export function AppPublishConfirmationView({
         <AppAudienceQuestion
           offer={offer}
           selected={selected}
-          workspaceName={offer.workspaceName ?? workspaceName}
+          workspaceName={workspaceName}
           disabled={disabled}
           onChange={onChange}
         />
       ) : (
         <SkeletonList rows={2} className="w-full" />
       )}
-      <AppAudienceChange offer={offer} selected={selected} />
+      <AppAudienceChange offer={offer} selected={selected} workspaceName={workspaceName} />
       <PublishNarrativeReadLead read={narrative} />
       {storedData ? (
         <KeyValueList>
@@ -177,7 +192,7 @@ export function useAppPublishConfirmation(
       <AppPublishConfirmationView
         offer={offer}
         selected={selected}
-        workspaceName={host?.workspace?.name ?? ""}
+        workspaceName={appWorkspaceName(call.workspaceId, host?.workspace, offer?.workspaceName)}
         narrative={question.narrative}
         storedData={readsStoredData ? storedData : undefined}
         disabled={disabled}

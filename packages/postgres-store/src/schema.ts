@@ -62,7 +62,7 @@ import { operationRuns } from "./schema/operationRuns";
 import { liveOnceRuns, liveOnceSwitches } from "./schema/liveOnceSwitches";
 import { permissionGrants, namespaces } from "./schema/access";
 import { infrastructureCheckState } from "./schema/infrastructure";
-import { pages, fileSets, pageBuilds } from "./schema/pages";
+import { pages, fileSets, pageBuilds, appUserStorage } from "./schema/pages";
 import {
   secrets,
   connectionState,
@@ -132,6 +132,7 @@ export const schema = {
   pages,
   fileSets,
   pageBuilds,
+  appUserStorage,
   secrets,
   connectionState,
   connectionBindings,

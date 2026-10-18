@@ -1,5 +1,6 @@
 import {
   ApiError,
+  completedOutput,
   type ApiClient,
   type AppActionPermission,
   type AppBridgeHostMessage,
@@ -62,6 +63,9 @@ export type FrameWorkflowRunAnswer =
 export interface FrameCalls {
   /** What each action would come to for the viewer, or nothing where it could not be read. */
   can(): Promise<Record<string, AppActionPermission> | undefined>;
+  writeStorage(
+    mutation: Extract<AppBridgePageMessage, { type: "storage_write" }>["mutation"]
+  ): Promise<void>;
   run(call: FrameCall): Promise<FrameCallAnswer>;
   /** Reads a Workflow Run that a `workflow` action of the frame started. */
   workflowRun(runId: string): Promise<FrameWorkflowRunAnswer>;
@@ -150,6 +154,14 @@ export function createFrameCalls(
   }
   const { pageSessionId, fileSetId, token } = proof;
   return {
+    async writeStorage(mutation) {
+      completedOutput(
+        await client.apps.sessions.write_storage({
+          params: { pageSessionId },
+          body: { fileSetId, token, mutation }
+        })
+      );
+    },
     can: () =>
       client.apps.sessions.context({ params: { pageSessionId }, body: { fileSetId, token } }).then(
         (answer) => answer.can,

@@ -487,7 +487,7 @@ describe("the bridge of a shown Page", () => {
 });
 
 describe("the frame of a Page", () => {
-  it("allows scripts and nothing else, sends no referrer and loads the address it was given", () => {
+  it("allows scripts, form events and downloads without an origin, sends no referrer and loads the address it was given", () => {
     const markup = render(
       createElement(PreviewPane, {
         source: { kind: "bundle", url: "https://api.example.test/app-content/set-2/token/" },
@@ -497,11 +497,11 @@ describe("the frame of a Page", () => {
     );
 
     expect(markup).toMatch(/^<iframe /u);
-    expect(markup).toContain('sandbox="allow-scripts"');
+    expect(markup).toContain('sandbox="allow-scripts allow-forms allow-downloads"');
     expect(markup).toContain('referrerPolicy="no-referrer"');
     expect(markup).toContain('src="https://api.example.test/app-content/set-2/token/"');
     expect(markup).toContain('title="Preview of Offers"');
-    expect(markup).not.toMatch(/allow-same-origin|allow-forms|allow-popups|allow-top-navigation/u);
+    expect(markup).not.toMatch(/allow-same-origin|allow-popups|allow-top-navigation/u);
     expect(markup).not.toMatch(/\ballow="/u);
   });
 

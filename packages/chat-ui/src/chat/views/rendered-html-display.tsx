@@ -1,6 +1,6 @@
 import { VIEW_SHELL_MESSAGES } from "@work-shape/catalyst-api-client";
 import { TOOL_DISPLAY_MODES } from "@work-shape/catalyst-core";
-import { Banner, Spinner, useUiMode } from "@work-shape/catalyst-ui";
+import { Banner, LoadError, Spinner, useUiMode } from "@work-shape/catalyst-ui";
 import { THEME_TOKEN_NAMES } from "@work-shape/catalyst-ui/theme";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "../../shared/i18n";
@@ -8,6 +8,23 @@ import { composeViewDocument, viewRunsScripts, type ViewDisplayKind } from "./vi
 import { useViewPolicy } from "./view-policy";
 
 const RUNTIME_THEME_STYLE_ID = "vivd-catalyst-runtime-theme";
+
+/**
+ * How long a view may take from a new shell to its loaded document. It keeps a view that never
+ * loads from spinning forever; the reader then sees the limit named and Try again. A view with
+ * chart libraries on a slow connection loads in about three seconds.
+ */
+export const VIEW_LOAD_TIMEOUT_MS = 30_000;
+
+/**
+ * How long after the shell's frame has loaded its ready message may still arrive. A frame that
+ * loads without the shell in it, such as a browser's error page for a blocked or failed address,
+ * never says ready; the reader sees the view could not be loaded and Try again.
+ */
+export const VIEW_SHELL_READY_GRACE_MS = 2_000;
+
+/** Why a view is not shown: its shell never said ready, or it did not load in time. */
+type ViewLoadFailure = "shell_unavailable" | "timeout";
 
 /**
  * The frame grows to its reported content height so the view never scrolls
@@ -62,6 +79,10 @@ export function RenderedHtmlDisplay({
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [scriptBlocked, setScriptBlocked] = useState(false);
+  const [failure, setFailure] = useState<ViewLoadFailure>();
+  // The shell of this key said ready, and when its frame loaded.
+  const [shellReady, setShellReady] = useState(false);
+  const [shellLoaded, setShellLoaded] = useState(false);
   const heightLimit = FRAME_HEIGHT_LIMITS[mode];
   const frameHeight = clampNumber(
     contentHeight ?? heightLimit.fallback,
@@ -69,6 +90,15 @@ export function RenderedHtmlDisplay({
     MAX_FRAME_HEIGHT
   );
   const frameStyle: CSSProperties = { height: `${frameHeight}px` };
+
+  // Each new shell starts unanswered: the timers below run for it alone.
+  const startShell = useCallback(() => {
+    setFailure(undefined);
+    setShellReady(false);
+    setShellLoaded(false);
+    setLoading(true);
+    setShellKey((key) => key + 1);
+  }, []);
 
   const refreshFrameDocument = useCallback(() => {
     const host = hostRef.current;
@@ -83,9 +113,24 @@ export function RenderedHtmlDisplay({
       setContentHeight(undefined);
       setScriptBlocked(false);
     }
-    setLoading(true);
-    setShellKey((key) => key + 1);
-  }, [html]);
+    startShell();
+  }, [html, startShell]);
+
+  useEffect(() => {
+    if (shellKey === 0 || !loading || failure) {
+      return;
+    }
+    const timer = setTimeout(() => setFailure("timeout"), VIEW_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [shellKey, loading, failure]);
+
+  useEffect(() => {
+    if (!shellLoaded || shellReady || failure) {
+      return;
+    }
+    const timer = setTimeout(() => setFailure("shell_unavailable"), VIEW_SHELL_READY_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [shellLoaded, shellReady, failure]);
 
   // The frame carries the theme it finds on its host after each render. Reading the mode
   // subscribes this component to the root's mode, so a switch renders it again.
@@ -100,6 +145,7 @@ export function RenderedHtmlDisplay({
       }
       switch (event.data.type) {
         case VIEW_SHELL_MESSAGES.ready:
+          setShellReady(true);
           if (frameSourceRef.current !== undefined) {
             shell.postMessage(
               {
@@ -114,6 +160,7 @@ export function RenderedHtmlDisplay({
           return;
         case VIEW_SHELL_MESSAGES.loaded:
           setLoading(false);
+          setFailure(undefined);
           return;
         case VIEW_SHELL_MESSAGES.blocked:
           setScriptBlocked(true);
@@ -141,7 +188,19 @@ export function RenderedHtmlDisplay({
   return (
     <div ref={hostRef} className="relative bg-background">
       {scriptBlocked ? <Banner tone="warning">{t("displayScriptBlocked")}</Banner> : null}
-      {loading ? (
+      {failure ? (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center bg-background p-4"
+          style={frameStyle}
+          data-testid="view-load-error"
+        >
+          <LoadError onRetry={startShell}>
+            {failure === "timeout"
+              ? t("displayLoadTimedOut", { seconds: VIEW_LOAD_TIMEOUT_MS / 1000 })
+              : t("displayLoadFailed")}
+          </LoadError>
+        </div>
+      ) : loading ? (
         <div
           className="absolute inset-0 z-10 flex items-center justify-center bg-[color-mix(in_srgb,var(--muted)_30%,var(--background))] text-sm text-muted-foreground"
           style={frameStyle}
@@ -153,7 +212,7 @@ export function RenderedHtmlDisplay({
           </span>
         </div>
       ) : null}
-      {shellKey > 0 ? (
+      {shellKey > 0 && !failure ? (
         <iframe
           key={shellKey}
           ref={iframeRef}
@@ -164,6 +223,7 @@ export function RenderedHtmlDisplay({
           src={shellUrl}
           className="w-full overflow-hidden border-0 bg-background"
           style={frameStyle}
+          onLoad={() => setShellLoaded(true)}
         />
       ) : (
         <div className="w-full bg-background" style={frameStyle} aria-hidden="true" />
