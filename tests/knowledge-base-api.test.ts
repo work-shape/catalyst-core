@@ -12,6 +12,7 @@ import {
   knowledgeQueryOperationName,
   type JsonObject
 } from "@work-shape/catalyst-core";
+import { dataFlowManifest } from "./support/workflow-data-flows";
 import { required } from "./support/assertions";
 import {
   clientInstanceId,
@@ -94,6 +95,69 @@ describe("a Knowledge Base on a Data Store", () => {
     const made = await publishKnowledgeBase(world, 1);
     expect(made.statusCode, made.body).toBe(200);
   }
+
+  it("derives filling and processing data Workflows from published steps without keeping reverse links", async () => {
+    const world = await start(true, undefined, undefined, undefined, true);
+    await published(world);
+    const publishFlow = async (
+      name: string,
+      operations: string[],
+      kind: "data" | "process" = "data"
+    ) => {
+      const key = `workflow:${name}`;
+      const written = await world.stores.configAssets.applyConfigAssetMutations({
+        clientInstanceId,
+        baseRevisions: { [key]: null },
+        mutations: [
+          {
+            type: "upsert",
+            kind: "workflow",
+            name,
+            draft: true,
+            config: {
+              name,
+              manifest: dataFlowManifest(name, operations, { kind })
+            }
+          }
+        ]
+      });
+      const revision = required(written.revisions[key]);
+      const stored = required(
+        await world.stores.configAssets.getConfigAssetRevision({
+          clientInstanceId,
+          kind: "workflow",
+          name,
+          revision
+        })
+      );
+      await world.stores.configAssets.publishConfigAssetRevision({
+        clientInstanceId,
+        kind: "workflow",
+        name,
+        revision,
+        assetId: required(written.assetIds[key]),
+        revisionId: stored.id
+      });
+    };
+    await publishFlow("import-documents", [`knowledge.${KB}.ingest`, `knowledge.${KB}.withdraw`]);
+    await publishFlow("process-documents", [
+      `knowledge.${KB}.pending`,
+      `knowledge.${KB}.put_processed`
+    ]);
+    await publishFlow("other-kb", ["knowledge.other.ingest"]);
+    await publishFlow("read-documents", [`knowledge.${KB}.pending`]);
+    await publishFlow("old-process", [`knowledge.${KB}.ingest`], "process");
+    const response = await world.api.call("knowledge_bases.get", { params: { knowledgeBase: KB } });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({
+      dataFlows: {
+        fills: [{ name: "import-documents", title: "Title import-documents" }],
+        processes: [{ name: "process-documents", title: "Title process-documents" }],
+        hidden: { fills: 0, processes: 0 },
+        truncated: false
+      }
+    });
+  });
 
   it("is off by default and needs the Data Stores on", async () => {
     const instance = await start(true);

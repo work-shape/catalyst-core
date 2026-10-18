@@ -11,6 +11,9 @@ import {
   CardReachable,
   CardTarget,
   CardTitle,
+  Chip,
+  EmptyState,
+  FilterBar,
   Page,
   PageHeader,
   SkeletonList
@@ -114,6 +117,12 @@ export function WorkflowsPageView({
 }) {
   const { t } = useTranslation();
   const rows = list.rows;
+  // Process Workflows first; the data Workflows, which fill Knowledge Bases and Data Stores,
+  // stand behind Data flows. The choice is offered only once there is a data Workflow.
+  const [kind, setKind] = useState<WorkflowListItem["kind"]>("process");
+  const dataCount = rows?.filter((workflow) => workflow.kind === "data").length ?? 0;
+  const offerKinds = dataCount > 0 || kind === "data";
+  const shown = rows?.filter((workflow) => workflow.kind === kind);
   const newButton = onNew ? (
     <Button onClick={() => onNew(t("workflows.newPrompt"))}>
       <Plus aria-hidden="true" />
@@ -148,23 +157,42 @@ export function WorkflowsPageView({
           />
         ) : (
           <div className="grid min-w-0 gap-4">
-            <ul
-              aria-label={t("workflows.title")}
-              className="grid grid-cols-1 gap-4 @2xl:grid-cols-2"
-            >
-              {rows.map((workflow) => (
-                <li key={workflow.id} className="flex min-w-0">
-                  <WorkflowCard
-                    workflow={workflow}
-                    workspaceId={workspaceId}
-                    now={now}
-                    canStart={runsAvailable && startOffered(workflow)}
-                    onOpenRoute={onOpenRoute}
-                    onStart={() => onStart(workflow)}
-                  />
-                </li>
-              ))}
-            </ul>
+            {offerKinds ? (
+              <FilterBar
+                filters={
+                  // One chip: on, the list shows the data Workflows; off again, the processes.
+                  <Chip
+                    pressed={kind === "data"}
+                    onClick={() => setKind(kind === "data" ? "process" : "data")}
+                  >
+                    {t("workflows.kindData")}
+                  </Chip>
+                }
+              />
+            ) : null}
+            {shown === undefined || shown.length === 0 ? (
+              <EmptyState layout="inline">
+                {t(kind === "data" ? "workflows.kindDataEmpty" : "workflows.kindProcessEmpty")}
+              </EmptyState>
+            ) : (
+              <ul
+                aria-label={t("workflows.title")}
+                className="grid grid-cols-1 gap-4 @2xl:grid-cols-2"
+              >
+                {shown.map((workflow) => (
+                  <li key={workflow.id} className="flex min-w-0">
+                    <WorkflowCard
+                      workflow={workflow}
+                      workspaceId={workspaceId}
+                      now={now}
+                      canStart={runsAvailable && startOffered(workflow)}
+                      onOpenRoute={onOpenRoute}
+                      onStart={() => onStart(workflow)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
             {list.hasMore ? (
               <Button
                 variant="outline"

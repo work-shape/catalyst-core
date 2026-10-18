@@ -249,6 +249,9 @@ export const statusGallery: GalleryGroup = {
               <Chip size={size} onClick={() => undefined}>
                 {text.emptyPresetBriefing}
               </Chip>
+              <Chip size={size} pressed onClick={() => undefined}>
+                {text.emptyPresetBriefing}
+              </Chip>
             </Samples>
           ))}
           <RemovableChips text={text} />

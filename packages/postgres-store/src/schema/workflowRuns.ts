@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   foreignKey,
   index,
@@ -52,6 +53,7 @@ export const workflowRuns = pgTable(
     mode: text("mode").$type<WorkflowRunMode>().notNull(),
     trigger: text("trigger").$type<WorkflowTriggerKind>().notNull(),
     status: text("status").$type<WorkflowRunStatus>().notNull(),
+    empty: boolean("empty").notNull().default(false),
     definition: jsonb("definition").$type<WorkflowManifest>().notNull(),
     input: jsonb("input").$type<JsonObject>().notNull(),
     // The run's result, wrapped so that a result of `null` is kept.

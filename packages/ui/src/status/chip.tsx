@@ -25,6 +25,11 @@ export interface ChipProps {
   href?: string;
   /** Makes the chip a button, or handles the click on its link. */
   onClick?: MouseEventHandler<HTMLElement>;
+  /**
+   * Makes a button chip a filter that is on or off: it says so to assistive technology and
+   * takes the selected fill while on.
+   */
+  pressed?: boolean;
   className?: string;
 }
 
@@ -37,6 +42,7 @@ export function Chip({
   onRemove,
   href,
   onClick,
+  pressed,
   className
 }: ChipProps) {
   const labels = useUiLabels("Chip");
@@ -66,6 +72,7 @@ export function Chip({
       className={cn(
         "inline-flex max-w-full shrink-0 items-center rounded-full border text-caption whitespace-nowrap text-foreground",
         chipSizes[size],
+        pressed && "border-primary-border bg-primary-soft text-primary-soft-foreground",
         className
       )}
     >
@@ -74,7 +81,12 @@ export function Chip({
           {body}
         </a>
       ) : onClick ? (
-        <button type="button" className={cn(bodyClassName, interactiveClassName)} onClick={onClick}>
+        <button
+          type="button"
+          className={cn(bodyClassName, interactiveClassName)}
+          aria-pressed={pressed}
+          onClick={onClick}
+        >
           {body}
         </button>
       ) : (

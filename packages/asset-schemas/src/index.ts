@@ -11,3 +11,5 @@ export * from "./workflow-datasets";
 export * from "./operation-batch";
 export * from "./knowledge-write";
 export * from "./operation-paging";
+
+export * from "./workflow-data-flows";

@@ -150,7 +150,16 @@ export const workflows = defineTranslations({
       "Build a new workflow that checks every morning which invoices are overdue and drafts a friendly reminder to each client.",
     "workflows.new": "New workflow",
     "workflows.newPrompt": "Build a new workflow that ",
+    "workflows.flows.hidden": "and {count} more you can't see",
+    "workflows.flows.hiddenOnly": "{count} workflows you can't see do this.",
+    "workflows.flows.hiddenOnlyOne": "One workflow you can't see does this.",
+    "workflows.flows.truncated":
+      "The instance has more published workflows than one read looks through, so this list may be incomplete.",
     "workflows.failed": "The workflow could not be loaded.",
+    "workflows.kindData": "Data flows",
+    "workflows.kindDataEmpty": "No data flows.",
+    "workflows.kindProcessEmpty":
+      "No process workflows yet. Workflows that fill knowledge bases and data stores are under Data flows.",
     "workflows.lastRun": "Last run",
     "workflows.listFailed": "The workflows could not be loaded.",
     "workflows.open": "Open",
@@ -278,6 +287,8 @@ export const workflows = defineTranslations({
     "workflows.run.waiting": "Waiting",
     "workflows.run.waitingLine":
       "Waiting for an approval. Whoever is asked decides in their Inbox.",
+    "workflows.runs.emptyGroup": "{count} empty runs",
+    "workflows.runs.emptyGroupLine": "Found nothing to do · {from} to {to}",
     "workflows.runs.keyFilter": "Filter by key",
     "workflows.runs.keyFilterPlaceholder": "A key or its start, such as 2026-09/",
     "workflows.runs.listFailed": "The runs could not be loaded.",
@@ -490,7 +501,16 @@ export const workflows = defineTranslations({
       "Bau einen neuen Workflow, der jeden Morgen prüft, welche Rechnungen überfällig sind, und für jeden Kunden eine freundliche Erinnerung entwirft.",
     "workflows.new": "Neuer Workflow",
     "workflows.newPrompt": "Bau einen neuen Workflow, der ",
+    "workflows.flows.hidden": "und {count} weitere, die du nicht sehen kannst",
+    "workflows.flows.hiddenOnly": "{count} Workflows, die du nicht sehen kannst, tun das.",
+    "workflows.flows.hiddenOnlyOne": "Ein Workflow, den du nicht sehen kannst, tut das.",
+    "workflows.flows.truncated":
+      "Die Instanz hat mehr veröffentlichte Workflows, als ein Lesezugriff durchsieht. Diese Liste kann unvollständig sein.",
     "workflows.failed": "Der Workflow konnte nicht geladen werden.",
+    "workflows.kindData": "Datenflüsse",
+    "workflows.kindDataEmpty": "Keine Datenflüsse.",
+    "workflows.kindProcessEmpty":
+      "Noch keine Prozess-Workflows. Workflows, die Wissensbasen und Datenspeicher füllen, findest du unter Datenflüsse.",
     "workflows.lastRun": "Letzter Lauf",
     "workflows.listFailed": "Die Workflows konnten nicht geladen werden.",
     "workflows.open": "Öffnen",
@@ -625,6 +645,8 @@ export const workflows = defineTranslations({
     "workflows.run.waiting": "Wartet",
     "workflows.run.waitingLine":
       "Wartet auf eine Freigabe. Wer gefragt ist, entscheidet in seiner Inbox.",
+    "workflows.runs.emptyGroup": "{count} leere Läufe",
+    "workflows.runs.emptyGroupLine": "Nichts zu tun gefunden · {from} bis {to}",
     "workflows.runs.keyFilter": "Nach Schlüssel filtern",
     "workflows.runs.keyFilterPlaceholder": "Ein Schlüssel oder sein Anfang, etwa 2026-09/",
     "workflows.runs.listFailed": "Die Läufe konnten nicht geladen werden.",

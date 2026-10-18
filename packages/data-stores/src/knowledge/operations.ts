@@ -1,3 +1,5 @@
+import { workflowDataFlowsSchema } from "@work-shape/catalyst-core";
+import { readWorkflowDataFlows } from "../workflow-data-flows";
 import { sourceOperation } from "./source-operations";
 import {
   isAppError,
@@ -80,6 +82,7 @@ const tableCheckSchema = z.object({ name: z.string(), readable: z.boolean() });
 
 /** The state of one Knowledge Base as its page reads it. */
 const stateOutputSchema = z.object({
+  dataFlows: workflowDataFlowsSchema.optional(),
   processingWaiting: z.boolean().optional(),
   /** The id of the Knowledge Base's asset. */
   id: z.string(),
@@ -292,14 +295,22 @@ function stateOperation(
         clientInstanceId: runtime.clientInstanceId,
         assetId: knowledgeBase.asset.id
       });
-      if (kept) return stateOf(runtime, knowledgeBase, kept);
+      const dataFlows = await readWorkflowDataFlows(
+        runtime.stores,
+        runtime.clientInstanceId,
+        { kind: "knowledge_base", name: knowledgeBase.asset.name },
+        context.access
+      );
+      const withFlows = async (state: CheckedKnowledgeState | undefined) => ({
+        ...(await stateOf(runtime, knowledgeBase, state)),
+        ...(dataFlows ? { dataFlows } : {})
+      });
+      if (kept) return withFlows(kept);
       // Nothing kept: it was never checked, or its store was being made when it was. A store
       // being made becomes ready by itself, and nobody need check for the page to see it: it is
       // looked at now, and kept once it is ready, as a query keeps the check after a failure.
       try {
-        return await stateOf(
-          runtime,
-          knowledgeBase,
+        return await withFlows(
           await checkKnowledgeBase(
             runtime,
             runtime.stores,
@@ -320,7 +331,7 @@ function stateOperation(
           },
           "A Knowledge Base with no kept state could not be checked"
         );
-        return stateOf(runtime, knowledgeBase, undefined);
+        return withFlows(undefined);
       }
     }
   };

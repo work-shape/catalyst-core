@@ -75,6 +75,8 @@ export const workflowRunSchema = z.object({
   mode: z.enum(WORKFLOW_RUN_MODES),
   trigger: z.enum(WORKFLOW_TRIGGER_KINDS),
   status: runStatusSchema,
+  /** A completed data run whose write steps handled no items. */
+  empty: z.boolean().optional(),
   /**
    * The service principal the run acts as. Its rights are the rights of every step. A test run
    * (`mode: test`) acts as the person who started it, bounded by this principal.

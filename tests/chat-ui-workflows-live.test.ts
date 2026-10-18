@@ -142,6 +142,7 @@ function instance(
               id: "month-end",
               name: " ",
               description: "Closes the month.",
+              kind: "data",
               definitionRevisionId: "rev_7",
               actions: ["workflow.read", "workflow.use"],
               runnable: false,
@@ -186,6 +187,8 @@ describe("the Workflow screens over the engine of an instance", () => {
         id: "open-invoices",
         name: "Open invoices",
         published: true,
+        // The list names no kind: a process.
+        kind: "process",
         startsByHand: true,
         refusedFor: [],
         mayStart: false,
@@ -211,6 +214,7 @@ describe("the Workflow screens over the engine of an instance", () => {
         name: "month-end",
         description: "Closes the month.",
         published: true,
+        kind: "data",
         startsByHand: true,
         // Listed although the instance starts none of it, with the instance's own reason.
         refusedFor: [{ code: NOT_BUILT.code, message: NOT_BUILT.message }],
@@ -224,6 +228,7 @@ describe("the Workflow screens over the engine of an instance", () => {
         name: "First draft",
         description: "Not yet.",
         published: false,
+        kind: "process",
         updatedAt: "2026-10-12T09:00:00.000Z",
         startsByHand: false,
         refusedFor: [],

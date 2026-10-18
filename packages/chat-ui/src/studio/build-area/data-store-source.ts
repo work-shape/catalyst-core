@@ -7,6 +7,7 @@ import { apiErrorCode } from "../../shared/workspace-utils";
 import { useAppsHost } from "../apps/apps-host";
 import { useWorkflowsHost } from "../workflows/workflows-host";
 import { instanceSentence } from "./build-refusals";
+import type { DataFlows } from "./data-flows-model";
 
 /** The state of one Data Store, as `data_stores.get` answers it. */
 export type DataStoreState = Awaited<ReturnType<ApiClient["data_stores"]["get"]>>;
@@ -18,8 +19,13 @@ export type DataStoreListed = Awaited<ReturnType<ApiClient["data_stores"]["list"
 export type DataStoreRowsPage = Awaited<ReturnType<ApiClient["data_stores"]["rows"]>>;
 /** One value of one row whole, as `data_stores.value` answers it. */
 export type DataStoreValue = Awaited<ReturnType<ApiClient["data_stores"]["value"]>>;
-/** The Apps and Workflows that use a store, as `data_stores.used_by` answers them. */
-export type DataStoreUsedBy = Awaited<ReturnType<ApiClient["data_stores"]["used_by"]>>;
+/**
+ * The Apps and Workflows that use a store, as `data_stores.used_by` answers them, with the
+ * data Workflows that fill or process it.
+ */
+export type DataStoreUsedBy = Awaited<ReturnType<ApiClient["data_stores"]["used_by"]>> & {
+  dataFlows?: DataFlows;
+};
 
 /** Where one value lies: its table, its column and `at` of its row. */
 export interface DataStoreValuePlace {

@@ -366,6 +366,7 @@ Follow the build rules for data scope in the platform docs: \`references/configu
 - \`runAs\`: the name of the service principal every step acts as. Its rights decide what a step
   may call. Do not change it unless the person asks: a publish checks whether its publisher
   may let a Workflow act as that principal.
+- \`kind\`: \`process\` unless set. Use \`data\` for a Workflow that fills or processes a Knowledge Base or Data Store. Publishing Knowledge Base \`ingest\`, \`withdraw\`, \`put_processed\` or Data Store \`records.propose\` from a process Workflow is refused with \`process_workflow_write_operation\`. A copied data template keeps \`kind: data\`.
 - \`packages\`: optional list of installed Python distribution names required by the code steps,
   for example \`packages: [pypdf]\`. Publish refuses any name outside the runner allow-list below.
 - \`inputs\`: the JSON Schema of the input a run is started with. An object schema.

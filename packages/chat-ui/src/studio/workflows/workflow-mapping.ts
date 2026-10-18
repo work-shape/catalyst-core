@@ -6,6 +6,7 @@ import {
   WORKFLOW_RUN_MODES,
   WORKFLOW_TRIGGER_KINDS,
   type WorkflowBlockStepRunView,
+  type WorkflowKind,
   type WorkflowLoopCounts,
   type WorkflowRunDataset,
   type WorkflowRunLineage,
@@ -121,6 +122,8 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   datasets?: readonly WorkflowDatasetResource[];
   /** When someone asked to cancel the run. It ends when the call that is going has ended. */
   cancelledAt?: string;
+  /** True on a run that ended `done` without a write step handling an item. */
+  empty?: boolean;
 }
 
 /** A step run as the engine's read answers it, with the placement the contract names. */
@@ -240,6 +243,7 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     ...(run.definitionRevisionId === undefined ? {} : { revisionId: run.definitionRevisionId }),
     test: run.mode === "test",
     ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
+    empty: run.empty === true && run.status === "done",
     ...(run.parentRunId === undefined || run.parentWorkflow === undefined
       ? {}
       : { parent: { runId: run.parentRunId, workflowId: run.parentWorkflow } })
@@ -299,6 +303,8 @@ export interface WorkflowSummaryResource {
   id: string;
   name: string;
   description?: string;
+  /** `process` unless the published definition says `data`. */
+  kind?: WorkflowKind;
   /** The id of the published revision: what a run started now names as its own. */
   definitionRevisionId?: string;
   /** Why the instance accepts no start by hand now. Empty where it does. */
@@ -371,6 +377,7 @@ export function toWorkflowListItem(summary: WorkflowSummaryResource): WorkflowLi
     ...(description ? { description } : {}),
     // The engine lists what has a published definition.
     published: true,
+    kind: summary.kind ?? "process",
     // A Workflow without a start by hand is refused for that alone.
     startsByHand: !(summary.reasons ?? []).some(({ code }) => code === "no_manual_trigger"),
     refusedFor: startIssues(summary),
@@ -395,6 +402,8 @@ export interface WorkflowAssetListed {
   description?: string;
   publishedRevision?: number;
   updatedAt: string;
+  /** What the kind's summary adds to the row, such as `workflowKind`. */
+  attributes?: Readonly<Record<string, string | boolean>>;
 }
 
 /**
@@ -408,6 +417,8 @@ export function toDraftWorkflowListItem(asset: WorkflowAssetListed): WorkflowLis
     name: asset.title.trim() || nameFromId(asset.name),
     ...(description ? { description } : {}),
     published: false,
+    // The asset list names the draft's kind; a row without it is a process.
+    kind: asset.attributes?.workflowKind === "data" ? "data" : "process",
     updatedAt: asset.updatedAt,
     startsByHand: false,
     refusedFor: [],

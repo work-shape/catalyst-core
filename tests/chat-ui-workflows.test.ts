@@ -366,6 +366,48 @@ describe("the list of Workflows", () => {
     expect(markup).toContain(t("workflows.listFailed"));
     expect(markup).toContain(t("tryAgain"));
   });
+
+  it("lists the processes first and keeps data Workflows behind Data flows (WF-KIND)", () => {
+    const importer = {
+      id: "invoice-import",
+      name: "Invoice import",
+      description: "Puts each new invoice into the knowledge base.",
+      kind: "data" as const
+    };
+    const reminder = { ...summary, kind: "process" as const };
+    expect(toWorkflowListItem(importer).kind).toBe("data");
+    // A Workflow the list names without a kind, and a draft never published, are processes.
+    expect(toWorkflowListItem(summary).kind).toBe("process");
+    expect(
+      toDraftWorkflowListItem({ name: "d", title: "D", updatedAt: now.toISOString() }).kind
+    ).toBe("process");
+    // A draft never published takes the kind its asset row names, a process where it names none.
+    const draft = (attributes?: Record<string, string | boolean>) =>
+      toDraftWorkflowListItem({
+        name: "d",
+        title: "D",
+        updatedAt: now.toISOString(),
+        ...(attributes ? { attributes } : {})
+      }).kind;
+    expect(draft({ workflowKind: "data" })).toBe("data");
+    expect(draft({ workflowKind: "process" })).toBe("process");
+    expect(draft({ workflowKind: "other" })).toBe("process");
+    expect(draft({})).toBe("process");
+
+    const markup = render(listPage([importer, reminder]));
+    expect(markup).toContain("Notify clients");
+    expect(markup).not.toContain("Invoice import");
+    // One chip, off while the processes are listed.
+    expect(markup).toMatch(/<button[^>]*aria-pressed="false"[^>]*>.*Data flows/u);
+    expect(markup.match(/aria-pressed=/gu)).toHaveLength(1);
+    expect(render(listPage([importer, reminder]), "de")).toContain(">Datenflüsse<");
+    // Without a data Workflow there is nothing to choose between.
+    expect(render(listPage([reminder]))).not.toContain(t("workflows.kindData"));
+    // Only data Workflows: the processes say where the others are, and the list is not empty.
+    const onlyData = render(listPage([importer]));
+    expect(onlyData).toContain(t("workflows.kindProcessEmpty"));
+    expect(onlyData).not.toContain(t("workflows.emptyReadOnly"));
+  });
 });
 
 describe("the page of a Workflow", () => {
@@ -675,6 +717,43 @@ describe("the runs of a Workflow", () => {
     const markup = render(page(runList({ rows })));
     expect(markup.match(/data-test-run=""/gu)).toHaveLength(1);
     expect(markup).toContain(t("workflows.run.testBadge"));
+  });
+
+  it("folds empty runs side by side into one row, and keeps every other run a row (WF-KIND)", () => {
+    const rows = [
+      toWorkflowRun(runResource({ id: "wr_9", status: "done" })),
+      toWorkflowRun(runResource({ id: "wr_8", status: "done", empty: true })),
+      toWorkflowRun(runResource({ id: "wr_7", status: "done", empty: true })),
+      toWorkflowRun(runResource({ id: "wr_6", status: "done", empty: true })),
+      toWorkflowRun(runResource({ id: "wr_5", status: "failed", empty: true })),
+      toWorkflowRun(runResource({ id: "wr_4", status: "done", empty: true, mode: "test" })),
+      toWorkflowRun(runResource({ id: "wr_3", status: "done", empty: true })),
+      toWorkflowRun(runResource({ id: "wr_2", status: "done" }))
+    ];
+    // Only a run that ended done is empty, whatever else the instance marks.
+    expect(rows.map((run) => run.empty)).toEqual([
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]);
+    const markup = render(page(runList({ rows, hasMore: true })));
+    expect(markup.match(/data-empty-runs="3"/gu)).toHaveLength(1);
+    expect(markup.match(/data-empty-runs=/gu)).toHaveLength(1);
+    expect(markup).toContain(">3 empty runs<");
+    // Folded, the three empty runs are behind the row; the others stand, a lone empty one too.
+    for (const shown of ["wr_9", "wr_5", "wr_4", "wr_3", "wr_2"]) {
+      expect(markup).toContain(`href="/w/cw_1/workflows/notify-clients/runs/${shown}"`);
+    }
+    for (const folded of ["wr_8", "wr_7", "wr_6"]) {
+      expect(markup).not.toContain(`/runs/${folded}"`);
+    }
+    expect(markup).toContain(t("workflows.showMore"));
+    expect(render(page(runList({ rows })), "de")).toContain(">3 leere Läufe<");
   });
 
   it("offers more runs where the instance has more", () => {

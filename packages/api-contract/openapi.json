@@ -10008,6 +10008,83 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "dataFlows": {
+                      "type": "object",
+                      "properties": {
+                        "fills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "title"
+                            ]
+                          }
+                        },
+                        "processes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "title"
+                            ]
+                          }
+                        },
+                        "hidden": {
+                          "type": "object",
+                          "properties": {
+                            "fills": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "processes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "fills",
+                            "processes"
+                          ]
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "fills",
+                        "processes",
+                        "hidden",
+                        "truncated"
+                      ]
+                    },
                     "apps": {
                       "type": "array",
                       "items": {
@@ -15298,6 +15375,83 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "dataFlows": {
+                      "type": "object",
+                      "properties": {
+                        "fills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "title"
+                            ]
+                          }
+                        },
+                        "processes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "title"
+                            ]
+                          }
+                        },
+                        "hidden": {
+                          "type": "object",
+                          "properties": {
+                            "fills": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "processes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "fills",
+                            "processes"
+                          ]
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "fills",
+                        "processes",
+                        "hidden",
+                        "truncated"
+                      ]
+                    },
                     "processingWaiting": {
                       "type": "boolean"
                     },
@@ -15451,6 +15605,83 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "dataFlows": {
+                      "type": "object",
+                      "properties": {
+                        "fills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "title"
+                            ]
+                          }
+                        },
+                        "processes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "title"
+                            ]
+                          }
+                        },
+                        "hidden": {
+                          "type": "object",
+                          "properties": {
+                            "fills": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "processes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "fills",
+                            "processes"
+                          ]
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "fills",
+                        "processes",
+                        "hidden",
+                        "truncated"
+                      ]
+                    },
                     "processingWaiting": {
                       "type": "boolean"
                     },
@@ -19704,6 +19935,9 @@
                         "limit_reached"
                       ]
                     },
+                    "empty": {
+                      "type": "boolean"
+                    },
                     "principal": {
                       "type": "object",
                       "properties": {
@@ -20033,6 +20267,9 @@
                         "cancelled",
                         "limit_reached"
                       ]
+                    },
+                    "empty": {
+                      "type": "boolean"
                     },
                     "principal": {
                       "type": "object",
@@ -21150,6 +21387,9 @@
                               "limit_reached"
                             ]
                           },
+                          "empty": {
+                            "type": "boolean"
+                          },
                           "principal": {
                             "type": "object",
                             "properties": {
@@ -21507,6 +21747,9 @@
                         "cancelled",
                         "limit_reached"
                       ]
+                    },
+                    "empty": {
+                      "type": "boolean"
                     },
                     "principal": {
                       "type": "object",
@@ -21888,6 +22131,9 @@
                         "cancelled",
                         "limit_reached"
                       ]
+                    },
+                    "empty": {
+                      "type": "boolean"
                     },
                     "principal": {
                       "type": "object",

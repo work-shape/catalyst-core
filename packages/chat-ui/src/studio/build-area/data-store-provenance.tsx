@@ -2,6 +2,7 @@ import { BookOpen, Database, LayoutGrid, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 import { Chip, EmptyState, List, ListRow } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import { DataFlowList } from "./data-flows";
 import { ReadState } from "./data-store-read-state";
 import {
   audienceLine,
@@ -39,8 +40,15 @@ export function DataStoreFillers({ store, workspaceId, source }: ProvenanceProps
     <UsedByRead store={store} source={source}>
       {(used) => {
         const fillers = dataStoreFillers(used);
+        // The data Workflows that fill it and are not already listed as a Workflow that adds
+        // rows: the same Workflow stands once.
+        const listed = new Set(
+          fillers.filter((filler) => filler.kind === "workflow").map((filler) => filler.name)
+        );
+        const flows = (used.dataFlows?.fills ?? []).filter((flow) => !listed.has(flow.name));
+        // The instance counts every hidden App and Workflow that adds rows here, data flows too.
         const hidden = used.hidden.fills;
-        if (fillers.length === 0) {
+        if (fillers.length === 0 && flows.length === 0) {
           // Nothing is said to fill the store while something the reader may not see does.
           return (
             <EmptyState layout="inline">
@@ -64,11 +72,45 @@ export function DataStoreFillers({ store, workspaceId, source }: ProvenanceProps
                   role: "filled-by"
                 })
               )}
+              {flows.map((flow) =>
+                row({
+                  kind: "workflow",
+                  name: flow.name,
+                  title: flow.title,
+                  description: undefined,
+                  role: "filled-by"
+                })
+              )}
             </List>
             <HiddenLine count={hidden} />
           </>
         );
       }}
+    </UsedByRead>
+  );
+}
+
+/**
+ * "Processed by": each data Workflow that processes what the store holds. The page shows the
+ * section only where the instance names or counts one.
+ */
+export function DataStoreProcessors({ store, workspaceId, source }: ProvenanceProps) {
+  const { t } = useTranslation();
+  const pageOf = source.useUsingPage(workspaceId);
+  return (
+    <UsedByRead store={store} source={source}>
+      {(used) =>
+        used.dataFlows === undefined ? null : (
+          <DataFlowList
+            flows={used.dataFlows}
+            role="processes"
+            pageOf={(name) => pageOf("workflow", name)}
+            label={t("dataStores.processedByTitle")}
+            // "Read by" says once that the lists may be incomplete.
+            showTruncated={false}
+          />
+        )
+      }
     </UsedByRead>
   );
 }
@@ -129,7 +171,7 @@ export function DataStoreReaders({ store, workspaceId, source }: ProvenanceProps
             <p className="text-caption text-muted-foreground" data-data-store-admins="">
               {t("dataStores.readByAdmins")}
             </p>
-            {used.truncated ? (
+            {used.truncated || used.dataFlows?.truncated === true ? (
               <p className="text-caption text-muted-foreground">
                 {t("dataStores.usedByTruncated")}
               </p>

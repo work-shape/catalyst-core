@@ -70,6 +70,8 @@ export const dataStores = defineTranslations({
     "dataStores.newPrompt": "Build a new data store that holds ",
     "dataStores.nextMigration": "Next migration",
     "dataStores.notReachable": "The tables show once the store is ready.",
+    "dataStores.processedByDescription": "The workflows that process what this store holds.",
+    "dataStores.processedByTitle": "Processed by",
     "dataStores.readByAdmins": "Instance admins always see everything.",
     "dataStores.readByDescription": "Who can see the rows.",
     "dataStores.readByTitle": "Read by",
@@ -222,6 +224,9 @@ export const dataStores = defineTranslations({
     "dataStores.newPrompt": "Bau einen neuen Datenspeicher, der ",
     "dataStores.nextMigration": "Nächste Migration",
     "dataStores.notReachable": "Die Tabellen erscheinen, sobald der Speicher bereit ist.",
+    "dataStores.processedByDescription":
+      "Die Workflows, die verarbeiten, was dieser Speicher hält.",
+    "dataStores.processedByTitle": "Verarbeitet von",
     "dataStores.readByAdmins": "Instanz-Admins sehen immer alles.",
     "dataStores.readByDescription": "Wer die Zeilen sehen kann.",
     "dataStores.readByTitle": "Gelesen von",

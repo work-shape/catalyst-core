@@ -663,6 +663,8 @@ export interface WorkflowStepRunCall {
 
 /** What a run page needs of a run beside its status. Types; the engine slices fill them. */
 export interface WorkflowRunRecordView {
+  /** True only for a completed data run whose write steps handled no items. */
+  empty?: boolean;
   /** The revision of the definition the run started on and keeps when it is resumed. */
   definitionRevisionId: string;
   /** Who cancelled the run, and when, as an ISO time. Missing on a run nobody cancelled. */
@@ -715,7 +717,7 @@ export const WORKFLOW_RUN_MAX_DEPTH = 2;
  * `duplicate_step_id`: two steps of a definition have one id.
  */
 export const WORKFLOW_ERROR_CODES = {
-  /** Reserved for WF-KIND: a process Workflow cannot publish a Knowledge Base write. */
+  /** A process Workflow cannot publish a Knowledge Base write or a records proposal. */
   processWriteOperation: "process_workflow_write_operation",
   datasetLimit: "dataset_limit",
   datasetExpired: "dataset_expired",

@@ -13,12 +13,14 @@ import {
   RadioGroup,
   Textarea
 } from "@work-shape/catalyst-ui";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import { FieldRefusals } from "./asset-form-fields";
 import { countChangedFields } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf } from "./build-refusals";
+import { DataFlowList, useWorkflowPage } from "./data-flows";
+import { hasDataFlows, type DataFlowRole } from "./data-flows-model";
 import { ReadState } from "./data-store-read-state";
 import { KnowledgeStatus, KnowledgeTestQuery } from "./knowledge-base-checks";
 import { KnowledgeDocuments } from "./knowledge-base-documents";
@@ -31,6 +33,23 @@ import {
   type KnowledgeTableForm
 } from "./knowledge-base-model";
 import type { KnowledgeBaseSource } from "./knowledge-base-source";
+
+/** The sections of the data Workflows on the page, by what they do to it. */
+const FLOW_SECTIONS = {
+  fills: {
+    id: "filled-by",
+    label: "knowledge.filledByTitle",
+    description: "knowledge.filledByDescription"
+  },
+  processes: {
+    id: "processed-by",
+    label: "knowledge.processedByTitle",
+    description: "knowledge.processedByDescription"
+  }
+} as const satisfies Record<
+  DataFlowRole,
+  { id: string; label: TranslationKey; description: TranslationKey }
+>;
 
 /**
  * The page of one Knowledge Base: what it holds and what it answers from. A new one is chosen
@@ -67,6 +86,39 @@ export function KnowledgeBaseEditor({
   };
   const published = asset?.publishedRevision;
   const documents = form.holds === "documents";
+  // The data Workflows that fill or process it arrive with the state the Status section reads:
+  // the same read, not another. A section stands only where one is named or counted.
+  const stateRead = source.useState(asset?.name ?? "", published);
+  const dataFlows = stateRead.status === "ready" ? stateRead.data.dataFlows : undefined;
+  const workflowPage = useWorkflowPage();
+  const namedRoles = (["fills", "processes"] as const).filter((role) =>
+    hasDataFlows(dataFlows, role)
+  );
+  // A cut read that found none still says the list may be incomplete, under Filled by.
+  const flowRoles: readonly DataFlowRole[] =
+    namedRoles.length === 0 && dataFlows?.truncated === true ? ["fills"] : namedRoles;
+  const flowSections: AssetSection[] =
+    dataFlows === undefined
+      ? []
+      : flowRoles.map((role, index) => {
+          const view = FLOW_SECTIONS[role];
+          return {
+            id: view.id,
+            label: t(view.label),
+            description: t(view.description),
+            count: dataFlows[role].length,
+            body: (
+              <DataFlowList
+                flows={dataFlows}
+                role={role}
+                pageOf={workflowPage}
+                label={t(view.label)}
+                // The note on a cut read stands once, under the last of the sections.
+                showTruncated={index === flowRoles.length - 1}
+              />
+            )
+          };
+        });
   const holdsOptions: { value: KnowledgeBaseHolds; label: string; description: string }[] = [
     {
       value: "documents",
@@ -147,6 +199,7 @@ export function KnowledgeBaseEditor({
         </>
       )
     },
+    ...flowSections,
     ...(documents
       ? [
           {

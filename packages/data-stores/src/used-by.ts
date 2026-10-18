@@ -1,3 +1,5 @@
+import { workflowDataFlowsSchema } from "@work-shape/catalyst-core";
+import { DATA_STORE_USED_BY_MAX_ASSETS, workflowDataFlows } from "./workflow-data-flows";
 import {
   CONNECTION_ACTIONS,
   AppError,
@@ -37,11 +39,6 @@ import type { PublishedStore } from "./verbs";
 // that Connection a source of the store. This is conservative: which value of which call ends
 // in which row is not traced.
 
-/**
- * How many published Apps, Workflows and Knowledge Bases one read looks through, each. An
- * instance with more is answered from the first ones by name, and `truncated` says so.
- */
-const DATA_STORE_USED_BY_MAX_ASSETS = 1_000;
 /** How long the read may take, in milliseconds. It reads no database of a store. */
 const DATA_STORE_USED_BY_TIMEOUT_MS = 15_000;
 
@@ -68,6 +65,7 @@ const usingSchema = z.object({
 });
 
 const usedByOutputSchema = z.object({
+  dataFlows: workflowDataFlowsSchema.optional(),
   /** The published Apps that use the store, with who opens them, and that the caller may be shown. */
   apps: z.array(usingSchema.extend({ audience: audienceSchema })),
   /** The published Workflows that use the store and that the caller may be shown. */
@@ -113,6 +111,7 @@ interface StoreUse {
 
 /** Whether an operation of the store adds rows: one that needs more than the right to read. */
 function verbWrites(verb: string): boolean {
+  if (verb === "records.propose") return true;
   const known = DATA_STORE_OPERATION_VERBS.find((candidate) => candidate === verb);
   return known !== undefined && DATA_STORE_OPERATION_RIGHTS[known] !== DATA_STORE_ACTIONS.read;
 }
@@ -332,7 +331,9 @@ async function usedBy(
     ),
     audiences.of(DATA_STORE_ACTIONS.read, store.resource)
   ]);
+  const dataFlows = workflowDataFlows(workflows, { kind: "data_store", name }, access);
   return {
+    ...(dataFlows ? { dataFlows } : {}),
     apps: appsShown,
     workflows: usingWorkflows.shown.map((shown) => {
       const { runAs } = shown.use;

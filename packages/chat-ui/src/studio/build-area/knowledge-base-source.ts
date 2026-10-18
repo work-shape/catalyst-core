@@ -8,9 +8,15 @@ import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { instanceSentence, PendingApprovalError, readRefusalDetails } from "./build-refusals";
+import type { DataFlows } from "./data-flows-model";
 
-/** The state of one published Knowledge Base, as `knowledge_bases.get` answers it. */
-export type KnowledgeBaseState = Awaited<ReturnType<ApiClient["knowledge_bases"]["get"]>>;
+/**
+ * The state of one published Knowledge Base, as `knowledge_bases.get` answers it, with the data
+ * Workflows that fill or process it.
+ */
+export type KnowledgeBaseState = Awaited<ReturnType<ApiClient["knowledge_bases"]["get"]>> & {
+  dataFlows?: DataFlows;
+};
 /** The rows a query answers, with the Knowledge Base and its tables as their source. */
 export type KnowledgeQueryAnswer = Awaited<ReturnType<ApiClient["knowledge_bases"]["query"]>>;
 
@@ -110,11 +116,12 @@ export interface KnowledgeBaseSource {
   /**
    * A hook: what the last check of the published revision found, and whether its processing
    * waits for a worker. With `watchProcessing` the state is read again every few seconds, as the
-   * Documents section of a Knowledge Base that keeps documents does.
+   * Documents section of a Knowledge Base that keeps documents does. Without a published
+   * revision it reads nothing and stays loading.
    */
   useState(
     knowledgeBase: string,
-    publishedRevision: number,
+    publishedRevision: number | undefined,
     watchProcessing?: boolean
   ): KnowledgeRead<KnowledgeBaseState>;
   /** Checks the published revision now. */
@@ -173,17 +180,28 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
   return {
     useState: (knowledgeBase, publishedRevision, watchProcessing = false) =>
       useRead(
-        key("state", knowledgeBase, publishedRevision),
+        key("state", knowledgeBase, publishedRevision ?? ""),
         (signal) => client.knowledge_bases.get({ params: { knowledgeBase }, signal }),
-        { pollWhile: (state) => knowledgeStateStillChanging(state, watchProcessing) }
+        {
+          enabled: publishedRevision !== undefined,
+          pollWhile: (state) => knowledgeStateStillChanging(state, watchProcessing)
+        }
       ),
     check: (knowledgeBase) =>
       called(async () => {
         const outcome = await client.knowledge_bases.check({ params: { knowledgeBase } });
         if (outcome.status !== "done") throw new PendingApprovalError();
-        // Every read of the state shows what this check found.
-        queryClient.setQueriesData({ queryKey: key("state", knowledgeBase) }, outcome.output);
-        return outcome.output;
+        // Every read of the state shows what this check found. A check finds nothing about the
+        // Workflows that fill it, so those stay as the last read named them.
+        const checked: KnowledgeBaseState = outcome.output;
+        queryClient.setQueriesData<KnowledgeBaseState>(
+          { queryKey: key("state", knowledgeBase) },
+          (previous) =>
+            checked.dataFlows === undefined && previous?.dataFlows !== undefined
+              ? { ...checked, dataFlows: previous.dataFlows }
+              : checked
+        );
+        return checked;
       }),
     query: (knowledgeBase, sql) =>
       called(() => client.knowledge_bases.query({ params: { knowledgeBase }, body: { sql } })),

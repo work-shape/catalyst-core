@@ -5,7 +5,15 @@ import { WORKFLOW_ASSET_KIND, type JsonObject } from "@work-shape/catalyst-core"
 import { WORKFLOW_MANIFEST_MAX_BYTES } from "@work-shape/catalyst-workflows";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { runSchema, workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
-import { NOTE, notifyClients, readyWorkflows, start, stepRunsOf } from "./support/workflow-runs";
+import {
+  CLIENTS,
+  NOTE,
+  failingFor,
+  notifyClients,
+  readyWorkflows,
+  start,
+  stepRunsOf
+} from "./support/workflow-runs";
 
 // A Workflow as an asset of the instance, through the API alone: its definition is written
 // and published with the asset operations, listed and started with the operations of the
@@ -108,6 +116,113 @@ describe("a Workflow stored as an asset", () => {
       params: { workflow: WORKFLOW },
       payload: { input: { note: NOTE } }
     });
+
+  it("lists a never-published data draft with its kind through existing asset attributes", async () => {
+    const t = await ready();
+    await put(t, { ...notifyClients(), kind: "data" }, null);
+    const listed = await t.expectOk(t.root.id, "assets.list", {
+      params: { kind: WORKFLOW_ASSET_KIND }
+    });
+    expect(listed.json()).toMatchObject({
+      items: [{ name: WORKFLOW, attributes: { workflowKind: "data" } }]
+    });
+  });
+
+  it("keeps process drafts editable but refuses data writes at every live revision gate", async () => {
+    const t = await ready();
+    const first = await put(t, notifyClients(), null);
+    expect((await publish(t, first)).statusCode).toBe(200);
+    const live = await published(t);
+    const definition = notifyClients();
+    const second = await put(
+      t,
+      {
+        ...definition,
+        steps: [
+          definition.steps[0],
+          {
+            id: "ingest",
+            name: "Fill documents",
+            type: "operation",
+            operation: "knowledge.documents.ingest",
+            input: { items: { value: [] } }
+          },
+          { id: "result", name: "Result", type: "output", input: {} }
+        ]
+      },
+      first
+    );
+    const refused = await publish(t, second);
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(refused.json()).toMatchObject({
+      error: {
+        details: { reason: "process_workflow_write_operation" }
+      }
+    });
+    expect(refused.body).toContain("kind: data");
+    expect(await published(t)).toBe(live);
+  });
+
+  it.each([
+    ["process", [], { done: 0, failed: 0 }, false],
+    ["data", [], { done: 0, failed: 0 }, true],
+    ["data", [{ id: "one" }], { done: 0, failed: 0 }, true],
+    ["data", [{ id: "one" }], { done: 1, failed: 0 }, false],
+    ["data", [{ id: "one" }], { done: 0, failed: 1 }, false],
+    ["data", [{ id: "one" }], { received: "unknown" }, false],
+    ["data", [{ id: "one" }], { table: "rows", inserted: 0, skipped: 0 }, true],
+    ["data", [{ id: "one" }], { withdrawn: 0 }, true],
+    [
+      "data",
+      [{ id: "one" }],
+      {
+        accepted: 0,
+        done: 0,
+        failed: 0,
+        withdrawn: 0,
+        failures: { $dataset: "empty", rowCount: 0, bytes: 0 }
+      },
+      true
+    ],
+    ["data", [{ id: "one" }], { done: "0", failed: 0 }, false]
+  ] as const)(
+    "classifies a %s run with items %j and write outcome %j as empty=%s",
+    async (kind, clients, output, empty) => {
+      const t = await ready();
+      t.setBehaviour((operation) =>
+        Promise.resolve(operation === "echo" ? { clients: [...clients] } : output)
+      );
+      const revision = await put(t, { ...notifyClients(), kind }, null);
+      expect((await publish(t, revision)).statusCode).toBe(200);
+      const started = await start(t);
+      await t.finish(started.id);
+      const read = await t.expectOk(t.root.id, "workflows.get_run", {
+        params: { runId: started.id }
+      });
+      expect(read.json()).toMatchObject({ status: "done", empty });
+      const listed = await t.expectOk(t.root.id, "workflows.list_runs", {
+        params: { workflow: WORKFLOW }
+      });
+      expect(listed.json()).toMatchObject({ items: [{ id: started.id, empty }] });
+    }
+  );
+
+  it("keeps a data run visible that ended done while every item's write failed", async () => {
+    const t = await ready();
+    t.setBehaviour(failingFor(CLIENTS.map(({ id }) => id)));
+    const revision = await put(
+      t,
+      { ...notifyClients({ onItemFailure: "continue" }), kind: "data" },
+      null
+    );
+    expect((await publish(t, revision)).statusCode).toBe(200);
+    const started = await start(t);
+    await t.finish(started.id);
+    const read = await t.expectOk(t.root.id, "workflows.get_run", {
+      params: { runId: started.id }
+    });
+    expect(read.json()).toMatchObject({ status: "done", empty: false });
+  });
 
   it("publishes declared installed packages, and refuses an unavailable name without moving the live revision", async () => {
     const t = await ready([{ name: "pypdf", version: "4.3.1" }]);

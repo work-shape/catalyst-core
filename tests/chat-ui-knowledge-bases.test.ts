@@ -21,6 +21,8 @@ import {
   type KnowledgeDocument,
   type KnowledgeRead
 } from "@work-shape/catalyst-chat-ui/build-area";
+import { WorkflowsHostProvider, type WorkflowsHost } from "@work-shape/catalyst-chat-ui/workflows";
+import { required } from "./support/assertions";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
@@ -122,8 +124,15 @@ function render(
   {
     newAsset = false,
     state = needsAttention,
-    locale = "en"
-  }: { newAsset?: boolean; state?: KnowledgeBaseState; locale?: "en" | "de" } = {}
+    locale = "en",
+    workflows
+  }: {
+    newAsset?: boolean;
+    state?: KnowledgeBaseState;
+    locale?: "en" | "de";
+    /** The Workflows area is open to the reader in this workspace. */
+    workflows?: WorkflowsHost;
+  } = {}
 ): string {
   const name = newAsset ? undefined : asset.name;
   const context = platformContext();
@@ -171,7 +180,10 @@ function render(
               href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
             }
           },
-          createElement(BuildFrame, { source: frame })
+          createElement(WorkflowsHostProvider, {
+            value: workflows,
+            children: createElement(BuildFrame, { source: frame })
+          })
         )
       )
     )
@@ -216,6 +228,101 @@ describe("Knowledge Bases in Build", () => {
     expect(page).toContain(">Not published<");
     expect(page).not.toContain("data-knowledge-state");
     expect(page).toContain("Publish the knowledge base to see whether it can read its tables");
+  });
+});
+
+describe("the data Workflows of a Knowledge Base (WF-KIND)", () => {
+  const workflows: WorkflowsHost = {
+    rights: { read: true, write: false, publish: false },
+    viewerId: "user_1",
+    workspace: { id: "ws_1", name: "Mine" },
+    showRoute: noop
+  };
+  const withFlows = (dataFlows: KnowledgeBaseState["dataFlows"]): KnowledgeBaseState => ({
+    ...needsAttention,
+    ...(dataFlows ? { dataFlows } : {})
+  });
+  const section = (page: string, id: string) =>
+    page.indexOf(`id="${id}"`) === -1
+      ? undefined
+      : (page.slice(page.indexOf(`id="${id}"`)).split("</section>")[0] ?? "");
+
+  it("names the Workflows that fill it and those that process it, each a link to its page", () => {
+    const state = withFlows({
+      fills: [{ id: "asset_import", name: "findings-import", title: "Findings import" }],
+      processes: [
+        { id: "asset_extract", name: "findings-extract", title: "Extract findings" },
+        { id: "asset_classify", name: "findings-classify", title: "" }
+      ],
+      hidden: { fills: 2, processes: 0 },
+      truncated: true
+    });
+    const page = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
+      state,
+      workflows
+    });
+    const filled = required(section(page, "filled-by"));
+    expect(filled).toContain(">Filled by</h2>");
+    expect(filled).toContain(">Findings import<");
+    expect(filled).toContain('href="/w/ws_1/workflows/findings-import"');
+    expect(filled).toContain("and 2 more you can&#x27;t see");
+    const processed = required(section(page, "processed-by"));
+    expect(processed).toContain(">Processed by</h2>");
+    expect(processed).toContain(">Extract findings<");
+    // A Workflow without a title is named by its name.
+    expect(processed).toContain(">findings-classify<");
+    expect(processed).toContain('href="/w/ws_1/workflows/findings-extract"');
+    // The note on a cut read stands once, under the last section.
+    expect(page.split("this list may be incomplete").length - 1).toBe(1);
+    expect(processed).toContain("this list may be incomplete");
+
+    const german = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
+      state,
+      workflows,
+      locale: "de"
+    });
+    expect(german).toContain(">Gefüllt von</h2>");
+    expect(german).toContain(">Verarbeitet von</h2>");
+    // Where the Workflows area is closed to the reader, the names stand without a link.
+    const closed = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), { state });
+    expect(closed).toContain(">Findings import<");
+    expect(closed).not.toContain("/workflows/findings-import");
+  });
+
+  it("counts the Workflows the reader may not see without naming one, and has no section without any", () => {
+    const hiddenOnly = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
+      state: withFlows({
+        fills: [],
+        processes: [],
+        hidden: { fills: 3, processes: 0 },
+        truncated: false
+      }),
+      workflows
+    });
+    const filled = required(section(hiddenOnly, "filled-by"));
+    expect(filled).toContain("3 workflows you can&#x27;t see do this.");
+    expect(filled).not.toContain("data-data-flow=");
+    expect(section(hiddenOnly, "processed-by")).toBeUndefined();
+    // A cut read that found none still says the list may be incomplete, once.
+    const cut = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
+      state: withFlows({
+        fills: [],
+        processes: [],
+        hidden: { fills: 0, processes: 0 },
+        truncated: true
+      })
+    });
+    expect(required(section(cut, "filled-by"))).toContain("this list may be incomplete");
+    expect(cut.split("this list may be incomplete").length - 1).toBe(1);
+    expect(section(cut, "processed-by")).toBeUndefined();
+    for (const state of [
+      needsAttention,
+      withFlows({ fills: [], processes: [], hidden: { fills: 0, processes: 0 }, truncated: false })
+    ]) {
+      const page = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), { state });
+      expect(section(page, "filled-by")).toBeUndefined();
+      expect(section(page, "processed-by")).toBeUndefined();
+    }
   });
 });
 

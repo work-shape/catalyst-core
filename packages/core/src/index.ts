@@ -200,3 +200,5 @@ export {
   WORKFLOW_DATASET_STATES,
   type WorkflowDatasetState
 } from "@work-shape/catalyst-asset-schemas";
+
+export { workflowDataFlowsSchema } from "@work-shape/catalyst-asset-schemas";

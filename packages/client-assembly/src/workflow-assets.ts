@@ -37,6 +37,7 @@ import {
   workflowDefinitionRefusal,
   workflowStepFileIssues,
   workflowStepFilesRefusal,
+  workflowKindIssues,
   workflowLimitIssues,
   workflowLimitRaises,
   workflowRunPrincipal,
@@ -192,6 +193,7 @@ export function createWorkflowAssetKind(
       summarize: (workflow) => ({
         name: workflow.name,
         title: workflow.manifest.name,
+        attributes: { workflowKind: workflow.manifest.kind === "data" ? "data" : "process" },
         ...(workflow.manifest.description === undefined
           ? {}
           : { description: workflow.manifest.description })
@@ -213,6 +215,8 @@ export function createWorkflowAssetKind(
       const parsed = workflowConfigSchema.parse(config);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      const kindIssues = workflowKindIssues(result.manifest);
+      if (kindIssues.length > 0) throw workflowDefinitionRefusal(parsed.name, kindIssues);
       // A limit above the operator's ceiling is refused here, by name, and never clamped.
       const above = workflowLimitIssues(result.manifest, limits);
       if (above.length > 0) throw workflowDefinitionRefusal(parsed.name, above);
@@ -272,13 +276,15 @@ export function createWorkflowAssetKind(
       return Promise.resolve(parsed.ok ? workflowLimitRaises(parsed.manifest, limits) : []);
     },
     async authorizeLive(input) {
+      const config = workflowConfigSchema.parse(input.config);
+      const result = parseStoredManifest(config.manifest);
+      if (!result.ok) throw workflowDefinitionRefusal(config.name, result.issues);
+      const kindIssues = workflowKindIssues(result.manifest);
+      if (kindIssues.length > 0) throw workflowDefinitionRefusal(config.name, kindIssues);
       await createWorkflowLiveCheck(
         options,
         (config) => runAsOfConfigSchema.safeParse(config).data?.manifest.runAs
       )(input);
-      const config = workflowConfigSchema.parse(input.config);
-      const result = parseStoredManifest(config.manifest);
-      if (!result.ok) throw workflowDefinitionRefusal(config.name, result.issues);
       assertWorkflowPackages(
         result.manifest,
         options.runnerPackages ?? runnerPackageManifest.packages

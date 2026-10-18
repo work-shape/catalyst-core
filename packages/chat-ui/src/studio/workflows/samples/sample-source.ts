@@ -160,6 +160,7 @@ export function createSampleSource(
             name: manifest.name,
             description: manifest.description,
             published: true,
+            kind: "process" as const,
             startsByHand: true,
             refusedFor: [],
             mayStart,

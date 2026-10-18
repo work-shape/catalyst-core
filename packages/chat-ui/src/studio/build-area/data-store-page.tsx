@@ -36,7 +36,8 @@ import {
   migrationNumber
 } from "./data-store-model";
 import { DataStoreDraftPage, dataStoreNeverPublished } from "./data-store-draft";
-import { DataStoreFillers, DataStoreReaders } from "./data-store-provenance";
+import { hasDataFlows } from "./data-flows-model";
+import { DataStoreFillers, DataStoreProcessors, DataStoreReaders } from "./data-store-provenance";
 import { ReadState } from "./data-store-read-state";
 import { DataStoreRowsSection } from "./data-store-rows";
 import type { DataStoreSchema, DataStoreSource, DataStoreState } from "./data-store-source";
@@ -97,6 +98,10 @@ function PublishedDataStorePage({
     workspaceId: asset.scope.kind === "workspace" ? asset.scope.workspaceId : undefined,
     source
   };
+  // The data Workflows that process the store come with what uses it, the read the sections
+  // below make. "Processed by" stands only where one is named or counted.
+  const usedBy = source.useUsedBy(asset.name);
+  const dataFlows = usedBy.status === "ready" ? usedBy.data.dataFlows : undefined;
   const sections: {
     id: string;
     label: string;
@@ -131,6 +136,17 @@ function PublishedDataStorePage({
       description: t("dataStores.filledByDescription"),
       body: <DataStoreFillers {...provenance} />
     },
+    ...(dataFlows !== undefined && hasDataFlows(dataFlows, "processes")
+      ? [
+          {
+            id: "processed-by",
+            label: t("dataStores.processedByTitle"),
+            description: t("dataStores.processedByDescription"),
+            count: dataFlows.processes.length,
+            body: <DataStoreProcessors {...provenance} />
+          }
+        ]
+      : []),
     {
       id: "read-by",
       label: t("dataStores.readByTitle"),

@@ -57,6 +57,12 @@ export const knowledge = defineTranslations({
     "knowledge.tableReadable": "Readable",
     "knowledge.tableUnreadable": "Cannot be read",
     "knowledge.stateFailed": "The status could not be loaded.",
+    "knowledge.filledByDescription":
+      "The workflows that put documents into this knowledge base or take them out.",
+    "knowledge.filledByTitle": "Filled by",
+    "knowledge.processedByDescription":
+      "The workflows that process its documents by document type.",
+    "knowledge.processedByTitle": "Processed by",
     "knowledge.notPublished":
       "Publish the knowledge base to see whether it can read its tables and to try a query.",
     "knowledge.testTitle": "Test query",
@@ -233,6 +239,12 @@ export const knowledge = defineTranslations({
     "knowledge.tableReadable": "Lesbar",
     "knowledge.tableUnreadable": "Nicht lesbar",
     "knowledge.stateFailed": "Der Status konnte nicht geladen werden.",
+    "knowledge.filledByDescription":
+      "Die Workflows, die Dokumente in diese Wissensbasis bringen oder herausnehmen.",
+    "knowledge.filledByTitle": "Gefüllt von",
+    "knowledge.processedByDescription":
+      "Die Workflows, die ihre Dokumente nach Dokumenttyp verarbeiten.",
+    "knowledge.processedByTitle": "Verarbeitet von",
     "knowledge.notPublished":
       "Veröffentliche die Wissensbasis, um zu sehen, ob sie ihre Tabellen lesen kann, und um eine Abfrage zu testen.",
     "knowledge.testTitle": "Testabfrage",

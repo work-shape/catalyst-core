@@ -65,7 +65,8 @@ export interface WorkflowDefinitionIssue {
   code?:
     | WorkflowBlockIssue["code"]
     | typeof WORKFLOW_OPERATION_NOT_CALLABLE
-    | typeof WORKFLOW_LIMIT_ABOVE_CEILING;
+    | typeof WORKFLOW_LIMIT_ABOVE_CEILING
+    | "process_workflow_write_operation";
 }
 
 export type WorkflowDefinitionResult =

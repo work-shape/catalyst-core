@@ -1,3 +1,4 @@
+import { workflowDataFlowsSchema } from "@work-shape/catalyst-asset-schemas";
 import {
   knowledgeSyncInputSchema,
   knowledgeSyncResultSchema,
@@ -62,6 +63,7 @@ const knowledgeQueryResponseSchema = z.object({
 });
 
 const knowledgeStateResponseSchema = z.object({
+  dataFlows: workflowDataFlowsSchema.optional(),
   /** Due ingestion has no reporting worker. Omitted for a structured Knowledge Base. */
   processingWaiting: z.boolean().optional(),
   /** The id of the Knowledge Base's asset. */

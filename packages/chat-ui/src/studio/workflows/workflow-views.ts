@@ -1,5 +1,6 @@
 import {
   NOTIFY_CHANNELS,
+  type WorkflowKind,
   OPERATION_EFFECTS,
   OPERATION_TARGETS,
   WORKFLOW_RESERVED_STEP_TYPES,
@@ -20,6 +21,12 @@ export interface WorkflowListItem {
   description?: string;
   /** A revision is published: there is something to open and to start. */
   published: boolean;
+  /**
+   * `data` fills or processes a Knowledge Base or a Data Store and is listed behind the Data
+   * flows filter; `process` is everything else. A draft never published takes the kind its
+   * asset row names.
+   */
+  kind: WorkflowKind;
   /** When it was last changed, where the list names it. */
   updatedAt?: string;
   /** A person may start it, as far as the instance says. */
@@ -244,6 +251,12 @@ export interface WorkflowRunView {
   parent?: { runId: string; workflowId: string };
   /** The run key its start gave it, such as `2026-09/1402`. */
   runKey?: string;
+  /**
+   * The run ended `done` without a write step handling an item: a data run that found nothing
+   * to do. The instance marks the run itself, so a later change of the Workflow's kind leaves
+   * the runs before it as they were.
+   */
+  empty: boolean;
 }
 
 /** How far a loop is, as the instance counts it. */

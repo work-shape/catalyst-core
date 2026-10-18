@@ -1,3 +1,4 @@
+import { workflowDataFlowsSchema } from "@work-shape/catalyst-asset-schemas";
 import {
   DATA_STORE_CONDITIONS,
   DATA_STORE_INSERT_CONFLICT_MODES,
@@ -234,6 +235,7 @@ const usingAssetSchema = z.object({
 });
 
 const dataStoreUsedByResponseSchema = z.object({
+  dataFlows: workflowDataFlowsSchema.optional(),
   /** The published Apps whose `sql` actions name the store, as far as the caller is shown them. */
   apps: z.array(usingAssetSchema.extend({ audience: dataStoreAudienceSchema })),
   /** The published Workflows whose operation steps call the store. */

@@ -219,6 +219,8 @@ interface StoreAnswers {
   listed?: DataStoreRead<DataStoreListed>;
   value?: DataStoreRead<DataStoreValue>;
   usedBy?: DataStoreRead<DataStoreUsedBy>;
+  /** The reader is shown the pages of Workflows too, not only of Apps. */
+  workflowPages?: boolean;
 }
 
 function storeSource(answers: StoreAnswers = {}): DataStoreSource {
@@ -231,7 +233,11 @@ function storeSource(answers: StoreAnswers = {}): DataStoreSource {
     useUsedBy: () => answers.usedBy ?? ready(usedBy),
     // The instance's source decides this by `usingPageRoute`; here only the App has a page.
     useUsingPage: () => (kind, name) =>
-      kind === "app" ? { href: `/w/ws_1/apps/${name}`, open: noop } : undefined
+      kind === "app"
+        ? { href: `/w/ws_1/apps/${name}`, open: noop }
+        : answers.workflowPages
+          ? { href: `/w/ws_1/workflows/${name}`, open: noop }
+          : undefined
   };
 }
 
@@ -839,6 +845,89 @@ describe("What uses a Data Store", () => {
         states: { "visit-log": ready(storeState("visit-log", { status: "provisioning" })) }
       })
     ).toContain(">Visits board<");
+  });
+});
+
+describe("The data Workflows of a Data Store (WF-KIND)", () => {
+  const address = { kindPath: "data-stores", name: "visit-log" };
+  const flows = (dataFlows: DataStoreUsedBy["dataFlows"]) =>
+    ready<DataStoreUsedBy>({ ...usedBy, ...(dataFlows ? { dataFlows } : {}) });
+  const section = (page: string, id: string) =>
+    page.indexOf(`id="${id}"`) === -1
+      ? undefined
+      : (page.slice(page.indexOf(`id="${id}"`)).split("</section>")[0] ?? "");
+
+  it("adds the data Workflows that fill it under Filled by once each, and those that process it under Processed by", () => {
+    const page = render(address, {
+      workflowPages: true,
+      usedBy: flows({
+        // The rollup already stands as a Workflow that adds rows: it is not listed twice.
+        fills: [
+          { id: "asset_nightly", name: "nightly-rollup", title: "Nightly rollup" },
+          { id: "asset_import", name: "visit-import", title: "Visit import" }
+        ],
+        processes: [{ id: "asset_extract", name: "visit-extract", title: "Visit extract" }],
+        hidden: { fills: 3, processes: 2 },
+        truncated: false
+      })
+    });
+    const filled = required(section(page, "filled-by"));
+    expect(filled.split(">Nightly rollup<").length - 1).toBe(1);
+    expect(filled).toContain(">Visit import<");
+    expect(filled).toContain('href="/w/ws_1/workflows/visit-import"');
+    // The store's own count already holds every hidden App and Workflow that adds rows, data
+    // flows among them: it stands, and the data flows' count is not added to it.
+    expect(filled).toContain("and 1 more you can&#x27;t see");
+    expect(filled).not.toContain("and 3 more");
+    expect(filled).not.toContain("and 4 more");
+    // The section says what they do: no row carries a chip of its own for that.
+    expect(filled).not.toContain("Data flow<");
+
+    const processed = required(section(page, "processed-by"));
+    expect(page.indexOf('id="filled-by"')).toBeLessThan(page.indexOf('id="processed-by"'));
+    expect(processed).toContain(">Processed by</h2>");
+    expect(processed).toContain(">Visit extract<");
+    expect(processed).toContain('href="/w/ws_1/workflows/visit-extract"');
+    expect(processed).toContain("and 2 more you can&#x27;t see");
+    expect(render(address, { usedBy: flows(undefined), locale: "de" })).not.toContain(
+      "Verarbeitet von"
+    );
+  });
+
+  it("counts the Workflows the reader may not see without naming one, and has no section without any", () => {
+    const hiddenOnly = render(address, {
+      usedBy: flows({
+        fills: [],
+        processes: [],
+        hidden: { fills: 0, processes: 1 },
+        truncated: false
+      })
+    });
+    const processed = required(section(hiddenOnly, "processed-by"));
+    expect(processed).toContain("One workflow you can&#x27;t see does this.");
+    expect(processed).not.toContain("data-data-flow=");
+    expect(
+      render(address, {
+        locale: "de",
+        usedBy: flows({
+          fills: [],
+          processes: [],
+          hidden: { fills: 0, processes: 4 },
+          truncated: false
+        })
+      })
+    ).toContain("4 Workflows, die du nicht sehen kannst, tun das.");
+    // Nothing processes the store: no section, and Filled by stays as it was.
+    const none = render(address, {
+      usedBy: flows({
+        fills: [],
+        processes: [],
+        hidden: { fills: 0, processes: 0 },
+        truncated: false
+      })
+    });
+    expect(section(none, "processed-by")).toBeUndefined();
+    expect(required(section(none, "filled-by"))).toContain("and 1 more you can&#x27;t see");
   });
 });
 

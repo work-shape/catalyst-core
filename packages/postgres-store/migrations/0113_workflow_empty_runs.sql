@@ -1,0 +1,1 @@
+ALTER TABLE "workflow_runs" ADD COLUMN "empty" boolean DEFAULT false NOT NULL;

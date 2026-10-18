@@ -64,6 +64,7 @@ function mapRun(row: Omit<RunRow, "input" | "output" | "definition">): WorkflowR
     mode: row.mode,
     trigger: row.trigger,
     status: row.status,
+    empty: row.empty,
     principal: { id: row.principalId, name: row.principalName, displayLabel: row.principalLabel },
     startedBy: row.startedBy,
     rootRunId: row.rootRunId ?? row.id,

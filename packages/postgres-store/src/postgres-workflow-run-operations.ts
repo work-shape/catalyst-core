@@ -1,3 +1,4 @@
+import { endWorkflowRun } from "./postgres-workflow-run-end";
 import { childWorkflowRuns } from "./postgres-workflow-child-operations";
 import {
   stepPreview,
@@ -318,23 +319,6 @@ async function markWorkflowRunRunning(
     .update(workflowRuns)
     .set({ status: "running", startedAt: new Date(ref.startedAt) })
     .where(and(runIs(ref), eq(workflowRuns.status, "queued")));
-}
-
-async function endWorkflowRun(db: PostgresConnection, ref: Input<"endRun">): Promise<boolean> {
-  const ended = await db
-    .update(workflowRuns)
-    .set({
-      status: ref.status,
-      finishedAt: new Date(ref.finishedAt),
-      output: ref.output === undefined ? null : { value: ref.output },
-      error: ref.error ?? null,
-      ...(ref.status === "cancelled"
-        ? { cancelledBy: ref.cancelledBy ?? null, cancelledAt: new Date(ref.finishedAt) }
-        : {})
-    })
-    .where(and(runIs(ref), notEnded(workflowRuns.status)))
-    .returning({ id: workflowRuns.id });
-  return ended.length > 0;
 }
 
 async function createWorkflowStepRun(
