@@ -145,6 +145,9 @@ export function useDataStoreInstance(): {
   const close = () => Promise.all(started.splice(0).map((instance) => instance.close()));
 
   afterEach(async () => {
+    // Another fixture in this file may own stores even when this one was never started.
+    if (roots.length === 0) return;
+
     // Databases and roles are the cluster's, which other suites share: every one a test made
     // is removed by name, once the instance that reaches them is closed.
     await close();
