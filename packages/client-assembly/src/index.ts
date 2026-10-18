@@ -1,3 +1,4 @@
+export { shippedSkillsOf } from "./shipped-skills";
 export { readRunnerPackageManifest, RUNNER_PACKAGE_MANIFEST_PATH } from "./runner-packages";
 export type { ClientInstanceEnv } from "./env";
 export type {

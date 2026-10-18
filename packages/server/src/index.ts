@@ -1,3 +1,4 @@
+export { SKILL_MAX_BYTES } from "./asset-kinds/skill-files";
 import type { HttpRuntime, Logger } from "@work-shape/catalyst-core";
 import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
 import { createAuthorizer, normalizeAllowedOrigins } from "@work-shape/catalyst-core";
