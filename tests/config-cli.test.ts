@@ -148,20 +148,18 @@ describe("config CLI serialization", () => {
     ]);
   });
 
-  it("round-trips fastMode and leaves it out of the YAML when it is off", () => {
+  it("round-trips fastMode including an explicit false", () => {
     const fast = { ...agentConfig("Fast"), modelBindingId: "primary", fastMode: true };
     const serialized = serializeAgentYaml(fast);
 
     expect(serialized).toContain("fastMode: true\n");
     expect(parseAgentYaml(serialized)).toMatchObject({ fastMode: true });
     expect(serializeAgentYaml(parseAgentYaml(serialized))).toBe(serialized);
-    expect(serializeAgentYaml({ ...fast, fastMode: false })).not.toContain("fastMode");
-    expect(serializeAgentYaml({ ...fast, fastMode: false })).toBe(
-      serializeAgentYaml({ ...agentConfig("Fast"), modelBindingId: "primary" })
-    );
+    expect(serializeAgentYaml({ ...fast, fastMode: false })).toContain("fastMode: false");
+    expect(parseAgentYaml(serializeAgentYaml({ ...fast, fastMode: false })).fastMode).toBe(false);
   });
 
-  it("round-trips userSelectableModelBindingIds and leaves an empty list out of the YAML", () => {
+  it("round-trips selectable models including explicit empty lists and maps", () => {
     const agent = { ...agentConfig("Chooser"), modelBindingId: "primary" };
     const serialized = serializeAgentYaml({
       ...agent,
@@ -173,9 +171,10 @@ describe("config CLI serialization", () => {
       userSelectableModelBindingIds: ["fast", "cheap"]
     });
     expect(serializeAgentYaml(parseAgentYaml(serialized))).toBe(serialized);
-    expect(serializeAgentYaml({ ...agent, userSelectableModelBindingIds: [] })).toBe(
-      serializeAgentYaml(agent)
-    );
+    expect(
+      parseAgentYaml(serializeAgentYaml({ ...agent, userSelectableModelBindingIds: [] }))
+        .userSelectableModelBindingIds
+    ).toEqual([]);
 
     const withEfforts = serializeAgentYaml({
       ...agent,
@@ -184,9 +183,10 @@ describe("config CLI serialization", () => {
     });
     expect(withEfforts).toContain("modelReasoningEfforts:\n  fast: low\n");
     expect(serializeAgentYaml(parseAgentYaml(withEfforts))).toBe(withEfforts);
-    expect(serializeAgentYaml({ ...agent, modelReasoningEfforts: {} })).toBe(
-      serializeAgentYaml(agent)
-    );
+    expect(
+      parseAgentYaml(serializeAgentYaml({ ...agent, modelReasoningEfforts: {} }))
+        .modelReasoningEfforts
+    ).toEqual({});
   });
 
   it("round-trips SKILL.md with provenance comments inside frontmatter", () => {

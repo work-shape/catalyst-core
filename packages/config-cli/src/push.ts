@@ -12,6 +12,7 @@ import {
   type WorkingCopyBundle
 } from "./working-copy";
 import { agentPublishRefusalHint, askBeforePublish, waitingPublishLine } from "./publish-question";
+import { preflightGuardrails } from "./push-guardrail-preflight";
 import {
   type ConfigCommandOptions,
   type LocalAsset,
@@ -200,6 +201,17 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
       `This push changes ${items.length} assets, and one push holds at most ${ASSET_RELEASE_SYNC_MAX_ITEMS}. Push in parts with --only.`
     );
   }
+  if (
+    !(await preflightGuardrails(api, {
+      puts: touched.filter(isGuardrail),
+      deletes: deleteAssets.filter(isGuardrail),
+      listing,
+      baseOf,
+      ...(instance.workspace === undefined ? {} : { workspaceId: instance.workspace }),
+      options
+    }))
+  )
+    return 1;
   /** The agents this push wrote as drafts, which `--publish` makes live. */
   const drafted: PushedDraft[] = [];
   if (items.length > 0 || changesDefault) {

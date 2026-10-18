@@ -17,6 +17,7 @@ import {
   type AppCommandOptions
 } from "./app-commands";
 import { readAssetSource } from "./asset-sources";
+import { setAvailability, setDefault } from "./asset-pointers";
 import { runFollowCommand } from "./follow-commands";
 import {
   formatAsset,
@@ -552,14 +553,12 @@ const VERBS: Record<string, Verb> = {
         collaborationWorkspaceIds: values["available-in"] ?? []
       };
       return async (session) => {
-        const outcome = await session.api.change(
-          (client, idempotencyKey) =>
-            client.assets.set_availability({
-              params: { kind: session.kind.kind, name },
-              body,
-              idempotencyKey
-            }),
-          "It may have been applied: run 'show' before sending it again."
+        const outcome = await setAvailability(
+          session.api,
+          session.kind.kind,
+          name,
+          body,
+          session.scope
         );
         return settle(session, outcome, (output) => [
           `${session.kind.kind} '${name}' is offered in ${output.mode === "all" ? "every workspace" : `${output.personalWorkspaces ? "personal workspaces and " : ""}${output.collaborationWorkspaceIds.length} shared workspaces`}.`
@@ -578,15 +577,7 @@ const VERBS: Record<string, Verb> = {
       }
       const chosen = values.none ? null : name;
       return async (session) => {
-        const outcome = await session.api.change(
-          (client, idempotencyKey) =>
-            client.assets.set_default({
-              params: { kind: session.kind.kind },
-              body: { name: chosen },
-              idempotencyKey
-            }),
-          "It may have been applied: run 'list' before sending it again."
-        );
+        const outcome = await setDefault(session.api, session.kind.kind, chosen, session.scope);
         return settle(session, outcome, () => [
           chosen === null
             ? `The instance has no default ${session.kind.kind} now.`
