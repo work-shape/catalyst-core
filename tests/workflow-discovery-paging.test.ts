@@ -108,15 +108,10 @@ describe("published Workflow discovery beyond the former 500 total", () => {
       ({ name }) => name === "platform.assets.operations"
     );
     if (!tool) throw new Error("Callable-operation tool is missing");
-    const conversation = z
-      .object({ id: z.string() })
-      .parse(
-        (
-          await t.expectOk(t.root.id, "conversations.create", {
-            payload: { title: "Build a Workflow" }
-          })
-        ).json()
-      );
+    const created = await t.expectOk(t.root.id, "conversations.create", {
+      payload: { title: "Build a Workflow" }
+    });
+    const conversation = z.object({ id: z.string() }).parse(created.json());
     const callContext = {
       clientInstanceId,
       correlationId: "workflow-discovery-paging",
