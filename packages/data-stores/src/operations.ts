@@ -556,14 +556,19 @@ async function runVerb(
         { reason: "data_store_not_ready" }
       );
     }
-    // Let the verb refuse direct proposals before role repair or call-record DDL touches the store.
-    if (verb.verb === "records.propose" && context.origin.kind !== "workflow")
+    // Fixed proposal reads use the platform connection; the preinstalled frame performs
+    // customer writes as the app role. Neither role repair nor call-record DDL runs here.
+    if (verb.verb === "records.propose")
       return await verb.run(
         {
           runtime,
           store,
-          target: runtime.server.asRole(record, "app", runtime.stores.connections),
-          context
+          target: {
+            ...runtime.server.asPlatform(record.location.database),
+            ...(signal ? { signal } : {})
+          },
+          context,
+          ...(keyed ? { keyed } : {})
         },
         input
       );
@@ -573,8 +578,7 @@ async function runVerb(
         ...runtime.server.asRole(record, "app", runtime.stores.connections),
         ...(signal ? { signal } : {})
       };
-      if (keyed || verb.verb === "load" || verb.verb === "records.propose")
-        await ensureCallRecords(runtime, record, signal);
+      if (keyed || verb.verb === "load") await ensureCallRecords(runtime, record, signal);
       if (verb.verb === "load" && runtime.datasets?.authorize)
         await runtime.datasets.authorize(input, context);
       if (keyed) {

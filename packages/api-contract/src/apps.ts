@@ -6,6 +6,7 @@ import {
 import { z } from "zod";
 import { appActionPermissionSchema } from "./app-bridge";
 import { operationTargetSchema } from "./operation-runs";
+import { assetScopeSchema } from "./assets";
 import { pagePreviewSchema } from "./pages";
 
 /** The kind id of an App in the asset registry. */
@@ -233,11 +234,16 @@ export const appActionUnavailableSchema = z.enum([
 
 export type AppActionUnavailable = z.infer<typeof appActionUnavailableSchema>;
 
-/** What every named action of a revision is listed with, whatever its kind. */
-const listedAppAction = {
+/** The catalog a use holder may choose from, without configuration or a call preview. */
+const appActionSummary = {
   name: z.string(),
   effect: z.enum(OPERATION_EFFECTS),
-  description: z.string().optional(),
+  description: z.string().optional()
+};
+
+/** What every named action a reader sees is listed with, whatever its kind. */
+const listedAppAction = {
+  ...appActionSummary,
   /** The operation the action is, as an agent lists it: `app.<id>.<action>`. */
   toolName: z.string(),
   /** What the action takes: its declared parameters, as JSON Schema. */
@@ -306,10 +312,12 @@ export const appActionsSchema = z.object({
     z.object({
       name: z.string(),
       title: z.string(),
+      scope: assetScopeSchema,
       /** Which revision the actions are read from, and its number. */
       view: appModeSchema,
       revision: z.number().int().positive(),
-      actions: z.array(appActionSchema)
+      /** Readers get the full view; use-only holders get just name, description and effect. */
+      actions: z.array(z.union([appActionSchema, z.strictObject(appActionSummary)]))
     })
   ),
   /** More Apps are published than one answer lists. The answer holds the first by name. */

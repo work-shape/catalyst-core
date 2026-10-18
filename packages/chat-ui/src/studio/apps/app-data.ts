@@ -152,7 +152,8 @@ export function useAppActions(app: string, enabled: boolean): AppActionsRead {
       status: "ready",
       view: listed.view,
       revision: listed.revision,
-      actions: listed.actions
+      // A reader gets every action in full; a summary is what a holder of use alone gets.
+      actions: listed.actions.flatMap((action) => ("kind" in action ? [action] : []))
     };
   }
   return query.isError || query.data

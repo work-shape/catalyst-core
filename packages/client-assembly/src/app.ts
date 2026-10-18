@@ -455,7 +455,12 @@ export async function createClientInstanceExecutionAssembly(
     if (approvalRequestHandlers.has("skill_change")) {
       throw new AppError("VALIDATION_FAILED", "The skill_change approval kind is platform-owned");
     }
-    const handler = createSkillChangeApprovalHandler({ config, clientInstanceId, configAssets });
+    const handler = createSkillChangeApprovalHandler({
+      config,
+      clientInstanceId,
+      configAssets,
+      stores: store
+    });
     approvalRequestHandlers.set(handler.kind, handler);
   }
   const platformTools = createPlatformTools({ stores: store, modules, connections });

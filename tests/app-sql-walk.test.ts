@@ -76,7 +76,7 @@ describe("an App on a Data Store, from its folder to a member's row", () => {
     expectStatus(listed, 200);
     const [app] = appActionsSchema.parse(listed.json()).apps;
     expect(app).toMatchObject({ name: "ledger-app", view: "draft" });
-    expect(app?.actions.filter((action) => action.kind === "sql")).toEqual([
+    expect(app?.actions.filter((action) => "kind" in action && action.kind === "sql")).toEqual([
       {
         name: "add_finding",
         kind: "sql",
@@ -106,7 +106,9 @@ describe("an App on a Data Store, from its folder to a member's row", () => {
       }
     ]);
     // A client that knows `connection` actions alone still reads those of the list.
-    expect(app?.actions.find((action) => action.kind === "connection")).toMatchObject({
+    expect(
+      app?.actions.find((action) => "kind" in action && action.kind === "connection")
+    ).toMatchObject({
       name: "load",
       connection: { name: "crm" },
       operation: "echo"

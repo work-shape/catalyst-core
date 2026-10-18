@@ -72,7 +72,7 @@ describe("the store a Knowledge Base owns", () => {
     return eventually(async () => {
       await jobs.runDue();
       const record = await ownedRecord(world);
-      expect(record).toMatchObject({ status: "ready", level: 11 });
+      expect(record).toMatchObject({ status: "ready", level: 12 });
       return required(record);
     });
   }
@@ -109,6 +109,32 @@ describe("the store a Knowledge Base owns", () => {
       )
     );
 
+  it.each(["en", "de"] as const)(
+    "refuses a token cap below the extraction reserve at publish in %s, and accepts the reserve",
+    async (locale) => {
+      const instance = await start(true, undefined, undefined, undefined, {
+        defaultLocale: locale
+      });
+      const config = (maxTokensPerDocument: number) =>
+        documents({ methods: ["keyword"], extraction: { budget: { maxTokensPerDocument } } });
+      const draft = await put(instance, config(511));
+      expect(draft.statusCode).toBe(200);
+      const refused = await publish(instance, 1);
+      expect(refused.statusCode).toBe(422);
+      const body = refused.json<ErrorBody>();
+      expect(body.error.message).toContain("extraction.budget.maxTokensPerDocument");
+      expect(body.error.message).toContain("511");
+      expect(body.error.message).toContain("512");
+      expect(body.error.message).toContain(
+        locale === "de" ? "kleiner als das Minimum" : "below the extraction minimum"
+      );
+      expect(await ownedRecord(instance)).toBeUndefined();
+      expect((await put(instance, config(512), 1)).statusCode).toBe(200);
+      expect((await publish(instance, 2)).statusCode).toBe(200);
+      await settle(instance);
+    }
+  );
+
   it("is made on publish with the platform's tables and pgvector where the Knowledge Base searches by meaning", async () => {
     const instance = await start(true, undefined, undefined, undefined, { embedding: true });
 
@@ -135,7 +161,8 @@ describe("the store a Knowledge Base owns", () => {
         expect.objectContaining({ number: 8, name: "record_content_hash" }),
         expect.objectContaining({ number: 9, name: "source_superseded" }),
         expect.objectContaining({ number: 10, name: "field_extraction_budget" }),
-        expect.objectContaining({ number: 11, name: "record_content_hash_upgrade" })
+        expect.objectContaining({ number: 11, name: "record_content_hash_upgrade" }),
+        expect.objectContaining({ number: 12, name: "record_projection_frame" })
       ]
     });
     const { database } = record.location;
@@ -208,7 +235,7 @@ describe("the store a Knowledge Base owns", () => {
           name: `knowledge-base:${KB}`,
           title: "Objektunterlagen",
           status: "ready",
-          level: 11,
+          level: 12,
           ownedBy: { knowledgeBase: KB }
         }
       ]
@@ -251,7 +278,7 @@ describe("the store a Knowledge Base owns", () => {
         ).toEqual([{ count: 1 }]);
         return sql`select * from catalyst_kb.migrations order by number`;
       });
-      expect(ledger.map(({ number }) => number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+      expect(ledger.map(({ number }) => number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
       const audits = await instance.stores.audit.listAuditEvents({
         clientInstanceId,
         type: "data_store.migrated"
