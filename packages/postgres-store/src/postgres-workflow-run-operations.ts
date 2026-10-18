@@ -1,3 +1,5 @@
+import { lockWorkflowRun, lockWorkflowRunByKey } from "./postgres-workflow-run-lock-order";
+import { failedItemCount } from "./postgres-workflow-item-counts";
 import { runIsWaiting } from "./postgres-workflow-run-waiting";
 import { countWorkflowFailures } from "./postgres-workflow-failure-counts";
 import { countWorkflowLoops, listWorkflowStepRuns } from "./postgres-workflow-step-reads";
@@ -20,10 +22,9 @@ import {
   stepRunIs,
   notEnded
 } from "./postgres-workflow-run-mapping";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import {
   WORKFLOW_ENDED_STATUSES,
-  WORKFLOW_KEY_RELEASING_STATUSES,
   type JsonObject,
   type JsonValue,
   type WorkflowCodeOutcome,
@@ -43,28 +44,6 @@ import { type PostgresConnection } from "./postgres-database";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 
 type Input<Method extends keyof WorkflowRunsStore> = Parameters<WorkflowRunsStore[Method]>[0];
-
-async function lockWorkflowRunByKey(
-  db: PostgresConnection,
-  input: Input<"lockRunByKey">
-): Promise<WorkflowRun | undefined> {
-  // The predicate of `workflow_runs_active_run_key_idx`: the run that holds the key, read again
-  // behind its lock, so one that ended `failed` while this waited is no longer it.
-  const [row] = await db
-    .select(runColumns)
-    .from(workflowRuns)
-    .where(
-      and(
-        eq(workflowRuns.clientInstanceId, input.clientInstanceId),
-        eq(workflowRuns.workflow, input.workflow),
-        eq(workflowRuns.mode, input.mode),
-        eq(workflowRuns.runKey, input.runKey),
-        notInArray(workflowRuns.status, [...WORKFLOW_KEY_RELEASING_STATUSES])
-      )
-    )
-    .for("update");
-  return row ? mapRun(row) : undefined;
-}
 
 async function linkWorkflowStepRun(
   db: PostgresConnection,
@@ -111,14 +90,6 @@ async function readWorkflowScheduleState(
       )
     );
   return { fired: row?.fired ?? false, open: row?.open ?? false };
-}
-
-async function lockWorkflowRun(
-  db: PostgresConnection,
-  ref: Input<"lockRun">
-): Promise<WorkflowRun | undefined> {
-  const [row] = await db.select(runColumns).from(workflowRuns).where(runIs(ref)).for("update");
-  return row ? mapRun(row) : undefined;
 }
 
 async function markWorkflowRunWaiting(
@@ -358,7 +329,21 @@ async function endWorkflowStepRun(
     })
     .where(and(stepRunIs(ref), notEnded(workflowStepRuns.status)))
     .returning(stepRunColumns);
-  if (ended[0]) await noteLoopEnded(db, ended[0]);
+  if (ended[0]) {
+    await noteLoopEnded(db, ended[0]);
+    // Cancellation leaves running attempts to record their real outcome. The terminal
+    // run's original count predates this failure; refresh it behind the same run lock.
+    if (ref.status === "failed")
+      await db
+        .update(workflowRuns)
+        .set({ failedItemCount })
+        .where(
+          and(
+            runIs({ clientInstanceId: ref.clientInstanceId, id: ended[0].runId }),
+            inArray(workflowRuns.status, [...WORKFLOW_ENDED_STATUSES])
+          )
+        );
+  }
   return ended.length > 0;
 }
 

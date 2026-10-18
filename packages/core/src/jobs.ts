@@ -263,6 +263,16 @@ export type RetryJobResult =
 
 export interface JobsStore {
   /**
+   * Requests another execution no earlier than runAfter. Requests for one key coalesce
+   * at the earliest requested time. Unlike enqueue, a running job cannot swallow this
+   * wake: the executor queues it after that attempt ends. Commits with the subject row.
+   */
+  runAgainAfter<Payload extends JsonObject>(
+    kind: JobKind<Payload>,
+    payload: Payload,
+    options: EnqueueJobOptions & { dedupeKey: string; runAfter: Date }
+  ): Promise<void>;
+  /**
    * Enqueues a job. Inside `stores.transaction` it commits or rolls back with the subject
    * record. The payload is validated here and again when the job is claimed.
    */

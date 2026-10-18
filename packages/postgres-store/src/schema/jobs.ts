@@ -70,3 +70,28 @@ export const jobWorkerReports = pgTable(
   },
   (table) => [primaryKey({ columns: [table.clientInstanceId, table.kind] })]
 );
+
+/** Durable wakes are separate from leased jobs: requesting one never locks a running job. */
+export const jobWakes = pgTable(
+  "platform_job_wakes",
+  {
+    clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    kind: text("kind").notNull(),
+    dedupeKey: text("dedupe_key").notNull(),
+    payload: jsonb("payload").$type<JsonObject>().notNull(),
+    runAfter: timestamp("run_after", { withTimezone: true }).notNull(),
+    subject: text("subject"),
+    concurrencyKey: text("concurrency_key"),
+    concurrencyLimit: integer("concurrency_limit"),
+    correlationId: text("correlation_id").notNull()
+  },
+  (table) => [
+    primaryKey({ columns: [table.clientInstanceId, table.kind, table.dedupeKey] }),
+    index("platform_job_wakes_due_idx").on(
+      table.clientInstanceId,
+      table.kind,
+      table.runAfter,
+      table.dedupeKey
+    )
+  ]
+);

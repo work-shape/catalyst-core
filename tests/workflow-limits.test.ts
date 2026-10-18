@@ -1,3 +1,6 @@
+import postgres from "postgres";
+import { fileTestDatabaseUrl } from "./support/test-database";
+import { deferred, waitUntil } from "./support/assertions";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -6,6 +9,7 @@ import {
   type OperationDefinition,
   type OperationRunId,
   type OperationSource,
+  type RegisteredJobHandler,
   type WorkflowManifest,
   type WorkflowRunId
 } from "@work-shape/catalyst-core";
@@ -508,6 +512,88 @@ describe("time a run spends waiting", () => {
     expect(
       (await short.stores.workflowRuns.readRun({ clientInstanceId, id: run.id }))?.waitedMs
     ).toBeGreaterThanOrEqual(2_000);
+  });
+
+  it("retains the moved deadline while the old deadline job is still running", async () => {
+    const definition = parseOk(waiting("import", "manual"));
+    definition.steps.splice(2, 0, {
+      id: "busy",
+      name: "Busy",
+      type: "operation",
+      operation: "connection.crm.echo",
+      input: { text: { value: "busy" } }
+    });
+    const { t, started } = await readyWaiting([definition]);
+    const busy = deferred<void>();
+    const busyEntered = deferred<void>();
+    t.state.limits = { ...t.state.limits, callTimeoutMs: 30_000 };
+    t.setBehaviour(async () => {
+      busyEntered.resolve();
+      await busy.promise;
+      return {};
+    });
+    const run = await startRun(t, "import");
+    await untilSyncWaits(t, () => Promise.resolve(run.id));
+    const returned = deferred<void>();
+    const settle = deferred<void>();
+    let first = true;
+    const deadline = t.worker(
+      t.workflows.jobHandlers
+        .filter((handler) => handler.kind.kind === "workflow_run.deadline")
+        .map((handler): RegisteredJobHandler => ({
+          ...handler,
+          bind(job) {
+            const bound = handler.bind(job);
+            return {
+              ...bound,
+              async run(control) {
+                await bound.run(control);
+                if (first) {
+                  first = false;
+                  returned.resolve();
+                  await settle.promise;
+                }
+              }
+            };
+          }
+        }))
+    );
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
+    let attempt: Promise<void> | undefined;
+    try {
+      await sql`update platform_jobs set run_after = now() where kind = 'workflow_run.deadline' and subject = ${run.id}`;
+      attempt = deadline.runDue();
+      await returned.promise; // The waiting-run check committed; the job row still runs.
+      await endSync(t, started[0]);
+      const working = t.worker(
+        t.workflows.jobHandlers.filter((handler) => handler.kind.kind !== "workflow_run.deadline")
+      );
+      await waitUntil(async () => {
+        if ((await stepRunsOf(t, run.id)).some((step) => step.stepId === "busy")) return true;
+        await working.runDue();
+        return false;
+      }, "the resumed run queues its busy step");
+      const pass = working.runDue();
+      await busyEntered.promise;
+      // Put the resumed deadline in the past without a real-time sleep. The wake must
+      // survive the old job's successful settlement and drive the new deadline check.
+      await sql`update workflow_runs set deadline_at = now() - interval '1 second' where id = ${run.id}`;
+      await sql`update platform_job_wakes set run_after = now() where subject = ${run.id}`;
+      settle.resolve();
+      await attempt;
+      await deadline.runDue();
+      expect(await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id })).toMatchObject({
+        status: "limit_reached",
+        error: { code: "duration_limit" }
+      });
+      busy.resolve();
+      await pass;
+    } finally {
+      settle.resolve();
+      busy.resolve();
+      await attempt;
+      await sql.end();
+    }
   });
 
   it("moves a parent's deadline with the wait of its child", async () => {

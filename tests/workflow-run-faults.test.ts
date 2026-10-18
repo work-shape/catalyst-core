@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
+  connectionCallError,
   createPlatformId,
   workflowStepIdempotencyKey,
   type WorkflowManifest
 } from "@work-shape/catalyst-core";
 import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
-import { deferred } from "./support/assertions";
+import { deferred, eventually } from "./support/assertions";
 import { clientInstanceId } from "./support/access-instance";
 import {
   hangingAt,
@@ -485,6 +486,42 @@ describe("what the store keeps of a run", () => {
         error.cause.message.includes("workflow_step_runs_key_idx")
     );
     expect((await stepRunsOf(t, started.id)).map((stepRun) => stepRun.key)).toEqual(["start"]);
+  });
+});
+
+describe("late failed attempts after cancel", () => {
+  it("refreshes distinct failed item counts after cancellation without restarting the run", async () => {
+    const t = await ready();
+    const entered = deferred<void>();
+    const answerLate = deferred<void>();
+    hanging.push(() => answerLate.resolve());
+    t.setBehaviour(async (operation, input) => {
+      if (operation === "write") {
+        entered.resolve();
+        await answerLate.promise;
+        // A permanent source refusal cannot be masked by a later retry.
+        throw connectionCallError("upstream_conflict");
+      }
+      return answer(operation, input);
+    });
+    const run = await start(t);
+    const worker = await reach(t, entered.promise);
+    await t.expectOk(t.root.id, "workflows.cancel_run", { params: { runId: run.id } });
+    expect(await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id })).toMatchObject({
+      status: "cancelled",
+      failedItemCount: 0
+    });
+    answerLate.resolve();
+    await eventually(async () => {
+      expect(await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id })).toMatchObject({
+        status: "cancelled",
+        failedItemCount: 1
+      });
+    });
+    await worker.idle();
+    const steps = await stepRunsOf(t, run.id);
+    expect(steps.filter((step) => step.status === "failed")).toHaveLength(1);
+    expect(steps.some((step) => step.stepId === "result")).toBe(false);
   });
 });
 
