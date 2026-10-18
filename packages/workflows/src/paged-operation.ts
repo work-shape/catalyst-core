@@ -98,6 +98,18 @@ export async function pagedOperation(input: {
     next[paging.param] = paging.start ?? (paging.by === "page" ? 1 : 0);
     next[paging.sizeParam] = paging.size;
   }
+  // Every continuation this step run has sent or received: the start input and each
+  // committed page's checkpoint. Rebuilt from the parts, so it survives recovery.
+  const seen = new Set<JsonValue | undefined>(
+    "cursor" in paging
+      ? [
+          input.args[paging.param],
+          ...(saved?.parts ?? []).map((part) =>
+            part.checkpoint ? checkpointSchema.parse(part.checkpoint).next[paging.param] : undefined
+          )
+        ].filter((value) => value !== undefined && value !== null && value !== "")
+      : []
+  );
   let first = saved?.parts[0]?.checkpoint
     ? checkpointSchema.parse(saved.parts[0].checkpoint).first
     : undefined;
@@ -270,12 +282,15 @@ export async function pagedOperation(input: {
               "paging_invalid",
               "The page continuation must be a string or number"
             );
-          if (!done && cursor === next[paging.param])
+          if (!done && seen.has(cursor))
             throw new WorkflowStepFailure(
               "paging_repeated_cursor",
-              "The page continuation did not advance"
+              "The page continuation repeats one this step already read"
             );
-          if (!done) next = { ...next, [paging.param]: cursor ?? null };
+          if (!done) {
+            seen.add(cursor);
+            next = { ...next, [paging.param]: cursor ?? null };
+          }
         }
         // First-page metadata may contain a continuation. It stays in the dataset record only.
         const reference = await datasets.write({

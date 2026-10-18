@@ -564,6 +564,33 @@ it("fails immediately when a cursor repeats", async () => {
   });
   expect(calls).toBe(2);
 });
+it.each([false, true])(
+  "fails fast when a cursor returns to one already read (A, B, A), deferred between pages: %s",
+  async (deferred) => {
+    // A low page limit lets a missed cycle end in dataset_limit instead of the test timeout.
+    const { fixture: f, id } = await setup(
+      { by: "cursor", param: "c", cursor: "next" },
+      { pages: 10 }
+    );
+    const sent: unknown[] = [];
+    let refused = false;
+    f.setBehaviour(async (_op, input) => {
+      const { c } = z.object({ c: z.string().optional() }).parse(input);
+      sent.push(c);
+      // A deferral re-enters the step, which must rebuild what it has seen from its checkpoints.
+      if (c === "B" && deferred && !refused) {
+        refused = true;
+        throw connectionCallError("upstream_rate_limited", undefined, 0);
+      }
+      return { rows: [{ id: sent.length }], next: c === undefined ? "A" : c === "A" ? "B" : "A" };
+    });
+    expect(await f.finish(id)).toMatchObject({
+      status: "failed",
+      error: { code: "paging_repeated_cursor" }
+    });
+    expect(sent).toEqual(deferred ? [undefined, "A", "B", "B"] : [undefined, "A", "B"]);
+  }
+);
 it.each(["disabled", "exposure"] as const)(
   "stops without retries when the Connection is %s",
   async (change) => {
