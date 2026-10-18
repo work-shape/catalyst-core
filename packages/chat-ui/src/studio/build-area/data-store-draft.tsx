@@ -5,6 +5,7 @@ import {
   Banner,
   Button,
   Chip,
+  ConfirmDialog,
   EmptyState,
   InlineError,
   List,
@@ -55,7 +56,8 @@ export function dataStoreNeverPublished(
 /**
  * The page of a Data Store never published: there is no database yet, so nothing of its state,
  * its tables or its rows can be read. It says so, lists the migrations a publish applies, and
- * offers Publish to whoever may publish it (Platform Access check 44). The agent never publishes.
+ * offers Publish to whoever may publish it (Platform Access check 44). The agent never publishes,
+ * and the person confirms first: a migration applied to the database is not taken back.
  */
 export function DataStoreDraftPage({
   page,
@@ -67,6 +69,7 @@ export function DataStoreDraftPage({
 }: BuildAssetViewProps & { title: string; description: string | undefined }) {
   const { t } = useTranslation();
   const [publishing, setPublishing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [failure, setFailure] = useState<string>();
   const migrations = draftMigrationsOf(asset.config);
   const onPublish =
@@ -76,6 +79,7 @@ export function DataStoreDraftPage({
           setPublishing(true);
           setFailure(await publish());
           setPublishing(false);
+          setConfirming(false);
         };
   return (
     <Page
@@ -111,14 +115,7 @@ export function DataStoreDraftPage({
           title={t("dataStores.draftUnpublished")}
           action={
             onPublish === undefined ? undefined : (
-              <Button
-                size="sm"
-                data-data-store-publish=""
-                loading={publishing}
-                onClick={() => {
-                  onPublish().catch(() => undefined);
-                }}
-              >
+              <Button size="sm" data-data-store-publish="" onClick={() => setConfirming(true)}>
                 <Send aria-hidden="true" />
                 {t("build.publish")}
               </Button>
@@ -153,6 +150,28 @@ export function DataStoreDraftPage({
           )}
         </Section>
       </div>
+      {onPublish === undefined ? null : (
+        <ConfirmDialog
+          open={confirming}
+          tone="primary"
+          title={t("build.publishTitle", { name: title })}
+          confirmLabel={t("build.publish")}
+          loading={publishing}
+          onConfirm={() => {
+            onPublish().catch(() => undefined);
+          }}
+          onClose={() => setConfirming(false)}
+        >
+          <span data-data-store-publish-confirm="">
+            {t(
+              migrations.length === 1
+                ? "dataStores.publishDescriptionOne"
+                : "dataStores.publishDescription",
+              { count: migrations.length }
+            )}
+          </span>
+        </ConfirmDialog>
+      )}
     </Page>
   );
 }

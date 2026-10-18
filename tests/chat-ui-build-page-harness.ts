@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { vi } from "vitest";
-import { createApiClient } from "@work-shape/catalyst-api-client";
+import { createApiClient, type ApiUser } from "@work-shape/catalyst-api-client";
 import { apiOperations, safeConfigSchema } from "@work-shape/catalyst-api-contract";
 import {
   buildAssetKinds,
@@ -68,36 +68,12 @@ export function listedKind(request: Request, url: URL): string | undefined {
   return list?.[1];
 }
 
-const unmounts: (() => Promise<void>)[] = [];
-
-/** Takes down every page the tests mounted. Called after each test. */
-export async function unmountBuildPages(): Promise<void> {
-  for (const unmount of unmounts.splice(0)) {
-    await unmount();
-  }
-}
-
-/**
- * Opens the page of `asset` in Build. `answer` answers what the page asks the instance for; a
- * request it leaves undefined is answered with the platform context, or refused.
- */
-export async function mountBuildPage(
-  asset: BuildAsset,
-  kindPath: string,
-  answer: (request: Request, url: URL) => Response | undefined,
-  /** The agent fields the instance lets people change. */
+/** What a Settings or Build page knows of the instance and of its reader, a plain user unless given. */
+export function buildPageSettings(
+  fetchImpl: typeof fetch,
+  user?: ApiUser,
   editableAgentFields: readonly EditableAgentField[] = []
-): Promise<HTMLElement> {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const request = new Request(input, init);
-    const url = new URL(request.url);
-    const answered = answer(request, url);
-    if (answered !== undefined) return answered;
-    if (url.pathname === apiOperations["platform.context.get"].path)
-      return Response.json(contextWithKnowledge());
-    return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
-  };
+): SettingsPageContextValue {
   const config = createTestConfig();
   const safeConfig = safeConfigSchema.parse(
     createSafeConfigView(
@@ -106,11 +82,11 @@ export async function mountBuildPage(
       resolveInstanceModules(config, []).snapshot
     )
   );
-  const settings: SettingsPageContextValue = {
+  return {
     apiBaseUrl: URL_OF_INSTANCE,
     authScope: "build-page",
     client: createApiClient({ baseUrl: URL_OF_INSTANCE, fetchImpl }),
-    user: settingsUser(),
+    user: user ?? settingsUser(),
     config: {
       ...safeConfig,
       features: {
@@ -135,6 +111,41 @@ export async function mountBuildPage(
     onWorkspaceLeft: () => undefined,
     onWorkspaceDeleted: () => undefined
   };
+}
+
+const unmounts: (() => Promise<void>)[] = [];
+
+/** Takes down every page the tests mounted. Called after each test. */
+export async function unmountBuildPages(): Promise<void> {
+  for (const unmount of unmounts.splice(0)) {
+    await unmount();
+  }
+}
+
+/**
+ * Opens the page of `asset` in Build. `answer` answers what the page asks the instance for; a
+ * request it leaves undefined is answered with the platform context, or refused.
+ */
+export async function mountBuildPage(
+  asset: BuildAsset,
+  kindPath: string,
+  answer: (request: Request, url: URL) => Response | undefined,
+  /** The agent fields the instance lets people change. */
+  editableAgentFields: readonly EditableAgentField[] = [],
+  /** The reader, a plain user unless given, and the instance's answer to a save. */
+  reader: { user?: ApiUser; put?: BuildSource["writes"]["put"] } = {}
+): Promise<HTMLElement> {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    const answered = answer(request, url);
+    if (answered !== undefined) return answered;
+    if (url.pathname === apiOperations["platform.context.get"].path)
+      return Response.json(contextWithKnowledge());
+    return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
+  };
+  const settings = buildPageSettings(fetchImpl, reader.user, editableAgentFields);
   const source: BuildSource = {
     kinds: [{ kind: asset.kind, canCreate: true, canDelete: true }],
     rights: resolveBuildRights({ permissions: ["config_assets.write"] }, platformContext()),
@@ -153,7 +164,7 @@ export async function mountBuildPage(
     exists: async () => true,
     checkName: async () => ({ available: true }),
     writes: {
-      put: async () => ({ revision: 1 }),
+      put: reader.put ?? (async () => ({ revision: 1 })),
       readFiles: async () => [],
       delete: async () => undefined,
       publish: async () => ({ draftRevision: 1, publishedRevision: 1 }),

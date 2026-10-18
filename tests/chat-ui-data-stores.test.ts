@@ -225,6 +225,7 @@ interface StoreAnswers {
 
 function storeSource(answers: StoreAnswers = {}): DataStoreSource {
   return {
+    seesServerConditions: true,
     useStoreState: (store) => answers.states?.[store] ?? ready(storeState(store)),
     useSchema: () => answers.schema ?? ready(schema),
     useListed: () => answers.listed ?? ready({ items: [], truncated: false }),
@@ -450,7 +451,7 @@ describe("Data Stores in Build", () => {
       "8 MB",
       'data-data-store-row-state="migrations_pending"',
       "Migrations pending",
-      "2 open on the server",
+      "2 to do on the server",
       'data-data-store-row-measured="visit-log"',
       ">2 tables<",
       ">about 1,240 rows<"
@@ -590,7 +591,7 @@ describe("Data Stores in Build", () => {
     expect(page).toContain("Setup failed");
     expect(page).toContain("The server refused CREATE DATABASE.");
     expect(page).toContain('data-data-store-condition="sessions_open"');
-    expect(page).toContain("Sessions of the server can be seen");
+    expect(page).toContain("Hide the server&#x27;s sessions from this store");
     expect(page).toContain("The tables show once the store is ready.");
     expect(page).not.toContain("must not be read");
 

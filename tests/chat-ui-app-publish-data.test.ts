@@ -207,6 +207,7 @@ describe("the readers of a store", () => {
     truncated: false
   });
   const source = (used: DataStoreUsedBy): DataStoreSource => ({
+    seesServerConditions: false,
     useStoreState: () => ({ status: "loading" }),
     useSchema: () => ({ status: "loading" }),
     useListed: () => ({ status: "loading" }),

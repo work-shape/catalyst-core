@@ -1,6 +1,7 @@
 import {
   type ChatMessage,
   type JsonObject,
+  type LocaleCode,
   readUserMessageMetadata
 } from "@work-shape/catalyst-core";
 import type { ModelMessage } from "@work-shape/catalyst-model-provider";
@@ -82,10 +83,18 @@ export function temporaryAttachmentTitles(message: ChatMessage): string[] {
     )
     .filter((filename): filename is string => Boolean(filename));
 
-  return [
-    ...filenames,
-    attachments.length === 1 ? "Attached file" : `${attachments.length} attached files`
-  ];
+  return [...filenames, ...attachmentPlaceholders(attachments.length)];
+}
+
+/**
+ * The titles the chat gives a conversation its first message only attached files to, in each
+ * language it writes them in (`conversationAttachedFile`, `conversationAttachedFiles`). The
+ * title job replaces them as it replaces "New conversation"; a title a person wrote stays.
+ */
+function attachmentPlaceholders(count: number): string[] {
+  return count === 1
+    ? ["Attached file", "Angehängte Datei"]
+    : [`${count} attached files`, `${count} angehängte Dateien`];
 }
 
 function readAttachmentManifestEntries(message: ChatMessage): JsonObject[] {
@@ -101,7 +110,17 @@ function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function createTitlePrompt(firstUserMessage: ChatMessage): ModelMessage[] {
+/** The language a title is written in, as the title model is told it. */
+const TITLE_LANGUAGES: Record<LocaleCode, string> = { en: "English", de: "German" };
+
+/**
+ * The model call that names a conversation, in the language of the one it belongs to: the list
+ * of their conversations is read in that language, whatever language the first message used.
+ */
+export function createTitlePrompt(
+  firstUserMessage: ChatMessage,
+  locale: LocaleCode
+): ModelMessage[] {
   return [
     {
       role: "system",
@@ -110,6 +129,7 @@ export function createTitlePrompt(firstUserMessage: ChatMessage): ModelMessage[]
         "Infer the conversation topic from the initial user message only.",
         "The title should describe the overall likely conversation, not quote or answer the user message.",
         "Use 3 to 7 words.",
+        `Write the headline in ${TITLE_LANGUAGES[locale]}.`,
         "Do not include names, addresses, emails, phone numbers, bank details, exact salary amounts, IDs, or other personal data.",
         "If the content is sensitive, use a generic topic label.",
         "Return only the headline text."

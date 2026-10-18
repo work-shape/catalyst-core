@@ -417,7 +417,7 @@ describe("Studio refusals", () => {
     expect(readBuildRefusal(refusal("CONFLICT", "The default agent changed"), t)).toEqual({
       ok: false,
       conflict: false,
-      refusals: [{ message: "The default agent changed" }]
+      refusals: [{ message: "The default agent changed", asSent: true }]
     });
   });
 
@@ -543,7 +543,7 @@ describe("Studio refusals", () => {
     expect(readBuildRefusal(refusal("VALIDATION_FAILED", unread), t)).toEqual({
       ok: false,
       conflict: false,
-      refusals: [{ message: unread }]
+      refusals: [{ message: unread, asSent: true }]
     });
     expect(
       refusalsOf(
