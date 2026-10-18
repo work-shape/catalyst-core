@@ -55,7 +55,7 @@ interface Preview {
 
 const HEADER_SET = {
   "content-security-policy":
-    "sandbox allow-scripts; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'; frame-ancestors 'self' https://ui.example.test",
+    "sandbox allow-scripts allow-forms allow-downloads; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'; frame-ancestors 'self' https://ui.example.test",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
   "x-dns-prefetch-control": "off",
@@ -267,7 +267,7 @@ describe("the content route of a Page", () => {
       expect(shell.headers["content-type"]).toBe("text/html; charset=utf-8");
       // The frame the server writes allows scripts and nothing else.
       const held = heldBy(shell.body);
-      expect(held.sandbox).toBe("allow-scripts");
+      expect(held.sandbox).toBe("allow-scripts allow-forms allow-downloads");
       expect(shell.body.split("<iframe").length).toBe(2);
       // The Page document is one script and nothing after it. The stored HTML is a text in
       // that script: no element of it is in the document before the script has run.
@@ -580,7 +580,9 @@ describe("the content route of a Page", () => {
     // A client that does not say what its request is for gets an HTML file as the shell, a
     // script as it is, and no file a browser would show as a document without a shell.
     const unnamed = async (path: string) => callTestPath(instance, "GET", `${url}${path}`);
-    expect(heldBy((await unnamed("")).body).sandbox).toBe("allow-scripts");
+    expect(heldBy((await unnamed("")).body).sandbox).toBe(
+      "allow-scripts allow-forms allow-downloads"
+    );
     expect((await unnamed("assets/main.js")).statusCode).toBe(200);
     const svg = await unnamed("assets/icon.svg");
     expect(svg.statusCode).toBe(403);
@@ -668,7 +670,9 @@ describe("the content route of a Page", () => {
     );
     expect(whole).toMatch(/^HTTP\/1\.1 422 /u);
     expect(whole).toContain("The address of the request cannot be read");
-    expect(whole.toLowerCase()).toContain("content-security-policy: sandbox allow-scripts;");
+    expect(whole.toLowerCase()).toContain(
+      "content-security-policy: sandbox allow-scripts allow-forms allow-downloads;"
+    );
     expect(whole).not.toContain(payload);
     expect(whole).not.toContain(signature);
 

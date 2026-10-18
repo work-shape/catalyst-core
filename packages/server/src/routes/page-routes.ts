@@ -267,7 +267,18 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     // An HTML file is answered as the shell that holds it, never as it is stored. The policy
     // of this answer names the one script of the shell's frame and the outside hosts it may
     // connect to: of an App's, never one that a draft added before it was published.
-    const shell = composePageShell(new TextDecoder().decode(bytes));
+    const storage = fileSet.asset
+      ? {
+          persistent: true,
+          session: checked.claims.pageSessionId,
+          values: await options.stores.pages.getAppUserStorage({
+            clientInstanceId: options.clientInstanceId,
+            appId: fileSet.asset.id,
+            userId: asUserId(checked.claims.viewerId)
+          })
+        }
+      : { persistent: false, session: checked.claims.pageSessionId, values: {} };
+    const shell = composePageShell(new TextDecoder().decode(bytes), storage);
     const outsideHosts = fileSet.asset
       ? await appOutsideHosts(options.stores.pages, {
           clientInstanceId: options.clientInstanceId,
@@ -283,7 +294,13 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
         outsideHosts: outsideHosts?.allowed ?? []
       })
     );
-    return send(reply, file.contentType, cacheControl, shell.document);
+    // Personal snapshots change independently of the immutable revision.
+    return send(
+      reply,
+      file.contentType,
+      storage.persistent ? "no-store" : cacheControl,
+      shell.document
+    );
   });
 }
 
