@@ -18,6 +18,7 @@ import {
   ConnectionTestPathField
 } from "./connection-form";
 import type { ConnectionFormState } from "./connection-form-model";
+import { RefusalDetail } from "./refusal-notice";
 
 // The second step of the New connection dialog: the name, the address and the key, with the
 // id, how the key is sent and, for a REST API, its fixed headers and test path under
@@ -42,7 +43,10 @@ export interface CreateFields {
 /** Where a field says what is wrong with it. */
 export type CreateFieldErrors = Partial<
   Record<"id" | "url" | "key" | "headerName" | "headers" | "testPath" | "general", string>
->;
+> & {
+  /** The instance's sentences behind the refusals, which only an administrator is shown. */
+  detail?: string;
+};
 
 export function ConnectionCreateForm({
   fields,
@@ -228,6 +232,7 @@ export function ConnectionCreateForm({
           {errors.general}
         </FormNotice>
       ) : null}
+      <RefusalDetail detail={errors.detail} />
     </form>
   );
 }

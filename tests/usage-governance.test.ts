@@ -1,4 +1,5 @@
 import { createTestInstance, getTestExecution } from "./support/test-instance";
+import { ensureTestUser } from "./support/test-store";
 import { describe, expect, it } from "vitest";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
@@ -439,6 +440,8 @@ async function createGovernance(
 ) {
   const clientInstanceId = asClientInstanceId("client-usage-test");
   const store = (await createTestInstance()).stores;
+  // The person of the calls: their own safeguards hold only while their row exists.
+  await ensureTestUser(clientInstanceId, usageAttribution.userId);
   return {
     clientInstanceId,
     store,

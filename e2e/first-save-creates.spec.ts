@@ -219,7 +219,7 @@ test("a Workflow draft the agent creates beside the subject moves nobody and off
   await expect(page.getByTestId("dock-head")).toContainText(`Working on: ${firstTitle}`);
 });
 
-test("New agent in a workspace's Studio opens the dock, and the first save creates an agent offered nowhere", async ({
+test("New agent in a workspace's Studio waits for Allow before creating an agent offered nowhere", async ({
   page
 }) => {
   test.setTimeout(180_000);
@@ -257,7 +257,7 @@ test("New agent in a workspace's Studio opens the dock, and the first save creat
   await expect(page.getByRole("dialog", { name: "New agent", exact: true })).toHaveCount(0);
   await expect(composerOf(page)).toHaveValue("Build a new agent that ");
 
-  await sendToolCall(page, "platform.assets.put", {
+  const input = {
     kind: "agent",
     name,
     config: {
@@ -269,7 +269,21 @@ test("New agent in a workspace's Studio opens the dock, and the first save creat
       skillNames: [],
       initialPrompts: []
     }
-  });
+  };
+  await composerOf(page).fill(`/tool platform.assets.put ${JSON.stringify(input)}`);
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  const confirmation = page.getByTestId("tool-decision-card");
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation).toContainText(name);
+  // A live first save is held at the host's card, with nothing persisted before Allow.
+  const stored = () =>
+    page.request.get(`${apiBaseUrl}/api/v1/assets/agent/${name}?workspaceId=${workspaceId}`);
+  expect((await stored()).status()).toBe(404);
+  expect(await offered()).not.toContain(name);
+  await confirmation.getByRole("button", { name: "Allow", exact: true }).click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(page.getByText(/^Tool work completed:/u)).toHaveCount(1);
+  expect((await stored()).ok()).toBe(true);
   await expect(page).toHaveURL((url) => url.pathname === `/build/agents/${name}`);
   await expect(page.getByTestId("asset-opened-line").last()).toHaveText("Opened Built helper");
   // The agent is offered to nobody: it is not among the workspace's agents. Other tests change
@@ -317,8 +331,18 @@ test("the first save of a Data Store in a personal chat opens its draft in Studi
   await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
   await page.reload();
 
-  // Publish is the person's click: the store then has a database and a state.
+  // Publish is the person's click, and it asks first: a migration is not taken back.
   await page.locator("[data-data-store-publish]").click();
+  const question = page.locator("dialog[open]");
+  await expect(question.locator("[data-data-store-publish-confirm]")).toContainText(
+    "cannot be taken back"
+  );
+  await question.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(draft).toBeVisible();
+  await page.locator("[data-data-store-publish]").click();
+  await page.locator("dialog[open]").getByRole("button", { name: "Publish" }).click();
+  // The store then has a database and a state.
   await expect(page.locator("[data-data-store-draft]")).toHaveCount(0);
   await expect(page.locator("[data-data-store-state]")).toBeVisible();
 

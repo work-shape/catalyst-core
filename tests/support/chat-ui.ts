@@ -53,6 +53,7 @@ export {
   settingsGoToTargets,
   visibleSettingsPages
 } from "../../packages/chat-ui/src/admin/settings/catalog";
+export { SettingsArea } from "../../packages/chat-ui/src/admin/settings/settings-area";
 export {
   ApiKeysPage,
   ConnectCodeConfirm
@@ -467,3 +468,4 @@ export {
   type ShellSession
 } from "../../packages/chat-ui/src/shared/shell-session";
 export { useDraftForNewConnection } from "../../packages/chat-ui/src/studio/build-area/connection-draft";
+export { attachedFilesTitle } from "../../packages/chat-ui/src/chat/workspace/workspace-conversation-actions";

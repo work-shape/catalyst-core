@@ -1,5 +1,6 @@
 import type { ApiClient, LocaleCode, Message } from "@work-shape/catalyst-api-client";
 import type { useWorkspaceCacheActions } from "../../shared/api/workspace-queries";
+import { createTranslationContext } from "../../shared/i18n";
 import type { ApprovalRevisionRunInput } from "../approvals/approval-revision-host";
 import {
   createRunIdempotencyKey,
@@ -11,6 +12,18 @@ import type { WorkspaceDock } from "./use-workspace-dock";
 import { WORKSPACE_AUTH_SCOPE, isAbandonedDraftConversation } from "./workspace-chat-state";
 import type { useWorkspaceDraftController } from "./workspace-drafts";
 import type { useWorkspaceChromeState, useWorkspaceRouteState } from "./workspace-ui-state";
+
+/**
+ * The title of a conversation whose first message only attached files, until the title job
+ * names it: the file's name, or the count in the person's language. The job recognises each
+ * language's form (`server/src/conversations/conversation-title.ts`).
+ */
+export function attachedFilesTitle(files: readonly File[], locale: LocaleCode): string {
+  const { t } = createTranslationContext(locale);
+  return files.length === 1
+    ? files[0]?.name || t("conversationAttachedFile")
+    : t("conversationAttachedFiles", { count: String(files.length) });
+}
 
 interface WorkspaceConversationActionsInput {
   client: ApiClient;
@@ -92,8 +105,7 @@ export function createWorkspaceConversationActions({
     if (selectedConversationId) {
       return selectedConversationId;
     }
-    const title =
-      files.length === 1 ? (files[0]?.name ?? "Attached file") : `${files.length} attached files`;
+    const title = attachedFilesTitle(files, activeLocale);
     const conversation = await client.conversations.create({
       body: {
         title,

@@ -3,8 +3,6 @@ import { opensAssets, type BuildKind } from "./build-asset-kind";
 import type { BuildKindState } from "./build-data";
 import type { BuildLocation } from "../../shared/build-route";
 
-const LAST_KIND_STORAGE_KEY = "vivd-catalyst:build-kind";
-
 /** A kind the frame shows: its entry with what the instance says about it. */
 export interface VisibleBuildKind<Entry extends BuildKind = BuildKind> {
   entry: Entry;
@@ -33,13 +31,12 @@ export interface BuildPlace {
 
 /**
  * Resolves an address. `/build` and an address with a kind the reader has no item for open the
- * kind last visited, else the first one, so Build always lands on a list. A kind that only
- * lists has no asset page: the address of one of its assets opens its list.
+ * first kind the reader has, Agents for most, regardless of the previous visit (ACCEPT-1c). A
+ * kind that only lists has no asset page: the address of one of its assets opens its list.
  */
 export function resolveBuildPlace(
   kinds: readonly VisibleBuildKind[],
-  location: BuildLocation,
-  lastKindPath: string | undefined
+  location: BuildLocation
 ): BuildPlace | undefined {
   const named = kinds.find((kind) => kind.entry.path === location.kindPath);
   if (named) {
@@ -47,25 +44,8 @@ export function resolveBuildPlace(
       ? { kind: named, name: location.name, corrected: false }
       : { kind: named, name: undefined, corrected: true };
   }
-  const fallback = kinds.find((kind) => kind.entry.path === lastKindPath) ?? kinds[0];
+  const fallback = kinds[0];
   return fallback ? { kind: fallback, name: undefined, corrected: true } : undefined;
-}
-
-/** The kind the reader opened last in this browser. */
-export function readLastBuildKindPath(): string | undefined {
-  try {
-    return window.localStorage.getItem(LAST_KIND_STORAGE_KEY) ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function storeLastBuildKindPath(path: string): void {
-  try {
-    window.localStorage.setItem(LAST_KIND_STORAGE_KEY, path);
-  } catch {
-    // A browser that refuses storage opens Build on the first kind.
-  }
 }
 
 const MINUTE_MS = 60_000;

@@ -13,6 +13,7 @@ import {
   type ConversationVisibility,
   type JobControl,
   type JsonObject,
+  type LocaleCode,
   type RuntimeCallContext,
   type UserId,
   addDays,
@@ -369,7 +370,10 @@ export class ConversationWorkflow {
     try {
       const completion = await this.options.modelGateway.complete({
         binding,
-        messages: createTitlePrompt(firstUserMessage),
+        messages: createTitlePrompt(
+          firstUserMessage,
+          user.locale ?? this.options.config.localization.defaultLocale
+        ),
         tools: [],
         reasoningEffort: reasoningEffortTheModelTakes(
           this.options.modelGateway,
@@ -441,7 +445,9 @@ export class ConversationWorkflow {
     }
   }
 
-  private async findActiveUser(userId: UserId): Promise<AuthenticatedUser | undefined> {
+  private async findActiveUser(
+    userId: UserId
+  ): Promise<(AuthenticatedUser & { locale: LocaleCode | undefined }) | undefined> {
     const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
@@ -451,6 +457,8 @@ export class ConversationWorkflow {
     }
     const identity = user.identities[0];
     return {
+      // The language the account chose, which a job writes the person's text in.
+      locale: user.locale,
       id: user.id,
       externalUserId: identity?.externalUserId ?? user.id,
       displayLabel: user.displayLabel,

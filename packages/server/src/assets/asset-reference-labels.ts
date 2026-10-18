@@ -9,7 +9,7 @@ export function assetKindLabel(kind: string, locale: LocaleCode): string {
     workflow: ["Workflow", "Workflow"],
     connection: ["Connection", "Verbindung"],
     data_store: ["Data Store", "Datenspeicher"],
-    knowledge_base: ["Knowledge Base", "Wissensdatenbank"],
+    knowledge_base: ["Knowledge Base", "Wissensbasis"],
     guardrail: ["Guardrail", "Guardrail"]
   };
   return labels[kind]?.[locale === "de" ? 1 : 0] ?? kind;

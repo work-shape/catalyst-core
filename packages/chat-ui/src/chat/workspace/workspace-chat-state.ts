@@ -94,12 +94,16 @@ const RUN_COMMAND_NOT_TAKEN_CODE = "AGENT_RUN_COMMAND_NOT_TAKEN";
 // The code a run is failed with when its model has no price on the rate card (`@work-shape/catalyst-core`).
 const MODEL_NOT_PRICED_CODE = "MODEL_NOT_PRICED";
 
+// The code a run is failed with when a usage safeguard or spend budget refused its next model
+// call (`@work-shape/catalyst-core`).
+const MODEL_USAGE_LIMIT_REACHED_CODE = "MODEL_USAGE_LIMIT_REACHED";
+
 /**
  * What the person reads above the composer when a run ended as failed or cancelled. The
  * reason of a cancellation and the message of any failure but an application's refusal are
  * written for operators, so the person reads a sentence in their language instead. A model
- * without a price is named with its remedy to someone who sees the usage of the instance;
- * anyone else reads what they can do themselves.
+ * without a price and a reached usage limit are named with their remedy to someone who sees the
+ * usage of the instance; anyone else reads what they can do themselves.
  */
 export function terminalRunNotice(
   error: ConversationControllerState["error"],
@@ -110,6 +114,9 @@ export function terminalRunNotice(
   if (error?.class !== "run_failed") return undefined;
   if (error.code === MODEL_NOT_PRICED_CODE) {
     return t(viewer.seesRateCard ? "runModelNotPricedOperator" : "runModelNotPriced");
+  }
+  if (error.code === MODEL_USAGE_LIMIT_REACHED_CODE) {
+    return t(viewer.seesRateCard ? "runUsageLimitReachedOperator" : "runUsageLimitReached");
   }
   // Only a refusal of the application speaks to the person. An internal, aborted or unknown
   // failure carries the worker's words, such as "Agent run failed": it reads as interrupted.

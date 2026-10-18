@@ -45,6 +45,7 @@ export function SettingsArea({ settings }: { settings: SettingsAreaModel }) {
         <WorkspaceScope
           workspace={context.workspace}
           workspaces={workspaces}
+          worksInPersonal={context.activeWorkspace?.kind === "personal"}
           onSelect={selectWorkspace}
         />
       ) : undefined,
@@ -113,14 +114,20 @@ export function BuildArea({ build }: { build: BuildAreaModel }) {
   );
 }
 
-/** Which shared workspace the Workspace pages change: a picker for several, the name for one. */
+/**
+ * Which shared workspace the Workspace pages change: a picker for several, the name for one. A
+ * personal workspace has no such pages, so while the person works in theirs the scope says
+ * that the name is a shared workspace, not where they are.
+ */
 function WorkspaceScope({
   workspace,
   workspaces,
+  worksInPersonal,
   onSelect
 }: {
   workspace: CollaborationWorkspaceWithRole;
   workspaces: readonly CollaborationWorkspaceWithRole[];
+  worksInPersonal: boolean;
   onSelect(collaborationWorkspaceId: string): void;
 }) {
   const { t } = useTranslation();
@@ -132,35 +139,46 @@ function WorkspaceScope({
       size="sm"
     />
   );
+  const caption = worksInPersonal ? (
+    <span data-workspace-scope-shared="" className="text-caption text-muted-foreground">
+      {t("settings.workspaceScopeShared")}
+    </span>
+  ) : null;
   if (workspaces.length < 2) {
     return (
-      <div className="flex min-w-0 items-center gap-2 text-label">
-        {mark(workspace)}
-        <span className="truncate">{workspace.name}</span>
+      <div className="grid min-w-0 gap-0.5">
+        {caption}
+        <div className="flex min-w-0 items-center gap-2 text-label">
+          {mark(workspace)}
+          <span className="truncate">{workspace.name}</span>
+        </div>
       </div>
     );
   }
   return (
-    <Picker
-      search={workspaces.length > WORKSPACE_SEARCH_FROM_COUNT}
-      value={workspace.id}
-      options={workspaces.map((candidate) => ({
-        value: candidate.id,
-        label: candidate.name,
-        leading: mark(candidate)
-      }))}
-      onValueChange={onSelect}
-    >
-      <Button
-        variant="outline"
-        size="sm"
-        className="w-full min-w-0 justify-start"
-        aria-label={`${t("settings.workspaceScope")}: ${workspace.name}`}
+    <div className="grid min-w-0 gap-0.5">
+      {caption}
+      <Picker
+        search={workspaces.length > WORKSPACE_SEARCH_FROM_COUNT}
+        value={workspace.id}
+        options={workspaces.map((candidate) => ({
+          value: candidate.id,
+          label: candidate.name,
+          leading: mark(candidate)
+        }))}
+        onValueChange={onSelect}
       >
-        {mark(workspace)}
-        <span className="min-w-0 flex-1 truncate text-left">{workspace.name}</span>
-        <ChevronsUpDown aria-hidden="true" className="text-muted-foreground" />
-      </Button>
-    </Picker>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full min-w-0 justify-start"
+          aria-label={`${t("settings.workspaceScope")}: ${workspace.name}`}
+        >
+          {mark(workspace)}
+          <span className="min-w-0 flex-1 truncate text-left">{workspace.name}</span>
+          <ChevronsUpDown aria-hidden="true" className="text-muted-foreground" />
+        </Button>
+      </Picker>
+    </div>
   );
 }

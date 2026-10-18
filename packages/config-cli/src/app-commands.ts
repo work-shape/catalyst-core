@@ -11,14 +11,13 @@ import { publishFileChanges } from "./publish-file-changes";
 import { appPublishData } from "./app-publish-data";
 import {
   APP_STATE_FILE,
-  folderIsEmpty,
   localChanges,
   readAppFolder,
   readAppState,
-  writeAppFiles,
   writeAppState,
   type AppFolderState
 } from "./app-folder";
+import { folderIsEmpty, writeFolderFiles } from "./asset-folder";
 import { formatRefusal, formatWarnings } from "./asset-output";
 import { connectApi, resolveWorkingDir, type ConfigCommandOptions } from "./command-support";
 import { askBeforePublish, waitingPublishLine } from "./publish-question";
@@ -169,7 +168,7 @@ async function pull(
     );
   }
   const contentRevision = asset.contentRevision ?? asset.revision;
-  const hashes = await writeAppFiles(directory, asset.files, previous);
+  const hashes = await writeFolderFiles(directory, asset.files, previous);
   await writeAppState(directory, {
     instance: target.url,
     workspaceId: target.workspaceId,

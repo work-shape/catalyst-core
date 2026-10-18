@@ -17,15 +17,19 @@ export const dataStores = defineTranslations({
     "dataStores.columnPrimaryKey": "Key",
     "dataStores.columnsOf": "Columns of {table}",
     "dataStores.columnType": "Type",
-    "dataStores.conditionCount": "1 open on the server",
-    "dataStores.conditionCounts": "{count} open on the server",
-    "dataStores.conditionOpen": "Open",
+    "dataStores.conditionCount": "1 to do on the server",
+    "dataStores.conditionCounts": "{count} to do on the server",
+    "dataStores.conditionOpen": "To do",
     "dataStores.conditionsDescription":
-      "What the database server leaves open around this store. The store works with each of them. The operator closes them.",
-    "dataStores.conditionServerDatabasesOpen": "Other databases of the server can be reached",
-    "dataStores.conditionSessionsOpen": "Sessions of the server can be seen",
-    "dataStores.conditionsTitle": "Open on the server",
-    "dataStores.conditionTempFilesUnbounded": "Temporary files have no limit",
+      "Steps on the database server that close what it leaves open around this store. The store works meanwhile. Open a step to see what to run.",
+    "dataStores.conditionServerDatabasesOpen": "Close the server's other databases to this store",
+    "dataStores.conditionSessionsOpen": "Hide the server's sessions from this store",
+    "dataStores.conditionsTitle": "To do on the server",
+    "dataStores.conditionTempFilesUnbounded": "Limit the store's temporary files",
+    "dataStores.publishDescription":
+      "Publishing creates the store's database and applies its {count} migrations in order. A migration cannot be taken back: a later change needs a new migration.",
+    "dataStores.publishDescriptionOne":
+      "Publishing creates the store's database and applies its migration. A migration cannot be taken back: a later change needs a new migration.",
     "dataStores.description":
       "Where apps and workflows keep their records. This page shows what each store holds.",
     "dataStores.descriptionLabel": "Description",
@@ -171,15 +175,20 @@ export const dataStores = defineTranslations({
     "dataStores.columnPrimaryKey": "Schlüssel",
     "dataStores.columnsOf": "Spalten von {table}",
     "dataStores.columnType": "Typ",
-    "dataStores.conditionCount": "1 Punkt am Server offen",
-    "dataStores.conditionCounts": "{count} Punkte am Server offen",
-    "dataStores.conditionOpen": "Offen",
+    "dataStores.conditionCount": "1 Schritt am Server zu tun",
+    "dataStores.conditionCounts": "{count} Schritte am Server zu tun",
+    "dataStores.conditionOpen": "Zu tun",
     "dataStores.conditionsDescription":
-      "Was der Datenbankserver rund um diesen Speicher offen lässt. Der Speicher arbeitet mit jedem dieser Punkte. Der Betreiber schließt sie.",
-    "dataStores.conditionServerDatabasesOpen": "Andere Datenbanken des Servers sind erreichbar",
-    "dataStores.conditionSessionsOpen": "Sitzungen des Servers sind sichtbar",
-    "dataStores.conditionsTitle": "Am Server offen",
-    "dataStores.conditionTempFilesUnbounded": "Temporäre Dateien haben keine Grenze",
+      "Schritte am Datenbankserver, die schließen, was er rund um diesen Speicher offen lässt. Der Speicher arbeitet so lange weiter. Öffne einen Schritt, um zu sehen, was auszuführen ist.",
+    "dataStores.conditionServerDatabasesOpen":
+      "Andere Datenbanken des Servers für diesen Speicher sperren",
+    "dataStores.conditionSessionsOpen": "Sitzungen des Servers vor diesem Speicher verbergen",
+    "dataStores.conditionsTitle": "Am Server zu tun",
+    "dataStores.conditionTempFilesUnbounded": "Temporäre Dateien des Speichers begrenzen",
+    "dataStores.publishDescription":
+      "Beim Veröffentlichen entsteht die Datenbank des Speichers, und seine {count} Migrationen werden der Reihe nach angewendet. Eine Migration lässt sich nicht zurücknehmen: Eine spätere Änderung braucht eine neue Migration.",
+    "dataStores.publishDescriptionOne":
+      "Beim Veröffentlichen entsteht die Datenbank des Speichers, und seine Migration wird angewendet. Eine Migration lässt sich nicht zurücknehmen: Eine spätere Änderung braucht eine neue Migration.",
     "dataStores.description":
       "Hier legen Apps und Workflows ihre Einträge ab. Diese Seite zeigt, was jeder Speicher enthält.",
     "dataStores.descriptionLabel": "Beschreibung",

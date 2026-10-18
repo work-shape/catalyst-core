@@ -3,16 +3,14 @@ import {
   AppError,
   moduleOffError,
   operationDenialError,
-  POLICY_VALUES,
-  resolvePolicy,
   unknownToJsonValue,
   type AuditRecorder,
   type Conversation,
   type ConversationSubject,
   type JsonObject,
+  type LocaleCode,
   type OperationAuthorization,
   type OperationDefinition,
-  type PolicyValue,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
 import {
@@ -41,8 +39,8 @@ import type { AssetCall } from "../assets/asset-access";
 import { assetWriteEvent } from "../guardrails/asset-guardrail-events";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { AssetWorkflow } from "../assets/asset-service";
-const PROPOSED_KIND = "agent";
 import { callableByAudience, listingOrigin } from "./platform-operations-audience";
+import { createPlatformAssetPolicy } from "./platform-asset-policy";
 import { readPlatformContext } from "./platform-context";
 import {
   CREATED_FROM_CHAT,
@@ -70,6 +68,8 @@ import type { AssetWorkflowOptions } from "../types";
 // `assets.validate`, `assets.put`, `assets.list`, `workspaces.files.list` and
 // `platform.context.get` has.
 
+const PROPOSED_KIND = "agent";
+
 /** The module whose switch turns changing assets through `assets.put` on and off. */
 const ASSET_WRITE_OPERATION = "assets.put";
 /** The operations a Page's way into an App projects, beside `assets.put` of the App. */
@@ -80,9 +80,6 @@ const APP_FROM_PAGE_OPERATIONS = {
 
 /** How many revisions of an App back a save of a Page looks for one written from that Page. */
 const APP_REVISIONS_LOOKED_BACK = 200;
-
-const stricterOf = (left: PolicyValue | undefined, right: PolicyValue): PolicyValue =>
-  left === undefined || POLICY_VALUES.indexOf(right) > POLICY_VALUES.indexOf(left) ? right : left;
 
 /** How many operations one list answers. The list has no pages, so this is its bound. */
 const CALLABLE_OPERATION_LIST_MAX = 200;
@@ -122,6 +119,7 @@ const namedBy = (input: { kind?: string; name?: string }): ConversationSubject |
 
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
+  const { centralFloor, putFloor } = createPlatformAssetPolicy(options, workflow);
 
   const pageApps = new PageApps(options);
 
@@ -147,35 +145,6 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       );
     }
     return conversation;
-  }
-
-  /**
-   * The strictest value an administrator set on any of `operations` for the asset at
-   * `address`, read as the value that was set: a tool's own mode stands where no setting names
-   * the operation, since the instance default for changes is one an agent's call cannot meet.
-   */
-  async function centralFloor(
-    operations: readonly string[],
-    address: { kind: string; name?: string; workspaceId?: string }
-  ): Promise<PolicyValue | undefined> {
-    const policy = options.operationCalls?.deps.policy;
-    if (!policy) return undefined;
-    const centralSettings = await policy.centralSettings();
-    const targets = await workflow.policyTargets(address);
-    let floor: PolicyValue | undefined;
-    for (const name of operations) {
-      const asked = resolvePolicy({
-        definition: { name, effect: "changing", defaultPolicy: "allow" },
-        origin: { kind: "user" },
-        instanceDefaults: policy.instanceDefaults,
-        centralSettings,
-        targets,
-        callerCanConfirm: true,
-        canPause: true
-      });
-      if (asked.source === "central_setting") floor = stricterOf(floor, asked.value);
-    }
-    return floor;
   }
 
   /** Whether a revision of the App `name` was ever written from the Page `fromPage` names. */
@@ -216,7 +185,10 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     ) {
       throw subjectUnavailable();
     }
-    const app = { name: row.name, title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}) };
+    const app = {
+      name: row.name,
+      title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}, context.locale)
+    };
     const page = await pageApps.named(conversation.id, input.page);
     const origin = await options.configAssets.store.getConfigAssetPageOrigin({
       clientInstanceId: options.clientInstanceId,
@@ -426,11 +398,19 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     };
   }
 
-  /** The name people read for an asset, as a list shows it: its name where none is told. */
-  function titleOf(kind: string, name: string, config: JsonObject): string {
+  /**
+   * The name people read for an asset, as a list shows it, in the language of the one the run
+   * is for: its name where none is told.
+   */
+  function titleOf(
+    kind: string,
+    name: string,
+    config: JsonObject,
+    locale: LocaleCode | undefined
+  ): string {
     const assetKind = options.configAssets.kinds.kinds.find((each) => each.kind === kind);
     try {
-      return assetKind?.summarize(config).title ?? name;
+      return assetKind?.summarize(config, locale).title ?? name;
     } catch {
       return name;
     }
@@ -532,7 +512,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       created: true,
       kind: named.kind,
       name: named.name,
-      title: titleOf(named.kind, named.name, read.config),
+      title: titleOf(named.kind, named.name, read.config, context.locale),
       ...ownerOf(kind, conversation),
       ...(beside ? { besideSubject: true as const } : {})
     };
@@ -558,7 +538,10 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         await requireOwnTranscript(options, conversation);
       }
       const read = await readAsset(context, conversation, named);
-      const opened = { ...read, title: titleOf(read.kind, read.name, read.config) };
+      const opened = {
+        ...read,
+        title: titleOf(read.kind, read.name, read.config, context.locale)
+      };
       if (!moves) return opened;
       // An asset of the instance becomes the subject only by a person's step: the agent's own
       // open is none, since a document or a tool's answer the agent read can ask for it, and
@@ -742,7 +725,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       // `assets.put` of the API asks it: its name places it in a Namespace. A save the call
       // itself refuses asks nothing here.
       const target = await putTarget(conversation, input);
-      return target ? centralFloor([ASSET_WRITE_OPERATION], target) : undefined;
+      return target ? putFloor(target, input.expectedRevision !== undefined) : undefined;
     },
 
     async appSavePolicyFloor(conversationId) {
