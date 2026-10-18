@@ -21,7 +21,7 @@ const CONSTRAINT_EXISTS = `
       ) or exists (
         select 1 from pg_catalog.pg_index i
         join pg_catalog.pg_class x on x.oid = i.indexrelid
-        where i.indrelid = t.oid and x.relname = $2
+        where i.indrelid = t.oid and i.indisunique and x.relname = $2
       )) end
   ) as present
 `;

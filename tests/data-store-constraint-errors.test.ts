@@ -22,12 +22,17 @@ const cases: { kind: string; code: string; name: string | undefined; row: JsonOb
   { kind: "raised-check", code: "23514", name: undefined, row: { adresse: MARKER } },
   { kind: "raised-unique", code: "23505", name: undefined, row: { adresse: MARKER } },
   { kind: "ddl-index", code: "23505", name: undefined, row: { adresse: MARKER } },
+  { kind: "ddl-index-other-table", code: "23505", name: undefined, row: { adresse: MARKER } },
   { kind: "ddl-table", code: "23514", name: undefined, row: { adresse: MARKER } },
   { kind: "ddl-column", code: "23502", name: undefined, row: { adresse: MARKER } }
 ];
 
 const ddlTriggers: Readonly<Record<string, string>> = {
   "ddl-index": `execute format('create unique index %I on public.scratch(id)', NEW.adresse);
+    insert into public.scratch values (1);`,
+  // After rollback the index name exists on other, not on the table that failed.
+  "ddl-index-other-table": `drop index public.other_index;
+    create unique index other_index on public.scratch(id);
     insert into public.scratch values (1);`,
   // The constraint already exists on objekt: its name alone is insufficient.
   "ddl-table": `execute format('create table public.%I (id integer constraint bounded_price check (id > 0))', NEW.adresse);
@@ -71,6 +76,11 @@ describe("constraint diagnostics through a Data Store operation", () => {
               insert into objekt values (1, 'held', 2000, 1, '[1,2)');
               create table scratch (id integer);
               insert into scratch values (1);
+              ${
+                kind === "ddl-index-other-table"
+                  ? "create table other (id integer); create unique index other_index on other(id);"
+                  : ""
+              }
               ${
                 raised
                   ? `create function refuse_row() returns trigger language plpgsql as $$
