@@ -119,6 +119,7 @@ export const dataStoresModule = defineModule({
  */
 export const knowledgeModule = defineModule({
   name: "knowledge",
+  tools: ["knowledge.add_files"],
   jobKinds: Object.values(KNOWLEDGE_JOB_KINDS),
   requires: ["dataStores"],
   kinds: [KNOWLEDGE_BASE_ASSET_KIND],
@@ -128,6 +129,7 @@ export const knowledgeModule = defineModule({
     "knowledge_bases.source_items",
     "knowledge_bases.locate",
     "knowledge_bases.get",
+    "knowledge_bases.open_document",
     "knowledge_bases.check",
     "knowledge_bases.query",
     "knowledge_bases.add_files",

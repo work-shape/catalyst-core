@@ -98,6 +98,8 @@ export interface KnowledgeChoice {
   name: string;
   title: string;
   description?: string;
+  /** A Knowledge Base that has no published revision yet, and so does not answer. */
+  unpublished?: true;
 }
 
 /**
@@ -164,9 +166,10 @@ export interface KnowledgeBaseSource {
   ): KnowledgeRead<PagedItems<KnowledgeChoice>>;
   /**
    * A hook: the documents of a published Knowledge Base that keeps documents. While one of them
-   * is still being indexed, they are read again every few seconds.
+   * is still being indexed, they are read again every few seconds. It reads nothing while
+   * `enabled` is false, as while the Knowledge Base's store is still being made.
    */
-  useDocuments(knowledgeBase: string): KnowledgeRead<KnowledgeDocumentPages>;
+  useDocuments(knowledgeBase: string, enabled?: boolean): KnowledgeRead<KnowledgeDocumentPages>;
   /** Indexes failed documents again: each goes back to being indexed. */
   retry(knowledgeBase: string, documentIds: readonly string[]): Promise<KnowledgeCall<unknown>>;
   /**
@@ -263,12 +266,15 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
           client,
           key("choice", "knowledge_base", owner ?? "", search),
           { kind: "knowledge_base", owner, search, limit: KNOWLEDGE_BASE_CHOICE_PAGE_SIZE },
-          toKnowledgeChoice,
+          (asset) => ({
+            ...toKnowledgeChoice(asset),
+            ...(asset.publishedRevision === undefined ? { unpublished: true as const } : {})
+          }),
           enabled
         )
       ),
-    useDocuments: (knowledgeBase) =>
-      useDocuments(client, knowledgeBase, key("documents", knowledgeBase)),
+    useDocuments: (knowledgeBase, enabled = true) =>
+      useDocuments(client, knowledgeBase, key("documents", knowledgeBase), enabled),
     retry: (knowledgeBase, documentIds) =>
       called(async () => {
         const outcome = await client.knowledge_bases.retry_documents({
@@ -334,10 +340,12 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
 function useDocuments(
   client: ApiClient,
   knowledgeBase: string,
-  queryKey: (string | number)[]
+  queryKey: (string | number)[],
+  enabled: boolean
 ): KnowledgeRead<KnowledgeDocumentPages> {
   const query = useInfiniteQuery({
     queryKey,
+    enabled,
     queryFn: ({ pageParam, signal }) =>
       client.knowledge_bases.list_documents({
         params: { knowledgeBase },

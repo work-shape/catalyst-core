@@ -90,6 +90,9 @@ export const knowledge = defineTranslations({
     "knowledge.signalKeyword": "words",
     "knowledge.signalTitle": "titles and file names",
     "knowledge.searchPage": "page {page}",
+    "knowledge.citationPage": "p. {page}",
+    "knowledge.citationRemoved": "{name}: source no longer available",
+    "knowledge.citationFailed": "{name}: could not be opened, try again",
     "knowledge.searchNone": "No passage matches. Try other words.",
     "knowledge.searchFailed": "The search failed.",
     "knowledge.searchRefused": "You may not search this knowledge base.",
@@ -98,11 +101,15 @@ export const knowledge = defineTranslations({
       "The knowledge bases this agent answers from. It gets one tool that reads all of them and says in its answer which one it used.",
     "knowledge.agentNone": "No knowledge base chosen.",
     "knowledge.agentChoose": "Choose knowledge bases",
-    "knowledge.agentNote": "Only a published knowledge base answers.",
+    "knowledge.agentNoteWorkspace":
+      "Lists the knowledge bases of this agent's workspace and of the instance. One of another workspace is not offered here.",
+    "knowledge.agentNoteInstance":
+      "Lists the instance's knowledge bases. One that a workspace owns is not offered here.",
+    "knowledge.agentUnpublished": "Not published yet: it answers once it is published",
     "knowledge.holdsLabel": "What it answers from",
     "knowledge.holdsDocuments": "Documents",
     "knowledge.holdsDocumentsDescription":
-      "Files you add: PDF, DOCX, TXT or Markdown. Agents search them for words.",
+      "Files you add: {formats}. Agents search them for words.",
     "knowledge.holdsTables": "Tables of a data store",
     "knowledge.holdsTablesDescription": "Agents read the rows of the tables you describe with SQL.",
     "knowledge.sourceDocumentsDescription":
@@ -119,6 +126,8 @@ export const knowledge = defineTranslations({
     "knowledge.documentsEmptyReadOnly":
       "No documents yet. Somebody who may change this knowledge base adds them.",
     "knowledge.documentsFailed": "The documents could not be loaded.",
+    "knowledge.documentsPreparing":
+      "Its store is being made. The documents show here by themselves once it is ready.",
     "knowledge.documentsRefused": "You may not see the documents of this knowledge base.",
     "knowledge.documentsMore": "Show more",
     "knowledge.documentPending": "Being indexed",
@@ -297,6 +306,9 @@ export const knowledge = defineTranslations({
     "knowledge.signalKeyword": "Wörtern",
     "knowledge.signalTitle": "Titeln und Dateinamen",
     "knowledge.searchPage": "Seite {page}",
+    "knowledge.citationPage": "S. {page}",
+    "knowledge.citationRemoved": "{name}: Quelle nicht mehr verfügbar",
+    "knowledge.citationFailed": "{name}: konnte nicht geöffnet werden, versuch es noch einmal",
     "knowledge.searchNone": "Keine Textstelle passt. Versuch es mit anderen Wörtern.",
     "knowledge.searchFailed": "Die Suche ist fehlgeschlagen.",
     "knowledge.searchRefused": "Du darfst diese Wissensbasis nicht durchsuchen.",
@@ -305,11 +317,16 @@ export const knowledge = defineTranslations({
       "Die Wissensbasen, aus denen dieser Agent antwortet. Er bekommt ein Werkzeug, das alle liest, und sagt in seiner Antwort, welche er genutzt hat.",
     "knowledge.agentNone": "Keine Wissensbasis gewählt.",
     "knowledge.agentChoose": "Wissensbasen wählen",
-    "knowledge.agentNote": "Nur eine veröffentlichte Wissensbasis antwortet.",
+    "knowledge.agentNoteWorkspace":
+      "Hier stehen die Wissensbasen aus dem Arbeitsbereich dieses Agenten und die der Instanz. Eine aus einem anderen Arbeitsbereich steht hier nicht zur Wahl.",
+    "knowledge.agentNoteInstance":
+      "Hier stehen die Wissensbasen der Instanz. Eine, die einem Arbeitsbereich gehört, steht hier nicht zur Wahl.",
+    "knowledge.agentUnpublished":
+      "Noch nicht veröffentlicht: Sie antwortet, sobald sie veröffentlicht ist",
     "knowledge.holdsLabel": "Woraus sie antwortet",
     "knowledge.holdsDocuments": "Dokumente",
     "knowledge.holdsDocumentsDescription":
-      "Dateien, die du hinzufügst: PDF, DOCX, TXT oder Markdown. Agenten durchsuchen sie nach Wörtern.",
+      "Dateien, die du hinzufügst: {formats}. Agenten durchsuchen sie nach Wörtern.",
     "knowledge.holdsTables": "Tabellen eines Datenspeichers",
     "knowledge.holdsTablesDescription":
       "Agenten lesen die Zeilen der Tabellen, die du beschreibst, mit SQL.",
@@ -327,6 +344,8 @@ export const knowledge = defineTranslations({
     "knowledge.documentsEmptyReadOnly":
       "Noch keine Dokumente. Jemand, der diese Wissensbasis ändern darf, fügt sie hinzu.",
     "knowledge.documentsFailed": "Die Dokumente konnten nicht geladen werden.",
+    "knowledge.documentsPreparing":
+      "Ihr Speicher wird angelegt. Die Dokumente erscheinen hier von selbst, sobald er bereit ist.",
     "knowledge.documentsRefused": "Du darfst die Dokumente dieser Wissensbasis nicht sehen.",
     "knowledge.documentsMore": "Mehr zeigen",
     "knowledge.documentPending": "Wird indexiert",

@@ -1,3 +1,4 @@
+import { messageSchema } from "@work-shape/catalyst-api-contract";
 import {
   createRecordingGovernance,
   withoutStreaming,
@@ -19,6 +20,7 @@ import {
   type ChatMessage,
   type JsonObject,
   type ModelProviderConfig,
+  readAssistantFinalMetadata,
   readAssistantModelContextSnapshot,
   readAssistantProviderContinuation,
   readToolResultMetadata,
@@ -54,6 +56,131 @@ import {
 } from "../packages/agent-runtime/src/model-context-projection";
 
 describe("local agent runtime", () => {
+  it("E6 persists only cited Knowledge Base source identities on the assistant answer", async () => {
+    const clientInstanceId = asClientInstanceId("knowledge-citation-runtime");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "knowledge-citations",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = (await createTestInstance()).stores;
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const provider: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    let step = 0;
+    const source = {
+      ref: "K1",
+      knowledgeBase: "handbook",
+      documentId: "doc",
+      fileId: "file",
+      fileName: "handbook.pdf",
+      page: 4,
+      originLink: "https://example.test/original"
+    };
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              name: "reader",
+              displayName: "Reader",
+              instructions: "Search and cite.",
+              modelProviderId: provider.id,
+              toolNames: [],
+              skillNames: [],
+              initialPrompts: [],
+              knowledgeBases: ["handbook"]
+            }
+          ]
+        }),
+        modelProviders: [provider],
+        defaultModelProvider: provider,
+        conversationHistory: store.conversations,
+        modelProvider: {
+          id: provider.id,
+          async complete() {
+            step += 1;
+            return step === 1
+              ? {
+                  text: "",
+                  toolCalls: [
+                    {
+                      toolCallId: "search",
+                      toolName: "knowledge.search",
+                      input: { query: "vacation" }
+                    }
+                  ],
+                  usage: noReportedUsage()
+                }
+              : { text: "28 days [K1].", toolCalls: [], usage: noReportedUsage() };
+          }
+        },
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        dataTools: {
+          describe: async () => [
+            {
+              name: "knowledge.handbook.search",
+              effect: "reading",
+              description: "Handbook",
+              inputJsonSchema: {}
+            },
+            {
+              name: "knowledge.search",
+              effect: "reading",
+              description: "Search handbook",
+              inputJsonSchema: {}
+            }
+          ]
+        },
+        runTool: async () => ({
+          status: "success",
+          output: {
+            passages: [
+              { ...source, text: "private passage text", score: 1 },
+              { ...source, ref: "K2", text: "uncited passage", score: 0.5 }
+            ]
+          }
+        }),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
+      })
+    );
+    const run = await runtime.start(
+      { agentName: "reader", conversationId, message: { text: "How much vacation?" } },
+      context
+    );
+    for await (const _event of runtime.observe(run.runId, context)) {
+      /* drain */
+    }
+    const messages = await store.conversations.listMessages({ clientInstanceId, conversationId });
+    const answer = messages.findLast((message) => message.role === "assistant");
+    const metadata = readAssistantFinalMetadata(answer?.metadata);
+    expect(metadata?.knowledgeSources).toEqual([source]);
+    // The API client parses this schema before the renderer sees the answer. Unknown final
+    // metadata fields are stripped, so a metadata-only test would miss the broken render path.
+    const received = messageSchema.parse(answer);
+    expect(readAssistantFinalMetadata(received.metadata)?.knowledgeSources).toEqual([source]);
+    expect(JSON.stringify(metadata)).not.toContain("private passage text");
+    expect(JSON.stringify(metadata)).not.toContain("uncited passage");
+  });
+
   it("reclaims stale pending run-start idempotency commands", async () => {
     const store = (await createTestInstance()).stores;
     const clientInstanceId = asClientInstanceId("run-start-reclaim-client");

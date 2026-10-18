@@ -1,3 +1,4 @@
+import { knowledgeDocumentRoutes } from "./knowledge-document-routes";
 import { z } from "zod";
 import type { AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
@@ -301,7 +302,13 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
         runtime.modelGateway.embed(call)
       );
       return {
-        routes: [knowledgeRoutes],
+        routes: [
+          knowledgeRoutes,
+          knowledgeDocumentRoutes({
+            knowledgeBases,
+            files: runtime.files
+          })
+        ],
         dataToolSources: [knowledgeBases.toolSource],
         jobHandlers: [
           ...fileJobs.handlers,

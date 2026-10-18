@@ -640,6 +640,7 @@ describe("the modules workflows and dataStores", () => {
     expect(knowledgeModule).toEqual({
       ...nothing,
       name: "knowledge",
+      tools: ["knowledge.add_files"],
       jobKinds: Object.values(KNOWLEDGE_JOB_KINDS),
       requires: ["dataStores"],
       kinds: [KNOWLEDGE_BASE_ASSET_KIND],
@@ -649,6 +650,7 @@ describe("the modules workflows and dataStores", () => {
         "knowledge_bases.source_items",
         "knowledge_bases.locate",
         "knowledge_bases.get",
+        "knowledge_bases.open_document",
         "knowledge_bases.check",
         "knowledge_bases.query",
         "knowledge_bases.add_files",

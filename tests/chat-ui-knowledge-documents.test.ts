@@ -96,7 +96,8 @@ function plantedSource(overrides: Partial<KnowledgeBaseSource> = {}) {
     data: { count: 1 }
   }));
   const source: KnowledgeBaseSource = {
-    useState: () => ({ status: "loading" }),
+    useState: () =>
+      ready({ id: "asset_objektunterlagen", name: "objektunterlagen", status: "ok", tables: [] }),
     check: unused,
     query: unused,
     search: unused,
@@ -743,6 +744,131 @@ describe("processing that waits for a worker", () => {
     // The Status section of a Knowledge Base of tables polls as before.
     expect(knowledgeStateStillChanging(state({ status: "needs_attention" }), false)).toBe(false);
     expect(knowledgeStateStillChanging(state(), false)).toBe(false);
+  });
+});
+
+describe("a Knowledge Base whose store is still being made (ACCEPT-FIX-8, E7)", () => {
+  // Right after a publish the store has no documents table yet, and listing the documents
+  // failed with the instance's raw SQL error. The section now waits for the state to say the
+  // store is ready, says so meanwhile, and reads the documents by itself once it is.
+  const sqlError =
+    "Listing the documents names a table or view that does not exist (SQLSTATE 42P01)";
+  const stateOf = (status: KnowledgeBaseState["status"]): KnowledgeBaseState => ({
+    id: "asset_richtlinien",
+    name: "richtlinien",
+    status,
+    tables: []
+  });
+  const sectionOf = (
+    status: KnowledgeBaseState["status"],
+    useDocuments: KnowledgeBaseSource["useDocuments"]
+  ) =>
+    createElement(KnowledgeDocuments, {
+      source: plantedSource({ useState: () => ready(stateOf(status)), useDocuments }),
+      knowledgeBase: "richtlinien",
+      publishedRevision: 1,
+      canWrite: true
+    });
+  const preparingNotice = () => document.querySelector("[data-knowledge-documents-preparing]");
+
+  it("reads no documents while its store is made and says so, in English and German", () => {
+    const useDocuments = vi.fn<KnowledgeBaseSource["useDocuments"]>(() => ({
+      status: "failed",
+      message: sqlError,
+      retry: () => undefined
+    }));
+    show(sectionOf("preparing", useDocuments));
+    expect(useDocuments).toHaveBeenLastCalledWith("richtlinien", false);
+    expect(preparingNotice()?.textContent).toBe(
+      "Its store is being made. The documents show here by themselves once it is ready."
+    );
+    expect(document.body.textContent).not.toContain("SQLSTATE");
+    expect(button("Try again")).toBeUndefined();
+
+    show(sectionOf("preparing", useDocuments), "de");
+    expect(preparingNotice()?.textContent).toBe(
+      "Ihr Speicher wird angelegt. Die Dokumente erscheinen hier von selbst, sobald er bereit ist."
+    );
+    expect(document.body.textContent).not.toContain("SQLSTATE");
+  });
+
+  it("reads no documents before the state answered, so a page opened right after a publish shows no error", () => {
+    const useDocuments = vi.fn<KnowledgeBaseSource["useDocuments"]>(() => ({
+      status: "failed",
+      message: sqlError,
+      retry: () => undefined
+    }));
+    show(
+      createElement(KnowledgeDocuments, {
+        source: plantedSource({ useState: () => ({ status: "loading" }), useDocuments }),
+        knowledgeBase: "richtlinien",
+        publishedRevision: 1,
+        canWrite: true
+      })
+    );
+    expect(useDocuments).toHaveBeenLastCalledWith("richtlinien", false);
+    expect(document.body.textContent).not.toContain("SQLSTATE");
+    expect(button("Try again")).toBeUndefined();
+  });
+
+  it("goes from loading to being made to listed without a reload, reading documents only once ready", () => {
+    let current: KnowledgeRead<KnowledgeBaseState> = { status: "loading" };
+    const useDocuments = vi.fn<KnowledgeBaseSource["useDocuments"]>((_name, enabled) =>
+      enabled === true
+        ? ready({ documents })
+        : { status: "failed", message: sqlError, retry: () => undefined }
+    );
+    const section = () =>
+      createElement(KnowledgeDocuments, {
+        source: plantedSource({ useState: () => current, useDocuments }),
+        knowledgeBase: "richtlinien",
+        publishedRevision: 1,
+        canWrite: true
+      });
+    // Opened right after the publish: the state has not answered yet.
+    show(section());
+    expect(useDocuments).toHaveBeenLastCalledWith("richtlinien", false);
+    expect(document.querySelector("[data-knowledge-document]")).toBeNull();
+    expect(document.body.textContent).not.toContain("SQLSTATE");
+    // Its store is being made, or the check that would say so has not found it yet.
+    for (const status of ["preparing", "unchecked"] as const) {
+      current = ready(stateOf(status));
+      show(section());
+      expect(useDocuments).toHaveBeenLastCalledWith("richtlinien", false);
+      expect(preparingNotice()).not.toBeNull();
+      expect(document.body.textContent).not.toContain("SQLSTATE");
+    }
+    // It stands: the documents are read and listed.
+    current = ready(stateOf("ok"));
+    show(section());
+    expect(useDocuments).toHaveBeenLastCalledWith("richtlinien", true);
+    expect(preparingNotice()).toBeNull();
+    expect(row("vertrag").getAttribute("data-knowledge-document-state")).toBe("indexed");
+  });
+
+  it("reads no documents where the state could not be read, and offers to try again without the instance's words", () => {
+    const retry = vi.fn();
+    const useDocuments = vi.fn<KnowledgeBaseSource["useDocuments"]>(() => ({
+      status: "failed",
+      message: sqlError,
+      retry: () => undefined
+    }));
+    show(
+      createElement(KnowledgeDocuments, {
+        source: plantedSource({
+          useState: () => ({ status: "failed", message: sqlError, retry }),
+          useDocuments
+        }),
+        knowledgeBase: "richtlinien",
+        publishedRevision: 1,
+        canWrite: true
+      })
+    );
+    expect(useDocuments).toHaveBeenLastCalledWith("richtlinien", false);
+    expect(document.body.textContent).not.toContain("SQLSTATE");
+    expect(document.body.textContent).toContain("The documents could not be loaded.");
+    act(() => button("Try again")?.click());
+    expect(retry).toHaveBeenCalled();
   });
 });
 

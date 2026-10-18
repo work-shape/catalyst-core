@@ -342,6 +342,9 @@ export function useDataStoreInstance(): {
         tools: [],
         capabilities: [
           ...(agent?.capability ? [agent.capability] : []),
+          ...(typeof knowledge === "object" && knowledge.attachments
+            ? [knowledge.attachments]
+            : []),
           ...(typeof knowledge === "object" && knowledge.documents
             ? [documentsModuleCapability]
             : [])

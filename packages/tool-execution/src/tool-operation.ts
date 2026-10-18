@@ -49,6 +49,11 @@ import type { ToolRegistry } from "./tool-registry";
 import { failed } from "./tool-results";
 import { APP_PUBLISH_TOOL_NAME } from "./app-publish-tool";
 import { WORKFLOW_TEST_TOOL_NAMES } from "./workflow-test-tools";
+import {
+  KNOWLEDGE_ADD_FILES_TOOL_NAME,
+  runKnowledgeAddFiles,
+  isKnowledgeAddFilesOperation
+} from "./knowledge-add-files-tool";
 
 /**
  * After how long a tool call that is still `running` counts as interrupted. No tool runs
@@ -193,7 +198,8 @@ export function registerToolOperations(
     if (
       WORKFLOW_TEST_TOOL_NAMES.includes(tool.name) ||
       tool.name === RUN_AGENT_TOOL_NAME ||
-      tool.name === APP_PUBLISH_TOOL_NAME
+      tool.name === APP_PUBLISH_TOOL_NAME ||
+      tool.name === KNOWLEDGE_ADD_FILES_TOOL_NAME
     )
       continue;
     registry.register(toolOperation(tool, options));
@@ -469,6 +475,11 @@ export function createToolOperationRunner(
     if (toolRequest.toolName === KNOWLEDGE_SEARCH_TOOL_NAME) {
       return runKnowledgeSearch(toolRequest, context, options, deps, runner, takeKnowledgeRefs);
     }
+    if (toolRequest.toolName === KNOWLEDGE_ADD_FILES_TOOL_NAME) {
+      const listed =
+        (await deps.agentToolNames?.(toolRequest.agentName, toolRequest.conversationId)) ?? [];
+      return runKnowledgeAddFiles(toolRequest, context, options, listed, runner);
+    }
     const projected:
       | { request: ToolExecutionRequest; idempotencyKey?: string }
       | { refusal: ToolHandlerFailureResult } =
@@ -650,7 +661,12 @@ async function calledTool(
   }
   // The operation of a Knowledge Base the agent lists, as its knowledge tool projected it.
   if (toolName.startsWith(KNOWLEDGE_OPERATION_PREFIX)) {
-    return { tool: { name: toolName, effect: "reading" } };
+    return {
+      tool: {
+        name: toolName,
+        effect: isKnowledgeAddFilesOperation(toolName) ? "changing" : "reading"
+      }
+    };
   }
   // The start of a subagent, as `run_agent` projected it.
   if (toolName === AGENTS_RUN_OPERATION) {

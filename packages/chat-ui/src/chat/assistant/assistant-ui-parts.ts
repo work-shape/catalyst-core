@@ -24,6 +24,7 @@ import {
 import { readWorkspaceToolErrorText } from "../tools/workspace-tool-display";
 import {
   readCompatibleAssistantFinalRunId,
+  readCompatibleAssistantKnowledgeSources,
   readCompatibleAssistantToolCalls,
   readCompatibleAssistantWebSourceMetadata,
   readCompatibleUserAttachmentRefs,
@@ -296,6 +297,7 @@ export function toUiMessageParts(
       options.includeSyntheticWebSearchTool !== false &&
       !toolCalls.some((toolCall) => toolCall.toolName === "web_search")
   });
+  appendAssistantKnowledgeSourceParts(parts, message);
   const finalRunId = readCompatibleAssistantFinalRunId(message);
   appendWorkspacePromotedSurfacesPart(
     parts,
@@ -377,6 +379,53 @@ export function appendAssistantWebSourceParts(
         )
       }
     } as UIMessage["parts"][number]);
+  }
+}
+
+/** A ref to a Knowledge Base passage as the agent cites it in its answer: `[K1]`. */
+const KNOWLEDGE_CITATION = /\s?\[(K[1-9][0-9]*)\]/gu;
+
+/**
+ * The Knowledge Base passages an answer cites, as source chips beside its web sources: the
+ * cited `[K1]` leaves the text, and each cited file and page is one chip. A ref the run did not
+ * record stays as written, and a passage the answer does not cite is not shown.
+ */
+export function appendAssistantKnowledgeSourceParts(
+  parts: UIMessage["parts"],
+  message: Message
+): void {
+  const sources = readCompatibleAssistantKnowledgeSources(message);
+  if (sources.length === 0) {
+    return;
+  }
+  const byRef = new Map(sources.map((source) => [source.ref, source]));
+  const cited = new Map<string, (typeof sources)[number]>();
+  parts.forEach((part, index) => {
+    if (part.type !== "text") return;
+    parts[index] = {
+      ...part,
+      text: part.text.replace(KNOWLEDGE_CITATION, (marker, ref: string) => {
+        const source = byRef.get(ref);
+        if (!source) return marker;
+        const key = `${source.knowledgeBase}/${source.documentId}/${source.page ?? ""}`;
+        if (!cited.has(key)) cited.set(key, source);
+        return "";
+      })
+    };
+  });
+  for (const source of cited.values()) {
+    parts.push({
+      type: "source-document",
+      sourceId: `knowledge:${source.ref}`,
+      mediaType: "application/octet-stream",
+      title: source.fileName,
+      filename: source.fileName,
+      providerMetadata: {
+        vivdCatalyst: {
+          knowledge: { ...source }
+        }
+      }
+    });
   }
 }
 

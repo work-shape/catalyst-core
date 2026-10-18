@@ -6,6 +6,7 @@ import {
   readAssistantToolCallsMetadata,
   readToolResultMetadata,
   readUserMessageMetadata,
+  type KnowledgeCitationSource,
   type MessageCitation,
   type WebSource
 } from "@work-shape/catalyst-core";
@@ -96,6 +97,17 @@ export function readCompatibleAssistantWebSourceMetadata(
     return { sources: [], citations: [] };
   }
   return readAssistantWebSourceMetadata(message.metadata);
+}
+
+/** The Knowledge Base passages an answer was given, by their refs, as its run recorded them. */
+export function readCompatibleAssistantKnowledgeSources(
+  message: Pick<Message, "metadata" | "role">
+): KnowledgeCitationSource[] {
+  if (message.role !== "assistant") {
+    return [];
+  }
+  const runtime = readAgentRuntimeMessageMetadata(message.metadata);
+  return runtime?.kind === "assistant_final" ? (runtime.knowledgeSources ?? []) : [];
 }
 
 export function readCompatiblePersistedToolResult(

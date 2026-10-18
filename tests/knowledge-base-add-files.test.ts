@@ -8,8 +8,11 @@ import {
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
   KNOWLEDGE_FILE_MAX_BYTES,
+  asAgentRunId,
+  asToolCallId,
   asConversationId,
   asManagedFileId,
+  type AuthenticatedUser,
   type DataStoreRecord,
   type JsonObject
 } from "@work-shape/catalyst-core";
@@ -202,6 +205,152 @@ describe("adding files to a Knowledge Base", () => {
   /** The objects the store of files holds under the Knowledge Base's prefix. */
   const storedCopies = async (world: DataStoreInstance) =>
     readdir(join(world.filesRoot, "knowledge-bases", await assetId(world))).catch(() => []);
+
+  it("E8 lets a platform agent copy a chat attachment through the existing add_files operation", async () => {
+    const attachments = createManagedObjectTestAttachmentCapability();
+    const instance = await start(true, "allow", developmentAuth, undefined, {
+      attachments: attachments.capability
+    });
+    const record = await published(instance);
+    const source = await conversationWithFile(instance, {
+      filename: FILE_NAME,
+      contentType: "text/plain",
+      content: FILE_TEXT
+    });
+    const saved = await instance.api.call("assets.put", {
+      params: { kind: "agent", name: "kb-builder" },
+      payload: {
+        expectedRevision: null,
+        config: {
+          name: "kb-builder",
+          displayName: "KB builder",
+          instructions: "Add attachments when asked.",
+          modelProviderId: "local",
+          toolNames: ["platform.assets.get"],
+          skillNames: [],
+          initialPrompts: []
+        }
+      }
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const conversation = required(
+      await instance.stores.conversations.getConversation(
+        clientInstanceId,
+        asConversationId(source.conversationId)
+      )
+    );
+    const user: AuthenticatedUser = {
+      id: conversation.createdByUserId,
+      externalUserId: conversation.createdByExternalUserId,
+      displayLabel: "Writer",
+      clientInstanceId,
+      authSource: "development",
+      roles: ["user", "admin", "superadmin"],
+      permissionRefs: []
+    };
+    const runtime = instance.execution.localAgentRuntimeOptions;
+    const ask = (input: JsonObject, agentName = "kb-builder") =>
+      runtime.runTool(
+        {
+          toolName: "knowledge.add_files",
+          toolCallId: asToolCallId("add-call"),
+          agentRunId: asAgentRunId("add-run"),
+          conversationId: asConversationId(source.conversationId),
+          agentName,
+          input
+        },
+        { clientInstanceId, user, correlationId: "e8" }
+      );
+    const input = { knowledgeBase: KB, files: [source] };
+    const added = await ask(input);
+    expect(added, JSON.stringify(added)).toMatchObject({ status: "success", output: { count: 1 } });
+    const rows = await documentRows(record);
+    expect(rows).toMatchObject([{ file_name: FILE_NAME, title: "Mietvertrag Erika Mustermann" }]);
+    expect(rows[0]?.managed_file_id).not.toBe(source.fileId);
+    expect(await ask(input, "agent-without-tools")).toMatchObject({
+      status: "failed",
+      error: { code: "not_allowed" }
+    });
+    expect(await ask({ knowledgeBase: "bad.target", files: [source] })).toMatchObject({
+      status: "failed",
+      error: { code: "validation_failed" }
+    });
+    const run = required(
+      (await instance.stores.operationRuns.list({ clientInstanceId })).find(
+        (run) => run.operation === `knowledge.${KB}.add_files`
+      )
+    );
+    expect(run).toMatchObject({ effect: "changing", status: "done" });
+  });
+
+  it("E6 opens a cited original only for a Knowledge Base user and refuses removed or mismatched documents", async () => {
+    const { instance } = await instanceWithFiles();
+    const source = await conversationWithFile(instance, {
+      filename: FILE_NAME,
+      contentType: "text/plain",
+      content: FILE_TEXT
+    });
+    const added = await addFiles(instance, [source]);
+    const documentId = required(addedSchema.parse(added.json()).documents[0]).id;
+    await eventually(async () => {
+      await getTestJobs(instance.api).runDue();
+      const opened = await instance.api.call("knowledge_bases.open_document", {
+        params: { knowledgeBase: KB, documentId }
+      });
+      expect(opened.statusCode, opened.body).toBe(200);
+      expect(opened.body).toBe(FILE_TEXT);
+      expect(opened.headers["content-disposition"]).toMatch(/^inline;/);
+      expect(opened.headers["x-content-type-options"]).toBe("nosniff");
+      expect(opened.headers["content-type"]).toBe("text/plain; charset=utf-8");
+      expect(opened.headers["cache-control"]).toBe("private, no-store");
+    });
+    const denied = await instance.api.call("knowledge_bases.open_document", {
+      params: { knowledgeBase: KB, documentId },
+      headers: asMember
+    });
+    expect(denied.statusCode).toBe(403);
+    const memberRead = await instance.api.call("conversations.create", {
+      payload: { title: "Source reader" },
+      headers: asMember
+    });
+    expect(memberRead.statusCode).toBe(200);
+    const memberConversationId = z.object({ id: z.string() }).parse(memberRead.json()).id;
+    const memberConversation = required(
+      await instance.stores.conversations.getConversation(
+        clientInstanceId,
+        asConversationId(memberConversationId)
+      )
+    );
+    const granted = await instance.api.call("permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: memberConversation.createdByUserId,
+        action: KNOWLEDGE_BASE_ACTIONS.use,
+        scopeKind: "asset",
+        scopeId: await assetId(instance)
+      }
+    });
+    expect(granted.statusCode, granted.body).toBe(200);
+    const permitted = await instance.api.call("knowledge_bases.open_document", {
+      params: { knowledgeBase: KB, documentId },
+      headers: asMember
+    });
+    expect(permitted.statusCode, permitted.body).toBe(200);
+    expect(permitted.body).toBe(FILE_TEXT);
+    const wrong = await instance.api.call("knowledge_bases.open_document", {
+      params: { knowledgeBase: "another-base", documentId }
+    });
+    expect(wrong.statusCode).toBe(404);
+    const removed = await instance.api.call("knowledge_bases.remove_documents", {
+      params: { knowledgeBase: KB },
+      payload: { documentIds: [documentId] }
+    });
+    expect(removed.statusCode, removed.body).toBe(200);
+    const gone = await instance.api.call("knowledge_bases.open_document", {
+      params: { knowledgeBase: KB, documentId }
+    });
+    expect(gone.statusCode).toBe(404);
+  });
 
   it("copies a file the writer can open into one the Knowledge Base owns, which the Conversation's cleanup and the orphan sweep leave alone", async () => {
     const { instance, attachments, record } = await instanceWithFiles();

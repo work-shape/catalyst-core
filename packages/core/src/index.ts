@@ -214,3 +214,5 @@ export * from "./data-store-record-withdrawal";
 export * from "./operation-execution-stop";
 
 export { personalWorkspaceOwnerName } from "./personal-workspace-name";
+
+export * from "./knowledge-citations";
