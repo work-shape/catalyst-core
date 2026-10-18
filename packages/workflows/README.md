@@ -20,6 +20,20 @@ nonempty page continues after the loop, and an empty page proceeds to the follow
 steps. Map that input into the source operation's cursor parameter. A completed
 page starts a fresh source read; an unfinished page retains its remaining rows.
 
+Until resume positions and finished-step outputs are carried between histories, publishing
+and draft test runs refuse these shapes, naming the step and rule in English and German:
+
+- A write, send, notify, child Workflow start, or loop containing one before a
+  `continueAsNew` loop at the same or any enclosing level. Reads, triggers and code
+  steps may precede it; those steps run again in every history.
+- A loop after a `continueAsNew` loop at the same or any enclosing level.
+- A `limits.stepRuns` budget smaller than the steps before the loop, the loop containers,
+  one item and the tail together. The refusal states the minimum count and the limit.
+
+A `continueAsNew` loop can be the last loop, with non-loop steps after it. These are
+publish-time restrictions pending EW-CAN-RESUME, which will resume at step boundaries
+without repeating finished work.
+
 Each history starts its trigger and fixed steps on the revision published at that
 moment. The checkpointed loop resumes its remaining immutable dataset view or inline
 items. Checkpoints are internal values, never included in list/read responses. A

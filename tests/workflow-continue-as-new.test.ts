@@ -75,6 +75,25 @@ async function finishChain(t: WorkflowFixture) {
   throw new Error(`The continuation chain did not end: ${JSON.stringify(await runs(t))}`);
 }
 
+async function readyPublished(manifest: unknown) {
+  const t = await readyWorkflows(
+    (fixture) => {
+      open = fixture;
+    },
+    { definitions: "assets", datasetObjects: new MemoryObjectStorage() }
+  );
+  const params = { kind: "workflow", name: "notify-clients" };
+  const draft = await t.expectOk(t.admin.id, "assets.put", {
+    params,
+    payload: { config: { name: "notify-clients", manifest }, expectedRevision: null }
+  });
+  await t.expectOk(t.root.id, "assets.publish", {
+    params,
+    payload: { revision: draft.json().revision }
+  });
+  return t;
+}
+
 // Three item writes need six steps before the output, or eighteen when nested.
 // Reserve the output even on a page whose last item cannot be known in advance.
 it.each([
@@ -125,7 +144,7 @@ it.each([
             }
           : step
       );
-    const { t } = await ready({ ...manifest, limits: { stepRuns: budget } });
+    const t = await readyPublished({ ...manifest, limits: { stepRuns: budget } });
     const started = await t.expectOk(t.root.id, "workflows.start", {
       params: { workflow: "notify-clients" },
       payload: { input: { note: "Tail edge" }, key: "tail-edge" }
@@ -192,7 +211,7 @@ it("reserves the inner tail, the rest of the outer item and the outer tail", asy
         }
       : step
   );
-  const { t } = await ready({ ...manifest, limits: { stepRuns: 8 } });
+  const t = await readyPublished({ ...manifest, limits: { stepRuns: 8 } });
   await start(t);
   const chain = await finishChain(t);
   expect(chain.some((run) => run.status === "continued")).toBe(true);
@@ -204,7 +223,7 @@ it("reserves the inner tail, the rest of the outer item and the outer tail", asy
 
 it("drains concurrent children of an oversized item before checkpointing a quiet frontier", async () => {
   const manifest = definition();
-  const { t } = await ready({
+  const t = await readyPublished({
     ...manifest,
     inputs: { type: "object", properties: { offset: { type: "string" } }, required: ["offset"] },
     limits: { stepRuns: 8 },
@@ -297,7 +316,9 @@ it("refuses a continuation tail larger than limits.stepRuns at publish", async (
     payload: { revision }
   });
   expect(refused.statusCode, refused.body).toBe(422);
-  expect(refused.json().error.message).toContain("needs 3 tail steps, above limits.stepRuns of 2");
+  expect(refused.json().error.message).toContain(
+    "needs at least 7 step runs for steps before the loop, one item and the tail, above limits.stepRuns of 2"
+  );
 });
 
 describe("continue-as-new", () => {

@@ -46,7 +46,11 @@ import {
   type WorkflowDataPruningOptions
 } from "./data-pruning";
 import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
-import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
+import {
+  workflowDefinitionRefusal,
+  type WorkflowDefinitionSource,
+  type WorkflowDefinitionSummary
+} from "./definition-source";
 import {
   WORKFLOW_RUN_LIMITS,
   WORKFLOW_UNBOUNDED_CEILINGS,
@@ -66,7 +70,8 @@ import { createScheduleTrigger } from "./schedule-trigger";
 import { createScheduledStart } from "./scheduled-start";
 import { createStepExecutor, type StepEnd, type WorkflowCodeRunner } from "./step-execution";
 import { stepJobConcurrency, workflowCodeJobKind, workflowStepJobKind } from "./step-job";
-import type { WorkflowLimitContext } from "./run-limits";
+import { workflowLimitIssues, type WorkflowLimitContext } from "./run-limits";
+import { workflowContinuationIssues } from "./continuation-rules";
 import { createRunWaiting } from "./run-waiting";
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
@@ -701,7 +706,14 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     },
 
     // A test run starts from the trigger whatever its kinds: only a person starts one.
-    test: ({ draft, ...input }) => startByHand(draft, input, "test"),
+    async test({ draft, ...input }) {
+      const issues = [
+        ...(await workflowContinuationIssues(draft.manifest, operationCalls.registry)),
+        ...workflowLimitIssues(draft.manifest, limitContext)
+      ];
+      if (issues.length > 0) throw workflowDefinitionRefusal(draft.manifest.id, issues);
+      return startByHand(draft, input, "test");
+    },
 
     async cancel(input) {
       const cancelled = await stores.transaction(async (tx) => {

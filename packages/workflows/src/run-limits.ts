@@ -1,3 +1,4 @@
+import { workflowLoopMinimumSteps } from "./continuation-rules";
 import {
   workflowDurationMs,
   type WorkflowLimits,
@@ -6,7 +7,6 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   indexWorkflowSteps,
-  workflowLoopTailSteps,
   WORKFLOW_LIMIT_ABOVE_CEILING,
   type WorkflowDefinitionIssue
 } from "./definition";
@@ -151,11 +151,11 @@ export function workflowLimitIssues(
       continues = current.step.type === "loop" && current.step.continueAsNew !== undefined;
       current = current.sequence.loop ? index.get(current.sequence.loop) : undefined;
     }
-    const needed = workflowLoopTailSteps(index, id);
+    const needed = workflowLoopMinimumSteps(index, id);
     if (continues && needed > budget)
       issues.push({
         path: `steps.${id}.continueAsNew`,
-        message: `The loop '${id}' needs ${needed} tail steps, above limits.stepRuns of ${budget}`
+        message: `The loop '${id}' needs at least ${needed} step runs for steps before the loop, one item and the tail, above limits.stepRuns of ${budget}. / Schleife '${id}' benötigt mindestens ${needed} Schritte für die Schritte vor der Schleife, ein Element und die nachfolgenden Schritte; limits.stepRuns erlaubt ${budget}.`
       });
   }
   return issues;

@@ -46,6 +46,7 @@ import {
   workflowStepFilesRefusal,
   workflowKindIssues,
   workflowLimitIssues,
+  workflowContinuationIssues,
   workflowRunPrincipal,
   type WorkflowDefinitionResult,
   type WorkflowLimitContext,
@@ -243,6 +244,9 @@ export function createWorkflowAssetKind(
       const parsed = workflowConfigSchema.parse(config);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      const continuation = await workflowContinuationIssues(result.manifest, options.registry?.());
+      if (continuation.length > 0)
+        throw workflowDefinitionRefusal(result.manifest.id, continuation);
       const kindIssues = workflowKindIssues(result.manifest);
       if (kindIssues.length > 0) throw workflowDefinitionRefusal(parsed.name, kindIssues);
       // A limit above the operator's ceiling is refused here, by name, and never clamped.
@@ -328,6 +332,9 @@ export function createWorkflowAssetKind(
       const config = workflowConfigSchema.parse(input.config);
       const result = parseStoredManifest(config.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(config.name, result.issues);
+      const continuation = await workflowContinuationIssues(result.manifest, options.registry?.());
+      if (continuation.length > 0)
+        throw workflowDefinitionRefusal(result.manifest.id, continuation);
       const kindIssues = workflowKindIssues(result.manifest);
       if (kindIssues.length > 0) throw workflowDefinitionRefusal(config.name, kindIssues);
       await createWorkflowLiveCheck(

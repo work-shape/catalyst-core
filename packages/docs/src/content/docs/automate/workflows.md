@@ -94,3 +94,17 @@ status and a numbered key. Work and usage count once across the parts. Labels an
 failure policy stay with the original run. A change published between parts applies
 to the next part, and the list marks the version change. If the new version refuses
 the carried input, that part fails and names the field that needs attention.
+
+Until resume positions and finished-step outputs are carried between histories, publishing
+and draft test runs refuse these shapes, naming the step and rule in English and German:
+
+- A write, send, notify, child Workflow start, or loop containing one before a
+  `continueAsNew` loop at the same or any enclosing level. Reads, triggers and code
+  steps may precede it; those steps run again in every history.
+- A loop after a `continueAsNew` loop at the same or any enclosing level.
+- A `limits.stepRuns` budget smaller than the steps before the loop, the loop containers,
+  one item and the tail together. The refusal states the minimum count and the limit.
+
+A `continueAsNew` loop can be the last loop, with non-loop steps after it. These are
+publish-time restrictions pending EW-CAN-RESUME, which will resume at step boundaries
+without repeating finished work.
