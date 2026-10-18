@@ -11,7 +11,7 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 import { getTestJobs } from "./support/test-instance";
 
 // The synced source migrations (SRC-0 and SRC-1a) bring a store made
-// at level 1 to level 8 at the next start, without a publish, and leaves its rows as they
+// at level 1 to level 9 at the next start, without a publish, and leaves its rows as they
 // were, and the `sources` entry of a Knowledge Base is saved with a draft but not published
 // until SRC-1a syncs it. `schedule` is withdrawn. Spec: data-stores-and-knowledge-bases.md, Synced sources, check 71.
 
@@ -92,10 +92,61 @@ describe("catalyst_kb source migrations", () => {
     expect(published.statusCode, published.body).toBe(200);
   };
 
+  it("upgrades REC-1a's level 8 store to level 9 before accepting superseded runs", async () => {
+    const instance = await start(true, undefined, undefined, undefined, true);
+    await writeAndPublish(instance, 1);
+    const made = await settle(instance, 9);
+    const url = new URL(await fileTestDatabaseUrl());
+    url.pathname = `/${made.location.database}`;
+    const store = postgres(url.toString(), { max: 1, onnotice() {} });
+    try {
+      // Restore the previous release's constraint and migration ledger.
+      await store.unsafe(`
+        alter table catalyst_kb.sync_runs drop constraint sync_runs_state_check;
+        alter table catalyst_kb.sync_runs add constraint sync_runs_state_check
+          check (state in ('running','done','failed'));
+        delete from catalyst_kb.migrations where number=9;`);
+      const previous = await store`select * from catalyst_kb.migrations order by number`;
+      await instance.stores.dataStores.putDataStore({
+        ...made,
+        level: 8,
+        migrations: made.migrations.slice(0, 8)
+      });
+      await store`insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id)
+        values ('held-pass','source','full','held-operation')`;
+      await expect(
+        store`update catalyst_kb.sync_runs set state='superseded',ended_at=now() where id='held-pass'`
+      ).rejects.toMatchObject({ code: "23514" });
+      const platform = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
+      try {
+        await platform`update platform_jobs set run_after=now()
+          where kind='data_store.upgrade_owned' and client_instance_id=${clientInstanceId}
+          and status='queued'`;
+      } finally {
+        await platform.end();
+      }
+      const migrated = await settle(instance, 9);
+      expect(migrated.migrations.slice(0, 8)).toEqual(made.migrations.slice(0, 8));
+      expect(migrated.migrations[8]).toMatchObject({ number: 9, name: "source_superseded" });
+      const applied = await store`select * from catalyst_kb.migrations order by number`;
+      expect(applied.slice(0, 8)).toEqual(previous);
+      expect(applied.map((row) => row.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(await store`select state from catalyst_kb.sync_runs where id='held-pass'`).toEqual([
+        { state: "running" }
+      ]);
+      await store`update catalyst_kb.sync_runs set state='superseded',ended_at=now() where id='held-pass'`;
+      expect(
+        await store`select state,failure_code from catalyst_kb.sync_runs where id='held-pass'`
+      ).toEqual([{ state: "superseded", failure_code: null }]);
+    } finally {
+      await store.end();
+    }
+  });
+
   it("upgrades connector cursors unchanged and constrains Workflow source identity (KBW-0)", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
     await writeAndPublish(instance, 1);
-    const made = await settle(instance, 8);
+    const made = await settle(instance, 9);
     const url = new URL(await fileTestDatabaseUrl());
     url.pathname = `/${made.location.database}`;
     const store = postgres(url.toString(), { max: 1, onnotice() {} });
@@ -116,7 +167,7 @@ describe("catalyst_kb source migrations", () => {
       } finally {
         await platform.end();
       }
-      await settle(instance, 8);
+      await settle(instance, 9);
       expect(
         await store`select source_id,cursor,kind,workflow_id from catalyst_kb.source_cursors`
       ).toEqual([{ source_id: "box", cursor: "cursor-1", kind: "connector", workflow_id: null }]);
@@ -140,10 +191,10 @@ describe("catalyst_kb source migrations", () => {
     }
   });
 
-  it("brings a store at level 1 to level 8 with its documents, contents and chunks unchanged", async () => {
+  it("brings a store at level 1 to level 9 with its documents, contents and chunks unchanged", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
     await writeAndPublish(instance, 1);
-    const made = await settle(instance, 8);
+    const made = await settle(instance, 9);
     const url = new URL(await fileTestDatabaseUrl());
     url.pathname = `/${made.location.database}`;
     const store = postgres(url.toString(), { max: 1, onnotice: () => undefined });
@@ -197,7 +248,7 @@ describe("catalyst_kb source migrations", () => {
       } finally {
         await platform.end();
       }
-      const migrated = await settle(instance, 8);
+      const migrated = await settle(instance, 9);
 
       expect(migrated.migrations.map(({ number, name }) => ({ number, name }))).toEqual([
         { number: 1, name: "documents" },
@@ -207,13 +258,14 @@ describe("catalyst_kb source migrations", () => {
         { number: 5, name: "source_withdrawal" },
         { number: 6, name: "workflow_sources" },
         { number: 7, name: "document_processors" },
-        { number: 8, name: "record_content_hash" }
+        { number: 8, name: "record_content_hash" },
+        { number: 9, name: "source_superseded" }
       ]);
       expect(
         (await store`select number from catalyst_kb.migrations order by number`).map(
           (row) => row.number
         )
-      ).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
       expect(await rowsOf()).toEqual(before);
       // A document added by hand names no item.
       expect(await store`select source_item_id from catalyst_kb.documents`).toEqual([
@@ -240,7 +292,7 @@ describe("catalyst_kb source migrations", () => {
       ).toContainEqual(
         expect.objectContaining({
           subject: made.id,
-          metadata: expect.objectContaining({ level: 8, appliedCount: 7 })
+          metadata: expect.objectContaining({ level: 9, appliedCount: 8 })
         })
       );
 
@@ -309,7 +361,7 @@ describe("the sources entry of a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 8 });
+      expect(record).toMatchObject({ status: "ready", level: 9 });
     });
   });
 

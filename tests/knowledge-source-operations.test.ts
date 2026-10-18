@@ -20,6 +20,8 @@ describe("source sync operations (KB 74, 75)", () => {
     expect(before).toHaveLength(0);
     // Each request reaches the owned store on its own transaction/connection. Neither
     // response waits for a worker, so both must see the one running-row winner.
+    // Starting can wait on the run or the document lock that orders supersession;
+    // observe both requests reaching the store rather than one SQL statement shape.
     const url = new URL(await fileTestDatabaseUrl());
     url.pathname = `/${world.record.location.database}`;
     const blocker = postgres(url.toString(), { max: 1, onnotice() {} });
@@ -49,7 +51,7 @@ describe("source sync operations (KB 74, 75)", () => {
     try {
       await eventually(async () => {
         const [row] =
-          await world.sql`select count(*)::int as n from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like 'insert into catalyst_kb.sync_runs %'`;
+          await world.sql`select count(*)::int as n from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and (query like '%catalyst_kb.sync_runs%' or query='lock table catalyst_kb.documents in share row exclusive mode')`;
         expect(row?.n).toBe(2);
       });
     } finally {

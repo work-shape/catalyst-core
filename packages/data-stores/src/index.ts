@@ -221,7 +221,6 @@ export function createDataStores(input: {
     clientInstanceId,
     databaseUrl: input.databaseUrl,
     credentials,
-    secretRows: stores.connections,
     poolMaxConnections: limits.poolMaxConnections,
     ...(limits.statement ? { statementLimits: limits.statement } : {})
   });

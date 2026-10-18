@@ -15,7 +15,8 @@ export interface KnowledgeSources {
   start(
     payload: KnowledgeSyncJobPayload,
     mode: KnowledgeListingMode,
-    signal: AbortSignal
+    signal: AbortSignal,
+    supersedePending?: boolean
   ): Promise<string>;
   sources(
     id: string,

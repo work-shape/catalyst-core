@@ -236,10 +236,10 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
         payload.knowledgeBaseId,
         control.signal
       ).run(payload.syncRunId);
-      if (!active || active.state === "failed") return;
+      if (!active || active.state === "failed" || active.state === "superseded") return;
       if (active.definitionKey !== sourceBoundaryKey(found.source)) {
         await sourceTransaction(runtime.data, payload, control, (store) =>
-          store.finish(payload, "knowledge_source_refused")
+          store.finish(payload, undefined, "superseded")
         );
         return;
       }

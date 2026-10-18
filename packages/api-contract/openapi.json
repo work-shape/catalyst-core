@@ -17607,7 +17607,8 @@
                                     "enum": [
                                       "running",
                                       "done",
-                                      "failed"
+                                      "failed",
+                                      "superseded"
                                     ]
                                   },
                                   "counts": {
@@ -17868,7 +17869,8 @@
                                     "enum": [
                                       "running",
                                       "done",
-                                      "failed"
+                                      "failed",
+                                      "superseded"
                                     ]
                                   },
                                   "counts": {
@@ -18401,7 +18403,8 @@
                       "enum": [
                         "running",
                         "done",
-                        "failed"
+                        "failed",
+                        "superseded"
                       ]
                     },
                     "counts": {

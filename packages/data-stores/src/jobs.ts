@@ -412,7 +412,13 @@ async function provision(
   let made: { conditions: DataStoreCondition[] } | { error: unknown };
   try {
     const secrets = await storeSecrets(runtime, control, storeId);
-    await provisionDataStore(runtime.server, record, secrets, control.signal);
+    await provisionDataStore(
+      runtime.server,
+      record,
+      secrets,
+      runtime.stores.connections,
+      control.signal
+    );
     made = { conditions: await readStoreConditions(runtime.server, record, control.signal) };
   } catch (error) {
     made = { error };
@@ -665,6 +671,7 @@ async function migrate(
           current,
           migration,
           {
+            secretRows: stores.connections,
             ledgerKey: ledger,
             superuser,
             sizeLimitBytes: current.sizeLimitBytes,

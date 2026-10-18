@@ -470,14 +470,14 @@ export function createSourceStore(
         );
       });
     },
-    async finish(payload: KnowledgeSyncJobPayload, failureCode?: string) {
+    async finish(payload: KnowledgeSyncJobPayload, failureCode?: string, outcome?: "superseded") {
       return change(async (sql) => {
         await refreshSourceFreshness(sql, payload.sourceId, false);
         const finished = await sql.run(
-          `update catalyst_kb.sync_runs set state=$2::text,failure_code=$3::text,ended_at=now() where id=$1::text and state='running' and ($3::text is not null or (cursor_after::jsonb->>'complete'='true' and (cursor_after::jsonb->>'listing' is distinct from 'true' or cursor_after::jsonb->>'reconciled'='true') and not exists (select 1 from catalyst_kb.source_items where source_id=$4::text and state='discovered'))) returning id`,
+          `update catalyst_kb.sync_runs set state=$2::text,failure_code=$3::text,ended_at=now() where id=$1::text and state='running' and ($2::text='superseded' or $3::text is not null or (cursor_after::jsonb->>'complete'='true' and (cursor_after::jsonb->>'listing' is distinct from 'true' or cursor_after::jsonb->>'reconciled'='true') and not exists (select 1 from catalyst_kb.source_items where source_id=$4::text and state='discovered'))) returning id`,
           [
             payload.syncRunId,
-            failureCode ? "failed" : "done",
+            outcome ?? (failureCode ? "failed" : "done"),
             failureCode ?? null,
             payload.sourceId
           ]

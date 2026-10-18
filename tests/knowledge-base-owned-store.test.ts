@@ -72,7 +72,7 @@ describe("the store a Knowledge Base owns", () => {
     return eventually(async () => {
       await jobs.runDue();
       const record = await ownedRecord(world);
-      expect(record).toMatchObject({ status: "ready", level: 8 });
+      expect(record).toMatchObject({ status: "ready", level: 9 });
       return required(record);
     });
   }
@@ -132,7 +132,8 @@ describe("the store a Knowledge Base owns", () => {
         expect.objectContaining({ number: 5, name: "source_withdrawal" }),
         expect.objectContaining({ number: 6, name: "workflow_sources" }),
         expect.objectContaining({ number: 7, name: "document_processors" }),
-        expect.objectContaining({ number: 8, name: "record_content_hash" })
+        expect.objectContaining({ number: 8, name: "record_content_hash" }),
+        expect.objectContaining({ number: 9, name: "source_superseded" })
       ]
     });
     const { database } = record.location;
@@ -204,7 +205,7 @@ describe("the store a Knowledge Base owns", () => {
           name: `knowledge-base:${KB}`,
           title: "Objektunterlagen",
           status: "ready",
-          level: 8,
+          level: 9,
           ownedBy: { knowledgeBase: KB }
         }
       ]
