@@ -76,6 +76,16 @@ export const connections = defineTranslations({
       "Enter the key under Credential. Then test again.",
     "connections.healthUnauthorizedNextRuntime":
       "Enter a new key under Credential. Then test again.",
+    "connections.healthUnauthorizedTextNoKey":
+      "The outside system refuses access without a credential, and this connection sends none.",
+    "connections.healthUnauthorizedNextNoKey":
+      "The server asks for a key, and this connection sends none. Under Settings, choose Edit, set how the key is sent and save. Then enter the key.",
+    "connections.secretRemove": "Remove key",
+    "connections.secretRemoveTitle": "Remove the key?",
+    "connections.secretRemoveAgents":
+      "The key is deleted and the connection sends no key from now on. Calls of {agents} and of Workflows that use this connection are refused by a server that asks for a key.",
+    "connections.secretRemoveNoAgents":
+      "The key is deleted and the connection sends no key from now on. No agent uses its tools; Workflows that use this connection are refused by a server that asks for a key.",
     "connections.healthSecretUnreadableNextRuntime":
       "Enter the key again under Credential. Then test again.",
     "connections.healthUnavailableNextRuntime":
@@ -328,6 +338,16 @@ export const connections = defineTranslations({
       "Gib den Schlüssel unter Zugangsdaten ein. Teste danach erneut.",
     "connections.healthUnauthorizedNextRuntime":
       "Gib unter Zugangsdaten einen neuen Schlüssel ein. Teste danach erneut.",
+    "connections.healthUnauthorizedTextNoKey":
+      "Das externe System lässt ohne Zugangsdaten keinen Zugriff zu, und diese Verbindung sendet keine.",
+    "connections.healthUnauthorizedNextNoKey":
+      "Der Server verlangt einen Schlüssel, und diese Verbindung sendet keinen. Wähl unter Einstellungen Bearbeiten, leg fest, wie der Schlüssel gesendet wird, und speichere. Gib dann den Schlüssel ein.",
+    "connections.secretRemove": "Schlüssel entfernen",
+    "connections.secretRemoveTitle": "Schlüssel entfernen?",
+    "connections.secretRemoveAgents":
+      "Der Schlüssel wird gelöscht, und die Verbindung sendet ab jetzt keinen. Aufrufe von {agents} und von Workflows, die diese Verbindung nutzen, lehnt ein Server ab, der einen Schlüssel verlangt.",
+    "connections.secretRemoveNoAgents":
+      "Der Schlüssel wird gelöscht, und die Verbindung sendet ab jetzt keinen. Kein Agent nutzt ihre Tools; Aufrufe von Workflows, die diese Verbindung nutzen, lehnt ein Server ab, der einen Schlüssel verlangt.",
     "connections.healthSecretUnreadableNextRuntime":
       "Gib den Schlüssel unter Zugangsdaten erneut ein. Teste danach erneut.",
     "connections.healthUnavailableNextRuntime":
