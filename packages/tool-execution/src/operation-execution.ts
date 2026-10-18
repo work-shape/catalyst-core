@@ -3,6 +3,7 @@ import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
   JobDeferredError,
+  INTERRUPTED_RUN_ERROR,
   OPERATION_DENIAL_REASONS,
   PLATFORM_EVENT_ALLOW,
   connectionCallReasonOf,
@@ -38,7 +39,6 @@ import {
   type OperationResource,
   type OperationResult,
   type OperationRun,
-  type OperationRunDecisionReason,
   type OperationRunEnd,
   type OperationRunStore,
   type PlatformEventAnswer,
@@ -51,6 +51,12 @@ import {
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { failureLogFields } from "./tool-failure-log";
+import {
+  OperationCallStoppedError,
+  OperationNotBegunError,
+  startOperationCall,
+  type DirectDecision
+} from "./operation-call";
 
 /**
  * Files the request another person decides, with the frozen call as its payload. Answers
@@ -469,45 +475,12 @@ export async function denyRun(
   return { result: { status: "denied", runId: context.run.id, reason: denial }, run: denied };
 }
 
+export type { DirectDecision } from "./operation-call";
+
 /**
- * Executes a call that passed its checks and records how it ended. Whatever the implementation
- * throws ends the run as failed; a refusal it raises through `context.access.require` ends it
- * as denied.
+ * Executes a call that passed its checks under one deadline and records how it ended.
+ * An implementation's own right refusal ends it as denied.
  */
-/**
- * The decision of a call that ran on its own caller's word, with why where that needs saying:
- * `direct` where it was their confirmation, `approved` where it was the approval a guardrail
- * asked for and they hold the right that decides it.
- */
-export type DirectDecision =
-  | { mode: "direct"; reason?: OperationRunDecisionReason }
-  | { mode: "approved"; reason: "approved_by_caller" };
-
-/** Thrown by the `begin` of `executeAdmitted`: the operation was not called. */
-export class OperationNotBegunError extends Error {
-  constructor() {
-    super("The operation was not called");
-    this.name = "OperationNotBegunError";
-  }
-}
-
-/** Calls the operation now. What it throws, at once or later, rejects the answer. */
-function callOperation(
-  definition: OperationDefinition,
-  input: unknown,
-  execution: OperationExecutionContext
-): Promise<unknown> {
-  let executing: Promise<unknown>;
-  try {
-    executing = Promise.resolve(definition.execute(input, execution));
-  } catch (error) {
-    executing = Promise.reject(error instanceof Error ? error : new Error(String(error)));
-  }
-  // The answer is awaited after the started event. A rejection before that is still handled.
-  executing.catch(() => undefined);
-  return executing;
-}
-
 export async function executeAdmitted(
   context: RunContext,
   access: ActorAccess,
@@ -524,6 +497,7 @@ export async function executeAdmitted(
   const { run, definition, call, deps, now } = context;
   let completed: OperationEnding | undefined;
   let started = false;
+  let executing: ReturnType<typeof startOperationCall> | undefined;
   try {
     if (!begin && !context.runtime.resumeReadingRunId)
       await context.emit("operation.started", "after", { status: "success" });
@@ -545,10 +519,17 @@ export async function executeAdmitted(
     };
     await begin?.();
     started = true;
-    const executing = callOperation(definition, call.input, execution);
+    executing = startOperationCall(
+      definition,
+      call.input,
+      execution,
+      now(),
+      begin ? undefined : run.startedAt
+    );
     // With `begin` the call is said to have started once it has: nothing may be awaited before.
-    if (begin) await context.emit("operation.started", "after", { status: "success" });
-    const answer = await executing;
+    if (begin)
+      await executing.wait(context.emit("operation.started", "after", { status: "success" }));
+    const answer = await executing.answer;
     if (definition.completion) {
       if (joinedRunId && joinedRunId !== run.id) {
         const joined = await deps.runs.get({
@@ -587,7 +568,7 @@ export async function executeAdmitted(
     const tool = isToolOperationAnswer(answer) ? answer : undefined;
     const answered: unknown = tool ? toolOutput(tool.result) : answer;
     const output = context.runtime.captureOutput
-      ? await context.runtime.captureOutput(answered)
+      ? await executing.wait(context.runtime.captureOutput(answered))
       : answered;
     // From here on the call has happened. Whatever fails below is a failure to record it, and
     // the caller is still told the outcome with the run: an error would make it call again.
@@ -633,6 +614,27 @@ export async function executeAdmitted(
     return completed;
   } catch (error) {
     if (error instanceof OperationNotBegunError) throw error;
+    if (error instanceof OperationCallStoppedError) {
+      try {
+        if (error.kind === "aborted") {
+          // A lost paging lease leaves its checkpoint open for the next worker.
+          if (context.runtime.readPages) throw context.runtime.signal?.reason;
+          const interrupted = await endRun(context, {
+            status: "failed",
+            finishedAt: now().toISOString(),
+            error: INTERRUPTED_RUN_ERROR
+          });
+          return {
+            result: { status: "failed", runId: run.id, error: INTERRUPTED_RUN_ERROR },
+            run: interrupted
+          };
+        }
+        return await failRun(context, error.reason, !started);
+      } finally {
+        // Persist the terminal outcome before an abort handler can finish its work.
+        executing?.abort(error.reason);
+      }
+    }
     // A deferred page keeps the one reading Operation Run open for the next leased attempt.
     if (
       context.runtime.readPages &&
@@ -654,14 +656,16 @@ export async function executeAdmitted(
     // An implementation that asks for a further right refuses through `context.access.require`.
     const refused = forbiddenSchema.safeParse(error);
     if (refused.success) {
-      return denyRun(context, {
+      return await denyRun(context, {
         kind: "forbidden",
         ...refused.data.details,
         message: refused.data.message
       });
     }
     // An implementation that rolled back whole says so; every other one may have changed something.
-    return failRun(context, error, !started || (isAppError(error) && error.changedNothing));
+    return await failRun(context, error, !started || (isAppError(error) && error.changedNothing));
+  } finally {
+    executing?.close();
   }
 }
 
