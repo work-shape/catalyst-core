@@ -21,6 +21,8 @@ interface BuildRefusal {
   detail?: string;
   /** The message is the instance's sentence as it came, in the instance's words. */
   asSent?: true;
+  /** Nothing is refused: the change waits for somebody's approval. */
+  waiting?: true;
 }
 
 /** How a change went. */
@@ -50,10 +52,22 @@ interface BuildConflict {
 
 /** A write the instance accepted and did not make: somebody else has to approve it first. */
 export class PendingApprovalError extends Error {
-  constructor() {
+  /** People who may approve it, by name, as far as the writer may see them. */
+  readonly approverNames: readonly string[];
+
+  constructor(approverNames: readonly string[] = []) {
     super("The change waits for an approval");
     this.name = "PendingApprovalError";
+    this.approverNames = approverNames;
   }
+}
+
+/** The names the instance gives in the preview of a waiting request of who may approve it. */
+export function approverNamesOf(preview: unknown): string[] {
+  const names = field(preview, "approverNames");
+  return Array.isArray(names)
+    ? names.filter((name): name is string => typeof name === "string" && name.trim() !== "")
+    : [];
 }
 
 /** The details a refusal of the instance carries, read from an answer nobody vouches for. */
@@ -246,7 +260,11 @@ export function readBuildRefusal(
       : { ok: false, conflict: true, ...readConflict(error) };
   }
   if (error instanceof PendingApprovalError) {
-    return refused({ message: t("build.pendingApproval") });
+    const names = new Intl.ListFormat(locale, { type: "disjunction" }).format(error.approverNames);
+    return refused({
+      message: names ? t("build.pendingApprovalBy", { names }) : t("build.pendingApproval"),
+      waiting: true
+    });
   }
   const details = readRefusalDetails(error);
   if (details.reason === "person_context_app_unavailable") {
@@ -297,6 +315,12 @@ export function readBuildRefusal(
 
 function refused(refusal: BuildRefusal): BuildWriteOutcome {
   return { ok: false, conflict: false, refusals: [refusal] };
+}
+
+/** What a change that waits for an approval says. Undefined for every other outcome. */
+export function waitingNotice(outcome: BuildWriteOutcome | undefined): string | undefined {
+  if (!outcome || outcome.ok || outcome.conflict) return undefined;
+  return outcome.refusals.find((refusal) => refusal.waiting)?.message;
 }
 
 /** The sentences of a refused change that concern one field, or the ones that concern none. */

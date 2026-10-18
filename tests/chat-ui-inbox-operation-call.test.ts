@@ -340,9 +340,12 @@ describe("inbox item of an operation call", () => {
   it("says who wants to create which skill where, why it waits, and shows the skill's text", () => {
     const markup = put(newSkill);
 
+    // ACCEPT-FIX-9 C13: no Namespace prefix in what a person reads; it is an id.
     expect(markup).toMatch(
-      /data-testid="operation-call-headline"[^>]*>Elif Aydin wants to create the skill “Elternzeit: häufige Fragen” in the Namespace hr-\.</u
+      /data-testid="operation-call-headline"[^>]*>Elif Aydin wants to create the skill “Elternzeit: häufige Fragen”\.</u
     );
+    expect(markup).not.toContain("hr-<");
+    expect(markup).not.toContain("Namespace");
     expect(markup).toContain(
       "If you approve, the skill is saved. If you decline, nothing changes."
     );
@@ -365,19 +368,12 @@ describe("inbox item of an operation call", () => {
     expect(markup).not.toContain("assets.put");
 
     const german = put(newSkill, "de");
-    expect(german).toContain(
-      "Elif Aydin möchte den Skill „Elternzeit: häufige Fragen“ im Namespace hr- anlegen."
-    );
+    expect(german).toContain("Elif Aydin möchte den Skill „Elternzeit: häufige Fragen“ anlegen.");
     expect(german).toContain(
       "Wenn du freigibst, wird der Skill gespeichert. Wenn du ablehnst, ändert sich nichts."
     );
     expect(german).toContain(
       "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Skills zur Freigabe vorlegt."
-    );
-    // Outside a Namespace the sentence names none.
-    const { namespace: _namespace, ...plain } = newSkill;
-    expect(put(plain)).toContain(
-      "Elif Aydin wants to create the skill “Elternzeit: häufige Fragen”.<"
     );
   });
 
@@ -410,9 +406,7 @@ describe("inbox item of an operation call", () => {
   it("shows a change as before and after, with what else changes about the skill", () => {
     const markup = put(changedSkill);
 
-    expect(markup).toContain(
-      "Elif Aydin wants to change the skill “Urlaubsrichtlinie” in the Namespace hr-."
-    );
+    expect(markup).toContain("Elif Aydin wants to change the skill “Urlaubsrichtlinie”.<");
     expect(markup).toContain(
       "If you approve, the change is saved. If you decline, nothing changes."
     );
@@ -447,7 +441,97 @@ describe("inbox item of an operation call", () => {
     );
   });
 
-  it("names the surface and the row by the skill, with who asked and the Namespace", () => {
+  // ACCEPT-FIX-9 E4: once decided, the item read "Action to approve · assets.put" and "the
+  // input was removed". The preview keeps the skill, so requester and approver read the skill
+  // title and what changed after the decision too.
+  it("keeps the skill's title and what changed once the request is decided", () => {
+    const decided = (locale: "de" | "en", canDecide: boolean) =>
+      call(
+        {
+          summary: "assets.put",
+          status: "approved",
+          canDecide,
+          applyResult: { execution: "done" },
+          payload: { runId: "opr_1", inputRemoved: true },
+          preview: {
+            ...putPreview,
+            inputs: [],
+            inputFieldCount: 0,
+            inputRemoved: true,
+            asset: changedSkill
+          }
+        },
+        locale
+      );
+    // The approver, who could decide it, and the requester, who could not.
+    for (const markup of [decided("en", true), decided("en", false)]) {
+      expect(markup).toMatch(/>Skill change: Urlaubsrichtlinie<\/h3>/u);
+      expect(markup).toMatch(/Before<\/span>.*Krankmeldung ab dem dritten Tag\./u);
+      expect(markup).toMatch(/New<\/span>.*Krankmeldung ab dem ersten Tag\./u);
+      expect(markup).toMatch(/data-testid="operation-call-outcome" data-outcome="done"/u);
+      expect(markup).not.toContain("Action to approve");
+      expect(markup).not.toContain('data-testid="operation-call-input-removed"');
+      expect(markup).not.toContain("assets.put");
+    }
+    expect(decided("de", false)).toMatch(/>Änderung einer Fähigkeit: Urlaubsrichtlinie<\/h3>/u);
+    const { content: _content, ...listed } = changedSkill;
+    const decidedRow = row({ ...putPreview, inputs: [], inputRemoved: true, asset: listed });
+    expect(decidedRow).toContain("Skill change: Urlaubsrichtlinie");
+    expect(decidedRow).not.toContain("assets.put");
+  });
+
+  // ACCEPT-FIX-9 E7: an outdated request offered Approve without a word, although approving
+  // applies nothing.
+  it("warns before approving a request whose skill changed since, in both languages", () => {
+    const stale = { ...changedSkill, isStale: true };
+
+    expect(put(stale)).toMatch(
+      /data-testid="operation-call-stale"[^>]*>[\s\S]*This request is out of date: “Urlaubsrichtlinie” was changed after it was made\. Approving it applies nothing\. Ask Elif Aydin to submit a new change\./u
+    );
+    expect(put(stale, "de")).toContain(
+      "Diese Anfrage ist veraltet: „Urlaubsrichtlinie“ wurde nach ihr geändert. Freigeben übernimmt nichts. Bitte Elif Aydin, eine neue Änderung einzureichen."
+    );
+    expect(put(changedSkill)).not.toContain('data-testid="operation-call-stale"');
+    // The warning alone says what approving does: no sentence that approving saves the change.
+    expect(put(stale)).not.toContain("If you approve, the change is saved.");
+    expect(put(changedSkill)).toContain("If you approve, the change is saved.");
+  });
+
+  // ACCEPT-FIX-9 E7: approving an outdated request ended "Not executed … no longer allowed"
+  // with the instance's English sentence as the reason, also in German.
+  it("says in the reader's language that an outdated request was approved and nothing applied", () => {
+    const refusedStale = (locale: "de" | "en") =>
+      call(
+        {
+          summary: "assets.put",
+          status: "superseded",
+          canDecide: false,
+          applyResult: {
+            execution: "refused",
+            error: {
+              code: "APPROVAL_STALE",
+              message:
+                "The asset changed after this request was made. Submit a new change; nothing was applied."
+            }
+          },
+          payload: { runId: "opr_2", inputRemoved: true },
+          preview: { ...putPreview, inputs: [], inputRemoved: true, asset: changedSkill }
+        },
+        locale
+      );
+    const german = refusedStale("de");
+
+    expect(german).toMatch(
+      /data-testid="operation-call-outcome" data-outcome="refused"[^>]*>[\s\S]*Nicht übernommen: „Urlaubsrichtlinie“ wurde nach dieser Anfrage geändert, deshalb hat sich nichts geändert\. Reiche eine neue Änderung ein, wenn sie noch nötig ist\./u
+    );
+    expect(german).not.toContain("The asset changed");
+    expect(german).not.toContain("nicht mehr erlaubt");
+    expect(refusedStale("en")).toContain(
+      "Not applied: “Urlaubsrichtlinie” was changed after this request was made, so nothing changed. Submit a new change if it is still needed."
+    );
+  });
+
+  it("names the surface and the row by the skill, with who asked and no Namespace prefix", () => {
     expect(surface({ ...putPreview, asset: newSkill }, "en")).toMatchObject({
       title: "New skill",
       subtitle: "Elternzeit: häufige Fragen"
@@ -461,7 +545,8 @@ describe("inbox item of an operation call", () => {
     const { content: _content, ...listed } = newSkill;
     const markup = row({ ...putPreview, asset: listed });
     expect(markup).toContain("New skill: Elternzeit: häufige Fragen");
-    expect(markup).toContain("Elif Aydin · hr-");
+    expect(markup).toContain("Elif Aydin");
+    expect(markup).not.toContain("hr-");
     expect(markup).toContain("lucide-book-open");
     expect(markup).not.toContain("lucide-zap");
     expect(markup).not.toContain("assets.put");
@@ -484,9 +569,7 @@ describe("inbox item of an operation call", () => {
     };
     const markup = put(asset, "en", agentPreview);
 
-    expect(markup).toContain(
-      "Elif Aydin wants to change the agent “Abwesenheiten” in the Namespace hr-."
-    );
+    expect(markup).toContain("Elif Aydin wants to change the agent “Abwesenheiten”.<");
     expect(markup).toContain(
       "If you approve, it is saved as Elif Aydin. If you decline, nothing changes."
     );
@@ -498,7 +581,7 @@ describe("inbox item of an operation call", () => {
     );
     expect(markup).not.toContain('data-testid="operation-call-skill"');
     expect(put(asset, "de", agentPreview)).toContain(
-      "Elif Aydin möchte den Agenten „Abwesenheiten“ im Namespace hr- ändern."
+      "Elif Aydin möchte den Agenten „Abwesenheiten“ ändern."
     );
     expect(surface({ ...agentPreview, asset }, "en").title).toBe("Action to approve");
   });

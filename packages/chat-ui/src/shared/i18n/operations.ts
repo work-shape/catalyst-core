@@ -134,12 +134,10 @@ export const operations = defineTranslations({
     "operations.callHeadlineReading": "{actor} wants to run a reading action.",
     "operations.callEffect":
       "If you approve, it runs once as {actor}. If you decline, nothing runs.",
-    "operations.callAssetCreateIn":
-      "{actor} wants to create {kind} “{title}” in the Namespace {namespace}.",
     "operations.callAssetCreate": "{actor} wants to create {kind} “{title}”.",
-    "operations.callAssetChangeIn":
-      "{actor} wants to change {kind} “{title}” in the Namespace {namespace}.",
     "operations.callAssetChange": "{actor} wants to change {kind} “{title}”.",
+    "operations.callAssetStale":
+      "This request is out of date: “{title}” was changed after it was made. Approving it applies nothing. Ask {actor} to submit a new change.",
     "operations.callAssetKindSkill": "the skill",
     "operations.callAssetKindAgent": "the agent",
     "operations.callAssetKindConnection": "the Connection",
@@ -182,6 +180,8 @@ export const operations = defineTranslations({
     "operations.callOutcomeExpired": "Expired before it was decided. Nothing was executed.",
     "operations.callOutcomeHeld":
       "Allowed. The call now waits for an approver; nothing was executed yet.",
+    "operations.callOutcomeStale":
+      "Not applied: “{title}” was changed after this request was made, so nothing changed. Submit a new change if it is still needed.",
     "operations.callOutcomeReason": "Reason: {reason}",
     "operations.callExpires": "Expires",
     "operations.callExpiresHint": "After that the call expires and does not run.",
@@ -350,12 +350,10 @@ export const operations = defineTranslations({
     "operations.callHeadlineReading": "{actor} möchte eine lesende Aktion ausführen.",
     "operations.callEffect":
       "Wenn du freigibst, läuft sie einmal als {actor}. Wenn du ablehnst, läuft nichts.",
-    "operations.callAssetCreateIn":
-      "{actor} möchte {kind} „{title}“ im Namespace {namespace} anlegen.",
     "operations.callAssetCreate": "{actor} möchte {kind} „{title}“ anlegen.",
-    "operations.callAssetChangeIn":
-      "{actor} möchte {kind} „{title}“ im Namespace {namespace} ändern.",
     "operations.callAssetChange": "{actor} möchte {kind} „{title}“ ändern.",
+    "operations.callAssetStale":
+      "Diese Anfrage ist veraltet: „{title}“ wurde nach ihr geändert. Freigeben übernimmt nichts. Bitte {actor}, eine neue Änderung einzureichen.",
     "operations.callAssetKindSkill": "den Skill",
     "operations.callAssetKindAgent": "den Agenten",
     "operations.callAssetKindConnection": "die Connection",
@@ -400,6 +398,8 @@ export const operations = defineTranslations({
       "Abgelaufen, bevor entschieden wurde. Es wurde nichts ausgeführt.",
     "operations.callOutcomeHeld":
       "Erlaubt. Der Aufruf wartet jetzt auf eine Freigabe; noch wurde nichts ausgeführt.",
+    "operations.callOutcomeStale":
+      "Nicht übernommen: „{title}“ wurde nach dieser Anfrage geändert, deshalb hat sich nichts geändert. Reiche eine neue Änderung ein, wenn sie noch nötig ist.",
     "operations.callOutcomeReason": "Grund: {reason}",
     "operations.callExpires": "Läuft ab",
     "operations.callExpiresHint": "Danach verfällt der Aufruf und läuft nicht.",

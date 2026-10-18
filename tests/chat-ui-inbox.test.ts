@@ -27,6 +27,7 @@ import {
   type InboxTab
 } from "./chat-ui-inbox-harness";
 import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
+import { ApprovalRevisionHostProvider } from "./support/chat-ui";
 
 // Every test here fails without the Inbox frame: the modules it reads did not exist.
 
@@ -412,6 +413,28 @@ describe("inbox item", () => {
 
     expect(state({ status: "loading" })).toContain('aria-busy="true"');
     expect(state({ status: "not-found" })).toContain("du darfst ihn nicht sehen");
+    // ACCEPT-FIX-9 C13: the refusal named nobody. It names an instance admin to ask, where the
+    // instance tells the person one, and otherwise says whom to ask without a name.
+    expect(state({ status: "not-found" })).toContain("Frag jemanden, der die Instanz verwaltet.");
+    const named = render(
+      createElement(
+        ApprovalRevisionHostProvider,
+        {
+          value: {
+            currentUserId: "user-sven",
+            instanceAdminName: "Mara Lindqvist",
+            personalWorkspaceAgentName: () => undefined,
+            startRevision: () => undefined,
+            agentDisplayName: () => undefined,
+            openConversation: () => undefined
+          }
+        },
+        createElement(InboxItemView, { state: { status: "not-found" }, actions: idleActions })
+      )
+    );
+    expect(named).toContain(
+      "Diesen Vorschlag gibt es nicht mehr oder du darfst ihn nicht sehen. Frag jemanden, der die Instanz verwaltet, zum Beispiel Mara Lindqvist."
+    );
     expect(state({ status: "error", onRetry: () => undefined })).toContain(
       ">Erneut versuchen</button>"
     );

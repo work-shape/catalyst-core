@@ -27,6 +27,18 @@ export const APPROVAL_AUTH_SCOPE = "standalone";
 
 const PENDING_COUNT_REFETCH_MS = 60_000;
 
+/**
+ * How often a request whose approved change is still being carried out is asked again, so the
+ * final state shows once the change has run. Run recovery ends a change that stopped, so the
+ * request always reaches a final state, and then it is no longer asked this often.
+ */
+const SETTLING_REFETCH_MS = 2_000;
+
+/** The decision is taken and its change still runs: `execution` is `queued`. */
+function isSettling(request: ApprovalRequestView | undefined): boolean {
+  return request?.status === "approved" && request.applyResult?.execution === "queued";
+}
+
 export const approvalRequestQueryKeys = {
   /** Prefix of every approval request query; a decision invalidates all of them at once. */
   all: (apiBaseUrl: string, authScope: string) =>
@@ -72,7 +84,10 @@ export function useApprovalRequestQuery(
     // The card is the live state of a shared request: another approver may
     // have decided while this tab was in the background.
     refetchOnWindowFocus: true,
-    refetchInterval: input.refetchIntervalMs ?? false,
+    // Nothing tells this tab when an approved change has run: a request in the Inbox or in a
+    // conversation whose run this tab does not watch asks again soon while the change runs.
+    refetchInterval: (query) =>
+      isSettling(query.state.data) ? SETTLING_REFETCH_MS : (input.refetchIntervalMs ?? false),
     retry: (failureCount, error) => !isApprovalRequestNotFound(error) && failureCount < 2
   });
 }

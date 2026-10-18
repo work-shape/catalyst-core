@@ -38,12 +38,13 @@ const outcomes: readonly OperationCallOutcome[] = [...APPROVAL_EXECUTIONS];
 export function operationCallOutcome(request: {
   status: string;
   applyResult?: unknown;
-}): { outcome: OperationCallOutcome; reason?: string } | undefined {
+}): { outcome: OperationCallOutcome; reason?: string; reasonCode?: string } | undefined {
   const result = isRecord(request.applyResult) ? request.applyResult : {};
   const outcome = outcomes.find((candidate) => candidate === result.execution);
   const reason = isRecord(result.error) ? readText(result.error.message) : undefined;
+  const reasonCode = isRecord(result.error) ? readText(result.error.code) : undefined;
   if (outcome) {
-    return { outcome, ...(reason ? { reason } : {}) };
+    return { outcome, ...(reason ? { reason } : {}), ...(reasonCode ? { reasonCode } : {}) };
   }
   return request.status === "approved" ? { outcome: "done" } : undefined;
 }
@@ -78,8 +79,6 @@ export interface OperationCallAsset {
   kind: string;
   name: string;
   title: string;
-  /** The registered prefix the asset's name starts with. */
-  namespace?: string;
   /** Approving creates the asset. */
   isNew: boolean;
   /** A skill's text in the shape `SkillChangeBody` reads. An opened request has it, a row has not. */
@@ -92,6 +91,8 @@ export interface OperationCallAsset {
   removedResources: string[];
   /** The reader may not read the stored skill, so nothing is compared with it. */
   beforeWithheld: boolean;
+  /** The stored asset changed after the call was held: approving it applies nothing. */
+  isStale: boolean;
 }
 
 /** Why a held publish can no longer be approved: what it would publish moved since. */
@@ -258,7 +259,6 @@ function parseAsset(value: unknown): OperationCallAsset | undefined {
   if (!kind || !name) {
     return undefined;
   }
-  const namespace = readText(value.namespace);
   const previous = isRecord(value.previous) ? value.previous : {};
   const previousTitle = readText(previous.title);
   const previousDescription = readText(previous.description);
@@ -276,7 +276,7 @@ function parseAsset(value: unknown): OperationCallAsset | undefined {
       ? value.removedResources.flatMap((path) => readText(path) ?? [])
       : [],
     beforeWithheld: value.beforeWithheld === true,
-    ...(namespace ? { namespace } : {}),
+    isStale: value.isStale === true,
     ...(description ? { description } : {}),
     ...(value.content === undefined ? {} : { content: value.content })
   };

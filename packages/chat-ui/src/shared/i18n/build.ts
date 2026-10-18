@@ -75,6 +75,8 @@ export const build = defineTranslations({
     "build.platform": "Platform",
     "build.pendingApproval":
       "This change waits for an approval. Nothing was changed yet and your text is still here.",
+    "build.pendingApprovalBy":
+      "This change waits for approval by {names}. Nothing has changed yet and your text is still here.",
     "build.readOnly": "You can read this but not change it.",
     "build.readOnlyInstance":
       "Belongs to no Namespace. Only a person who may edit on the whole instance can change it.",
@@ -216,6 +218,8 @@ export const build = defineTranslations({
     "build.platform": "Plattform",
     "build.pendingApproval":
       "Diese Änderung wartet auf eine Freigabe. Es wurde noch nichts geändert und dein Text ist noch da.",
+    "build.pendingApprovalBy":
+      "Diese Änderung wartet auf Freigabe durch {names}. Es wurde noch nichts geändert und dein Text ist noch da.",
     "build.readOnly": "Du kannst dies lesen, aber nicht ändern.",
     "build.readOnlyInstance":
       "Gehört zu keinem Namespace. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",

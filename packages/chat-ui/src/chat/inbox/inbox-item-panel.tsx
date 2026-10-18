@@ -27,6 +27,7 @@ import {
   offersApprovalWithdraw,
   visibleApprovalChecks
 } from "../approvals/approval-request-model";
+import { refusalAskingInstanceAdmin } from "../../admin/settings/ask-instance-admin";
 import { useApprovalRevisionHost } from "../approvals/approval-revision-host";
 import { ApprovalStatusBadge } from "../approvals/approval-status-badge";
 import { isInboxConfirmation } from "../approvals/operation-call-preview";
@@ -89,7 +90,12 @@ export function InboxItemView({
     return <SkeletonPage sections={1} />;
   }
   if (state.status === "not-found") {
-    return <EmptyState layout="inline">{t("approvalNotFound")}</EmptyState>;
+    // The person may not see it: they are told whom to ask, never sent to a page.
+    return (
+      <EmptyState layout="inline" data-testid="inbox-item-not-found">
+        {refusalAskingInstanceAdmin(t("approvalNotFound"), t, host?.instanceAdminName)}
+      </EmptyState>
+    );
   }
   if (state.status === "error") {
     return (
