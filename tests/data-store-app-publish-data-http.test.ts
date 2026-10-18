@@ -77,7 +77,7 @@ describe("the stored data of a revision, over HTTP", () => {
 
     const written = await t.putApp(t.kai.id, "findings", appReading("payroll", ["peek"], "cross"));
     expectStatus(written, 422);
-    expect(written.body).toContain("references unknown data_store 'payroll'");
+    expect(written.body).toContain("references unknown Data Store 'payroll'");
     expect(written.body).not.toContain("Salaries of the payroll team");
     // The original draft is still the one the builder reads; no cross-owner draft was saved.
     const unchanged = await sources(t.kai.id, 2);
