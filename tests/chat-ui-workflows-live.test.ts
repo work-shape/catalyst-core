@@ -622,8 +622,7 @@ describe("what a run says about how it ended", () => {
   });
   const page = (
     resource: Parameters<typeof toWorkflowRun>[0],
-    stepRuns: readonly Parameters<typeof toWorkflowStepRun>[0][] = [],
-    moreStepRuns?: { loading: boolean; load(): void }
+    stepRuns: readonly Parameters<typeof toWorkflowStepRun>[0][] = []
   ) =>
     render(
       createElement(WorkflowRunPageView, {
@@ -636,7 +635,6 @@ describe("what a run says about how it ended", () => {
           silentSince: undefined,
           stepsFailed: false,
           stepRuns: stepRuns.map(toWorkflowStepRun),
-          ...(moreStepRuns === undefined ? {} : { moreStepRuns }),
           retry: noop
         },
         now: new Date("2026-10-12T09:12:00.000Z"),
@@ -734,13 +732,5 @@ describe("what a run says about how it ended", () => {
     expect(markup).toContain(t("workflows.run.stoppingLine"));
     expect(markup).not.toContain(`>${t("workflows.run.cancel")}<`);
     expect(page(run)).not.toContain(t("workflows.run.stoppingLine"));
-  });
-
-  it("says that a run has more step runs than the page read, with the way to the next page", () => {
-    const more = page(run, [], { loading: false, load: noop });
-    expect(more).toContain(t("workflows.run.stepRunsCut"));
-    expect(more).toContain("data-run-more-steps");
-    expect(page(run)).not.toContain(t("workflows.run.stepRunsCut"));
-    expect(page(run)).not.toContain("data-run-more-steps");
   });
 });

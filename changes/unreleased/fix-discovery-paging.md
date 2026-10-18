@@ -9,3 +9,5 @@ section: Fixed
 - **Extensions:** Custom `WorkflowDefinitionSource.list` readers must honor the supplied `StorePage` limit and exclusive Workflow-id cursor. Built-in asset and folder readers implement that contract.
 
 - **Maintenance:** Call-ledger setup shares the existing database grant turn with store migration and provisioning, so concurrent maintenance cannot race on Postgres schema catalog grants.
+
+- **Workflow runs:** The run page reads every step page automatically, drawing steps as pages arrive.

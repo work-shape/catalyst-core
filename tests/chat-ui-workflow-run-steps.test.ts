@@ -4,8 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createApiClient } from "@work-shape/catalyst-api-client";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { createTranslationContext, TranslationProvider } from "@work-shape/catalyst-chat-ui";
 import {
+  createInstanceSource,
   toWorkflow,
   toWorkflowRun,
   toWorkflowStepRun,
@@ -15,8 +18,30 @@ import {
   type WorkflowsSource
 } from "@work-shape/catalyst-chat-ui/workflows";
 import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
-import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
+import { UiRoot, uiLabelsEn, type FlowCanvasProps } from "@work-shape/catalyst-ui";
 import { CONDITION_WAIT_MS } from "./support/assertions";
+
+// Happy DOM has no layout dimensions. Keep the real nodes and the Workflow graph, and
+// replace only the canvas engine that would otherwise wait for a nonzero viewport.
+vi.mock("@work-shape/catalyst-ui", async (importOriginal) => {
+  const ui = await importOriginal<typeof import("@work-shape/catalyst-ui")>();
+  return {
+    ...ui,
+    FlowCanvas: ({ graph }: FlowCanvasProps) =>
+      createElement(
+        "div",
+        null,
+        graph.nodes.map((node) =>
+          createElement(ui.FlowNode, {
+            key: node.id,
+            label: node.title,
+            title: node.title,
+            ...(node.status === undefined ? {} : { status: node.status })
+          })
+        )
+      )
+  };
+});
 
 // UI-FIX-1: the page of a run says when the steps of the run could not be read, with Try
 // again, under the head of the run it holds. Try again reads the run and its steps again, also
@@ -88,35 +113,43 @@ type RunView = typeof doneRun;
  * call after call. `nextCursor` says where the page after the one read from a cursor starts.
  */
 async function mountRunPage(
-  listSteps: (cursor: string | undefined) => Promise<readonly StepRunResource[]>,
+  listSteps: (
+    cursor: string | undefined,
+    signal: AbortSignal
+  ) => Promise<readonly StepRunResource[]>,
   readRun: () => Promise<RunView> = () => Promise.resolve(doneRun),
-  nextCursor: (cursor: string | undefined) => string | undefined = () => undefined
+  nextCursor: (cursor: string | undefined) => string | undefined = () => undefined,
+  options: { workflow?: ReturnType<typeof toWorkflow>; runs?: WorkflowsSource["runs"] } = {}
 ) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const getRun = vi.fn(readRun);
-  const listFrameStepRuns = vi.fn(async (_runId: string, cursor: string | undefined) => ({
-    stepRuns: (await listSteps(cursor)).map(toWorkflowStepRun),
-    entryLoops: [],
-    nextCursor: nextCursor(cursor)
-  }));
+  const listFrameStepRuns = vi.fn(
+    async (_runId: string, cursor: string | undefined, signal: AbortSignal) => ({
+      stepRuns: (await listSteps(cursor, signal)).map(toWorkflowStepRun),
+      entryLoops: [],
+      nextCursor: nextCursor(cursor)
+    })
+  );
   const source: WorkflowsSource = {
     key: "run-steps",
     listWorkflows: unused,
     getWorkflow: () =>
       Promise.resolve(
-        toWorkflow(
-          { name: "notify-clients", config: definition, publishedRevision: 2 },
-          { mayStart: true },
-          { draftRevision: 2, publishedRevision: 2 }
-        )
+        options.workflow ??
+          toWorkflow(
+            { name: "notify-clients", config: definition, publishedRevision: 2 },
+            { mayStart: true },
+            { draftRevision: 2, publishedRevision: 2 }
+          )
       ),
     runs: {
       listRuns: unused,
-      getRun,
       listFrameStepRuns,
       listEntryStepRuns: unused,
       start: unused,
-      cancel: unused
+      cancel: unused,
+      ...options.runs,
+      getRun
     }
   };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -162,13 +195,22 @@ async function mountRunPage(
       )
     );
   });
-  unmounts.push(async () => {
+  const unmount = async () => {
     await act(async () => root.unmount());
     queryClient.clear();
     container.remove();
     vi.unstubAllGlobals();
-  });
-  return { container, getRun, listFrameStepRuns };
+  };
+  unmounts.push(unmount);
+  return {
+    container,
+    getRun,
+    listFrameStepRuns,
+    unmount: async () => {
+      unmounts.splice(unmounts.indexOf(unmount), 1);
+      await unmount();
+    }
+  };
 }
 
 async function until(check: () => void): Promise<void> {
@@ -297,24 +339,133 @@ describe("the steps of a run on its page", () => {
     expect(page.container.textContent).toContain(t("workflows.run.running"));
   });
 
-  // DISCOVERY-PAGING: the frame stopped after ten reads and said so with no way on. The page
-  // reads the next page of the frame from the cursor the last one handed on, as often as the
-  // reader asks, and says nothing once the last page is there.
-  it("reads the next page of the frame from its cursor, and stops saying it is cut after the last", async () => {
-    const doneResult: StepRunResource = { ...doneClients, id: "sr_result", stepId: "result" };
-    const page = await mountRunPage(
-      (cursor) => Promise.resolve(cursor === undefined ? [doneClients] : [doneResult]),
-      () => Promise.resolve(doneRun),
-      (cursor) => (cursor === undefined ? "c2" : undefined)
-    );
-    const more = () => page.container.querySelector<HTMLElement>("[data-run-more-steps] button");
-    await until(() => expect(more()).not.toBeNull());
-    expect(page.container.textContent).toContain(t("workflows.run.stepRunsCut"));
-    expect(page.listFrameStepRuns.mock.calls.map((call) => call[1])).toEqual([undefined]);
+  // The API lists loop items in creation order too. The after-loop step lives past page one,
+  // and a finished run never polls again to find it: only automatic cursor following can.
+  it("draws the step after 150 loop items of two steps without a click, incrementally", async () => {
+    const loopDefinition = toWorkflow({
+      name: "notify-clients",
+      config: {
+        ...definition,
+        steps: [
+          ...definition.steps.slice(0, 2),
+          {
+            id: "each_client",
+            name: "For each client",
+            type: "loop",
+            items: { step: "clients", path: "" },
+            steps: [
+              { id: "send", name: "Send", type: "operation", operation: "crm.send" },
+              { id: "record", name: "Record", type: "operation", operation: "crm.record" }
+            ]
+          },
+          definition.steps[2]
+        ]
+      }
+    });
+    const rows: StepRunResource[] = [
+      doneClients,
+      {
+        ...doneClients,
+        id: "sr_loop",
+        stepId: "each_client",
+        stepType: "loop",
+        loop: { total: 150, done: 150, failed: 0, running: 0 }
+      },
+      ...Array.from({ length: 150 }, (_, index) =>
+        ["send", "record"].map((stepId): StepRunResource => ({
+          ...doneClients,
+          id: `sr_${index}_${stepId}`,
+          stepId,
+          containerStepRunId: "sr_loop",
+          iteration: { index }
+        }))
+      ).flat(),
+      { ...doneClients, id: "sr_result", stepId: "result", stepType: "output" }
+    ];
+    const cursors: (string | undefined)[] = [];
+    let release: () => void = () => undefined;
+    const laterPage = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const client = createApiClient({
+      baseUrl: "https://chat.example.com",
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        const url = new URL(request.url);
+        expect(url.pathname).toBe(
+          apiOperations["workflows.list_step_runs"].path.replace(":runId", doneRun.id)
+        );
+        expect(url.searchParams.get("limit")).toBe("200");
+        const cursor = url.searchParams.get("cursor") ?? undefined;
+        cursors.push(cursor);
+        if (cursor !== undefined) await laterPage;
+        const offset = Number(cursor ?? 0);
+        const items = rows
+          .slice(offset, offset + 200)
+          .map((row) => ({ ...row, runId: doneRun.id, key: row.id }));
+        return Response.json({
+          items,
+          ...(offset + 200 < rows.length ? { nextCursor: String(offset + 200) } : {})
+        });
+      }
+    });
+    const page = await mountRunPage(unused, undefined, undefined, {
+      workflow: loopDefinition,
+      runs: createInstanceSource(client, "paged-run").runs
+    });
+    const node = (name: string) =>
+      page.container.querySelector(`[data-slot="flow-node"][aria-label*="${name}"]`);
+    await until(() => expect(cursors).toEqual([undefined, "200"]));
+    // Page one paints before the second response. The after-loop node is still plain.
+    expect(node("Load the clients")?.getAttribute("data-status")).toBe("done");
+    expect(node("Result")?.getAttribute("data-status")).not.toBe("done");
+    await act(async () => release());
+    await until(() => expect(node("Result")?.getAttribute("data-status")).toBe("done"));
+    expect(page.container.querySelector("[data-run-more-steps]")).toBeNull();
+    expect(cursors).toEqual([undefined, "200"]);
+  });
 
-    await act(async () => more()?.click());
-    await until(() => expect(more()).toBeNull());
+  it("follows more than ten frame pages, including pages with no frame steps", async () => {
+    const page = await mountRunPage(
+      (cursor) =>
+        Promise.resolve(
+          cursor === "12" ? [{ ...doneClients, id: "sr_result", stepId: "result" }] : []
+        ),
+      undefined,
+      (cursor) => (Number(cursor ?? 0) < 12 ? String(Number(cursor ?? 0) + 1) : undefined)
+    );
+    await until(() => expect(page.listFrameStepRuns).toHaveBeenCalledTimes(13));
+    await until(() =>
+      expect(
+        page.container
+          .querySelector('[data-slot="flow-node"][aria-label="Result"]')
+          ?.getAttribute("data-status")
+      ).toBe("done")
+    );
+    expect(page.listFrameStepRuns.mock.calls.map((call) => call[1])).toEqual([
+      undefined,
+      ...Array.from({ length: 12 }, (_, index) => String(index + 1))
+    ]);
+  });
+
+  it("aborts the outstanding frame page on leaving and never follows its next cursor", async () => {
+    let signal: AbortSignal | undefined;
+    let release: (steps: readonly StepRunResource[]) => void = () => undefined;
+    const page = await mountRunPage(
+      (cursor, currentSignal) => {
+        if (cursor === undefined) return Promise.resolve([doneClients]);
+        signal = currentSignal;
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      },
+      undefined,
+      (cursor) => (cursor === undefined ? "c2" : "c3")
+    );
+    await until(() => expect(signal).toBeDefined());
+    await page.unmount();
+    expect(signal?.aborted).toBe(true);
+    await act(async () => release([doneClients]));
     expect(page.listFrameStepRuns.mock.calls.map((call) => call[1])).toEqual([undefined, "c2"]);
-    expect(page.container.textContent).not.toContain(t("workflows.run.stepRunsCut"));
   });
 });

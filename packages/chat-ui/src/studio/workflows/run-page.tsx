@@ -8,7 +8,6 @@ import {
   Dialog,
   InlineError,
   LoadError,
-  LoadMore,
   PageHeader,
   PageLead,
   TextLink
@@ -432,7 +431,6 @@ export function WorkflowRunPageView({
                 run.revisionId !== workflow.revisionId
               }
               stopping={stopping}
-              {...(read.moreStepRuns === undefined ? {} : { moreStepRuns: read.moreStepRuns })}
               failedEntries={failedEntries}
               onShowFailed={(stepId) => setFocus({ stepId })}
             />
@@ -470,7 +468,6 @@ function RunNotices({
   showFailure,
   earlierRevision,
   stopping,
-  moreStepRuns,
   failedEntries,
   onShowFailed
 }: {
@@ -480,8 +477,6 @@ function RunNotices({
   earlierRevision: boolean;
   /** Someone asked to cancel the run, and it has not ended yet. */
   stopping: boolean;
-  /** Present while the run has step runs after those the page read: reads the next page. */
-  moreStepRuns?: WorkflowRunRead["moreStepRuns"];
   /** Entries of the run's loops that failed while the run ended `done`. */
   failedEntries: FailedEntries | undefined;
   /** Opens the failed entries of the loop with the given step id. */
@@ -510,7 +505,6 @@ function RunNotices({
     line === undefined &&
     testLine === undefined &&
     !earlierRevision &&
-    moreStepRuns === undefined &&
     failedEntries === undefined &&
     !(showFailure && run.failure)
   ) {
@@ -541,23 +535,6 @@ function RunNotices({
           {t("workflows.run.earlierRevision")}
         </Banner>
       ) : null}
-      {moreStepRuns === undefined ? null : (
-        <Banner
-          tone="info"
-          layout="line"
-          data-run-cut=""
-          action={
-            <LoadMore
-              loading={moreStepRuns.loading}
-              onLoad={moreStepRuns.load}
-              label={t("workflows.showMore")}
-              data-run-more-steps=""
-            />
-          }
-        >
-          {t("workflows.run.stepRunsCut")}
-        </Banner>
-      )}
       {showFailure && run.failure ? <FailureBanner failure={run.failure} /> : null}
       {failedEntries === undefined ? null : (
         <FailedEntriesBanner

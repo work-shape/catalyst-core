@@ -241,11 +241,6 @@ export interface WorkflowRunRead {
    * counts say what failed inside a run that ended `done`. Absent until they arrived.
    */
   entryLoops?: readonly WorkflowStepRunView[] | undefined;
-  /**
-   * Present while the run has step runs after those read: reads the next page. Until then,
-   * steps late in the run show no state.
-   */
-  moreStepRuns?: { loading: boolean; load(): void };
   retry(): void;
 }
 
@@ -265,7 +260,7 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
   });
   const run = query.data;
   // The pages of the frame read so far are read again while the run is going, each from its
-  // own cursor, and the reader asks for the next page from the page.
+  // own cursor. Follow every cursor automatically so steps after loop items get their state.
   const steps = useInfiniteQuery({
     queryKey: [...keys.runs, "frame", runId],
     queryFn: ({ pageParam, signal }) => runsOf(runs).listFrameStepRuns(runId, pageParam, signal),
@@ -275,6 +270,13 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
     retry: retryUnlessGone,
     refetchInterval: () => runRefreshMs(run)
   });
+  const pages = steps.data?.pages;
+  const { hasNextPage, isFetching, isError, fetchNextPage } = steps;
+  useEffect(() => {
+    if (hasNextPage && !isFetching && !isError) {
+      void fetchNextPage().catch(() => undefined);
+    }
+  }, [pages, hasNextPage, isFetching, isError, fetchNextPage]);
   // A run that ends while the page follows it has its steps read once more, after the last
   // change, and never again.
   const ended = run === undefined ? undefined : run.ended;
@@ -286,7 +288,6 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
     }
     if (ended !== undefined) endedBefore.current = ended;
   }, [ended, readStepsAgain]);
-  const pages = steps.data?.pages;
   return {
     run,
     problem: query.isError && run === undefined ? readProblem(query.error) : undefined,
@@ -295,14 +296,6 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
     stepsFailed: steps.isError && !query.isError,
     stepRuns: pages?.flatMap((page) => page.stepRuns),
     entryLoops: pages?.flatMap((page) => page.entryLoops),
-    ...(steps.hasNextPage
-      ? {
-          moreStepRuns: {
-            loading: steps.isFetchingNextPage,
-            load: () => void steps.fetchNextPage().catch(() => undefined)
-          }
-        }
-      : {}),
     retry: () => {
       void query.refetch().catch(() => undefined);
       // Before the run arrived there are no steps to ask for.
