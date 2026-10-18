@@ -1,6 +1,16 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve, sep } from "node:path";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  rmdir,
+  writeFile
+} from "node:fs/promises";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import type { Asset } from "@work-shape/catalyst-api-contract";
 
 /** The common baseline of a pulled folder; each kind keeps its own name and state filename. */
@@ -68,7 +78,7 @@ export async function writeFolderState(
 }
 
 /** Refuse links before reading a baseline or replacing a folder, including untracked entries. */
-export async function refuseLinks(directory: string): Promise<void> {
+export async function refuseLinks(directory: string, recursive = true): Promise<void> {
   let stats;
   try {
     stats = await lstat(directory);
@@ -78,7 +88,7 @@ export async function refuseLinks(directory: string): Promise<void> {
   }
   if (stats.isSymbolicLink())
     throw new Error(`'${directory}' is a symbolic link. Pull into a folder without links.`);
-  if (stats.isDirectory()) {
+  if (recursive && stats.isDirectory()) {
     for (const entry of await readdir(directory)) await refuseLinks(join(directory, entry));
   }
 }
@@ -94,7 +104,7 @@ export async function localChanges(
   const walk = async (folder: string, prefix: string) => {
     for (const entry of await readdir(folder, { withFileTypes: true })) {
       const path = `${prefix}${entry.name}`;
-      if (path === filename) continue;
+      if (path === filename || (entry.name === ".DS_Store" && entry.isFile())) continue;
       const tracked =
         Object.hasOwn(state.files, path) ||
         Object.keys(state.files).some((file) => file.startsWith(`${path}/`));
@@ -118,7 +128,9 @@ export async function localChanges(
       (path) => Object.hasOwn(state.files, path) && now[path] !== state.files[path]
     ),
     added: Object.keys(now).filter((path) => !Object.hasOwn(state.files, path)),
-    removed: Object.keys(state.files).filter((path) => !Object.hasOwn(now, path))
+    removed: Object.keys(state.files).filter(
+      (path) => basename(path) !== ".DS_Store" && !Object.hasOwn(now, path)
+    )
   };
 }
 
@@ -131,6 +143,7 @@ export async function writeFolderFiles(
   const hashes: Record<string, string> = {};
   for (const file of files) {
     const target = safeTarget(directory, file.path);
+    if (basename(file.path) === ".DS_Store") continue;
     const bytes =
       file.base64 !== undefined
         ? Buffer.from(file.base64, "base64")
@@ -158,12 +171,14 @@ export async function replaceFolder(
   state: Omit<FolderState, "files"> & { skill: string },
   beforeReplace: () => Promise<void>
 ): Promise<number> {
-  await mkdir(dirname(directory), { recursive: true });
-  const temporary = await mkdtemp(join(dirname(directory), ".catalyst-pull-"));
-  const backup = join(temporary, "previous");
-  const staged = join(temporary, "next");
+  const createdParent = await mkdir(dirname(directory), { recursive: true });
+  let temporary: string | undefined;
+  let installed = false;
   let moved = false;
   try {
+    temporary = await mkdtemp(join(dirname(directory), ".catalyst-pull-"));
+    const backup = join(temporary, "previous");
+    const staged = join(temporary, "next");
     await mkdir(staged);
     if (files.some((file) => file.path === filename))
       throw new Error(`The instance named the reserved state file '${filename}'.`);
@@ -182,15 +197,28 @@ export async function replaceFolder(
       if (moved) await rename(backup, directory);
       throw error;
     }
+    installed = true;
     return Object.keys(hashes).length;
   } finally {
-    await rm(temporary, { recursive: true, force: true });
+    if (temporary !== undefined) await rm(temporary, { recursive: true, force: true });
+    if (!installed && createdParent !== undefined) {
+      // Remove only empty parents this pull created; preserve concurrent additions.
+      for (let parent = dirname(directory); ; parent = dirname(parent)) {
+        const removed = await rmdir(parent).then(
+          () => true,
+          () => false
+        );
+        if (!removed || parent === createdParent) break;
+      }
+    }
   }
 }
 
 export async function folderIsEmpty(directory: string): Promise<boolean> {
   try {
-    return (await readdir(directory)).length === 0;
+    return (await readdir(directory, { withFileTypes: true })).every(
+      (entry) => entry.name === ".DS_Store" && entry.isFile()
+    );
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") return true;
     throw error;
@@ -201,7 +229,7 @@ function safeTarget(directory: string, path: string): string {
   const target = resolve(directory, path);
   if (
     path.includes("\\") ||
-    path.split("/").some((part) => part === ".." || part === "") ||
+    path.split("/").some((part) => part === "." || part === ".." || part === "") ||
     !target.startsWith(`${resolve(directory)}${sep}`)
   ) {
     throw new Error(`The instance named the file '${path}', which lies outside the folder.`);

@@ -219,6 +219,134 @@ describe("catalyst skill pull (ADISC-2 check 71)", () => {
     }
   );
 
+  it("refuses an unbound repo before walking its node_modules links", async () => {
+    const f = await fixture();
+    await fs.mkdir(join(f.cwd, "node_modules"));
+    await fs.symlink("missing-package", join(f.cwd, "node_modules/package"));
+    const before = await tree(f.cwd);
+    expect(await f.pull(".")).toMatchObject({
+      code: 1,
+      err: expect.stringContaining("holds files and no pulled skill")
+    });
+    expect(f.calls.some((call) => call.operation === "assets.get")).toBe(false);
+    expect(await tree(f.cwd)).toEqual(before);
+  });
+
+  it.each(["agent", "agents", "workflow", "guardrail", "unknown-kind"])(
+    "rejects %s pull as usage before contacting the instance",
+    async (kind) => {
+      const f = await fixture();
+      expect(await f.run([kind, "pull", "guide", "copy"])).toMatchObject({
+        code: 2,
+        err: expect.stringContaining("'pull' is a command of skills and Apps only")
+      });
+      expect(f.calls).toEqual([]);
+      expect(await tree(f.cwd)).toEqual({});
+    }
+  );
+
+  it("shows skill pull once in offline help without advertising pull for every kind", async () => {
+    const f = await fixture();
+    const result = await f.run(["--help"]);
+    expect(result.code).toBe(0);
+    expect(result.out.match(/catalyst skill pull <name> <folder>/gu)).toHaveLength(1);
+    expect(result.out).not.toContain("catalyst <kind> pull");
+    expect(f.calls).toEqual([]);
+  });
+
+  it("cleans up newly created parents after a failed nested pull", async () => {
+    const f = await fixture();
+    await fs.mkdir(join(f.cwd, "existing"));
+    await fs.writeFile(join(f.cwd, "existing/mine"), "keep");
+    const before = await tree(f.cwd);
+    f.state.files = files.map((file) => ({ ...file, sha256: "0".repeat(64) }));
+    for (const target of ["new/nested/copy", "existing/new/nested/copy"])
+      expect(await f.pull(target)).toMatchObject({ code: 1 });
+    expect(await tree(f.cwd)).toEqual(before);
+  });
+
+  it("preserves additions inside newly created parents when a pull fails", async () => {
+    const f = await fixture();
+    const actual = await vi.importActual<typeof fs>("node:fs/promises");
+    vi.mocked(fs.writeFile).mockImplementation(async () => {
+      await actual.writeFile(join(f.cwd, "new/mine"), "concurrent addition");
+      throw new Error("staging failed");
+    });
+    expect(await f.pull("new/nested/copy")).toMatchObject({ code: 1 });
+    expect(await tree(f.cwd)).toEqual({
+      "new/": "directory",
+      "new/mine": `420:${Buffer.from("concurrent addition").toString("base64")}`
+    });
+  });
+
+  it("refuses refreshing a folder that contains the process cwd", async () => {
+    const f = await fixture();
+    expect(await f.pull()).toMatchObject({ code: 0 });
+    for (const cwd of [join(f.cwd, "copy"), join(f.cwd, "copy/references")]) {
+      const before = await tree(f.cwd);
+      f.calls.length = 0;
+      const cwdMock = vi.spyOn(process, "cwd").mockReturnValue(cwd);
+      try {
+        expect(await f.pull()).toMatchObject({
+          code: 1,
+          err: expect.stringContaining("contains the current working directory")
+        });
+      } finally {
+        cwdMock.mockRestore();
+      }
+      expect(f.calls.some((call) => call.operation === "assets.get")).toBe(false);
+      expect(await tree(f.cwd)).toEqual(before);
+    }
+  });
+
+  it("ignores only .DS_Store during pull and refresh and never stages it", async () => {
+    const f = await fixture();
+    await fs.mkdir(join(f.cwd, "copy"));
+    await fs.writeFile(join(f.cwd, "copy/.DS_Store"), "Finder visited an empty folder");
+    f.state.files = [
+      ...files,
+      ...files
+        .slice(0, 1)
+        .flatMap((file) => [".DS_Store", "references/.DS_Store"].map((path) => ({ ...file, path })))
+    ];
+    expect(await f.pull()).toMatchObject({ code: 0 });
+    for (const path of [".DS_Store", "references/.DS_Store"]) {
+      await expect(fs.lstat(join(f.cwd, "copy", path))).rejects.toMatchObject({ code: "ENOENT" });
+      await fs.writeFile(join(f.cwd, "copy", path), "Finder metadata");
+    }
+    // Older pulls may already track Finder metadata; neither edits nor removal count.
+    const statePath = join(f.cwd, "copy", stateFile);
+    const oldState = JSON.parse(await fs.readFile(statePath, "utf8"));
+    oldState.files[".DS_Store"] = files[0]?.sha256;
+    oldState.files["references/.DS_Store"] = files[0]?.sha256;
+    await fs.writeFile(statePath, JSON.stringify(oldState));
+    await fs.rm(join(f.cwd, "copy/references/.DS_Store"));
+    vi.mocked(fs.writeFile).mockClear();
+    f.state.revision = 2;
+    expect(await f.pull()).toMatchObject({ code: 0 });
+    expect(fs.writeFile).not.toHaveBeenCalledWith(
+      expect.stringMatching(/\/\.DS_Store$/u),
+      expect.anything(),
+      expect.anything()
+    );
+    const baseline = JSON.parse(await fs.readFile(join(f.cwd, "copy", stateFile), "utf8"));
+    expect(Object.keys(baseline.files)).toEqual(files.map((file) => file.path));
+    await fs.writeFile(join(f.cwd, "copy/.DS_Store.backup"), "foreign");
+    const before = await tree(f.cwd);
+    expect(await f.pull()).toMatchObject({
+      code: 1,
+      err: expect.stringContaining(".DS_Store.backup")
+    });
+    expect(await tree(f.cwd)).toEqual(before);
+    await fs.rm(join(f.cwd, "copy/.DS_Store.backup"));
+    await fs.mkdir(join(f.cwd, "copy/.DS_Store"));
+    await fs.writeFile(join(f.cwd, "copy/.DS_Store/mine"), "foreign");
+    expect(await f.pull()).toMatchObject({
+      code: 1,
+      err: expect.stringContaining(".DS_Store/mine")
+    });
+  });
+
   it("refuses local edits, additions and removals and lists their paths", async () => {
     const f = await fixture();
     expect(await f.pull()).toMatchObject({ code: 0 });
@@ -268,49 +396,55 @@ describe("catalyst skill pull (ADISC-2 check 71)", () => {
     expect(await tree(f.cwd)).toEqual(before);
   });
 
-  it.each(["wrong hash", "broken HTTP", "broken file transfer", "../x", "/abs", "a\\b"])(
-    "keeps both new and earlier targets unchanged after %s",
-    async (failure) => {
-      for (const earlier of [false, true]) {
-        const f = await fixture();
-        if (earlier) expect(await f.pull()).toMatchObject({ code: 0 });
-        const before = await tree(f.cwd);
-        f.state.revision = 2;
-        if (failure === "wrong hash")
-          f.state.files = files.map((file, index) =>
-            index === 2 ? { ...file, sha256: "0".repeat(64) } : file
-          );
-        else if (failure === "broken HTTP") f.state.broken = true;
-        else if (failure === "broken file transfer") {
-          const actual = await vi.importActual<typeof fs>("node:fs/promises");
-          let written = 0;
-          vi.mocked(fs.writeFile).mockImplementation(async (path, data, options) => {
-            if (String(path).endsWith("/scripts/run.py")) {
-              expect(written).toBe(2);
-              throw new Error("transfer broke after second file");
-            }
-            await actual.writeFile(path, data, options);
-            written += 1;
-          });
-        } else
-          f.state.files = [
-            ...files.slice(0, 2),
-            {
-              ...files[0],
-              path: failure,
-              sha256: files[0]?.sha256 ?? "",
-              bytes: 0,
-              contentType: "text/plain"
-            }
-          ].filter((file): file is NonNullable<Asset["files"]>[number] => file !== undefined);
-        expect(await f.pull()).toMatchObject({ code: 1, out: "" });
-        expect(await tree(f.cwd)).toEqual(before);
-        vi.mocked(fs.writeFile).mockImplementation(
-          (await vi.importActual<typeof fs>("node:fs/promises")).writeFile
+  it.each([
+    "wrong hash",
+    "broken HTTP",
+    "broken file transfer",
+    "../x",
+    "/abs",
+    "a\\b",
+    "./a",
+    "a/./b"
+  ])("keeps both new and earlier targets unchanged after %s", async (failure) => {
+    for (const earlier of [false, true]) {
+      const f = await fixture();
+      if (earlier) expect(await f.pull()).toMatchObject({ code: 0 });
+      const before = await tree(f.cwd);
+      f.state.revision = 2;
+      if (failure === "wrong hash")
+        f.state.files = files.map((file, index) =>
+          index === 2 ? { ...file, sha256: "0".repeat(64) } : file
         );
-      }
+      else if (failure === "broken HTTP") f.state.broken = true;
+      else if (failure === "broken file transfer") {
+        const actual = await vi.importActual<typeof fs>("node:fs/promises");
+        let written = 0;
+        vi.mocked(fs.writeFile).mockImplementation(async (path, data, options) => {
+          if (String(path).endsWith("/scripts/run.py")) {
+            expect(written).toBe(2);
+            throw new Error("transfer broke after second file");
+          }
+          await actual.writeFile(path, data, options);
+          written += 1;
+        });
+      } else
+        f.state.files = [
+          ...files.slice(0, 2),
+          {
+            ...files[0],
+            path: failure,
+            sha256: files[0]?.sha256 ?? "",
+            bytes: 0,
+            contentType: "text/plain"
+          }
+        ].filter((file): file is NonNullable<Asset["files"]>[number] => file !== undefined);
+      expect(await f.pull()).toMatchObject({ code: 1, out: "" });
+      expect(await tree(f.cwd)).toEqual(before);
+      vi.mocked(fs.writeFile).mockImplementation(
+        (await vi.importActual<typeof fs>("node:fs/promises")).writeFile
+      );
     }
-  );
+  });
 
   it("restores the target when moving the staged folder into place fails", async () => {
     for (const earlier of [false, true]) {
