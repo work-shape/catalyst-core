@@ -303,8 +303,13 @@ test("a failed run opens on the step that failed, and a loop at work lists its f
   const failed = await openSample(page, "monthly-booking-check/runs/run-failed");
   await expect(failed.locator('[data-flow-id="clients"]')).toHaveAttribute("data-status", "failed");
   await expect(failed.locator('[data-step-panel="clients"]')).toBeVisible();
+  // C7: the refusal names the account and the Connection. The sample reader administers no
+  // technical account, so the advice stays to ask an administrator.
   await expect(failed.locator('[data-step-panel="clients"]')).toContainText(
-    "The workflow may not do this: its account may not use the Connection “Bookings”."
+    "The workflow may not do this: its account “Workflow runner” may not use the Connection “Bookings”."
+  );
+  await expect(failed.locator('[data-step-panel="clients"]')).toContainText(
+    "Ask an administrator to give the workflow that right, then run it again."
   );
 
   const running = await openSample(page, "monthly-booking-check/runs/run-running");

@@ -35066,9 +35066,7 @@
             },
             "required": [
               "id",
-              "name",
-              "timeZone",
-              "timeZoneDefaulted"
+              "name"
             ]
           },
           "release": {

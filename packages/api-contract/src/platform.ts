@@ -81,8 +81,9 @@ export const platformContextSchema = z.object({
   instance: z.object({
     id: z.string(),
     name: z.string(),
-    timeZone: z.string(),
-    timeZoneDefaulted: z.boolean()
+    // Older v1 instances omit schedule metadata; current instances always supply both.
+    timeZone: z.string().optional(),
+    timeZoneDefaulted: z.boolean().optional()
   }),
   release: z.object({
     version: z.string(),

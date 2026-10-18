@@ -432,13 +432,17 @@ export interface InstanceTimeZone {
   defaulted: boolean;
 }
 
-/** The instance's zone as its context names it, for a schedule saved without one. */
+/**
+ * The instance's zone as its context names it, for a schedule saved without one. An older
+ * server names no zone: then nothing, never a guessed one.
+ */
 export function instanceTimeZoneOf(
   context: Pick<PlatformContext, "instance"> | undefined
 ): InstanceTimeZone | undefined {
-  return context === undefined
+  const timeZone = context?.instance.timeZone;
+  return timeZone === undefined
     ? undefined
-    : { timeZone: context.instance.timeZone, defaulted: context.instance.timeZoneDefaulted };
+    : { timeZone, defaulted: context?.instance.timeZoneDefaulted ?? false };
 }
 
 /** What the screen knows of a failed step beside its failure: its account and its Connection. */
