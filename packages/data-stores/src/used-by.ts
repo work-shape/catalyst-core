@@ -182,7 +182,7 @@ const appActionSchema = z.union([
 ]);
 
 /** What the published revision of an App does with the store, or nothing. */
-function appUse(asset: ConfigAssetRecord, store: string): StoreUse | undefined {
+export function appUse(asset: ConfigAssetRecord, store: string): StoreUse | undefined {
   const config = appConfigSchema.safeParse(asset.publishedConfig);
   if (!config.success) return undefined;
   const actions = config.data.manifest.actions.flatMap((action) => {
@@ -245,7 +245,7 @@ const knowledgeBaseConfigSchema = z.object({
 });
 
 /** The title of a published Knowledge Base on the store, or nothing. */
-function knowledgeBaseUse(asset: ConfigAssetRecord, store: string): string | undefined {
+export function knowledgeBaseUse(asset: ConfigAssetRecord, store: string): string | undefined {
   const config = knowledgeBaseConfigSchema.safeParse(asset.publishedConfig);
   return config.success && config.data.backend.dataStore === store
     ? (config.data.title ?? asset.name)

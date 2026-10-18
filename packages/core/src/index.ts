@@ -47,6 +47,7 @@ export * from "./origins";
 export * from "./pages";
 export * from "./workflow-blocks";
 export * from "./workflow-principal-rights";
+export * from "./publish-narrative";
 export * from "./workflow-runs";
 export * from "./workflow-step-job";
 export * from "./workflows";

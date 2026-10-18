@@ -217,6 +217,7 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
     knowledgeBackend: dataStores.knowledgeBackend,
     knowledgeSourceJobs: dataStores.knowledgeSourceJobs,
     knowledgeSources: dataStores.knowledgeSources,
+    publishNarrativeData: dataStores.publishNarrativeData,
     operationSources: () => [dataStores.operationSource],
     start: ({ files }) => {
       if (files) {

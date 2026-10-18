@@ -4,12 +4,20 @@ import { Banner, Button, ConfirmDialog, InlineError } from "@work-shape/catalyst
 import type { DraftDecision } from "../build-area/build-data";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { useTranslation } from "../../shared/i18n";
+import {
+  narrativeHolds,
+  PublishDetails,
+  PublishNarrativeReadLead,
+  usePublishNarrative,
+  type PublishNarrativeRead
+} from "../../shared/publish-narrative";
 import { useWorkflowDraftWrites } from "./workflow-data";
 import { draftState, editOffered, type WorkflowDraftState } from "./workflow-model";
 import type { WorkflowView } from "./workflow-views";
 import { useWorkflowsHost } from "./workflows-host";
 import { WorkflowPublishRights } from "./workflow-publish-rights";
 import { workflowPublishRefusal } from "./workflow-publish-rights-model";
+import { useWorkflowsSource } from "./workflow-source";
 
 // The draft of a Workflow on its page: the conversation in which the agent changes it, and the
 // bar that says the draft is not what is published, with the test run, the publish and the
@@ -160,6 +168,10 @@ export function useWorkflowDraft(
   const [waits, setWaits] = useState(false);
   const state = draftState(view);
   const draft = view?.draft;
+  const narrative = useWorkflowPublishNarrative(
+    workflow,
+    asking === "publish" ? draft?.revision : undefined
+  );
   if (host === undefined || view === undefined || draft === undefined || state === undefined) {
     return { bar: undefined, dialog: null };
   }
@@ -210,6 +222,7 @@ export function useWorkflowDraft(
           publishedRevision={draft.publishedRevision}
           {...(draft.publishQuestion ? { question: draft.publishQuestion } : {})}
           rights={<WorkflowPublishRights workflow={workflow} />}
+          narrative={narrative}
           loading={busy}
           error={error}
           waits={waits}
@@ -222,6 +235,27 @@ export function useWorkflowDraft(
   };
 }
 
+/** A question asked without the instance's sentence, as in a sample. */
+const NO_NARRATIVE: PublishNarrativeRead = { status: "none" };
+
+/**
+ * The instance's sentence on publishing one revision of a Workflow, read while the question
+ * about it is open: nothing is read for another question or where the source words none.
+ */
+function useWorkflowPublishNarrative(
+  workflow: string,
+  revision: number | undefined
+): PublishNarrativeRead {
+  const source = useWorkflowsSource();
+  const read = source.publishNarrative?.read;
+  return usePublishNarrative(
+    [source.key, "workflow", workflow, revision],
+    read === undefined || revision === undefined
+      ? undefined
+      : (signal) => read(workflow, revision, signal)
+  );
+}
+
 /** Asks once before a draft is published or discarded, and answers a refusal in place. */
 export function DraftChangeDialog({
   change,
@@ -230,6 +264,7 @@ export function DraftChangeDialog({
   publishedRevision,
   question = [],
   rights,
+  narrative = NO_NARRATIVE,
   loading,
   error,
   waits = false,
@@ -245,6 +280,8 @@ export function DraftChangeDialog({
   question?: readonly string[];
   /** What the technical accounts of the publish lack, and the step that gives it. */
   rights?: ReactNode;
+  /** The instance's sentence on the publish, read for `revision`. */
+  narrative?: PublishNarrativeRead;
   loading: boolean;
   error: string | undefined;
   /** The publish was sent and waits for an approver. */
@@ -254,20 +291,14 @@ export function DraftChangeDialog({
 }) {
   const { t } = useTranslation();
   const publish = change === "publish";
-  return (
-    <ConfirmDialog
-      open
-      tone={publish ? "primary" : "danger"}
-      title={t(publish ? "workflows.draft.publishTitle" : "workflows.draft.discardTitle", { name })}
-      confirmLabel={t(publish ? "workflows.draft.publish" : "workflows.draft.discard")}
-      loading={loading}
-      onConfirm={onConfirm}
-      onClose={onClose}
-    >
-      {publish
-        ? t("workflows.draft.publishBody", { number: revision })
-        : t("workflows.draft.discardBody", { number: publishedRevision ?? revision })}
-      {publish && question.length > 0 ? (
+  const details = (
+    <>
+      {narrative.status === "none" ? null : (
+        <p className="text-body text-muted-foreground" data-testid="workflow-publish-body">
+          {t("workflows.draft.publishBody", { number: revision })}
+        </p>
+      )}
+      {question.length > 0 ? (
         <ul
           aria-label={t("workflows.draft.publishRaises")}
           className="mt-3 grid gap-1 text-body text-foreground"
@@ -278,7 +309,32 @@ export function DraftChangeDialog({
           ))}
         </ul>
       ) : null}
-      {publish ? rights : null}
+      {rights}
+    </>
+  );
+  return (
+    <ConfirmDialog
+      open
+      tone={publish ? "primary" : "danger"}
+      title={t(publish ? "workflows.draft.publishTitle" : "workflows.draft.discardTitle", { name })}
+      confirmLabel={t(publish ? "workflows.draft.publish" : "workflows.draft.discard")}
+      loading={loading}
+      confirmDisabled={publish && narrativeHolds(narrative)}
+      onConfirm={onConfirm}
+      onClose={onClose}
+    >
+      {publish ? null : t("workflows.draft.discardBody", { number: publishedRevision ?? revision })}
+      {publish && narrative.status === "none"
+        ? t("workflows.draft.publishBody", { number: revision })
+        : null}
+      {publish && narrative.status !== "none" ? (
+        // The sentence leads; which revision goes live is a detail of it.
+        <div className="grid gap-3 text-foreground">
+          <PublishNarrativeReadLead read={narrative} />
+          <PublishDetails>{details}</PublishDetails>
+        </div>
+      ) : null}
+      {publish && narrative.status === "none" ? details : null}
       {error ? <InlineError className="mt-3">{error}</InlineError> : null}
       {waits ? (
         <Banner layout="line" role="status" className="mt-3" data-testid="workflow-publish-waits">

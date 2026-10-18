@@ -16,6 +16,7 @@ import {
   runAppCommand,
   type AppCommandOptions
 } from "./app-commands";
+import { workflowPublishDetails } from "./workflow-publish-review";
 import { readAssetSource } from "./asset-sources";
 import { setAvailability, setDefault } from "./asset-pointers";
 import { runFollowCommand } from "./follow-commands";
@@ -298,13 +299,28 @@ const VERBS: Record<string, Verb> = {
           session.kind.actions.approve !== undefined ||
           (agent && session.scope.workspaceId !== undefined);
         if (asks) {
+          const details =
+            session.kind.kind === "workflow" && !values.yes && session.options.prompt
+              ? await workflowPublishDetails({
+                  api: session.api,
+                  options: session.options,
+                  scope: session.scope,
+                  name,
+                  revision,
+                  json: values.json
+                })
+              : undefined;
           const asked = {
             kind: session.kind.kind,
             command: kindNoun(session.kind),
             name,
             revision
           };
-          const answer = await askBeforePublish(session.options, { ...asked, yes: values.yes });
+          const answer = await askBeforePublish(session.options, {
+            ...asked,
+            yes: values.yes,
+            ...(details ? { details } : {})
+          });
           if (answer === "refused") return EXIT.refused;
           unattended = answer === "unattended";
         } else if (values.yes && session.kind.kind === "data_store") {

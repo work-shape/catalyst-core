@@ -163,6 +163,18 @@ export const assetFileSchema = z.object({
   base64: z.string().optional()
 });
 
+/**
+ * The plain sentence a publish question leads with (PUBQ-1), in the reader's language: what
+ * runs, when, as which account, what it reads, writes and sends, and who sees it, then one
+ * warning for each step a guardrail in force will or may stop when the revision runs live.
+ * Names and counts only, never a row value. A held publish's review carries the same object.
+ */
+export const publishNarrativeSchema = z.object({
+  summary: z.string(),
+  /** Empty where no guardrail in force stops a step, and for an App. */
+  warnings: z.array(z.string())
+});
+
 export const assetSchema = z.object({
   id: z.string(),
   kind: z.string(),
@@ -176,6 +188,11 @@ export const assetSchema = z.object({
   runsAs: z.string().optional(),
   /** Unrecorded draft review lines naming its audience and shared source accounts. */
   publishQuestion: z.array(z.string()).optional(),
+  /**
+   * Of an App or a Workflow, for a reader of its draft: the publish question's sentence and
+   * warnings for the revision this read returns.
+   */
+  publishNarrative: publishNarrativeSchema.optional(),
   /**
    * The revision `config` and `files` are of, for a kind with a draft and a published revision:
    * the draft where the call names none.
@@ -609,6 +626,7 @@ export const assetPreconditionRequiredDetailsSchema = z.object({
 export type AssetScope = z.infer<typeof assetScopeSchema>;
 export type AssetSummary = z.infer<typeof assetSummarySchema>;
 export type Asset = z.infer<typeof assetSchema>;
+export type PublishNarrative = z.infer<typeof publishNarrativeSchema>;
 export type AssetSyncItem = z.infer<typeof assetSyncItemSchema>;
 export type AssetSyncRefusedItem = z.infer<typeof assetSyncRefusedItemSchema>;
 export type AssetRevisionConflict = z.infer<typeof assetRevisionConflictSchema>;

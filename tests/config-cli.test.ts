@@ -3449,7 +3449,7 @@ describe("catalyst asset commands against an instance", () => {
       );
       expect(declined).toMatchObject({ code: 1, err: "Nothing was published.\n" });
       expect(declining.asked).toEqual([
-        "Publish revision 1 of app 'offers'? If approval is required, this files a request in the Inbox. [y/N] "
+        "Publish revision 1 of app 'offers'? If approval is required, this files a request in the Inbox. [y/N; d=Details] "
       ]);
       expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
       const published = await cliAs(t.instance, t.admin.id, cwd, ["y"]).run(

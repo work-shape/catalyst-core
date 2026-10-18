@@ -285,7 +285,8 @@ describe("catalyst app commands", () => {
         t.workspaceId
       );
       expect(first, first.err).toMatchObject({ code: 0 });
-      expect(first.out).toContain("Publish revision 1 of App 'offers' (its first publish).");
+      expect(first.out).toContain("opens for");
+      expect(first.out).not.toContain("Publish revision 1 of App 'offers' (its first publish).");
       expect(first.out).toContain("Published revision 1 of App 'offers'.");
 
       await writeFile(
@@ -296,20 +297,22 @@ describe("catalyst app commands", () => {
 
       const asked = await run("app", "publish", "offers", "--workspace", t.workspaceId);
       expect(asked.code).toBe(1);
-      expect(asked.out).toContain("Publish revision 2 of App 'offers' in place of revision 1.");
-      expect(asked.out).toContain("External hosts it calls:\n  api.example.org  (added)");
+      expect(asked.out).not.toContain("Publish revision 2 of App 'offers' in place of revision 1.");
+      expect(asked.out).not.toContain("External hosts it calls:\n  api.example.org  (added)");
       expect(asked.err).toContain("needs your answer here, so a run without a terminal");
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
 
       const questions: string[] = [];
       const declined = await cliAs(t.instance, t.admin.id, cwd, async (question) => {
         questions.push(question);
-        return "n";
+        return questions.length === 1 ? "d" : "n";
       })("app", "publish", "offers", "--workspace", t.workspaceId);
       expect(declined).toMatchObject({ code: 1, err: "Nothing was published.\n" });
-      expect(questions).toEqual([
-        "Publish revision 2 of app 'offers'? If approval is required, this files a request in the Inbox. [y/N] "
-      ]);
+      const publishQuestion =
+        "Publish revision 2 of app 'offers'? If approval is required, this files a request in the Inbox. [y/N; d=Details] ";
+      expect(questions).toEqual([publishQuestion, publishQuestion]);
+      expect(declined.out).toContain("Publish revision 2 of App 'offers' in place of revision 1.");
+      expect(declined.out).toContain("External hosts it calls:\n  api.example.org  (added)");
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
 
       const confirmed = await cliAs(t.instance, t.admin.id, cwd, async () => "y")(
@@ -325,7 +328,9 @@ describe("catalyst app commands", () => {
         publishedRevision: 2,
         replacedRevision: 1
       });
-      expect(confirmed.err).toContain("Publish revision 2 of App 'offers' in place of revision 1.");
+      expect(confirmed.err).not.toContain(
+        "Publish revision 2 of App 'offers' in place of revision 1."
+      );
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 2 });
 
       const status = await run("app", "status", "offers", "--workspace", t.workspaceId);

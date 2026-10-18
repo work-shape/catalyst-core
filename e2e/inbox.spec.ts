@@ -8,7 +8,8 @@ import {
   signIn,
   tabName
 } from "./inbox-fixtures";
-import { approvePublishInInbox, memberPublishesApp } from "./publish-approval-fixtures";
+import { publishQuestionsLeadWithTheSentence } from "./publish-narrative-fixtures";
+import { approveMemberPublish } from "./publish-approval-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Response } from "@playwright/test";
 import { expect, test } from "./test";
@@ -789,10 +790,10 @@ test("a member's publish of an App waits in the Inbox with its review, and an ad
 }, testInfo) => {
   test.setTimeout(shotsDir ? 300_000 : 120_000);
   await signIn(page, reviewer);
-  const waiting = await memberPublishesApp(page, browser, baseURL, pageErrors, testInfo.retry);
-  try {
-    await approvePublishInInbox(page, waiting);
-  } finally {
-    await waiting.end();
-  }
+  await approveMemberPublish({ page, browser, baseURL, pageErrors }, testInfo.retry);
 });
+
+test(
+  "PUBQ-1: every publish question leads with the plain sentence in the reader's language, the lists behind Details",
+  publishQuestionsLeadWithTheSentence
+);

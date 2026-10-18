@@ -149,7 +149,7 @@ export function createOperationCallApprovalHandler(
       const about = subjectKindOf(call);
       const review =
         about && call.subject && context.status === "pending"
-          ? await about.review(call.subject, context.viewer?.inList ?? false)
+          ? await about.review(call.subject, context.viewer?.inList ?? false, context.viewer)
           : undefined;
       return toJsonObject({
         ...previewOf(call),

@@ -52,13 +52,31 @@ export function DisclosureTrigger({
   );
 }
 
+export interface DisclosureContentProps extends HTMLAttributes<HTMLDivElement> {
+  /**
+   * Keeps the folded content in the page, hidden, so what it reads is read while it is folded:
+   * a question whose click waits for a list behind "Details" still waits for it.
+   */
+  keepMounted?: boolean;
+}
+
 export function DisclosureContent({
   className,
   children,
+  keepMounted = false,
   ...props
-}: HTMLAttributes<HTMLDivElement>) {
+}: DisclosureContentProps) {
   return (
-    <Collapsible.Content className={cn("overflow-hidden text-body", className)} {...props}>
+    <Collapsible.Content
+      className={cn(
+        "overflow-hidden text-body",
+        // Radix renders forced content as open; a folded one is hidden here, by its state.
+        keepMounted && "data-[state=closed]:hidden",
+        className
+      )}
+      {...(keepMounted ? { forceMount: true } : {})}
+      {...props}
+    >
       <div
         className={cn(
           "mt-1 flex flex-col gap-1",

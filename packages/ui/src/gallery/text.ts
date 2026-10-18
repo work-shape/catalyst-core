@@ -105,6 +105,8 @@ export interface GalleryText
   confirmPublishTitle: string;
   confirmPublishBody: string;
   confirmWhileRunning: string;
+  confirmNotYet: string;
+  confirmNotYetBody: string;
   openPopover: string;
   popoverTitle: string;
   popoverBody: string;
@@ -337,6 +339,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     confirmPublishTitle: "Publish Support assistant?",
     confirmPublishBody: "Everyone in this workspace gets the new version at once.",
     confirmWhileRunning: "While it runs",
+    confirmNotYet: "Not yet answerable",
+    confirmNotYetBody: "What this publish makes live is still being read.",
     openPopover: "Open popover",
     popoverTitle: "Filter by state",
     popoverBody: "Only agents in the chosen state are listed.",
@@ -603,6 +607,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     confirmPublishTitle: "Support-Assistent veröffentlichen?",
     confirmPublishBody: "Alle in diesem Workspace erhalten sofort die neue Version.",
     confirmWhileRunning: "Während es läuft",
+    confirmNotYet: "Noch nicht beantwortbar",
+    confirmNotYetBody: "Was diese Veröffentlichung live schaltet, wird noch gelesen.",
     openPopover: "Popover öffnen",
     popoverTitle: "Nach Status filtern",
     popoverBody: "Es werden nur Agenten im gewählten Status angezeigt.",

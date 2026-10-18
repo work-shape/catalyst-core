@@ -36,6 +36,7 @@ import {
   type AssetTarget
 } from "./asset-target";
 import type { AssetWorkflowOptions } from "../types";
+import { unavailablePublishNarrative } from "../publish-narrative/publish-narrator";
 
 /**
  * Who is told of an agent's pending draft: a holder of `agent.write` on it, and the holder of
@@ -192,16 +193,36 @@ export class AssetReadWorkflow {
             })
           ).get(asset.id)
         : undefined;
+    // Only a kind with a publish question reads the reader's language: an App, a Workflow, a
+    // Knowledge Base.
+    const asksPublish =
+      !publishedOnly &&
+      (target.kind.publishQuestion !== undefined || target.kind.publishReach !== undefined);
+    const locale = asksPublish ? await this.readerLocale(call) : undefined;
     const publishQuestion =
-      !publishedOnly && target.kind.publishQuestion
+      locale && target.kind.publishQuestion
         ? await target.kind.publishQuestion({
             assetId: asset.id,
             scope: asset.scope,
             config: content.config,
-            locale: await this.readerLocale(call),
+            locale,
             names: this.addresseeNames()
           })
         : undefined;
+    // The sentence the publish question leads with, for the revision this read returns (PUBQ-1).
+    const publishNarrative = locale
+      ? await this.options.operationCalls?.publishNarrator
+          ?.narrate({
+            kind: target.kind.kind,
+            name: asset.name,
+            scope: asset.scope,
+            revision: content.contentRevision ?? asset.revision,
+            config: content.config,
+            locale,
+            access: call.access
+          })
+          .catch(() => unavailablePublishNarrative(locale))
+      : undefined;
     const agentStatus =
       target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;
     // What the caller may do here, decided as each write decides it, so the page offers no
@@ -222,6 +243,7 @@ export class AssetReadWorkflow {
       ...content,
       ...(runsAs === undefined ? {} : { runsAs }),
       ...(publishQuestion?.length ? { publishQuestion } : {}),
+      ...(publishNarrative ? { publishNarrative } : {}),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
       allowed,

@@ -5,6 +5,12 @@ import {
   PRINCIPAL_HOLDER_KINDS,
   type PolicySource
 } from "@work-shape/catalyst-core";
+import {
+  narrativeReadOf,
+  parsePublishNarrative,
+  type PublishNarrativeRead
+} from "../../shared/publish-narrative";
+
 const originKinds = OPERATION_ORIGIN_KINDS;
 
 type OperationCallOriginKind = (typeof originKinds)[number];
@@ -117,6 +123,12 @@ export interface PublishReview {
   dataStores: { name: string; minSchema?: number }[];
   runAs?: string;
   stale?: PublishStale;
+  /**
+   * The instance's sentence on what the publish makes live, in the reader's language. Absent
+   * where the request holds none, as one from before PUBQ-1; failed where it holds one this
+   * client cannot read whole.
+   */
+  narrative?: Exclude<PublishNarrativeRead, { status: "none" | "loading" }>;
 }
 
 /** The values of `heldBy` that are a standing rule of the instance, not one finding. */
@@ -266,6 +278,7 @@ function parseReview(value: unknown): PublishReview | undefined {
       : [];
   const runAs = readText(value.runAs);
   const stale = staleReasons.find((reason) => reason === value.stale);
+  const narrative = narrativeReadOf(parsePublishNarrative(value.publishNarrative));
   return {
     kind,
     name,
@@ -291,7 +304,8 @@ function parseReview(value: unknown): PublishReview | undefined {
         })
       : [],
     ...(runAs ? { runAs } : {}),
-    ...(stale ? { stale } : {})
+    ...(stale ? { stale } : {}),
+    ...(narrative.status === "ready" || narrative.status === "failed" ? { narrative } : {})
   };
 }
 

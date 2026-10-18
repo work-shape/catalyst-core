@@ -28220,6 +28220,9 @@
               "type": "string"
             }
           },
+          "publishNarrative": {
+            "$ref": "#/components/schemas/PublishNarrative"
+          },
           "contentRevision": {
             "type": "integer",
             "exclusiveMinimum": 0,
@@ -34411,6 +34414,24 @@
         },
         "required": [
           "revision"
+        ]
+      },
+      "PublishNarrative": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "summary",
+          "warnings"
         ]
       },
       "PutAssetRequest": {
