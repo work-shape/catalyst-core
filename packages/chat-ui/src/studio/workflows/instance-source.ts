@@ -1,4 +1,3 @@
-import { z } from "zod";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { principalGrantRequest } from "../../admin/access/principal-grants-model";
@@ -100,13 +99,39 @@ function done<Output>(
 }
 
 /** The two lists are in byte order of name. A cursor retains each unread position. */
-const listPartSchema = z.object({
-  cursor: z.string().optional(),
-  after: z.string().optional(),
-  done: z.boolean()
-});
-const listPositionSchema = z.object({ published: listPartSchema, assets: listPartSchema });
-type ListPart = z.infer<typeof listPartSchema>;
+interface ListPart {
+  cursor?: string | undefined;
+  after?: string | undefined;
+  done: boolean;
+}
+interface ListPosition {
+  published: ListPart;
+  assets: ListPart;
+}
+
+function listPartOf(value: unknown): ListPart {
+  if (
+    !isRecord(value) ||
+    typeof value.done !== "boolean" ||
+    (value.cursor !== undefined && typeof value.cursor !== "string") ||
+    (value.after !== undefined && typeof value.after !== "string")
+  ) {
+    throw new Error("Invalid Workflow list cursor");
+  }
+  return { done: value.done, cursor: value.cursor, after: value.after };
+}
+
+function listPositionOf(cursor: string | undefined): ListPosition {
+  if (cursor === undefined) return { published: { done: false }, assets: { done: false } };
+  try {
+    const value: unknown = JSON.parse(cursor);
+    if (!isRecord(value)) throw new Error("Invalid Workflow list cursor");
+    return { published: listPartOf(value.published), assets: listPartOf(value.assets) };
+  } catch {
+    throw new Error("Invalid Workflow list cursor");
+  }
+}
+
 interface ListPage<Row> {
   items: readonly Row[];
   nextCursor?: string | undefined;
@@ -179,10 +204,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
     // Join the engine's start/run summaries with per-asset rights, including published
     // Workflows held by write or publish alone. Each source advances independently.
     listWorkflows: async (_workspaceId, query, signal) => {
-      const position =
-        query.cursor === undefined
-          ? { published: { done: false }, assets: { done: false } }
-          : listPositionSchema.parse(JSON.parse(query.cursor));
+      const position = listPositionOf(query.cursor);
       let reads = 0;
       const takeRead = () => reads++ < LIST_READS_PER_PAGE;
       const published = listReader(

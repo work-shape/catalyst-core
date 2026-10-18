@@ -295,6 +295,20 @@ describe("the Workflow screens over the engine of an instance", () => {
     );
   });
 
+  it.each([
+    "{",
+    "[]",
+    JSON.stringify({ published: { done: "false" }, assets: { done: false } }),
+    JSON.stringify({ published: { done: false, cursor: 17 }, assets: { done: false } }),
+    JSON.stringify({ published: { done: false, after: 17 }, assets: { done: false } })
+  ])("refuses an invalid list cursor before reading the instance: %s", async (cursor) => {
+    const { source, calls } = instance();
+    await expect(source.listWorkflows("cw_1", { limit: 2, cursor }, signal)).rejects.toThrow(
+      "Invalid Workflow list cursor"
+    );
+    expect(calls).toEqual([]);
+  });
+
   it("joins rights across independent pages, retaining a write-only published Workflow", async () => {
     const firstEnginePage = [workflowSummaries(0, 1)[0], workflowSummaries(2, 1)[0]];
     const { source, calls } = instance({
