@@ -6,8 +6,8 @@ import { INIT_SQL } from "./support/data-store-world";
 import { setupFindingsApp, type FindingsWorld } from "./support/findings-app";
 
 // DS-13b over HTTP: what the publish question of one stored revision tells, asked by a second
-// person who may write the App. A draft may name any store of the instance; the answer
-// describes only the stores a publish of the App would reach.
+// person who may write the App. A new draft names only selectable stores within its owner
+// boundary; a refused reference reveals none of the hidden store's details.
 
 const LIST = "-- @param limit integer\nselect client_id from findings order by id limit $limit\n";
 
@@ -67,7 +67,7 @@ describe("the stored data of a revision, over HTTP", () => {
       query: { app: "findings", revision: String(revision) }
     });
 
-  it("names a store of another workspace by the draft's name as unavailable, and tells nothing of it", async () => {
+  it("refuses a draft naming a hidden store of another workspace, and tells nothing of it", async () => {
     // The store of the App's own workspace is described, to Kai as to anyone who may write.
     const own = sourcesSchema.parse((await sources(t.kai.id, 2)).json());
     expect(own.stores).toEqual([
@@ -76,29 +76,13 @@ describe("the stored data of a revision, over HTTP", () => {
     expect(own.stores[0]).not.toHaveProperty("unavailable");
 
     const written = await t.putApp(t.kai.id, "findings", appReading("payroll", ["peek"], "cross"));
-    expectStatus(written, 200);
-    const { revision } = revisionSchema.parse(written.json());
-    const asked = await sources(t.kai.id, revision);
-    expectStatus(asked, 200);
-    const answer = sourcesSchema.parse(asked.json());
-    expect(answer.revision).toBe(revision);
-    // The other is named as the draft declares it, with no title, filler or measurement.
-    expect(answer.stores).toHaveLength(1);
-    expect(answer.stores[0]).toEqual({
-      name: "payroll",
-      title: "payroll",
-      unavailable: true,
-      fillers: [],
-      actions: ["peek"]
-    });
-    expect(JSON.stringify(answer)).not.toContain("Salaries of the payroll team");
-
-    // A publish of it is refused for the same store, by the same rule.
-    const published = await t.publish(t.admin.id, "findings", revision);
-    expectStatus(published, 404);
-    expect(published.json()).toMatchObject({
-      error: { details: { reason: "data_store_unavailable", dataStore: "payroll" } }
-    });
+    expectStatus(written, 422);
+    expect(written.body).toContain("references unknown Data Store 'payroll'");
+    expect(written.body).not.toContain("Salaries of the payroll team");
+    // The original draft is still the one the builder reads; no cross-owner draft was saved.
+    const unchanged = await sources(t.kai.id, 2);
+    expectStatus(unchanged, 200);
+    expect(sourcesSchema.parse(unchanged.json()).stores).toEqual(own.stores);
   });
 
   it("asks a revision of the App of the name now, not of an App deleted before it", async () => {

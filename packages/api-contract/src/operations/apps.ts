@@ -134,14 +134,14 @@ export const appOperations = {
     rateClass: "read"
   }),
   // A path of its own: `actions` beside `/apps/:app` would read an App named `actions`. The
-  // right is `app.read` on each App, decided where the answer is built: on the App the call
-  // names, and per App where it names none.
+  // Named details require app.read. The unnamed chooser lists published actions through
+  // app.read or app.use, decided per App where the answer is built.
   "apps.actions.list": defineRegisteredOperation({
     id: "apps.actions.list",
     method: "GET",
     path: "/api/v1/app-actions",
     summary:
-      "List the named actions of one App or of every published App the caller reads, with what a call of each would come to for the caller",
+      "List the named actions of one App or of every published App the caller reads or uses, with what a call of each would come to for the caller",
     tag: "Apps",
     auth: "user",
     scope: "config_assets:read",

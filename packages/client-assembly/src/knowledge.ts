@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { RouteRegistration, WorkflowAssetKind } from "@work-shape/catalyst-server";
@@ -91,10 +92,24 @@ function queryEmbedder(
   };
 }
 
+const knowledgeReferencesSchema = z.object({
+  backend: z.object({ dataStore: z.string() }).optional(),
+  sources: z.array(z.object({ connection: z.string() })).optional()
+});
+
 /** The kind `knowledge_base` as the asset workflow of the API registers it. */
 function workflowAssetKind(knowledgeBases: KnowledgeBases): WorkflowAssetKind {
   return {
     ...knowledgeBases.assetKind,
+    references: (config) => {
+      const parsed = knowledgeReferencesSchema.safeParse(config);
+      if (!parsed.success) return [];
+      const { backend, sources } = parsed.data;
+      return [
+        ...(backend ? [{ kind: "data_store", name: backend.dataStore }] : []),
+        ...(sources ?? []).map((source) => ({ kind: "connection", name: source.connection }))
+      ];
+    },
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,

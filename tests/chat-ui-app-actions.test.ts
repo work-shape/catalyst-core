@@ -1,5 +1,10 @@
 import { createElement, type ReactNode } from "react";
-import type { AppAction, Asset, OperationRunResource } from "@work-shape/catalyst-api-client";
+import type {
+  AppAction,
+  AppActions,
+  Asset,
+  OperationRunResource
+} from "@work-shape/catalyst-api-client";
 import {
   ActionTestDialogView,
   appActionInputStart,
@@ -10,6 +15,7 @@ import {
   AppDetailsDialog,
   AppEditFrame,
   AppToolsGroup,
+  appsOfOwner,
   appToolsView,
   formatAppActionResult,
   keptWhileItServes,
@@ -734,11 +740,19 @@ describe("the Apps group of an agent's tools", () => {
       {
         name: "orders",
         title: "Orders board",
+        scope: { kind: "instance" },
         view: "published",
         revision: 3,
         actions: [action(), save, gone]
       },
-      { name: "empty", title: "Empty", view: "published", revision: 1, actions: [gone] }
+      {
+        name: "empty",
+        title: "Empty",
+        scope: { kind: "instance" },
+        view: "published",
+        revision: 1,
+        actions: [gone]
+      }
     ]
   };
   const group = (selected: string[], state: AppToolsRead = read, locale: "en" | "de" = "en") =>
@@ -757,6 +771,26 @@ describe("the Apps group of an agent's tools", () => {
       groups: [],
       unchecked: ["app.orders.load"]
     });
+  });
+
+  // REF-OWNER: an agent names Apps of its own owner and of the instance, as it names skills.
+  it("offers an agent of the instance the instance's Apps alone, and a workspace's agent its workspace's and the instance's", () => {
+    const app = (name: string, scope: AppActions["apps"][number]["scope"]) => ({
+      name,
+      title: name,
+      scope,
+      view: "published" as const,
+      revision: 1,
+      actions: [action()]
+    });
+    const apps = [
+      app("shared", { kind: "instance" }),
+      app("own", { kind: "workspace", workspaceId: "cw_own" }),
+      app("other", { kind: "workspace", workspaceId: "cw_other" })
+    ];
+
+    expect(appsOfOwner(apps, undefined).map((entry) => entry.name)).toEqual(["shared"]);
+    expect(appsOfOwner(apps, "cw_own").map((entry) => entry.name)).toEqual(["shared", "own"]);
   });
 
   it("is a labelled group with a check box per action, its description and its effect", () => {

@@ -305,6 +305,7 @@ test("a store's page names the Workflow that fills it with its Connection and ac
         name: workflow,
         manifest: {
           id: workflow,
+          kind: "data",
           name: "Nachtimport",
           description: "Copies the clients of Exampledata every night.",
           runAs: account,

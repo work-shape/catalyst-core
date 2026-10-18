@@ -279,6 +279,7 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
         }
       })
     }),
+    references: () => [],
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ current, next, principalId }) =>
