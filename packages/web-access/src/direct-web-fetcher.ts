@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { request as httpRequest, type IncomingHttpHeaders, type RequestOptions } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
+import { isOperationTimeout } from "@work-shape/catalyst-core";
 import type {
   JsonObject,
   JsonValue,
@@ -510,7 +511,8 @@ function createOperationAbort(input: {
     }
   };
 
-  const onParentAbort = () => abort("cancelled", input.signal?.reason);
+  const onParentAbort = () =>
+    abort(isOperationTimeout(input.signal) ? "timed_out" : "cancelled", input.signal?.reason);
   if (input.signal?.aborted) {
     onParentAbort();
   } else {

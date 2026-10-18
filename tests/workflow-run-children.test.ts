@@ -692,7 +692,9 @@ describe("descendant ownership and recovery", () => {
     definitions.publish(parent());
     const t = await ready(definitions);
     // Losing the outcome after the root commits must not create another root on replay.
-    vi.spyOn(t.operationCalls.deps.runs, "finish").mockResolvedValueOnce(undefined);
+    vi.spyOn(t.operationCalls.deps.runs, "finish").mockRejectedValueOnce(
+      new Error("The outcome could not be recorded")
+    );
     const first = await t.invoke(
       t.root,
       "workflow.parent.start",

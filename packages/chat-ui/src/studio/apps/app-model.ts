@@ -1,10 +1,12 @@
 import {
+  APP_ASSET_KIND,
   ApiError,
   type AssetSummary,
   type CollaborationWorkspaceAgents,
   type PlatformContext
 } from "@work-shape/catalyst-api-client";
 import { APP_MODES } from "@work-shape/catalyst-core";
+import { resolveBuildRights } from "../../shared/build-rights";
 import type { TranslationKey } from "../../shared/i18n";
 
 /** The four rights of an App, by the names the instance decides them under. */
@@ -35,18 +37,49 @@ export const NO_APP_RIGHTS: AppRights = {
 };
 
 /**
- * The reader's rights on Apps, from what the instance says the reader holds on every asset of
- * the kind. This is the one place the interface decides what it offers: a right that is
- * granted per workspace (AP-3) is added here and nowhere else. The instance decides every
- * call itself.
+ * The reader's rights on the Apps of the open workspace, as the instance names them for that
+ * workspace: a grant there, a membership's role or a right on the whole instance. An App always
+ * belongs to a workspace, so a right in another workspace offers nothing here. This is the one
+ * place the interface decides what it offers in a workspace; the instance decides every call.
  */
-export function resolveAppRights(context: Pick<PlatformContext, "actions"> | undefined): AppRights {
-  const held = context?.actions ?? [];
+export function resolveAppRights(
+  context: PlatformContext | undefined,
+  workspaceId: string | undefined
+): AppRights {
+  if (workspaceId === undefined) {
+    return NO_APP_RIGHTS;
+  }
+  // No session: its legacy keys name agents and skills, never Apps.
+  const rights = resolveBuildRights(undefined, context);
+  const holds = (verb: keyof AppRights) =>
+    rights.holdsInWorkspace(APP_ASSET_KIND, verb, workspaceId);
   return {
-    read: held.includes(APP_RIGHT_NAMES.read),
-    write: held.includes(APP_RIGHT_NAMES.write),
-    publish: held.includes(APP_RIGHT_NAMES.publish),
-    delete: held.includes(APP_RIGHT_NAMES.delete)
+    read: holds("read"),
+    write: holds("write"),
+    publish: holds("publish"),
+    delete: holds("delete")
+  };
+}
+
+/**
+ * The reader's rights on one App: what the instance says with the App's record or its row of
+ * the list the reader may do to it, decided with every grant and deny there is, those on the
+ * App itself included. Until the App arrives, and from an instance that says nothing, the
+ * workspace's rights stand.
+ */
+export function appRightsOn(
+  rights: AppRights,
+  app: Pick<AssetSummary, "allowed"> | undefined
+): AppRights {
+  const allowed = app?.allowed;
+  if (allowed === undefined) {
+    return rights;
+  }
+  return {
+    read: allowed.includes("read"),
+    write: allowed.includes("write"),
+    publish: allowed.includes("publish"),
+    delete: allowed.includes("delete")
   };
 }
 

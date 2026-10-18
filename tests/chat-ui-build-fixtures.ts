@@ -58,6 +58,43 @@ export function platformContext(
   };
 }
 
+/**
+ * What the instance answers a caller who holds these actions in these Shared Workspaces, by id,
+ * and these on the instance's assets as a whole, where the instance runs Apps.
+ */
+export function appsContext(
+  workspaces: Record<string, readonly string[]>,
+  instance: string[] = []
+): PlatformContext {
+  const base = platformContext([], instance);
+  return {
+    ...base,
+    kinds: [
+      ...base.kinds,
+      {
+        kind: "app",
+        plural: "apps",
+        lifecycle: "active",
+        representation: "files",
+        owners: ["workspace"],
+        actions: {
+          read: "app.read",
+          write: "app.write",
+          publish: "app.publish",
+          delete: "app.delete"
+        }
+      }
+    ],
+    workspaces: Object.entries(workspaces).map(([id, actions]) => ({
+      id,
+      name: id,
+      kind: "shared" as const,
+      member: true,
+      actions: [...actions]
+    }))
+  };
+}
+
 /** Writes agents in the Namespace and only reads its skills. */
 export const taxNamespace: Namespaces[number] = {
   prefix: "tax-",

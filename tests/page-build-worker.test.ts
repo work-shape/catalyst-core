@@ -6,6 +6,7 @@ import {
   assetRepoCommitJob,
   assetRepoSweepJob,
   createPageBundleJobs,
+  createPageBuildClient,
   createSandboxPageBuild
 } from "@work-shape/catalyst-server";
 import {
@@ -13,7 +14,11 @@ import {
   createClientInstanceWorkspaceCommandWorker,
   platformModules
 } from "@work-shape/catalyst-client-assembly";
-import { createModuleRegistry, type Logger } from "@work-shape/catalyst-core";
+import {
+  OperationExecutionStop,
+  createModuleRegistry,
+  type Logger
+} from "@work-shape/catalyst-core";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
 import { createTestConfig, workspaceInfrastructure } from "./support/fixtures";
@@ -77,6 +82,25 @@ describe("the apps module and the workspace command worker", () => {
     ).not.toThrow();
     expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(false), [])).not.toThrow();
   });
+
+  it.each(["timeout", "aborted"] as const)(
+    "preserves the executor's %s reason while waiting for a Page build",
+    async (kind) => {
+      const harness = await createWorkspaceHarness();
+      const client = createPageBuildClient({ stores: harness.store, unclaimedMs: 0 });
+      const result = await client.build({
+        clientInstanceId: harness.clientInstanceId,
+        conversationId: harness.conversation.id,
+        request: { pageName: "probe", directory: "probe", files: [] },
+        signal: AbortSignal.abort(new OperationExecutionStop(kind, undefined)),
+        deadline: new Date(Date.now() + 60_000)
+      });
+      expect(result).toMatchObject({
+        status: "failed",
+        reason: kind === "timeout" ? "timeout" : "stopped"
+      });
+    }
+  );
 
   const workerConfig = (input: { files: boolean }) => {
     const base = createTestConfig();

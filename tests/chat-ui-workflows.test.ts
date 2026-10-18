@@ -143,6 +143,7 @@ function runRead(run: RunResource, stepRuns: readonly StepRunResource[]): Workfl
     run: toWorkflowRun(run),
     problem: undefined,
     silentSince: undefined,
+    stepsFailed: false,
     stepRuns: stepRuns.map(toWorkflowStepRun),
     stepRunsCut: false,
     retry: noop
@@ -908,6 +909,7 @@ describe("the page of a run", () => {
   const unread = {
     run: undefined,
     silentSince: undefined,
+    stepsFailed: false,
     stepRuns: undefined,
     stepRunsCut: false,
     retry: noop

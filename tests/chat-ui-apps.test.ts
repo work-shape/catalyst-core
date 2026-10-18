@@ -41,6 +41,7 @@ import {
   workspaceRouteNavigation,
   workspaceRoutePath
 } from "@work-shape/catalyst-chat-ui/apps";
+import { appsContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Apps area: its addresses, what a reader is offered by the rights they hold, and what
@@ -54,6 +55,7 @@ const render = (node: ReactNode, locale: "en" | "de" = "en") =>
 
 const workspace = { id: "cw_1", name: "Nordlicht Beratung", emoji: null };
 const ALL: AppRights = { read: true, write: true, publish: true, delete: true };
+const ALL_NAMES = ["app.read", "app.write", "app.publish", "app.delete"];
 const WRITER: AppRights = { read: true, write: true, publish: false, delete: false };
 
 function summary(overrides: Partial<AssetSummary> = {}): AssetSummary {
@@ -167,17 +169,19 @@ describe("the Apps row of the rail", () => {
 });
 
 describe("what a reader may do with Apps", () => {
-  it("reads the four rights from what the instance says the reader holds", () => {
-    expect(resolveAppRights(undefined)).toEqual(NO_APP_RIGHTS);
-    expect(resolveAppRights({ actions: ["agent.read", "app.read", "app.write"] })).toEqual({
+  it("reads the four rights the instance names in the open workspace", () => {
+    const context = appsContext({ cw_open: ["app.read", "app.write"], cw_other: ALL_NAMES });
+    expect(resolveAppRights(undefined, "cw_open")).toEqual(NO_APP_RIGHTS);
+    expect(resolveAppRights(context, undefined)).toEqual(NO_APP_RIGHTS);
+    expect(resolveAppRights(context, "cw_open")).toEqual({
       read: true,
       write: true,
       publish: false,
       delete: false
     });
-    expect(
-      resolveAppRights({ actions: ["app.read", "app.write", "app.publish", "app.delete"] })
-    ).toEqual(ALL);
+    expect(resolveAppRights(context, "cw_other")).toEqual(ALL);
+    // A right on the instance's own assets is not one in a workspace the instance does not name.
+    expect(resolveAppRights(appsContext({}, ALL_NAMES), "cw_open")).toEqual(NO_APP_RIGHTS);
   });
 
   it("tells a published App with a draft ahead from one that has only a draft", () => {
