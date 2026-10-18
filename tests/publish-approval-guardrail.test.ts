@@ -189,16 +189,14 @@ describe("publishing needs an instance admin's approval", () => {
       );
     const asked = async () =>
       narrativeSchema.parse(
-        z
-          .object({ publishNarrative: z.unknown() })
-          .parse(
-            (
-              await t.expectOk(t.admin.id, "assets.get", {
-                params: { kind: "app", name: "narrated" },
-                query: { workspaceId: t.workspaceId, revision: "1" }
-              })
-            ).json()
-          ).publishNarrative
+        z.object({ publishNarrative: z.unknown() }).parse(
+          (
+            await t.expectOk(t.admin.id, "assets.get", {
+              params: { kind: "app", name: "narrated" },
+              query: { workspaceId: t.workspaceId, revision: "1" }
+            })
+          ).json()
+        ).publishNarrative
       );
     const english = await reviewed();
     expect(english.summary).toMatch(/^Offers opens for /u);

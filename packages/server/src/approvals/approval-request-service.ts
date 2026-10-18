@@ -134,7 +134,12 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const locale = this.options.readerLocale
       ? await this.options.readerLocale(user.id, context.locale)
       : context.locale;
-    return this.view(user, { access, inList: false, ...(locale ? { locale } : {}) }, context, request);
+    return this.view(
+      user,
+      { access, inList: false, ...(locale ? { locale } : {}) },
+      context,
+      request
+    );
   }
 
   async listRequests(

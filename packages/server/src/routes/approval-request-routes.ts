@@ -13,10 +13,12 @@ export function registerApprovalRequestRoutes(route: Route, options: ChatServerO
     auditRecorder: options.auditRecorder,
     // A held publish's review leads with a sentence in the language of who opens it (PUBQ-1).
     readerLocale: async (userId, requested) =>
-      (await options.stores.users.getUser({
-        clientInstanceId: options.clientInstanceId,
-        userId: asUserId(userId)
-      }))?.locale ??
+      (
+        await options.stores.users.getUser({
+          clientInstanceId: options.clientInstanceId,
+          userId: asUserId(userId)
+        })
+      )?.locale ??
       requested ??
       options.config.localization.defaultLocale
   });

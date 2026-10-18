@@ -191,7 +191,8 @@ export class AssetReadWorkflow {
     // Only a kind with a publish question reads the reader's language: an App, a Workflow, a
     // Knowledge Base.
     const asksPublish =
-      !publishedOnly && (target.kind.publishQuestion !== undefined || target.kind.publishReach !== undefined);
+      !publishedOnly &&
+      (target.kind.publishQuestion !== undefined || target.kind.publishReach !== undefined);
     const locale = asksPublish ? await this.readerLocale(call) : undefined;
     const publishQuestion =
       locale && target.kind.publishQuestion
