@@ -6,7 +6,8 @@ import { join } from "node:path";
 import postgres from "postgres";
 import { PostgresFixtures, requiredTestDatabaseUrl } from "./support/postgres-fixtures";
 import { fileTestDatabaseUrl } from "./support/test-database";
-import { describe, expect, it, vi } from "vitest";
+import { useDataStoreInstance } from "./support/data-store-instance";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { asClientInstanceId } from "@work-shape/catalyst-core";
 import { createTestInstance } from "./support/test-instance";
 import { createTestConfig, seedConversationMessage } from "./support/fixtures";
@@ -297,4 +298,30 @@ describe("Postgres fixture lifecycle", () => {
     },
     OWN_RUN_TIMEOUT_MS
   );
+});
+
+describe("Data Store fixture ownership", () => {
+  const owner = useDataStoreInstance();
+  let ownedDatabase: string | undefined;
+
+  afterEach(async () => {
+    if (!ownedDatabase) return;
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
+    try {
+      expect(await sql`select datname from pg_database where datname = ${ownedDatabase}`).toEqual([
+        { datname: ownedDatabase }
+      ]);
+    } finally {
+      ownedDatabase = undefined;
+      await sql.end();
+    }
+  });
+  // Stack-ordered teardown runs this unused fixture before the assertion and then the owner.
+  useDataStoreInstance();
+
+  it("leaves another fixture's live database intact when it started no instance", async () => {
+    const world = await owner.start(true);
+    const record = await owner.publishStore(world);
+    ownedDatabase = record.location.database;
+  });
 });
