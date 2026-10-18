@@ -29,6 +29,8 @@ import {
   type OperationAuthorization
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import { paginate, pageScope, readablePage, storePage } from "../http/paging";
+import type { appActionsListQuerySchema } from "@work-shape/catalyst-api-contract";
 import { decide } from "../assets/asset-access";
 import type { ResolvedChatServerOptions } from "../types";
 import { appActionPermissions } from "./action-call";
@@ -48,12 +50,6 @@ type ConnectionAction = Extract<CompiledAppAction, { kind: "connection" }>;
 // would come to for the reader, and why a call cannot reach its operation where it cannot.
 // Nothing is called here and no outside system is contacted. The policy is resolved by the
 // rule a call from the revision's frame is decided by, so the list and the call agree.
-
-/**
- * How many published Apps one answer without a named App lists, in one query. Where more are
- * published, the answer holds the first so many by name and says so in `truncated`.
- */
-const APP_ACTIONS_LIST_MAX_APPS = 200;
 
 /** The exposure a call from the frame of an App needs of a Connection's operation. */
 const APP_EXPOSURE: ConnectionExposure = "bridge";
@@ -152,16 +148,16 @@ export class AppActionList {
   /**
    * The actions of the App the call names: of its draft for whoever writes the App, of the
    * published revision for every other reader. Without a name, the actions of the published
-   * revision of every App the caller reads or uses, at most `APP_ACTIONS_LIST_MAX_APPS` Apps.
+   * revision of every App the caller reads or uses, a cursor page at a time.
    */
   async list(
     caller: { actor: AuthenticatedIdentity; access: ActorAccess },
-    input: { app?: string }
+    input: z.infer<typeof appActionsListQuerySchema>
   ): Promise<AppActions> {
     const reads = (asset: ConfigAssetRecord, action: string) =>
       caller.access.authorize(action, appResourceOf(scoped(asset))).allowed;
     let revisions: ListedRevision[];
-    let truncated = false;
+    let nextCursor: string | undefined;
     if (input.app !== undefined) {
       const asset = await this.app(input.app);
       const view = asset && reads(asset, APP_ACTIONS.write) ? "draft" : "published";
@@ -173,15 +169,23 @@ export class AppActionList {
       }
       revisions = [revision];
     } else {
-      // One more than is listed, so that an answer that leaves Apps out knows it.
-      const assets = await this.options.stores.configAssets.listPublishedConfigAssets({
-        clientInstanceId: this.options.clientInstanceId,
-        kind: APP_ASSET_KIND,
-        limit: APP_ACTIONS_LIST_MAX_APPS + 1
-      });
-      truncated = assets.length > APP_ACTIONS_LIST_MAX_APPS;
-      revisions = assets
-        .slice(0, APP_ACTIONS_LIST_MAX_APPS)
+      const scope = pageScope("apps.actions.list", {}, input);
+      const page = storePage(input, ["name"], scope);
+      const assets = await readablePage(
+        page,
+        (paging) =>
+          this.options.stores.configAssets.listPublishedConfigAssets({
+            clientInstanceId: this.options.clientInstanceId,
+            kind: APP_ASSET_KIND,
+            limit: paging.limit,
+            ...(typeof paging.after?.[0] === "string" ? { afterName: paging.after[0] } : {})
+          }),
+        (asset) => reads(asset, APP_ACTIONS.read) || reads(asset, APP_ACTIONS.use),
+        (asset) => [asset.name]
+      );
+      const listed = paginate(assets, input, ["name"], false, scope);
+      nextCursor = listed.nextCursor;
+      revisions = listed.items
         .filter((asset) => reads(asset, APP_ACTIONS.read) || reads(asset, APP_ACTIONS.use))
         .flatMap((asset) => listedRevision(asset, "published") ?? []);
     }
@@ -298,7 +302,7 @@ export class AppActionList {
         )
       });
     }
-    return { apps, truncated };
+    return { apps, truncated: nextCursor !== undefined, ...(nextCursor ? { nextCursor } : {}) };
   }
 
   /**

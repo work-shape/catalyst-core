@@ -1,30 +1,37 @@
-import { listAll, type ApiClient } from "@work-shape/catalyst-api-client";
+import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { principalGrantRequest } from "../../admin/access/principal-grants-model";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import {
   listedOf,
   toAssetWorkflowListItem,
+  toDraftWorkflowListItem,
   toWorkflow,
   toWorkflowListItem,
   toWorkflowRun,
   toWorkflowStepRun
 } from "./workflow-mapping";
 import type { WorkflowRunsSource, WorkflowsSource } from "./source-shapes";
-import type { WorkflowStepRunView } from "./workflow-views";
+import type { WorkflowListItem, WorkflowStepRunView } from "./workflow-views";
 
 // The Workflow screens over the instance: the operations of the Workflows module and, for a
 // definition, the read of an asset.
 
-/** How many step runs one read of a run's frame asks for: the most a list read gives. */
-const FRAME_PAGE_SIZE = 200;
 /**
- * How many reads a run's frame takes at most. The contract has no read of the step runs
- * outside the items of a loop yet, so the frame is picked out of all step runs of the run, in
- * the order they were made. A run with more step runs than these reads hold is drawn as far as
- * they reach, and its page says so.
+ * How many step runs one page of a run's frame asks for: the most a list read gives. The
+ * contract has no read of the step runs outside the items of a loop yet, so the frame is picked
+ * out of all step runs of the run, in the order they were made, a page at a time.
  */
-const FRAME_MAX_PAGES = 10;
+const FRAME_PAGE_SIZE = 200;
+
+/** How many Workflows one read of the engine's list asks for, where a page asks for none. */
+const WORKFLOW_SUMMARY_PAGE_SIZE = 200;
+
+/**
+ * How many reads one page of the screen's list makes at most while they find nothing to show.
+ * What is left is handed on as the page's cursor.
+ */
+const LIST_READS_PER_PAGE = 5;
 
 /** The part of the client the Workflow screens call. */
 type WorkflowsClient = Pick<ApiClient, "workflows" | "assets" | "permissions">;
@@ -45,31 +52,24 @@ function runsSource(client: WorkflowsClient): WorkflowRunsSource {
     },
     getRun: async (runId, signal) =>
       toWorkflowRun(await client.workflows.get_run({ params: { runId }, signal })),
-    listFrameStepRuns: async (runId, signal) => {
+    listFrameStepRuns: async (runId, cursor, signal) => {
+      const page = await client.workflows.list_step_runs({
+        params: { runId },
+        query: { limit: FRAME_PAGE_SIZE, cursor },
+        signal
+      });
       const stepRuns: WorkflowStepRunView[] = [];
       const entryLoops: WorkflowStepRunView[] = [];
-      let cursor: string | undefined;
-      for (let read = 0; read < FRAME_MAX_PAGES; read += 1) {
-        const page = await client.workflows.list_step_runs({
-          params: { runId },
-          query: { limit: FRAME_PAGE_SIZE, cursor },
-          signal
-        });
-        for (const stepRun of page.items) {
-          // A step run of an item of a loop is one of many: the loop's counts stand for them.
-          // A loop in an item is kept apart: its counts say what failed inside it.
-          if (stepRun.iteration === undefined) {
-            stepRuns.push(toWorkflowStepRun(stepRun));
-          } else if (stepRun.loop !== undefined) {
-            entryLoops.push(toWorkflowStepRun(stepRun));
-          }
-        }
-        cursor = page.nextCursor;
-        if (cursor === undefined) {
-          return { stepRuns, entryLoops, complete: true };
+      for (const stepRun of page.items) {
+        // A step run of an item of a loop is one of many: the loop's counts stand for them.
+        // A loop in an item is kept apart: its counts say what failed inside it.
+        if (stepRun.iteration === undefined) {
+          stepRuns.push(toWorkflowStepRun(stepRun));
+        } else if (stepRun.loop !== undefined) {
+          entryLoops.push(toWorkflowStepRun(stepRun));
         }
       }
-      return { stepRuns, entryLoops, complete: false };
+      return { stepRuns, entryLoops, nextCursor: page.nextCursor };
     },
     listEntryStepRuns: async (runId, query, signal) => {
       const page = await client.workflows.list_step_runs({
@@ -100,6 +100,71 @@ function done<Output>(
 }
 
 /**
+ * Where the next page of the list starts. The list is the published Workflows, as the engine
+ * pages them, and then the drafts, as the asset list pages them. A cursor of the screen names
+ * the part and the cursor of that part's own list.
+ */
+type ListPosition = { part: "published" | "drafts"; cursor: string | undefined };
+
+const PUBLISHED_PREFIX = "published:";
+const DRAFTS_PREFIX = "drafts:";
+
+function listPositionOf(cursor: string | undefined): ListPosition {
+  if (cursor?.startsWith(DRAFTS_PREFIX)) {
+    return { part: "drafts", cursor: cursor.slice(DRAFTS_PREFIX.length) || undefined };
+  }
+  return {
+    part: "published",
+    cursor: cursor?.startsWith(PUBLISHED_PREFIX)
+      ? cursor.slice(PUBLISHED_PREFIX.length) || undefined
+      : undefined
+  };
+}
+
+/** One read of one part of the list, with the screen's cursor of what follows it. */
+async function readListPart(
+  client: WorkflowsClient,
+  position: ListPosition,
+  limit: number,
+  signal: AbortSignal
+): Promise<{ items: WorkflowListItem[]; nextCursor: string | undefined }> {
+  const paging = { limit, ...(position.cursor === undefined ? {} : { cursor: position.cursor }) };
+  if (position.part === "published") {
+    const page = await client.workflows.list({ query: paging, signal });
+    return {
+      items: page.items.map((item) => toWorkflowListItem(item)),
+      nextCursor: page.nextCursor === undefined ? DRAFTS_PREFIX : PUBLISHED_PREFIX + page.nextCursor
+    };
+  }
+  const page = await client.assets.list({
+    params: { kind: WORKFLOW_ASSET_KIND },
+    query: paging,
+    signal
+  });
+  return {
+    items: page.items
+      .filter((asset) => asset.publishedRevision === undefined)
+      .map(toDraftWorkflowListItem),
+    nextCursor: page.nextCursor === undefined ? undefined : DRAFTS_PREFIX + page.nextCursor
+  };
+}
+
+/** The engine's summary of one published Workflow, read page after page until it is found. */
+async function findSummary(client: WorkflowsClient, workflow: string, signal: AbortSignal) {
+  let cursor: string | undefined;
+  do {
+    const page = await client.workflows.list({
+      query: { limit: WORKFLOW_SUMMARY_PAGE_SIZE, ...(cursor === undefined ? {} : { cursor }) },
+      signal
+    });
+    const summary = page.items.find((entry) => entry.id === workflow);
+    if (summary !== undefined) return summary;
+    cursor = page.nextCursor;
+  } while (cursor !== undefined);
+  return undefined;
+}
+
+/**
  * The source of an instance. The list is the engine's: the published Workflows the reader may
  * read, each with its latest run. A definition is read as an asset, the shape a Workflow is
  * stored in.
@@ -107,38 +172,31 @@ function done<Output>(
 export function createInstanceSource(client: WorkflowsClient, key: string): WorkflowsSource {
   return {
     key,
-    // The engine lists the published Workflows the reader may read or start. Every other
-    // Workflow the asset list names is listed from its asset: a draft never published, and a
-    // published one its writer or publisher may neither read nor start. The screen shows a
-    // draft only to who may write it. What the reader may do to a Workflow, and who owns it,
-    // is said by its asset's row: the engine names its start alone.
-    listWorkflows: async (_workspaceId, _query, signal) => {
-      const [{ items }, assets] = await Promise.all([
-        client.workflows.list({ signal }),
-        listAll((paging) =>
-          client.assets.list({ params: { kind: WORKFLOW_ASSET_KIND }, query: paging, signal })
-        )
-      ]);
-      const listed = new Set(items.map((entry) => entry.id));
-      const rowOf = new Map(assets.map((asset) => [asset.name, asset]));
-      return {
-        items: [
-          ...items.map((entry) => toWorkflowListItem(entry, rowOf.get(entry.id))),
-          ...assets.filter((asset) => !listed.has(asset.name)).map(toAssetWorkflowListItem)
-        ],
-        // The engine's list is whole in one answer, and the asset rows are read to their end.
-        nextCursor: undefined
-      };
+    // The engine lists what is published; a Workflow never published is listed from its
+    // asset, as a draft, after the published ones. The screen shows a draft only to who may
+    // write Workflows.
+    listWorkflows: async (_workspaceId, query, signal) => {
+      // A part may answer a page with nothing to show: the engine lists no published
+      // Workflow, or a page of assets holds only published ones. The next read follows at
+      // once, so the screen meets an empty page only after LIST_READS_PER_PAGE such reads.
+      const items: WorkflowListItem[] = [];
+      let cursor = query.cursor;
+      for (let read = 0; read < LIST_READS_PER_PAGE; read += 1) {
+        const page = await readListPart(client, listPositionOf(cursor), query.limit, signal);
+        items.push(...page.items);
+        cursor = page.nextCursor;
+        if (items.length > 0 || cursor === undefined) break;
+      }
+      return { items, nextCursor: cursor };
     },
     // The definition is the Workflow's asset, and so is whether a revision is published;
     // whether the instance starts it, and the id of its published revision, are on its entry
     // of the list. A Workflow the list does not name is not the reader's to start.
     getWorkflow: async (_workspaceId, workflow, signal) => {
-      const [asset, { items }] = await Promise.all([
+      const [asset, summary] = await Promise.all([
         client.assets.get({ params: { kind: WORKFLOW_ASSET_KIND, name: workflow }, signal }),
-        client.workflows.list({ signal })
+        findSummary(client, workflow, signal)
       ]);
-      const summary = items.find((entry) => entry.id === workflow);
       const { manifest } = asset.config;
       return toWorkflow(
         {

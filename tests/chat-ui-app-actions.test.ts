@@ -735,7 +735,6 @@ describe("a run of an App in Instance > Operations", () => {
 describe("the Apps group of an agent's tools", () => {
   const read: AppToolsRead = {
     status: "ready",
-    truncated: false,
     apps: [
       {
         name: "orders",
@@ -822,24 +821,24 @@ describe("the Apps group of an agent's tools", () => {
     expect(group(["app.orders.load"], read, "de")).toContain("Aktionen veröffentlichter Apps.");
   });
 
-  // The instance lists the first 200 published Apps and says when it left some out. The group
-  // showed the cut list as if it were whole, and called a held action of an App left out
-  // "No longer available".
-  it("says that Apps were left out, and judges no held action the cut list does not offer", () => {
-    const cut: AppToolsRead = { ...read, truncated: true };
+  // The instance pages the published Apps. The group showed a partial list as if it were
+  // whole, and called a held action of an App not read yet "No longer available"
+  // (DISCOVERY-PAGING: the next page is read from the group).
+  it("says that more Apps follow, offers the next page, and judges no held action not read yet", () => {
+    const cut: AppToolsRead = { ...read, more: { loading: false, load: noop } };
     const view = appToolsView(cut, ["app.orders.load", "app.later.read"]);
 
     expect(view).toMatchObject({ cut: true, unavailable: [], unchecked: ["app.later.read"] });
     const markup = group(["app.later.read"], cut);
     expect(markup).toContain("data-app-tools-cut");
-    expect(markup).toContain("Not every app is listed");
+    expect(markup).toContain("More published apps follow");
+    expect(markup).toContain("data-app-tools-more");
     expect(markup).toContain('data-held-app-tool="app.later.read"');
     expect(markup).toContain("Not in this list. The agent keeps these actions.");
     expect(markup).not.toContain("No longer available");
-    // Said also where the cut list offers nothing and the agent holds nothing.
-    expect(group([], { status: "ready", truncated: true, apps: [] }, "de")).toContain(
-      "Nicht jede App ist aufgeführt"
-    );
+    // Said also where the pages read offer nothing and the agent holds nothing.
+    const none: AppToolsRead = { status: "ready", apps: [], more: { loading: false, load: noop } };
+    expect(group([], none, "de")).toContain("Es folgen weitere veröffentlichte Apps");
     expect(group([], read)).not.toContain("data-app-tools-cut");
   });
 });

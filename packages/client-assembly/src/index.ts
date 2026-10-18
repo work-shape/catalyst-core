@@ -58,7 +58,6 @@ export {
 export { readWorkflowManifest } from "@work-shape/catalyst-workflows";
 export {
   WORKFLOW_LIST_DESCRIPTION_MAX,
-  WORKFLOW_LIST_MAX,
   WORKFLOW_LIST_NAME_MAX,
   createWorkflowAssetDefinitions,
   createWorkflowAssetKind,

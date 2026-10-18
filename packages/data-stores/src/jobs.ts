@@ -1,19 +1,33 @@
+import { drop, dropOwnedStore } from "./store-drop";
+export { publishDataStore, retireDataStore } from "./store-publishing";
+import {
+  provisionJob,
+  migrateJob,
+  dropJob,
+  measureSizeJob,
+  upgradeOwnedJob,
+  measureSizeTickJob,
+  upgradeOwnedTickJob,
+  measureSizePageJob,
+  upgradeOwnedPageJob,
+  enqueueStoreJob,
+  DATA_STORE_JOB_SLOTS,
+  DATA_STORE_MEASURE_INTERVAL_MS,
+  DATA_STORE_UPGRADE_INTERVAL_MS,
+  type StorePayload
+} from "./store-job-kinds";
+export { enqueueStoreJob, enqueueStoreDrop } from "./store-job-kinds";
+import { upgradeOwnedStores } from "./maintenance";
 import { checkRecordsCatalog, readExistingRecordsKeys } from "./records/publish";
-import { z } from "zod";
 import {
   AppError,
   isAppError,
   DATA_STORE_ASSET_KIND,
-  DATA_STORE_JOB_KINDS,
-  DATA_STORE_MANIFEST_FILE,
   KNOWLEDGE_BASE_ASSET_KIND,
   NonRetryableJobError,
   claimSubjectRow,
   defineJobHandler,
-  defineJobKind,
   defineSchedule,
-  scheduledJobPayloadSchema,
-  subjectDedupeKey,
   type DataStoreCondition,
   type DataStoreFailure,
   type DataStoreRecord,
@@ -32,15 +46,11 @@ import {
   type DataStoreDefinition
 } from "./definition";
 import { describeDatabaseFailure } from "./failures";
-import {
-  knowledgeStoreNeedsMigration,
-  applyKnowledgeStoreSchema
-} from "./knowledge/builtin/store-schema";
+import { applyKnowledgeStoreSchema } from "./knowledge/builtin/store-schema";
 import { knowledgeBaseDefinitionSchema } from "./knowledge/definition";
 import { DataStoreMigrationRefusal, applyMigration, readSignedMigrations } from "./migrating";
 import {
   DataStoreProvisioningError,
-  dropStoreDatabase,
   ensureStoreSchema,
   ensureVectorExtension,
   provisionDataStore,
@@ -53,225 +63,6 @@ import { measureDataStores, recordStoreSize } from "./size";
 // The jobs that bring a store's database to its published revision. Publishing writes the
 // store's record and enqueues in the same transaction; the handlers read the record anew,
 // work on the database outside of any transaction and write each outcome onto the record.
-
-const SECOND_MS = 1_000;
-const MINUTE_MS = 60 * SECOND_MS;
-
-/**
- * How often provisioning and a migration are tried while the database server is busy or away,
- * with waits that double from 5 seconds up to 2 minutes. An error another attempt cannot mend
- * ends the job at once. Publishing again queues a new job.
- */
-const DATA_STORE_JOB_MAX_ATTEMPTS = 5;
-const DATA_STORE_JOB_BACKOFF = { baseMs: 5 * SECOND_MS, maxMs: 2 * MINUTE_MS } as const;
-/** A job whose lease is this old without a heartbeat lost its process. */
-const DATA_STORE_JOB_LEASE_MS = 2 * MINUTE_MS;
-/** How many stores are provisioned or migrated at once across the instance, and in one process. */
-const DATA_STORE_JOBS_MAX_RUNNING = 4;
-const DATA_STORE_JOB_SLOTS = 2;
-/** How often the size of every store is measured. */
-const DATA_STORE_MEASURE_INTERVAL_MS = 24 * 60 * MINUTE_MS;
-/**
- * How often the stores Knowledge Bases own are checked against the release's tables, besides
- * at each start. How many stores one check reads.
- */
-const DATA_STORE_UPGRADE_INTERVAL_MS = 24 * 60 * MINUTE_MS;
-const DATA_STORE_UPGRADE_MAX_STORES = 2_000;
-
-const storePayloadSchema = z.object({ storeId: z.string().min(1).max(200) });
-type StorePayload = z.infer<typeof storePayloadSchema>;
-
-const storeJob = {
-  payloadSchema: storePayloadSchema,
-  maxAttempts: DATA_STORE_JOB_MAX_ATTEMPTS,
-  backoff: DATA_STORE_JOB_BACKOFF,
-  leaseMs: DATA_STORE_JOB_LEASE_MS,
-  concurrency: { global: DATA_STORE_JOBS_MAX_RUNNING, perKey: 1 }
-} as const;
-
-/** Creates the database and the roles of one store. The payload names the store and holds nothing of it. */
-const provisionJob = defineJobKind({ ...storeJob, kind: DATA_STORE_JOB_KINDS.provision });
-
-/**
- * Applies the migrations the published revision of one store has and its database lacks. For
- * the store a Knowledge Base owns, they are the platform's tables of this release.
- */
-const migrateJob = defineJobKind({ ...storeJob, kind: DATA_STORE_JOB_KINDS.migrate });
-
-/** Drops the database, the roles and the record of a store whose Knowledge Base was deleted. */
-const dropJob = defineJobKind({ ...storeJob, kind: DATA_STORE_JOB_KINDS.drop });
-
-const measureSizeJob = defineJobKind({
-  kind: DATA_STORE_JOB_KINDS.measureSize,
-  payloadSchema: scheduledJobPayloadSchema,
-  maxAttempts: 1,
-  backoff: { baseMs: 0, maxMs: 0 },
-  leaseMs: 10 * MINUTE_MS,
-  concurrency: { global: 1 },
-  manualRetry: false
-});
-
-/**
- * Queues the migration of every store a Knowledge Base owns whose tables are behind the
- * release. Due at each start, so a store an earlier release made gets the tables of this one
- * without a publish: an operation that needs them refuses until then.
- */
-const upgradeOwnedJob = defineJobKind({
-  kind: DATA_STORE_JOB_KINDS.upgradeOwned,
-  payloadSchema: scheduledJobPayloadSchema,
-  maxAttempts: 1,
-  backoff: { baseMs: 0, maxMs: 0 },
-  leaseMs: 10 * MINUTE_MS,
-  concurrency: { global: 1 },
-  manualRetry: false
-});
-
-/**
- * Queues the job that brings a store to its published revision: provisioning while it has no
- * database, a migration after. While one is queued for the store this inserts nothing.
- * `behind` names a job that is running and has read the published revision already: the new
- * one is then queued under the store's second key, and runs once that one ended.
- */
-export async function enqueueStoreJob(
-  stores: Pick<PlatformStores, "jobs">,
-  record: Pick<DataStoreRecord, "id" | "clientInstanceId" | "status">,
-  behind?: Pick<Job, "dedupeKey">
-): Promise<void> {
-  const kind = record.status === "provisioning" ? provisionJob : migrateJob;
-  const first = subjectDedupeKey(kind.kind, record.id);
-  await stores.jobs.enqueue(
-    kind,
-    { storeId: record.id },
-    {
-      clientInstanceId: record.clientInstanceId,
-      subject: record.id,
-      dedupeKey: behind?.dedupeKey === first ? `${first}:next` : first,
-      concurrencyKey: record.id
-    }
-  );
-}
-
-/**
- * Queues the job that drops the store a deleted Knowledge Base owned. While one is queued for
- * the store this inserts nothing.
- */
-export async function enqueueStoreDrop(
-  stores: Pick<PlatformStores, "jobs">,
-  record: Pick<DataStoreRecord, "id" | "clientInstanceId">
-): Promise<void> {
-  await stores.jobs.enqueue(
-    dropJob,
-    { storeId: record.id },
-    {
-      clientInstanceId: record.clientInstanceId,
-      subject: record.id,
-      dedupeKey: subjectDedupeKey(dropJob.kind, record.id),
-      concurrencyKey: record.id
-    }
-  );
-}
-
-/**
- * What publishing a revision of a store does beside moving the published pointer, in the same
- * transaction: it writes the store's record and queues the job. It throws, and so refuses the
- * publish, where the revision changes a migration the store has applied, and where the id is
- * still held by a retired store.
- */
-export async function publishDataStore(
-  runtime: Pick<DataStoreRuntime, "clientInstanceId" | "server" | "limits">,
-  stores: PlatformStores,
-  input: { storeId: string; revision: number; definition: DataStoreDefinition }
-): Promise<void> {
-  const { clientInstanceId, server, limits } = runtime;
-  const { storeId, definition } = input;
-  const asset = await stores.configAssets.getConfigAsset({
-    clientInstanceId,
-    kind: DATA_STORE_ASSET_KIND,
-    name: definition.name
-  });
-  const owner = asset?.scope.kind ?? "instance";
-  if (definition.scope !== undefined && definition.scope !== owner) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `'${DATA_STORE_MANIFEST_FILE}' says scope '${definition.scope}' and the store belongs to ${owner === "instance" ? "the instance" : "a workspace"}. Write the store for ${definition.scope === "instance" ? "the instance" : "a workspace"}, or change 'scope'.`,
-      { reason: "scope_mismatch" }
-    );
-  }
-  const held = await stores.dataStores.findDataStoreByName({
-    clientInstanceId,
-    name: definition.name
-  });
-  if (held && held.id !== storeId) {
-    throw new AppError(
-      "CONFLICT",
-      `The id '${definition.name}' is held by a retired Data Store whose database still exists. It is free once that store is dropped.`,
-      { reason: "data_store_id_held" }
-    );
-  }
-  const current = await stores.dataStores.getDataStore({
-    clientInstanceId,
-    id: storeId,
-    lock: true
-  });
-  const issue = current && appliedMigrationIssue(current.migrations, definition);
-  if (issue) {
-    throw new AppError("VALIDATION_FAILED", issue, { reason: "applied_migration_changed" });
-  }
-  // A one-step publish may introduce the table and rules together. Check its final schema
-  // in the migration transaction, never the old catalog while DDL is still queued.
-  if (definition.migrations.length === (current?.level ?? 0)) {
-    await checkRecordsCatalog(server, current, definition.records);
-  }
-  const now = new Date().toISOString();
-  const names = server.namesOf(storeId);
-  const record: DataStoreRecord = {
-    ...(current ?? {
-      id: storeId,
-      clientInstanceId,
-      name: definition.name,
-      status: "provisioning",
-      location: { ...server.location, database: names.database },
-      roles: { app: names.app, migration: names.migration },
-      level: 0,
-      migrations: [],
-      conditions: [],
-      createdAt: now
-    }),
-    targetRevision: input.revision,
-    // The instance's ceiling, which a manifest lowers and never raises.
-    sizeLimitBytes: Math.min(
-      definition.sizeLimitBytes ?? limits.sizeLimitBytes,
-      limits.sizeLimitBytes
-    ),
-    updatedAt: now
-  };
-  await stores.dataStores.putDataStore(record);
-  await enqueueStoreJob(stores, record);
-}
-
-/**
- * What deleting the asset of a store does to the store, in the same transaction: the record
- * is marked retired. The database, the roles and every row stay, and the record keeps the id.
- */
-export async function retireDataStore(
-  runtime: Pick<DataStoreRuntime, "clientInstanceId">,
-  stores: PlatformStores,
-  storeId: string
-): Promise<void> {
-  const record = await stores.dataStores.getDataStore({
-    clientInstanceId: runtime.clientInstanceId,
-    id: storeId,
-    lock: true
-  });
-  if (!record || record.status === "retired") return;
-  const now = new Date().toISOString();
-  await stores.dataStores.putDataStore({
-    ...record,
-    status: "retired",
-    retiredAt: now,
-    updatedAt: now
-  });
-}
 
 /** Reads the record of a job's store, held for the transaction. A retired store has no work left. */
 function claimStore(runtime: DataStoreRuntime, control: JobControl, storeId: string) {
@@ -786,41 +577,6 @@ async function owningKnowledgeBase(runtime: DataStoreRuntime, record: DataStoreR
   return definition.success && !("backend" in definition.data) ? definition.data : undefined;
 }
 
-/**
- * Brings the store a Knowledge Base owns to what its published revision needs: pgvector where
- * it searches by meaning, and the platform's tables of this release. Nothing of an author
- * runs: the store has no migrations of its own.
- */
-/**
- * Queues the migration of each store a Knowledge Base owns that has its database and a level
- * below the release's. The migration applies the tables of this release, as a publish does.
- */
-async function upgradeOwnedStores(runtime: DataStoreRuntime, control: JobControl): Promise<void> {
-  const { clientInstanceId, logger } = runtime;
-  const records = await runtime.stores.dataStores.listDataStores({
-    clientInstanceId,
-    limit: DATA_STORE_UPGRADE_MAX_STORES + 1
-  });
-  if (records.length > DATA_STORE_UPGRADE_MAX_STORES) {
-    logger.warn(
-      { limit: DATA_STORE_UPGRADE_MAX_STORES, limitName: "DATA_STORE_UPGRADE_MAX_STORES" },
-      "More Data Stores exist than one upgrade check reads"
-    );
-  }
-  const behind = records
-    .slice(0, DATA_STORE_UPGRADE_MAX_STORES)
-    .filter(
-      (record) =>
-        record.ownerKnowledgeBaseId !== undefined &&
-        record.status === "ready" &&
-        knowledgeStoreNeedsMigration(record)
-    );
-  if (behind.length === 0) return;
-  await control.transaction(async (stores) => {
-    for (const record of behind) await enqueueStoreJob(stores, record);
-  });
-}
-
 async function migrateOwnedStore(
   runtime: DataStoreRuntime,
   job: Job<StorePayload>,
@@ -875,124 +631,6 @@ async function migrateOwnedStore(
  * the ones its id gives, or the record of another store names them. Nothing where they are
  * its own and no other record's.
  */
-async function foreignStoreObjects(
-  runtime: DataStoreRuntime,
-  stores: PlatformStores,
-  storeId: string,
-  record: DataStoreRecord | undefined
-): Promise<{ reason: string; message: string } | undefined> {
-  const names = runtime.server.namesOf(storeId);
-  if (
-    record &&
-    (record.location.database !== names.database ||
-      record.roles.app !== names.app ||
-      record.roles.migration !== names.migration)
-  ) {
-    return {
-      reason: "store_names_not_its_own",
-      message:
-        "The record of the store names a database or roles other than the ones its id gives. Nothing was dropped: an operator checks the record."
-    };
-  }
-  const naming = await stores.dataStores.listDataStoresNaming({
-    clientInstanceId: runtime.clientInstanceId,
-    database: names.database,
-    roles: [names.app, names.migration]
-  });
-  if (naming.some((other) => other.id !== storeId)) {
-    return {
-      reason: "store_names_shared",
-      message:
-        "The record of another Data Store names the database or a role of this store. Nothing was dropped: an operator checks the records."
-    };
-  }
-  return undefined;
-}
-
-/**
- * Drops the database and the two roles the id of a store gives, after reading that they are
- * its own. Where they are not, nothing is dropped, the refusal is logged and audited, and the
- * job fails without another attempt.
- */
-async function dropOwnedStore(
-  runtime: DataStoreRuntime,
-  job: Job<StorePayload>,
-  control: JobControl,
-  storeId: string,
-  record: DataStoreRecord | undefined
-): Promise<void> {
-  const foreign = await control.transaction((stores) =>
-    foreignStoreObjects(runtime, stores, storeId, record)
-  );
-  if (foreign) {
-    runtime.logger.warn(
-      { storeId, reason: foreign.reason },
-      "The database of a Data Store was not dropped: its names are not its own"
-    );
-    await runtime.auditRecorder.record({
-      type: "data_store.dropped",
-      status: "failed",
-      subject: storeId,
-      reason: foreign.reason,
-      correlationId: job.correlationId,
-      metadata: { name: record?.name ?? storeId }
-    });
-    throw new NonRetryableJobError(foreign.message, { reason: foreign.reason });
-  }
-  try {
-    await dropStoreDatabase(runtime.server, storeId, control.signal);
-  } catch (error) {
-    if (control.signal.aborted)
-      throw new AppError("CONFLICT", "The work on a Data Store was stopped");
-    const failure = describeDatabaseFailure(
-      error,
-      "Dropping the store of a deleted Knowledge Base"
-    );
-    throw new AppError("CONFLICT", failure.sentence, { reason: "drop_failed" });
-  }
-}
-
-/**
- * Drops the store a deleted Knowledge Base owned: its database with every row in it, its two
- * roles, their secrets, and its record. A store of its own asset is never dropped here: it
- * outlives its asset until an operator removes it.
- */
-async function drop(
-  runtime: DataStoreRuntime,
-  job: Job<StorePayload>,
-  control: JobControl
-): Promise<void> {
-  const { storeId } = job.payload;
-  const record = await claimSubjectRow(control, async (stores) => {
-    const row = await stores.dataStores.getDataStore({
-      clientInstanceId: runtime.clientInstanceId,
-      id: storeId,
-      lock: true
-    });
-    return row?.status === "retired" && row.ownerKnowledgeBaseId !== undefined
-      ? { status: "claimed" as const, row }
-      : { status: "finished" as const };
-  });
-  if (!record) return;
-  await dropOwnedStore(runtime, job, control, storeId, record);
-  await control.transaction(async (stores) => {
-    for (const secret of ["app", "migration", "ledger"] as const) {
-      await runtime.credentials.remove(stores.connections, storeId, secret);
-    }
-    await stores.dataStores.deleteDataStore({
-      clientInstanceId: runtime.clientInstanceId,
-      id: storeId
-    });
-  });
-  await runtime.auditRecorder.record({
-    type: "data_store.dropped",
-    status: "success",
-    subject: record.id,
-    correlationId: job.correlationId,
-    metadata: { name: record.name }
-  });
-}
-
 /** The handlers, the schedules and the manual retries of the store's job kinds. */
 export function createDataStoreJobs(runtime: DataStoreRuntime): {
   handlers: RegisteredJobHandler[];
@@ -1011,15 +649,43 @@ export function createDataStoreJobs(runtime: DataStoreRuntime): {
         slots: DATA_STORE_JOB_SLOTS,
         run: (job, control) => migrate(runtime, job, control)
       }),
+      ...[measureSizeJob, measureSizeTickJob].map((kind) =>
+        defineJobHandler({
+          kind,
+          slots: 1,
+          run: (_job, control) =>
+            control.transaction(async (stores) => {
+              await stores.jobs.enqueue(
+                measureSizePageJob,
+                {},
+                { clientInstanceId: runtime.clientInstanceId, dedupeKey: "first-page" }
+              );
+            })
+        })
+      ),
+      ...[upgradeOwnedJob, upgradeOwnedTickJob].map((kind) =>
+        defineJobHandler({
+          kind,
+          slots: 1,
+          run: (_job, control) =>
+            control.transaction(async (stores) => {
+              await stores.jobs.enqueue(
+                upgradeOwnedPageJob,
+                {},
+                { clientInstanceId: runtime.clientInstanceId, dedupeKey: "first-page" }
+              );
+            })
+        })
+      ),
       defineJobHandler({
-        kind: measureSizeJob,
+        kind: measureSizePageJob,
         slots: 1,
-        run: (_job, control) => measureDataStores(runtime, control)
+        run: (job, control) => measureDataStores(runtime, control, job.payload)
       }),
       defineJobHandler({
-        kind: upgradeOwnedJob,
+        kind: upgradeOwnedPageJob,
         slots: 1,
-        run: (_job, control) => upgradeOwnedStores(runtime, control)
+        run: (job, control) => upgradeOwnedStores(runtime, control, job.payload)
       }),
       defineJobHandler({
         kind: dropJob,
@@ -1028,10 +694,10 @@ export function createDataStoreJobs(runtime: DataStoreRuntime): {
       })
     ],
     schedules: [
-      defineSchedule({ kind: measureSizeJob, every: DATA_STORE_MEASURE_INTERVAL_MS }),
+      defineSchedule({ kind: measureSizeTickJob, every: DATA_STORE_MEASURE_INTERVAL_MS }),
       // A store an earlier release made gets this release's tables as soon as it is up.
       defineSchedule({
-        kind: upgradeOwnedJob,
+        kind: upgradeOwnedTickJob,
         every: DATA_STORE_UPGRADE_INTERVAL_MS,
         dueAtStart: true
       })

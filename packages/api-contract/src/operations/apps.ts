@@ -141,7 +141,7 @@ export const appOperations = {
     method: "GET",
     path: "/api/v1/app-actions",
     summary:
-      "List the named actions of one App or of every published App the caller reads or uses, with what a call of each would come to for the caller",
+      "List the actions of one App, or a cursor page of published Apps the caller reads or uses, with call previews. Follow nextCursor until absent to reach every App.",
     tag: "Apps",
     auth: "user",
     scope: "config_assets:read",

@@ -169,7 +169,7 @@ describe("a Data Store on an assembled instance", () => {
     );
     expect(startedKinds(instance)).toEqual({
       jobs: Object.values(DATA_STORE_JOB_KINDS),
-      schedules: [DATA_STORE_JOB_KINDS.measureSize, DATA_STORE_JOB_KINDS.upgradeOwned],
+      schedules: [DATA_STORE_JOB_KINDS.measureSizeTick, DATA_STORE_JOB_KINDS.upgradeOwnedTick],
       // A scheduled measurement is not retried by hand: the next tick is its retry.
       retries: [
         DATA_STORE_JOB_KINDS.provision,

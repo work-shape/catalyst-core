@@ -80,8 +80,8 @@ export function createRunReads(options: {
       return definition ? withEveryBodyStep(stepRuns, definition, slots) : stepRuns;
     },
 
-    async listWorkflows() {
-      const summaries = await definitions.list();
+    async listWorkflows(page?: StorePage) {
+      const summaries = await definitions.list(page);
       const last = await stores.workflowRuns.listLastRuns({
         clientInstanceId,
         workflows: summaries.map((summary) => summary.id)

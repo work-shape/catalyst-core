@@ -34,6 +34,7 @@ export const workflowsModule = defineModule({
     WORKFLOW_RUN_JOB_KINDS.executeStep,
     workflowDeadlineJobKind.kind,
     WORKFLOW_RUN_JOB_KINDS.fireSchedule,
+    WORKFLOW_RUN_JOB_KINDS.repairSchedules,
     WORKFLOW_CODE_JOB_KIND,
     WORKFLOW_CODE_SWEEP_JOB_KIND,
     WORKFLOW_RUN_JOB_KINDS.pruneData,

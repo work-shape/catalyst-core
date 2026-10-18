@@ -1,3 +1,4 @@
+import type { StorePage } from "@work-shape/catalyst-core";
 import {
   workflowsConfigSchema,
   type ClientInstanceConfig
@@ -109,8 +110,8 @@ export interface InstanceWorkflows {
   /** Removes the values of the runs that are due, as the daily job does. */
   pruneRunData(): Promise<{ runs: number; stepRuns: number; batches: number }>;
   /**
-   * Queues the job of the next due time of every published Workflow that has a schedule and
-   * has none queued. Nothing where the module is off.
+   * Repairs one page of scheduled Workflows and persists the remaining pages as repair jobs.
+   * Answers the first page's due times. Nothing where the module is off.
    */
   planSchedules(): Promise<{ workflow: string; dueAt: string }[]>;
   /**
@@ -174,8 +175,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
    * refused for now. One the engine of this release does not run is listed with the engine's
    * reasons, never left out, so a page says why it cannot be started instead of guessing.
    */
-  async function listWorkflows(): Promise<WorkflowListEntry[]> {
-    const published = await (given ? publishedWorkflowsOf(given) : assets.published());
+  async function listWorkflows(page?: StorePage): Promise<WorkflowListEntry[]> {
+    const published = await (given ? publishedWorkflowsOf(given, page) : assets.published(page));
     const last = await stores.workflowRuns.listLastRuns({
       clientInstanceId,
       workflows: published.map((workflow) => workflow.id)

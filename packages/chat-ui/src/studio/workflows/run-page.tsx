@@ -8,6 +8,7 @@ import {
   Dialog,
   InlineError,
   LoadError,
+  LoadMore,
   PageHeader,
   PageLead,
   TextLink
@@ -431,7 +432,7 @@ export function WorkflowRunPageView({
                 run.revisionId !== workflow.revisionId
               }
               stopping={stopping}
-              stepRunsCut={read.stepRunsCut}
+              {...(read.moreStepRuns === undefined ? {} : { moreStepRuns: read.moreStepRuns })}
               failedEntries={failedEntries}
               onShowFailed={(stepId) => setFocus({ stepId })}
             />
@@ -469,7 +470,7 @@ function RunNotices({
   showFailure,
   earlierRevision,
   stopping,
-  stepRunsCut,
+  moreStepRuns,
   failedEntries,
   onShowFailed
 }: {
@@ -479,8 +480,8 @@ function RunNotices({
   earlierRevision: boolean;
   /** Someone asked to cancel the run, and it has not ended yet. */
   stopping: boolean;
-  /** The run has more step runs than the page reads. */
-  stepRunsCut: boolean;
+  /** Present while the run has step runs after those the page read: reads the next page. */
+  moreStepRuns?: WorkflowRunRead["moreStepRuns"];
   /** Entries of the run's loops that failed while the run ended `done`. */
   failedEntries: FailedEntries | undefined;
   /** Opens the failed entries of the loop with the given step id. */
@@ -509,7 +510,7 @@ function RunNotices({
     line === undefined &&
     testLine === undefined &&
     !earlierRevision &&
-    !stepRunsCut &&
+    moreStepRuns === undefined &&
     failedEntries === undefined &&
     !(showFailure && run.failure)
   ) {
@@ -540,11 +541,23 @@ function RunNotices({
           {t("workflows.run.earlierRevision")}
         </Banner>
       ) : null}
-      {stepRunsCut ? (
-        <Banner tone="info" layout="line" data-run-cut="">
+      {moreStepRuns === undefined ? null : (
+        <Banner
+          tone="info"
+          layout="line"
+          data-run-cut=""
+          action={
+            <LoadMore
+              loading={moreStepRuns.loading}
+              onLoad={moreStepRuns.load}
+              label={t("workflows.showMore")}
+              data-run-more-steps=""
+            />
+          }
+        >
           {t("workflows.run.stepRunsCut")}
         </Banner>
-      ) : null}
+      )}
       {showFailure && run.failure ? <FailureBanner failure={run.failure} /> : null}
       {failedEntries === undefined ? null : (
         <FailedEntriesBanner

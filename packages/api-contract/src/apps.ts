@@ -7,6 +7,7 @@ import { z } from "zod";
 import { appActionPermissionSchema } from "./app-bridge";
 import { operationTargetSchema } from "./operation-runs";
 import { assetScopeSchema } from "./assets";
+import { listQuerySchema } from "./shared";
 import { pagePreviewSchema } from "./pages";
 
 /** The kind id of an App in the asset registry. */
@@ -211,12 +212,12 @@ export const appActionCallResultSchema = z.union([
 export type AppSessionContextResponse = z.infer<typeof appSessionContextSchema>;
 export type AppActionCallResult = z.infer<typeof appActionCallResultSchema>;
 
-export const appActionsListQuerySchema = z
-  .object({
+export const appActionsListQuerySchema = listQuerySchema
+  .extend({
     /**
      * The id of one App. Named, the answer holds that App alone: its draft for whoever writes
      * it, the published revision for everybody else who reads it. Left out, it holds the
-     * published revision of every App the caller reads.
+     * published revisions of one cursor page of Apps the caller reads or uses.
      */
     app: z.string().min(1).max(63).optional()
   })
@@ -320,8 +321,9 @@ export const appActionsSchema = z.object({
       actions: z.array(z.union([appActionSchema, z.strictObject(appActionSummary)]))
     })
   ),
-  /** More Apps are published than one answer lists. The answer holds the first by name. */
-  truncated: z.boolean()
+  /** Kept for existing readers; true while another cursor page follows. */
+  truncated: z.boolean(),
+  nextCursor: z.string().optional()
 });
 
 export type AppActions = z.infer<typeof appActionsSchema>;

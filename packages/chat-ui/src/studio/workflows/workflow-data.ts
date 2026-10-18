@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
@@ -241,8 +241,11 @@ export interface WorkflowRunRead {
    * counts say what failed inside a run that ended `done`. Absent until they arrived.
    */
   entryLoops?: readonly WorkflowStepRunView[] | undefined;
-  /** The run has more step runs than the page reads: steps late in the run may show no state. */
-  stepRunsCut: boolean;
+  /**
+   * Present while the run has step runs after those read: reads the next page. Until then,
+   * steps late in the run show no state.
+   */
+  moreStepRuns?: { loading: boolean; load(): void };
   retry(): void;
 }
 
@@ -261,28 +264,45 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
     refetchInterval: (current) => runRefreshMs(current.state.data)
   });
   const run = query.data;
-  // The run's own answer is part of the key once it has ended, so the steps are read once
-  // more after the last change and never again.
-  const steps = useQuery({
-    queryKey: [...keys.runs, "frame", runId, run?.ended === true ? run.status : "going"],
-    queryFn: ({ signal }) => runsOf(runs).listFrameStepRuns(runId, signal),
+  // The pages of the frame read so far are read again while the run is going, each from its
+  // own cursor, and the reader asks for the next page from the page.
+  const steps = useInfiniteQuery({
+    queryKey: [...keys.runs, "frame", runId],
+    queryFn: ({ pageParam, signal }) => runsOf(runs).listFrameStepRuns(runId, pageParam, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor,
     enabled: run !== undefined,
     retry: retryUnlessGone,
-    // The steps stay in view while the key moves from "going" to the run's end, never into the
-    // page of another run, whose state they would claim until its own steps arrive.
-    placeholderData: (previous, previousQuery) =>
-      previousQuery?.queryKey.includes(runId) === true ? previous : undefined,
     refetchInterval: () => runRefreshMs(run)
   });
+  // A run that ends while the page follows it has its steps read once more, after the last
+  // change, and never again.
+  const ended = run === undefined ? undefined : run.ended;
+  const endedBefore = useRef(ended);
+  const readStepsAgain = steps.refetch;
+  useEffect(() => {
+    if (ended === true && endedBefore.current === false) {
+      void readStepsAgain().catch(() => undefined);
+    }
+    if (ended !== undefined) endedBefore.current = ended;
+  }, [ended, readStepsAgain]);
+  const pages = steps.data?.pages;
   return {
     run,
     problem: query.isError && run === undefined ? readProblem(query.error) : undefined,
     silentSince: query.isError && run !== undefined ? query.dataUpdatedAt : undefined,
     // Said until a reading of the steps succeeds, also where earlier steps are held.
     stepsFailed: steps.isError && !query.isError,
-    stepRuns: steps.data?.stepRuns,
-    entryLoops: steps.data?.entryLoops,
-    stepRunsCut: steps.data?.complete === false,
+    stepRuns: pages?.flatMap((page) => page.stepRuns),
+    entryLoops: pages?.flatMap((page) => page.entryLoops),
+    ...(steps.hasNextPage
+      ? {
+          moreStepRuns: {
+            loading: steps.isFetchingNextPage,
+            load: () => void steps.fetchNextPage().catch(() => undefined)
+          }
+        }
+      : {}),
     retry: () => {
       void query.refetch().catch(() => undefined);
       // Before the run arrived there are no steps to ask for.

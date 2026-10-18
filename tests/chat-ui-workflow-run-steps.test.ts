@@ -85,18 +85,19 @@ type RunView = typeof doneRun;
 
 /**
  * The page of a run whose steps and run the instance answers as `listSteps` and `readRun` do,
- * call after call.
+ * call after call. `nextCursor` says where the page after the one read from a cursor starts.
  */
 async function mountRunPage(
-  listSteps: () => Promise<readonly StepRunResource[]>,
-  readRun: () => Promise<RunView> = () => Promise.resolve(doneRun)
+  listSteps: (cursor: string | undefined) => Promise<readonly StepRunResource[]>,
+  readRun: () => Promise<RunView> = () => Promise.resolve(doneRun),
+  nextCursor: (cursor: string | undefined) => string | undefined = () => undefined
 ) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const getRun = vi.fn(readRun);
-  const listFrameStepRuns = vi.fn(async () => ({
-    stepRuns: (await listSteps()).map(toWorkflowStepRun),
+  const listFrameStepRuns = vi.fn(async (_runId: string, cursor: string | undefined) => ({
+    stepRuns: (await listSteps(cursor)).map(toWorkflowStepRun),
     entryLoops: [],
-    complete: true
+    nextCursor: nextCursor(cursor)
   }));
   const source: WorkflowsSource = {
     key: "run-steps",
@@ -294,5 +295,26 @@ describe("the steps of a run on its page", () => {
       expect(page.container.textContent).not.toContain(STEPS_FAILED);
     });
     expect(page.container.textContent).toContain(t("workflows.run.running"));
+  });
+
+  // DISCOVERY-PAGING: the frame stopped after ten reads and said so with no way on. The page
+  // reads the next page of the frame from the cursor the last one handed on, as often as the
+  // reader asks, and says nothing once the last page is there.
+  it("reads the next page of the frame from its cursor, and stops saying it is cut after the last", async () => {
+    const doneResult: StepRunResource = { ...doneClients, id: "sr_result", stepId: "result" };
+    const page = await mountRunPage(
+      (cursor) => Promise.resolve(cursor === undefined ? [doneClients] : [doneResult]),
+      () => Promise.resolve(doneRun),
+      (cursor) => (cursor === undefined ? "c2" : undefined)
+    );
+    const more = () => page.container.querySelector<HTMLElement>("[data-run-more-steps] button");
+    await until(() => expect(more()).not.toBeNull());
+    expect(page.container.textContent).toContain(t("workflows.run.stepRunsCut"));
+    expect(page.listFrameStepRuns.mock.calls.map((call) => call[1])).toEqual([undefined]);
+
+    await act(async () => more()?.click());
+    await until(() => expect(more()).toBeNull());
+    expect(page.listFrameStepRuns.mock.calls.map((call) => call[1])).toEqual([undefined, "c2"]);
+    expect(page.container.textContent).not.toContain(t("workflows.run.stepRunsCut"));
   });
 });

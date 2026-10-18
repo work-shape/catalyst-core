@@ -126,8 +126,14 @@ export function publishedDefinitions() {
   const held = new Map<string, WorkflowDefinitionRevision>();
   const source: WorkflowDefinitionSource = {
     read: (id) => Promise.resolve(held.get(id)),
-    list: () =>
-      Promise.resolve([...held.values()].map(({ manifest: { id, name } }) => ({ id, name })))
+    list: (page) =>
+      Promise.resolve(
+        [...held.values()]
+          .map(({ manifest: { id, name } }) => ({ id, name }))
+          .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+          .filter(({ id }) => typeof page?.after?.[0] !== "string" || id > page.after[0])
+          .slice(0, page?.limit ?? 200)
+      )
   };
   return {
     source,

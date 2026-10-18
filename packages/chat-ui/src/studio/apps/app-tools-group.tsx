@@ -1,6 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import type { AppActions } from "@work-shape/catalyst-api-client";
 import { appActionOperationName } from "@work-shape/catalyst-core";
+import { LoadMore } from "@work-shape/catalyst-ui";
+import type { MoreRead } from "../build-area/paged-items";
 import {
   ToolChip,
   ToolGroup,
@@ -22,6 +24,8 @@ import { useSettingsPage } from "../../shared/settings-page-context";
 
 /** What every tool name of an App's action starts with. */
 const APP_TOOL_PREFIX = "app.";
+/** How many Apps one page of the agent page's read asks the instance for. */
+const APP_TOOLS_PAGE_SIZE = 50;
 
 /** What the instance says of the actions of Apps, as the agent page asked for it. */
 export type AppToolsRead =
@@ -31,8 +35,8 @@ export type AppToolsRead =
   | {
       status: "ready";
       apps: AppActions["apps"];
-      /** The instance has more published Apps than one answer lists, and left some out. */
-      truncated: boolean;
+      /** Present while more published Apps follow those read: reads the next page. */
+      more?: MoreRead;
     };
 
 /** One listed action of an App: in full for a reader, its summary for a holder of use alone. */
@@ -67,7 +71,7 @@ interface AppToolGroupView {
 
 interface AppToolsView {
   groups: AppToolGroupView[];
-  /** The answer left Apps out: the groups are not every App the reader may read. */
+  /** More Apps follow those read: the groups are not every App the reader may read yet. */
   cut: boolean;
   /**
    * The names the agent holds that no group offers, where the answer is whole. Empty until
@@ -76,7 +80,7 @@ interface AppToolsView {
   unavailable: string[];
   /**
    * The names the agent holds of which nothing is known: before the instance answered, and
-   * those no group offers where the answer left Apps out. Shown, never judged.
+   * those no group offers while more Apps follow. Shown, never judged.
    */
   unchecked: string[];
 }
@@ -93,6 +97,7 @@ export function appToolsView(read: AppToolsRead, selected: readonly string[]): A
   });
   const offered = new Set(offering.flatMap((app) => app.tools.map((tool) => tool.toolName)));
   const unoffered = held.filter((toolName) => !offered.has(toolName));
+  const cut = read.more !== undefined;
   return {
     groups: offering.map((app) => ({
       ...app,
@@ -102,10 +107,10 @@ export function appToolsView(read: AppToolsRead, selected: readonly string[]): A
         groupCount: offering.length
       })
     })),
-    cut: read.truncated,
-    // An action of an App the answer left out is as available as ever.
-    unavailable: read.truncated ? [] : unoffered,
-    unchecked: read.truncated ? unoffered : []
+    cut,
+    // An action of an App not read yet is as available as ever.
+    unavailable: cut ? [] : unoffered,
+    unchecked: cut ? unoffered : []
   };
 }
 
@@ -124,22 +129,38 @@ export function appsOfOwner(
 }
 
 /**
- * The actions of the published Apps an agent of `owner` may name: one read when the agent page
- * opens. The instance answers every App the reader may read or use in one answer; the page keeps
- * those of the agent's owner and of the instance.
+ * The actions of the published Apps an agent of `owner` may name: the first page when the agent
+ * page opens, and the next as the reader asks for it. The instance pages every App the reader
+ * may read or use; the page keeps those of the agent's owner and of the instance.
  */
 export function useAppToolsRead(owner: string | undefined): AppToolsRead {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: ["app-tools", apiBaseUrl, authScope, owner ?? ""],
-    queryFn: ({ signal }) => client.apps.actions.list({ signal }),
+    queryFn: ({ pageParam, signal }) =>
+      client.apps.actions.list({
+        query: { limit: APP_TOOLS_PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) },
+        signal
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor,
     retry: false
   });
   return query.data
     ? {
         status: "ready",
-        apps: appsOfOwner(query.data.apps, owner),
-        truncated: query.data.truncated
+        apps: appsOfOwner(
+          query.data.pages.flatMap((page) => page.apps),
+          owner
+        ),
+        ...(query.hasNextPage
+          ? {
+              more: {
+                loading: query.isFetchingNextPage,
+                load: () => void query.fetchNextPage().catch(() => undefined)
+              }
+            }
+          : {})
       }
     : query.isPending
       ? { status: "loading" }
@@ -179,11 +200,6 @@ export function AppToolsGroup({
     <fieldset className="grid min-w-0 gap-3" data-tool-group="apps">
       <legend className="text-label">{t("apps.title")}</legend>
       <p className="text-caption text-muted-foreground">{t("apps.toolsHint")}</p>
-      {view.cut ? (
-        <p className="text-caption text-muted-foreground" data-app-tools-cut>
-          {t("apps.toolsCut")}
-        </p>
-      ) : null}
       {view.groups.map((group) => (
         <ToolGroup
           key={group.name}
@@ -196,6 +212,17 @@ export function AppToolsGroup({
           onChange={onChange}
         />
       ))}
+      {read.status === "ready" && read.more ? (
+        <div className="grid justify-items-start gap-1" data-app-tools-cut>
+          <p className="text-caption text-muted-foreground">{t("apps.toolsCut")}</p>
+          <LoadMore
+            loading={read.more.loading}
+            onLoad={read.more.load}
+            label={t("apps.showMore")}
+            data-app-tools-more=""
+          />
+        </div>
+      ) : null}
       {held.length > 0 ? (
         <div className="grid min-w-0 gap-2">
           <p className="text-caption text-muted-foreground">

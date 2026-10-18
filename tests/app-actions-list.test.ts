@@ -1,3 +1,4 @@
+import { discoveryNames, seedDiscoveryAssets } from "./support/discovery-assets";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appActionSchema, appActionsSchema } from "@work-shape/catalyst-api-contract";
 import { clientInstanceId } from "./support/access-instance";
@@ -190,5 +191,71 @@ describe("apps.actions.list", () => {
       operations: [operationOf("echo", { exposure: ["bridge"] })]
     });
     expect((await actionsOf(t.admin.id, "stock")).count?.unavailable).toBe("connection_disabled");
+  });
+
+  // Each App carries actions; paging never splits an App’s actions.
+  it("reaches every action of 201 Apps through bounded cursor pages", async () => {
+    const names = discoveryNames("paging-app", 201);
+    const template = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "app",
+      name: "orders"
+    });
+    if (!template?.publishedConfig) throw new Error("Published App fixture is missing");
+    const config = template.publishedConfig;
+    await seedDiscoveryAssets(
+      t.stores.configAssets,
+      "app",
+      names,
+      (name) => ({ ...config, name }),
+      { kind: "workspace", workspaceId: t.workspaceId }
+    );
+
+    const found: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const response = await t.call(t.admin.id, "apps.actions.list", {
+        query: { limit: 200, ...(cursor ? { cursor } : {}) }
+      });
+      expectStatus(response, 200);
+      const page = appActionsSchema.parse(response.json());
+      expect(page.apps.length).toBeLessThanOrEqual(200);
+      for (const app of page.apps.filter((app) => app.name.startsWith("paging-app-"))) {
+        expect(app.actions.map((action) => action.name).sort()).toEqual([
+          "agent-only",
+          "load",
+          "save"
+        ]);
+        found.push(app.name);
+      }
+      cursor = page.nextCursor;
+    } while (cursor);
+    expect(found).toEqual(names);
+    // An asset grant on the final App must cross earlier unreadable pages.
+    const last = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "app",
+      name: names[200] ?? "missing"
+    });
+    if (!last) throw new Error("Last App is missing");
+    await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.lena.id,
+      action: "app.read",
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: last.id,
+      grantedBy: t.admin.id
+    });
+    const visibleResponse = await t.call(t.lena.id, "apps.actions.list", { query: { limit: 200 } });
+    expectStatus(visibleResponse, 200);
+    const visible = appActionsSchema.parse(visibleResponse.json());
+    expect(visible.apps.map((app) => app.name)).toEqual([last.name]);
+    expect(visible.nextCursor).toBeUndefined();
+    expectStatus(
+      await t.call(t.admin.id, "apps.actions.list", { query: { cursor: "invalid" } }),
+      422
+    );
   });
 });

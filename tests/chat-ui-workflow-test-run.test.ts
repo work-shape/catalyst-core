@@ -228,7 +228,6 @@ describe("the page of a test run", () => {
           silentSince: undefined,
           stepsFailed: false,
           stepRuns: steps,
-          stepRunsCut: false,
           retry: noop
         },
         now,
