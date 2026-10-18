@@ -13,6 +13,7 @@ import {
 } from "./working-copy";
 import { agentPublishRefusalHint, askBeforePublish, waitingPublishLine } from "./publish-question";
 import { preflightGuardrails } from "./push-guardrail-preflight";
+import { CANONICAL_FORM_VERSION } from "./serialization";
 import {
   type ConfigCommandOptions,
   type LocalAsset,
@@ -70,6 +71,19 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     );
   }
   const baselineAssets = baseline.assets;
+  // Check before hashing: an older hash may differ even without an edit, and its file may
+  // omit fields. A scoped pull upgrades only the assets it actually reads again.
+  const selectedKeys = new Set(assetEntries(bundle).map((asset) => asset.key));
+  const outdated = Object.entries(baselineAssets).filter(
+    ([key, base]) =>
+      (selectedKeys.has(key) || options.prune) &&
+      base.canonicalFormVersion !== CANONICAL_FORM_VERSION
+  );
+  if (outdated.length > 0) {
+    throw new Error(
+      `${outdated.map(([key]) => key).join(", ")}: baseline uses an older canonical form. Run 'catalyst config pull' first, then push again. Commit or stash local edits in git first: the pull overwrites the local files.`
+    );
+  }
   const touched = assetEntries(bundle).filter(
     (asset) => baselineAssets[asset.key]?.hash !== assetHash(asset.contents)
   );
@@ -173,7 +187,13 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
       return {
         type: "put" as const,
         kind: asset.kind,
-        config: { ...asset.config },
+        config: {
+          ...asset.config,
+          // Omission preserves stored frontmatter on the server; an empty map clears it.
+          ...(asset.kind === "skill" && base !== undefined
+            ? { frontmatter: asset.config.frontmatter ?? {} }
+            : {})
+        },
         expectedRevision: base?.revision ?? null,
         ...(asset.kind === "agent" && draftRevision !== undefined
           ? { expectedDraftRevision: draftRevision }

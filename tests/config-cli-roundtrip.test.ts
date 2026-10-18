@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,10 +11,14 @@ import {
   type SkillConfig
 } from "@work-shape/catalyst-asset-schemas";
 import {
+  CANONICAL_FORM_VERSION,
   canonicalizeAgentConfig,
   canonicalizeSkillConfig,
   parseSkillFile,
   readManifest,
+  readStateFile,
+  writeStateFile,
+  serializeAgentYaml,
   readWorkingCopy,
   runCli,
   serializeSkillMarkdown
@@ -38,7 +43,7 @@ const agent = {
   reasoningEffort: "high",
   fastMode: false,
   userSelectableModelBindingIds: [],
-  modelReasoningEfforts: {},
+  modelReasoningEfforts: { z: "high", a: "low" },
   maxSteps: 8,
   toolNames: ["run_agent"],
   subagentNames: ["researcher"],
@@ -221,6 +226,24 @@ async function fixture(
   const read = async () => readWorkingCopy(cwd, await readManifest(cwd));
   return { cwd, calls, state, run, pull, read };
 }
+async function oldCopy(f: Awaited<ReturnType<typeof fixture>>, serverOrder: boolean) {
+  await f.pull();
+  const { subagentNames: _subagents, knowledgeBases: _knowledge, ...oldAgent } = agent;
+  const canonical = serializeAgentYaml(oldAgent);
+  const contents = serverOrder
+    ? canonical.replace("  a: low\n  z: high", "  z: high\n  a: low")
+    : canonical;
+  if (serverOrder) expect(contents).not.toBe(canonical);
+  await writeFile(join(f.cwd, "agents/helper.agent.yaml"), contents);
+  const path = join(f.cwd, ".catalyst-state.json");
+  const state = await readStateFile(path);
+  const baseline = state.instances.local?.assets?.["agent:helper"];
+  if (!baseline) throw new Error("Missing baseline");
+  delete baseline.canonicalFormVersion;
+  baseline.hash = createHash("sha256").update(contents).digest("hex");
+  await writeStateFile(path, state);
+  f.calls.length = 0;
+}
 describe("config schema round trips", () => {
   it("pulls and reads the complete agent and skill, then pushes them intact after an instructions edit", async () => {
     const f = await fixture();
@@ -275,24 +298,102 @@ describe("config schema round trips", () => {
       });
     });
   }
-  it("keeps every parsed schema key, including release metadata and file indexes outside the authored working copy", () => {
-    const indexed = {
-      ...skill,
+  it("classifies every schema field as authored or server-carried", () => {
+    const carried = {
       files: [
         { path: "assets/icon.png", sha256: "a".repeat(64), bytes: 1, mediaType: "image/png" }
       ],
       origin: "release",
       icon: "book"
     };
-    expect(Object.keys(agent).sort()).toEqual(Object.keys(agentConfigSchema.shape).sort());
-    expect(Object.keys(indexed).sort()).toEqual(Object.keys(skillConfigSchema.shape).sort());
+    expect(Object.keys(agentEdits).sort()).toEqual(Object.keys(agentConfigSchema.shape).sort());
+    expect([...Object.keys(skillEdits), ...Object.keys(carried)].sort()).toEqual(
+      Object.keys(skillConfigSchema.shape).sort()
+    );
     expect(canonicalizeAgentConfig(agent)).toEqual(agentConfigSchema.parse(agent));
-    expect(canonicalizeSkillConfig(indexed)).toEqual(skillConfigSchema.parse(indexed));
-    for (const key of Object.keys(indexed)) {
-      const without = Object.fromEntries(Object.entries(indexed).filter(([name]) => name !== key));
+    expect(canonicalizeSkillConfig({ ...skill, ...carried })).toEqual(skill);
+    for (const key of Object.keys(skillEdits)) {
+      const without = Object.fromEntries(Object.entries(skill).filter(([name]) => name !== key));
       if (skillConfigSchema.safeParse(without).success)
-        expect(canonicalizeSkillConfig(without)).not.toEqual(canonicalizeSkillConfig(indexed));
+        expect(canonicalizeSkillConfig(without)).not.toEqual(canonicalizeSkillConfig(skill));
     }
+  });
+  it("ignores server-carried skill fields after a fresh pull and never sends them as edits", async () => {
+    const indexed = {
+      ...skill,
+      files: [
+        { path: "assets/icon.png", sha256: "a".repeat(64), bytes: 1, mediaType: "image/png" }
+      ],
+      origin: "release" as const,
+      icon: "book"
+    };
+    const f = await fixture([remote("skill", indexed)]);
+    await f.pull();
+    const unchanged = await f.run(["config", "push"]);
+    expect(unchanged.out).toContain("No local changes to push.");
+    expect(f.calls.some((c) => c.operation === "assets.sync")).toBe(false);
+    await writeFile(
+      join(f.cwd, "skills/guide/SKILL.md"),
+      serializeSkillMarkdown({ ...skill, content: "Edited" })
+    );
+    expect((await f.run(["config", "push"])).code).toBe(0);
+    expect(f.calls.find((c) => c.operation === "assets.sync")?.body).toMatchObject({
+      items: [{ kind: "skill", config: { ...skill, content: "Edited" } }]
+    });
+    expect(JSON.stringify(f.calls.find((c) => c.operation === "assets.sync")?.body)).not.toMatch(
+      /"(?:files|origin|icon)":/u
+    );
+  });
+  for (const edited of [false, true]) {
+    it(`refuses an old canonical baseline before any write, with local edit = ${edited}`, async () => {
+      const f = await fixture();
+      await oldCopy(f, true);
+      if (edited) {
+        const local = (await f.read()).agents[0];
+        await writeFile(
+          join(f.cwd, "agents/helper.agent.yaml"),
+          JSON.stringify({ ...local, instructions: "Edited" })
+        );
+      }
+      const result = await f.run(["config", "push"]);
+      expect(result.code).toBe(1);
+      expect(result.err).toContain("agent:helper: baseline uses an older canonical form");
+      expect(result.err).toContain("Run 'catalyst config pull' first");
+      expect(f.calls).toEqual([]);
+    });
+  }
+  it("refuses pruning an asset with an old canonical baseline before any write", async () => {
+    const f = await fixture();
+    await oldCopy(f, true);
+    await rm(join(f.cwd, "agents/helper.agent.yaml"));
+    const result = await f.run(["config", "push", "--prune"]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("agent:helper: baseline uses an older canonical form");
+    expect(f.calls).toEqual([]);
+  });
+  for (const serverOrder of [false, true]) {
+    it(`refetches an old canonical baseline at the same revision, server-order hash = ${serverOrder}`, async () => {
+      const f = await fixture();
+      await oldCopy(f, serverOrder);
+      await f.pull();
+      expect(f.calls.filter((c) => c.operation === "assets.get")).toHaveLength(1);
+      expect((await f.read()).agents).toEqual([agent]);
+      const state = await readStateFile(join(f.cwd, ".catalyst-state.json"));
+      expect(state.instances.local?.assets?.["agent:helper"]?.canonicalFormVersion).toBe(
+        CANONICAL_FORM_VERSION
+      );
+      f.calls.length = 0;
+      expect((await f.run(["config", "push"])).out).toContain("No local changes to push.");
+      expect(f.calls.some((c) => c.operation === "assets.sync")).toBe(false);
+    });
+  }
+  it("a scoped pull leaves unselected old baselines refused", async () => {
+    const f = await fixture();
+    await oldCopy(f, true);
+    expect((await f.run(["config", "pull", "--only", "skill:guide"])).code).toBe(0);
+    expect((await f.run(["config", "push"])).err).toContain(
+      "agent:helper: baseline uses an older canonical form"
+    );
   });
   it("treats reordered free-form maps as no local edit", async () => {
     const f = await fixture();
@@ -353,7 +454,7 @@ describe("push guardrail preflight", () => {
     f.state.invalidGuardrail = true;
     const result = await f.run(["config", "push"]);
     expect(result.code).toBe(1);
-    expect(result.err).toContain("nothing was applied");
+    expect(result.err).toContain("1 issue (event); nothing was applied");
     expect(result.err).not.toContain("private value");
     expect(
       f.calls.filter((c) => ["assets.sync", "assets.put", "assets.delete"].includes(c.operation))
@@ -439,7 +540,10 @@ describe("asset pointer preconditions", () => {
       expect(f.calls.some((c) => c.operation.startsWith("assets.set_"))).toBe(false);
       f.state.rejectRead = false;
       f.state.changedPointer = true;
-      expect((await f.run(["agent", ...args])).code).toBe(1);
+      const refused = await f.run(["agent", ...args]);
+      expect(refused.code).toBe(1);
+      if (args[0] === "set-default")
+        expect(refused.err).toContain("Run 'catalyst agent list' and retry");
       expect(f.calls.filter((c) => c.operation.startsWith("assets.set_"))).toHaveLength(1);
     });
   }

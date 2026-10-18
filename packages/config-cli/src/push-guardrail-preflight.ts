@@ -49,7 +49,7 @@ export async function preflightGuardrails(
       const paths = checked.issues.flatMap((issue) => issue.path?.join(".") ?? []);
       writeError(
         input.options,
-        `Validation failed for ${asset.key}: ${checked.issues.length} issues${paths.length ? ` (${paths.join(", ")})` : ""}; nothing was applied.`
+        `Validation failed for ${asset.key}: ${checked.issues.length} ${checked.issues.length === 1 ? "issue" : "issues"}${paths.length ? ` (${paths.join(", ")})` : ""}; nothing was applied.`
       );
       return false;
     }

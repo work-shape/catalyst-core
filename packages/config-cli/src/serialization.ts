@@ -15,6 +15,9 @@ export interface AssetProvenance {
   version?: number;
 }
 
+/** Bump when a working copy's field projection or content hashing changes. */
+export const CANONICAL_FORM_VERSION = 1;
+
 const yamlDumpOptions: yaml.DumpOptions = {
   lineWidth: -1,
   noCompatMode: true,
@@ -40,14 +43,22 @@ export function parseSkillFile(contents: string, skillFile = "SKILL.md"): SkillC
 }
 
 export function canonicalizeSkillConfig(input: unknown): SkillConfig {
-  const skill = skillConfigSchema.parse(sortKeys(skillConfigSchema.parse(input)));
+  // These fields travel with the server asset, but SKILL.md and its text resources do not
+  // represent them. They cannot count as local changes or be sent as working-copy edits.
+  const {
+    files: _files,
+    icon: _icon,
+    origin: _origin,
+    resources,
+    frontmatter,
+    ...skill
+  } = skillConfigSchema.parse(sortKeys(skillConfigSchema.parse(input)));
   return {
     ...skill,
-    ...(skill.resources === undefined
-      ? {}
-      : {
-          resources: [...skill.resources].sort((left, right) => left.path.localeCompare(right.path))
-        })
+    ...(frontmatter === undefined || Object.keys(frontmatter).length === 0 ? {} : { frontmatter }),
+    ...(resources?.length
+      ? { resources: [...resources].sort((left, right) => left.path.localeCompare(right.path)) }
+      : {})
   };
 }
 
