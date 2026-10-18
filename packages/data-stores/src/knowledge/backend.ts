@@ -4,11 +4,12 @@ import {
   DATA_STORE_ACTIONS,
   type DataStoreKnowledgeTarget,
   type KnowledgeBackend,
+  type KnowledgeBackendStores,
   type KnowledgeCheckResult
 } from "@work-shape/catalyst-core";
 import { catalogTarget, rowsOf } from "../catalog";
 import { databaseFailureError } from "../failures";
-import { readStores } from "../operations";
+import { readStore } from "../operations";
 import { PostgresExecutorError } from "@work-shape/catalyst-postgres-connector";
 import { asStoreRole } from "../roles";
 import type { DataStoreRuntime } from "../runtime";
@@ -36,13 +37,19 @@ const READABLE_RELATIONS = `
 
 const relationRow = z.object({ name: z.string(), readable: z.boolean() });
 
+/**
+ * The platform's rows a call reads: those of the transaction of a publish, a grant or a
+ * retirement, which already holds a connection of the pool, or the pool's own outside of one.
+ */
+type Rows = Pick<KnowledgeBackendStores, "configAssets" | "connections" | "dataStores">;
+
 /** The published store a Knowledge Base names, or nothing where none has that id. */
-async function storeOf(
+function storeOf(
   runtime: DataStoreRuntime,
+  rows: Rows,
   dataStore: string
 ): Promise<PublishedStore | undefined> {
-  const { stores } = await readStores(runtime, [dataStore]);
-  return stores.find((store) => store.record.name === dataStore);
+  return readStore({ clientInstanceId: runtime.clientInstanceId, stores: rows }, dataStore);
 }
 
 /**
@@ -51,10 +58,11 @@ async function storeOf(
  */
 async function reachableStore(
   runtime: DataStoreRuntime,
+  rows: Rows,
   target: DataStoreKnowledgeTarget
 ): Promise<{ store: PublishedStore } | { problem: string }> {
   const name = target.dataStore;
-  const store = await storeOf(runtime, name);
+  const store = await storeOf(runtime, rows, name);
   if (!store) {
     return {
       problem: `The Data Store '${name}' is not available: no published Data Store has that id. It may have been deleted.`
@@ -68,13 +76,53 @@ async function reachableStore(
 export function createDataStoreKnowledgeBackend(
   runtime: DataStoreRuntime
 ): KnowledgeBackend<DataStoreKnowledgeTarget> {
+  /** The roles of a store held with the passwords read from `rows`. */
+  const withRows = (rows: Rows) => ({ ...runtime, stores: rows });
+
+  async function check(
+    rows: Rows,
+    target: DataStoreKnowledgeTarget,
+    signal: AbortSignal | undefined
+  ): Promise<KnowledgeCheckResult> {
+    const reached = await reachableStore(runtime, rows, target);
+    if ("problem" in reached) {
+      return {
+        status: "needs_attention",
+        tables: target.tables.map(({ name }) => ({ name, readable: false })),
+        problem: reached.problem
+      };
+    }
+    const { record } = reached.store;
+    const found = await asStoreRole(withRows(rows), record, signal, async () =>
+      z.array(relationRow).parse(
+        (
+          await runtime.server.executor.query({
+            ...catalogTarget(runtime.server.asRole(record, "app", rows.connections)),
+            ...(signal ? { signal } : {}),
+            sql: READABLE_RELATIONS,
+            parameters: [{ type: "text[]", value: target.tables.map(({ name }) => name) }]
+          })
+        ).rows
+      )
+    );
+    const tables = target.tables.map(({ name }) => ({
+      name,
+      readable: found.some((relation) => relation.name === name && relation.readable)
+    }));
+    return {
+      status: tables.every((table) => table.readable) ? "ok" : "needs_attention",
+      tables
+    };
+  }
+
   const backend: KnowledgeBackend<DataStoreKnowledgeTarget> = {
+    // Every read goes through `stores`, the rows of the publish's transaction.
     async publish(stores, { target, replaced, access }) {
-      const store = await storeOf(runtime, target.dataStore);
+      const store = await storeOf(runtime, stores, target.dataStore);
       // The publisher hands the store's rows to whoever holds the Knowledge Base's `use`. A
       // store the publisher may not read is not named to them: the check refuses it as missing.
       if (store) access.require(DATA_STORE_ACTIONS.read, store.resource);
-      const result = await backend.check(target);
+      const result = await check(stores, target, undefined);
       if (result.status !== "ok") {
         const missing = result.tables.filter((table) => !table.readable).map(({ name }) => name);
         throw new AppError(
@@ -88,63 +136,35 @@ export function createDataStoreKnowledgeBackend(
       // Away from the store before first: at no step may it read in both.
       const before = replaced?.backend === "dataStore" ? replaced.dataStore : undefined;
       if (before !== undefined && before !== target.dataStore) {
-        const old = await storeOf(runtime, before);
+        const old = await storeOf(runtime, stores, before);
         if (old?.record.status === "ready") {
-          await revokeReader(runtime, old.record, target.assetId, undefined);
+          await revokeReader(withRows(stores), old.record, target.assetId, undefined);
         }
       }
       await backend.grant(stores, target);
       return result;
     },
 
-    async check(target, signal): Promise<KnowledgeCheckResult> {
-      const reached = await reachableStore(runtime, target);
-      if ("problem" in reached) {
-        return {
-          status: "needs_attention",
-          tables: target.tables.map(({ name }) => ({ name, readable: false })),
-          problem: reached.problem
-        };
-      }
-      const { record } = reached.store;
-      const found = await asStoreRole(runtime, record, signal, async () =>
-        z.array(relationRow).parse(
-          (
-            await runtime.server.executor.query({
-              ...catalogTarget(runtime.server.asRole(record, "app")),
-              ...(signal ? { signal } : {}),
-              sql: READABLE_RELATIONS,
-              parameters: [{ type: "text[]", value: target.tables.map(({ name }) => name) }]
-            })
-          ).rows
-        )
-      );
-      const tables = target.tables.map(({ name }) => ({
-        name,
-        readable: found.some((relation) => relation.name === name && relation.readable)
-      }));
-      return {
-        status: tables.every((table) => table.readable) ? "ok" : "needs_attention",
-        tables
-      };
+    check(target, signal): Promise<KnowledgeCheckResult> {
+      return check(runtime.stores, target, signal);
     },
 
     async grant(stores, target, signal) {
-      const reached = await reachableStore(runtime, target);
+      const reached = await reachableStore(runtime, stores, target);
       if ("problem" in reached) throw unavailable(reached.problem);
-      await grantReader(runtime, stores.connections, reached.store.record, target, signal);
+      await grantReader(withRows(stores), stores.connections, reached.store.record, target, signal);
     },
 
     async retire(stores, target, signal) {
-      const store = await storeOf(runtime, target.dataStore);
+      const store = await storeOf(runtime, stores, target.dataStore);
       if (store?.record.status === "ready") {
-        await revokeReader(runtime, store.record, target.assetId, signal);
+        await revokeReader(withRows(stores), store.record, target.assetId, signal);
       }
       await dropReader(runtime, stores.connections, target.assetId, signal);
     },
 
     async query(target, statement, signal) {
-      const reached = await reachableStore(runtime, target);
+      const reached = await reachableStore(runtime, runtime.stores, target);
       if ("problem" in reached) throw unavailable(reached.problem);
       const { record } = reached.store;
       const read = async () =>

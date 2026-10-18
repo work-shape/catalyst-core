@@ -42,10 +42,15 @@ export interface DataStoreServer {
   namesOf(storeId: string): { database: string; app: string; migration: string };
   /** A database of the server as the platform's own role, which owns the store databases. */
   asPlatform(database: string): PostgresTarget;
-  /** The database of a store as one of its roles. */
+  /**
+   * The database of a store as one of its roles. `secretRows` are where its password is read
+   * should the call open a connection: the rows of a transaction the caller holds, so that the
+   * call takes no second connection of the platform's pool. Left out, the pool's own rows.
+   */
   asRole(
     record: Pick<DataStoreRecord, "id" | "location" | "roles">,
-    role: DataStoreRole
+    role: DataStoreRole,
+    secretRows?: ConnectionsStore
   ): PostgresTarget;
   /**
    * The name of the role of one Knowledge Base, which reads the tables it describes. It follows
@@ -121,7 +126,7 @@ export function createDataStoreServer(input: {
       credentialHandle: PLATFORM_ROLE_HANDLE,
       limits: { maxConnections: poolMaxConnections }
     }),
-    asRole: (record, role) => ({
+    asRole: (record, role, secretRows) => ({
       location: {
         host: record.location.host,
         port: record.location.port,
@@ -132,6 +137,13 @@ export function createDataStoreServer(input: {
         schemas: ["public"]
       },
       credentialHandle: `${record.id}:${role}`,
+      ...(secretRows
+        ? {
+            secrets: {
+              getSecret: () => input.credentials.read(secretRows, record.id, role)
+            }
+          }
+        : {}),
       // Never more than Postgres lets the role open.
       limits: {
         ...(role === "app" ? input.statementLimits : {}),

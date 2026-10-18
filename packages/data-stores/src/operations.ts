@@ -17,6 +17,7 @@ import {
   type ConfigAssetRecord,
   type DataStoreInsertResult,
   type DataStoreRecord,
+  type PlatformStores,
   type DataStoreSchema,
   type DataToolDescriptor,
   type DataToolSource,
@@ -451,8 +452,14 @@ function publishedStore(
   };
 }
 
-async function readStore(
-  runtime: DataStoreRuntime,
+/** One published store by its name: two reads, through the rows the caller hands in. */
+export async function readStore(
+  runtime: Pick<DataStoreRuntime, "clientInstanceId"> & {
+    stores: {
+      configAssets: Pick<PlatformStores["configAssets"], "getConfigAsset">;
+      dataStores: Pick<PlatformStores["dataStores"], "getDataStore">;
+    };
+  },
   name: string
 ): Promise<PublishedStore | undefined> {
   const { clientInstanceId, stores } = runtime;

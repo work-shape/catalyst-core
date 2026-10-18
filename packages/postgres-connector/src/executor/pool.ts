@@ -88,9 +88,12 @@ export class PostgresConnection implements PostgresSession, PostgresChangeSessio
   private pastReadLimit = false;
   /** False while a call works on the connection it began on. Nothing reconnects under it. */
   private mayOpenSocket = true;
+  /** Where the password is read if the call that holds the connection opens its socket. */
+  private secrets: ScopedSecretResolver;
 
   constructor(source: PostgresConnectionSource) {
     this.source = source;
+    this.secrets = source.secrets;
     const { location } = source;
     // The driver reads `socket` and opens no socket of its own once it is set. Its types do
     // not list the option, nor `max_pipeline`.
@@ -268,6 +271,15 @@ export class PostgresConnection implements PostgresSession, PostgresChangeSessio
   }
 
   /**
+   * Where the call that now holds the connection has its password read, should the connection
+   * open a socket for it: the caller's own resolver, or the executor's where it names none. A
+   * socket opens only at the start of a call, so the resolver of an earlier call is never used.
+   */
+  useSecrets(secrets: ScopedSecretResolver | undefined): void {
+    this.secrets = secrets ?? this.source.secrets;
+  }
+
+  /**
    * Called by the driver when the server asks for the password, once per physical connection.
    * The driver cannot take a failure here, so a credential that does not resolve ends the
    * socket with the reason and leaves the driver's question unanswered. So does a credential
@@ -278,7 +290,7 @@ export class PostgresConnection implements PostgresSession, PostgresChangeSessio
     const { socket } = this;
     let password: string | undefined;
     try {
-      password = await this.source.secrets.getSecret(this.source.credentialHandle);
+      password = await this.secrets.getSecret(this.source.credentialHandle);
     } catch {
       return this.endSocket("failed");
     }

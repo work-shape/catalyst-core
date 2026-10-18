@@ -14,6 +14,7 @@ import {
   type KnowledgeSearchSignal
 } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindActions } from "./asset-kinds";
+import type { ConfigAssetStore } from "./config-assets";
 import type { ConnectionsStore } from "./connections";
 import type { DataStoreRecordsStore, DataStoreRows, DataStoreStatement } from "./data-stores";
 import { z } from "zod";
@@ -284,8 +285,13 @@ export interface BuiltinKnowledgeTarget {
 /** A Knowledge Base as a backend is asked about it. */
 export type KnowledgeBaseTarget = DataStoreKnowledgeTarget | BuiltinKnowledgeTarget;
 
-/** The rows a backend writes beside a publish, bound to the publish's transaction. */
+/**
+ * The rows a backend reads and writes beside a publish, bound to the publish's transaction.
+ * Every read of the publish goes through them: the transaction holds a connection of the
+ * platform's pool, and a read that took another one could wait for it without end.
+ */
 export interface KnowledgeBackendStores {
+  configAssets: Pick<ConfigAssetStore, "getConfigAsset">;
   connections: ConnectionsStore;
   dataStores: DataStoreRecordsStore;
   jobs: JobsStore;
@@ -357,7 +363,11 @@ export interface KnowledgeBackend<Target extends KnowledgeBaseTarget = Knowledge
    * The documents and contents of the Knowledge Base, for its index job and its operations.
    * None for a backend that keeps no documents.
    */
-  documentStore(target: Target): KnowledgeDocumentStore | undefined;
+  documentStore(
+    target: Target,
+    /** Where the store's record is read, such as the transaction of a publish; else the pool. */
+    records?: DataStoreRecordsStore
+  ): KnowledgeDocumentStore | undefined;
 }
 
 /** A document as it is added to a Knowledge Base that keeps documents. */

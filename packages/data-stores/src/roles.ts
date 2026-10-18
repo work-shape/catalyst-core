@@ -5,7 +5,7 @@ import {
   type PostgresChangeStatements
 } from "@work-shape/catalyst-postgres-connector";
 import { z } from "zod";
-import type { DataStoreRecord } from "@work-shape/catalyst-core";
+import type { DataStoreRecord, PlatformStores } from "@work-shape/catalyst-core";
 import type { DataStoreRole } from "./credentials";
 import { DATA_STORE_ROLE_LIMITS, roleSettings } from "./role-limits";
 import type { DataStoreRuntime } from "./runtime";
@@ -30,6 +30,14 @@ const DATA_STORE_ROLE_STEP_TIMEOUT_MS = 120_000;
 const SCRAM_ITERATIONS = 4_096;
 
 const ROLES = ["app", "migration"] as const satisfies readonly DataStoreRole[];
+
+/**
+ * What holds the roles of a store: the server, and where the passwords are read, which may be
+ * the rows of a transaction the caller holds.
+ */
+export type StoreRoleRuntime = Pick<DataStoreRuntime, "server" | "credentials"> & {
+  stores: Pick<PlatformStores, "connections">;
+};
 
 type StoreRoles = Pick<DataStoreRecord, "roles">;
 type Passwords = Record<DataStoreRole, string>;
@@ -263,7 +271,7 @@ export async function writeReaderRole(
 
 /** The passwords of both roles, each made where the Secret Store holds none. */
 async function storePasswords(
-  runtime: Pick<DataStoreRuntime, "credentials" | "stores">,
+  runtime: Pick<StoreRoleRuntime, "credentials" | "stores">,
   storeId: string
 ): Promise<Passwords> {
   const { credentials, stores } = runtime;
@@ -280,7 +288,7 @@ async function storePasswords(
  * changed one when Postgres refuses the password, see `asStoreRole`.
  */
 async function holdStoreRoles(
-  runtime: Pick<DataStoreRuntime, "server" | "credentials" | "stores">,
+  runtime: StoreRoleRuntime,
   record: Pick<DataStoreRecord, "id" | "roles">,
   signal: AbortSignal | undefined
 ): Promise<void> {
@@ -311,7 +319,7 @@ async function holdStoreRoles(
  * error a statement of the work raises is never that, whatever its SQLSTATE.
  */
 export async function asStoreRole<Result>(
-  runtime: Pick<DataStoreRuntime, "server" | "credentials" | "stores">,
+  runtime: StoreRoleRuntime,
   record: Pick<DataStoreRecord, "id" | "roles">,
   signal: AbortSignal | undefined,
   work: () => Promise<Result>

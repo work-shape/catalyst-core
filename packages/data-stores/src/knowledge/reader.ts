@@ -4,7 +4,7 @@ import type {
   DataStoreRecord
 } from "@work-shape/catalyst-core";
 import { takeGrantTurn } from "../provisioning";
-import { asStoreRole, writeReaderRole } from "../roles";
+import { asStoreRole, writeReaderRole, type StoreRoleRuntime } from "../roles";
 import type { DataStoreRuntime } from "../runtime";
 import { quoteIdentifier } from "../server";
 
@@ -52,7 +52,7 @@ function asPlatformOn(
 
 /** As the store's migration role, which owns its tables, in one transaction. */
 function asOwnerOf(
-  runtime: Pick<DataStoreRuntime, "server" | "credentials" | "stores">,
+  runtime: StoreRoleRuntime,
   store: Store,
   signal: AbortSignal | undefined,
   script: string
@@ -61,7 +61,7 @@ function asOwnerOf(
   return asStoreRole(runtime, store, signal, () =>
     server.executor.change(
       {
-        ...server.asRole(store, "migration"),
+        ...server.asRole(store, "migration", runtime.stores.connections),
         timeoutMs: READER_STEP_TIMEOUT_MS,
         ...(signal ? { signal } : {})
       },
@@ -79,7 +79,7 @@ function asOwnerOf(
  * grants of the revision before or of this one.
  */
 export async function grantReader(
-  runtime: Pick<DataStoreRuntime, "server" | "credentials" | "stores">,
+  runtime: StoreRoleRuntime,
   /** Where the role's password is kept: the rows of the caller's transaction, where it has one. */
   secrets: ConnectionsStore,
   store: Store,
@@ -115,7 +115,7 @@ export async function grantReader(
 
 /** Takes from the role of the Knowledge Base everything it was granted in `store`. */
 export async function revokeReader(
-  runtime: Pick<DataStoreRuntime, "server" | "credentials" | "stores">,
+  runtime: StoreRoleRuntime,
   store: Store,
   knowledgeBaseId: string,
   signal: AbortSignal | undefined

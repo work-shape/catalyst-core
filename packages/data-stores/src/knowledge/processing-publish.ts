@@ -8,6 +8,7 @@ import {
   enqueueKnowledgeIndex,
   KNOWLEDGE_JOB_KINDS,
   KNOWLEDGE_FILE_MAX_BYTES,
+  type DataStoreRecordsStore,
   type KnowledgeProcessingContent,
   type KnowledgeDocumentStore,
   type PlatformStores
@@ -65,19 +66,21 @@ export async function knowledgeProcessingReview(
   previous: unknown,
   assetId: string,
   embedding: KnowledgeEmbedding,
-  draftOnly = false
+  draftOnly = false,
+  /** Where the store's record is read: a publish passes the rows of its transaction. */
+  records: DataStoreRecordsStore = runtime.stores.dataStores
 ) {
   const next = knowledgeBaseDefinitionSchema.parse(config);
   const before = knowledgeBaseDefinitionSchema.safeParse(previous);
   if (!before.success || "backend" in next) return undefined;
   const previousRules = processingRules(before.data.documentTypes);
   const nextRules = processingRules(next.documentTypes);
-  const record = await runtime.stores.dataStores.getDataStore({
+  const record = await records.getDataStore({
     clientInstanceId: runtime.clientInstanceId,
     id: assetId
   });
   if (record?.status !== "ready") return undefined;
-  const store = runtime.backend.documentStore(knowledgeTargetOf(next, assetId));
+  const store = runtime.backend.documentStore(knowledgeTargetOf(next, assetId), records);
   if (!store) return undefined;
   // Unchanged rules need only a release-version check, without classifying documents or
   // reading chunks. Publish always reviews the affected set again inside its transaction.
@@ -249,7 +252,9 @@ export async function confirmKnowledgeProcessing(
     input.config,
     input.replaced,
     input.assetId,
-    embedding
+    embedding,
+    false,
+    stores.dataStores
   );
   if (!review) return;
   if (input.confirmProcessing !== review.confirmation || !review.priced)

@@ -46,9 +46,9 @@ export function createKnowledgeBackend(
       target.backend === "dataStore"
         ? dataStore.documentFileIds(target, fileIds, signal)
         : builtin.documentFileIds(target, fileIds, signal),
-    documentStore: (target) =>
+    documentStore: (target, records) =>
       target.backend === "dataStore"
         ? dataStore.documentStore(target)
-        : builtin.documentStore(target)
+        : builtin.documentStore(target, records)
   };
 }

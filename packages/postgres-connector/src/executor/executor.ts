@@ -38,6 +38,11 @@ export interface PostgresTarget {
   location: PostgresLocation;
   /** The name the password is resolved by. Never the password. */
   credentialHandle: string;
+  /**
+   * Where the password is read if this call opens a connection, such as the rows of a
+   * transaction the caller holds. Left out, the executor's own resolver.
+   */
+  secrets?: ScopedSecretResolver;
   limits?: PostgresLimits;
   /** Aborting it cancels the query on the server. */
   signal?: AbortSignal;
@@ -173,9 +178,10 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
     // whatever the caller does to its object meanwhile.
     const location = frozenLocation(target.location);
     const limits = resolvePostgresLimits(target.limits, input.poolMaxConnections);
-    const { signal } = target;
+    const { signal, secrets } = target;
     const pool = poolFor(location, target.credentialHandle);
     const connection = await pool.acquire(limits.maxConnections, signal);
+    connection.useSecrets(secrets);
     const timeoutMs = shape.timeoutMs ?? limits.statementTimeoutMs;
     const interruption = watchInterruption(timeoutMs + POSTGRES_DEADLINE_GRACE_MS, signal);
     const first = await Promise.race([

@@ -141,8 +141,8 @@ export function createBuiltinKnowledgeBackend(
       return knowledgeDocumentFileIds(runtime, target, fileIds, signal);
     },
 
-    documentStore(target) {
-      return createBuiltinDocumentStore(runtime, target);
+    documentStore(target, records) {
+      return createBuiltinDocumentStore(runtime, target, records);
     },
 
     query(target) {

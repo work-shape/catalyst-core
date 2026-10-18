@@ -12,6 +12,7 @@ import {
   knowledgeDocumentStateOf,
   type BuiltinKnowledgeTarget,
   type DataStoreRecord,
+  type DataStoreRecordsStore,
   type KnowledgeChunkInput,
   type KnowledgeDocumentEntry,
   type KnowledgeDocumentStore,
@@ -185,7 +186,9 @@ const ISO_UTC = `'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'`;
 
 export function createBuiltinDocumentStore(
   runtime: DataStoreRuntime,
-  target: BuiltinKnowledgeTarget
+  target: BuiltinKnowledgeTarget,
+  /** Where the store's record is read: the rows of a transaction the caller holds, or the pool. */
+  records: DataStoreRecordsStore = runtime.stores.dataStores
 ): KnowledgeDocumentStore {
   async function inStore<T>(
     what: string,
@@ -193,7 +196,7 @@ export function createBuiltinDocumentStore(
     signal: AbortSignal | undefined,
     work: (sql: PostgresChangeStatements) => Promise<T>
   ): Promise<T> {
-    const record = await storeOf(runtime, target);
+    const record = await storeOf(runtime, records, target);
     try {
       return await runtime.server.executor.change(
         {
@@ -470,7 +473,7 @@ export function createBuiltinDocumentStore(
     },
 
     async startFirstGeneration(model, signal) {
-      const record = await storeOf(runtime, target);
+      const record = await storeOf(runtime, records, target);
       // The type of the vectors. Outside the transaction below, which takes no time with it.
       try {
         await ensureVectorExtension(
@@ -778,9 +781,10 @@ async function insertChunks(
 /** The record of the store the Knowledge Base owns, while it can be written. */
 async function storeOf(
   runtime: DataStoreRuntime,
+  records: DataStoreRecordsStore,
   target: BuiltinKnowledgeTarget
 ): Promise<DataStoreRecord> {
-  const record = await runtime.stores.dataStores.getDataStore({
+  const record = await records.getDataStore({
     clientInstanceId: runtime.clientInstanceId,
     id: target.assetId
   });
