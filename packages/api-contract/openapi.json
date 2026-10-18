@@ -16027,10 +16027,16 @@
                               "knowledge_text_empty",
                               "knowledge_index_failed",
                               "knowledge_file_too_many_pages",
-                              "knowledge_processor_output_invalid"
+                              "knowledge_processor_output_invalid",
+                              "knowledge_conversion_timeout"
                             ]
                           },
                           "failurePageLimit": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "failurePageCount": {
                             "type": "integer",
                             "exclusiveMinimum": 0,
                             "maximum": 9007199254740991
@@ -16448,7 +16454,8 @@
                               "knowledge_text_empty",
                               "knowledge_index_failed",
                               "knowledge_file_too_many_pages",
-                              "knowledge_processor_output_invalid"
+                              "knowledge_processor_output_invalid",
+                              "knowledge_conversion_timeout"
                             ]
                           }
                         ]
@@ -17523,7 +17530,8 @@
                                             "knowledge_text_empty",
                                             "knowledge_index_failed",
                                             "knowledge_file_too_many_pages",
-                                            "knowledge_processor_output_invalid"
+                                            "knowledge_processor_output_invalid",
+                                            "knowledge_conversion_timeout"
                                           ]
                                         }
                                       ]
@@ -17783,7 +17791,8 @@
                                             "knowledge_text_empty",
                                             "knowledge_index_failed",
                                             "knowledge_file_too_many_pages",
-                                            "knowledge_processor_output_invalid"
+                                            "knowledge_processor_output_invalid",
+                                            "knowledge_conversion_timeout"
                                           ]
                                         }
                                       ]
@@ -18095,7 +18104,8 @@
                     "knowledge_text_empty",
                     "knowledge_index_failed",
                     "knowledge_file_too_many_pages",
-                    "knowledge_processor_output_invalid"
+                    "knowledge_processor_output_invalid",
+                    "knowledge_conversion_timeout"
                   ]
                 }
               ]
@@ -18185,7 +18195,8 @@
                                   "knowledge_text_empty",
                                   "knowledge_index_failed",
                                   "knowledge_file_too_many_pages",
-                                  "knowledge_processor_output_invalid"
+                                  "knowledge_processor_output_invalid",
+                                  "knowledge_conversion_timeout"
                                 ]
                               }
                             ]

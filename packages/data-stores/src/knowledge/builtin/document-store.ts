@@ -144,6 +144,7 @@ const documentRow = z.object({
   format: z.enum(KNOWLEDGE_DOCUMENT_FORMATS),
   state: z.enum(KNOWLEDGE_CONTENT_STATES),
   failure_code: z.string().nullable(),
+  page_count: z.number().int().nullable(),
   source_id: z.string().nullable(),
   added_at: z.string(),
   updated_at: z.string(),
@@ -421,9 +422,9 @@ export function createBuiltinDocumentStore(
           await sql.run(
             `update catalyst_kb.contents
            set state = 'failed', failure_code = $2::pg_catalog.text, chunking_revision = null,
-             updated_at = now()
+             page_count = $3::pg_catalog.int4, updated_at = now()
            where sha256 = $1::pg_catalog.text`,
-            [input.contentSha256, input.code]
+            [input.contentSha256, input.code, input.pageCount ?? null]
           );
         }
       );
@@ -612,7 +613,7 @@ export function createBuiltinDocumentStore(
           const rows = z.array(documentRow).parse(
             await sql.run(
               `select d.id, d.managed_file_id, d.file_name, d.title, c.format, c.state,
-               c.failure_code, s.source_id,
+               c.failure_code, c.page_count, s.source_id,
                to_char(d.added_at at time zone 'UTC', ${ISO_UTC}) as added_at,
                to_char(c.updated_at at time zone 'UTC', ${ISO_UTC}) as updated_at,
                d.added_at::pg_catalog.text as cursor_at
@@ -734,6 +735,11 @@ function entryOf(row: z.infer<typeof documentRow>): KnowledgeDocumentEntry {
     format: row.format,
     state: knowledgeDocumentStateOf(row.state),
     ...(row.state === "failed" && code.success ? { failureCode: code.data } : {}),
+    ...(row.state === "failed" &&
+    code.data === "knowledge_conversion_timeout" &&
+    row.page_count !== null
+      ? { failurePageCount: row.page_count }
+      : {}),
     ...(row.state === "pending" && waitCode.success ? { waitCode: waitCode.data } : {}),
     ...(row.source_id === null ? {} : { sourceId: row.source_id }),
     addedAt: row.added_at,

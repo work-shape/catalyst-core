@@ -501,7 +501,11 @@ export function createKnowledgeIndexJobHandler(
           if (pages.kind === "requested") return;
           if (pages.kind === "failed") {
             await store.failContent(
-              { contentSha256: payload.contentSha256, code: pages.code },
+              {
+                contentSha256: payload.contentSha256,
+                code: pages.code,
+                pageCount: pages.pageCount
+              },
               signal
             );
             await audit(payload, target, job.correlationId, { code: pages.code });

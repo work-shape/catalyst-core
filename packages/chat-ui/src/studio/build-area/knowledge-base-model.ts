@@ -179,13 +179,15 @@ export const KNOWLEDGE_DOCUMENT_FAILURES: Record<
   knowledge_text_empty: "knowledge.failureTextEmpty",
   knowledge_index_failed: "knowledge.failureIndex",
   knowledge_file_too_many_pages: "knowledge.failureTooManyPages",
-  knowledge_processor_output_invalid: "knowledge.failureProcessorOutput"
+  knowledge_processor_output_invalid: "knowledge.failureProcessorOutput",
+  knowledge_conversion_timeout: "knowledge.failureConversionTimeout"
 };
 
 /**
  * The sentence of why a document failed. A failed one without a code gets the general one. A
  * document over the page limit names the limit when the instance sent it (`{limit}`); an older
- * instance sends none, and the sentence names no number.
+ * instance sends none, and the sentence names no number. A conversion that took too long names
+ * the document's page count the same way (`{count}`).
  */
 export function documentFailureText(document: KnowledgeDocument): TranslationKey {
   if (document.failureCode === undefined) {
@@ -196,6 +198,12 @@ export function documentFailureText(document: KnowledgeDocument): TranslationKey
     document.failurePageLimit !== undefined
   ) {
     return "knowledge.failureTooManyPagesLimit";
+  }
+  if (
+    document.failureCode === "knowledge_conversion_timeout" &&
+    document.failurePageCount !== undefined
+  ) {
+    return "knowledge.failureConversionTimeoutPages";
   }
   return KNOWLEDGE_DOCUMENT_FAILURES[document.failureCode];
 }

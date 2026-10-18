@@ -37,7 +37,7 @@ type Pages =
       extractionRevision: number;
       output?: KnowledgeProcessorOutput;
     }
-  | { kind: "failed"; code: KnowledgeDocumentFailureCode }
+  | { kind: "failed"; code: KnowledgeDocumentFailureCode; pageCount?: number }
   | { kind: "requested" };
 
 async function availableCopy(runtime: KnowledgeRuntime, knowledgeBaseId: string, fileId: string) {
@@ -183,7 +183,13 @@ export async function pagesOf(
       await files.objects.delete(
         knowledgeExtractionKey(payload.knowledgeBaseId, payload.contentSha256)
       );
-    return { kind: "failed", code: unusable };
+    return {
+      kind: "failed",
+      code: unusable,
+      ...(result !== "invalid" && result?.status === "failed" && result.pageCount !== undefined
+        ? { pageCount: result.pageCount }
+        : {})
+    };
   }
   if (result !== undefined && result !== "invalid" && result.status === "extracted") {
     return {

@@ -274,6 +274,49 @@ describe("the Documents section", () => {
     expect(row("akte").textContent).not.toMatch(/\d+ Seiten|undefined/);
   });
 
+  it("names the page count of a document that took too long to convert, in both languages", () => {
+    const showDocument = (slow: KnowledgeDocument, locale?: "de") =>
+      show(
+        createElement(KnowledgeDocuments, {
+          source: plantedSource({ useDocuments: () => ready({ documents: [slow] }) }),
+          knowledgeBase: "objektunterlagen",
+          publishedRevision: 1,
+          canWrite: true
+        }),
+        locale
+      );
+    const timedOut: Partial<KnowledgeDocument> = {
+      format: "pdf",
+      fileName: "akte.pdf",
+      failureCode: "knowledge_conversion_timeout"
+    };
+    const counted = document_("akte", "failed", { ...timedOut, failurePageCount: 6001 });
+
+    showDocument(counted);
+    expect(row("akte").textContent).toContain(
+      "This document of 6,001 pages took too long to convert. Split it into smaller files and retry."
+    );
+    expect(button("Retry", row("akte"))).toBeDefined();
+    showDocument(counted, "de");
+    expect(row("akte").textContent).toContain(
+      "Dieses Dokument mit 6.001 Seiten hat zu lange zum Umwandeln gebraucht."
+    );
+    expect(row("akte").textContent).not.toContain("knowledge_conversion_timeout");
+
+    // Without a page count the sentence names no number.
+    const uncounted = document_("akte", "failed", timedOut);
+    showDocument(uncounted);
+    expect(row("akte").textContent).toContain(
+      "This document took too long to convert. Split it into smaller files and retry."
+    );
+    expect(row("akte").textContent).not.toMatch(/\d+ pages|undefined|\{count\}/);
+    showDocument(uncounted, "de");
+    expect(row("akte").textContent).toContain(
+      "Dieses Dokument hat zu lange zum Umwandeln gebraucht."
+    );
+    expect(row("akte").textContent).not.toMatch(/\d+ Seiten|undefined|\{count\}/);
+  });
+
   it("has a sentence for every failure code the instance sends", () => {
     expect(Object.keys(KNOWLEDGE_DOCUMENT_FAILURES).sort()).toEqual(
       [...KNOWLEDGE_DOCUMENT_FAILURE_CODES].sort()

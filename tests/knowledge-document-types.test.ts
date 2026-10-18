@@ -5,7 +5,12 @@ import {
   validateKnowledgeProcessingOutput,
   chunkKnowledgeText
 } from "@work-shape/catalyst-data-stores";
-import { parseKnowledgeProcessorOutput, runKnowledgeExtraction } from "@work-shape/catalyst-core";
+import {
+  KnowledgeExtractionError,
+  knowledgeExtractionResultSchema,
+  parseKnowledgeProcessorOutput,
+  runKnowledgeExtraction
+} from "@work-shape/catalyst-core";
 
 const types = knowledgeDocumentTypesSchema.parse([
   {
@@ -141,6 +146,30 @@ describe("document types and the frozen processor contract (KB 80, 95)", () => {
     expect(
       chunks.every((chunk) => chunk.tokenCount <= 512 && chunk.text.startsWith("| Key | Value |"))
     ).toBe(true);
+  });
+  it("carries a counted conversion timeout through the stored extraction contract", async () => {
+    const result = await runKnowledgeExtraction({
+      format: "pdf",
+      maxPages: 8_000,
+      signal: new AbortController().signal,
+      readFile: async () => new Uint8Array([1]),
+      extractor: {
+        revision: 1,
+        extract: async () => {
+          throw new KnowledgeExtractionError(
+            "knowledge_conversion_timeout",
+            "Document took too long to convert",
+            6_001
+          );
+        }
+      }
+    });
+    expect(knowledgeExtractionResultSchema.parse(result)).toEqual({
+      status: "failed",
+      code: "knowledge_conversion_timeout",
+      pageCount: 6_001
+    });
+    expect(() => knowledgeExtractionResultSchema.parse({ ...result, pageCount: -1 })).toThrow();
   });
   it("fails hostile built-in output with the shared code and enforces the runtime page limit", async () => {
     const input = {

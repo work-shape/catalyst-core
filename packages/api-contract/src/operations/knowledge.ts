@@ -122,6 +122,8 @@ const knowledgeListDocumentsResponseSchema = z.object({
       failureCode: z.enum(KNOWLEDGE_DOCUMENT_FAILURE_CODES).optional(),
       /** Current configured page limit when `failureCode` is `knowledge_file_too_many_pages`. */
       failurePageLimit: z.number().int().positive().optional(),
+      /** Detected pages when conversion took too long. */
+      failurePageCount: z.number().int().positive().optional(),
       /**
        * Why a `pending` document waits, where it waits for more than its turn: a usage limit
        * that refuses its embedding. It goes on by itself once the limit resets or is raised.

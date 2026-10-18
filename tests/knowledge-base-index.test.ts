@@ -89,6 +89,7 @@ const documentsSchema = z.object({
       state: z.enum(["pending", "indexed", "failed"]),
       failureCode: z.string().optional(),
       failurePageLimit: z.number().optional(),
+      failurePageCount: z.number().optional(),
       addedAt: z.string(),
       updatedAt: z.string()
     })
@@ -691,6 +692,47 @@ describe("indexing the documents of a Knowledge Base", () => {
       { chunking_revision: 1, state: "extracted" }
     ]);
     await extractWorker.stop();
+  });
+
+  it("persists a conversion timeout and its page count through extraction, indexing and listing", async () => {
+    const { instance } = await instanceWith({ documents: true, maxPagesPerDocument: 8_000 });
+    const objects = createFilesystemObjectStorage(instance.filesRoot);
+    const document = await add(instance, {
+      filename: "long.pdf",
+      contentType: "application/pdf",
+      content: "%FAKE-PDF\nlong"
+    });
+    const worker = createJobWorker({
+      stores: instance.stores,
+      clientInstanceId,
+      logger: silent,
+      handlers: [
+        defineKnowledgeExtractHandler({
+          clientInstanceId,
+          objects,
+          maxPages: 8_000,
+          slots: 1,
+          extractor: {
+            revision: 1,
+            extract: async () => {
+              throw new KnowledgeExtractionError("knowledge_conversion_timeout", "Too slow", 6_001);
+            }
+          }
+        })
+      ]
+    });
+    try {
+      await runJobs(instance);
+      await worker.runDue();
+      await runJobs(instance);
+      expect((await list(instance)).documents.find((row) => row.id === document.id)).toMatchObject({
+        state: "failed",
+        failureCode: "knowledge_conversion_timeout",
+        failurePageCount: 6_001
+      });
+    } finally {
+      await worker.stop();
+    }
   });
 
   it("fails a PDF over the page limit with its code before converting it, indexes one at the limit, and Retry after a raised limit indexes it", async () => {

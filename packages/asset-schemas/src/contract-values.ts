@@ -759,7 +759,9 @@ export const KNOWLEDGE_DOCUMENT_FAILURE_CODES = [
   // is read.
   "knowledge_file_too_many_pages",
   // A built-in or Workflow processor returned output outside its contract.
-  "knowledge_processor_output_invalid"
+  "knowledge_processor_output_invalid",
+  // Conversion exceeded its page-aware deadline.
+  "knowledge_conversion_timeout"
 ] as const;
 export type KnowledgeDocumentFailureCode = (typeof KNOWLEDGE_DOCUMENT_FAILURE_CODES)[number];
 

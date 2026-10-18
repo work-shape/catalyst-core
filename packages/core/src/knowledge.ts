@@ -742,6 +742,8 @@ export interface KnowledgeDocumentEntry {
   format: KnowledgeDocumentFormat;
   state: KnowledgeDocumentState;
   failureCode?: KnowledgeDocumentFailureCode;
+  /** Detected pages when conversion exceeded its deadline. */
+  failurePageCount?: number;
   /** Why a `pending` document waits, where it waits for more than its turn. */
   waitCode?: KnowledgeDocumentWaitCode;
   /**
@@ -944,7 +946,7 @@ export interface KnowledgeDocumentStore {
   ): Promise<number>;
   /** Removes the content's chunks and marks it `failed` with `code`. */
   failContent(
-    input: { contentSha256: string; code: KnowledgeDocumentFailureCode },
+    input: { contentSha256: string; code: KnowledgeDocumentFailureCode; pageCount?: number },
     signal?: AbortSignal
   ): Promise<void>;
   /** The documents not withdrawn, newest first, one page after `cursor`. */

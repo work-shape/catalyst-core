@@ -60,7 +60,8 @@ export const KNOWLEDGE_EXTRACTION_FAILURE_CODES = [
   "knowledge_file_missing",
   "knowledge_extraction_failed",
   "knowledge_file_too_many_pages",
-  "knowledge_processor_output_invalid"
+  "knowledge_processor_output_invalid",
+  "knowledge_conversion_timeout"
 ] as const satisfies readonly KnowledgeDocumentFailureCode[];
 
 export type KnowledgeExtractionFailureCode = (typeof KNOWLEDGE_EXTRACTION_FAILURE_CODES)[number];
@@ -74,7 +75,11 @@ export type KnowledgeExtractionFailureCode = (typeof KNOWLEDGE_EXTRACTION_FAILUR
 export class KnowledgeExtractionError extends AppError {
   readonly failureCode: KnowledgeExtractionFailureCode;
 
-  constructor(code: KnowledgeExtractionFailureCode, message: string) {
+  constructor(
+    code: KnowledgeExtractionFailureCode,
+    message: string,
+    readonly pageCount?: number
+  ) {
     super("VALIDATION_FAILED", message, { reason: code });
     this.name = "KnowledgeExtractionError";
     this.failureCode = code;
@@ -126,7 +131,8 @@ export const knowledgeExtractionResultSchema = z.discriminatedUnion("status", [
   }),
   z.strictObject({
     status: z.literal("failed"),
-    code: z.enum(KNOWLEDGE_EXTRACTION_FAILURE_CODES)
+    code: z.enum(KNOWLEDGE_EXTRACTION_FAILURE_CODES),
+    pageCount: z.number().int().positive().optional()
   })
 ]);
 
@@ -186,7 +192,11 @@ export async function runKnowledgeExtraction(input: {
     });
   } catch (error) {
     if (error instanceof KnowledgeExtractionError && !input.signal.aborted) {
-      return { status: "failed", code: error.failureCode };
+      return {
+        status: "failed",
+        code: error.failureCode,
+        ...(error.pageCount === undefined ? {} : { pageCount: error.pageCount })
+      };
     }
     if (
       error instanceof AppError &&
