@@ -136,6 +136,12 @@ export class PostgresConnection implements PostgresSession, PostgresChangeSessio
     }
   }
 
+  /** Starts the next cursor batch's socket budget; a stream never grants unbounded reads. */
+  resetReadLimit(bytes: number): void {
+    this.readBytes = 0;
+    this.readLimitBytes = bytes;
+  }
+
   get readLimitPassed(): boolean {
     return this.pastReadLimit;
   }

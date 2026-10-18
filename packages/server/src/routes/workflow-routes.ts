@@ -249,6 +249,29 @@ function registerWorkflowRoutes(
     }
   });
 
+  route.operation(apiOperations["workflows.download_dataset"], {
+    authorize: (input, { access, actor }) =>
+      authorizeOnRun(input.runId, (run, resource) =>
+        run && startedBy(run, actor)
+          ? { allowed: true }
+          : decide(access, WORKFLOW_ACTIONS.readRunData, resource)
+      ),
+    resource: runResource,
+    module: WORKFLOWS_MODULE,
+    recordsEveryCall: true,
+    execute: async (input, context) => {
+      const download = required().downloadDataset;
+      if (!download) throw new AppError("NOT_FOUND", "Dataset downloads are not available");
+      return download({
+        ...input,
+        actor: context.actor,
+        access: context.access,
+        correlationId: context.correlationId,
+        ...(context.runtime.signal ? { signal: context.runtime.signal } : {})
+      });
+    }
+  });
+
   route.operation(apiOperations["workflows.get_run"], {
     authorize: (input, { access, actor, origin }) =>
       authorizeOnRun(input.runId, mayReadRun(access, actor, origin)),

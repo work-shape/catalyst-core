@@ -367,11 +367,11 @@ describe("a load into a Data Store", () => {
     // What the reference says is refused before a row is read.
     expect(await refusal(load(world, { ...small, rowCount: 100_001 }))).toMatchObject({
       code: "VALIDATION_FAILED",
-      message: expect.stringContaining("DATA_STORE_LOAD_MAX_ROWS"),
-      details: { reason: "load_too_large", cap: "DATA_STORE_LOAD_MAX_ROWS", actual: 100_001 }
+      message: expect.stringContaining("dataStores.load.rows"),
+      details: { reason: "load_too_large", cap: "dataStores.load.rows", actual: 100_001 }
     });
     expect(await refusal(load(world, { ...small, bytes: 67_108_865 }))).toMatchObject({
-      details: { reason: "load_too_large", cap: "DATA_STORE_LOAD_MAX_BYTES" }
+      details: { reason: "load_too_large", cap: "dataStores.load.bytes" }
     });
     expect(world.datasets.reads()).toBe(0);
 
@@ -379,14 +379,14 @@ describe("a load into a Data Store", () => {
     const rows = Array.from({ length: 101 }, (_, part) => many(1_000, {}, part * 1_000));
     const understated = { ...world.datasets.put("ds_rows", rows), rowCount: 10, bytes: 10 };
     expect(await refusal(load(world, understated))).toMatchObject({
-      details: { reason: "load_too_large", cap: "DATA_STORE_LOAD_MAX_ROWS" }
+      details: { reason: "load_too_large", cap: "dataStores.load.rows" }
     });
     const heavy = Array.from({ length: 65 }, (_, index) => [
       found(index, { note: "n".repeat(1024 ** 2) })
     ]);
     expect(
       await refusal(load(world, { ...world.datasets.put("ds_bytes", heavy), bytes: 10 }))
-    ).toMatchObject({ details: { reason: "load_too_large", cap: "DATA_STORE_LOAD_MAX_BYTES" } });
+    ).toMatchObject({ details: { reason: "load_too_large", cap: "dataStores.load.bytes" } });
     expect(await count(world)).toBe(0);
   });
 

@@ -1,3 +1,4 @@
+export type { WorkflowDatasetDownloadFormat } from "@work-shape/catalyst-asset-schemas";
 import type { WorkflowDatasetState } from "@work-shape/catalyst-asset-schemas";
 import type { ClientInstanceId, WorkflowRunId, WorkflowStepRunId } from "./ids";
 import type { JsonObject } from "./json";

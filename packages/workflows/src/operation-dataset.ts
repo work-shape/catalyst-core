@@ -47,10 +47,12 @@ export async function operationDatasetCapture(input: {
           field.$dataset === datasetId(input.stepRun.id, input.at)
         )
           return jsonObjectSchema.parse(output);
-        if (!Array.isArray(field))
+        const streamed = definition?.streams === true && isRowStream(field);
+        if (!Array.isArray(field) && !streamed)
           throw new WorkflowStepFailure("dataset_path_invalid", "The dataset path names no list");
         async function* rows() {
-          yield* Array.isArray(field) ? field : [];
+          if (Array.isArray(field)) yield* field;
+          else if (isRowStream(field)) yield* field;
         }
         object[part] = {
           ...(await input.datasets.write({
@@ -83,4 +85,8 @@ export async function operationDatasetCapture(input: {
     }
     return jsonObjectSchema.parse(output);
   };
+}
+
+function isRowStream(value: unknown): value is AsyncIterable<unknown> {
+  return value !== null && typeof value === "object" && Symbol.asyncIterator in value;
 }

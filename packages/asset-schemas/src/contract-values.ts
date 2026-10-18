@@ -1020,3 +1020,7 @@ export const MANAGED_FILE_STATUSES = ["available", "released", "deleted"] as con
 /** A Workflow automates a process unless it fills or processes data. */
 export const WORKFLOW_KINDS = ["process", "data"] as const;
 export type WorkflowKind = (typeof WORKFLOW_KINDS)[number];
+
+/** Wire formats for a streamed Workflow result dataset. */
+export const WORKFLOW_DATASET_DOWNLOAD_FORMATS = ["jsonl", "csv"] as const;
+export type WorkflowDatasetDownloadFormat = (typeof WORKFLOW_DATASET_DOWNLOAD_FORMATS)[number];

@@ -141,6 +141,15 @@ export type DataStoreLoadConflictMode = (typeof DATA_STORE_LOAD_CONFLICT_MODES)[
 /** The right a `load` needs beside `data_store.insert` where it changes or removes rows. */
 export const DATA_STORE_LOAD_CHANGE_RIGHT = DATA_STORE_ACTIONS.execute;
 
+/** Defaults for the operator's atomic-load ceilings; release config may raise them. */
+export const DATA_STORE_LOAD_DEFAULT_LIMITS = {
+  rows: 100_000,
+  bytes: 67_108_864,
+  timeoutMs: 600_000
+} as const;
+/** Whole-cursor deadline for a Workflow query; the operator may raise it. */
+export const DATA_STORE_QUERY_DEFAULT_TIMEOUT_MS = 600_000;
+
 /**
  * The input of `data_store.<id>.load`, which takes a dataset of a Workflow Run into one table
  * in one transaction, once per step run. Reserved: the slice that brings datasets runs it.

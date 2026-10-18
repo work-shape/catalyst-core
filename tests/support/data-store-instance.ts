@@ -124,7 +124,8 @@ export function useDataStoreInstance(): {
      * a Knowledge Base may search by meaning. `attachments` is a capability the API process
      * stores the files of Conversations with.
      */
-    knowledge?: boolean | KnowledgeOptions
+    knowledge?: boolean | KnowledgeOptions,
+    workflows?: true
   ): Promise<DataStoreInstance>;
   /** Closes the processes of every instance the test started. */
   close(): Promise<unknown>;
@@ -178,7 +179,8 @@ export function useDataStoreInstance(): {
     changing?: PolicyValue,
     developmentAuth?: unknown,
     guardrails?: Record<string, unknown>,
-    knowledge: boolean | KnowledgeOptions = false
+    knowledge: boolean | KnowledgeOptions = false,
+    workflows?: true
   ): Promise<DataStoreInstance> {
     const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
     roots.push(root);
@@ -207,6 +209,7 @@ export function useDataStoreInstance(): {
       modules: {
         assetManagement: { enabled: true },
         dataStores: { enabled: dataStores },
+        ...(workflows ? { workflows: { enabled: true } } : {}),
         ...(options.apiAccess ? { personalApiKeys: { enabled: true } } : {}),
         ...(knowledge ? { knowledge: { enabled: true } } : {}),
         ...(typeof knowledge === "object" && knowledge.documents

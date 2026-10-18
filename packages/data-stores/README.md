@@ -109,3 +109,9 @@ The rows come from a dataset reader that the slice bringing the datasets of Work
 - Without a `pg_hba.conf` line or a revoke as above, a store role connects to every database of the server that lets `PUBLIC` in.
 - An advisory lock is the database's own, and each store has a database of its own: a store that takes such locks and keeps them hinders its own calls and nobody else's.
 - Nothing limits what one statement writes to the disk but its time.
+
+Workflow dataset consumers: `data_store.<id>.load` reads only datasets the calling run may read (or, for a direct caller, datasets covered by `workflow.read_run_data`). It records the first result per step run in `catalyst.loads` in the same transaction as the table rows. A retry returns that result even under another attempt key. The internal table is added to existing stores on first load; store migrations cannot name `catalyst`.
+
+`dataStores.load.rows`, `dataStores.load.bytes` and `dataStores.load.timeoutMs` set the operator ceilings for one atomic load (100,000 rows, 64 MiB and 10 minutes by default). Raise them when the instance can handle a larger call, or produce smaller datasets upstream for separate loads. A load takes the store's size limit before and after its writes. A Workflow query with `dataset: { at: rows }` reads its complete result through a cursor; other callers keep the inline query caps. `dataStores.queryTimeoutMs` bounds the complete streamed read (10 minutes by default).
+
+Result downloads use `GET /api/v1/workflow-runs/<run>/datasets/<dataset>?format=jsonl|csv`. Only result datasets are exposed, to the run starter or a holder of `workflow.read_run_data`. JSON Lines preserves arbitrary object rows; CSV quotes every cell and JSON-encodes nested values. Dataset storage, retention and region are unchanged.

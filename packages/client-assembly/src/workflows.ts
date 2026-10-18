@@ -18,6 +18,7 @@ import {
 import {
   codeStepIssues,
   createWorkflowEngine,
+  createDatasetDownload,
   noWorkflowStepFiles,
   workflowDefinitionStartIssues,
   workflowRunPrincipal,
@@ -217,6 +218,16 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       createWorkflowRoutes(
         {
           ...engine,
+          ...(parts.datasetObjects
+            ? {
+                downloadDataset: createDatasetDownload({
+                  clientInstanceId,
+                  stores,
+                  objects: parts.datasetObjects,
+                  limits: parts.datasetLimits ?? workflowsConfigSchema.parse({}).datasets
+                })
+              }
+            : {}),
           listWorkflows,
           async test({ workflow, ...start }) {
             // Definitions a test hands in are published revisions without a draft.

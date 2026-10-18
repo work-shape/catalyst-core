@@ -9,11 +9,12 @@ import {
   WORKFLOW_RUN_STATUSES,
   WORKFLOW_STEP_RUN_STATUSES,
   WORKFLOW_STEP_TYPES,
+  WORKFLOW_DATASET_DOWNLOAD_FORMATS,
   WORKFLOW_TRIGGER_KINDS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { listQuerySchema, timestampSchema } from "../shared";
-import { defineRegisteredOperation, json, page } from "./define-operation";
+import { defineRegisteredOperation, blob, json, page } from "./define-operation";
 
 // The Workflows of an instance and their runs: the list, the start by hand, the test run of a
 // draft, the reads and the cancel. A read answers states,
@@ -277,6 +278,22 @@ export type StartWorkflowRunRequest = z.infer<typeof startWorkflowRunRequestSche
 // Workflow's own (`workflow.use`, `workflow.read`, `workflow.write`) and is decided on the
 // Workflow the call or its run names.
 export const workflowOperations = {
+  "workflows.download_dataset": defineRegisteredOperation({
+    id: "workflows.download_dataset",
+    method: "GET",
+    path: "/api/v1/workflow-runs/:runId/datasets/:datasetId",
+    summary:
+      "Download a result dataset as streamed JSON Lines or CSV; requires run-data access or the run starter",
+    tag: "Workflows",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    query: z.object({ format: z.enum(WORKFLOW_DATASET_DOWNLOAD_FORMATS).default("jsonl") }),
+    response: blob(),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
   "workflows.list": defineRegisteredOperation({
     id: "workflows.list",
     method: "GET",

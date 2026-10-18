@@ -189,6 +189,7 @@ export {
 export { WORKFLOW_PAGING_DEFAULTS } from "./workflow-datasets";
 
 export type {
+  WorkflowDatasetDownloadFormat,
   WorkflowDatasetLimits,
   WorkflowDatasetPart,
   WorkflowRunDataset,

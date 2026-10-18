@@ -6,12 +6,6 @@ export const POSTGRES_POOL_MAX_CONNECTIONS = 4;
 export const POSTGRES_POOL_IDLE_CLOSE_SECONDS = 60;
 export const POSTGRES_POOL_ACQUIRE_WAIT_MS = 5_000;
 export const POSTGRES_STATEMENT_TIMEOUT_MS = 15_000;
-/**
- * The longest a change of a database the platform manages may take: the statement timeout of
- * the role that applies a store's migrations. Past it the change is cancelled and fails as a
- * timeout.
- */
-export const POSTGRES_CHANGE_MAX_TIMEOUT_MS = 600_000;
 /** How long after the statement timeout the platform's own timer cancels the query. */
 export const POSTGRES_DEADLINE_GRACE_MS = 1_000;
 /** How long after a cancel request the next one follows while the backend is still there. */

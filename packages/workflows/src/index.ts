@@ -13,6 +13,7 @@ export const WORKFLOW_OPERATION_IDS = [
   "workflows.start",
   "workflows.test",
   "workflows.get_run",
+  "workflows.download_dataset",
   "workflows.list_runs",
   "workflows.list_step_runs",
   "workflows.cancel_run"
@@ -129,3 +130,7 @@ export type { WorkflowDatasets, WorkflowDatasetsOptions } from "./datasets";
 export { checkDatasetContracts } from "./dataset-contracts";
 
 export { enqueueDatasetCleanup } from "./dataset-lifetime";
+
+export { createDatasetDownload } from "./dataset-download";
+
+export { WorkflowStepFailure } from "./step-failure";

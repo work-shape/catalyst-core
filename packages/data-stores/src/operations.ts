@@ -1,8 +1,5 @@
+import { query, rowsSchema } from "./query";
 import {
-  POSTGRES_PARAMETERS_MAX_COUNT,
-  POSTGRES_QUERY_TEXT_MAX_CHARS,
-  POSTGRES_RESULT_MAX_BYTES,
-  POSTGRES_RESULT_MAX_ROWS,
   POSTGRES_STATEMENT_TIMEOUT_MS,
   PostgresExecutorError
 } from "@work-shape/catalyst-postgres-connector";
@@ -14,13 +11,11 @@ import {
   DATA_STORE_OPERATION_RIGHTS,
   DATA_STORE_OPERATION_SCOPES,
   DATA_STORE_PREVIEW_ROW_LIMIT,
-  DATA_STORE_SCALAR_TYPES,
   dataStoreInsertConflictSchema,
   dataStoreInsertResultSchema,
   dataStoreOperationName,
   type ConfigAssetRecord,
   type DataStoreInsertResult,
-  type DataStoreParameterType,
   type DataStoreRecord,
   type DataStoreSchema,
   type DataToolDescriptor,
@@ -81,30 +76,7 @@ const DATA_STORE_RUN_GRACE_MS = 30_000;
 export const RUN_TIMEOUT_MS =
   DATA_STORE_ROLE_LIMITS.app.statementTimeoutMs + DATA_STORE_RUN_GRACE_MS;
 
-const scalarSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
-const valueSchema = z.union([scalarSchema, z.array(scalarSchema)]);
-const parameterTypes: readonly DataStoreParameterType[] = DATA_STORE_SCALAR_TYPES.flatMap(
-  (type) => [type, `${type}[]`] as const
-);
 const tableNameSchema = z.string().min(1).max(DATA_STORE_IDENTIFIER_MAX_CHARS);
-
-/** One read-only statement and the values it binds: the input of every SQL read of a store. */
-export const queryInputSchema = z.strictObject({
-  sql: z.string().min(1).max(POSTGRES_QUERY_TEXT_MAX_CHARS),
-  parameters: z
-    .array(
-      z.union([valueSchema, z.strictObject({ type: z.enum(parameterTypes), value: valueSchema })])
-    )
-    .max(POSTGRES_PARAMETERS_MAX_COUNT)
-    .optional()
-});
-
-/** Rows as a SQL read of a store answers them. */
-export const rowsSchema = z.object({
-  columns: z.array(z.object({ name: z.string(), type: z.string(), nativeType: z.string() })),
-  rows: z.array(z.record(z.string(), z.json())),
-  truncated: z.boolean()
-});
 
 const insertInputSchema = z.strictObject({
   table: tableNameSchema,
@@ -283,24 +255,6 @@ function emptyKeyStatement(
       ${computed === "" ? "" : `, lateral (select ${computed}) as computed`}
     where not (${bound})`;
 }
-
-const query: StoreVerb = {
-  verb: "query",
-  effect: "reading",
-  inputSchema: queryInputSchema,
-  outputSchema: rowsSchema,
-  use: `Reads rows. Use it to answer from what is stored there. Send one read-only SELECT or WITH statement in PostgreSQL syntax. Put every value into "parameters" and refer to it as $1, $2 and so on; never write a value into the SQL. A parameter is the bare value, or { "type", "value" } where the database cannot tell its type. The tables are in the schema "public"; call describe to learn their columns. At most ${POSTGRES_RESULT_MAX_ROWS} rows and ${POSTGRES_RESULT_MAX_BYTES} bytes come back, and "truncated" says when there were more: narrow the statement or page with LIMIT and OFFSET. A statement that runs longer than ${POSTGRES_STATEMENT_TIMEOUT_MS / 1000} seconds is cancelled.`,
-  async run({ runtime, target }, call) {
-    const input = queryInputSchema.parse(call);
-    return rowsOf(
-      await runtime.server.executor.query({
-        ...target,
-        sql: input.sql,
-        ...(input.parameters ? { parameters: input.parameters } : {})
-      })
-    );
-  }
-};
 
 const insert: StoreVerb = {
   verb: "insert",
@@ -595,6 +549,9 @@ async function runVerb(
     // The app role as the platform gave it, before anything runs as that role.
     return await asStoreRole(runtime, record, signal, async () => {
       const target = { ...runtime.server.asRole(record, "app"), ...(signal ? { signal } : {}) };
+      if (keyed || verb.verb === "load") await ensureCallRecords(runtime, record, signal);
+      if (verb.verb === "load" && runtime.datasets?.authorize)
+        await runtime.datasets.authorize(input, context);
       if (keyed) {
         await ensureCallRecords(runtime, record, signal);
         // Asked before anything of the call is checked: what the first call was answered
@@ -602,7 +559,7 @@ async function runVerb(
         const before = await readRecordedCall(runtime, target, keyed);
         if (before) return verb.outputSchema.parse(before);
       }
-      return verb.run({ runtime, store, target, ...(keyed ? { keyed } : {}) }, input);
+      return verb.run({ runtime, store, target, context, ...(keyed ? { keyed } : {}) }, input);
     });
   } catch (error) {
     // A call under the same key was kept while this one waited for it.
@@ -658,6 +615,7 @@ function operationOf(
   return {
     name: dataStoreOperationName(store.record.name, verb.verb),
     effect: verb.effect,
+    ...(verb.streams ? { streams: true as const } : {}),
     // A read of a customer's rows is recorded, every time.
     ...(verb.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(verb.changeClass ? { changeClass: verb.changeClass } : {}),
@@ -672,7 +630,12 @@ function operationOf(
     outputSchema: verb.outputSchema,
     resource: () => store.resource,
     module: DATA_STORES_MODULE,
-    timeoutMs: verb.timeoutMs ?? RUN_TIMEOUT_MS,
+    timeoutMs:
+      verb.verb === "query" && runtime.limits.queryTimeoutMs
+        ? runtime.limits.queryTimeoutMs + DATA_STORE_RUN_GRACE_MS
+        : verb.verb === "load" && runtime.limits.load
+          ? runtime.limits.load.timeoutMs + DATA_STORE_RUN_GRACE_MS
+          : (verb.timeoutMs ?? RUN_TIMEOUT_MS),
     execute: (input, context) => runVerb(runtime, store, verb, input, context)
   };
 }

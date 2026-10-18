@@ -1,3 +1,5 @@
+import { Readable } from "node:stream";
+import { downloadAnswerSchema } from "../http/download";
 import {
   isRegisteredOperation,
   operationPathParamNames,
@@ -134,7 +136,12 @@ export function createOperationRegistration(
       throw new Error(`Operation '${operation.id}' must authenticate its caller`);
     }
     const { response } = operation;
-    if (response.kind !== "json" && response.kind !== "page" && response.kind !== "redirect") {
+    if (
+      response.kind !== "json" &&
+      response.kind !== "page" &&
+      response.kind !== "redirect" &&
+      response.kind !== "blob"
+    ) {
       throw new Error(`Operation '${operation.id}' must answer JSON`);
     }
     const [action, ...furtherActions] = operation.requires ?? [];
@@ -174,7 +181,7 @@ export function createOperationRegistration(
       scope: operation.scope ?? null,
       auth: operation.auth,
       inputSchema: operationInputSchema(operation),
-      outputSchema: response.schema,
+      outputSchema: response.kind === "blob" ? downloadAnswerSchema : response.schema,
       resource: (input) => binding.resource?.(input),
       ...(binding.policyTargets ? { policyTargets: binding.policyTargets } : {}),
       ...(binding.beforeEvents ? { beforeEvents: binding.beforeEvents } : {}),
@@ -249,6 +256,17 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
       if (outcome.replayed) void reply.header("idempotent-replayed", "true");
       switch (result.status) {
         case "done":
+          if (operation.response.kind === "blob") {
+            const download = downloadAnswerSchema.parse(result.output);
+            return reply
+              .header("content-type", download.contentType)
+              .header(
+                "content-disposition",
+                `attachment; filename="${encodeURIComponent(download.filename)}"`
+              )
+              .header("cache-control", "private, no-store")
+              .send(Readable.from(download.body));
+          }
           if (
             operation.response.kind === "json" ||
             operation.response.kind === "page" ||

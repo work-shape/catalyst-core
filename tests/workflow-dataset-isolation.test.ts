@@ -31,6 +31,7 @@ async function save(t: WorkflowFixture, manifest: { id: string; [key: string]: u
 }
 
 it.each([
+  "child-input",
   "child-output",
   "child-output-typed",
   "operation-reference",
@@ -104,14 +105,32 @@ it.each([
     ]
   });
   await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
-  if (surface.startsWith("child-output"))
+  if (surface.startsWith("child-"))
     await save(t, {
       ...base,
       id: "forge-parent",
       outputs: { type: "object" },
       steps: [
         base.steps[0],
-        { id: "child", name: "Child", type: "workflow", workflow: "forge-child", input: {} },
+        ...(surface === "child-input"
+          ? [
+              {
+                id: "foreign",
+                name: "Foreign",
+                type: "operation",
+                operation: "connection.crm.echo",
+                input: { text: { value: "forge" } }
+              }
+            ]
+          : []),
+        {
+          id: "child",
+          name: "Child",
+          type: "workflow",
+          workflow: "forge-child",
+          input:
+            surface === "child-input" ? { rows: { ref: { step: "foreign", path: "clients" } } } : {}
+        },
         {
           id: "each",
           name: "Each",
@@ -131,7 +150,7 @@ it.each([
       ]
     });
   await t.allow({ kind: "user", id: t.kai.id }, "workflow.use");
-  if (!surface.startsWith("child-output")) {
+  if (!surface.startsWith("child-")) {
     await save(t, {
       ...base,
       id: "forge-parent",
@@ -188,6 +207,10 @@ it.each([
       )
     );
   }
+  if (surface === "child-input")
+    t.setBehaviour((operation, input) =>
+      Promise.resolve<JsonValue>(operation === "echo" ? { clients: forged } : { received: input })
+    );
   const url = await listenTestInstance(t.instance);
   const response = await fetch(
     `${url}${apiOperations["workflows.start"].path.replace(":workflow", "forge-parent")}`,
@@ -217,5 +240,12 @@ it.each([
     });
   } else if (!surface.startsWith("child-output")) {
     expect(run.error).toMatchObject({ code: "FORBIDDEN" });
+  }
+  if (surface === "child-input") {
+    const parent = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
+    if (!parent) throw new Error("Missing parent run");
+    expect(await t.stores.workflowRuns.listChildRuns({ clientInstanceId, id: parent.id })).toEqual(
+      []
+    );
   }
 });

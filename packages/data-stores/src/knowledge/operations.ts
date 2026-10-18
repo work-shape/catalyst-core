@@ -29,7 +29,8 @@ import {
   POSTGRES_STATEMENT_TIMEOUT_MS
 } from "@work-shape/catalyst-postgres-connector";
 import { z } from "zod";
-import { queryInputSchema, rowsSchema, RUN_TIMEOUT_MS } from "../operations";
+import { RUN_TIMEOUT_MS } from "../operations";
+import { queryInputSchema, rowsSchema } from "../query";
 import {
   knowledgeBaseDefinitionSchema,
   knowledgeTargetOf,

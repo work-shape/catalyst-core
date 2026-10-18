@@ -1222,10 +1222,17 @@ With the module `dataStores` on, each Data Store gets a Postgres database of its
 dataStores:
   sizeLimit: 5GB
   poolMaxConnections: 5
+  queryTimeoutMs: 600000
+  load:
+    rows: 100000
+    bytes: 67108864
+    timeoutMs: 600000
 ```
 
 - `sizeLimit` is the most one store may hold, as a whole number of `MB` or `GB`. A store's own `sizeLimit` in `store.yaml` names less and never more. At the limit no rows are added and reading keeps working. Every insert reads the size of the database before it writes and after, and is rolled back where it passed the limit: no row that is kept lies beyond it, and the files exceed it only by what the inserts of one moment wrote, under 256 MiB for rows alone. Default `5GB`.
 - `poolMaxConnections` is the most connections one process holds to one store at once, between 1 and 10. Default 5.
+
+`queryTimeoutMs` is the deadline for the full cursor of a Workflow query with a dataset destination; ordinary queries keep their inline row, byte and statement bounds. `load.rows`, `load.bytes` and `load.timeoutMs` bound one atomic dataset load. These are operator ceilings: raise them when the instance can handle larger work. A load beyond its row or byte ceiling answers `load_too_large`; produce smaller datasets upstream for separate calls or raise the ceiling. The store's own size limit still applies. Defaults are shown above.
 
 ### Build rules for data scope
 

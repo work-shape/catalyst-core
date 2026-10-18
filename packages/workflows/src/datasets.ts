@@ -184,18 +184,24 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
   /** The caller receives a reader bound to exactly one authorized dataset. No bearer id lookup. */
   async function reader(input: {
     id: string;
-    runId?: WorkflowRun["id"];
+    runId?: string;
     access?: ActorAccess;
     offset?: number;
     limit?: number;
+    signal?: AbortSignal;
   }): Promise<{ rowSchema: JsonObject; rows: AsyncIterable<JsonObject> }> {
     const row = await metadata(input.id);
     if (input.runId) {
+      const readerRun = await stores.workflowRuns.readRun({ clientInstanceId, id: input.runId });
+      if (!readerRun)
+        throw new WorkflowStepFailure("FORBIDDEN", "This run cannot read the dataset", {
+          systemic: true
+        });
       if (
         !(await stores.workflowRunDatasets.canRead({
           clientInstanceId,
           id: row.id,
-          runId: input.runId
+          runId: readerRun.id
         }))
       )
         throw new WorkflowStepFailure("FORBIDDEN", "This run cannot read the dataset", {
@@ -221,6 +227,7 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
       let skip = input.offset ?? 0,
         left = input.limit ?? Infinity;
       for (const part of row.parts) {
+        input.signal?.throwIfAborted();
         if (left <= 0) return;
         if (skip >= part.rows) {
           skip -= part.rows;
@@ -240,6 +247,7 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
           try {
             const chunks: AsyncIterable<unknown> = stream;
             for await (const chunk of chunks) {
+              input.signal?.throwIfAborted();
               if (!(chunk instanceof Uint8Array)) throw datasetExpired();
               const data = Buffer.from(chunk);
               hash.update(data);

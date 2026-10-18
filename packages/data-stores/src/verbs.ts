@@ -10,6 +10,7 @@ import {
   type JsonObject,
   type OperationChangeClass,
   type OperationEffect,
+  type OperationExecutionContext,
   type OperationResource
 } from "@work-shape/catalyst-core";
 import type { z } from "zod";
@@ -29,6 +30,7 @@ export interface PublishedStore {
 /** What one call of a verb works with: the store and the way to its database as the app role. */
 interface VerbCall {
   runtime: DataStoreRuntime;
+  context?: OperationExecutionContext;
   store: PublishedStore;
   /** The database of the store as its app role, cancelled with the call. */
   target: PostgresTarget;
@@ -43,6 +45,7 @@ interface VerbCall {
 export interface StoreVerb {
   verb: DataStoreOperationVerb;
   effect: OperationEffect;
+  streams?: true;
   changeClass?: OperationChangeClass;
   inputSchema: z.ZodType;
   outputSchema: z.ZodType;

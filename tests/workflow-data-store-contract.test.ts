@@ -641,6 +641,7 @@ describe("the modules workflows and dataStores", () => {
         "workflows.start",
         "workflows.test",
         "workflows.get_run",
+        "workflows.download_dataset",
         "workflows.list_runs",
         "workflows.list_step_runs",
         "workflows.cancel_run"

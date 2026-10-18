@@ -4,6 +4,7 @@ import type {
   JsonObject,
   Logger,
   PlatformStores,
+  OperationExecutionContext,
   WorkflowDatasetReference
 } from "@work-shape/catalyst-core";
 import type { DataStoreCredentials } from "./credentials";
@@ -13,6 +14,12 @@ import type { DataStoreServer, DataStoreStatementLimits } from "./server";
 export interface DataStoreLimits {
   /** The most one store may hold. A store's manifest may name less and never more. */
   sizeLimitBytes: number;
+  /** Operator ceilings for one atomic load; defaults come from release config. */
+  load?: { rows: number; bytes: number; timeoutMs: number };
+  /** Maximum row size of the workflow dataset writer receiving query results. */
+  streamRowBytes?: number;
+  /** Operator deadline for a query streamed into a Workflow dataset. */
+  queryTimeoutMs?: number;
   /** The most connections the platform holds to one store at once. */
   poolMaxConnections: number;
   /**
@@ -23,17 +30,20 @@ export interface DataStoreLimits {
 }
 
 /**
- * Where a load reads the rows of a dataset from. The slice that brings the datasets of
- * Workflow Runs gives it; a process without one refuses `load` as `not_supported_yet`.
+ * The authorized dataset port of the instance. Production binds both the dispatch gate and
+ * byte reader to the caller's run, or to the caller's run-data rights for a direct call.
  */
 export interface DataStoreDatasetReader {
+  /** Checked before any replay as well as at the byte reader. */
+  authorize?(input: unknown, context: OperationExecutionContext): Promise<void>;
   /**
    * The rows of the dataset in its order, in parts of whatever size. It throws an `AppError`
    * where the dataset cannot be read, such as one that was deleted.
    */
   read(
     reference: WorkflowDatasetReference,
-    signal: AbortSignal | undefined
+    signal: AbortSignal | undefined,
+    context?: OperationExecutionContext
   ): AsyncIterable<readonly JsonObject[]>;
 }
 
@@ -46,7 +56,7 @@ export interface DataStoreRuntime {
   limits: DataStoreLimits;
   credentials: DataStoreCredentials;
   auditRecorder: AuditRecorder;
-  /** Where `load` reads the rows of a dataset from. Missing until the datasets of Workflow Runs exist. */
+  /** Where `load` reads authorized rows; absent in a process without dataset storage. */
   datasets?: DataStoreDatasetReader;
   /** The stores this process has seen to hold the table of their call records, by id. */
   callRecords: Map<string, Promise<void>>;

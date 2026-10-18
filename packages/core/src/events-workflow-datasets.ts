@@ -22,6 +22,24 @@ const WORKFLOW_DATASET_AUDIT = {
 };
 
 export const WORKFLOW_DATASET_EVENTS = {
+  "workflow_run.dataset_downloaded": {
+    ...WORKFLOW_DATASET_AUDIT,
+    name: "workflow_run.dataset_downloaded"
+  },
+  "workflow_run.dataset_loaded": {
+    ...WORKFLOW_DATASET_AUDIT,
+    name: "workflow_run.dataset_loaded",
+    payload: {
+      ...WORKFLOW_DATASET_AUDIT.payload,
+      properties: {
+        ...WORKFLOW_DATASET_AUDIT.payload.properties,
+        inserted: { type: "integer", minimum: 0 },
+        updated: { type: "integer", minimum: 0 },
+        skipped: { type: "integer", minimum: 0 },
+        deleted: { type: "integer", minimum: 0 }
+      }
+    }
+  },
   "workflow_run.dataset_created": {
     ...WORKFLOW_DATASET_AUDIT,
     name: "workflow_run.dataset_created",

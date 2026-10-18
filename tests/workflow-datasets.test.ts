@@ -1,3 +1,5 @@
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { listenTestInstance } from "./support/test-instance";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
@@ -385,4 +387,75 @@ it("deleting an unpublished Workflow claims the datasets of its active test run"
   expect(
     await t.stores.workflowRunDatasets.get({ clientInstanceId, id: dataset.id })
   ).toMatchObject({ state: "deleted" });
+});
+
+it("streams only result datasets over HTTP to the starter or a run-data reader, with content-free audit", async () => {
+  const definitions = publishedDefinitions();
+  const base = notifyClients();
+  definitions.publish({
+    ...base,
+    id: "download-data",
+    outputs: { type: "object" },
+    steps: [
+      base.steps[0],
+      {
+        id: "rows",
+        name: "Rows",
+        type: "operation",
+        operation: "connection.crm.echo",
+        input: { text: { value: "read" } },
+        dataset: { at: "clients" }
+      },
+      {
+        id: "result",
+        name: "Result",
+        type: "output",
+        input: { rows: { ref: { step: "rows", path: "clients" } } }
+      }
+    ]
+  });
+  const t = await readyWorkflows(
+    (fixture) => {
+      open = fixture;
+    },
+    { definitions: definitions.source, datasetObjects: new MemoryObjectStorage() }
+  );
+  const rows = [{ id: 'private,"value\nnext', nested: { ok: true } }];
+  t.setBehaviour(() => Promise.resolve({ clients: rows }));
+  await t.allow({ kind: "user", id: t.kai.id }, "workflow.use");
+  await t.allow({ kind: "user", id: t.lena.id }, "workflow.read");
+  const run = await t.finish((await start(t, t.kai.id, "download-data")).id);
+  expect(run.status).toBe("done");
+  const ref = JSON.parse(run.outputPreview?.text ?? "null").rows;
+  const url = await listenTestInstance(t.instance);
+  const download = (user: string, id = run.id, dataset = ref.$dataset, format = "jsonl") =>
+    fetch(
+      `${url}${apiOperations["workflows.download_dataset"].buildPath({ params: { runId: id, datasetId: dataset }, query: { format } })}`,
+      {
+        headers: { "x-test-user": user }
+      }
+    );
+  expect((await download(t.lena.id)).status).toBe(403);
+  const jsonl = await download(t.kai.id);
+  expect(jsonl.status).toBe(200);
+  expect(jsonl.headers.get("cache-control")).toBe("private, no-store");
+  expect(await jsonl.text()).toBe(JSON.stringify(rows[0]) + "\n");
+  const csv = await download(t.root.id, run.id, ref.$dataset, "csv");
+  expect(csv.status).toBe(200);
+  expect(await csv.text()).toBe('"id","nested"\r\n"private,""value\nnext","{""ok"":true}"\r\n');
+  const other = await t.finish((await start(t, t.root.id, "download-data")).id);
+  expect((await download(t.root.id, other.id)).status).toBe(404);
+  expect((await download(t.kai.id, run.id, "missing")).status).toBe(404);
+  expect((await download(t.kai.id, run.id, ref.$dataset, "bad")).status).toBe(422);
+  const events = await t.stores.audit.listAuditEvents({
+    clientInstanceId,
+    type: "workflow_run.dataset_downloaded"
+  });
+  expect(events.filter((event) => event.subject === ref.$dataset)).toHaveLength(2);
+  expect(JSON.stringify(events)).not.toContain("private");
+  expect(JSON.stringify(events)).not.toContain("nested");
+  const persisted = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
+  if (!persisted) throw new Error("Missing run");
+  await t.stores.workflowRunDatasets.claimRun({ clientInstanceId, runId: persisted.id });
+  expect((await download(t.kai.id)).status).toBe(404);
 });

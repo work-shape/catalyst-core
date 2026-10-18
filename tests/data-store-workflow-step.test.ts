@@ -138,7 +138,7 @@ describe("a step of a Workflow Run on a Data Store", () => {
     }
     // One that only adds is the principal's to make; no dataset of a run exists to read yet.
     expect(await step("load", { table: "findings", dataset }, "step_load")).toMatchObject({
-      result: { status: "failed", error: { details: { reason: "not_supported_yet" } } }
+      result: { status: "failed", error: { details: { reason: "dataset_expired" } } }
     });
   });
 

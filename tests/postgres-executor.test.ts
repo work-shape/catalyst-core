@@ -76,6 +76,37 @@ describe("Postgres executor on a customer's database", () => {
   afterAll(() => executor?.close());
 
   describe("results", () => {
+    it("streams past the inline row and byte caps without retaining the result", async () => {
+      const query = {
+        ...asReader(),
+        sql: "select i, repeat('x', 1024) as text from generate_series(1, 2500) i order by i"
+      };
+      expect(await calls().query(query)).toMatchObject({ truncated: true });
+      let count = 0;
+      const result = await calls().stream(
+        { ...query, rowBytes: 2048 },
+        async ({ columns, rows }) => {
+          expect(columns.map((column) => column.name)).toEqual(["i", "text"]);
+          for await (const row of rows) {
+            count += 1;
+            expect(row.i).toBe(count);
+          }
+          return count;
+        }
+      );
+      expect(result).toBe(2500);
+      const abort = new AbortController();
+      await expect(
+        calls().stream({ ...query, rowBytes: 2048, signal: abort.signal }, async ({ rows }) => {
+          for await (const _row of rows) {
+            abort.abort();
+          }
+        })
+      ).rejects.toBeInstanceOf(PostgresExecutorError);
+      expect(await calls().query({ ...asReader(), sql: "select 1 as alive" })).toMatchObject({
+        rows: [{ alive: 1 }]
+      });
+    });
     it("returns typed columns and values in their JSON forms", async () => {
       const result = await calls().query({
         ...asReader(),

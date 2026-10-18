@@ -47,6 +47,20 @@ const DATA_STORE_CALL_RECORDS_PRUNE_TIMEOUT_MS = 60_000;
 export function callRecordsSetup(appRole: string): string {
   const app = quoteIdentifier(appRole);
   return `
+    create table if not exists catalyst.loads (
+      step_run_id text primary key,
+      outcome jsonb not null,
+      made_at timestamptz not null default now()
+    );
+    revoke all on catalyst.loads from ${app};
+    create or replace function catalyst.recorded_load(step_id text)
+      returns jsonb language sql stable security definer set search_path = pg_catalog
+      as $load$ select outcome from catalyst.loads where step_run_id = step_id $load$;
+    create or replace function catalyst.record_load(step_id text, result jsonb)
+      returns void language sql security definer set search_path = pg_catalog
+      as $load$ insert into catalyst.loads(step_run_id, outcome) values (step_id, result) $load$;
+    revoke all on function catalyst.recorded_load(text), catalyst.record_load(text, jsonb) from public;
+    grant execute on function catalyst.recorded_load(text), catalyst.record_load(text, jsonb) to ${app};
     create table if not exists catalyst.calls (
       key text primary key,
       operation text not null,

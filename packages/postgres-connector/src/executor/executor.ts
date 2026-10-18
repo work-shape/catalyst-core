@@ -3,7 +3,6 @@ import type { JsonObject, ScopedSecretResolver } from "@work-shape/catalyst-core
 import { describePostgres, type PostgresDescribeResult } from "./describe";
 import { PostgresExecutorError, toPostgresExecutorError } from "./errors";
 import {
-  POSTGRES_CHANGE_MAX_TIMEOUT_MS,
   POSTGRES_CURSOR_BATCH_ROWS,
   POSTGRES_DEADLINE_GRACE_MS,
   POSTGRES_READ_MARGIN_BYTES,
@@ -75,8 +74,8 @@ export interface PostgresDescribeInput extends PostgresTarget {
 /** A change of a database the platform manages itself: which database, as whom, how long. */
 export interface PostgresChangeInput extends PostgresTarget {
   /**
-   * How long the change may take before the platform cancels it, at most
-   * `POSTGRES_CHANGE_MAX_TIMEOUT_MS`. The statement timeout of the role applies beside it.
+   * How long this platform-owned change may take before it is cancelled. The caller
+   * derives this from operator settings; the role's statement timeout applies beside it.
    */
   timeoutMs: number;
   /** `false` for statements the database refuses inside a transaction, such as `create database`. */
@@ -101,6 +100,14 @@ export interface PostgresChangeStatements {
  */
 export interface PostgresExecutor {
   query(input: PostgresQueryInput): Promise<PostgresQueryResult>;
+  /** Consumes the whole read-only cursor inside its transaction, with bounded batches. */
+  stream<T>(
+    input: PostgresQueryInput & { rowBytes: number; timeoutMs?: number },
+    consume: (result: {
+      columns: PostgresQueryResult["columns"];
+      rows: AsyncIterable<JsonObject>;
+    }) => Promise<T>
+  ): Promise<T>;
   /**
    * Runs `work` in one transaction that commits when it returns and rolls back when it throws.
    * Nothing screens its statements: its caller is platform code on a database of the
@@ -175,8 +182,12 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
       interruption.raised,
       transacted(connection, limits.maxBytes + POSTGRES_READ_MARGIN_BYTES, shape, async () => {
         // A change runs under the settings of its role, which the platform set on it.
-        if (shape === READ_ONLY_CALL) {
-          await applySettings(connection, location.schemas, limits.statementTimeoutMs);
+        if (shape.opening === READ_ONLY_CALL.opening) {
+          await applySettings(
+            connection,
+            location.schemas,
+            shape.timeoutMs ?? limits.statementTimeoutMs
+          );
         }
         return work(connection, limits, location);
       })
@@ -225,11 +236,41 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
         };
       });
     },
-    change(change, work) {
-      const timeoutMs = Math.min(
-        POSTGRES_CHANGE_MAX_TIMEOUT_MS,
-        Math.max(1, Math.trunc(change.timeoutMs))
+    async stream(query, consume) {
+      screenPostgresQuery(query.sql);
+      const parameters = bindPostgresParameters(query.parameters ?? []);
+      return guarded(
+        query,
+        async (session) => {
+          const described = await callerStatement(() => session.columns(query.sql, parameters));
+          const columns = await resultColumns(session, described);
+          async function* rows() {
+            const batches = session.cursor(query.sql, parameters, POSTGRES_CURSOR_BATCH_ROWS);
+            session.resetReadLimit(
+              query.rowBytes * POSTGRES_CURSOR_BATCH_ROWS + POSTGRES_READ_MARGIN_BYTES
+            );
+            for await (const batch of batches) {
+              query.signal?.throwIfAborted();
+              for (const raw of batch) yield readPostgresRow(raw, columns);
+              session.resetReadLimit(
+                query.rowBytes * POSTGRES_CURSOR_BATCH_ROWS + POSTGRES_READ_MARGIN_BYTES
+              );
+            }
+          }
+          // The consumer is awaited here: its failure rolls back and releases the cursor.
+          return consume({
+            columns: columns.map(({ key, type }) => ({ name: key, type })),
+            rows: rows()
+          });
+        },
+        {
+          ...READ_ONLY_CALL,
+          ...(query.timeoutMs === undefined ? {} : { timeoutMs: query.timeoutMs })
+        }
       );
+    },
+    change(change, work) {
+      const timeoutMs = Math.max(1, Math.trunc(change.timeoutMs));
       return guarded(
         change,
         (session) => work(changeStatements(session)),

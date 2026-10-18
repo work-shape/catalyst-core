@@ -1,3 +1,7 @@
+import {
+  DATA_STORE_LOAD_DEFAULT_LIMITS,
+  DATA_STORE_QUERY_DEFAULT_TIMEOUT_MS
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 /** A size as release config and `store.yaml` write it: a whole number of MB or GB. */
@@ -19,7 +23,18 @@ export const dataStoresConfigSchema = z
       .string()
       .regex(SIZE_PATTERN, "a whole number of MB or GB, such as 500MB or 5GB")
       .default("5GB"),
-    poolMaxConnections: z.number().int().min(1).max(10).default(5)
+    /** Whole-cursor deadline for Workflow dataset queries. Ordinary reads keep their inline bounds. */
+    queryTimeoutMs: z.number().int().positive().default(DATA_STORE_QUERY_DEFAULT_TIMEOUT_MS),
+    poolMaxConnections: z.number().int().min(1).max(10).default(5),
+    /** Ceilings for one atomic load. Raise them when the store can handle larger calls. */
+    load: z
+      .object({
+        rows: z.number().int().positive().default(DATA_STORE_LOAD_DEFAULT_LIMITS.rows),
+        bytes: z.number().int().positive().default(DATA_STORE_LOAD_DEFAULT_LIMITS.bytes),
+        timeoutMs: z.number().int().positive().default(DATA_STORE_LOAD_DEFAULT_LIMITS.timeoutMs)
+      })
+      .strict()
+      .prefault({})
   })
   .strict()
   .prefault({});

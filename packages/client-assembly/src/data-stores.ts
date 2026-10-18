@@ -1,3 +1,4 @@
+import { createWorkflowDatasets, WorkflowStepFailure } from "@work-shape/catalyst-workflows";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { RouteRegistration, WorkflowAssetKind } from "@work-shape/catalyst-server";
 import { loadSecretKeyring } from "@work-shape/catalyst-connections";
@@ -6,6 +7,8 @@ import {
   DATA_STORE_ACTIONS,
   DATA_STORE_OPERATION_RIGHTS,
   dataStoreOperationName,
+  dataStoreLoadInputSchema,
+  type OperationExecutionContext,
   type DataStoreOperationVerb
 } from "@work-shape/catalyst-core";
 import {
@@ -113,6 +116,26 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
       "Data Stores keep the passwords of their database roles in the Secret Store: name a key under 'secretStore.keys', or turn 'modules.dataStores.enabled' off"
     );
   }
+  function datasetReadFailure(error: unknown): never {
+    if (error instanceof WorkflowStepFailure)
+      throw new AppError(error.code === "FORBIDDEN" ? "FORBIDDEN" : "NOT_FOUND", error.message, {
+        reason: error.code
+      });
+    throw error;
+  }
+  let datasets: ReturnType<typeof createWorkflowDatasets> | undefined;
+  const openDataset = (id: string, context: OperationExecutionContext, signal?: AbortSignal) => {
+    if (!datasets) throw new AppError("NOT_FOUND", "Dataset storage is not available");
+    return datasets
+      .reader({
+        id,
+        ...(context.origin.kind === "workflow"
+          ? { runId: context.origin.workflowRunId }
+          : { access: context.access }),
+        ...(signal ? { signal } : {})
+      })
+      .catch(datasetReadFailure);
+  };
   const dataStores = createDataStores({
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
@@ -120,7 +143,24 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
     keyring: await loadSecretKeyring({ keys: config.secretStore.keys, secrets }),
     limits: {
       sizeLimitBytes: sizeLimitBytes(config.dataStores.sizeLimit),
-      poolMaxConnections: config.dataStores.poolMaxConnections
+      poolMaxConnections: config.dataStores.poolMaxConnections,
+      load: config.dataStores.load,
+      streamRowBytes: config.workflows.datasets.rowBytes,
+      queryTimeoutMs: config.dataStores.queryTimeoutMs
+    },
+    datasets: {
+      async authorize(input, context) {
+        await openDataset(dataStoreLoadInputSchema.parse(input).dataset.$dataset, context);
+      },
+      async *read(reference, signal, context) {
+        if (!context) throw new AppError("FORBIDDEN", "Dataset loads need a caller");
+        try {
+          const reader = await openDataset(reference.$dataset, context, signal);
+          for await (const row of reader.rows) yield [row];
+        } catch (error) {
+          datasetReadFailure(error);
+        }
+      }
     },
     embedding: knowledgeEmbedding(config),
     logger: parts.logger
@@ -131,13 +171,23 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
     knowledgeSourceJobs: dataStores.knowledgeSourceJobs,
     knowledgeSources: dataStores.knowledgeSources,
     operationSources: () => [dataStores.operationSource],
-    start: () => ({
-      jobHandlers: dataStores.jobHandlers,
-      schedules: dataStores.schedules,
-      jobRetries: dataStores.jobRetries,
-      routes: [dataStoreRoutes(dataStores)],
-      dataToolSources: [dataStores.toolSource],
-      close: () => dataStores.close()
-    })
+    start: ({ files }) => {
+      if (files) {
+        datasets = createWorkflowDatasets({
+          clientInstanceId: parts.clientInstanceId,
+          stores: parts.stores,
+          objects: files.objects,
+          limits: config.workflows.datasets
+        });
+      }
+      return {
+        jobHandlers: dataStores.jobHandlers,
+        schedules: dataStores.schedules,
+        jobRetries: dataStores.jobRetries,
+        routes: [dataStoreRoutes(dataStores)],
+        dataToolSources: [dataStores.toolSource],
+        close: () => dataStores.close()
+      };
+    }
   };
 };

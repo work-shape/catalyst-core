@@ -1,7 +1,9 @@
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import {
   AppError,
+  auditActorFromIdentity,
   DATA_STORE_LOAD_CHANGE_RIGHT,
+  DATA_STORE_LOAD_DEFAULT_LIMITS,
   dataStoreLoadInputSchema,
   dataStoreLoadResultSchema,
   dataStoreOperationName,
@@ -12,27 +14,24 @@ import { z } from "zod";
 import { catalogTarget, readTables } from "./catalog";
 import { quoteIdentifier } from "./server";
 import { storeSizeBytes } from "./size";
-import { changeWhole, reclaim, storeFull, tableUnknown, type StoreVerb } from "./verbs";
+import {
+  AnsweredBefore,
+  changeWhole,
+  reclaim,
+  storeFull,
+  tableUnknown,
+  type StoreVerb
+} from "./verbs";
 
 // `load`: the rows of a dataset of a Workflow Run into one table of a store, all in one
 // transaction as the app role. A reader of the table sees the rows as they were until the
 // load is kept, and then all of it: also where it replaces rows. It holds to what an insert
 // holds to, and to a bound of its own on one call.
 
-/** How many rows one load takes at most. A larger dataset is loaded in several calls. */
-const DATA_STORE_LOAD_MAX_ROWS = 100_000;
-/** How large the rows of one load are at most, as JSON, in bytes. */
-const DATA_STORE_LOAD_MAX_BYTES = 67_108_864;
 /** How many rows one statement of a load writes at most. */
 const DATA_STORE_LOAD_STATEMENT_ROWS = 1_000;
 /** How large the rows of one statement of a load are at most, as JSON, in bytes: one row where a row is larger. */
 const DATA_STORE_LOAD_STATEMENT_BYTES = 1_048_576;
-/**
- * How long one load may take in all, in milliseconds. Each of its statements ends at the
- * statement timeout of the app role, and a reader that gives no rows for
- * `idleInTransactionTimeoutMs` of that role ends the load in the database.
- */
-const DATA_STORE_LOAD_TIMEOUT_MS = 300_000;
 /** How much longer than the load its run may stay `running` before it counts as interrupted, in milliseconds. */
 const DATA_STORE_LOAD_RUN_GRACE_MS = 30_000;
 
@@ -40,12 +39,20 @@ function refused(message: string, details: JsonObject): AppError {
   return new AppError("VALIDATION_FAILED", message, details);
 }
 
-function tooLarge(cap: "ROWS" | "BYTES", actual: number): AppError {
-  const [limit, unit] =
-    cap === "ROWS" ? [DATA_STORE_LOAD_MAX_ROWS, "rows"] : [DATA_STORE_LOAD_MAX_BYTES, "bytes"];
+function tooLarge(
+  cap: "ROWS" | "BYTES",
+  actual: number,
+  limits: { rows: number; bytes: number }
+): AppError {
+  const [limit, unit] = cap === "ROWS" ? [limits.rows, "rows"] : [limits.bytes, "bytes"];
   return refused(
-    `The dataset has ${cap === "ROWS" ? "" : "rows of "}${actual} ${unit} or more. One load takes at most ${DATA_STORE_LOAD_MAX_ROWS} rows (DATA_STORE_LOAD_MAX_ROWS) and ${DATA_STORE_LOAD_MAX_BYTES} bytes of rows (DATA_STORE_LOAD_MAX_BYTES, as JSON); load it in several calls.`,
-    { reason: "load_too_large", cap: `DATA_STORE_LOAD_MAX_${cap}`, limit, actual }
+    `The dataset has ${cap === "ROWS" ? "" : "rows of "}${actual} ${unit} or more. One load takes at most ${limits.rows} rows (dataStores.load.rows) and ${limits.bytes} bytes of rows (dataStores.load.bytes, as JSON); produce smaller datasets upstream for separate calls, or raise the dataStores.load operator ceilings.`,
+    {
+      reason: "load_too_large",
+      cap: cap === "ROWS" ? "dataStores.load.rows" : "dataStores.load.bytes",
+      limit,
+      actual
+    }
   );
 }
 
@@ -254,7 +261,7 @@ export const load: StoreVerb = {
   changeClass: "irreversible",
   inputSchema: dataStoreLoadInputSchema,
   outputSchema: dataStoreLoadResultSchema,
-  timeoutMs: DATA_STORE_LOAD_TIMEOUT_MS + DATA_STORE_LOAD_RUN_GRACE_MS,
+  timeoutMs: DATA_STORE_LOAD_DEFAULT_LIMITS.timeoutMs + DATA_STORE_LOAD_RUN_GRACE_MS,
   // Adding rows is `data_store.insert`. Changing or removing rows that are stored is more.
   furtherRights(call) {
     const input = dataStoreLoadInputSchema.safeParse(call);
@@ -262,9 +269,29 @@ export const load: StoreVerb = {
       ? [DATA_STORE_LOAD_CHANGE_RIGHT]
       : [];
   },
-  async run({ runtime, store, target, keyed }, call) {
+  async run({ runtime, store, target, keyed, context }, call) {
     const input = dataStoreLoadInputSchema.parse(call);
     const { record } = store;
+    const limits = runtime.limits.load ?? DATA_STORE_LOAD_DEFAULT_LIMITS;
+    const stepId = context?.origin.kind === "workflow" ? context.origin.stepRunId : undefined;
+    const replay = async (sql: Pick<PostgresChangeStatements, "run">) => {
+      if (!stepId) return undefined;
+      const [row] = await sql.run("select catalyst.recorded_load($1::text) as outcome", [stepId]);
+      return row?.outcome == null ? undefined : dataStoreLoadResultSchema.parse(row.outcome);
+    };
+    const beforeLoad = stepId
+      ? await replay({
+          run: async (sql, parameters) =>
+            (
+              await runtime.server.executor.query({
+                ...target,
+                sql,
+                ...(parameters ? { parameters } : {})
+              })
+            ).rows
+        })
+      : undefined;
+    if (beforeLoad) return beforeLoad;
     const reader = runtime.datasets;
     if (!reader) {
       throw refused(
@@ -274,11 +301,11 @@ export const load: StoreVerb = {
     }
     // What the reference says is refused before a row is read. What the dataset holds is
     // counted as it is read, since a reference is a caller's word.
-    if (input.dataset.rowCount > DATA_STORE_LOAD_MAX_ROWS) {
-      throw tooLarge("ROWS", input.dataset.rowCount);
+    if (input.dataset.rowCount > limits.rows) {
+      throw tooLarge("ROWS", input.dataset.rowCount, limits);
     }
-    if (input.dataset.bytes > DATA_STORE_LOAD_MAX_BYTES) {
-      throw tooLarge("BYTES", input.dataset.bytes);
+    if (input.dataset.bytes > limits.bytes) {
+      throw tooLarge("BYTES", input.dataset.bytes, limits);
     }
     const [table] = await readTables(runtime.server.executor, target, input.table);
     if (!table) throw tableUnknown(input.table);
@@ -318,6 +345,7 @@ export const load: StoreVerb = {
     // here and raised once the change has rolled back.
     let refusal: AppError | undefined;
     let wrote = false;
+    let replayed: DataStoreLoadResult | undefined;
 
     /** Checks and writes the rows of one statement, the first of which is row `first` of the dataset. */
     async function writePart(
@@ -356,11 +384,24 @@ export const load: StoreVerb = {
     }
 
     try {
-      return await changeWhole(
+      const result = await changeWhole(
         { runtime, keyed },
-        { ...target, timeoutMs: DATA_STORE_LOAD_TIMEOUT_MS },
+        { ...target, timeoutMs: limits.timeoutMs },
         async (sql) => {
           try {
+            if (stepId) {
+              await sql.run(
+                "select pg_advisory_xact_lock(hashtextextended('catalyst load ' || $1::text, 0))::text as held",
+                [stepId]
+              );
+              replayed = await replay(sql);
+              if (replayed) throw new AnsweredBefore(replayed);
+            }
+            // The app role normally limits each statement to 15 seconds; a bulk load uses
+            // the operator's own timeout for its transaction and statements.
+            await sql.run("select set_config('statement_timeout', $1, true)", [
+              String(limits.timeoutMs)
+            ]);
             let pending: string[] = [];
             let pendingBytes = 0;
             let written = 0;
@@ -371,15 +412,15 @@ export const load: StoreVerb = {
               pending = [];
               pendingBytes = 0;
             };
-            for await (const rows of reader.read(input.dataset, target.signal)) {
+            for await (const rows of reader.read(input.dataset, target.signal, context)) {
               for (const row of rows) {
                 statements ??= statementsOf(input, table, typeOf, Object.keys(row), keyMayBeEmpty);
                 counts.rows += 1;
-                if (counts.rows > DATA_STORE_LOAD_MAX_ROWS) throw tooLarge("ROWS", counts.rows);
+                if (counts.rows > limits.rows) throw tooLarge("ROWS", counts.rows, limits);
                 const text = rowOf(statements, input.columns !== undefined, row, counts.rows);
                 const bytes = Buffer.byteLength(text);
                 counts.bytes += bytes;
-                if (counts.bytes > DATA_STORE_LOAD_MAX_BYTES) throw tooLarge("BYTES", counts.bytes);
+                if (counts.bytes > limits.bytes) throw tooLarge("BYTES", counts.bytes, limits);
                 if (
                   pending.length === DATA_STORE_LOAD_STATEMENT_ROWS ||
                   pendingBytes + bytes > DATA_STORE_LOAD_STATEMENT_BYTES
@@ -396,20 +437,44 @@ export const load: StoreVerb = {
             await sql.script("set constraints all immediate");
             const after = await size();
             if (after > record.sizeLimitBytes) throw storeFull(record, after);
-            return {
+            const result = {
               table: table.name,
               inserted: counts.inserted,
               updated: counts.updated,
               skipped: counts.rows - counts.inserted - counts.updated,
               deleted: counts.deleted
             } satisfies DataStoreLoadResult;
+            if (stepId)
+              await sql.run("select catalyst.record_load($1::text, $2::jsonb)::text as recorded", [
+                stepId,
+                JSON.stringify(result)
+              ]);
+            return result;
           } catch (error) {
             if (error instanceof AppError) refusal = error;
             throw error;
           }
         }
       );
+      if (context?.origin.kind === "workflow")
+        await context.audit.record({
+          type: "workflow_run.dataset_loaded",
+          actor: auditActorFromIdentity(context.actor),
+          status: "success",
+          subject: input.dataset.$dataset,
+          correlationId: context.correlationId,
+          metadata: {
+            ...(stepId ? { stepRunId: stepId } : {}),
+            ...(context.origin.kind === "workflow" ? { runId: context.origin.workflowRunId } : {}),
+            datasetId: input.dataset.$dataset,
+            rowCount: counts.rows,
+            bytes: counts.bytes,
+            ...result
+          }
+        });
+      return result;
     } catch (error) {
+      if (replayed) throw new AnsweredBefore(replayed);
       // Rows that were written and not kept still fill the files of the store.
       if (wrote) await reclaim(runtime, record);
       throw refusal ?? error;

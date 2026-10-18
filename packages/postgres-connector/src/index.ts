@@ -16,7 +16,6 @@ export type {
   PostgresRelationSummary
 } from "./executor/describe";
 export {
-  POSTGRES_CHANGE_MAX_TIMEOUT_MS,
   POSTGRES_DEADLINE_GRACE_MS,
   POSTGRES_PARAMETERS_MAX_COUNT,
   POSTGRES_POOL_ACQUIRE_WAIT_MS,

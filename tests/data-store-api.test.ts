@@ -128,7 +128,9 @@ describe("a Data Store on an assembled instance", () => {
   it("has the size ceiling and the pool cap of a store in release config, with the spec's defaults", () => {
     expect(parseClientInstanceConfig(createTestConfig()).dataStores).toEqual({
       sizeLimit: "5GB",
-      poolMaxConnections: 5
+      poolMaxConnections: 5,
+      queryTimeoutMs: 600_000,
+      load: { rows: 100_000, bytes: 67_108_864, timeoutMs: 600_000 }
     });
   });
 

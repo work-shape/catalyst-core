@@ -1,5 +1,7 @@
 import type { WorkflowKind } from "@work-shape/catalyst-core";
 import type {
+  WorkflowDatasetDownloadFormat,
+  ActorAccess,
   AuthenticatedIdentity,
   AuthenticatedUser,
   JsonObject,
@@ -17,6 +19,15 @@ import type {
  * `workflows` is on; the routes decide the caller's right before they ask it for anything.
  */
 export interface WorkflowRunsPort {
+  downloadDataset?(input: {
+    runId: string;
+    datasetId: string;
+    format: WorkflowDatasetDownloadFormat;
+    actor: AuthenticatedIdentity;
+    access: ActorAccess;
+    correlationId: string;
+    signal?: AbortSignal;
+  }): Promise<import("../http/download").DownloadAnswer>;
   /** Starts a run of the published definition by hand. The run acts as its own principal. */
   start(input: {
     workflow: string;

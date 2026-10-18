@@ -443,7 +443,9 @@ Successful runs release intermediates. Failed runs retain datasets for their res
 
 A reading Connection operation may declare paging by page, offset, cursor or next_link. Use \`paginate: true\` with \`dataset: { at: items }\` to take its paging settings, or override fields with \`paginate: { size: 100 }\`. Other output fields come from the first page. One paged step keeps one Operation Run with counts only. A lost worker resumes at the last complete page. Rows, bytes, pageBytes and pages are operator ceilings under \`workflows.datasets\`. The minute ceiling is \`workflows.limits.pagedStepMinutes\`; the Workflow may set \`limits.pagedStepMinutes\` under it. A limit fails the step, so no consumer gets a partial dataset. A changing source can repeat or skip rows between pages; load with a key removes repeats.
 
-Download, Data Store load and streamed query are EW-12b. Collection is still deferred; do not offer it.
+A Data Store query with \`dataset: { at: rows }\` reads its full cursor into a dataset instead of the ordinary inline row cap. To put those rows into a table, call \`data_store.<id>.load\` with \`{ table, dataset }\`. Optional \`columns\` maps row fields to columns; \`key\` names a unique constraint, \`onConflict: skip | update\` needs that key, and \`replace: { by: [columns] }\` replaces the matching groups (each column of \`by\` is part of \`key\`). A retry of the same step returns the first load result. Loads need \`data_store.insert\`, plus \`data_store.execute\` for update or replace. The operator controls \`dataStores.load\` and \`dataStores.queryTimeoutMs\`; if a dataset exceeds one atomic load, produce smaller datasets upstream or ask the operator to raise its ceiling.
+
+A dataset returned by the run can be downloaded as JSON Lines or CSV through \`workflows.download_dataset\`. Rows need \`workflow.read_run_data\`, or the caller must have started that run. Collection is still deferred; do not offer it.
 
 ## What this engine does not run yet
 
