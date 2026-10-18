@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { AgentDraft, OperationOutcome } from "@work-shape/catalyst-api-client";
+import { invalidateOfferedAgents } from "../../shared/api/agent-placement-mutations";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
@@ -153,6 +154,11 @@ export function useAgentDraft(input: {
             }),
       done: async () => {
         queryClient.setQueryData(queryKey, null);
+        // The published draft is the live agent, which the lists of offered agents also show.
+        // The page does not wait for them, as a save in Build does not.
+        if (kind === "publish") {
+          invalidateOfferedAgents(queryClient, apiBaseUrl, authScope).catch(() => undefined);
+        }
         await reload();
       },
       reread,
