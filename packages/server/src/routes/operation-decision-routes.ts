@@ -51,7 +51,7 @@ export function registerOperationDecisionRoutes(
     changeClass: "irreversible",
     authorize: ({ runId }, { actor }) => authorizeDecider(runId, actor),
     resource: ({ runId }) => ({ kind: "operation_run", id: runId }),
-    async execute({ runId, decision, reason }, { actor }) {
+    async execute({ runId, decision, reason, audience }, { actor }) {
       if (isAuthenticatedServicePrincipal(actor)) {
         throw new AppError("FORBIDDEN", "Only a person decides the calls of their own run");
       }
@@ -64,6 +64,7 @@ export function registerOperationDecisionRoutes(
         clientInstanceId,
         operationRunId: runId,
         deciderUserId: getSubjectUserId(actor),
+        ...(audience ? { audience } : {}),
         decision: { mode, by: actor.id, byLabel: actor.displayLabel, at, ...comment },
         ...(mode === "declined"
           ? { declined: { error: { code: error.code, message: error.message }, denial } }

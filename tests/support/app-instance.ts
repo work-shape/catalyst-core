@@ -288,7 +288,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
     publish: (userId, name, revision) =>
       access.call(userId, "assets.publish", {
         params: { kind: "app", name },
-        payload: { revision, workspaceId }
+        payload: { revision, workspaceId, audience: "workspace" }
       }),
     async listed(name) {
       const response = await access.expectOk(admin.id, "assets.list", {

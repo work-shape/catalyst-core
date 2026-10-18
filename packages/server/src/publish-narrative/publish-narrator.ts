@@ -98,6 +98,7 @@ export interface PublishNarratorOptions {
 }
 
 export interface PublishNarrateInput {
+  audienceLabel?: string;
   kind: string;
   name: string;
   scope: AssetScope;
@@ -545,6 +546,7 @@ async function narrateApp(
     summary: appSummary(
       {
         title: oneLine(facts.title),
+        ...(input.audienceLabel ? { audienceLabel: input.audienceLabel } : {}),
         ...(stored?.audience ? { audience: audienceOnOneLine(stored.audience) } : {}),
         ...(stored?.truncated ? { truncated: true } : {}),
         ...(workspace === undefined ? {} : { workspace: oneLine(workspace) }),

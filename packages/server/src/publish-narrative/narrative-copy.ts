@@ -47,6 +47,7 @@ export interface NoticeRecipientsSentence {
 
 /** What an App revision does, with every name as people read it. */
 export interface AppSentence {
+  audienceLabel?: string;
   title: string;
   /** Who may use it. Absent where the stored-data module is off. */
   audience?: PublishNarrativeAudience;
@@ -142,6 +143,12 @@ interface Copy {
   moreReaders(store: string): string;
   appIncomplete: string;
   appOpens(title: string, audience: string): string;
+  /**
+   * The sentence for an audience chosen in "For whom?" (SHARE-1), by the label that also stands
+   * alone, as in "Only the builder" or "Alle in Vertrieb": its first word is set to fit the
+   * sentence, and German "Nur für …" takes the place of the sentence's own "für".
+   */
+  appOpensForChosen(title: string, label: string): string;
   appOpensAdminsOnly(title: string): string;
   appOpensInWorkspace(title: string, workspace: string): string;
   appStores(stores: string): string;
@@ -238,6 +245,9 @@ const EN: Copy = {
   moreReaders: (store) => `This review may omit other readers of ${store}.`,
   appIncomplete: "This review may omit other people or data sources.",
   appOpens: (title, audience) => `${title} opens for ${audience}.`,
+  // "Only the builder" reads "only the builder"; a capital after the first letter keeps it.
+  appOpensForChosen: (title, label) =>
+    `${title} opens for ${/^[A-Z][a-z]/u.test(label) ? label.charAt(0).toLowerCase() + label.slice(1) : label}.`,
   appOpensAdminsOnly: (title) => `${title} opens for instance admins only.`,
   appOpensInWorkspace: (title, workspace) =>
     `${title} opens for whoever may use it in “${workspace}”.`,
@@ -344,6 +354,11 @@ const DE: Copy = {
   moreReaders: (store) => `Diese Übersicht nennt vielleicht nicht alle Leser von ${store}.`,
   appIncomplete: "Diese Übersicht nennt vielleicht nicht alle Personen und Datenquellen.",
   appOpens: (title, audience) => `${title} öffnet sich für ${audience}.`,
+  // Nouns keep their capital: only the leading "Nur" and "Alle" are lowered.
+  appOpensForChosen: (title, label) =>
+    label.startsWith("Nur für ")
+      ? `${title} öffnet sich nur für ${label.slice("Nur für ".length)}.`
+      : `${title} öffnet sich für ${label.replace(/^Alle(?=\s)/u, "alle")}.`,
   appOpensAdminsOnly: (title) => `${title} öffnet sich nur für Instanz-Admins.`,
   appOpensInWorkspace: (title, workspace) =>
     `${title} öffnet sich für alle, die sie in „${workspace}“ verwenden dürfen.`,
@@ -522,8 +537,9 @@ export function appSummary(input: AppSentence, locale: LocaleCode): string {
   const copy = COPY[locale];
   const { and } = lists(locale);
   const counted = input.audience;
-  const opens =
-    counted === undefined && input.workspace !== undefined
+  const opens = input.audienceLabel
+    ? copy.appOpensForChosen(input.title, input.audienceLabel)
+    : counted === undefined && input.workspace !== undefined
       ? copy.appOpensInWorkspace(input.title, input.workspace)
       : counted !== undefined && adminsOnly(counted) && input.truncated !== true
         ? copy.appOpensAdminsOnly(input.title)

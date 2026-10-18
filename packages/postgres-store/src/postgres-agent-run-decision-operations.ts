@@ -1,7 +1,11 @@
+import { createHash } from "node:crypto";
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   AppError,
+  canonicalJson,
+  type JsonValue,
+  isJsonObject,
   DECISION_EXPIRED_REASON,
   agentRunJobOptions,
   executeAgentRunJob,
@@ -92,6 +96,20 @@ export async function decideWaitingToolCall(
     }
     if (!resumeState || !waitedOn) throw notWaiting(false);
 
+    if (input.audience !== undefined) {
+      if (
+        input.decision.mode !== "confirmed" ||
+        callRow.operation !== "assets.publish" ||
+        !isJsonObject(waitedOn.frozenInput) ||
+        waitedOn.frozenInput.kind !== "app"
+      ) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "An audience can only be chosen when confirming an App publish"
+        );
+      }
+      waitedOn.frozenInput = { ...waitedOn.frozenInput, audience: input.audience };
+    }
     const declined = input.decision.mode === "declined" ? input.declined : undefined;
     if (input.decision.mode === "declined" && !declined) {
       throw new AppError("VALIDATION_FAILED", "A declined call needs how its run ends");
@@ -101,7 +119,13 @@ export async function decideWaitingToolCall(
     const [updated] = await tx
       .update(operationRuns)
       .set({
-        decision: input.decision,
+        decision: {
+          ...input.decision,
+          ...(input.audience
+            ? { edited: true, inputHashes: [callRow.inputHash, hashInput(waitedOn.frozenInput)] }
+            : {})
+        },
+        ...(input.audience ? { inputHash: hashInput(waitedOn.frozenInput) } : {}),
         updatedAt: decidedAt,
         ...(declined
           ? {
@@ -151,6 +175,7 @@ export async function decideWaitingToolCall(
       .update(agentRuns)
       .set({
         lastSequence: event.sequence,
+        resumeState,
         updatedAt: sql`now()`,
         // The run goes on once nothing it waits on is undecided: queued, with its job.
         ...(resumes ? { status: "queued" as const } : {})
@@ -196,4 +221,9 @@ function notWaiting(expired: boolean): AppError {
         reason: DECISION_EXPIRED_REASON
       })
     : new AppError("CONFLICT", "This call does not wait for a decision any more.");
+}
+
+/** Matches the operation runner's hash of the person's chosen, frozen input. */
+function hashInput(input: JsonValue): string {
+  return createHash("sha256").update(canonicalJson(input)).digest("hex");
 }

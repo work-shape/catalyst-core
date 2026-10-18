@@ -78,6 +78,7 @@ async function authorizeAppOfOrigin(
     );
   }
   const resource = appResourceOf({
+    appAvailability: asset.appAvailability,
     id: asset.id,
     name: asset.name,
     workspaceId: asset.scope.workspaceId

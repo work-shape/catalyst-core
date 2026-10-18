@@ -41,6 +41,8 @@ The kind is the first word: `agent`, `skill`, `guardrail`, `app`, `workflow`, `d
 
 A write names the revision it was made against. When the instance says the asset moved on, read it again and redo the change on the new revision; do not overwrite another person's work. Publish (`catalyst app publish offers --revision 5`) only when the person asks for it.
 
+An App publish first asks who may use it: only its builder, its owning workspace, or the whole instance where allowed. The person chooses the audience. Pass their stated choice with `--audience` (`self`, `workspace` or `instance`); never choose it for them or widen a live App's audience on your own. An unattended publish needs that explicit flag. `--yes` submits it for a person to confirm in their Inbox; it does not make it live by itself.
+
 ## A working copy of agents, skills and guardrails
 
 A folder with a `catalyst.yaml` is a working copy. Work in this order:

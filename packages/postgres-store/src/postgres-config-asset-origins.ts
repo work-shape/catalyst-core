@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { ConfigAssetFromPage, ConfigAssetStore } from "@work-shape/catalyst-core";
-import { publishedColumns, publishedRevisions } from "./postgres-config-asset-operations";
+import { publishedColumns, publishedRevisions } from "./postgres-config-asset-revisions";
 import type { PostgresConnection } from "./postgres-database";
 import { mapConfigAsset } from "./rows";
 import { configAssetRevisions, configAssets } from "./schema";

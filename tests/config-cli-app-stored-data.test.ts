@@ -93,6 +93,8 @@ async function publish(options: { json?: boolean; response?: unknown; status?: n
       "app",
       "publish",
       "report",
+      "--audience",
+      "workspace",
       "--workspace",
       "w1",
       "--revision",

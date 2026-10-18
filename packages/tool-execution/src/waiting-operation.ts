@@ -126,7 +126,23 @@ export async function executeConfirmedOperation(
   if ("end" in admitted) {
     return admitted.end;
   }
-  return executeWaitingCall(admitted.context, decision, options.signal);
+  const { context, policy } = admitted;
+  if (
+    context.call.origin.kind === "agent" &&
+    context.definition.name === "assets.publish" &&
+    policy.next === "await_approval"
+  ) {
+    const approval = await context.definition.approval?.(context.call.input);
+    const access = await deps.authorizer.forActor(context.call.actor);
+    if (!approval || !access.authorize(approval.action).allowed)
+      return holdForApproval(context, policy, waiting.heldInput, approval);
+    return executeWaitingCall(
+      context,
+      { ...decision, mode: "approved", reason: "approved_by_caller" },
+      options.signal
+    );
+  }
+  return executeWaitingCall(context, decision, options.signal);
 }
 
 /**

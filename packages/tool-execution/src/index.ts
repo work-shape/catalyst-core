@@ -84,3 +84,5 @@ export {
   operationWorkspace,
   type OperationPolicyContext
 } from "./operation-policy-call";
+
+export { APP_PUBLISH_TOOL_NAME, createAppPublishTool } from "./app-publish-tool";

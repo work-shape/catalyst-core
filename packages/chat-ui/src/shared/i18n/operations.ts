@@ -113,6 +113,9 @@ export const operations = defineTranslations({
       "The draft changed since the request was made. This request can no longer be approved; publishing again asks for the new draft.",
     "operations.publishStaleLive":
       "Another version was published since the request was made. This request can no longer be approved.",
+    "operations.publishAudience": "For whom",
+    "operations.publishNarrows": "This publish does not widen access.",
+    "operations.publishWidens": "This publish widens access.",
     "operations.publishVersion": "Version",
     "operations.publishFirst": "Version {number}, the first one published",
     "operations.publishReplaces": "Version {number}, in place of version {live}",
@@ -326,6 +329,9 @@ export const operations = defineTranslations({
       "Der Entwurf hat sich seit der Anfrage geändert. Diese Anfrage kann nicht mehr freigegeben werden; erneutes Veröffentlichen fragt den neuen Entwurf an.",
     "operations.publishStaleLive":
       "Seit der Anfrage wurde eine andere Version veröffentlicht. Diese Anfrage kann nicht mehr freigegeben werden.",
+    "operations.publishAudience": "Für wen",
+    "operations.publishNarrows": "Diese Veröffentlichung erweitert den Zugriff nicht.",
+    "operations.publishWidens": "Diese Veröffentlichung erweitert den Zugriff.",
     "operations.publishVersion": "Version",
     "operations.publishFirst": "Version {number}, die erste veröffentlichte",
     "operations.publishReplaces": "Version {number}, statt Version {live}",

@@ -9,8 +9,19 @@ import { appReadsStoredData } from "./app-model";
 // the KeyValueList of the question that holds them.
 
 /** The lines for one revision of one App, read when the question opens. */
-export function AppPublishData({ app, revision }: { app: string; revision: number }) {
-  return <AppPublishDataView read={useAppPublishData(app, revision)} />;
+export function AppPublishData({
+  app,
+  revision,
+  audienceLabel
+}: {
+  app: string;
+  revision: number;
+  /** Who the request's chosen audience names (SHARE-1), in place of who may use the App now. */
+  audienceLabel?: string | undefined;
+}) {
+  return (
+    <AppPublishDataView read={useAppPublishData(app, revision)} audienceLabel={audienceLabel} />
+  );
 }
 
 /**
@@ -18,8 +29,27 @@ export function AppPublishData({ app, revision }: { app: string; revision: numbe
  * then has nothing to say about it. Statements, parameters and rows are never shown; how many
  * rows the whole store held is said as what it is, the bound and not what the actions select.
  */
-export function AppPublishDataView({ read }: { read: AppPublishDataRead }) {
-  const { t } = useTranslation();
+export function AppPublishDataView({
+  read,
+  audienceLabel,
+  audiencePeople,
+  audiencePending = false
+}: {
+  read: AppPublishDataRead;
+  /**
+   * Who the audience chosen in the question names (SHARE-1). It takes the place of who may use
+   * the App now: the lines say who would see the data after this publish.
+   */
+  audienceLabel?: string | undefined;
+  /** How many people the chosen audience names, where the instance counted them. */
+  audiencePeople?: number | undefined;
+  /**
+   * The answer for a newly chosen audience is on its way: who sees the data waits for it, and
+   * the people of the choice before are never shown under the new one. The stores stay.
+   */
+  audiencePending?: boolean;
+}) {
+  const { locale, t } = useTranslation();
   if (read.status === "loading") {
     return (
       <KeyValue label={t("apps.publishDataAudience")} data-field="data-audience">
@@ -47,7 +77,37 @@ export function AppPublishDataView({ read }: { read: AppPublishDataRead }) {
   return (
     <>
       <KeyValue label={t("apps.publishDataAudience")} data-field="data-audience">
-        {data.audience}
+        {audiencePending ? (
+          <SkeletonList rows={1} className="w-full" data-testid="app-publish-audience-pending" />
+        ) : audienceLabel === undefined ? (
+          data.audience
+        ) : (
+          // The chosen audience, then whoever sees the data whatever it is: the App's own
+          // grant holders and the instance admins. A choice never hides either.
+          <div className="grid min-w-0 gap-0.5" data-testid="app-publish-data-audience">
+            <span data-testid="app-publish-data-chosen">
+              {audiencePeople === undefined
+                ? audienceLabel
+                : t(
+                    audiencePeople === 1
+                      ? "apps.publishAudiencePeopleOne"
+                      : "apps.publishAudiencePeople",
+                    {
+                      label: audienceLabel,
+                      count: new Intl.NumberFormat(locale).format(audiencePeople)
+                    }
+                  )}
+            </span>
+            {data.holders ? (
+              <span className={caption} data-testid="app-publish-data-holders">
+                {t("apps.publishDataHolders", { holders: data.holders })}
+              </span>
+            ) : null}
+            <span className={caption} data-testid="app-publish-data-admins">
+              {t("apps.publishDataAdmins")}
+            </span>
+          </div>
+        )}
       </KeyValue>
       <KeyValue label={t("apps.publishDataStores")} data-field="data-stored">
         <div className="grid min-w-0 gap-3" data-testid="app-publish-data">

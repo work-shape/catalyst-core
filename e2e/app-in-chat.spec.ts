@@ -141,13 +141,11 @@ test("what a plain chat opened becomes an App without a question, and its next s
   await expect(subject).toHaveAttribute("data-subject-kind", "app");
   await expect(subject).toContainText(appTitle);
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  // The call reads as what it did, in the run's Work history.
+  // The call stands as its own line, outside the Work history: who can use the App now, with
+  // "Share" (SHARE-1).
   const message = page.locator('[data-role="assistant"]').last();
-  const history = message.getByRole("button", { name: /^Work history/u });
-  await expect(history).toHaveAttribute("aria-expanded", "false");
-  await history.click();
-  await expect(message.getByTestId("tool-call-fold-sentence")).toHaveText(
-    `Saved as the app ${appTitle}`
+  await expect(message.getByTestId("app-saved-line")).toContainText(
+    `Saved as the app ${appTitle}. You can use it now; others can once you share it.`
   );
   expect(await draftRevision()).toBe(1);
 

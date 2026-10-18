@@ -10,6 +10,8 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   APP_SAVE_TOOL_NAME,
+  APP_PUBLISH_TOOL_NAME,
+  createAppPublishTool,
   WORKSPACE_OPEN_TOOL_NAME,
   createAppSaveTool,
   createConnectionDraftTool,
@@ -56,6 +58,7 @@ const WRITE_FILE_TOOL = "workspace.write_file";
 const APP_TOOLS = [
   WORKSPACE_OPEN_TOOL_NAME,
   APP_SAVE_TOOL_NAME,
+  APP_PUBLISH_TOOL_NAME,
   WRITE_FILE_TOOL,
   "workspace.edit_file",
   "workspace.read_file"
@@ -151,6 +154,7 @@ export function createPlatformTools(
       ...createWorkflowTestTools(),
       createRunAgentTool(),
       createAppSaveTool(platformAssets.calls),
+      createAppPublishTool(),
       ...(input.connections
         ? [
             createConnectionDraftTool({

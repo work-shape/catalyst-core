@@ -13,7 +13,8 @@ type AppSources = Awaited<ReturnType<ApiClient["data_stores"]["app_sources"]>>;
 export async function appPublishData(
   api: ConfigApi,
   app: string,
-  candidate: Asset
+  candidate: Asset,
+  audienceLabel?: string
 ): Promise<string> {
   const config = candidate.config;
   const manifest = isRecord(config) && isRecord(config.manifest) ? config.manifest : undefined;
@@ -32,15 +33,16 @@ export async function appPublishData(
       "The stored-data summary does not describe this revision. Nothing was published."
     );
   }
-  return formatStoredData(data);
+  return formatStoredData(data, audienceLabel);
 }
 
-function formatStoredData(data: AppSources): string {
+function formatStoredData(data: AppSources, audienceLabel?: string): string {
   const audience = data.audience;
   if (!audience) return "";
   return [
     "Who sees the stored data:",
-    ...(audience.workspace
+    ...(audienceLabel ? [`  ${audienceLabel}.`] : []),
+    ...(!audienceLabel && audience.workspace
       ? [`  Everyone in ${audience.workspace.title} (${audience.workspace.members} people).`]
       : []),
     ...audience.holders.map((holder) => `  Additional ${holder.kind}: ${holder.title}.`),

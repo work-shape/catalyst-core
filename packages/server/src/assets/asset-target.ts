@@ -42,7 +42,7 @@ export interface AssetTarget {
   /** An asset of another scope carries the name. The call never reads or writes it. */
   elsewhere: boolean;
   /** That asset, as far as the caller's right to read it is decided on. */
-  other?: Pick<ConfigAssetRecord, "id" | "scope">;
+  other?: Pick<ConfigAssetRecord, "id" | "scope" | "appAvailability">;
   /** What the caller's right is decided on. */
   resource: AccessResource;
   /** The address the target was read for. */
@@ -81,9 +81,15 @@ export async function resolveAssetTarget(
     ...(asset ? { asset } : {}),
     elsewhere: row !== undefined && asset === undefined,
     ...(row !== undefined && asset === undefined
-      ? { other: { id: row.id, scope: row.scope } }
+      ? {
+          other: {
+            id: row.id,
+            scope: row.scope,
+            ...(row.appAvailability ? { appAvailability: row.appAvailability } : {})
+          }
+        }
       : {}),
-    resource: accessResource(kind.kind, address.name, scope, asset?.id),
+    resource: accessResource(kind.kind, address.name, scope, asset?.id, asset?.appAvailability),
     address
   };
 }

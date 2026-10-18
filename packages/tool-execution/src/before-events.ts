@@ -19,7 +19,7 @@ import {
 /** What the before-events of a call are asked from: a run's context. */
 export interface BeforeEventsOf {
   definition: Pick<OperationDefinition, "name" | "events" | "beforeEvents" | "inputWithoutSecrets">;
-  call: Pick<OperationCall, "input" | "origin">;
+  call: Pick<OperationCall, "input" | "origin"> & Partial<Pick<OperationCall, "actor">>;
   emit(
     name: PlatformEventName,
     phase: "before",
@@ -39,7 +39,7 @@ type SubjectAnswer = PlatformEventAnswer & { subject?: GuardrailSubject };
 export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectAnswer[]> {
   const { definition, call } = context;
   // Read before any is asked: whether the call is about guardrails decides who answers.
-  const own = (await definition.beforeEvents?.(call.input, call.origin)) ?? [];
+  const own = (await definition.beforeEvents?.(call.input, call.origin, call.actor)) ?? [];
   const about = aboutGuardrails(definition.name, call.input, own)
     ? { aboutGuardrails: true as const }
     : {};
