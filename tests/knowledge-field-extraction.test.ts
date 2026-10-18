@@ -157,177 +157,200 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
     expect(results.map((result) => result.statusCode).sort()).toEqual([200, 409]);
     expect(extract).toHaveBeenCalledTimes(1);
   });
-  it("check 83 adversarial table: extract_fields carries every misread to records review, never projection", async () => {
-    const cases = [
-      { value: 1205, quote: "Wohnfläche 120,5 m²", passes: false },
-      { value: 15, quote: "1,5 Zimmer", passes: false },
-      { value: 350, quote: "350.000 EUR", passes: false },
-      { value: 35, quote: "35O.OOO", passes: false },
-      { value: "5", quote: "15 Einheiten", passes: false },
-      { value: 120.5, quote: "Wohnfläche 120,5 m²", passes: true },
-      { value: 350000, quote: "350.000 EUR", passes: true },
-      { value: 120.5, quote: "Invented Wohnfläche 120,5 m²", passes: false }
-    ];
-    const extract = vi.fn<KnowledgeFieldExtractor["extract"]>();
-    const world = await setup(undefined, undefined, false, undefined, {
-      currency: "EUR",
-      reserveCost: () => 1,
-      extract
-    });
-    world.world.put({
-      folderId: "folder",
-      name: "contract.txt",
-      mime: "text/plain",
-      bytes: new TextEncoder().encode(
-        "Wohnfläche 120,5 m². 1,5 Zimmer. 350.000 EUR. 35O.OOO. 15 Einheiten."
-      )
-    });
-    await world.drain(await world.sync());
-    const documentId = String(
-      required(
-        (await world.sql`select id from catalyst_kb.documents where withdrawn_at is null`)[0]
-      ).id
-    );
-    const config = world.dataStores.readFiles([
-      {
-        path: "store.yaml",
-        bytes: new TextEncoder().encode(
-          'id: review\nname: Review\ndescription: Evidence regression\nrecords:\n  - table: readings\n    key: {column: id, fromPath: "/cases/{id}/"}\n    precedence: [default]\n    review: {always: []}\n'
-        )
-      },
-      {
-        path: "migrations/0001_readings.sql",
-        bytes: new TextEncoder().encode(
-          "create table readings (id integer primary key, amount numeric, label text)"
-        )
+  it.each(["de", "en"] as const)(
+    "uses the %s instance content locale through extraction and records regardless of caller language",
+    async (defaultLocale) => {
+      const cases = [
+        { value: 1205, quote: "Wohnfläche 120,5 m²", passes: false },
+        { value: 15, quote: "1,5 Zimmer", passes: false },
+        { value: 350, quote: "350.000 EUR", passes: defaultLocale === "en" },
+        { value: 35, quote: "35O.OOO", passes: false },
+        { value: "5", quote: "15 Einheiten", passes: false },
+        { value: 120.5, quote: "Wohnfläche 120,5 m²", passes: true },
+        { value: 350000, quote: "350.000 EUR", passes: defaultLocale === "de" },
+        { value: 350000, quote: "350,000 USD", passes: defaultLocale === "en" },
+        { value: 120.5, quote: "Invented Wohnfläche 120,5 m²", passes: false }
+      ];
+      const extract = vi.fn<KnowledgeFieldExtractor["extract"]>();
+      const world = await setup(
+        undefined,
+        undefined,
+        false,
+        undefined,
+        {
+          currency: "EUR",
+          reserveCost: () => 1,
+          extract
+        },
+        defaultLocale
+      );
+      for (const index of cases.keys()) {
+        world.world.put({
+          folderId: "folder",
+          name: `contract-${index}.txt`,
+          mime: "text/plain",
+          bytes: new TextEncoder().encode(
+            "Wohnfläche 120,5 m². 1,5 Zimmer. 350.000 EUR. 350,000 USD. 35O.OOO. 15 Einheiten."
+          )
+        });
       }
-    ]);
-    const stores = world.instance.stores;
-    const written = await stores.configAssets.applyConfigAssetMutations({
-      clientInstanceId,
-      baseRevisions: { "data_store:review": null },
-      mutations: [{ type: "upsert", kind: "data_store", name: "review", config, draft: true }]
-    });
-    const assetId = required(written.assetIds["data_store:review"]);
-    const revision = required(written.revisions["data_store:review"]);
-    const saved = required(
-      await stores.configAssets.getConfigAssetRevision({
+      await world.drain(await world.sync());
+      const documents =
+        await world.sql`select id, file_name from catalyst_kb.documents where withdrawn_at is null`;
+      const config = world.dataStores.readFiles([
+        {
+          path: "store.yaml",
+          bytes: new TextEncoder().encode(
+            'id: review\nname: Review\ndescription: Evidence regression\nrecords:\n  - table: readings\n    key: {column: id, fromPath: "/cases/{id}/"}\n    precedence: [default]\n    review: {always: []}\n'
+          )
+        },
+        {
+          path: "migrations/0001_readings.sql",
+          bytes: new TextEncoder().encode(
+            "create table readings (id integer primary key, amount numeric, label text);"
+          )
+        }
+      ]);
+      const stores = world.instance.stores;
+      const written = await stores.configAssets.applyConfigAssetMutations({
+        clientInstanceId,
+        baseRevisions: { "data_store:review": null },
+        mutations: [{ type: "upsert", kind: "data_store", name: "review", config, draft: true }]
+      });
+      const assetId = required(written.assetIds["data_store:review"]);
+      const revision = required(written.revisions["data_store:review"]);
+      const saved = required(
+        await stores.configAssets.getConfigAssetRevision({
+          clientInstanceId,
+          kind: "data_store",
+          name: "review",
+          revision
+        })
+      );
+      await stores.configAssets.publishConfigAssetRevision({
         clientInstanceId,
         kind: "data_store",
         name: "review",
-        revision
-      })
-    );
-    await stores.configAssets.publishConfigAssetRevision({
-      clientInstanceId,
-      kind: "data_store",
-      name: "review",
-      assetId,
-      revision,
-      revisionId: saved.id
-    });
-    await world.dataStores.publish(stores, { assetId, revision, config });
-    const record = await eventually(async () => {
-      await world.worker.runDue();
-      const record = required(
-        await stores.dataStores.getDataStore({ clientInstanceId, id: assetId })
-      );
-      expect(record.status).toBe("ready");
-      return record;
-    });
-    const url = new URL(await fileTestDatabaseUrl());
-    url.pathname = `/${record.location.database}`;
-    const target = postgres(url.toString(), { max: 1, onnotice() {} });
-    const actor: AuthenticatedUser = {
-      clientInstanceId,
-      id: "publisher",
-      externalUserId: "publisher",
-      displayLabel: "Publisher",
-      authSource: "test",
-      roles: ["superadmin"],
-      permissionRefs: []
-    };
-    const access = createActorAccess(
-      { ...actor, kind: "user" },
-      { holderActive: true, grants: [] }
-    );
-    const propose = required(
-      await world.dataStores.operationSource.resolve("data_store.review.records.propose")
-    );
-    try {
-      for (const [index, test] of cases.entries()) {
-        const name = typeof test.value === "string" ? "label" : "amount";
-        extract.mockResolvedValueOnce({
-          text: JSON.stringify({
-            values: { [name]: test.value, unsupported: 1 },
-            evidence: [{ name, page: 1, quote: test.quote }]
-          }),
-          cost: 0.1
-        });
-        const response = await world.instance.api.call("knowledge_bases.extract_fields", {
-          params: { knowledgeBase: "sync-test" },
-          payload: {
-            documentId,
-            schema: {
-              type: "object",
-              properties: { [name]: { type: typeof test.value } },
-              additionalProperties: false
-            }
-          }
-        });
-        expect(response.statusCode, response.body).toBe(200);
-        const result = response.json();
-        expect(result.droppedFields).toBe(1);
-        expect(result.failedFields, test.quote).toBe(test.passes ? 0 : 1);
-        expect(result.fields[name]).toEqual({ value: test.value, page: 1, quote: test.quote });
-        const context: OperationExecutionContext = {
-          runId: createPlatformId("opr"),
-          actor,
-          access,
-          audit: new NoopAuditRecorder(),
-          correlationId: "adversarial",
-          origin: { kind: "workflow", workflowRunId: "run", stepRunId: createPlatformId("step") },
-          runtime: { locale: "de" }
-        };
-        await propose.execute(
-          {
-            table: "readings",
-            items: [
-              {
-                knowledgeBaseId: world.record.id,
-                documentId,
-                kind: result.type,
-                documentDate: result.date,
-                path: `/cases/${index}/contract.txt`,
-                fields: Object.entries(result.fields).map(([name, field]) => ({
-                  name,
-                  ...z
-                    .object({
-                      value: z.union([z.string(), z.number()]),
-                      page: z.number(),
-                      quote: z.string()
-                    })
-                    .parse(field)
-                }))
-              }
-            ]
-          },
-          context
+        assetId,
+        revision,
+        revisionId: saved.id
+      });
+      await world.dataStores.publish(stores, { assetId, revision, config });
+      const record = await eventually(async () => {
+        await world.worker.runDue();
+        const record = required(
+          await stores.dataStores.getDataStore({ clientInstanceId, id: assetId })
         );
-        const [candidate] =
-          await target`select evidence from catalyst.record_fields where record_key=${JSON.stringify(index)}::jsonb`;
-        expect(required(candidate).evidence, test.quote).toMatchObject({
-          status: test.passes ? "passed" : "failed"
-        });
-        const [projected] =
-          await target`select amount::float8, label from readings where id=${index}`;
-        expect(required(projected)[name], test.quote).toBe(test.passes ? test.value : null);
+        expect(record.status).toBe("ready");
+        expect(record.level).toBe(1);
+        return record;
+      });
+      const url = new URL(await fileTestDatabaseUrl());
+      url.pathname = `/${record.location.database}`;
+      const target = postgres(url.toString(), { max: 1, onnotice() {} });
+      const actor: AuthenticatedUser = {
+        clientInstanceId,
+        id: "publisher",
+        externalUserId: "publisher",
+        displayLabel: "Publisher",
+        authSource: "test",
+        roles: ["superadmin"],
+        permissionRefs: []
+      };
+      const access = createActorAccess(
+        { ...actor, kind: "user" },
+        { holderActive: true, grants: [] }
+      );
+      const propose = required(
+        await world.dataStores.operationSource.resolve("data_store.review.records.propose")
+      );
+      try {
+        for (const callerLocale of [undefined, "de", "en"] as const) {
+          for (const [index, test] of cases.entries()) {
+            const documentId = String(
+              required(documents.find((doc) => doc.file_name === `contract-${index}.txt`)).id
+            );
+            const name = typeof test.value === "string" ? "label" : "amount";
+            extract.mockResolvedValueOnce({
+              text: JSON.stringify({
+                values: { [name]: test.value, unsupported: 1 },
+                evidence: [{ name, page: 1, quote: test.quote }]
+              }),
+              cost: 0.1
+            });
+            const response = await world.instance.api.call("knowledge_bases.extract_fields", {
+              headers: callerLocale ? { "accept-language": callerLocale } : {},
+              params: { knowledgeBase: "sync-test" },
+              payload: {
+                documentId,
+                schema: {
+                  type: "object",
+                  properties: { [name]: { type: typeof test.value } },
+                  additionalProperties: false
+                }
+              }
+            });
+            expect(response.statusCode, response.body).toBe(200);
+            const result = response.json();
+            expect(result.droppedFields).toBe(1);
+            expect(result.failedFields, test.quote).toBe(test.passes ? 0 : 1);
+            expect(result.fields[name]).toEqual({ value: test.value, page: 1, quote: test.quote });
+            const context: OperationExecutionContext = {
+              runId: createPlatformId("opr"),
+              actor,
+              access,
+              audit: new NoopAuditRecorder(),
+              correlationId: "adversarial",
+              origin: {
+                kind: "workflow",
+                workflowRunId: "run",
+                stepRunId: createPlatformId("step")
+              },
+              runtime: callerLocale ? { locale: callerLocale } : {}
+            };
+            const proposed = await propose.execute(
+              {
+                table: "readings",
+                items: [
+                  {
+                    knowledgeBaseId: world.record.id,
+                    documentId,
+                    kind: result.type,
+                    documentDate: result.date,
+                    path: `/cases/${index}/contract.txt`,
+                    fields: Object.entries(result.fields).map(([name, field]) => ({
+                      name,
+                      ...z
+                        .object({
+                          value: z.union([z.string(), z.number()]),
+                          page: z.number(),
+                          quote: z.string()
+                        })
+                        .parse(field)
+                    }))
+                  }
+                ]
+              },
+              context
+            );
+            expect(proposed).toMatchObject({ failures: { rowCount: 0 } });
+            const [candidate] =
+              await target`select evidence, record_key from catalyst.record_fields where document_id=${documentId} and field_name=${name}`;
+            expect(required(candidate).record_key).toBe(index);
+            expect(required(candidate).evidence, test.quote).toMatchObject({
+              status: test.passes ? "passed" : "failed"
+            });
+            const [projected] =
+              await target`select amount::float8, label from readings where id=${index}`;
+            expect(required(projected)[name], test.quote).toBe(test.passes ? test.value : null);
+          }
+        }
+      } finally {
+        await target.end();
       }
-    } finally {
-      await target.end();
     }
-  });
-  it("admits an approximately 6,000-token German document by default, names a token refusal and resumes after raising its limit", async () => {
+  );
+  it("admits a varied 25 KB German contract by default, refuses 40 KB with estimate and limit, and resumes after a raise", async () => {
     const extract = vi.fn<KnowledgeFieldExtractor["extract"]>(async () => ({
       text: '{"values":{},"evidence":[]}',
       cost: 0
@@ -337,9 +360,30 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
       reserveCost: () => 1,
       extract
     });
-    const text = "Die Fläche des Gebäudes. ".repeat(720);
-    expect(new TextEncoder().encode(text).byteLength).toBeGreaterThan(18000);
-    world.world.put({
+    const contract = (minimumBytes: number) => {
+      const clauses: string[] = [];
+      for (
+        let section = 1;
+        new TextEncoder().encode(clauses.join("\n")).byteLength < minimumBytes;
+        section += 1
+      ) {
+        const terms = [
+          `Der Vermieter übergibt im Abschnitt ${section} die Räume im geprüften Zustand. Die Schlüssel werden am ${(section % 28) + 1}. März 2024 gegen Empfangsbestätigung ausgehändigt.`,
+          `Für die Einheit ${section} beträgt die monatliche Grundmiete ${800 + section},50 EUR. Betriebskosten werden jährlich nach den tatsächlich angefallenen Ausgaben abgerechnet.`,
+          `Die Parteien dokumentieren unter Ziffer ${section} die vorhandenen Zählerstände. Änderungen an elektrischen Anlagen bedürfen einer schriftlichen Zustimmung und fachgerechten Ausführung.`,
+          `Anlage ${section} beschreibt die Nutzung von Garten, Keller und gemeinschaftlichen Flächen. Der Mieter hält die Zugänge frei und meldet erkennbare Schäden unverzüglich.`,
+          `Die Sicherheitsleistung für Vertragsteil ${section} darf in drei gleichen Monatsraten erbracht werden. Sie wird getrennt vom übrigen Vermögen verzinst angelegt.`,
+          `Nach Maßgabe von Nummer ${section} stimmen die Beteiligten Besichtigungstermine rechtzeitig ab. Bei dringender Gefahr ist der Zugang zur Schadensbegrenzung zu ermöglichen.`,
+          `Das Übergabeprotokoll ${section} enthält die vereinbarten Instandsetzungen mit Fristen. Der Auftragnehmer weist die verwendeten Materialien durch geeignete Belege nach.`,
+          `Ergänzungen zu Paragraph ${section} werden von beiden Vertragsparteien unterzeichnet. Sollte eine Bestimmung unwirksam sein, bleiben die übrigen Vereinbarungen bestehen.`
+        ];
+        clauses.push(required(terms[section % terms.length]));
+      }
+      return clauses.join("\n");
+    };
+    const text = contract(25_000);
+    expect(new TextEncoder().encode(text).byteLength).toBeLessThan(25_500);
+    const sourceId = world.world.put({
       folderId: "folder",
       name: "reference.txt",
       mime: "text/plain",
@@ -364,7 +408,8 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
     expect((await world.sql`select spent::float8 from catalyst_kb.field_budgets`)[0]?.spent).toBe(
       0
     );
-    await world.publishSources(sources, { extraction: { budget: { maxTokensPerDocument: 1000 } } });
+    world.world.write(sourceId, new TextEncoder().encode(contract(40_000)));
+    await world.drain(await world.sync("changes"));
     const refused = await call();
     expect(refused.statusCode, refused.body).toBe(409);
     const documents = await world.instance.api.call("knowledge_bases.list_documents", {
@@ -377,13 +422,24 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
           fieldsPendingReason: {
             reason: "token_budget",
             estimatedTokens: expect.any(Number),
-            maxTokensPerDocument: 1000
+            maxTokensPerDocument: 8000
           }
         }
       ]
     });
+    expect(refused.json()).toMatchObject({
+      error: {
+        details: {
+          estimatedTokens: expect.any(Number),
+          maxTokensPerDocument: 8000
+        }
+      }
+    });
+    expect(refused.json().error.details.estimatedTokens).toBeGreaterThan(10_000);
     expect(extract).toHaveBeenCalledTimes(1);
-    await world.publishSources(sources, { extraction: { budget: { maxTokensPerDocument: 8000 } } });
+    await world.publishSources(sources, {
+      extraction: { budget: { maxTokensPerDocument: 16000 } }
+    });
     expect((await call()).statusCode).toBe(200);
     expect(extract).toHaveBeenCalledTimes(2);
   });

@@ -114,6 +114,8 @@ export interface KnowledgeBases {
 }
 
 export function createKnowledgeBases(input: {
+  /** Instance content locale until Knowledge Bases support a content-language setting. */
+  defaultLocale: string;
   clientInstanceId: ClientInstanceId;
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;
@@ -133,6 +135,7 @@ export function createKnowledgeBases(input: {
   now?: () => Date;
 }): KnowledgeBases {
   const runtime: KnowledgeRuntime = {
+    defaultLocale: input.defaultLocale,
     clientInstanceId: input.clientInstanceId,
     stores: input.stores,
     backend: input.backend,

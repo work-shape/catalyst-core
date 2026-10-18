@@ -225,6 +225,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
   const embedding = knowledgeEmbedding(parts.config);
   let assertFieldBudgetPriced: (() => void) | undefined;
   const knowledgeBases = createKnowledgeBases({
+    defaultLocale: parts.config.localization.defaultLocale,
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
     backend,

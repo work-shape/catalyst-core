@@ -170,6 +170,7 @@ export async function setupFindingsApp(): Promise<FindingsWorld> {
   const key = randomBytes(32).toString("base64");
   const statementLimits: FindingsWorld["statementLimits"] = {};
   const dataStores = createDataStores({
+    defaultLocale: "en",
     clientInstanceId,
     stores: own.stores,
     databaseUrl,

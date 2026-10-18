@@ -2,10 +2,10 @@ import type { JsonValue } from "./json";
 import type { RecordEvidenceResult } from "@work-shape/catalyst-asset-schemas";
 
 /** Compare retained text and citations without layout or Unicode encoding differences. */
-function normalise(text: string): string {
+function normalise(text: string, keepLineHyphen = false): string {
   return text
     .normalize("NFC")
-    .replace(/(\p{L})[-\u00ad][\t ]*\r?\n\s*(?=\p{L})/gu, "$1")
+    .replace(/(\p{L})[-\u00ad][\t ]*\r?\n\s*(?=\p{L})/gu, keepLineHyphen ? "$1-" : "$1")
     .replaceAll("\u00ad", "")
     .replace(/\s+/gu, " ")
     .trim();
@@ -35,9 +35,37 @@ function valueInQuote(value: JsonValue, quote: string, locale: string): boolean 
     const date = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(text);
     if (date) {
       if (wordsInclude(quote, text)) return true;
-      return [...quote.matchAll(/(?<!\d)(\d{1,2})\.(\d{1,2})\.(\d{4})(?!\d)/gu)].some(
-        ([, day, month, year]) =>
-          year === date[1] && Number(month) === Number(date[2]) && Number(day) === Number(date[3])
+      const matches = [
+        ...quote.matchAll(/(?<![\p{L}\p{N}])(\d{1,2})\.(\d{1,2})\.(\d{4})(?!\d)/gu)
+      ].map(([, day, month, year]) => ({ day: Number(day), month: Number(month), year }));
+      const months = [
+        ["Januar", "January"],
+        ["Februar", "February"],
+        ["März", "March"],
+        ["April"],
+        ["Mai", "May"],
+        ["Juni", "June"],
+        ["Juli", "July"],
+        ["August"],
+        ["September"],
+        ["Oktober", "October"],
+        ["November"],
+        ["Dezember", "December"]
+      ];
+      for (const [index, names] of months.entries()) {
+        const name = `(?:${names.join("|")})`;
+        for (const [, day, year] of quote.matchAll(
+          new RegExp(`(?<![\\p{L}\\p{N}])(\\d{1,2})\\.? ${name} (\\d{4})(?!\\d)`, "giu")
+        ))
+          matches.push({ day: Number(day), month: index + 1, year });
+        for (const [, day, year] of quote.matchAll(
+          new RegExp(`(?<![\\p{L}\\p{N}])${name} (\\d{1,2}),? (\\d{4})(?!\\d)`, "giu")
+        ))
+          matches.push({ day: Number(day), month: index + 1, year });
+      }
+      return matches.some(
+        ({ day, month, year }) =>
+          year === date[1] && month === Number(date[2]) && day === Number(date[3])
       );
     }
     return wordsInclude(quote, text);
@@ -66,10 +94,13 @@ export function recordEvidence(
   locale = "de"
 ): RecordEvidenceResult {
   if (page === undefined) return { status: "failed", reason: "page_not_found" };
-  const normalQuote = normalise(quote);
-  if (!normalQuote || !wordsInclude(normalise(page), normalQuote))
-    return { status: "failed", reason: "quote_not_found" };
-  if (!valueInQuote(value, normalQuote, locale))
+  const quotes = [normalise(quote), normalise(quote, true)].filter(
+    (text) =>
+      text &&
+      [normalise(page), normalise(page, true)].some((pageText) => wordsInclude(pageText, text))
+  );
+  if (!quotes.length) return { status: "failed", reason: "quote_not_found" };
+  if (!quotes.some((text) => valueInQuote(value, text, locale)))
     return { status: "failed", reason: "value_not_parsed" };
   return { status: "passed" };
 }

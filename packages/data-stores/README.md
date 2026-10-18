@@ -218,8 +218,7 @@ Only the owning Knowledge Base's retained text and the caller's returned result 
 `extraction.budget.perMonth` optionally limits this Knowledge Base's field extraction in
 the instance usage currency. Publishing a monthly budget requires the extraction binding
 to have a customer rate-card row; an unpriced binding does not prevent startup. `maxTokensPerDocument` defaults to 8000 and covers conservative
-input tokens plus the maximum output. Input tokens are estimated as UTF-8 bytes / 3 plus
-the prompt allowance unless the binding supplies a tokenizer. A document is never silently truncated. Admission
+input tokens plus the maximum output. Input tokens are estimated as ceil(UTF-8 bytes / 4) over the serialized input and schema unless the binding supplies a tokenizer. A document is never silently truncated. Admission
 reserves the maximum call cost in one monthly row before contacting the model; settlement
 returns unused money, including when a provider returns invalid output or reports zero cost.
 A content change before the provider call releases the full reservation. Only a call whose
@@ -233,3 +232,5 @@ Owned-store migration 10 adds the monthly counter and the document's pending mar
 9 is reserved by SRC-3b. There is no core database migration. Old application versions may
 run on the additive tables; keep the new migration recorded on rollback. Admission costs one
 monthly-row lock plus an indexed document update; no list or sum grows with the corpus.
+
+Field evidence in extraction and records proposals uses the instance `localization.defaultLocale`, never the caller’s interface language. Knowledge Base content/indexing languages are not supported in this release.

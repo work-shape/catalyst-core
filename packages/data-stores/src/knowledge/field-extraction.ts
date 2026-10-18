@@ -23,9 +23,7 @@ import { knowledgeExtractionBudgetSchema, type KnowledgeBaseDefinition } from ".
 const FIELD_EXTRACTION_BASE_TIMEOUT_MS = 60_000;
 const FIELD_EXTRACTION_PER_1000_TOKENS_MS = 15_000;
 // Estimate German and English text without treating UTF-8 bytes as tokens; never truncate evidence.
-const FIELD_INPUT_BYTES_PER_TOKEN = 3;
-// Fixed instructions plus the provider envelope; protects the configured per-document token budget.
-const FIELD_PROMPT_OVERHEAD_TOKENS = 512;
+const FIELD_INPUT_BYTES_PER_TOKEN = 4;
 const answerSchema = z.strictObject({
   date: z.iso.date().nullable().optional(),
   values: z.record(z.string(), z.json()),
@@ -184,7 +182,7 @@ export function extractFieldsOperation(
           new TextEncoder().encode(
             JSON.stringify({ pages, schema: format, outputInstructions: format })
           ).byteLength / FIELD_INPUT_BYTES_PER_TOKEN
-        ) + FIELD_PROMPT_OVERHEAD_TOKENS;
+        );
       if (inputTokens >= maxTokens) {
         // Token refusal is a pause too, without changing the document's search state.
         await store.pause(
@@ -292,7 +290,7 @@ export function extractFieldsOperation(
         const citation = citations.length === 1 ? citations[0] : undefined;
         const field = { value, page: citation?.page ?? 1, quote: citation?.quote ?? " " };
         if (
-          recordEvidence(value, field.quote, pageText.get(field.page), context.runtime.locale)
+          recordEvidence(value, field.quote, pageText.get(field.page), runtime.defaultLocale)
             .status !== "passed"
         )
           failedFields += 1;
@@ -304,7 +302,7 @@ export function extractFieldsOperation(
           parsed.data.date &&
           pages.some(
             (page) =>
-              recordEvidence(parsed.data.date ?? null, page.text, page.text, context.runtime.locale)
+              recordEvidence(parsed.data.date ?? null, page.text, page.text, runtime.defaultLocale)
                 .status === "passed"
           )
             ? parsed.data.date

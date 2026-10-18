@@ -14,6 +14,8 @@ import { knowledgeTargetOf, type KnowledgeBaseDefinition } from "./definition";
 
 /** What everything that serves Knowledge Bases in one process is built on. */
 export interface KnowledgeRuntime {
+  /** Instance content locale until Knowledge Bases support a content-language setting. */
+  defaultLocale: string;
   clientInstanceId: ClientInstanceId;
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;

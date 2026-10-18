@@ -34,9 +34,18 @@ describe("PROC-2 evidence boundary", () => {
     [120.5, "Area 120,5 m²", "en", "passed"],
     [1205, "Area 12.05 m²", "de", "failed"],
     ["2026-01-02", "Datum 2.1.2026", "de", "passed"],
+    ["2024-03-01", "Datum 1. März 2024", "de", "passed"],
+    ["2024-03-01", "March 1, 2024", "en", "passed"],
+    ["2024-03-01", "1. März 24", "de", "failed"],
+    ["2024-03-01", "March 1, 24", "en", "failed"],
+    ["2024-03-01", "1.3.24", "de", "failed"],
     ["größer", "größer", "de", "passed"]
   ] as const)("parses %s from %s under %s: %s", (value, quote, locale, status) => {
     expect(recordEvidence(value, quote, quote, locale).status).toBe(status);
+  });
+  it.each(["NordSüd", "Nord-Süd"])("accepts a line-end hyphen as joined or kept: %s", (value) => {
+    expect(recordEvidence(value, value, "Nord-\nSüd").status).toBe("passed");
+    expect(recordEvidence(value, "Nord-\nSüd", value).status).toBe("passed");
   });
   it("never accepts a quoted digit cut out of a larger number on the page", () => {
     expect(recordEvidence("5", "5", "15 Einheiten").status).toBe("failed");

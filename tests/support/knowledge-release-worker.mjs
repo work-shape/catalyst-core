@@ -24,6 +24,7 @@ const stores = await createPostgresStores({
   logger
 });
 const dataStores = createDataStores({
+  defaultLocale: "en",
   clientInstanceId,
   stores,
   databaseUrl: process.env.KB13A_DATABASE_URL,
@@ -44,6 +45,7 @@ objects.delete = async (key) => {
   return originalDelete(key);
 };
 const knowledge = createKnowledgeBases({
+  defaultLocale: "en",
   clientInstanceId,
   stores,
   backend: dataStores.knowledgeBackend,

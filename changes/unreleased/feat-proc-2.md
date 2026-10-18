@@ -9,3 +9,5 @@ section: Added
 - Owned-store migration audit counts use the SQL migrations actually applied, preserving accurate counts when another lane reserves a migration number.
 
 - Monthly-budget publish refuses an unpriced extraction binding, naming the binding and missing `usage.costs.customer.models` row; startup remains available. Token refusals retain their estimate and configured limit for distinct EN/DE recovery copy.
+
+- Field evidence uses the instance content locale consistently in extraction and records, independent of caller language. Estimate input at ceil(UTF-8 bytes / 4) with the default 8000-token budget; accept joined or retained line-end hyphens and German/English month names with four-digit years.

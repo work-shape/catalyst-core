@@ -92,10 +92,10 @@ describe("catalyst_kb source migrations", () => {
     expect(published.statusCode, published.body).toBe(200);
   };
 
-  it("upgrades REC-1a's level 8 store to level 9 before accepting superseded runs", async () => {
+  it("upgrades REC-1a's level 8 store to the release level before accepting superseded runs", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
     await writeAndPublish(instance, 1);
-    const made = await settle(instance, 9);
+    const made = await settle(instance, 10);
     const url = new URL(await fileTestDatabaseUrl());
     url.pathname = `/${made.location.database}`;
     const store = postgres(url.toString(), { max: 1, onnotice() {} });
@@ -125,12 +125,15 @@ describe("catalyst_kb source migrations", () => {
       } finally {
         await platform.end();
       }
-      const migrated = await settle(instance, 9);
+      const migrated = await settle(instance, 10);
       expect(migrated.migrations.slice(0, 8)).toEqual(made.migrations.slice(0, 8));
-      expect(migrated.migrations[8]).toMatchObject({ number: 9, name: "source_superseded" });
+      expect(migrated.migrations.find(({ number }) => number === 9)).toMatchObject({
+        number: 9,
+        name: "source_superseded"
+      });
       const applied = await store`select * from catalyst_kb.migrations order by number`;
-      expect(applied.slice(0, 8)).toEqual(previous);
-      expect(applied.map((row) => row.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(applied.filter(({ number }) => number !== 9)).toEqual(previous);
+      expect(applied.map((row) => row.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
       expect(await store`select state from catalyst_kb.sync_runs where id='held-pass'`).toEqual([
         { state: "running" }
       ]);

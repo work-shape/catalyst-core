@@ -63,7 +63,8 @@ export function useKnowledgeSync() {
     extractor?: KnowledgeExtractor,
     withFileRoute = false,
     developmentAuth?: unknown,
-    fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor
+    fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor,
+    defaultLocale: "de" | "en" = "de"
   ) {
     const logs: unknown[] = [];
     const logger: Logger = {
@@ -83,6 +84,7 @@ export function useKnowledgeSync() {
     };
     const instance = await start(true, undefined, developmentAuth, undefined, {
       embedding: true,
+      defaultLocale,
       apiAccess: true,
       ...(extractor ? { documents: true as const } : {}),
       ...(fieldExtractor
@@ -211,6 +213,7 @@ export function useKnowledgeSync() {
       models: [{ bindingId: "embedding", model: "test", dimensions: 8 }]
     };
     const dataStores = createDataStores({
+      defaultLocale,
       embedding,
       clientInstanceId,
       stores: instance.stores,
@@ -234,6 +237,7 @@ export function useKnowledgeSync() {
       vectors: texts.map(() => Array.from({ length: 8 }, () => 0.25))
     }));
     const knowledge = createKnowledgeBases({
+      defaultLocale,
       assertFieldBudgetPriced: () => fieldExtractor?.assertBudgetPriced?.(),
       clientInstanceId,
       stores: instance.stores,
