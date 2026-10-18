@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { ApiError, createApiClient } from "@work-shape/catalyst-api-client";
 import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import {
+  ASSET_ADDRESS_MAX_LENGTH,
+  ASSET_ADDRESS_PATTERN,
+  assetAddressFromName
+} from "@work-shape/catalyst-core";
 import { addressOf } from "@work-shape/catalyst-ui";
 import {
   addressBlocksCreate,
   addressCheckOf,
-  assetIdFromTitle,
   buildScopes,
   PendingApprovalError,
   mayCreateAgents,
@@ -23,15 +27,33 @@ import {
   type Namespaces
 } from "./chat-ui-build-fixtures";
 
+// ACCEPT-FIX-1 F2: every create dialog makes the address by the one rule the strictest kind
+// holds, so the address it suggests is never refused. Fails with the old generator, which
+// joined words by '_' that a Knowledge Base, Data Store and App refuse.
 describe("Studio ids", () => {
-  it("makes an id from the name people read", () => {
-    expect(assetIdFromTitle("Tax Review")).toBe("tax_review");
-    expect(assetIdFromTitle("  Steuer-Prüfung (Köln) 2026 ")).toBe("steuer_prufung_koln_2026");
-    expect(assetIdFromTitle("Crème brûlée")).toBe("creme_brulee");
-    expect(assetIdFromTitle("already_an_id")).toBe("already_an_id");
-    // A name without a letter or digit gives no id: the reader types one.
-    expect(assetIdFromTitle("???")).toBe("");
-    expect(assetIdFromTitle("")).toBe("");
+  const address = (name: string) => assetAddressFromName(name, "knowledge_base");
+
+  it("makes an address from the name people read", () => {
+    expect(address("ACCEPT Nordlicht Wissen")).toBe("accept-nordlicht-wissen");
+    // German letters keep their sound; other accents are dropped.
+    expect(address("  Steuer-Prüfung (Köln) 2026 ")).toBe("steuer-pruefung-koeln-2026");
+    expect(address("Crème brûlée")).toBe("creme-brulee");
+    expect(address("Straße & Gärten")).toBe("strasse-gaerten");
+    expect(address("already_an_id")).toBe("already-an-id");
+    // A long name is cut at the limit, and the cut never ends on '-'.
+    const long = address("Wissen ".repeat(20));
+    expect(long.length).toBeLessThanOrEqual(ASSET_ADDRESS_MAX_LENGTH);
+    expect(long).toMatch(ASSET_ADDRESS_PATTERN);
+  });
+
+  it("starts with the kind's word where the name does not start with a letter", () => {
+    expect(address("2026 Jahresplan")).toBe("knowledge-base-2026-jahresplan");
+    expect(address("2026")).toBe("knowledge-base-2026");
+    expect(address("???")).toBe("knowledge-base");
+    expect(assetAddressFromName("3. Quartal", "agent")).toBe("agent-3-quartal");
+    // Only an empty name makes no address.
+    expect(address("   ")).toBe("");
+    expect(address("")).toBe("");
   });
 });
 
@@ -39,14 +61,16 @@ describe("Studio ids", () => {
 // Fails without the change: the dialogs held the id as a field of its own, checked by nothing
 // before the save.
 describe("the address of a new asset", () => {
+  const address = (name: string) => assetAddressFromName(name, "agent");
+
   it("follows the name until it is edited by hand, and then stays as typed", () => {
-    expect(addressOf({ name: "Tax Review" }, assetIdFromTitle)).toBe("tax_review");
-    expect(addressOf({ name: "Tax Review 2026" }, assetIdFromTitle)).toBe("tax_review_2026");
+    expect(addressOf({ name: "Tax Review" }, address)).toBe("tax-review");
+    expect(addressOf({ name: "Tax Review 2026" }, address)).toBe("tax-review-2026");
     const typed = { name: "Tax Review", typedAddress: "tax" };
-    expect(addressOf(typed, assetIdFromTitle)).toBe("tax");
-    expect(addressOf({ ...typed, name: "Steuer-Prüfung" }, assetIdFromTitle)).toBe("tax");
+    expect(addressOf(typed, address)).toBe("tax");
+    expect(addressOf({ ...typed, name: "Steuer-Prüfung" }, address)).toBe("tax");
     // Emptied by hand it stays empty, so it does not jump back while the person retypes it.
-    expect(addressOf({ name: "Tax Review", typedAddress: "" }, assetIdFromTitle)).toBe("");
+    expect(addressOf({ name: "Tax Review", typedAddress: "" }, address)).toBe("");
   });
 
   it("names why an address is refused, in the reader's language, and blocks the create", () => {
@@ -62,9 +86,16 @@ describe("the address of a new asset", () => {
       state: "refused",
       reason: "Diese Adresse ist vergeben. Wähle einen anderen Namen oder eine andere Adresse."
     });
-    expect(addressCheckOf(invalid, en)).toMatchObject({
+    // The reason says the rule the dialog makes addresses by, with its limit.
+    expect(addressCheckOf(invalid, en)).toEqual({
       state: "refused",
-      reason: expect.stringMatching(/^This address does not work\./u)
+      reason:
+        "This address does not work. Use lowercase letters and digits in words joined by -, starting with a letter, at most 63 characters."
+    });
+    expect(addressCheckOf(invalid, de)).toEqual({
+      state: "refused",
+      reason:
+        "Diese Adresse geht so nicht. Nimm Kleinbuchstaben und Ziffern in Wörtern, die - verbindet, am Anfang einen Buchstaben, höchstens 63 Zeichen."
     });
     expect(addressCheckOf({ ok: true, found: { available: true } }, en)).toEqual({
       state: "free"

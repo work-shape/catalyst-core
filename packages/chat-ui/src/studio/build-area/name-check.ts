@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ASSET_ADDRESS_MAX_LENGTH } from "@work-shape/catalyst-core";
 import type { AddressCheck } from "@work-shape/catalyst-ui";
 import type { CheckName, NameCheckAnswer } from "../../shared/api/asset-writes";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
@@ -23,7 +24,10 @@ export function addressCheckOf(
       ? { state: "free" }
       : {
           state: "refused",
-          reason: t(found.reason === "name_taken" ? "build.addressTaken" : "build.addressInvalid")
+          reason:
+            found.reason === "name_taken"
+              ? t("build.addressTaken")
+              : t("build.addressInvalid", { max: ASSET_ADDRESS_MAX_LENGTH })
         };
   }
   // Only the instance's refusal carries a code; a lost connection says nothing of the name.

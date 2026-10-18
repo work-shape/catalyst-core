@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { assetAddressFromName } from "@work-shape/catalyst-core";
 import {
   Button,
   Dialog,
@@ -14,7 +15,6 @@ import {
 import type { CheckName } from "../../shared/api/asset-writes";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildAssetKind, BuildAssetStart } from "./build-asset-kind";
-import { assetIdFromTitle } from "./build-model";
 import type { BuildNamespace } from "../../shared/build-rights";
 import { addressBlocksCreate, useAddressCheck } from "./name-check";
 
@@ -72,7 +72,8 @@ export function BuildCreateDialog({
   );
   const [everywhere, setEverywhere] = useState(false);
   const title = value.name.trim();
-  const id = addressOf(value, assetIdFromTitle).trim();
+  const derive = (named: string) => assetAddressFromName(named, entry.kind);
+  const id = addressOf(value, derive).trim();
   const name = id === "" ? "" : `${prefix}${id}`;
   const check = useAddressCheck(checkName, name);
   const choices = [
@@ -121,7 +122,7 @@ export function BuildCreateDialog({
           autoFocus
           value={value}
           onChange={setValue}
-          derive={assetIdFromTitle}
+          derive={derive}
           check={check}
           nameLabel={t(entry.titleLabel)}
           addressLabel={t("build.createAddress")}

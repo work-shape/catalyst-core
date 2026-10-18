@@ -117,7 +117,7 @@ export {
   toolPackages,
   withImpliedTools
 } from "./instance-tools";
-export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";
+export { resolveBuildPlace, visibleBuildKinds } from "./build-model";
 export { addressBlocksCreate, addressCheckOf } from "./name-check";
 export {
   PendingApprovalError,

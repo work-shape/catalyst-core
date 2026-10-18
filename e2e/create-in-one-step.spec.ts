@@ -13,8 +13,8 @@ import { expect, test } from "./test";
 const builder = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 
-/** The agent of `tests/fixtures/e2e-assets` whose address the new one asks for. */
-const TAKEN_TITLE = "Application Assistant";
+/** The address of an agent of `tests/fixtures/e2e-assets`, typed by hand into a new one. */
+const TAKEN_ADDRESS = "application_assistant";
 
 const rail = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
 const address = (dialog: Locator) => dialog.locator('[data-name-with-address-field="address"]');
@@ -57,21 +57,25 @@ test("a new agent's address follows its name, names a taken one while typing and
   const proceed = dialog.getByRole("button", { name: "Continue", exact: true });
   await expect(fold).toHaveAttribute("aria-expanded", "false");
 
-  // The fixture's agent holds the address the name makes: the fold opens with the reason.
-  await nameField(dialog).fill(TAKEN_TITLE);
-  await expect(dialog.getByRole("alert")).toHaveText(
-    "This address is taken. Choose another name or address."
-  );
-  await expect(address(dialog)).toHaveValue("application_assistant");
-  await expect(proceed).toBeDisabled();
+  // A name that does not start with a letter makes an address that starts with the kind.
+  await nameField(dialog).fill("2026");
+  await fold.click();
+  await expect(address(dialog)).toHaveValue("agent-2026");
 
-  // Another name moves the address with it; the fold stays open and the reason goes.
+  // The address follows the name, as lowercase words joined by '-'.
   const suffix = randomUUID().slice(0, 8);
   await nameField(dialog).fill(`Travel Helper ${suffix}`);
-  await expect(address(dialog)).toHaveValue(`travel_helper_${suffix}`);
+  await expect(address(dialog)).toHaveValue(`travel-helper-${suffix}`);
   await expect(address(dialog)).toHaveAttribute("data-address-check", "free");
   await expect(dialog.getByRole("alert")).toHaveCount(0);
   await expect(proceed).toBeEnabled();
+
+  // A taken address is named at the field while typing, and Continue waits.
+  await address(dialog).fill(TAKEN_ADDRESS);
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "This address is taken. Choose another name or address."
+  );
+  await expect(proceed).toBeDisabled();
 
   // Typed by hand, the address stays when the name changes again.
   const typed = `travel-${suffix}`;
@@ -132,7 +136,9 @@ test("pictures of the three create forms", async ({ page, instanceAgents: _insta
     "new-agent-taken",
     async () => {
       const dialog = await openNewAgent(page);
-      await nameField(dialog).fill(TAKEN_TITLE);
+      await nameField(dialog).fill("Application Assistant");
+      await dialog.getByRole("button", { name: "Advanced", exact: true }).click();
+      await address(dialog).fill(TAKEN_ADDRESS);
       await expect(address(dialog)).toHaveAttribute("data-address-check", "refused");
       // The chevron turns as the fold opens.
       await expect(dialog.locator("[data-name-with-address-fold]")).toHaveAttribute(

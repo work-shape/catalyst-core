@@ -1,14 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { WORKFLOW_NAME_PATTERN, WORKFLOW_NAME_RULE } from "@work-shape/catalyst-asset-schemas";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
+  ASSET_ADDRESS_MAX_LENGTH,
+  ASSET_ADDRESS_PATTERN,
+  CONNECTION_NAME_MAX_LENGTH,
+  CONNECTION_NAME_PATTERN,
+  CONNECTION_NAME_RULE,
+  assetAddressFromName,
+  assetNameIssue,
   createAssetKindRegistry,
   defineAssetKind,
   findNamespaceOfAssetName,
   type AssetValidationContext,
   type RegisteredAssetKind
 } from "@work-shape/catalyst-core";
-import { createAgentAssetKind, createSkillAssetKind } from "@work-shape/catalyst-server";
+import {
+  createAgentAssetKind,
+  createAppAssetKind,
+  createGuardrailAssetKind,
+  createSkillAssetKind
+} from "@work-shape/catalyst-server";
 
 // A third kind as a later slice would write it: everything it is stands in this one
 // definition, and nothing outside it names the kind.
@@ -254,3 +267,67 @@ function clashDefinition() {
     summarize: (gadget: { name: string }) => ({ name: gadget.name, title: gadget.name })
   };
 }
+
+// ACCEPT-FIX-1 F2: the address a create dialog makes from a name is one every kind takes, so
+// no dialog suggests an address its own kind refuses. Fails with words joined by '_', which a
+// Data Store, a Knowledge Base and an App refuse.
+describe("the address a create dialog makes", () => {
+  const rules: { kind: string; rule: Pick<RegisteredAssetKind, "nameRule"> }[] = [
+    { kind: "agent", rule: agentKind },
+    { kind: "skill", rule: skillKind },
+    { kind: "app", rule: createAppAssetKind() },
+    { kind: "guardrail", rule: createGuardrailAssetKind() },
+    {
+      kind: "workflow",
+      rule: { nameRule: { pattern: WORKFLOW_NAME_PATTERN, description: WORKFLOW_NAME_RULE } }
+    },
+    {
+      kind: "connection",
+      rule: {
+        nameRule: {
+          pattern: CONNECTION_NAME_PATTERN,
+          maxLength: CONNECTION_NAME_MAX_LENGTH,
+          description: CONNECTION_NAME_RULE
+        }
+      }
+    },
+    // A Data Store and a Knowledge Base name themselves by the address rule itself.
+    {
+      kind: "data_store",
+      rule: {
+        nameRule: {
+          pattern: ASSET_ADDRESS_PATTERN,
+          maxLength: ASSET_ADDRESS_MAX_LENGTH,
+          description: "address"
+        }
+      }
+    }
+  ];
+  const names = [
+    "ACCEPT Nordlicht Wissen",
+    "Steuer-Prüfung (Köln) 2026",
+    "Straße & Gärten",
+    "2026 Jahresplan",
+    "2026",
+    "???",
+    "Wissen ".repeat(20)
+  ];
+
+  it("is taken by every kind a create dialog makes", () => {
+    for (const name of names) {
+      for (const { kind, rule } of rules) {
+        const address = assetAddressFromName(name, kind);
+        expect(address, name).toMatch(ASSET_ADDRESS_PATTERN);
+        expect(assetNameIssue(rule, address), `${kind}: ${address}`).toBeUndefined();
+      }
+    }
+  });
+
+  // A Data Store and a Knowledge Base took this rule since they were made (77497e991): the
+  // shared rule takes and refuses the same ids, so no stored id changes its answer.
+  it("takes and refuses the ids a Data Store took and refused before", () => {
+    const before = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
+    const ids = ["sales", "sales-2026", "a1-b2-c3", "a--b", "a-", "-a", "1a", "a_b", "Sales", ""];
+    for (const id of ids) expect(ASSET_ADDRESS_PATTERN.test(id), id).toBe(before.test(id));
+  });
+});
