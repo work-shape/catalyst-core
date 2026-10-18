@@ -432,7 +432,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "e2e",
-      "count": 74,
+      "count": 68,
       "owner": "NS-RETIRE"
     },
     {

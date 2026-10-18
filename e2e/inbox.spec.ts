@@ -525,11 +525,13 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
   const answerOf = (data: object) => requestWithOrigin(page, "put", heldSkillUrl, { data });
   const openRow = async (heading: string) => {
     await page.goto("/inbox");
+    await page.getByRole("tab", { name: /^To decide/u }).click();
     // Found without the region's name, which the pictures read in two languages.
     const row = page.getByTestId("inbox-row").filter({ hasText: HELD_TITLE });
     await expect(row).toHaveCount(1);
     await expect(row).toContainText(heading);
-    await expect(row).toContainText(`E2E Superadmin · ${HELD_NAMESPACE}`);
+    await expect(row).toContainText("E2E Superadmin");
+    await expect(row).not.toContainText(HELD_NAMESPACE);
     await shoot(
       page,
       `inbox-row-${heading.startsWith("New") ? "new-skill" : "skill-change"}`,
@@ -559,9 +561,7 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
 
     // A new skill: the row names it, and the item shows all of it with its line breaks.
     await openRow(`New skill: ${HELD_TITLE}`);
-    await expect(headline).toHaveText(
-      `E2E Superadmin wants to create the skill “${HELD_TITLE}” in the Namespace ${HELD_NAMESPACE}.`
-    );
+    await expect(headline).toHaveText(`E2E Superadmin wants to create the skill “${HELD_TITLE}”.`);
     await expect(call).toContainText(
       "If you approve, the skill is saved. If you decline, nothing changes."
     );
@@ -580,9 +580,7 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
 
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
     await page.reload();
-    await expect(headline).toHaveText(
-      `E2E Superadmin möchte den Skill „${HELD_TITLE}“ im Namespace ${HELD_NAMESPACE} anlegen.`
-    );
+    await expect(headline).toHaveText(`E2E Superadmin möchte den Skill „${HELD_TITLE}“ anlegen.`);
     await page.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
     await page.reload();
 
@@ -595,6 +593,12 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
         return (await run.json()).status;
       })
       .toBe("done");
+    // ACCEPT-FIX-9 E4/E5: final state and the kind's preview survive without a reload.
+    await expect(call.getByTestId("operation-call-outcome")).toHaveAttribute(
+      "data-outcome",
+      "done"
+    );
+    await expect(skill).toContainText(OLD_PARAGRAPH);
     const change = await answerOf({
       config: heldSkill(NEW_PARAGRAPH),
       expectedRevision: await assetRevision(page, heldSkillUrl)
@@ -603,9 +607,7 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
 
     // A change: the item shows the paragraph before and after, and not the ones that stay.
     await openRow(`Skill change: ${HELD_TITLE}`);
-    await expect(headline).toHaveText(
-      `E2E Superadmin wants to change the skill “${HELD_TITLE}” in the Namespace ${HELD_NAMESPACE}.`
-    );
+    await expect(headline).toHaveText(`E2E Superadmin wants to change the skill “${HELD_TITLE}”.`);
     await expect(skill).toContainText(OLD_PARAGRAPH);
     await expect(skill).toContainText(NEW_PARAGRAPH);
     await expect(skill).not.toContainText(KEPT_PARAGRAPH);
@@ -622,6 +624,8 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     // Declined, nothing changes: the skill keeps its paragraph.
     await page.locator('button[data-decision="reject"]').click();
     await expect(page.locator('button[data-decision="reject"]')).toHaveCount(0);
+    await expect(skill).toContainText(OLD_PARAGRAPH);
+    await expect(skill).toContainText(NEW_PARAGRAPH);
     const kept: unknown = await (await page.request.get(heldSkillUrl)).json();
     expect(JSON.stringify(kept)).toContain(OLD_PARAGRAPH);
 
