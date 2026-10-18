@@ -15,6 +15,7 @@ import {
   FILE_SET_MAX_TOTAL_BYTES,
   fileSetObjectPrefix,
   isAppError,
+  isOperationTimeout,
   isPageBuildId,
   JOB_UNCLAIMED_MS,
   JOB_WORKER_CHECK_INTERVAL_MS,
@@ -511,15 +512,16 @@ export function createPageBuildClient(
             }).catch(() => false);
           }
           if (noWorker || input.signal?.aborted || Date.now() >= deadline) {
-            const gaveUp: PageBuildFailure = input.signal?.aborted
-              ? {
-                  status: "failed",
-                  reason: "stopped",
-                  message: "The save was stopped before the Page was built."
-                }
-              : noWorker
-                ? { status: "failed", reason: "no_worker", message: PAGE_BUILD_NO_WORKER_MESSAGE }
-                : { status: "failed", reason: "timeout", message: PAGE_BUILD_BUSY_MESSAGE };
+            const gaveUp: PageBuildFailure =
+              input.signal?.aborted && !isOperationTimeout(input.signal)
+                ? {
+                    status: "failed",
+                    reason: "stopped",
+                    message: "The save was stopped before the Page was built."
+                  }
+                : noWorker && !isOperationTimeout(input.signal)
+                  ? { status: "failed", reason: "no_worker", message: PAGE_BUILD_NO_WORKER_MESSAGE }
+                  : { status: "failed", reason: "timeout", message: PAGE_BUILD_BUSY_MESSAGE };
             // The build finds a result on its row and stores nothing. When it was faster, its
             // result is the answer.
             const written = await options.stores.pages.finishPageBuild({

@@ -12,6 +12,7 @@ import {
 
 import {
   AppError,
+  OperationExecutionStop,
   isJsonObject,
   unknownToJsonValue,
   type AgentConfig,
@@ -176,6 +177,24 @@ describe("web access direct fetch", () => {
       })
     });
   });
+
+  it.each(["timeout", "aborted"] as const)(
+    "preserves the executor's %s reason before the fetch's own deadline",
+    async (kind) => {
+      const fetcher = new DirectWebFetcher({ resolver: resolvePublicExample });
+      await expect(
+        fetcher.fetch(
+          { url: "https://example.com/stopped" },
+          {
+            signal: AbortSignal.abort(new OperationExecutionStop(kind, undefined))
+          }
+        )
+      ).rejects.toMatchObject({
+        resultStatus: kind === "timeout" ? "timed_out" : "cancelled",
+        code: kind === "timeout" ? "timed_out" : "cancelled"
+      });
+    }
+  );
 
   it("bounds DNS resolution with the fetch timeout", async () => {
     const fetcher = new DirectWebFetcher({

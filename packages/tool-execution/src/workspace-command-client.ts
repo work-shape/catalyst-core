@@ -7,6 +7,7 @@ import {
   type WorkspaceCommand,
   type WorkspaceHandle,
   isAppError,
+  isOperationTimeout,
   noWorkerTakesJobs
 } from "@work-shape/catalyst-core";
 import { runWorkspaceCommandJob, workspaceCommandJobOptions } from "./workspace-command-kind";
@@ -156,14 +157,17 @@ export function createWorkspaceCommandClient(
       let current = command;
       let nextWorkerCheck = Date.now() + JOB_UNCLAIMED_MS;
       while (true) {
-        if (wait.signal?.aborted) {
+        if (wait.signal?.aborted && !isOperationTimeout(wait.signal)) {
           return cancelWaitingCommand(
             command,
             "Workspace command was cancelled with its agent run",
             "cancelled"
           );
         }
-        if (contextDeadlineMs !== undefined && Date.now() >= contextDeadlineMs) {
+        if (
+          isOperationTimeout(wait.signal) ||
+          (contextDeadlineMs !== undefined && Date.now() >= contextDeadlineMs)
+        ) {
           return cancelWaitingCommand(
             command,
             "Workspace command exceeded the tool execution deadline",
@@ -194,6 +198,13 @@ export function createWorkspaceCommandClient(
         if (isTerminalWorkspaceCommand(current)) {
           return { status: "settled", command: current };
         }
+        // A database await may cross the deadline or deliver an executor stop. Classify it
+        // at the top of the loop before deciding that no worker takes the command.
+        if (
+          wait.signal?.aborted ||
+          (contextDeadlineMs !== undefined && Date.now() >= contextDeadlineMs)
+        )
+          continue;
         // Only a command no worker claimed is given up: one that runs ends by its own limits.
         if (current.status === "queued" && Date.now() >= nextWorkerCheck) {
           nextWorkerCheck = Date.now() + JOB_WORKER_CHECK_INTERVAL_MS;
@@ -201,6 +212,11 @@ export function createWorkspaceCommandClient(
             clientInstanceId: command.clientInstanceId,
             kind: runWorkspaceCommandJob
           });
+          if (
+            wait.signal?.aborted ||
+            (contextDeadlineMs !== undefined && Date.now() >= contextDeadlineMs)
+          )
+            continue;
           if (noWorker) {
             // Decided under the lock of the job. A worker that claimed the command in this
             // very moment runs it, and this call goes on waiting for its result.
