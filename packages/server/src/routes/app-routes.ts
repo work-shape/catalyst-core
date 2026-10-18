@@ -104,7 +104,9 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
           ? { type: "set", key: "[redacted]", value: "[redacted]" }
           : input.mutation.type === "remove"
             ? { type: "remove", key: "[redacted]" }
-            : { type: "clear" };
+            : input.mutation.type === "batch"
+              ? { type: "batch", clear: false, values: {} }
+              : { type: "clear" };
       return { ...input, token: "[redacted]", mutation };
     },
     authorize: async (input, { actor, access }) => {

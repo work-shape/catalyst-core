@@ -95,12 +95,13 @@ test("agent-style localStorage renders, survives reloads and stays private to th
   await signIn(page, admin);
   const app = await saveApp(
     page,
-    '<h1>Leave requests</h1><p id="saved"></p><button id="save">Keep date</button><button id="kit">Save with kit</button><output id="kit-result"></output>',
+    '<h1>Leave requests</h1><p id="saved"></p><output id="burst"></output><button id="save">Keep date</button><button id="kit">Save with kit</button><output id="kit-result"></output>',
     `import { storage } from "@work-shape/catalyst-app-kit";
 // The pattern agents and customers write: reading storage at module evaluation must not throw.
 const current = window.localStorage.getItem("leave-date") || "No date";
 document.querySelector("#saved").textContent = current;
-document.querySelector("#save").addEventListener("click", () => { window.localStorage.setItem("leave-date", "2026-11-01"); document.querySelector("#saved").textContent = "2026-11-01"; });
+document.querySelector("#burst").textContent = localStorage.getItem("burst") || "";
+document.querySelector("#save").addEventListener("click", () => { for (let index = 0; index < 100; index++) { if (index % 2 === 0) localStorage.setItem("burst", String(index)); else localStorage.setItem("leave-date", index === 99 ? "2026-11-01" : String(index)); } document.querySelector("#saved").textContent = "2026-11-01"; });
 document.querySelector("#kit").addEventListener("click", async () => { await storage.set("filters", { status: "open" }); document.querySelector("#kit-result").textContent = JSON.stringify(await storage.get("filters")); });`
   );
   const otherContext = await browser.newContext({ baseURL });
@@ -130,9 +131,14 @@ document.querySelector("#kit").addEventListener("click", async () => { await sto
         response.status() === 200
     );
     await appFrame(page).getByRole("button", { name: "Keep date" }).click();
-    await kept;
+    const saved = await kept;
+    expect(saved.request().postDataJSON()).toMatchObject({
+      mutation: { type: "batch", clear: false, values: { burst: "98", "leave-date": "2026-11-01" } }
+    });
+    expect(saved.headers()["operation-run-id"]).toBeTruthy();
     await page.reload();
     await expect(appFrame(page).locator("#saved")).toHaveText("2026-11-01");
+    await expect(appFrame(page).locator("#burst")).toHaveText("98");
     await appFrame(page).getByRole("button", { name: "Save with kit" }).click();
     await expect(appFrame(page).locator("#kit-result")).toHaveText('{"status":"open"}');
     await page.screenshot({ path: testInfo.outputPath("accept-fix-2-storage.png") });

@@ -12,6 +12,10 @@ const APP_STORAGE_SOURCE = `function installAppStorage(input) {
   let values = new Map(Object.entries(input.values));
   let sequence = 0;
   const waiting = new Map();
+  const buffered = new Map();
+  let clear = false;
+  let timer;
+  let callers = [];
   function change(mutation) {
     const next = new Map(values);
     if (mutation.type === "set") next.set(mutation.key, mutation.value);
@@ -22,23 +26,44 @@ const APP_STORAGE_SOURCE = `function installAppStorage(input) {
     }
     values = next;
     if (!input.persistent) return Promise.resolve();
+    if (mutation.type === "clear") {
+      clear = true;
+      buffered.clear();
+    } else buffered.set(mutation.key, mutation.type === "set" ? mutation.value : null);
+    if (timer === undefined) timer = setTimeout(flush, input.batchMs);
+    return new Promise((resolve, reject) => callers.push({ resolve, reject }));
+  }
+  function flush() {
+    clearTimeout(timer);
+    timer = undefined;
+    if (callers.length === 0) return;
+    const batch = callers;
+    const mutation = { type: "batch", clear, values: Object.fromEntries(buffered) };
+    callers = [];
+    buffered.clear();
+    clear = false;
     const requestId = \`storage-\${++sequence}\`;
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        waiting.delete(requestId);
-        reject(new Error("The interface did not save App storage. Try again."));
-      }, input.timeoutMs);
-      waiting.set(requestId, {
-        resolve: () => {
-          clearTimeout(timeout);
-          resolve();
-        },
-        reject: (error) => {
-          clearTimeout(timeout);
-          reject(error);
-        }
-      });
-      host.postMessage({ catalystBridge: 1, type: "storage_write", session: input.session, requestId, mutation }, "*");
+    const timeout = setTimeout(() => {
+      waiting.delete(requestId);
+      for (const caller of batch) caller.reject(new Error("The interface did not save App storage. Try again."));
+    }, input.timeoutMs);
+    waiting.set(requestId, {
+      resolve: () => {
+        clearTimeout(timeout);
+        for (const caller of batch) caller.resolve();
+      },
+      reject: (error) => {
+        clearTimeout(timeout);
+        for (const caller of batch) caller.reject(error);
+      }
+    });
+    host.postMessage({ catalystBridge: 1, type: "storage_write", session: input.session, requestId, mutation }, "*");
+  }
+  // A frame can disappear before the host saves this message. These flushes are best effort.
+  if (input.persistent) {
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flush();
     });
   }
   if (input.persistent) window.addEventListener("message", (event) => {
@@ -103,7 +128,8 @@ export function appStorageBootstrap(input: AppStorageBootstrap): string {
   const data = JSON.stringify({
     ...input,
     maxBytes: APP_USER_STORAGE_MAX_BYTES,
-    timeoutMs: APP_STORAGE_WRITE_TIMEOUT_MS
+    timeoutMs: APP_STORAGE_WRITE_TIMEOUT_MS,
+    batchMs: 250
   }).replaceAll("<", "\\u003c");
   return `(${APP_STORAGE_SOURCE})(${data});`;
 }

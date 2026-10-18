@@ -1,20 +1,6 @@
+import { personalWorkspaceOwnerName } from "@work-shape/catalyst-core";
 import type { CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
 import type { TranslationContextValue } from "../i18n";
-
-/** German sets only an apostrophe after a name that ends in an s sound: "Felix' Arbeitsbereich". */
-const ENDS_IN_S_SOUND = /[sßxz]$/iu;
-
-/**
- * The first name in a person's display label. A label that is an e-mail address, as an
- * account without a name has, gives none.
- */
-function firstName(ownerLabel: string | undefined): string | undefined {
-  const label = ownerLabel?.trim() ?? "";
-  if (label === "" || label.includes("@")) {
-    return undefined;
-  }
-  return label.split(/\s+/u)[0];
-}
 
 /**
  * What a Personal Workspace is called in the interface: "Felix's workspace", after its owner.
@@ -25,15 +11,15 @@ export function personalCollaborationWorkspaceName(
   ownerLabel: string | undefined,
   translate: TranslationContextValue["t"]
 ): string {
-  const name = firstName(ownerLabel);
-  if (name === undefined) {
+  const owner = personalWorkspaceOwnerName(ownerLabel);
+  if (owner === undefined) {
     return translate("collaborationWorkspacePersonalName");
   }
   return translate(
-    ENDS_IN_S_SOUND.test(name)
+    owner.sibilant
       ? "collaborationWorkspacePersonalNameOfSibilant"
       : "collaborationWorkspacePersonalNameOf",
-    { name }
+    { name: owner.name }
   );
 }
 

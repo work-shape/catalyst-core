@@ -43,7 +43,14 @@ export async function mutateAppUserStorage(
     const { mutation } = input;
     if (mutation.type === "set") values.set(mutation.key, mutation.value);
     else if (mutation.type === "remove") values.delete(mutation.key);
-    else values.clear();
+    else if (mutation.type === "clear") values.clear();
+    else {
+      if (mutation.clear) values.clear();
+      for (const [key, value] of Object.entries(mutation.values)) {
+        if (value === null) values.delete(key);
+        else values.set(key, value);
+      }
+    }
     const next = Object.fromEntries(values);
     if (Buffer.byteLength(JSON.stringify(next), "utf8") > APP_USER_STORAGE_MAX_BYTES) {
       throw new AppError(

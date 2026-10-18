@@ -318,7 +318,10 @@ export interface AppUserStorageKey {
 }
 
 export type AppUserStorageMutation =
-  { type: "set"; key: string; value: string } | { type: "remove"; key: string } | { type: "clear" };
+  | { type: "set"; key: string; value: string }
+  | { type: "remove"; key: string }
+  | { type: "clear" }
+  | { type: "batch"; clear: boolean; values: Record<string, string | null> };
 
 /** Protects per-person state; larger business records belong in a Data Store. */
 export const APP_USER_STORAGE_MAX_BYTES = 64 * 1024;
