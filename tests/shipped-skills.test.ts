@@ -467,3 +467,22 @@ describe("the skills that ship with the platform", () => {
     expect(kept.config).not.toHaveProperty("origin");
   });
 });
+
+// The authoring skill is the first source an agent consults, including on diagnosis.
+it("teaches the App sandbox before sending an agent to the detailed guide", () => {
+  for (const rule of [
+    "allow-scripts allow-forms allow-downloads",
+    "without allow-same-origin",
+    "form-action 'none'",
+    "localStorage",
+    "storage.get/set",
+    "Data Stores",
+    "Network"
+  ])
+    expect(platformDocsSkill.content).toContain(rule);
+  const guide = platformDocsSkill.resources?.find(
+    (resource) => resource.path === "references/apps/build.md"
+  );
+  expect(guide?.content).toContain("SecurityError");
+  expect(guide?.content).toContain("event.preventDefault()");
+});
