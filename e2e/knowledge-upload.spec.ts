@@ -178,7 +178,7 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
     );
     try {
       await page.goto("/build/knowledge-bases");
-      await page.getByRole("button", { name: "New knowledge base", exact: true }).click();
+      await page.getByRole("button", { name: "New knowledge base", exact: true }).first().click();
       const dialog = page.getByRole("dialog");
       const checked = page.waitForResponse(
         (response) =>
