@@ -7,12 +7,13 @@ import {
   NoopAuditRecorder,
   type AuthenticatedUser,
   type JsonObject,
+  type JobControl,
   type OperationBatchFailure
 } from "@work-shape/catalyst-core";
 import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { manifest, refusal, useDataStoreWorld } from "./support/data-store-world";
 import { accessOf } from "./support/access";
-import { required } from "./support/assertions";
+import { eventually, required } from "./support/assertions";
 
 const schema = {
   path: "migrations/0001_objects.sql",
@@ -108,7 +109,7 @@ describe("REC-1a records projection through the public operation source", () => 
       replaced: undefined,
       access: accessOf(actorOf(world.clientInstanceId))
     });
-    await settle(world, kbId, 11);
+    await settle(world, kbId, 12);
     const source = connect((await recordOf(world, kbId)).location.database);
     const target = connect(world.record.location.database);
     async function item(
@@ -139,6 +140,178 @@ describe("REC-1a records projection through the public operation source", () => 
     }
     return { ...world, failures, kbId, source, target, item };
   }
+
+  async function migrateTogether(w: Awaited<ReturnType<typeof world>>, id: string) {
+    const handler = required(
+      w.dataStores.jobHandlers.find(({ kind }) => kind.kind === "data_store.migrate")
+    );
+    const jobs = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        db.store.jobs.enqueue(
+          handler.kind,
+          { storeId: id },
+          {
+            clientInstanceId: w.clientInstanceId,
+            dedupeKey: createPlatformId("probe")
+          }
+        )
+      )
+    );
+    const control: JobControl = {
+      leaseToken: "schema-probe",
+      signal: AbortSignal.timeout(10_000),
+      attempt: 1,
+      logger: w.logger,
+      transaction: (work) => db.store.transaction(work)
+    };
+    if ((await recordOf(w, id)).ownerKnowledgeBaseId) {
+      await Promise.all(jobs.map((job) => handler.bind(job).run(control)));
+    } else {
+      for (const job of jobs) await handler.bind(job).run(control);
+    }
+    expect((await recordOf(w, id)).failure).toBeUndefined();
+  }
+
+  it.each(["customer", "owned"] as const)(
+    "%s ensure is idempotent across repeated upgrades (owned attempts run five in parallel)",
+    async (kind) => {
+      const w = await world(`ensure-${kind}`);
+      const record = kind === "owned" ? await recordOf(w, w.kbId) : w.record;
+      const sql = connect(record.location.database);
+      await sql`drop function catalyst.project_record(text,jsonb)`;
+      if (kind === "owned") {
+        // Start before schema creation: even the losing CREATE/REVOKE attempts must be safe.
+        await sql.unsafe("drop schema catalyst_kb cascade");
+        await db.store.dataStores.putDataStore({ ...record, level: 0, migrations: [] });
+      } else await sql`alter table catalyst.record_fields drop column content_sha256`;
+      await migrateTogether(w, record.id);
+      const before =
+        await sql`select oid,prosrc,proowner,prosecdef,proconfig,proacl from pg_proc where oid='catalyst.project_record(text,jsonb)'::regprocedure`;
+      await migrateTogether(w, record.id);
+      expect(
+        await sql`select oid,prosrc,proowner,prosecdef,proconfig,proacl from pg_proc where oid='catalyst.project_record(text,jsonb)'::regprocedure`
+      ).toEqual(before);
+      expect(
+        await sql`select count(*)::int as n from information_schema.columns where table_schema='catalyst' and table_name='record_fields' and column_name='content_sha256'`
+      ).toEqual([{ n: 1 }]);
+      if (kind === "owned")
+        expect(await sql`select number from catalyst_kb.migrations order by number`).toHaveLength(
+          12
+        );
+    }
+  );
+
+  it.each(["customer", "owned"] as const)(
+    "%s store: eight concurrent proposals take no ACCESS EXCLUSIVE lock and run no DDL",
+    async (kind) => {
+      const w = await world(`concurrent-${kind}`);
+      if (kind === "owned") {
+        // The public operation is customer-only. Point its test definition at the owned
+        // database to exercise the very same writer after the owned upgrade path.
+        const owned = await recordOf(w, w.kbId);
+        await w.source.unsafe(schema.text);
+        await w.source.unsafe(
+          `grant select,insert,update,delete on objekt to "${owned.roles.app}"`
+        );
+        await db.store.dataStores.putDataStore({
+          ...w.record,
+          location: owned.location,
+          roles: owned.roles
+        });
+      }
+      const targetRecord = await recordOf(w, w.id);
+      const observer = connect(targetRecord.location.database);
+      const holder = await connect(targetRecord.location.database).reserve();
+      const items = await Promise.all(
+        Array.from({ length: 8 }, (_, n) =>
+          w.item(
+            `d${n}`,
+            "kaufvertrag",
+            { kaufpreis: 100 + n },
+            "2026-10-18",
+            `/Objekte/${1400 + n}/file.pdf`
+          )
+        )
+      );
+      await observer.unsafe(`create function public.no_propose_ddl() returns event_trigger language plpgsql as $body$
+        begin raise exception 'DDL in records.propose'; end $body$;
+        create event trigger no_propose_ddl on ddl_command_end execute function public.no_propose_ddl();`);
+      await holder`begin`;
+      await holder`lock table catalyst.record_fields in access share mode`;
+      let finished = false;
+      const pending = Promise.allSettled(
+        items.map((item, n) =>
+          call(w, "records.propose", { table: "objekt", items: [item] }, `parallel-${n}`)
+        )
+      ).then((results) => {
+        finished = true;
+        return results;
+      });
+      let exclusiveLocks: { mode: string }[] = [];
+      try {
+        await eventually(async () => {
+          exclusiveLocks = await observer<
+            { mode: string }[]
+          >`select mode from pg_locks where relation='catalyst.record_fields'::regclass and mode='AccessExclusiveLock'`;
+          expect(finished || exclusiveLocks.length > 0).toBe(true);
+        });
+        expect(exclusiveLocks).toEqual([]);
+      } finally {
+        await holder`rollback`;
+        holder.release();
+        await pending;
+        await observer.unsafe("drop event trigger no_propose_ddl");
+        if (kind === "owned") await db.store.dataStores.putDataStore(w.record);
+      }
+      const results = await pending;
+      for (const result of results) if (result.status === "rejected") throw result.reason;
+      expect(results.map((result) => result.status)).toEqual(Array(8).fill("fulfilled"));
+      for (const result of results)
+        if (result.status === "fulfilled")
+          expect(result.value).toMatchObject({ done: 1, failed: 0 });
+      expect(await observer`select count(*)::int as n from objekt`).toEqual([{ n: 8 }]);
+      expect(await observer`select count(*)::int as n from catalyst.record_fields`).toEqual([
+        { n: 8 }
+      ]);
+    }
+  );
+
+  it.each(["column", "frame"] as const)(
+    "refuses a missing %s with a named EN/DE upgrade message and never repairs it",
+    async (missing) => {
+      const w = await world(`missing-${missing}`);
+      if (missing === "column")
+        await w.target`alter table catalyst.record_fields drop column content_sha256`;
+      else await w.target`drop function catalyst.project_record(text,jsonb)`;
+      for (const locale of ["en", "de"] as const) {
+        const error = await refusal(
+          call(w, "records.propose", { table: "objekt", items: [] }, undefined, locale)
+        );
+        expect(error).toMatchObject({
+          code: "CONFLICT",
+          details: { reason: "record_store_upgrade_required", store: "findings" }
+        });
+        expect(error.message).toContain("findings");
+        expect(error.message).toContain(
+          locale === "de" ? "benötigt sein Upgrade" : "needs its upgrade"
+        );
+      }
+      expect(await w.target`select count(*)::int as n from catalyst.loads`).toEqual([{ n: 0 }]);
+    }
+  );
+
+  it("refuses an app-owned frame changed to SECURITY INVOKER by an earlier trigger", async () => {
+    const w = await world("frame-flags");
+    const item = await w.item("af", "kaufvertrag", { kaufpreis: 100 });
+    await w.target
+      .unsafe(`create function public.change_frame() returns trigger language plpgsql as $body$
+      begin alter function catalyst.project_record(text,jsonb) security invoker; return new; end $body$;
+      create trigger change_frame after insert on objekt for each row execute function public.change_frame();`);
+    expect(
+      await refusal(call(w, "records.propose", { table: "objekt", items: [item] }))
+    ).toMatchObject({ details: { sqlState: "42501" } });
+    expect(await w.target`select count(*)::int as n from objekt`).toEqual([{ n: 0 }]);
+  });
 
   it("check 84: merges Exposé, Kaufvertrag and Baubeschreibung, projects one row, flags Widerspruch and Objekt zuordnen, and lists Gefüllt von with the Knowledge Base", async () => {
     const w = await world("check84");

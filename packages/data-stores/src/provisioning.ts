@@ -1,4 +1,5 @@
-import { RECORD_FIELDS_SCHEMA } from "./records/schema";
+import { RECORD_PROJECTION_SCHEMA } from "./records/projection-schema";
+import { RECORD_FIELDS_SCHEMA, RECORD_FIELDS_CONTENT_HASH } from "./records/schema";
 import { callRecordsSetup } from "./calls";
 import { z } from "zod";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
@@ -155,6 +156,7 @@ export async function ensureStoreSchema(
           ].join(";\n")
         );
       }
+      await sql.run("select set_config('catalyst.records_app_role', $1, true)", [record.roles.app]);
       await sql.script(
         `revoke all on schema public from public;
          grant usage, create on schema public to ${migration};
@@ -171,7 +173,9 @@ export async function ensureStoreSchema(
          grant usage on schema catalyst to ${migration};
          grant insert on catalyst.migrations to ${migration};
          ${callRecordsSetup(record.roles.app)};
-         ${RECORD_FIELDS_SCHEMA}`
+         ${RECORD_FIELDS_SCHEMA}
+         ${RECORD_FIELDS_CONTENT_HASH}
+         ${RECORD_PROJECTION_SCHEMA}`
       );
     }
   );
