@@ -21,10 +21,22 @@ import {
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
+import {
+  narrativeHolds,
+  PublishDetails,
+  PublishNarrativeReadLead,
+  type PublishNarrativeRead
+} from "../../shared/publish-narrative";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../../shared/routes";
 import { AppDraftActions } from "./actions-view";
-import { useApp, useAppPublishData, useAppWrites, type AppPublishDataRead } from "./app-data";
+import {
+  useApp,
+  useAppPublishData,
+  useAppPublishNarrative,
+  useAppWrites,
+  type AppPublishDataRead
+} from "./app-data";
 import { AppDraftFiles } from "./app-draft-files";
 import { AppDeleteDialog, AppFrame, AppHeader, NameList } from "./app-header";
 import {
@@ -564,6 +576,9 @@ export function AppEditFrame({
   );
 }
 
+/** A dialog asked without the instance's sentence, as in a sample. */
+const NO_NARRATIVE: PublishNarrativeRead = { status: "none" };
+
 type PublishDialogProps = {
   name: string;
   workspace: AppsWorkspace;
@@ -580,14 +595,18 @@ type PublishDialogProps = {
  * first publish or an older revision from the revisions drawer.
  */
 function AskedPublishDialog({ app, ...props }: PublishDialogProps & { app: string }) {
+  const narrative = useAppPublishNarrative(props.workspace.id, app, props.ask.revision);
   return props.ask.readsStoredData ? (
-    <PublishDialogWithData app={app} {...props} />
+    <PublishDialogWithData app={app} {...props} narrative={narrative} />
   ) : (
-    <PublishDialog {...props} />
+    <PublishDialog {...props} narrative={narrative} />
   );
 }
 
-function PublishDialogWithData({ app, ...props }: PublishDialogProps & { app: string }) {
+function PublishDialogWithData({
+  app,
+  ...props
+}: PublishDialogProps & { app: string; narrative: PublishNarrativeRead }) {
   return <PublishDialog {...props} storedData={useAppPublishData(app, props.ask.revision)} />;
 }
 
@@ -604,20 +623,36 @@ export function PublishDialog({
   loading,
   error,
   storedData,
+  narrative = NO_NARRATIVE,
   onConfirm,
   onClose
 }: PublishDialogProps & {
   /** The lines on stored data, read for `ask.revision`. Absent where it reads none. */
   storedData?: AppPublishDataRead;
+  /** The instance's sentence on the publish, read for `ask.revision`. */
+  narrative?: PublishNarrativeRead;
 }) {
   const { t } = useTranslation();
-  const waitsForData = storedData !== undefined && storedData.status !== "ready";
+  const waitsForData =
+    (storedData !== undefined && storedData.status !== "ready") || narrativeHolds(narrative);
+  const body = t("apps.publishBody", { number: ask.revision, workspace: workspace.name });
+  const lists = (
+    <KeyValueList>
+      <KeyValue label={t("apps.publishConnections")}>
+        <NameList names={ask.summary.connections} />
+      </KeyValue>
+      <KeyValue label={t("apps.publishHosts")}>
+        <NameList names={ask.summary.hosts} />
+      </KeyValue>
+      {storedData ? <AppPublishDataView read={storedData} /> : null}
+    </KeyValueList>
+  );
   return (
     <Dialog
       open
       size="sm"
       title={t("apps.publishTitle", { name })}
-      description={t("apps.publishBody", { number: ask.revision, workspace: workspace.name })}
+      {...(narrative.status === "none" ? { description: body } : {})}
       onClose={onClose}
       footer={
         <>
@@ -631,15 +666,18 @@ export function PublishDialog({
       }
     >
       <div className="grid gap-3">
-        <KeyValueList>
-          <KeyValue label={t("apps.publishConnections")}>
-            <NameList names={ask.summary.connections} />
-          </KeyValue>
-          <KeyValue label={t("apps.publishHosts")}>
-            <NameList names={ask.summary.hosts} />
-          </KeyValue>
-          {storedData ? <AppPublishDataView read={storedData} /> : null}
-        </KeyValueList>
+        <PublishNarrativeReadLead read={narrative} />
+        {narrative.status === "none" ? (
+          lists
+        ) : (
+          // The sentence leads; which revision goes live where is a detail of it.
+          <PublishDetails>
+            <p className="text-body text-muted-foreground" data-testid="app-publish-body">
+              {body}
+            </p>
+            {lists}
+          </PublishDetails>
+        )}
         {error ? <InlineError>{error}</InlineError> : null}
       </div>
     </Dialog>

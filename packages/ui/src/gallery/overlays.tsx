@@ -155,12 +155,16 @@ function DrawerSamples({ text }: { text: GalleryText }) {
 interface ConfirmSample {
   tone: ConfirmDialogTone;
   loading: boolean;
+  /** The question cannot be answered yet: its confirm button is held. */
+  notYet?: boolean;
 }
 
 function ConfirmDialogSamples({ text }: { text: GalleryText }) {
   const [sample, setSample] = useState<ConfirmSample | undefined>(undefined);
   const close = () => setSample(undefined);
   const danger = sample?.tone !== "primary";
+  const publishBody = sample?.notYet === true ? text.confirmNotYetBody : text.confirmPublishBody;
+  const body = danger ? text.confirmDeleteBody : publishBody;
   return (
     <Samples>
       <Button variant="outline" onClick={() => setSample({ tone: "danger", loading: false })}>
@@ -172,16 +176,23 @@ function ConfirmDialogSamples({ text }: { text: GalleryText }) {
       <Button variant="outline" onClick={() => setSample({ tone: "danger", loading: true })}>
         {text.confirmWhileRunning}
       </Button>
+      <Button
+        variant="outline"
+        onClick={() => setSample({ tone: "primary", loading: false, notYet: true })}
+      >
+        {text.confirmNotYet}
+      </Button>
       <ConfirmDialog
         open={sample !== undefined}
         tone={sample?.tone}
         loading={sample?.loading}
+        confirmDisabled={sample?.notYet === true}
         title={danger ? text.confirmDeleteTitle : text.confirmPublishTitle}
         confirmLabel={danger ? text.delete : text.publish}
         onConfirm={close}
         onClose={close}
       >
-        {danger ? text.confirmDeleteBody : text.confirmPublishBody}
+        {body}
       </ConfirmDialog>
     </Samples>
   );

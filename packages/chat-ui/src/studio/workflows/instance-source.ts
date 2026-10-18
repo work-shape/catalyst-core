@@ -163,6 +163,17 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
         );
       }
     },
+    // The sentence on a publish is the one the asset read of that revision words.
+    publishNarrative: {
+      read: async (workflow, revision, signal) =>
+        (
+          await client.assets.get({
+            params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
+            query: { revision: String(revision) },
+            signal
+          })
+        ).publishNarrative
+    },
     // A draft is published and discarded as the draft of any asset is.
     drafts: {
       publish: async (workflow, revision) => {

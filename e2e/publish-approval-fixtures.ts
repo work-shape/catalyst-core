@@ -30,7 +30,7 @@ const databaseUrl =
  * operation grants the rights of an App yet (RIGHTS-1c), and the Apps area offers what the
  * instance-wide rights allow. Answers how to take them back.
  */
-async function allowOnInstance(
+export async function allowOnInstance(
   email: string,
   actions: readonly string[]
 ): Promise<() => Promise<void>> {
@@ -166,7 +166,7 @@ export interface WaitingPublish {
  * publisher, holding the rights to write and publish Apps and not to approve, clicks Publish,
  * and the revision waits.
  */
-export async function memberPublishesApp(
+async function memberPublishesApp(
   page: Page,
   browser: Browser,
   baseURL: string | undefined,
@@ -194,7 +194,7 @@ export async function memberPublishesApp(
  * The admin finds the waiting publish in the Inbox with what it makes live, approves it, and
  * that revision is live.
  */
-export async function approvePublishInInbox(page: Page, waiting: WaitingPublish): Promise<void> {
+async function approvePublishInInbox(page: Page, waiting: WaitingPublish): Promise<void> {
   const { app, appUrl, workspaceId } = waiting;
   await page.goto("/inbox");
   const inbox = page.getByRole("region", { name: "Inbox", exact: true });
@@ -211,4 +211,22 @@ export async function approvePublishInInbox(page: Page, waiting: WaitingPublish)
   await page.locator('button[data-decision="approve"]').click();
   await expect(page.getByTestId("inbox-item")).toContainText("Decision by E2E Superadmin");
   await expect.poll(() => publishedRevisionOf(page, appUrl, workspaceId)).toBe(1);
+}
+
+/** The published App scenario, kept with the setup and cleanup it owns. */
+export async function approveMemberPublish(
+  {
+    page,
+    browser,
+    baseURL,
+    pageErrors
+  }: { page: Page; browser: Browser; baseURL: string | undefined; pageErrors: PageErrorWatch },
+  attempt: number
+): Promise<void> {
+  const waiting = await memberPublishesApp(page, browser, baseURL, pageErrors, attempt);
+  try {
+    await approvePublishInInbox(page, waiting);
+  } finally {
+    await waiting.end();
+  }
 }

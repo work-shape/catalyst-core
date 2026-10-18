@@ -442,6 +442,44 @@ test("a confirmation names its object and holds both buttons while the action ru
   await entry.getByRole("button", { name: "While it runs" }).click();
   await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
   await expect(dialog.locator('button[aria-busy="true"]')).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  // A question that cannot be answered yet holds its confirm button and nothing else.
+  await entry.getByRole("button", { name: "Not yet answerable" }).click();
+  const notYet = root.getByRole("dialog", { name: "Publish Support assistant?" });
+  await expect(notYet.getByRole("button", { name: "Publish" })).toBeDisabled();
+  await expect(notYet.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  await notYet.getByRole("button", { name: "Cancel" }).click();
+  await expect(notYet).toBeHidden();
+});
+
+test("a disclosure kept mounted stays in the page while folded and folds as any other", async ({
+  page
+}) => {
+  await signInViaApi(page, adminUser);
+  await page.goto("/ui-library");
+  await openSection(page, "Page structure");
+  const root = page.locator("[data-gallery-mode]").first();
+  const entry = root.locator('[data-gallery-entry="Disclosure"]');
+  const trigger = entry.getByRole("button", { name: "Details, read while folded" }).first();
+  const content = entry.locator("[data-gallery-kept-mounted]").first();
+  const body = content.getByText("This stays in the page while folded");
+
+  // Folded, the content is in the page and hidden from sight and from assistive technology.
+  await expect(content).toBeAttached();
+  await expect(content).toHaveAttribute("data-state", "closed");
+  await expect(body).toBeHidden();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  for (let round = 0; round < 2; round += 1) {
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(body).toBeVisible();
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await expect(body).toBeHidden();
+    await expect(content).toBeAttached();
+  }
 });
 
 test("form controls show the strong edge and a field wires its control", async ({ page }) => {

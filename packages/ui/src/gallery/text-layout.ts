@@ -92,6 +92,8 @@ export interface LayoutGalleryText {
   disclosureErrors: string;
   disclosureErrorOne: string;
   disclosureErrorTwo: string;
+  disclosureKeptMounted: string;
+  disclosureKeptMountedBody: string;
   saveChanges: string;
   saveSaved: string;
   saveHint: string;
@@ -283,6 +285,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     disclosureErrors: "Two build errors",
     disclosureErrorOne: "The file index.html is missing.",
     disclosureErrorTwo: "The script has a syntax error in line 12.",
+    disclosureKeptMounted: "Details, read while folded",
+    disclosureKeptMountedBody:
+      "This stays in the page while folded, so what it reads is read at once.",
     saveChanges: "Save changes",
     saveSaved: "Changes saved",
     saveHint: "Changes apply to new conversations at once.",
@@ -474,6 +479,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     disclosureErrors: "Zwei Build-Fehler",
     disclosureErrorOne: "Die Datei index.html fehlt.",
     disclosureErrorTwo: "Das Skript hat einen Syntaxfehler in Zeile 12.",
+    disclosureKeptMounted: "Details, auch zugeklappt gelesen",
+    disclosureKeptMountedBody:
+      "Das bleibt zugeklappt in der Seite, so wird sofort gelesen, was es liest.",
     saveChanges: "Änderungen speichern",
     saveSaved: "Änderungen gespeichert",
     saveHint: "Änderungen gelten sofort für neue Unterhaltungen.",

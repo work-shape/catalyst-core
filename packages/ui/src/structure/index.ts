@@ -12,6 +12,7 @@ export {
   Disclosure,
   DisclosureContent,
   DisclosureTrigger,
+  type DisclosureContentProps,
   type DisclosureProps,
   type DisclosureVariant
 } from "./disclosure";

@@ -375,6 +375,13 @@ jobs:
           name: app-font-specimens-${{ matrix.shard }}
           path: test-results/**/font-specimens-*-light.png
           retention-days: 3
+      - name: Keep publish-question evidence
+        if: ${{ !cancelled() && hashFiles('test-results/**/pubq-1-*.png') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: publish-question-${{ matrix.shard }}
+          path: test-results/**/pubq-1-*.png
+          retention-days: 3
       - name: Keep traces and the server log of a failed run
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
