@@ -2,7 +2,7 @@ name: Set up a check consumer
 description: Install from the pnpm cache and optionally restore this run's shared build.
 inputs:
   build:
-    description: Restore the build artifact produced by this run.
+    description: Restore the cached build produced by this run.
     default: "true"
 runs:
   using: composite
@@ -15,12 +15,19 @@ runs:
     - name: Install
       shell: bash
       run: pnpm install --frozen-lockfile
-    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+    # No restore keys: another run or commit must never supply this build.
+    - uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+      id: build-cache
       if: inputs.build == 'true'
       with:
-        name: check-build
-        path: ${{ runner.temp }}/check-build
+        path: /tmp/check-build.tgz
+        key: check-build-${{ github.run_id }}-${{ github.sha }}
+        fail-on-cache-miss: true
     - name: Restore build
       if: inputs.build == 'true'
       shell: bash
-      run: tar -xzf "$RUNNER_TEMP/check-build/check-build.tgz"
+      env:
+        CACHE_HIT: ${{ steps.build-cache.outputs.cache-hit }}
+      run: |
+        test "$CACHE_HIT" = true
+        tar -xzf /tmp/check-build.tgz
