@@ -112,7 +112,7 @@ export async function appAudienceReview(
 
 /** Only me selects the person publishing. A legacy request without a choice keeps the live
  * recipient instead, so omission never silently hands somebody else the private App. */
-export function appAudiencePerson(
+function appAudiencePerson(
   actor: AuthenticatedIdentity,
   asset: ConfigAssetRecord,
   chosen: AppAudience | undefined,

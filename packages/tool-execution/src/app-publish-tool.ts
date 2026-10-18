@@ -1,4 +1,4 @@
-import { APP_AUDIENCES } from "@work-shape/catalyst-asset-schemas";
+import { APP_AUDIENCES } from "@work-shape/catalyst-core";
 import { defineTool, toolFailed } from "@work-shape/catalyst-tool-sdk";
 import { z } from "zod";
 

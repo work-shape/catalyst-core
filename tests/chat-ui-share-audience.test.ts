@@ -245,7 +245,7 @@ describe("check 80: the Inbox item of a held App publish names the chosen audien
     );
   });
 
-  it("says whether the publish widens the App's reach, in both languages", () => {
+  it("says whether the publish widens access, in both languages", () => {
     const widening = (widens: unknown, locale: "en" | "de" = "en") =>
       renderItem(
         {
@@ -275,12 +275,12 @@ describe("check 80: the Inbox item of a held App publish names the chosen audien
         },
         { locale }
       );
-    expect(widening(true)).toContain(
-      "Its reach widens: people who cannot use the app now can use it after this."
+    expect(widening(true)).toContain(">This publish widens access.<");
+    expect(widening(false)).toContain(">This publish does not widen access.<");
+    expect(widening(true, "de")).toContain(">Diese Veröffentlichung erweitert den Zugriff.<");
+    expect(widening(false, "de")).toContain(
+      ">Diese Veröffentlichung erweitert den Zugriff nicht.<"
     );
-    expect(widening(false)).toContain("Its reach does not widen: nobody new can use the app.");
-    expect(widening(true, "de")).toContain("Die Reichweite wird größer:");
-    expect(widening(false, "de")).toContain("Die Reichweite wird nicht größer:");
     expect(at(widening(true), 'data-testid="publish-review-widens"')).toBeGreaterThan(
       at(widening(true), 'data-testid="publish-review-audience"')
     );

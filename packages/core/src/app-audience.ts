@@ -1,4 +1,5 @@
 import { APP_AUDIENCES } from "@work-shape/catalyst-asset-schemas";
+export { APP_AUDIENCES };
 /** The audience of an App's live revision, stored in its existing availability. */
 export type AppAudience = (typeof APP_AUDIENCES)[number];
 
