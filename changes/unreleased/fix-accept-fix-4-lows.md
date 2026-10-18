@@ -7,4 +7,6 @@ section: Fixed
 - Share attachment-only conversation title placeholders between title replacement and the chat dictionary.
 - Keep Knowledge Base embedding and field-extraction ingestion usage out of chat safeguard and spend counters, including settlement, lazy initialization and reconciliation, as required by KB-ISO and the limits spec section 3.1. Query embeddings still count as chat.
 
+- Use settled daily and monthly spend excluding Knowledge Base ingestion for Usage budget bars and headroom; keep ingestion costs in totals, history and attribution.
+
 Rollback restores the higher token defaults and can count ingestion against chat again; reconciliation must complete to correct counters left by the previous release. No migration is required. Assemble the paired capabilities change after this core change to classify KB field-extraction calls as `knowledge_field_extraction`; older capabilities keep their existing classification.

@@ -421,6 +421,12 @@ export interface ModelUsageEventStore {
   summarizeModelUsageHistory(input: {
     clientInstanceId: ClientInstanceId;
   }): Promise<ModelUsageHistory>;
+  /** Settled spend for chat budgets, excluding Knowledge Base ingestion, from daily rollups. */
+  summarizeModelUsageBudget(input: {
+    clientInstanceId: ClientInstanceId;
+    todayStart: ISODateString;
+    currentMonthStart: ISODateString;
+  }): Promise<{ dailySpentMicros: number; monthlySpentMicros: number }>;
   /** The sums of the days from `from` on. Reads no usage event. */
   summarizeRecentModelUsage(input: {
     clientInstanceId: ClientInstanceId;

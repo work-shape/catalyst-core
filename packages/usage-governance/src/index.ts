@@ -120,6 +120,9 @@ export interface SafeCostedModelUsageEvent extends SafeModelUsageEvent {
 }
 
 export interface SafeUsageSpendBudget {
+  /** Settled spend counted toward chat budgets; Knowledge Base ingestion is excluded. */
+  dailySpentMicros: number;
+  monthlySpentMicros: number;
   currency?: string;
   dailyLimitMicros?: number;
   monthlyLimitMicros?: number;
@@ -286,7 +289,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   }): Promise<SafeUsageSummary> {
     const now = input.now ?? new Date();
     const { todayStart, currentMonthStart } = createModelUsageWindowBounds(now);
-    const [history, recent, recentEvents] = await Promise.all([
+    const [history, recent, recentEvents, budgetSpend] = await Promise.all([
       this.store.summarizeModelUsageHistory({ clientInstanceId: input.clientInstanceId }),
       this.store.summarizeRecentModelUsage({
         clientInstanceId: input.clientInstanceId,
@@ -295,6 +298,11 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       this.store.listModelUsageEvents({
         clientInstanceId: input.clientInstanceId,
         limit: RECENT_EVENT_COUNT
+      }),
+      this.store.summarizeModelUsageBudget({
+        clientInstanceId: input.clientInstanceId,
+        todayStart,
+        currentMonthStart
       })
     ]);
     const rateCard = this.costs.customer;
@@ -339,6 +347,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     return {
       generatedAt: now.toISOString(),
       spendBudget: {
+        ...budgetSpend,
         ...(rateCard?.currency ? { currency: rateCard.currency } : {}),
         ...(this.budget.dailySpendLimit === undefined
           ? {}
