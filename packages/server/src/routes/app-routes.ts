@@ -4,6 +4,7 @@ import {
   PAGE_FILE_SET_HELD_KEY,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
+  type AppUserStorageMutation,
   asUserId,
   asCollaborationWorkspaceId
 } from "@work-shape/catalyst-core";
@@ -97,17 +98,15 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     changeClass: "reversible",
     defaultPolicy: "allow",
     // The token and personal value never enter a held input, fingerprint or audit row.
-    inputWithoutSecrets: ({ pageSessionId, fileSetId, mutation }) => ({
-      pageSessionId,
-      fileSetId,
-      token: "[redacted]",
-      mutation:
-        mutation.type === "set"
+    inputWithoutSecrets: (input) => {
+      const mutation: AppUserStorageMutation =
+        input.mutation.type === "set"
           ? { type: "set", key: "[redacted]", value: "[redacted]" }
-          : mutation.type === "remove"
+          : input.mutation.type === "remove"
             ? { type: "remove", key: "[redacted]" }
-            : { type: "clear" }
-    }),
+            : { type: "clear" };
+      return { ...input, token: "[redacted]", mutation };
+    },
     authorize: async (input, { actor, access }) => {
       if (isAuthenticatedServicePrincipal(actor))
         return { allowed: false, action: "apps.sessions.write_storage", reason: "no_grant" };

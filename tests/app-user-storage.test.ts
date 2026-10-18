@@ -35,11 +35,11 @@ describe("private App storage", () => {
     const other = await t.openApp(t.admin.id, "draft");
     expectStatus(await write(t.kai.id, frame, { type: "clear" }), 200);
     expectStatus(await write(t.admin.id, other, { type: "clear" }), 200);
-    for (const response of await Promise.all([
+    const writes = await Promise.all([
       write(t.kai.id, frame, { type: "set", key: "leave", value: '"2026-11-01"' }),
       write(t.kai.id, frame, { type: "set", key: "notes", value: '"Cover arranged"' })
-    ]))
-      expectStatus(response, 200);
+    ]);
+    for (const response of writes) expectStatus(response, 200);
     expect(await t.stores.pages.getAppUserStorage(await key(t.kai.id))).toEqual({
       leave: '"2026-11-01"',
       notes: '"Cover arranged"'
@@ -48,7 +48,12 @@ describe("private App storage", () => {
     const recorded = (await t.stores.operationRuns.list({ clientInstanceId })).filter(
       (run) => run.operation === "apps.sessions.write_storage"
     );
-    expect(recorded.length).toBeGreaterThan(0);
+    const ids = writes.map((response) => response.headers["operation-run-id"]);
+    const savedRuns = recorded.filter((run) => ids.includes(run.id));
+    expect(savedRuns).toHaveLength(2);
+    // Different private keys and values have the same redacted fingerprint: a retained
+    // fast hash must not let an operator guess someone's low-entropy preference.
+    expect(new Set(savedRuns.map((run) => run.inputHash)).size).toBe(1);
     expect(JSON.stringify(recorded)).not.toContain("Cover arranged");
     expect(JSON.stringify(recorded)).not.toContain(frame.proof.token);
     const loaded = await callTestPath(
