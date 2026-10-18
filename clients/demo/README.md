@@ -391,8 +391,9 @@ sample's own wording. Logs contain only `REST <status>`, never query values, hea
 The Connection declares `listClients` (Gateway), `listFiscalYears` (Gateway), `listPostings`
 (Enterprise), and `listAccountPostings` (Gateway), exposed to Workflows, agents and App
 bridges. Each description tells the caller where the ids come from and how to page.
-`listPostings.filter` is a single string until CS-5e adds array query parameters; direct REST
-already accepts repeated keys. No operation declares automatic `paging` until EW-13p.
+`listPostings.filter` is an array: each value goes out as one repeated `filter` key, as
+direct REST takes it, so one client's month is three values. `listPostings` declares
+`paging` by page, so a paged Workflow step reads that month to its short last page.
 
 All fault switches are off unless set. They affect REST reads; the volume divisor affects
 the shared MCP/REST generator. Health does not spend the rate window or fail under the
