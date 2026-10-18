@@ -25,7 +25,7 @@ import { BuildWithAgentEmptyState, type BuildWithAgentCopy } from "../build-with
 import { RouteLink } from "../route-link";
 import { useStartRun } from "./start-run";
 import { useRunsAvailable, useWorkflowList, type WorkflowList } from "./workflow-data";
-import { listedToReader, startOffered } from "./workflow-model";
+import { doneWithFailedRuns, listedToReader, startOffered } from "./workflow-model";
 import type { WorkflowListItem } from "./workflow-views";
 import { LoadError, RunStateBadge, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
@@ -276,7 +276,10 @@ function WorkflowCard({
           ) : (
             <>
               <span>{t("workflows.lastRun")}</span>
-              <RunStateBadge status={lastRun.status} />
+              <RunStateBadge
+                status={lastRun.status}
+                withFailedEntries={doneWithFailedRuns(lastRun)}
+              />
               {/* The full date stays reachable as a tooltip above the card's target. */}
               {lastRun.startedAt === undefined ? null : (
                 <CardReachable>

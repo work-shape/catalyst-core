@@ -1,5 +1,9 @@
-/** How far one part of a graph has come. `idle` is a part that is only described. */
-export type FlowStatus = "idle" | "running" | "waiting" | "done" | "failed" | "skipped";
+/**
+ * How far one part of a graph has come. `idle` is a part that is only described.
+ * `doneWithFailures` is a repeated part that ended with some of its entries failed.
+ */
+export type FlowStatus =
+  "idle" | "running" | "waiting" | "done" | "doneWithFailures" | "failed" | "skipped";
 
 /** What a connector says: nothing, that it was taken, that it is being taken, or that it was not. */
 export type FlowEdgeState = "rest" | "done" | "active" | "skipped";

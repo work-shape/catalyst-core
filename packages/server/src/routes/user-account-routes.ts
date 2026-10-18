@@ -35,7 +35,8 @@ export function registerUserAccountRoutes(route: Route, options: ResolvedChatSer
 
   route(apiOperations["me.update"], async ({ user, access, context, body }) => {
     const updated = await userAccount.updateCurrentUser(user, context, {
-      displayLabel: body.displayLabel
+      ...(body.displayLabel === undefined ? {} : { displayLabel: body.displayLabel }),
+      ...(body.locale === undefined ? {} : { locale: body.locale })
     });
     return {
       ...updated,

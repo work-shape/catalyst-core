@@ -23,7 +23,7 @@ export function conversationIdParam(params: { conversationId: string }): Convers
 }
 
 export function resolveRequestLocale(
-  options: ChatServerOptions,
+  options: Pick<ChatServerOptions, "config">,
   request: FastifyRequest,
   requestedLocale?: string
 ): LocaleCode {

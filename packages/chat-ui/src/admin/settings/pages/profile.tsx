@@ -22,7 +22,12 @@ type Notice = { tone: "error" | "success"; text: string };
 export function ProfilePage() {
   const { t } = useTranslation();
   const { apiBaseUrl, authScope, client, user, onAccountDeleted } = useSettingsPage();
-  const updateProfile = useUpdateCurrentUserMutation({ apiBaseUrl, authScope, client });
+  const updateProfile = useUpdateCurrentUserMutation({
+    apiBaseUrl,
+    authScope,
+    client,
+    userId: user.id
+  });
   const deleteAccount = useDeleteCurrentUserMutation({
     apiBaseUrl,
     authScope,

@@ -55,6 +55,12 @@ interface PlatformAssetIssue {
   code?: string;
 }
 
+/** Something a check names that refuses nothing, such as a run key without a rules revision. */
+interface PlatformAssetWarning {
+  code: string;
+  message: string;
+}
+
 /** The asset of a conversation as its agent reads it. */
 interface PlatformAssetRead {
   kind: string;
@@ -188,7 +194,7 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls, AppSaveCalls
     context: ToolExecutionContext,
     config: Record<string, unknown>,
     named?: ConversationSubject
-  ): Promise<{ issues: PlatformAssetIssue[] }>;
+  ): Promise<{ issues: PlatformAssetIssue[]; warnings?: PlatformAssetWarning[] }>;
   /**
    * Saves the subject's draft at `expectedRevision`, or the draft of the asset `kind` and
    * `name` name where this conversation created it. Without a revision it creates the asset
@@ -292,7 +298,11 @@ const openOutputSchema = readOutputSchema.extend({
   title: z.string(),
   awaitsPerson: z.literal(true).optional()
 });
-const validateOutputSchema = z.object({ valid: z.boolean(), issues: z.array(issueSchema) });
+const validateOutputSchema = z.object({
+  valid: z.boolean(),
+  issues: z.array(issueSchema),
+  warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional()
+});
 const putOutputSchema = z.union([
   z.object({
     saved: z.literal(true),
@@ -463,6 +473,7 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       description: [
         "Check a definition without saving it. Answers what a save of it would be refused for: each issue with the path of the value, a sentence and, where the check names one, a code.",
         "The checks are the ones a save runs. An empty list means a save of this config passes them.",
+        "A warning refuses nothing: correct what it names, or tell the person about it.",
         BOUND
       ].join(" "),
       inputSchema: z.object({
@@ -478,9 +489,13 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       }),
       outputSchema: validateOutputSchema,
       async execute(input, context) {
-        const { issues } = await calls.validate(context, input.config, createdDraftOf(input));
+        const { issues, warnings } = await calls.validate(
+          context,
+          input.config,
+          createdDraftOf(input)
+        );
         return toolSuccess(
-          { valid: issues.length === 0, issues },
+          { valid: issues.length === 0, issues, ...(warnings ? { warnings } : {}) },
           { auditSummary: { action: validate.name, metadata: { issueCount: issues.length } } }
         );
       }

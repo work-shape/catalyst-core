@@ -267,7 +267,7 @@ const VERBS: Record<string, Verb> = {
     }
   },
   publish: {
-    usage: "publish <name> --revision <n> [--confirm <blocked>]",
+    usage: "publish <name> --revision <n> [--yes] [--confirm <blocked>]",
     summary:
       "Make one revision the one its users are served (assets.publish). A guardrail shows its dry run first; an App or a Workflow asks you first",
     named: true,
@@ -306,6 +306,9 @@ const VERBS: Record<string, Verb> = {
           const answer = await askBeforePublish(session.options, { ...asked, yes: values.yes });
           if (answer === "refused") return EXIT.refused;
           unattended = answer === "unattended";
+        } else if (values.yes && session.kind.kind === "data_store") {
+          // As for other publishes, --yes sends an unattended request; a held one exits 3.
+          unattended = true;
         } else if (values.yes) {
           throw new UsageError(
             agent

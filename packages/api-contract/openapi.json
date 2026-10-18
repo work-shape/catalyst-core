@@ -20026,6 +20026,16 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "failedDescendantCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "failedItemCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -20359,6 +20369,16 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "failedDescendantCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "failedItemCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -21068,6 +21088,9 @@
                           "linkedRunId": {
                             "type": "string"
                           },
+                          "childRunId": {
+                            "type": "string"
+                          },
                           "error": {
                             "type": "object",
                             "properties": {
@@ -21316,6 +21339,16 @@
                           "lastRun": {
                             "type": "object",
                             "properties": {
+                              "failedDescendantCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "failedItemCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
                               "id": {
                                 "type": "string"
                               },
@@ -21680,6 +21713,16 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "failedDescendantCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "failedItemCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
                           "id": {
                             "type": "string"
                           },
@@ -22041,6 +22084,16 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "failedDescendantCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "failedItemCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -22425,6 +22478,16 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "failedDescendantCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "failedItemCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -26662,6 +26725,9 @@
           },
           "emailVerified": {
             "type": "boolean"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/LocaleCode"
           },
           "instanceAdminName": {
             "type": "string"
@@ -35920,11 +35986,18 @@
           "displayLabel": {
             "type": "string",
             "minLength": 1
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocaleCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
-        },
-        "required": [
-          "displayLabel"
-        ]
+        }
       },
       "UpdateNamespaceRequest": {
         "type": "object",

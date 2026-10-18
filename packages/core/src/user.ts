@@ -4,6 +4,7 @@ import { AppError } from "./errors";
 import type { AuthenticatedUser, UserRole } from "./identity";
 import type { ClientInstanceId, UserId } from "./ids";
 import { createPlatformId } from "./ids";
+import type { LocaleCode } from "./localization";
 import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
 
@@ -38,6 +39,12 @@ export interface UserRecord {
   permissionRefs: string[];
   permissions: string[];
   status: UserRecordStatus;
+  /**
+   * The language the person chose for their account. Without one, system notices and mail
+   * use `localization.defaultLocale`; a browser can still keep its local interface choice.
+   * This preference lives with the account and is removed with it.
+   */
+  locale?: LocaleCode;
   createdAt: ISODateString;
   updatedAt: ISODateString;
   lastAuthenticatedAt?: ISODateString;
@@ -84,6 +91,8 @@ export interface UpdateUserInput {
   /** Who the rows `permissions` writes name as their grantor. */
   grantedBy?: UserId;
   status?: UserStatus;
+  /** `null` goes back to the instance's default language. */
+  locale?: LocaleCode | null;
 }
 
 export interface UpsertUserIdentityInput {

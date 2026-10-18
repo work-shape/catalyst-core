@@ -137,7 +137,7 @@ describe("migration lint", () => {
     ).toEqual([]);
   });
 
-  it("keeps a concurrent index build in a repeatable migration of its own", () => {
+  it("keeps concurrent index migrations repeatable, including nullable column additions", () => {
     expect(rules(`CREATE INDEX CONCURRENTLY "c_idx" ON "conversations" ("title");`)).toEqual([
       "concurrent-index"
     ]);
@@ -147,6 +147,19 @@ describe("migration lint", () => {
         CREATE INDEX CONCURRENTLY IF NOT EXISTS "c_idx" ON "conversations" ("summary");
       `)
     ).toEqual(["concurrent-index"]);
+    expect(
+      rules(`
+        ALTER TABLE "product_users" ADD COLUMN IF NOT EXISTS "locale" text;--> statement-breakpoint
+        ALTER TABLE "workflow_runs" ADD COLUMN IF NOT EXISTS "failed_item_count" integer;--> statement-breakpoint
+        CREATE INDEX CONCURRENTLY IF NOT EXISTS "wf_idx" ON "workflow_runs" ("root_run_id") WHERE "failed_item_count" > 0;
+      `)
+    ).toEqual([]);
+    for (const suffix of ["text DEFAULT 'x'", "text NOT NULL", "text REFERENCES users(id)"]) {
+      expect(
+        rules(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS summary ${suffix};--> statement-breakpoint
+          CREATE INDEX CONCURRENTLY IF NOT EXISTS c_idx ON conversations(summary);`)
+      ).toContain("concurrent-index");
+    }
     expect(
       rules(`
         CREATE INDEX CONCURRENTLY IF NOT EXISTS "a_idx" ON "conversations" ("title");

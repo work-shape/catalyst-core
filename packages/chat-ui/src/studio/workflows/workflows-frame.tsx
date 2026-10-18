@@ -134,14 +134,17 @@ export function LoadError({ children, onRetry }: { children: ReactNode; onRetry(
 /** The state of a run as a badge. A run that is going carries a spinner in place of the dot. */
 export function RunStateBadge({
   status,
-  stopping = false
+  stopping = false,
+  withFailedEntries = false
 }: {
   status: WorkflowRunStatus;
   /** The reader asked to cancel the run and the instance has not ended it yet. */
   stopping?: boolean;
+  /** Entries of the run's loops failed: a run that ended `done` reads as a warning. */
+  withFailedEntries?: boolean;
 }) {
   const { t } = useTranslation();
-  const state = runStatePresentation(status, stopping);
+  const state = runStatePresentation(status, stopping, withFailedEntries);
   return state.spins ? (
     <Badge tone={state.tone} size="sm" leading={<Spinner size="sm" />}>
       {t(state.label)}

@@ -475,8 +475,12 @@ export function useWorkspaceConversationActivityState(): WorkspaceConversationAc
   );
 }
 
-export function useWorkspaceLocale(configLocale: LocaleCode | undefined): LocaleCode {
-  const { browserLocale, localePreference } = useWorkspacePreferences();
+/** `localePreference` is the one the person chose: their account's, else this browser's. */
+export function useWorkspaceLocale(
+  configLocale: LocaleCode | undefined,
+  localePreference: LocaleCode | undefined
+): LocaleCode {
+  const { browserLocale } = useWorkspacePreferences();
   return configLocale ?? localePreference ?? browserLocale ?? "en";
 }
 

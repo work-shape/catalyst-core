@@ -9,6 +9,7 @@ import type {
   ConfigAssetRecord,
   FileSet,
   JsonObject,
+  LocaleCode,
   Namespace,
   OperationEffect,
   PlatformStores,
@@ -83,6 +84,14 @@ export interface PublishReach {
 
 /** The operation a write of an asset arrives through. */
 export type AssetWriteSurface = "put" | "delete" | "revert" | "sync";
+
+/** The names a question shows in place of ids: of a user, and of a Shared Workspace. */
+export interface AddresseeNames {
+  /** The user's name, or nothing for an id that names no user. */
+  user(id: string): Promise<string | undefined>;
+  /** The Shared Workspace's name, or nothing for an id that names none. */
+  workspace(id: string): Promise<string | undefined>;
+}
 
 /**
  * A registered kind with what the config asset workflow asks of it. Everything the workflow
@@ -169,11 +178,16 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * What a revision reaches beside its live revision, for the review of a held publish. A kind
    * whose publish no guardrail holds leaves it out.
    */
-  /** Unrecorded draft review lines; accounts and source boundaries must never enter runs. */
+  /**
+   * Unrecorded draft review lines; accounts and source boundaries must never enter runs. They
+   * are written in `locale`, the reader's language, and name people and workspaces by name.
+   */
   publishQuestion?(input: {
     assetId: string;
     scope: AssetScope;
     config: unknown;
+    locale: LocaleCode;
+    names: AddresseeNames;
   }): Promise<string[]>;
   publishReach?(next: JsonObject, live: JsonObject | undefined): PublishReach;
   /**
@@ -203,6 +217,15 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     definition: unknown;
     stores: PlatformStores;
   }): Promise<void>;
+  /**
+   * What a check of a definition that holds says beside its issues: a warning refuses nothing.
+   * Asked by `assets.validate` only, with what is stored.
+   */
+  validationWarnings?(input: {
+    clientInstanceId: ClientInstanceId;
+    definition: unknown;
+    stores: PlatformStores;
+  }): Promise<{ code: string; message: string }[]>;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses an interactive delete. */
   assertInteractiveDeleteAllowed(input: { surface: AssetWriteSurface }): void;
   /**

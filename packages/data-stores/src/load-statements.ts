@@ -5,6 +5,7 @@ import {
   type JsonObject
 } from "@work-shape/catalyst-core";
 import type { z } from "zod";
+import { replacementStatements } from "./load-replace";
 import { quoteIdentifier } from "./server";
 function refused(message: string, details: JsonObject): AppError {
   return new AppError("VALIDATION_FAILED", message, details);
@@ -95,33 +96,10 @@ export function statementsOf(
           on ${key.map((column) => `stored.${quoteIdentifier(column)} = sent.${quoteIdentifier(column)}`).join(" and ")}
         where ${own}
       ) as twice)::pg_catalog.int4 as twice`;
-  const by = input.replace?.by;
-  // Two loads that replace the rows of one value at once would each delete what was stored
-  // before either and keep the rows of both. So a load holds the value until it is kept or
-  // rolled back, and the next one waits and then deletes what the first stored. The lock is
-  // the database's own and each store has a database of its own; the values are taken in one
-  // order, and a load that waits longer than the app role's statement timeout fails whole.
-  const lock = by
-    ? `
-    select pg_catalog.count(pg_catalog.pg_advisory_xact_lock(held.id)::pg_catalog.text)::pg_catalog.int4 as held
-    from (
-      select distinct pg_catalog.hashtextextended(
-        $2::pg_catalog.text || ' ' || row(${listed(by, "sent")})::pg_catalog.text, 0
-      ) as id
-      from ${sentOf(by)}
-      order by id
-    ) as held`
-    : undefined;
-  const remove = by
-    ? `
-    with gone as (
-      delete from ${stored} as stored
-      where (${listed(by, "stored")}) in (select ${listed(by, "sent")} from ${sentOf(by)})
-        and not (${own})
-      returning 1
-    )
-    select pg_catalog.count(*)::pg_catalog.int4 as count from gone`
-    : undefined;
+  const replace =
+    input.replace && input.replace.values === undefined
+      ? replacementStatements(table.name, typeOf, input.replace.by)
+      : undefined;
   // `update` writes every column of the row that is no key; a column the load does not set
   // keeps what is stored.
   const changed = columns.filter((column) => !key.includes(column));
@@ -153,8 +131,7 @@ export function statementsOf(
   return {
     fields,
     ...(check ? { check } : {}),
-    ...(lock ? { lock } : {}),
-    ...(remove ? { remove } : {}),
+    ...(replace ? { lock: replace.lock, remove: replace.remove } : {}),
     write
   };
 }

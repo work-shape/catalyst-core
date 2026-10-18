@@ -105,6 +105,7 @@ function sourceOf(
       getRun: () => Promise.resolve(toWorkflowRun(run)),
       listFrameStepRuns: async () => ({
         stepRuns: (await stepRuns).map(toWorkflowStepRun),
+        entryLoops: [],
         complete: true
       }),
       listEntryStepRuns: unused,

@@ -37,12 +37,21 @@ const slot = (markup: string, name: string) =>
 const classesOf = (tag: string) => /\sclass="([^"]*)"/u.exec(tag)?.[1]?.split(" ") ?? [];
 const textOf = (markup: string) => markup.replace(/<[^>]*>/gu, " ").replace(/\s+/gu, " ");
 
-const statuses: readonly FlowStatus[] = ["idle", "running", "waiting", "done", "failed", "skipped"];
+const statuses: readonly FlowStatus[] = [
+  "idle",
+  "running",
+  "waiting",
+  "done",
+  "doneWithFailures",
+  "failed",
+  "skipped"
+];
 const words: Record<FlowStatus, string | undefined> = {
   idle: undefined,
   running: "Running",
   waiting: "Waiting",
   done: "Done",
+  doneWithFailures: "Done with failures",
   failed: "Failed",
   skipped: "Skipped"
 };
@@ -51,6 +60,7 @@ const frames: Record<FlowStatus, string> = {
   running: "border-info-border",
   waiting: "border-warning",
   done: "border-success-border",
+  doneWithFailures: "border-warning",
   failed: "border-destructive",
   skipped: "border-input"
 };
@@ -72,7 +82,7 @@ describe("FlowNode", () => {
       }
       // The corner badge is a second sign for the states that ask for attention or report an end.
       expect(markup.includes('data-slot="flow-badge"')).toBe(
-        ["running", "waiting", "done", "failed"].includes(status)
+        ["running", "waiting", "done", "doneWithFailures", "failed"].includes(status)
       );
       expect(classesOf(slot(markup, "flow-node")).includes("opacity-55")).toBe(
         status === "skipped"
@@ -211,6 +221,7 @@ describe("FlowGroup", () => {
     ["running", "border-info"],
     ["waiting", "border-warning"],
     ["done", "border-success"],
+    ["doneWithFailures", "border-warning"],
     ["failed", "border-destructive"]
   ])("colours its line for %s and says the status in words", (status, line) => {
     const markup = group({ status });

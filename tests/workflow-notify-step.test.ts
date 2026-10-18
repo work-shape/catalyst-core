@@ -3,7 +3,13 @@ import { z } from "zod";
 import { clientInstanceId } from "./support/access-instance";
 import { runSchema, workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
 import { required } from "./support/assertions";
-import { stepRunsOf } from "./support/workflow-runs";
+import {
+  failingFor,
+  notifyClients,
+  readyWorkflows,
+  start,
+  stepRunsOf
+} from "./support/workflow-runs";
 
 let fixture: WorkflowFixture | undefined;
 afterEach(async () => {
@@ -61,15 +67,31 @@ describe("Workflow notify steps and grouped failure notices", () => {
       }
     ]);
     await save(t, manifest);
-    const review = z.object({ publishQuestion: z.array(z.string()) }).parse(
-      (
-        await t.expectOk(t.root.id, "assets.get", {
-          params: { kind: "workflow", name: manifest.id }
-        })
-      ).json()
-    );
-    expect(review.publishQuestion.join(" ")).toContain(t.admin.id);
-    expect(review.publishQuestion.join(" ")).toContain("inbox");
+    const question = async (headers?: Record<string, string>) =>
+      z
+        .object({ publishQuestion: z.array(z.string()) })
+        .parse(
+          (
+            await t.expectOk(t.root.id, "assets.get", {
+              params: { kind: "workflow", name: manifest.id },
+              ...(headers === undefined ? {} : { headers })
+            })
+          ).json()
+        )
+        .publishQuestion.join(" ");
+    // People are named by name, never by id, in the reader's language (REH-900). A request
+    // that names no language reads the instance's.
+    const asked = await question();
+    expect(asked).toContain(t.admin.displayLabel);
+    expect(asked).not.toContain(t.admin.id);
+    expect(asked).toContain("in the Inbox");
+    // A German reader on the same instance reads it in German.
+    expect(await question({ "accept-language": "de" })).toContain("im Eingang");
+    // The language the account chose goes before the one the browser names.
+    await t.expectOk(t.root.id, "me.update", { payload: { locale: "de" } });
+    expect(await question({ "accept-language": "en" })).toContain("im Eingang");
+    await t.expectOk(t.root.id, "me.update", { payload: { locale: null } });
+    expect(await question({ "accept-language": "en" })).toContain("in the Inbox");
     const live = runSchema.parse(
       (
         await t.expectOk(t.root.id, "workflows.start", {
@@ -135,11 +157,105 @@ describe("Workflow notify steps and grouped failure notices", () => {
     await worker.runDue();
     expect(await items(t, t.admin.id)).toEqual([]);
     expect(await items(t, t.root.id)).toMatchObject([
-      { preview: { text: expect.stringContaining("1 run(s)") } }
+      {
+        summary: "A Workflow run needs attention",
+        preview: {
+          text: "1 run failed, reached a limit or has failed entries. Open the run to review it."
+        }
+      }
     ]);
     expect((await stepRunsOf(t, run.id)).find((step) => step.stepId === "notify")?.status).toBe(
       "failed"
     );
+  });
+
+  it.each([
+    {
+      children: 1,
+      summary: "Workflow-Läufe brauchen deine Aufmerksamkeit",
+      text: "2 Läufe sind fehlgeschlagen, haben ein Limit erreicht oder enthalten fehlgeschlagene Einträge. Öffne den Lauf, um sie zu prüfen."
+    },
+    {
+      children: 3,
+      summary: "Workflow-Läufe brauchen deine Aufmerksamkeit",
+      text: "4 Läufe sind fehlgeschlagen, haben ein Limit erreicht oder enthalten fehlgeschlagene Einträge. Öffne den Lauf, um sie zu prüfen."
+    },
+    {
+      children: 2,
+      chose: "en",
+      summary: "Workflow runs need attention",
+      text: "3 runs failed, reached a limit or have failed entries. Open the run to review them."
+    }
+  ])(
+    "words the failure notice in the publisher's language, else the instance's ($children failed, chose $chose)",
+    async ({ children, chose, summary, text }) => {
+      fixture = await workflowFixture({ definitions: "assets", locale: "de" });
+      const t = fixture;
+      const child = {
+        ...definition("failing-child", []),
+        outputs: {
+          type: "object",
+          required: ["missing"],
+          properties: { missing: { type: "string" } }
+        },
+        steps: [{ ...trigger, triggers: [{ kind: "parent" }] }, output]
+      };
+      await save(t, child);
+      await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+      const parent = definition("german-parent", [
+        {
+          id: "each",
+          name: "Each",
+          type: "loop",
+          items: { step: "start", path: "input.items" },
+          onItemFailure: "continue",
+          steps: [{ id: "child", name: "Child", type: "workflow", workflow: child.id, input: {} }]
+        }
+      ]);
+      await save(t, parent);
+      // The publisher's own language, in an instance whose default is German.
+      if (chose) await t.expectOk(t.root.id, "me.update", { payload: { locale: chose } });
+      const run = runSchema.parse(
+        (
+          await t.expectOk(t.root.id, "workflows.start", {
+            params: { workflow: parent.id },
+            payload: { input: { items: Array.from({ length: children }, (_, index) => index) } }
+          })
+        ).json()
+      );
+      const worker = t.worker();
+      expect((await t.finish(run.id, worker)).status).toBe("done");
+      await worker.runDue();
+      expect(await items(t, t.root.id)).toMatchObject([{ summary, preview: { text } }]);
+    }
+  );
+
+  it("notifies the publisher when a done run has only failed operation items", async () => {
+    const t = await readyWorkflows(
+      (opened) => {
+        fixture = opened;
+      },
+      { definitions: "assets" }
+    );
+    await save(t, notifyClients({ onItemFailure: "continue" }));
+    t.setBehaviour(failingFor(["client-bert"]));
+    const worker = t.worker();
+    const run = await t.finish((await start(t)).id, worker);
+    expect(run.status).toBe("done");
+    await worker.runDue();
+    const stored = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
+    if (!stored) throw new Error("Missing completed run");
+    expect(
+      await t.stores.workflowRuns.listChildRuns({ clientInstanceId, id: stored.id })
+    ).toHaveLength(0);
+    expect(await items(t, t.root.id)).toMatchObject([
+      {
+        summary: "A Workflow run needs attention",
+        preview: {
+          text: "1 run failed, reached a limit or has failed entries. Open the run to review it."
+        }
+      }
+    ]);
   });
 
   it("creates exactly one notice for fifty failed children even when the root failure job runs twice", async () => {
@@ -179,7 +295,12 @@ describe("Workflow notify steps and grouped failure notices", () => {
     expect((await t.finish(run.id, worker, 1500)).status).toBe("done");
     await worker.runDue();
     expect(await items(t, t.root.id)).toMatchObject([
-      { preview: { text: expect.stringContaining("50 run(s)") } }
+      {
+        summary: "Workflow runs need attention",
+        preview: {
+          text: "51 runs failed, reached a limit or have failed entries. Open the run to review them."
+        }
+      }
     ]);
     expect(await items(t, t.root.id)).toHaveLength(1);
     expect(
@@ -187,7 +308,7 @@ describe("Workflow notify steps and grouped failure notices", () => {
         clientInstanceId,
         rootRunId: run.id
       })
-    ).toBe(50);
+    ).toBe(51);
     // A new job for the same root must run the handler again, not merely poll an empty queue.
     const handler = required(
       t.workflows.jobHandlers.find((entry) => entry.kind.kind === "workflow_run.notify_failure")

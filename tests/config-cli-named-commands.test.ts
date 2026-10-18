@@ -287,6 +287,120 @@ describe("named CLI operation faces", () => {
     }
   });
 
+  it.each([false, true])(
+    "publishes a Data Store and reports its live revision (json: %s)",
+    async (json) => {
+      const requests: Request[] = [];
+      const result = await run(
+        ["data-store", "publish", "findings", "--revision", "1", ...(json ? ["--json"] : [])],
+        {
+          fetchImpl: apiFetch((request) => {
+            if (new URL(request.url).pathname === apiOperations["platform.context.get"].path) {
+              return Response.json({
+                ...platformContext,
+                kinds: [
+                  {
+                    kind: "data_store",
+                    plural: "data_stores",
+                    lifecycle: "draft_published",
+                    representation: "files",
+                    actions: {
+                      read: "data_store.read",
+                      write: "data_store.write",
+                      delete: "data_store.delete",
+                      publish: "data_store.publish"
+                    },
+                    manifestFile: "data-store.yaml",
+                    owners: ["instance", "workspace"]
+                  }
+                ]
+              });
+            }
+            requests.push(request);
+            return Response.json({ draftRevision: 1, publishedRevision: 1 });
+          })
+        }
+      );
+      expect(result.code, result.err).toBe(0);
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.method).toBe("POST");
+      expect(new URL(required(requests[0]).url).pathname).toBe(
+        apiOperations["assets.publish"].buildPath({
+          params: { kind: "data_store", name: "findings" }
+        })
+      );
+      expect(requests[0]?.headers.get("Catalyst-Unattended")).toBeNull();
+      expect(await requests[0]?.json()).toEqual({ revision: 1 });
+      if (json) expect(JSON.parse(result.out)).toEqual({ draftRevision: 1, publishedRevision: 1 });
+      else expect(result.out).toContain("Published revision 1");
+    }
+  );
+
+  it.each(["pending_confirmation", "pending_approval"])(
+    "returns 3 when a Data Store publish is %s instead of claiming success",
+    async (status) => {
+      const pending = {
+        id: "publish-1",
+        href: apiOperations["operations.get_run"].buildPath({ params: { runId: "publish-1" } }),
+        operation: "assets.publish",
+        effect: "changing",
+        status,
+        actor: { kind: "user", id: "kai", label: "Kai" },
+        origin: { kind: "cli" },
+        target: "live",
+        inputHash: "hash",
+        attempt: 1,
+        correlationId: "correlation",
+        createdAt: at
+      };
+      for (const json of [false, true]) {
+        const result = await run(
+          [
+            "data-store",
+            "publish",
+            "findings",
+            "--revision",
+            "1",
+            "--yes",
+            ...(json ? ["--json"] : [])
+          ],
+          {
+            fetchImpl: apiFetch(async (request) => {
+              if (new URL(request.url).pathname === apiOperations["platform.context.get"].path) {
+                return Response.json({
+                  ...platformContext,
+                  kinds: [
+                    {
+                      kind: "data_store",
+                      plural: "data_stores",
+                      lifecycle: "draft_published",
+                      representation: "files",
+                      owners: ["instance", "workspace"],
+                      actions: {
+                        read: "data_store.read",
+                        write: "data_store.write",
+                        delete: "data_store.delete",
+                        publish: "data_store.publish"
+                      }
+                    }
+                  ]
+                });
+              }
+              expect(request.headers.get("Catalyst-Unattended")).toBe("1");
+              expect(await request.json()).toEqual({ revision: 1 });
+              return Response.json(pending, { status: 202 });
+            })
+          }
+        );
+        expect(result.code, result.err).toBe(3);
+        expect(result.out).not.toContain("Published revision");
+        if (json)
+          expect(JSON.parse(result.out)).toEqual({ status: "pending_approval", run: pending });
+        else expect(result.err).toContain("nothing has changed yet");
+      }
+    }
+  );
+
   it.each([undefined, "2"])(
     "prints one JSON object when App revision %s is already published",
     async (revision) => {

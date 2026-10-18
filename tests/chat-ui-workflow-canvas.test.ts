@@ -337,6 +337,45 @@ describe("a loop over thousands of items", () => {
     expect(stopped.nodes.find((node) => node.id === "save")?.status).toBe("skipped");
   });
 
+  it("warns, never a plain done, on a loop and a step of it that ended with failed items", () => {
+    const ended = stepRun({
+      stepId: "each_client",
+      stepType: "loop",
+      status: "done",
+      loop: { total: 600, done: 599, failed: 1, running: 0 },
+      bodyCounts: {
+        bookings: { total: 600, done: 599, failed: 1, running: 0 },
+        save: { total: 599, done: 599, failed: 0, running: 0 }
+      }
+    });
+    const graph = workflowGraph(workflow.steps, en, runOf([ended]));
+    expect(graph.groups[0]?.status).toBe("doneWithFailures");
+    expect(graph.nodes.find((node) => node.id === "bookings")?.status).toBe("doneWithFailures");
+    expect(graph.nodes.find((node) => node.id === "save")?.status).toBe("done");
+    // All of a step's items through while the loop still goes: the same warning.
+    const going = stepRun({
+      stepId: "each_client",
+      stepType: "loop",
+      status: "waiting",
+      finishedAt: undefined,
+      loop: { total: 600, done: 590, failed: 1, running: 9 },
+      bodyCounts: { bookings: { total: 600, done: 599, failed: 1, running: 0 } }
+    });
+    const running = workflowGraph(workflow.steps, en, runOf([going]));
+    expect(running.nodes.find((node) => node.id === "bookings")?.status).toBe("doneWithFailures");
+    expect(running.groups[0]?.status).toBe("running");
+    // Every item failed stays failed.
+    const allFailed = stepRun({
+      stepId: "each_client",
+      stepType: "loop",
+      status: "done",
+      loop: { total: 2, done: 0, failed: 2, running: 0 },
+      bodyCounts: { bookings: { total: 2, done: 0, failed: 2, running: 0 } }
+    });
+    const lost = workflowGraph(workflow.steps, en, runOf([allFailed]));
+    expect(lost.nodes.find((node) => node.id === "bookings")?.status).toBe("failed");
+  });
+
   it("says nothing on a step of the loop where the instance sends no counts of it", () => {
     const bare = stepRun({
       stepId: "each_client",

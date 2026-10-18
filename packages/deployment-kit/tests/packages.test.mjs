@@ -539,6 +539,32 @@ describe("the kit's Dockerfile", () => {
     );
   });
 
+  test("the demo runner pins tabular packages and serves its manifest in production and development", () => {
+    const demo = readFileSync(join(platformRoot, "docker/vivd-client.Dockerfile"), "utf8");
+    const stage = demo.split(" AS workspace-runner-runtime\n")[1]?.split("\nFROM ")[0];
+    assert.ok(stage);
+    const releasePins = systemPackages(kitDockerfile, "runner-system").pip;
+    for (const pin of ["numpy==2.1.3", "pandas==2.2.3"]) {
+      assert.ok(releasePins.includes(pin));
+      assert.ok(stage.includes(pin));
+    }
+    assert.ok(demo.includes("FROM workspace-runner-runtime AS workspace-command-runner"));
+    for (const target of [
+      "api",
+      "api-dev",
+      "artifact-preview-worker",
+      "artifact-preview-worker-dev"
+    ]) {
+      const body = demo.split(` AS ${target}\n`)[1]?.split("\nFROM ")[0];
+      assert.ok(
+        body?.includes(
+          "COPY --from=workspace-runner-runtime /usr/local/share/catalyst/runner-packages.json"
+        ),
+        target
+      );
+    }
+  });
+
   test("serves the interface with the platform's nginx configuration", () => {
     assert.equal(
       readFileSync(join(kitDir, "docker/nginx-spa.conf"), "utf8"),

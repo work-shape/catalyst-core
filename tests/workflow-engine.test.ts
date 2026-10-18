@@ -123,6 +123,28 @@ describe("a Workflow Run from the manual start to its end", () => {
     const run = await t.finish((await start(t)).id);
     expect(run.status).toBe("done");
 
+    // A failed operation item creates no child run. Lists and cards have no step runs,
+    // so the final count must travel through both API projections, and survive pruning.
+    const counts = { id: run.id, status: "done", failedItemCount: 1, failedDescendantCount: 0 };
+    expect(
+      (await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: run.id } })).json()
+    ).toMatchObject(counts);
+    expect(
+      (
+        await t.expectOk(t.root.id, "workflows.list_runs", {
+          params: { workflow: "notify-clients" }
+        })
+      ).json()
+    ).toMatchObject({ items: [expect.objectContaining(counts)] });
+    expect((await t.expectOk(t.root.id, "workflows.list")).json()).toMatchObject({
+      items: [
+        expect.objectContaining({ id: "notify-clients", lastRun: expect.objectContaining(counts) })
+      ]
+    });
+    expect(
+      await t.stores.workflowNotices.failureCount({ clientInstanceId, rootRunId: run.id })
+    ).toBe(1);
+
     const all = await stepRunsOf(t, run.id);
     const loop = all.find((stepRun) => stepRun.key === "each_client");
     const inLoop = await stepRunsOf(t, run.id, { containerStepRunId: loop?.id });
@@ -150,6 +172,17 @@ describe("a Workflow Run from the manual start to its end", () => {
     );
     expect(await stepRunsOf(t, run.id, { status: "done" })).toHaveLength(6);
     expect(await stepRunsOf(t, run.id, { containerStepRunId: "wfs_none" })).toEqual([]);
+    const stored = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
+    if (!stored) throw new Error("Missing completed run");
+    await t.stores.workflowRuns.pruneStepRunData({ clientInstanceId, id: stored.id, limit: 100 });
+    await t.stores.workflowRuns.markRunDataPruned({
+      clientInstanceId,
+      id: stored.id,
+      prunedAt: new Date().toISOString()
+    });
+    expect(
+      (await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: run.id } })).json()
+    ).toMatchObject(counts);
   });
 });
 

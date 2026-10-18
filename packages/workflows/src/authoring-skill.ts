@@ -13,6 +13,7 @@ import {
   WORKFLOW_CODE_LANGUAGES,
   WORKFLOW_STEP_FILES_MAX_BYTES
 } from "./code-step";
+import { WORKFLOW_RULES_REVISION_INPUT } from "./child-rules-revision";
 import { WORKFLOW_EXECUTED_STEP_TYPES } from "./definition";
 import {
   WORKFLOW_DEFINITION_MAX_STEPS,
@@ -72,7 +73,7 @@ const STEP_REFERENCE: {
     fields: {
       workflow: "The child Workflow id; it lists the parent trigger.",
       input: "A mapping onto the child's inputs; its inputs and outputs supply the schemas.",
-      key: "The child's run key: a list of literals and references, each a text or a number, which the engine joins with '/', such as [\"2026-09\", the client's number]. A run of the child that is open or done and has the key answers the step, which waits for it and does not own it; one that ended failed, cancelled or limit_reached gives its key up to a new run."
+      key: "The child's run key: a list of literals and references, each a text or a number, which the engine joins with '/', such as [{ value: \"2026-09\" }, { ref: { step: each_client, path: number } }]. A run of the child that is open or done and has the key answers the step, which waits for it and does not own it; one that ended failed, cancelled or limit_reached gives its key up to a new run."
     }
   },
   loop: {
@@ -318,6 +319,37 @@ says where it was cut. It is no whole config: do not save from it, because the s
 cut would be saved cut. Say so to the person.`;
 }
 
+const REVISION = WORKFLOW_RULES_REVISION_INPUT;
+const ECHO = 'json.dump(json.load(open("input.json")), open("output.json", "w"))';
+
+/** The steps of a parent that keeps the rules revision in one value. A test parses them. */
+const RULES_REVISION_STEPS = `- id: rules
+  name: Rules revision
+  type: code
+  file: rules.py
+  input:
+    ${REVISION}: { value: rules-4 }
+  inputSchema:
+    { type: object, properties: { ${REVISION}: { type: string } }, required: [${REVISION}] }
+  outputSchema:
+    { type: object, properties: { ${REVISION}: { type: string } }, required: [${REVISION}] }
+- id: each_client
+  name: For each client
+  type: loop
+  items: { step: start, path: input.clients }
+  steps:
+    - id: check
+      name: Check the client
+      type: workflow
+      workflow: check-client
+      input:
+        client: { ref: { step: each_client, path: id } }
+        ${REVISION}: { ref: { step: rules, path: ${REVISION} } }
+      key:
+        - { value: "2026-09" }
+        - { ref: { step: rules, path: ${REVISION} } }
+        - { ref: { step: each_client, path: id } }`;
+
 /** The step types the file form holds and this engine does not run. */
 export function workflowStepTypesNotRun(): string[] {
   const executed: readonly string[] = WORKFLOW_EXECUTED_STEP_TYPES;
@@ -365,8 +397,24 @@ until they publish it.
 Follow the build rules for data scope in the platform docs: \`references/configure/release-config.md\` in \`platform-docs\`.
 
 - Write the Mandant key on every copied row and keep it in aggregates and run history.
-- Design per-Mandant work as child runs keyed by the Mandant and the period, such as \`key: ["2026-09", <the Mandant's number>]\`. Starting the parent again for that period then runs only the children that did not end done. Do not replace them with an unkeyed cross-Mandant run.
-- When a rule of the check changes, put the rules revision in the child's key, such as \`key: ["2026-09", "rules-4", <the Mandant's number>]\`. A start by the old key answers the children that are done with what they found under the old rules.
+- Design per-Mandant work as child runs keyed by the Mandant and the period, such as \`key: [{ value: "2026-09" }, { ref: { step: <loop id>, path: <the Mandant's number> } }]\`. Starting the parent again for that period then runs only the children that did not end done. Do not replace them with an unkeyed cross-Mandant run.
+- Keep the rules revision of a check in one authored value. Give the child a required input
+  \`${REVISION}: { type: string }\` and let its script read the revision from that input, never
+  from a constant of its own. In the parent, write the value once, as the literal input of a
+  \`code\` step whose script, \`steps/rules.py\`, returns its input (\`${ECHO}\`), and reference
+  that step's output in the child's input and in its key alike:
+
+  \`\`\`yaml
+${RULES_REVISION_STEPS.replace(/^/gmu, "  ")}
+  \`\`\`
+
+  When a rule changes, change the child's script and that one literal. No reference reaches into
+  another definition, so the parent cannot read the child's revision. A check warns with
+  \`child_key_without_rules_revision\` where a keyed step passes \`${REVISION}\` to a child that
+  declares it and the key holds neither that source nor the child's \`const\`. It reads the
+  mappings, the keys and the child's inputs, never a script: a revision kept only in a script is
+  not checked, and a key without the revision lets the children that are done answer with what
+  they found under the old rules.
 - Say who a Workflow is for when it serves only part of the firm. Everyone in that audience must be allowed to see every Mandant the shared source credential can read.
 
 ## What a manifest is
@@ -380,6 +428,9 @@ Follow the build rules for data scope in the platform docs: \`references/configu
   may call. Do not change it unless the person asks: a publish checks whether its publisher
   may let a Workflow act as that principal.
 - \`kind\`: \`process\` unless set. Use \`data\` for a Workflow that fills or processes a Knowledge Base or Data Store. Publishing Knowledge Base \`ingest\`, \`withdraw\`, \`put_processed\` or Data Store \`records.propose\` from a process Workflow is refused with \`process_workflow_write_operation\`. A copied data template keeps \`kind: data\`.
+- \`onFailure\`: optional. \`notify\`, the default, is the only value this engine runs: the failed
+  descendants of one root produce one notice to the publisher of the root's revision when the
+  root ends. \`onFailure: workflow.<id>\` is reserved for EW-13 and refused.
 - \`packages\`: optional list of installed Python distribution names required by the code steps,
   for example \`packages: [pypdf]\`. Publish refuses any name outside the runner allow-list below.
 - \`inputs\`: the JSON Schema of the input a run is started with. An object schema.
@@ -422,7 +473,7 @@ packages. Adding a package requires a runner image release. There is no package-
 
 ## Mappings and references
 
-A manifest may set \`onFailure: notify\` (the default). Failed descendants of one root produce one notice to the root revision publisher when the root ends. \`onFailure: workflow.<id>\` is reserved for EW-13.\n\nThe \`input\` of a step is a mapping: one entry per field, and each entry is exactly one of
+The \`input\` of a step is a mapping: one entry per field, and each entry is exactly one of
 
 - \`value: <any JSON>\`: a literal, and
 - \`ref: { step: <id of an earlier step>, path: <dotted path into its output> }\`: a field of
@@ -472,7 +523,7 @@ Successful runs release intermediates. Failed runs retain datasets for their res
 
 A reading Connection operation may declare paging by page, offset, cursor or next_link. Use \`paginate: true\` with \`dataset: { at: items }\` to take its paging settings, or override fields with \`paginate: { size: 100 }\`. Other output fields come from the first page. One paged step keeps one Operation Run with counts only. A lost worker resumes at the last complete page. Rows, bytes, pageBytes and pages are operator ceilings under \`workflows.datasets\`. The minute ceiling is \`workflows.limits.pagedStepMinutes\`; the Workflow may set \`limits.pagedStepMinutes\` under it. A limit fails the step, so no consumer gets a partial dataset. A changing source can repeat or skip rows between pages; load with a key removes repeats.
 
-A Data Store query with \`dataset: { at: rows }\` reads its full cursor into a dataset instead of the ordinary inline row cap. To put those rows into a table, call \`data_store.<id>.load\` with \`{ table, dataset }\`. Optional \`columns\` maps row fields to columns; \`key\` names a unique constraint, \`onConflict: skip | update\` needs that key, and \`replace: { by: [columns] }\` replaces the matching groups (each column of \`by\` is part of \`key\`). A retry of the same step returns the first load result. Loads need \`data_store.insert\`, plus \`data_store.execute\` for update or replace. The operator controls \`dataStores.load\` and \`dataStores.queryTimeoutMs\`; if a dataset exceeds one atomic load, produce smaller datasets upstream or ask the operator to raise its ceiling.
+A Data Store query with \`dataset: { at: rows }\` reads its full cursor into a dataset instead of the ordinary inline row cap. To put those rows into a table, call \`data_store.<id>.load\` with \`{ table, dataset }\`. Optional \`columns\` maps row fields to columns; \`key\` names a unique constraint, \`onConflict: skip | update\` needs that key, and \`replace: { by: [columns] }\` replaces the matching groups (each column of \`by\` is part of \`key\`). When a rerun may find no rows, name the group the step owns with \`replace: { by: [client_id, month, rules_revision], values: { client_id, month, rules_revision } }\`: \`values\` gives exactly the columns of \`by\` as non-null scalars, taken from the scope the step was asked for, not from its rows. An empty dataset then clears that group only, and a row outside it refuses the whole load. A mapping holds no template, so build the \`replace\` object in a \`code\` step from that scope and pass it with one reference. A retry of the same step returns the first load result. Loads need \`data_store.insert\`, plus \`data_store.execute\` for update or replace. The operator controls \`dataStores.load\` and \`dataStores.queryTimeoutMs\`; if a dataset exceeds one atomic load, produce smaller datasets upstream or ask the operator to raise its ceiling.
 
 A dataset returned by the run can be downloaded as JSON Lines or CSV through \`workflows.download_dataset\`. Rows need \`workflow.read_run_data\`, or the caller must have started that run. Collection is still deferred; do not offer it.
 
@@ -484,7 +535,7 @@ A definition that holds one of these is refused when it is saved, with the code
 - the step types ${workflowStepTypesNotRun()
     .map((type) => `\`${type}\``)
     .join(", ")};
-- \`labels\` and \`onFailure\` on the manifest;
+- \`labels\` on the manifest, and \`onFailure: workflow.<id>\` (EW-13);
 - \`collect\` on a loop (EW-13);
 - datasets in agent inputs (EW-14b).
 

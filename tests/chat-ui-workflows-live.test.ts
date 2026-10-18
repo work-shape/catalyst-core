@@ -220,7 +220,14 @@ describe("the Workflow screens over the engine of an instance", () => {
         refusedFor: [{ code: NOT_BUILT.code, message: NOT_BUILT.message }],
         mayStart: true,
         startForm: { fields: [], unsupported: [] },
-        lastRun: { id: "wfr_0", status: "failed", startedAt: "2026-10-11T09:00:00.000Z" }
+        lastRun: {
+          id: "wfr_0",
+          status: "failed",
+          startedAt: "2026-10-11T09:00:00.000Z",
+          // An instance that sends no counts yet: nothing failed below, no item failed.
+          failedDescendantCount: 0,
+          failedItemCount: 0
+        }
       },
       // Never published: the engine names it nowhere, its asset lists it as a draft (NAV-2).
       {

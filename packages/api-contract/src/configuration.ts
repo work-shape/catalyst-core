@@ -9,14 +9,11 @@ import {
   REASONING_EFFORTS,
   THEME_MODE_PREFERENCES,
   TOOL_GROUPS,
-  WORKSPACE_SECTIONS,
-  localeCodes
+  WORKSPACE_SECTIONS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { auditActorSchema } from "./identity";
-import { timestampSchema } from "./shared";
-
-export const localeCodeSchema = z.enum(localeCodes);
+import { localeCodeSchema, timestampSchema } from "./shared";
 
 export const localizationSchema = z.object({
   locale: localeCodeSchema,

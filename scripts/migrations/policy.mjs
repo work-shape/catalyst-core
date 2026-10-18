@@ -93,6 +93,12 @@ function splitTopLevelCommas(shape) {
 
 const repeatableConcurrentIndex =
   /^(?:CREATE (?:UNIQUE )?INDEX CONCURRENTLY IF NOT EXISTS|DROP INDEX CONCURRENTLY IF EXISTS)\b/u;
+// A mixed concurrent migration is replayed after any partial failure. Only nullable,
+// plain-type columns without defaults or constraints may accompany the repeatable indexes.
+const repeatableNullableColumn = new RegExp(
+  String.raw`^ALTER TABLE ${qualifiedNamePattern} ADD COLUMN IF NOT EXISTS ${qualifiedNamePattern} [A-Z_][A-Z0-9_]*(?:\[\])?$`,
+  "u"
+);
 const additiveCreate = /^CREATE (?:TABLE|TYPE|SCHEMA|SEQUENCE|EXTENSION)\b/u;
 const additiveColumnAction =
   /^(?:ALTER (?:COLUMN )?\S+ (?:SET DEFAULT\b|DROP NOT NULL$)|VALIDATE CONSTRAINT \S+$)/u;
@@ -100,8 +106,8 @@ const additiveColumnAction =
 /**
  * Lints one new migration against an allow list of additive forms: new tables, types, schemas
  * and sequences; a nullable or defaulted column; a column default; a relaxed NOT NULL; a
- * constraint added NOT VALID and its later validation; a concurrent index in a migration of its
- * own; inserts and updates; comments; a lock timeout for the transaction of the migration. A table created unconditionally earlier in the same
+ * constraint added NOT VALID and its later validation; a concurrent index with repeatable
+ * nullable column additions; inserts and updates; comments; a lock timeout for the transaction of the migration. A table created unconditionally earlier in the same
  * migration takes any change. Every other statement is a contract step: it passes only under
  * `-- contract-after: <tag>` naming a release at or before the oldest supported one, the release
  * from which nothing depends on the old shape. A required column without a default and a
@@ -238,11 +244,14 @@ export function lintMigration({ name, text, oldestSupportedRelease }) {
   // applied and the next run repeats every statement.
   if (statements.some(runsOutsideTransaction)) {
     for (const statement of statements) {
-      if (!repeatableConcurrentIndex.test(statement.shape))
+      if (
+        !repeatableConcurrentIndex.test(statement.shape) &&
+        !repeatableNullableColumn.test(statement.shape)
+      )
         reject(
           statement,
           "concurrent-index",
-          "A migration with a concurrent index build holds only CREATE INDEX CONCURRENTLY IF NOT EXISTS and DROP INDEX CONCURRENTLY IF EXISTS."
+          "A concurrent index migration holds only repeatable concurrent indexes and nullable ADD COLUMN IF NOT EXISTS statements without defaults or constraints."
         );
     }
     const crowded = migration.chunks.find((chunk) => chunk.statements.length > 1)?.statements[0];

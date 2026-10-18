@@ -444,7 +444,8 @@ export function edgeStateOf(
   if (target === "running") {
     return "active";
   }
-  if (target === "done" || (source === "done" && (target === "failed" || target === "waiting"))) {
+  const through = (status: FlowStatus) => status === "done" || status === "doneWithFailures";
+  if (through(target) || (through(source) && (target === "failed" || target === "waiting"))) {
     return "done";
   }
   return "rest";

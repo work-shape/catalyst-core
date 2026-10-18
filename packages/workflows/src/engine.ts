@@ -18,6 +18,7 @@ import {
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type JobSchedule,
+  type LocaleCode,
   type PlatformStores,
   type Notices,
   type RegisteredJobHandler,
@@ -90,6 +91,8 @@ export interface WorkflowEngineOptions {
   definitions: WorkflowDefinitionSource;
   /** Bound to the transaction that settles the step: Inbox and mail queue commit together. */
   notices?: (stores: PlatformStores) => Notices;
+  /** The language of the notices the engine writes itself. English when left out. */
+  locale?: LocaleCode;
   /** The call path of the instance. An operation step calls through it and nothing else. */
   operationCalls: WorkflowOperationCalls;
   /** Defaults below the release's own, for a test. A Workflow's `limits` set its own. */
@@ -722,7 +725,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   return {
     jobHandlers: [
       ...datasetLifetime.handlers,
-      createFailureNotices({ clientInstanceId, notices: options.notices }),
+      createFailureNotices(options),
       stepHandler,
       deadlineHandler,
       schedule.handler,
@@ -791,11 +794,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         return true;
       });
       if (!cancelled) return undefined;
-      return stores.workflowRuns.readRun({ clientInstanceId, id: input.runId });
+      return stores.workflowRuns.readRunView({ clientInstanceId, id: input.runId });
     },
 
     async readRun(runId) {
-      const run = await stores.workflowRuns.readRun({ clientInstanceId, id: runId });
+      const run = await stores.workflowRuns.readRunView({ clientInstanceId, id: runId });
       if (!run) return undefined;
       const output = await stores.workflowRuns.readRunOutput({ clientInstanceId, id: run.id });
       const rows = await stores.workflowRunDatasets.getMany({

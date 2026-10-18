@@ -5,6 +5,8 @@ export const PERSONAL_DEFAULT_CONVERSATION_LIST = "personal-default";
 
 export const workspaceQueryKeys = {
   me: (apiBaseUrl: string) => ["me", apiBaseUrl] as const,
+  /** The saves of one account's own record: its name and its language. */
+  meUpdate: (apiBaseUrl: string, userId: string) => ["me", apiBaseUrl, "update", userId] as const,
   modelPreference: (apiBaseUrl: string) => ["me", apiBaseUrl, "model-preference"] as const,
   branding: (apiBaseUrl: string, localePreference: LocaleCode | undefined) =>
     ["branding", apiBaseUrl, localePreference ?? "auto"] as const,

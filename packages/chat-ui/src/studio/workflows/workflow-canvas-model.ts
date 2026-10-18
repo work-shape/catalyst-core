@@ -66,7 +66,10 @@ function stepRunEnded(stepRun: WorkflowStepRunView): boolean {
   return stepRun.status === "done" || stepRun.status === "failed" || stepRun.status === "cancelled";
 }
 
-/** A step run's state as the canvas shows it. A loop waits while its items are at work. */
+/**
+ * A step run's state as the canvas shows it. A loop waits while its items are at work, and one
+ * that ended `done` with failed items is done with failures.
+ */
 function statusOf(stepRun: WorkflowStepRunView): FlowStatus {
   switch (stepRun.status) {
     case "queued":
@@ -76,12 +79,17 @@ function statusOf(stepRun: WorkflowStepRunView): FlowStatus {
     case "waiting":
       return stepRun.loop === undefined ? "waiting" : "running";
     case "done":
-      return "done";
+      return (stepRun.loop?.failed ?? 0) > 0 ? "doneWithFailures" : "done";
     case "failed":
       return "failed";
     case "cancelled":
       return "skipped";
   }
+}
+
+/** Of items that are all through: failed where none was done, with failures where some were. */
+function statusOfThrough(counts: WorkflowLoopCounts): FlowStatus {
+  return counts.done === 0 ? "failed" : counts.failed > 0 ? "doneWithFailures" : "done";
 }
 
 /**
@@ -90,7 +98,7 @@ function statusOf(stepRun: WorkflowStepRunView): FlowStatus {
  */
 function statusOfCounts(counts: WorkflowLoopCounts, ended: boolean): FlowStatus {
   if (ended) {
-    return counts.done + counts.failed === 0 ? "skipped" : counts.done === 0 ? "failed" : "done";
+    return counts.done + counts.failed === 0 ? "skipped" : statusOfThrough(counts);
   }
   if (counts.running > 0) {
     return "running";
@@ -101,7 +109,7 @@ function statusOfCounts(counts: WorkflowLoopCounts, ended: boolean): FlowStatus 
   if (counts.done + counts.failed < counts.total) {
     return "running";
   }
-  return counts.done === 0 ? "failed" : "done";
+  return statusOfThrough(counts);
 }
 
 /**

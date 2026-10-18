@@ -46,6 +46,7 @@ import {
   type OperationBindingContext
 } from "../operations/operation-face";
 import type { ResolvedChatServerOptions } from "../types";
+import { resolveRequestLocale } from "../routes/request-context";
 import { accountTried, requireWithinLimit } from "./rate-limit";
 
 type RouteServerOptions = Pick<
@@ -436,7 +437,8 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
             ...declaredFields(operation.query, request.query),
             ...params
           },
-          idempotencyKey: readIdempotencyKey(request)
+          idempotencyKey: readIdempotencyKey(request),
+          locale: resolveRequestLocale(options, request)
         },
         reply
       );
@@ -502,6 +504,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
             correlationId,
             input: target.input,
             idempotencyKey: readIdempotencyKey(request),
+            locale: resolveRequestLocale(options, request),
             effect: resolved?.effect,
             runs: target.operation,
             ...(resolved ? {} : { absent: { right: binding.right, notFound: binding.notFound } })

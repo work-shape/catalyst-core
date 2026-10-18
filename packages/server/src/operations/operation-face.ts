@@ -11,6 +11,7 @@ import {
   isAppErrorCode,
   operationDenialError,
   type AuthenticatedIdentity,
+  type LocaleCode,
   type OperationAuthorization,
   type OperationAuthorizeContext,
   type OperationChangeClass,
@@ -103,6 +104,8 @@ export interface OperationFace {
       correlationId: string;
       input: unknown;
       idempotencyKey: string | undefined;
+      /** The caller's language, as the request names it: what the operation writes for them. */
+      locale?: LocaleCode;
       /**
        * The operation of the registry the call runs as, where the descriptor is the route of
        * a family of operations that exist per resource. Without it the descriptor's own.
@@ -244,7 +247,8 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         },
         absent
           ? { ...deps, registry: { ...registry, resolve: () => Promise.resolve(absent) } }
-          : deps
+          : deps,
+        call.locale === undefined ? {} : { locale: call.locale }
       ).catch((error: unknown) => {
         // A repeated call that cannot be answered still names the run that holds its key.
         const run = isAppError(error) ? runReferenceSchema.safeParse(error.details) : undefined;

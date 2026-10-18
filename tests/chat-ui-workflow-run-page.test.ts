@@ -469,7 +469,8 @@ describe("the filter of a loop's entries", () => {
           loadingMore: false,
           loadMore: noop,
           retry: noop
-        }
+        },
+        onOpenChild: noop
       })
     );
   };
@@ -492,5 +493,221 @@ describe("the filter of a loop's entries", () => {
   it("shows placeholders until the entries arrived, and says when there are none", () => {
     expect(list(undefined)).toContain("animate-pulse");
     expect(list([])).toContain(t("workflows.run.noEntries"));
+  });
+});
+
+describe("a fan-out that ended done with failed child runs", () => {
+  // REH-900: a parent whose loop went on past a failed child read as a plain green "Done", and
+  // the canvas, fitted to 600 children, was zoomed too far out to show the loop's counts.
+  const fanOut = workflowOf({
+    each_client: {
+      steps: [
+        {
+          id: "check",
+          name: "Check the client",
+          type: "workflow",
+          workflow: "client-check",
+          input: {}
+        }
+      ]
+    }
+  });
+  const loopRun = (failed: number) =>
+    stepRun({
+      id: "sr_loop",
+      stepId: "each_client",
+      stepType: "loop",
+      loop: { total: 600, done: 600 - failed, failed, running: 0 }
+    });
+  const page = (failed: number, locale: "en" | "de" = "en", status: "done" | "failed" = "done") =>
+    render(
+      runPage(read(run({ status, ...ended }), [startStep, loopRun(failed)]), {
+        workflow: fanOut
+      }),
+      locale
+    );
+
+  it("says it finished with failures, with the count, and offers the failed child runs", () => {
+    const markup = page(1);
+    expect(markup).toContain(t("workflows.run.doneWithFailures"));
+    expect(markup).toContain(t("workflows.run.failedChildRunsOne", { count: "1", total: "600" }));
+    expect(markup).toContain(t("workflows.run.showFailedChildRuns"));
+    expect(markup).toContain('data-run-failed-entries=""');
+  });
+
+  it("says it in German, with the plural", () => {
+    const markup = page(3, "de");
+    expect(markup).toContain(de("workflows.run.doneWithFailures"));
+    expect(markup).toContain(de("workflows.run.failedChildRunsMany", { count: "3", total: "600" }));
+    expect(markup).toContain(de("workflows.run.showFailedChildRuns"));
+  });
+
+  it("calls them entries where the loop starts no child run", () => {
+    const markup = render(
+      runPage(read(run({ status: "done", ...ended }), [startStep, loopRun(2)]))
+    );
+    expect(markup).toContain(t("workflows.run.failedEntriesMany", { count: "2", total: "600" }));
+    expect(markup).toContain(t("workflows.run.showFailedEntries"));
+  });
+
+  it("counts every loop of a kind, and names child runs and other entries apart", () => {
+    const twoLoops = toWorkflow({
+      name: "notify-clients",
+      publishedRevision: 1,
+      config: {
+        ...definitionOf({
+          each_client: {
+            steps: [
+              { id: "check", name: "Check", type: "workflow", workflow: "client-check", input: {} }
+            ]
+          }
+        }),
+        steps: [
+          ...definitionOf().steps.slice(0, 2),
+          {
+            id: "each_client",
+            name: "For each client",
+            type: "loop",
+            items: { step: "clients", path: "" },
+            steps: [
+              { id: "check", name: "Check", type: "workflow", workflow: "client-check", input: {} }
+            ]
+          },
+          {
+            id: "each_partner",
+            name: "For each partner",
+            type: "loop",
+            items: { step: "clients", path: "" },
+            steps: [
+              {
+                id: "check_partner",
+                name: "Check",
+                type: "workflow",
+                workflow: "client-check",
+                input: {}
+              }
+            ]
+          },
+          {
+            id: "each_note",
+            name: "For each note",
+            type: "loop",
+            items: { step: "clients", path: "" },
+            steps: [
+              { id: "send", name: "Send", type: "operation", operation: "connection.crm.write" }
+            ]
+          }
+        ]
+      }
+    });
+    const loopOf = (id: string, stepId: string, total: number, failed: number) =>
+      stepRun({
+        id,
+        stepId,
+        stepType: "loop",
+        loop: { total, done: total - failed, failed, running: 0 }
+      });
+    const markup = render(
+      runPage(
+        read(run({ status: "done", ...ended }), [
+          startStep,
+          loopOf("sr_a", "each_client", 600, 1),
+          loopOf("sr_b", "each_partner", 10, 0),
+          loopOf("sr_c", "each_note", 50, 2)
+        ]),
+        { workflow: twoLoops }
+      )
+    );
+    expect(markup).toContain(t("workflows.run.failedChildRunsOne", { count: "1", total: "610" }));
+    expect(markup).toContain(t("workflows.run.failedEntriesMany", { count: "2", total: "50" }));
+    expect(markup).toContain(t("workflows.run.showFailedChildRuns"));
+  });
+
+  // A loop's counts count entries, not child runs: an entry whose body does more than start
+  // one child run can fail elsewhere, and two child runs per entry are not one per entry.
+  const genericBody = (steps: readonly Record<string, unknown>[]) =>
+    render(
+      runPage(read(run({ status: "done", ...ended }), [startStep, loopRun(1)]), {
+        workflow: workflowOf({ each_client: { steps } })
+      })
+    );
+  const child = (id: string) => ({
+    id,
+    name: "Check the client",
+    type: "workflow" as const,
+    workflow: "client-check",
+    input: {}
+  });
+
+  it("calls them entries where the loop's body also does other work than its child run", () => {
+    const markup = genericBody([
+      child("check"),
+      { id: "send", name: "Send", type: "operation", operation: "connection.crm.write" }
+    ]);
+    expect(markup).toContain(t("workflows.run.failedEntriesOne", { count: "1", total: "600" }));
+    expect(markup).toContain(t("workflows.run.showFailedEntries"));
+    expect(markup).not.toContain(t("workflows.run.showFailedChildRuns"));
+  });
+
+  it("calls them entries where each entry starts more than one child run", () => {
+    const markup = genericBody([child("check"), child("check_again")]);
+    expect(markup).toContain(t("workflows.run.failedEntriesOne", { count: "1", total: "600" }));
+    expect(markup).not.toContain(
+      t("workflows.run.failedChildRunsOne", { count: "1", total: "600" })
+    );
+  });
+
+  it("shows no state for a done run until its step runs say whether entries failed", () => {
+    const loading: WorkflowRunRead = {
+      ...read(run({ status: "done", ...ended }), []),
+      stepRuns: undefined
+    };
+    const markup = render(runPage(loading, { workflow: fanOut }));
+    expect(markup).not.toContain(t("workflows.run.done"));
+    expect(markup).not.toContain(t("workflows.run.doneWithFailures"));
+  });
+
+  it("stays a plain Done where nothing failed, and leaves a failed run to its own banner", () => {
+    const clean = page(0);
+    expect(clean).toContain(t("workflows.run.done"));
+    expect(clean).not.toContain(t("workflows.run.doneWithFailures"));
+    expect(clean).not.toContain("data-run-failed-entries");
+    expect(page(1, "en", "failed")).not.toContain("data-run-failed-entries");
+  });
+
+  it("opens the child run from the row of a failed entry", () => {
+    const loop = placedSteps(fanOut.steps).get("each_client")?.step;
+    if (loop === undefined) throw new Error("The Workflow has no loop.");
+    const failedChild = toWorkflowStepRun(
+      stepRun({
+        id: "sr_0_check",
+        stepId: "check",
+        stepType: "workflow",
+        status: "failed",
+        containerStepRunId: "sr_loop",
+        iteration: { index: 0, label: "1002 · Weber KG" },
+        childRunId: "wr_child_1002",
+        error: { code: "child_failed", message: "x" }
+      })
+    );
+    const markup = render(
+      createElement(LoopEntriesView, {
+        loop,
+        counts: { total: 600, done: 599, failed: 1, running: 0 },
+        filter: "failed",
+        onFilterChange: noop,
+        read: {
+          stepRuns: [failedChild],
+          failed: false,
+          hasMore: false,
+          loadingMore: false,
+          loadMore: noop,
+          retry: noop
+        },
+        onOpenChild: noop
+      })
+    );
+    expect(markup).toContain("1002 · Weber KG");
+    expect(markup).toContain('data-child-run="wr_child_1002"');
   });
 });

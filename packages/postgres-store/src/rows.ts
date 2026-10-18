@@ -41,6 +41,7 @@ import {
   asToolCallId,
   asClientInstanceId,
   asUserId,
+  isLocaleCode,
   asApiCredentialId,
   asServicePrincipalId,
   asStructuredDataResourceId,
@@ -609,6 +610,8 @@ export function mapUserRecord(
     permissionRefs: row.permissionRefs,
     permissions,
     status: row.deletionRequestedAt ? "deleting" : row.status,
+    // A language the release no longer ships reads as none: the default applies.
+    ...(row.locale && isLocaleCode(row.locale) ? { locale: row.locale } : {}),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lastAuthenticatedAt: row.lastAuthenticatedAt?.toISOString(),

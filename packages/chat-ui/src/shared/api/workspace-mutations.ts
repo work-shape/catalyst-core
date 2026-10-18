@@ -1,9 +1,10 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AdministeredUser,
   AdministeredUserIdentity,
   ApiClient,
+  ApiUser,
   ChangeCurrentUserPasswordRequest,
   ConversationListItem,
   ConversationThreadSnapshot,
@@ -360,19 +361,41 @@ export function useCancelRunMutation(
   });
 }
 
-export function useUpdateCurrentUserMutation(input: WorkspaceMutationInput) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (mutationInput: UpdateCurrentUserRequest) =>
-      input.client.me.update({ body: mutationInput }),
-    onSuccess: (updatedUser) => {
-      queryClient.setQueryData(workspaceQueryKeys.me(input.apiBaseUrl), updatedUser);
+/**
+ * A save of the signed-in account's own record. Saves of one account go one after the other,
+ * so the last one sent is the one kept, and an answer for an account that is no longer the
+ * signed-in one leaves the record of the next one alone.
+ */
+export function currentUserUpdateOptions(
+  input: WorkspaceMutationInput & { userId: string },
+  queryClient: QueryClient
+) {
+  const meKey = workspaceQueryKeys.me(input.apiBaseUrl);
+  return {
+    mutationKey: workspaceQueryKeys.meUpdate(input.apiBaseUrl, input.userId),
+    scope: { id: `me-update:${input.apiBaseUrl}:${input.userId}` },
+    mutationFn: (mutationInput: UpdateCurrentUserRequest) => {
+      // A save waits for the earlier ones of its account. Whoever signed in meanwhile holds the
+      // session now, so a save of the account before is never sent: it would change theirs.
+      // No message of its own: the caller's general one says that it was not saved.
+      if (queryClient.getQueryData<ApiUser>(meKey)?.id !== input.userId) {
+        return Promise.reject(new Error());
+      }
+      return input.client.me.update({ body: mutationInput });
+    },
+    onSuccess: (updatedUser: ApiUser) => {
+      queryClient.setQueryData<ApiUser>(meKey, (current) =>
+        current?.id === updatedUser.id ? updatedUser : current
+      );
       void queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
       });
     }
-  });
+  };
+}
+
+export function useUpdateCurrentUserMutation(input: WorkspaceMutationInput & { userId: string }) {
+  return useMutation(currentUserUpdateOptions(input, useQueryClient()));
 }
 
 export function useChangeCurrentUserPasswordMutation(input: WorkspaceMutationInput) {

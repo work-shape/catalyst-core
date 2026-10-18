@@ -8,12 +8,12 @@ import { createCodeSandbox, parseWorkflowManifest } from "@work-shape/catalyst-w
 
 const image = process.env.CATALYST_RUNNER_IMAGE;
 describe.skipIf(!image)("Workflow packages in the runner image", () => {
-  it("imports declared pypdf in a code step and verifies the manifest without network", async () => {
+  it("imports declared pandas and pypdf in a code step and verifies the manifest without network", async () => {
     const manifest = parseWorkflowManifest({
       id: "pdf",
       name: "PDF",
       runAs: "runner",
-      packages: ["pypdf"],
+      packages: ["pypdf", "pandas"],
       inputs: { type: "object" },
       outputs: { type: "object" },
       steps: [
@@ -42,7 +42,7 @@ describe.skipIf(!image)("Workflow packages in the runner image", () => {
         tempRoot,
         outputMaxBytes: 4096,
         limits: {
-          memoryBytes: 128 * 1024 * 1024,
+          memoryBytes: 256 * 1024 * 1024,
           cpuCount: 1,
           pidsLimit: 64,
           scratchBytes: 16 * 1024 * 1024
@@ -64,7 +64,10 @@ describe.skipIf(!image)("Workflow packages in the runner image", () => {
       });
       expect(result, JSON.stringify(result)).toMatchObject({
         kind: "ended",
-        outcome: { kind: "output", value: { pypdf: "imported", network: "none" } }
+        outcome: {
+          kind: "output",
+          value: { pypdf: "imported", pandas: "imported", network: "none" }
+        }
       });
     } finally {
       await rm(tempRoot, { recursive: true, force: true });

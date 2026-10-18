@@ -1,4 +1,4 @@
-import { Check, Clock, Minus, X } from "lucide-react";
+import { Check, Clock, Minus, TriangleAlert, X } from "lucide-react";
 import type { HTMLAttributes, KeyboardEvent, ReactNode, Ref } from "react";
 import { cn } from "../cn";
 import { Spinner } from "../feedback/spinner";
@@ -39,6 +39,13 @@ export const flowStatusPresentations: Record<FlowStatus, StatusPresentation> = {
     frame: "border-success-border",
     badge: "bg-success text-success-foreground",
     footerIcon: "text-success"
+  },
+  doneWithFailures: {
+    label: "stateDoneWithFailures",
+    icon: <TriangleAlert aria-hidden="true" />,
+    frame: "border-warning",
+    badge: "bg-warning text-warning-foreground",
+    footerIcon: "text-warning"
   },
   failed: {
     label: "stateFailed",

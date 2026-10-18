@@ -1,3 +1,4 @@
+import { countWorkflowFailures } from "./postgres-workflow-failure-counts";
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { WorkflowRunsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
@@ -48,7 +49,16 @@ export function childWorkflowRuns(
             eq(workflowRuns.operationRunId, ref.operationRunId)
           )
         );
-      return row ? { ...mapRun(row), ...mapPreview(row.preview) } : undefined;
+      if (!row) return undefined;
+      const counts = await countWorkflowFailures(db, {
+        clientInstanceId: ref.clientInstanceId,
+        runIds: [row.id]
+      });
+      return {
+        ...mapRun(row),
+        ...mapPreview(row.preview),
+        failedDescendantCount: counts.get(row.id) ?? 0
+      };
     },
     async findChildRun(ref) {
       const [row] = await db
@@ -60,7 +70,16 @@ export function childWorkflowRuns(
             sql`${workflowRuns.parentStepRunId} = ${ref.id}`
           )
         );
-      return row ? { ...mapRun(row), ...mapPreview(row.preview) } : undefined;
+      if (!row) return undefined;
+      const counts = await countWorkflowFailures(db, {
+        clientInstanceId: ref.clientInstanceId,
+        runIds: [row.id]
+      });
+      return {
+        ...mapRun(row),
+        ...mapPreview(row.preview),
+        failedDescendantCount: counts.get(row.id) ?? 0
+      };
     },
     async listChildRuns(ref) {
       const rows = await db
@@ -73,7 +92,15 @@ export function childWorkflowRuns(
           )
         )
         .orderBy(asc(workflowRuns.createdAt), asc(workflowRuns.id));
-      return rows.map((row) => ({ ...mapRun(row), ...mapPreview(row.preview) }));
+      const counts = await countWorkflowFailures(db, {
+        clientInstanceId: ref.clientInstanceId,
+        runIds: rows.map((row) => row.id)
+      });
+      return rows.map((row) => ({
+        ...mapRun(row),
+        ...mapPreview(row.preview),
+        failedDescendantCount: counts.get(row.id) ?? 0
+      }));
     },
     async readRunOutput(ref) {
       const [row] = await db

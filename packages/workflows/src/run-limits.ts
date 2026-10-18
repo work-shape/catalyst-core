@@ -135,19 +135,34 @@ export function workflowLimitIssues(
   );
 }
 
+/** One limit a Workflow raises above its default: what the publish question names. */
+export interface WorkflowLimitRaise {
+  field: keyof WorkflowLimits;
+  /** The default, in the unit of the field: milliseconds for `duration`. */
+  standard: number;
+  asked: number;
+  /** As the Workflow wrote it, where it wrote it, such as `24h`. */
+  text?: string;
+}
+
 /**
- * The sentences of the publish question for a Workflow that raises a limit above its default,
- * one per raise. Empty where the Workflow keeps the defaults or lowers them.
+ * The limits a Workflow raises above their defaults, one per raise, for the publish question
+ * to word. Empty where the Workflow keeps the defaults or lowers them.
  */
 export function workflowLimitRaises(
   manifest: Pick<WorkflowManifest, "limits">,
   context: WorkflowLimitContext
-): string[] {
+): WorkflowLimitRaise[] {
   if (!manifest.limits) return [];
   return entriesOf(manifest.limits, context).flatMap((entry) =>
     entry.asked !== undefined && entry.asked > entry.standard
       ? [
-          `Raises the ${entry.label} of each run from ${entry.show(entry.standard)} to ${entry.text ?? entry.show(entry.asked)}.`
+          {
+            field: entry.field,
+            standard: entry.standard,
+            asked: entry.asked,
+            ...(entry.text === undefined ? {} : { text: entry.text })
+          }
         ]
       : []
   );

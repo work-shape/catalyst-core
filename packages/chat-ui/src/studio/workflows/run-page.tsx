@@ -21,7 +21,7 @@ import { fixWithAgentPrompt } from "./fix-with-agent";
 import { runKeyText, startedByText } from "./runs-list";
 import { useStartRun } from "./start-run";
 import { useRunLiveOnce, useTestRun, type LiveOnceControl } from "./test-run";
-import { WorkflowCanvas } from "./workflow-canvas";
+import { WorkflowCanvas, type WorkflowCanvasFocus } from "./workflow-canvas";
 import { EditRefusedBanner, useEditWithAgent, type WorkflowEdit } from "./workflow-draft";
 import {
   useWorkflow,
@@ -32,7 +32,14 @@ import {
   type WorkflowRunRead
 } from "./workflow-data";
 import type { WorkflowStepRunView, WorkflowStepView, WorkflowView } from "./workflow-views";
-import { cancelOffered, runFailed, startOffered } from "./workflow-model";
+import {
+  cancelOffered,
+  failedEntriesOf,
+  runFailed,
+  startOffered,
+  type EntryTally,
+  type FailedEntries
+} from "./workflow-model";
 import {
   BackLink,
   LoadError,
@@ -198,6 +205,16 @@ export function WorkflowRunPageView({
   const translation = useTranslation();
   const { locale, t } = translation;
   const run = read.run;
+  // "Show failed …" opens the loop's entries in the canvas's panel, filtered to the failed.
+  const [focus, setFocus] = useState<WorkflowCanvasFocus>();
+  const failedEntries =
+    run === undefined
+      ? undefined
+      : failedEntriesOf(
+          run,
+          [...(read.stepRuns ?? []), ...(read.entryLoops ?? [])],
+          workflow?.steps
+        );
   const address = { collaborationWorkspaceId: workspaceId, workflow: workflowId };
   const title =
     run === undefined
@@ -271,7 +288,16 @@ export function WorkflowRunPageView({
                   {t("workflows.run.testBadge")}
                 </Badge>
               ) : null}
-              <RunStateBadge status={run.status} stopping={stopping} />
+              {/* A done run's state waits for its step runs: they say whether entries failed. */}
+              {run.status === "done" &&
+              read.stepRuns === undefined &&
+              failedEntries === undefined ? null : (
+                <RunStateBadge
+                  status={run.status}
+                  stopping={stopping}
+                  withFailedEntries={failedEntries !== undefined}
+                />
+              )}
             </>
           )
         }
@@ -379,6 +405,8 @@ export function WorkflowRunPageView({
               }
               stopping={stopping}
               stepRunsCut={read.stepRunsCut}
+              failedEntries={failedEntries}
+              onShowFailed={(stepId) => setFocus({ stepId })}
             />
           )}
           <div className="relative min-h-0 flex-1">
@@ -395,6 +423,7 @@ export function WorkflowRunPageView({
                     }
               }
               onOpenChild={openChild}
+              {...(focus === undefined ? {} : { focus })}
             />
           </div>
         </>
@@ -413,7 +442,9 @@ function RunNotices({
   showFailure,
   earlierRevision,
   stopping,
-  stepRunsCut
+  stepRunsCut,
+  failedEntries,
+  onShowFailed
 }: {
   run: NonNullable<WorkflowRunRead["run"]>;
   silentFor: number | undefined;
@@ -423,8 +454,13 @@ function RunNotices({
   stopping: boolean;
   /** The run has more step runs than the page reads. */
   stepRunsCut: boolean;
+  /** Entries of the run's loops that failed while the run ended `done`. */
+  failedEntries: FailedEntries | undefined;
+  /** Opens the failed entries of the loop with the given step id. */
+  onShowFailed(stepId: string): void;
 }) {
   const { locale, t } = useTranslation();
+  const failedLoop = failedEntries?.opens?.loopStepId;
   const testLine =
     run.test && run.startedBy !== undefined
       ? t("workflows.run.testLine", { person: run.startedBy.name })
@@ -447,6 +483,7 @@ function RunNotices({
     testLine === undefined &&
     !earlierRevision &&
     !stepRunsCut &&
+    failedEntries === undefined &&
     !(showFailure && run.failure)
   ) {
     return null;
@@ -482,7 +519,85 @@ function RunNotices({
         </Banner>
       ) : null}
       {showFailure && run.failure ? <FailureBanner failure={run.failure} /> : null}
+      {failedEntries === undefined ? null : (
+        <FailedEntriesBanner
+          failedEntries={failedEntries}
+          onShow={failedLoop === undefined ? undefined : () => onShowFailed(failedLoop)}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * A run that ended `done` although entries of its loops failed: how many of how many, and the
+ * one way to them, which works at every zoom of the canvas. Before the page holds its loops, or
+ * where only runs further down have failures, it says how many, without a total and without a
+ * way the page could not keep.
+ */
+function FailedEntriesBanner({
+  failedEntries: { childRuns, entries, items, descendantRuns, opens },
+  onShow
+}: {
+  failedEntries: FailedEntries;
+  /** Opens the loop the failed entries are in. None where the page holds no such loop. */
+  onShow: (() => void) | undefined;
+}) {
+  const { locale, t } = useTranslation();
+  const counts = ({ failed, total }: EntryTally) => ({
+    count: failed.toLocaleString(locale),
+    total: total.toLocaleString(locale)
+  });
+  const sentences = [
+    childRuns === undefined
+      ? undefined
+      : t(
+          childRuns.failed === 1
+            ? "workflows.run.failedChildRunsOne"
+            : "workflows.run.failedChildRunsMany",
+          counts(childRuns)
+        ),
+    entries === undefined
+      ? undefined
+      : t(
+          entries.failed === 1
+            ? "workflows.run.failedEntriesOne"
+            : "workflows.run.failedEntriesMany",
+          counts(entries)
+        ),
+    items === undefined
+      ? undefined
+      : t(items === 1 ? "workflows.run.failedItemsOne" : "workflows.run.failedItemsMany", {
+          count: items.toLocaleString(locale)
+        }),
+    descendantRuns === undefined
+      ? undefined
+      : t(
+          descendantRuns === 1
+            ? "workflows.run.failedDescendantRunsOne"
+            : "workflows.run.failedDescendantRunsMany",
+          { count: descendantRuns.toLocaleString(locale) }
+        )
+  ].filter((sentence) => sentence !== undefined);
+  return (
+    <Banner
+      tone="warning"
+      layout="inline"
+      data-run-failed-entries=""
+      action={
+        onShow === undefined ? undefined : (
+          <Button size="sm" variant="outline" onClick={onShow}>
+            {t(
+              opens?.childRuns === true
+                ? "workflows.run.showFailedChildRuns"
+                : "workflows.run.showFailedEntries"
+            )}
+          </Button>
+        )
+      }
+    >
+      {sentences.join(" ")}
+    </Banner>
   );
 }
 

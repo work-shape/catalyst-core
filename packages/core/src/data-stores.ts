@@ -171,9 +171,15 @@ export const dataStoreLoadInputSchema = z
     onConflict: z.enum(DATA_STORE_LOAD_CONFLICT_MODES).default("fail"),
     /**
      * Replace by key: first deletes the rows whose values of these columns occur in the
-     * dataset, then inserts the dataset. `by` names columns of `key`.
+     * dataset, then inserts the dataset. `by` names columns of `key`. An explicit
+     * `values` group also replaces an empty dataset; every incoming row must belong to it.
      */
-    replace: z.strictObject({ by: z.array(z.string().min(1)).min(1) }).optional()
+    replace: z
+      .strictObject({
+        by: z.array(z.string().min(1)).min(1),
+        values: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional()
+      })
+      .optional()
   })
   .refine((input) => input.onConflict === "fail" || input.key !== undefined, {
     message: "onConflict 'skip' and 'update' need 'key'",
@@ -186,6 +192,22 @@ export const dataStoreLoadInputSchema = z
     {
       message:
         "'replace' deletes the rows that carry the values of 'by' and inserts the dataset; it needs 'key', which makes the inserted rows unique, and 'by' names columns of 'key'",
+      path: ["replace"]
+    }
+  )
+  .refine(
+    (input) => {
+      const replace = input.replace;
+      return (
+        !replace ||
+        (new Set(replace.by).size === replace.by.length &&
+          (replace.values === undefined ||
+            (Object.keys(replace.values).length === replace.by.length &&
+              replace.by.every((column) => Object.hasOwn(replace.values ?? {}, column)))))
+      );
+    },
+    {
+      message: "'replace.by' names each column once; 'replace.values' gives exactly those columns",
       path: ["replace"]
     }
   );

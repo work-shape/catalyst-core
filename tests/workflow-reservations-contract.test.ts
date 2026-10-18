@@ -389,6 +389,25 @@ describe("what the run view reads of a run and its step runs", () => {
 });
 
 describe("the load of a dataset into a Data Store", () => {
+  it("requires a complete explicit replacement group for an empty load", () => {
+    const input = {
+      table: "findings",
+      dataset: { $dataset: "empty", rowCount: 0, bytes: 0 },
+      key: ["client", "month", "rule"],
+      replace: { by: ["client", "month"], values: { client: "1001", month: "2026-09" } }
+    };
+    expect(dataStoreLoadInputSchema.parse(input).replace).toEqual(input.replace);
+    for (const replace of [
+      { by: ["client", "month"], values: {} },
+      { by: ["client", "month"], values: { client: "1001" } },
+      { by: ["client"], values: { client: "1001", month: "2026-09" } },
+      { by: ["client", "client"], values: { client: "1001" } },
+      { by: ["client"], values: { client: { unexpected: true } } },
+      { by: ["client"], values: { client: null } }
+    ])
+      expect(dataStoreLoadInputSchema.safeParse({ ...input, replace }).success).toBe(false);
+  });
+
   // Fails without `load`: 20,000 rows of a run had no way into a table but one insert per row.
   it("reads a load of a dataset into a table, its key and what it answers", () => {
     expect(DATA_STORE_LOAD_CONFLICT_MODES).toEqual(["fail", "skip", "update"]);

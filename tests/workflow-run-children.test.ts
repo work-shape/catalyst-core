@@ -1,3 +1,4 @@
+import type postgres from "postgres";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -20,6 +21,24 @@ import {
 } from "./support/workflow-instance";
 import { readyChildWorkflows } from "./support/workflow-children-instance";
 import { readyWorkflows, stepRunsOf } from "./support/workflow-runs";
+
+// Count only statements in a scoped read, excluding concurrent worker activity.
+const counted = await vi.hoisted(async () => {
+  const { AsyncLocalStorage } = await import("node:async_hooks");
+  return new AsyncLocalStorage<string[]>();
+});
+vi.mock("postgres", async (importOriginal) => {
+  type Connect = (url: string, options?: postgres.Options<Record<string, never>>) => postgres.Sql;
+  const actual = await importOriginal<{ default: Connect }>();
+  const connect: Connect = (url, options) =>
+    actual.default(url, {
+      ...options,
+      debug: (_connection, statement) => {
+        counted.getStore()?.push(statement);
+      }
+    });
+  return { ...actual, default: Object.assign(connect, actual.default) };
+});
 
 let open: WorkflowFixture | undefined;
 afterEach(async () => {
@@ -237,14 +256,67 @@ describe("Workflow child runs", () => {
       (await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: started.id } })).json()
     );
     expect(done.status).toBe("done");
+    expect(
+      (await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: started.id } })).json()
+    ).toMatchObject({ failedDescendantCount: 1 });
+    expect(
+      (
+        await t.expectOk(t.root.id, "workflows.list_runs", { params: { workflow: "parent" } })
+      ).json()
+    ).toMatchObject({
+      items: [expect.objectContaining({ id: started.id, failedDescendantCount: 1 })]
+    });
+    expect(
+      (await t.stores.workflowRuns.listLastRuns({ clientInstanceId, workflows: ["parent"] })).get(
+        "parent"
+      )
+    ).toMatchObject({ id: started.id, failedDescendantCount: 1 });
     expect(JSON.parse(done.outputPreview?.text ?? "null")).toEqual({
       result: { total: 600, done: 599, failed: 1 }
     });
     expect(openMax).toBe(4);
     const runs = await children(t, started.id);
     expect(runs).toHaveLength(600);
+    // A page of 600 runs and one of five each need one list and one grouped count.
+    for (const limit of [5, 600]) {
+      const statements: string[] = [];
+      const page = await counted.run(statements, () =>
+        t.stores.workflowRuns.listRuns({
+          clientInstanceId,
+          workflow: "child",
+          page: { limit }
+        })
+      );
+      expect(page).toHaveLength(limit);
+      expect(
+        statements.filter((statement) => !statement.includes("pg_catalog.pg_type"))
+      ).toHaveLength(2);
+    }
     expect(runs.every((r) => r.stepRunCount <= 3)).toBe(true);
     expect(runs.find((r) => r.itemIndex === 599)).toBeDefined();
+    const failedChild = runs.find((r) => r.status === "failed");
+    expect(failedChild).toBeDefined();
+    const response = await t.expectOk(t.root.id, "workflows.list_step_runs", {
+      params: { runId: started.id },
+      query: { status: "failed" }
+    });
+    const { items: failedSteps } = z
+      .object({
+        items: z.array(
+          z.object({
+            id: z.string(),
+            childRunId: z.string().optional(),
+            linkedRunId: z.string().optional()
+          })
+        )
+      })
+      .parse(response.json());
+    expect(failedSteps).toHaveLength(1);
+    expect(failedSteps[0]).toMatchObject({
+      id: failedChild?.parentStepRunId,
+      childRunId: failedChild?.id
+    });
+    expect(failedSteps[0]?.linkedRunId).toBeUndefined();
   }, 300_000);
 });
 

@@ -236,6 +236,8 @@ export async function workflowFixture(
     /** The clock of the engine and the time zone of its schedules, for a test of due times. */
     now?: InstanceWorkflowsParts["now"];
     timeZone?: string;
+    /** `localization.defaultLocale`: the language of the notices the engine writes itself. */
+    locale?: InstanceWorkflowsParts["locale"];
     /** The files of the Workflows' revisions, and what runs the scripts of code steps. */
     stepFiles?: InstanceWorkflowsParts["stepFiles"];
     codeRunner?: InstanceWorkflowsParts["codeRunner"];
@@ -319,6 +321,7 @@ export async function workflowFixture(
             ...(options.limits ? { limits: options.limits } : {}),
             ...(options.now ? { now: options.now } : {}),
             ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone }),
+            ...(options.locale ? { locale: options.locale } : {}),
             ...(options.stepFiles ? { stepFiles: options.stepFiles } : {}),
             ...(options.codeRunner ? { codeRunner: options.codeRunner } : {}),
             ...(options.stepDataDays === undefined ? {} : { stepDataDays: options.stepDataDays }),

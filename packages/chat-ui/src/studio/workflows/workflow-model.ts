@@ -8,6 +8,7 @@ import type {
   WorkflowFailureReason,
   WorkflowRunStatus,
   WorkflowRunView,
+  WorkflowStepRunView,
   WorkflowStepView,
   WorkflowView
 } from "./workflow-views";
@@ -207,14 +208,139 @@ const RUN_STATES: Readonly<Record<WorkflowRunStatus, RunStatePresentation>> = {
   limit_reached: { label: "workflows.run.limitReached", tone: "danger", spins: false }
 };
 
-/** How the state of a run reads. A run being cancelled says so until the instance has. */
+/**
+ * How the state of a run reads. A run being cancelled says so until the instance has. A run
+ * that ended `done` with failed loop entries is no plain success: it reads as a warning.
+ */
 export function runStatePresentation(
   status: WorkflowRunStatus,
-  stopping = false
+  stopping = false,
+  withFailedEntries = false
 ): RunStatePresentation {
-  return stopping && status !== "cancelled"
-    ? { label: "workflows.run.stopping", tone: "neutral", spins: true }
+  if (stopping && status !== "cancelled") {
+    return { label: "workflows.run.stopping", tone: "neutral", spins: true };
+  }
+  return status === "done" && withFailedEntries
+    ? { label: "workflows.run.doneWithFailures", tone: "warning", spins: false }
     : RUN_STATES[status];
+}
+
+/** How many entries of some loops failed, of how many they have together. */
+export interface EntryTally {
+  failed: number;
+  total: number;
+}
+
+/** What a run that ended `done` left failed below it: in its loops, or in runs further down. */
+export interface FailedEntries {
+  /** The loops that start a child run per entry: their entries are child runs. */
+  childRuns?: EntryTally;
+  /** Every other loop. */
+  entries?: EntryTally;
+  /**
+   * Only where the page holds no loop of the run's own with a failed entry, as before its step
+   * runs load: the items of its own loops that failed, as the instance counted them when the
+   * run ended. Whether they are child runs the page cannot tell yet. It has no total and no
+   * loop to take the reader to.
+   */
+  items?: number;
+  /**
+   * Only where neither a loop of the run's own nor its own count names a failed entry: the runs
+   * below it, at any depth, that failed or left failures, as the instance counts them. It has
+   * no total and no loop to take the reader to.
+   */
+  descendantRuns?: number;
+  /**
+   * The first loop of the run's frame with a failed entry, a child-run loop first: where the
+   * reader is taken. None where only loops inside entries or runs further down failed.
+   */
+  opens?: { loopStepId: string; childRuns: boolean };
+}
+
+/** A step of a definition by its id, at any depth of its loops and paths. */
+function stepById(
+  steps: readonly WorkflowStepView[] | undefined,
+  stepId: string
+): WorkflowStepView | undefined {
+  for (const step of steps ?? []) {
+    if (step.id === stepId) return step;
+    const inside =
+      stepById(step.steps, stepId) ??
+      (step.branches ?? []).reduce<WorkflowStepView | undefined>(
+        (found, branch) => found ?? stepById(branch.steps, stepId),
+        undefined
+      );
+    if (inside !== undefined) return inside;
+  }
+  return undefined;
+}
+
+/**
+ * Whether a run that ended `done` left failed items in its own loops, or runs with failures
+ * below it, at any depth. A list reads this: it holds no step runs.
+ */
+export function doneWithFailedRuns(
+  run: Pick<WorkflowRunView, "status" | "failedDescendantCount" | "failedItemCount">
+): boolean {
+  return run.status === "done" && (run.failedItemCount > 0 || run.failedDescendantCount > 0);
+}
+
+/**
+ * What a run that ended `done` left failed, read first from the counts on the step runs of its
+ * loops (a loop under `onItemFailure: continue` ends `done` with failed entries): those of its
+ * frame, at any depth of its blocks, and those of loops inside an entry of another loop. A loop
+ * is a child-run loop where its body is one `workflow` step: its entries are child runs. Any
+ * other body's counts are entries, whatever it calls. Each tally counts every loop of its kind,
+ * so "1 of 600" names all of them. Only a loop of the frame is one the page can open.
+ * Until the step runs load, the run's own count of failed items speaks, as `items`. A child run
+ * that ended `done` over failures of its own leaves no failed count in this run: for it the
+ * run's count of runs with failures below it speaks, as `descendantRuns`, where neither speaks.
+ * Nothing for a run that did not end `done`, or that left nothing failed.
+ */
+export function failedEntriesOf(
+  run: Pick<WorkflowRunView, "status" | "failedDescendantCount" | "failedItemCount">,
+  stepRuns: readonly Pick<WorkflowStepRunView, "stepId" | "iteration" | "loop">[] | undefined,
+  steps: readonly WorkflowStepView[] | undefined
+): FailedEntries | undefined {
+  if (run.status !== "done") return undefined;
+  // The counts count entries: they are child runs only where an entry is one child run.
+  const startsChildRuns = (stepId: string) => {
+    const body = stepById(steps, stepId)?.steps ?? [];
+    return body.length === 1 && body[0]?.kind === "workflow";
+  };
+  const loops = (stepRuns ?? []).flatMap((stepRun) =>
+    stepRun.loop === undefined
+      ? []
+      : [
+          {
+            stepId: stepRun.stepId,
+            counts: stepRun.loop,
+            child: startsChildRuns(stepRun.stepId),
+            // A loop in an item of another loop is one of many: the page cannot open it alone.
+            opens: stepRun.iteration === undefined
+          }
+        ]
+  );
+  const tally = (child: boolean): EntryTally | undefined => {
+    const own = loops.filter((loop) => loop.child === child);
+    const failed = own.reduce((sum, loop) => sum + loop.counts.failed, 0);
+    return failed === 0
+      ? undefined
+      : { failed, total: own.reduce((sum, loop) => sum + loop.counts.total, 0) };
+  };
+  const childRuns = tally(true);
+  const entries = tally(false);
+  if (childRuns === undefined && entries === undefined) {
+    if (run.failedItemCount > 0) return { items: run.failedItemCount };
+    return doneWithFailedRuns(run) ? { descendantRuns: run.failedDescendantCount } : undefined;
+  }
+  const openable = loops.filter((loop) => loop.opens && loop.counts.failed > 0);
+  const first = openable.find((loop) => loop.child) ?? openable[0];
+  return {
+    ...(childRuns === undefined ? {} : { childRuns }),
+    ...(entries === undefined ? {} : { entries }),
+    ...(first === undefined ? {} : { opens: { loopStepId: first.stepId, childRuns: first.child } })
+  };
 }
 
 /**

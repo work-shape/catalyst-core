@@ -24,6 +24,11 @@ interface SourcePage<Row> {
 /** The step runs a run's drawing is made of. */
 interface WorkflowFrameStepRuns {
   stepRuns: readonly WorkflowStepRunView[];
+  /**
+   * The step runs of loops inside an item of another loop: one per item, never drawn. Their
+   * counts say what failed inside a run that ended `done`.
+   */
+  entryLoops: readonly WorkflowStepRunView[];
   /** Every step run outside a loop's items is among them. False where the read was cut. */
   complete: boolean;
 }

@@ -208,34 +208,154 @@ describe("a load into a Data Store", () => {
     expect(await count(world, "month = '2026-08'")).toBe(3);
   });
 
-  it("lets the later of two loads that replace one month at once replace the rows of the earlier", async () => {
-    const world = await store("at-once");
-    await load(world, world.datasets.put("ds_stored", [many(50, { note: "stored" })]));
-    const replace = { key: KEY, replace: { by: ["month"] } };
-    const waiting = async () =>
-      (
-        await db.sql<{ count: number }[]>`
+  it("clears only the explicit month and client when a rerun has no findings", async () => {
+    const world = await store("empty-scoped");
+    await load(
+      world,
+      world.datasets.put("ds_old", [
+        [found(1), found(1, { rule_id: "second" }), found(2), found(1, { month: "2026-08" })]
+      ])
+    );
+    const replace = {
+      key: KEY,
+      replace: {
+        by: ["month", "client_id"],
+        values: { month: "2026-09", client_id: "client-1" }
+      }
+    };
+    expect(await load(world, world.datasets.put("ds_empty", []), replace)).toEqual({
+      table: "month_findings",
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      deleted: 2
+    });
+    expect(await count(world)).toBe(2);
+    expect(await count(world, "client_id = 'client-2' or month = '2026-08'")).toBe(2);
+    expect(await load(world, world.datasets.put("ds_empty_again", [[]]), replace)).toMatchObject({
+      deleted: 0
+    });
+  });
+
+  it("keeps all rows when a scoped replacement contains a row outside its group", async () => {
+    const world = await store("outside-scope");
+    await load(world, world.datasets.put("ds_old", [[found(1), found(2)]]));
+    const replace = {
+      key: KEY,
+      replace: {
+        by: ["client_id", "month"],
+        values: { client_id: "client-1", month: "2026-09" }
+      }
+    };
+    expect(
+      await refusal(
+        load(
+          world,
+          world.datasets.put("ds_mixed", [
+            [found(1, { note: "new" })],
+            [found(2, { note: "new" })]
+          ]),
+          replace
+        )
+      )
+    ).toMatchObject({ details: { reason: "replace_scope_mismatch" } });
+    expect(await count(world)).toBe(2);
+    expect(await count(world, "note = 'new'")).toBe(0);
+    expect(
+      await load(world, world.datasets.put("ds_valid", [[found(1, { note: "new" })]]), replace)
+    ).toMatchObject({ inserted: 1, deleted: 1 });
+    expect(await count(world)).toBe(2);
+  });
+
+  it("compares mapped replacement groups using the table's column types", async () => {
+    const world = await store("mapped-scope");
+    await load(
+      world,
+      world.datasets.put("ds_old", [
+        [
+          found(1, { client_id: "1001" }),
+          found(2),
+          found(1, { client_id: "1001", month: "2026-08" })
+        ]
+      ])
+    );
+    expect(
+      await load(
+        world,
+        world.datasets.put("ds_mapped", [
+          [
+            {
+              Mandant: 1001,
+              Monat: "2026-09",
+              Regel: "new-rule",
+              Betrag: 2
+            }
+          ]
+        ]),
+        {
+          key: KEY,
+          columns: { Mandant: "client_id", Monat: "month", Regel: "rule_id", Betrag: "amount" },
+          replace: { by: ["client_id", "month"], values: { client_id: "1001", month: "2026-09" } }
+        }
+      )
+    ).toMatchObject({ inserted: 1, deleted: 1 });
+    expect(await count(world)).toBe(3);
+    expect(
+      await count(world, "client_id = '1001' and month = '2026-09' and rule_id = 'new-rule'")
+    ).toBe(1);
+  });
+
+  it("an empty dataset without an explicit scope clears no inferred group", async () => {
+    const world = await store("empty-inferred");
+    await load(world, world.datasets.put("ds_old", [[found(1)]]));
+    expect(
+      await load(world, world.datasets.put("ds_empty", []), {
+        key: KEY,
+        replace: { by: ["month"] }
+      })
+    ).toMatchObject({ inserted: 0, deleted: 0 });
+    expect(await count(world)).toBe(1);
+  });
+
+  it.each(["inferred", "scope-first", "scope-second"])(
+    "serializes concurrent replacements (%s)",
+    async (mode) => {
+      const world = await store("at-once");
+      await load(world, world.datasets.put("ds_stored", [many(50, { note: "stored" })]));
+      const replace = { key: KEY, replace: { by: ["month"] } };
+      const scoped = { key: KEY, replace: { by: ["month"], values: { month: "2026-09" } } };
+      const waiting = async () =>
+        (
+          await db.sql<{ count: number }[]>`
           select count(*)::integer as count from pg_stat_activity
           where datname = ${world.record.location.database} and wait_event_type = 'Lock'`
-      )[0]?.count;
-    let later: Promise<unknown> | undefined;
-    // Load B starts once load A has deleted the stored rows and written its first thousand,
-    // and A goes on only when B waits for it.
-    const first = world.datasets.put(
-      "ds_a",
-      [many(1_100, { note: "a" }, 1_000), many(1_400, { note: "a" }, 2_100)],
-      async () => {
-        later = load(world, world.datasets.put("ds_b", [many(10, { note: "b" }, 10_000)]), replace);
-        await eventually(async () => expect(await waiting()).toBe(1));
-      }
-    );
+        )[0]?.count;
+      let later: Promise<unknown> | undefined;
+      // Load B starts once load A has deleted the stored rows and written its first thousand,
+      // and A goes on only when B waits for it.
+      const first = world.datasets.put(
+        "ds_a",
+        [many(1_100, { note: "a" }, 1_000), many(1_400, { note: "a" }, 2_100)],
+        async () => {
+          later = load(
+            world,
+            world.datasets.put("ds_b", [many(10, { note: "b" }, 10_000)]),
+            mode === "scope-second" ? scoped : replace
+          );
+          await eventually(async () => expect(await waiting()).toBe(1));
+        }
+      );
 
-    expect(await load(world, first, replace)).toMatchObject({ inserted: 2_500, deleted: 50 });
-    // B replaced what A stored, and says what it deleted.
-    expect(await later).toMatchObject({ inserted: 10, deleted: 2_500 });
-    expect(await count(world)).toBe(10);
-    expect(await count(world, "note = 'b'")).toBe(10);
-  });
+      expect(await load(world, first, mode === "scope-first" ? scoped : replace)).toMatchObject({
+        inserted: 2_500,
+        deleted: 50
+      });
+      // B replaced what A stored, and says what it deleted.
+      expect(await later).toMatchObject({ inserted: 10, deleted: 2_500 });
+      expect(await count(world)).toBe(10);
+      expect(await count(world, "note = 'b'")).toBe(10);
+    }
+  );
 
   it("refuses a dataset that holds one key twice, in one part or in two, and keeps none of its rows", async () => {
     const world = await store("twice");

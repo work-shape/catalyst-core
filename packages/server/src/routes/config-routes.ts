@@ -2,6 +2,8 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { createClientBranding, createSafeConfigView } from "@work-shape/catalyst-config-schema";
 import {
   allowedLegacyPermissions,
+  asUserId,
+  getSubjectUserId,
   moduleConfigKey,
   readDatabaseReadiness
 } from "@work-shape/catalyst-core";
@@ -22,8 +24,14 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
   route(apiOperations["ready.get"], () => readDatabaseReadiness(options.stores));
 
   route(apiOperations["me.get"], async ({ user, access }) => {
+    // The language is the record's, never the session's: a change elsewhere shows at once.
+    const record = await options.stores.users.getUser({
+      clientInstanceId: options.clientInstanceId,
+      userId: asUserId(getSubjectUserId(user))
+    });
     return {
       ...user,
+      ...(record?.locale ? { locale: record.locale } : {}),
       permissions: allowedLegacyPermissions(access),
       instanceAdminName: await readInstanceAdminName(options.stores.users, options.clientInstanceId)
     };

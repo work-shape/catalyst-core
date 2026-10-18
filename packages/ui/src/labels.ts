@@ -26,6 +26,8 @@ export interface UiLabels {
   stateRunning: string;
   stateWaiting: string;
   stateDone: string;
+  /** A repeated part of a graph that ended with some of its entries failed. */
+  stateDoneWithFailures: string;
   stateFailed: string;
   stateCancelled: string;
   stateLimitReached: string;
@@ -84,6 +86,7 @@ export const uiLabelsEn: UiLabels = {
   stateRunning: "Running",
   stateWaiting: "Waiting",
   stateDone: "Done",
+  stateDoneWithFailures: "Done with failures",
   stateFailed: "Failed",
   stateCancelled: "Cancelled",
   stateLimitReached: "Limit reached",
@@ -129,6 +132,7 @@ export const uiLabelsDe: UiLabels = {
   stateRunning: "Läuft",
   stateWaiting: "Wartet",
   stateDone: "Fertig",
+  stateDoneWithFailures: "Fertig mit Fehlern",
   stateFailed: "Fehlgeschlagen",
   stateCancelled: "Abgebrochen",
   stateLimitReached: "Limit erreicht",

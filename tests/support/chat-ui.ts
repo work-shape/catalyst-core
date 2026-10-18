@@ -248,6 +248,12 @@ export {
 } from "../../packages/chat-ui/src/chat/inbox";
 export { WorkspaceDraftsProvider } from "../../packages/chat-ui/src/chat/workspace/workspace-drafts";
 export {
+  chosenLocale,
+  latestSavingLocale,
+  savingLocaleFilters
+} from "../../packages/chat-ui/src/chat/workspace/account-locale";
+export { currentUserUpdateOptions } from "../../packages/chat-ui/src/shared/api/workspace-mutations";
+export {
   MarkdownArtifact,
   MarkdownLinkPolicyProvider
 } from "../../packages/chat-ui/src/chat/markdown/markdown-text";

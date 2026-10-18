@@ -365,7 +365,8 @@ describe("the page of a test run", () => {
           loadingMore: false,
           loadMore: noop,
           retry: noop
-        }
+        },
+        onOpenChild: noop
       })
     );
     expect(markup).toContain('data-target="live"');

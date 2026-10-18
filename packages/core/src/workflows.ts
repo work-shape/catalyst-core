@@ -670,6 +670,8 @@ export interface WorkflowStepRunCall {
 
 /** What a run page needs of a run beside its status. Types; the engine slices fill them. */
 export interface WorkflowRunRecordView {
+  /** Failed loop items captured once at finalization; absent on older runs. */
+  failedItemCount?: number;
   /** True only for a completed data run whose write steps handled no items. */
   empty?: boolean;
   /** The revision of the definition the run started on and keeps when it is resumed. */
@@ -681,6 +683,8 @@ export interface WorkflowRunRecordView {
 
 /** The latest run of a Workflow, on its entry in `workflows.list`. */
 export const workflowLastRunSchema = z.object({
+  failedItemCount: z.number().int().min(0).optional(),
+  failedDescendantCount: z.number().int().min(0).optional(),
   id: z.string().min(1),
   status: z.enum(WORKFLOW_RUN_STATUSES),
   startedAt: z.string().optional(),

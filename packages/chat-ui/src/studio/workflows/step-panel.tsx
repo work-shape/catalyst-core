@@ -390,7 +390,10 @@ function StepRunDetails({
     <>
       <KeyValueList>
         <KeyValue label={t("workflows.panel.state")}>
-          <RunStateBadge status={stepRun.status} />
+          <RunStateBadge
+            status={stepRun.status}
+            withFailedEntries={(stepRun.loop?.failed ?? 0) > 0}
+          />
         </KeyValue>
         {stepRun.startedAt === undefined ? null : (
           <KeyValue label={t("workflows.panel.started")}>

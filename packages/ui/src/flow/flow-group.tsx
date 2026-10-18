@@ -11,6 +11,7 @@ const groupFrames: Record<FlowStatus, string> = {
   running: "border-info",
   waiting: "border-warning",
   done: "border-success",
+  doneWithFailures: "border-warning",
   failed: "border-destructive",
   skipped: "border-input-strong"
 };

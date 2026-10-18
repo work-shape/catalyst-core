@@ -4,6 +4,7 @@ import {
 } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
+  asCollaborationWorkspaceId,
   asUserId,
   findNamespaceOfAssetName,
   getSubjectUserId,
@@ -26,7 +27,7 @@ import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
 import { accessResource, decide, type AssetCall } from "./asset-access";
 import { isReleaseSync } from "./asset-write-rules";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
-import type { WorkflowAssetKind } from "../asset-kinds/shared";
+import type { AddresseeNames, WorkflowAssetKind } from "../asset-kinds/shared";
 import {
   notFound,
   requireActive,
@@ -192,7 +193,9 @@ export class AssetReadWorkflow {
         ? await target.kind.publishQuestion({
             assetId: asset.id,
             scope: asset.scope,
-            config: content.config
+            config: content.config,
+            locale: await this.readerLocale(call),
+            names: this.addresseeNames()
           })
         : undefined;
     const agentStatus =
@@ -249,6 +252,35 @@ export class AssetReadWorkflow {
       }
     );
     return status;
+  }
+
+  /**
+   * The reader's language: the one their account chose, else the one their request names,
+   * else the instance's. A service principal has no account language.
+   */
+  private async readerLocale(call: AssetCall): Promise<LocaleCode> {
+    const { clientInstanceId, stores, config } = this.options;
+    const chosen = isAuthenticatedServicePrincipal(call.actor)
+      ? undefined
+      : (
+          await stores.users.getUser({
+            clientInstanceId,
+            userId: asUserId(getSubjectUserId(call.actor))
+          })
+        )?.locale;
+    return chosen ?? call.runtime?.locale ?? config.localization.defaultLocale;
+  }
+
+  /** Names of users and Shared Workspaces of the instance, for a question that hides ids. */
+  private addresseeNames(): AddresseeNames {
+    const { clientInstanceId, stores } = this.options;
+    return {
+      user: async (id) =>
+        (await stores.users.getUser({ clientInstanceId, userId: asUserId(id) }))?.displayLabel,
+      workspace: async (id) =>
+        (await stores.workspaces.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(id)))
+          ?.name
+    };
   }
 
   /** One page of the history, newest first. It stays readable after its asset is deleted. */

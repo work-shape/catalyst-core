@@ -125,6 +125,10 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   cancelledAt?: string;
   /** True on a run that ended `done` without a write step handling an item. */
   empty?: boolean;
+  /** Runs below it, at any depth, that failed, reached a limit or left failed items. */
+  failedDescendantCount?: number;
+  /** Items of its own loops that failed, counted once when the run ended. */
+  failedItemCount?: number;
 }
 
 /** A step run as the engine's read answers it, with the placement the contract names. */
@@ -261,6 +265,8 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     test: run.mode === "test",
     ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
     empty: run.empty === true && run.status === "done",
+    failedDescendantCount: run.failedDescendantCount ?? 0,
+    failedItemCount: run.failedItemCount ?? 0,
     ...(run.parentRunId === undefined || run.parentWorkflow === undefined
       ? {}
       : { parent: { runId: run.parentRunId, workflowId: run.parentWorkflow } })
@@ -333,7 +339,15 @@ export interface WorkflowSummaryResource {
   /** The label of the account every run acts as, where it is active. */
   runsAs?: string;
   /** The latest run of the Workflow, where it has one. */
-  lastRun?: { id: string; status: WorkflowRunStatus; startedAt?: string };
+  lastRun?: {
+    id: string;
+    status: WorkflowRunStatus;
+    startedAt?: string;
+    /** Runs below it, at any depth, that failed, reached a limit or left failed items. */
+    failedDescendantCount?: number;
+    /** Items of its own loops that failed, counted once when the run ended. */
+    failedItemCount?: number;
+  };
 }
 
 /** The reasons of a summary as the screens hold them: the code and the sentence. */
@@ -406,7 +420,9 @@ export function toWorkflowListItem(summary: WorkflowSummaryResource): WorkflowLi
           lastRun: {
             id: lastRun.id,
             status: lastRun.status,
-            ...(lastRun.startedAt === undefined ? {} : { startedAt: lastRun.startedAt })
+            ...(lastRun.startedAt === undefined ? {} : { startedAt: lastRun.startedAt }),
+            failedDescendantCount: lastRun.failedDescendantCount ?? 0,
+            failedItemCount: lastRun.failedItemCount ?? 0
           }
         })
   };

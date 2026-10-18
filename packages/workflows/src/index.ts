@@ -126,6 +126,7 @@ export {
 export { replaceScheduleJob, workflowScheduleJobKind } from "./schedule-trigger";
 export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
 export { checkChildContracts, checkChildCycles } from "./child-contracts";
+export { childRulesRevisionWarnings } from "./child-rules-revision";
 export { workflowRunPrincipal } from "./run-identity";
 export {
   workflowDefinitionStartIssues,

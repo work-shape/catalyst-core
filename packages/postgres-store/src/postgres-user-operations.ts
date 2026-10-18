@@ -404,6 +404,9 @@ async function updateUser(db: PostgresConnection, input: UpdateUserInput): Promi
   if (input.status !== undefined) {
     set.status = input.status;
   }
+  if (input.locale !== undefined) {
+    set.locale = input.locale;
+  }
 
   const row = await db.transaction(async (tx) => {
     await lockRights(tx, input);

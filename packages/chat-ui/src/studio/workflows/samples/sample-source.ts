@@ -89,7 +89,11 @@ export function createSampleSource(
     },
     getRun: async (runId) => Promise.resolve(toWorkflowRun(find(runId).run)),
     listFrameStepRuns: async (runId) =>
-      Promise.resolve({ stepRuns: find(runId).frame.map(toWorkflowStepRun), complete: true }),
+      Promise.resolve({
+        stepRuns: find(runId).frame.map(toWorkflowStepRun),
+        entryLoops: [],
+        complete: true
+      }),
     listEntryStepRuns: async (runId, query) => {
       const page = sampleEntryStepRuns(find(runId), query.containerStepRunId, query);
       return Promise.resolve({
@@ -172,7 +176,9 @@ export function createSampleSource(
                   lastRun: {
                     id: last.id,
                     status: last.status,
-                    ...(last.startedAt === undefined ? {} : { startedAt: last.startedAt })
+                    ...(last.startedAt === undefined ? {} : { startedAt: last.startedAt }),
+                    failedDescendantCount: 0,
+                    failedItemCount: 0
                   }
                 })
           };

@@ -68,6 +68,9 @@ const datasetMetadataSchema = z.object({
 });
 
 export const workflowRunSchema = z.object({
+  /** Descendants that failed, reached a limit or contain failed items, excluding this run. */
+  failedDescendantCount: z.number().int().min(0).optional(),
+  failedItemCount: z.number().int().min(0).optional(),
   id: z.string(),
   workflow: z.string(),
   /** The revision of the definition the run started on and keeps to its end. */
@@ -174,6 +177,8 @@ export const workflowStepRunSchema = z.object({
    * and does not own. Cancelling this run leaves that one going.
    */
   linkedRunId: z.string().optional(),
+  /** The child run owned by this step, when one has started. */
+  childRunId: z.string().optional(),
   error: workflowRunErrorSchema.optional(),
   outputPreview: workflowOutputPreviewSchema.optional(),
   datasets: z.array(datasetMetadataSchema).optional(),
@@ -263,6 +268,8 @@ export const workflowSummarySchema = z.object({
   /** The latest run of the Workflow. Missing on one that never ran. */
   lastRun: z
     .object({
+      failedDescendantCount: z.number().int().min(0).optional(),
+      failedItemCount: z.number().int().min(0).optional(),
       id: z.string(),
       status: runStatusSchema,
       startedAt: timestampSchema.optional(),

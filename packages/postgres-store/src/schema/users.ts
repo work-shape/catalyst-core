@@ -8,7 +8,12 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { UserModelPreference, UserRecord, UserStatus } from "@work-shape/catalyst-core";
+import type {
+  LocaleCode,
+  UserModelPreference,
+  UserRecord,
+  UserStatus
+} from "@work-shape/catalyst-core";
 
 export const productUsers = pgTable(
   "product_users",
@@ -22,6 +27,8 @@ export const productUsers = pgTable(
     permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
     status: text("status").$type<UserStatus>().notNull(),
     modelPreference: jsonb("model_preference").$type<UserModelPreference>(),
+    /** The language the person chose; null follows the instance's default. */
+    locale: text("locale").$type<LocaleCode>(),
     /** Set when the deletion of the account was accepted. The user is closed from then on. */
     deletionRequestedAt: timestamp("deletion_requested_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),

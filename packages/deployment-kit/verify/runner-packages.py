@@ -6,6 +6,7 @@ import json
 import re
 import socket
 
+import pandas as pd
 from pypdf import PdfReader, PdfWriter
 
 
@@ -22,6 +23,9 @@ assert {key(package["name"]): package["version"] for package in manifest} == ins
 for package in manifest:
     assert importlib.metadata.version(package["name"]) == package["version"], package["name"]
 assert any(key(package["name"]) == "pypdf" for package in manifest)
+assert importlib.metadata.version("pandas") == "2.2.3"
+assert any(key(package["name"]) == "pandas" for package in manifest)
+assert pd.DataFrame({"amount": [2, 3]}).amount.sum() == 5
 pdf = io.BytesIO()
 writer = PdfWriter()
 writer.add_blank_page(width=72, height=72)
@@ -32,4 +36,4 @@ assert len(PdfReader(pdf).pages) == 1
 with socket.socket() as probe:
     probe.settimeout(1)
     assert probe.connect_ex(("192.0.2.1", 9)) == errno.ENETUNREACH, "Runner has an outbound route"
-print(json.dumps({"packages": len(manifest), "pypdf": "imported", "network": "none"}))
+print(json.dumps({"packages": len(manifest), "pypdf": "imported", "pandas": "imported", "network": "none"}))

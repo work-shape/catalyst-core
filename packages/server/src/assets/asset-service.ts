@@ -76,7 +76,7 @@ import {
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
-import { type AvailableIn } from "./asset-placement";
+import { type AssetWarning, type AvailableIn } from "./asset-placement";
 import { AssetReadWorkflow } from "./asset-read-service";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
@@ -591,7 +591,17 @@ export class AssetWorkflow {
           );
     return {
       valid: checked.issues.length === 0,
-      ...(checked.warnings.length > 0 ? { warnings: checked.warnings } : {}),
+      ...nonEmptyWarnings([
+        ...checked.warnings,
+        // A definition that holds is asked what its kind warns of; one with issues is not.
+        ...(checked.issues.length > 0
+          ? []
+          : ((await kind.validationWarnings?.({
+              clientInstanceId: this.options.clientInstanceId,
+              definition: prepared,
+              stores: this.options.stores
+            })) ?? []))
+      ]),
       issues: checked.issues.map(({ message, path, code }) => ({
         message,
         ...(path === undefined || path.length === 0 ? {} : { path: path.map(String) }),
@@ -761,4 +771,9 @@ function allocatedRevision(
     throw new AppError("INTERNAL", `The write of config ${kind} '${name}' has no revision`);
   }
   return revision;
+}
+
+/** The warnings of an answer, left out where there are none. */
+function nonEmptyWarnings(warnings: AssetWarning[]): { warnings?: AssetWarning[] } {
+  return warnings.length > 0 ? { warnings } : {};
 }

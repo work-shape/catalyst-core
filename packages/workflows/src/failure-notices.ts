@@ -4,6 +4,7 @@ import {
   defineJobKind,
   isWorkflowRunEnded,
   type ClientInstanceId,
+  type LocaleCode,
   type Notices,
   type PlatformStores,
   type WorkflowRun
@@ -20,10 +21,39 @@ export const workflowFailureNoticeJob = defineJobKind({
   manualRetry: false
 });
 
+// The platform writes this notice itself, so its words are ours: counts only, never a value
+// of the run. It counts runs with failures: failed, at a limit, or with failed entries. It is in
+// the publisher's language as their record says it at delivery, and in the instance's default
+// language where they chose none, as the digest mail is.
+const failureCopy: Record<LocaleCode, (count: number) => { title: string; text: string }> = {
+  en: (count) =>
+    count === 1
+      ? {
+          title: "A Workflow run needs attention",
+          text: "1 run failed, reached a limit or has failed entries. Open the run to review it."
+        }
+      : {
+          title: "Workflow runs need attention",
+          text: `${count} runs failed, reached a limit or have failed entries. Open the run to review them.`
+        },
+  de: (count) =>
+    count === 1
+      ? {
+          title: "Ein Workflow-Lauf braucht deine Aufmerksamkeit",
+          text: "1 Lauf ist fehlgeschlagen, hat ein Limit erreicht oder enthält fehlgeschlagene Einträge. Öffne den Lauf, um ihn zu prüfen."
+        }
+      : {
+          title: "Workflow-Läufe brauchen deine Aufmerksamkeit",
+          text: `${count} Läufe sind fehlgeschlagen, haben ein Limit erreicht oder enthalten fehlgeschlagene Einträge. Öffne den Lauf, um sie zu prüfen.`
+        }
+};
+
 /** Only a root end queues this job, including a successful root with failed children. */
 export function createFailureNotices(options: {
   clientInstanceId: ClientInstanceId;
   notices?: (stores: PlatformStores) => Notices;
+  /** The instance's default language, for a publisher who chose none. English when left out. */
+  locale?: LocaleCode;
 }) {
   const { clientInstanceId } = options;
   return defineJobHandler({
@@ -55,8 +85,7 @@ export function createFailureNotices(options: {
           {
             from: failureSender(root),
             to: { users: [publisher] },
-            title: "Workflow runs need attention",
-            text: `${count} run(s) failed or reached a limit. Open the root run to review them.`,
+            ...failureCopy[user.locale ?? options.locale ?? "en"](count),
             channels: ["inbox"],
             link: { kind: "workflow_run", workflowId: root.workflow, runId: root.id }
           },

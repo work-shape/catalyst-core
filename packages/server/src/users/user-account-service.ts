@@ -5,6 +5,7 @@ import {
   auditActorFromUser,
   authenticatedUserFromRecord,
   type AuthenticatedUser,
+  type LocaleCode,
   type RuntimeCallContext,
   type UserRecord
 } from "@work-shape/catalyst-core";
@@ -12,8 +13,11 @@ import { requestAccountDeletion } from "../deletion/account-deletion";
 import type { DeletionOutcome } from "../deletion/subject-deletion";
 import type { ChatServerOptions } from "../types";
 
+/** What a person changes of their own profile; a field left out stays as it is. */
 interface UpdateCurrentUserCommand {
-  displayLabel: string;
+  displayLabel?: string;
+  /** `null` goes back to the instance's default language. */
+  locale?: LocaleCode | null;
 }
 
 interface ChangeCurrentUserPasswordCommand {
@@ -28,11 +32,20 @@ export class UserAccountWorkflow {
     actor: AuthenticatedUser,
     context: RuntimeCallContext,
     command: UpdateCurrentUserCommand
-  ): Promise<AuthenticatedUser> {
+  ): Promise<AuthenticatedUser & Pick<UserRecord, "locale">> {
+    const { supportedLocales } = this.options.config.localization;
+    if (command.locale && !supportedLocales.includes(command.locale)) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `This instance offers the languages ${supportedLocales.join(", ")}, not '${command.locale}'.`,
+        { reason: "locale_not_offered" }
+      );
+    }
     const updated = await this.options.stores.users.updateUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: asUserId(actor.id),
-      displayLabel: command.displayLabel
+      ...(command.displayLabel === undefined ? {} : { displayLabel: command.displayLabel }),
+      ...(command.locale === undefined ? {} : { locale: command.locale })
     });
 
     await this.options.auditRecorder.record({
@@ -42,18 +55,23 @@ export class UserAccountWorkflow {
       subject: updated.id,
       correlationId: context.correlationId,
       metadata: {
-        fields: ["displayLabel"]
+        fields: (["displayLabel", "locale"] as const).filter(
+          (field) => command[field] !== undefined
+        )
       }
     });
 
-    return authenticatedUserFromRecord({
-      user: updated,
-      identity: {
-        authSource: actor.authSource,
-        externalUserId: actor.externalUserId
-      },
-      correlationId: context.correlationId
-    });
+    return {
+      ...authenticatedUserFromRecord({
+        user: updated,
+        identity: {
+          authSource: actor.authSource,
+          externalUserId: actor.externalUserId
+        },
+        correlationId: context.correlationId
+      }),
+      ...(updated.locale ? { locale: updated.locale } : {})
+    };
   }
 
   async changeCurrentUserPassword(

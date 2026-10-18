@@ -25,6 +25,14 @@ export interface WorkflowCanvasRun {
   ) => LiveOnceControl | undefined;
 }
 
+/**
+ * A request to open the entries of a loop in the panel. Each request is a new object, so the
+ * same loop can be asked for again after the reader closed its panel.
+ */
+export interface WorkflowCanvasFocus {
+  stepId: string;
+}
+
 /** The same graph object for as long as nothing of it changed, so the canvas lays out once. */
 function useSameGraph<Graph extends FlowGraph>(graph: Graph): Graph {
   const key = JSON.stringify(graph);
@@ -44,13 +52,16 @@ function useSameGraph<Graph extends FlowGraph>(graph: Graph): Graph {
 export function WorkflowCanvas({
   workflow,
   run,
-  onOpenChild
+  onOpenChild,
+  focus
 }: {
   /** The Workflow, once its record arrived. */
   workflow: WorkflowView | undefined;
   run?: WorkflowCanvasRun;
   /** Opens what a `workflow` step starts: the child run where there is one, else its Workflow. */
   onOpenChild(step: WorkflowStepView, stepRun: WorkflowStepRunView | undefined): void;
+  /** Opens the entries of a loop, as its "Show the failed" does. */
+  focus?: WorkflowCanvasFocus;
 }) {
   const translation = useTranslation();
   const { locale, t } = translation;
@@ -129,6 +140,13 @@ export function WorkflowCanvas({
       setTab("run");
     }
   }, [failedId, placed]);
+  useEffect(() => {
+    if (focus !== undefined && placed.has(focus.stepId)) {
+      chose.current = true;
+      setSelectedId(focus.stepId);
+      setTab("entries");
+    }
+  }, [focus, placed]);
 
   const selected = selectedId === undefined ? undefined : placed.get(selectedId);
   const part =
@@ -149,6 +167,7 @@ export function WorkflowCanvas({
         loop={selected.step}
         stepRun={{ ...loopRun, loop: loopCounts }}
         runEnded={run.run.ended}
+        onOpenChild={onOpenChild}
       />
     );
   }

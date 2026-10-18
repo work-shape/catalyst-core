@@ -30,6 +30,8 @@ export interface LoopEntry {
   status: "failed" | "running" | "done" | "cancelled";
   /** The step run that failed, where one did. */
   failed?: WorkflowStepRunView;
+  /** A loop of the entry ended `done` with failed entries of its own. */
+  withFailedEntries?: true;
   /** Where the calls of its steps that change something went, each once, in a test run. */
   targets?: readonly WorkflowStepTarget[];
   /** In a test run: a run of the published revision would ask for an approval in this entry. */
@@ -63,7 +65,8 @@ export function loopEntries(stepRuns: readonly WorkflowStepRunView[]): LoopEntry
     const counted = {
       ...held,
       ...(targets === undefined ? {} : { targets }),
-      ...(stepRun.publishedWouldAsk === "approval" ? { publishedWouldAsk: true as const } : {})
+      ...(stepRun.publishedWouldAsk === "approval" ? { publishedWouldAsk: true as const } : {}),
+      ...((stepRun.loop?.failed ?? 0) > 0 ? { withFailedEntries: true as const } : {})
     };
     entries.set(
       index,
@@ -94,13 +97,16 @@ export function LoopEntries({
   runId,
   loop,
   stepRun,
-  runEnded
+  runEnded,
+  onOpenChild
 }: {
   runId: string;
   /** The loop, whose steps name the step an entry failed at. */
   loop: WorkflowStepView;
   stepRun: WorkflowStepRunView & { loop: WorkflowLoopCounts };
   runEnded: boolean;
+  /** Opens the child run an entry's `workflow` step started. */
+  onOpenChild(step: WorkflowStepView, stepRun: WorkflowStepRunView): void;
 }) {
   const [chosen, setChosen] = useState<EntryFilter>();
   const filter = chosen ?? defaultEntryFilter(stepRun.loop, runEnded);
@@ -117,6 +123,7 @@ export function LoopEntries({
       filter={filter}
       onFilterChange={setChosen}
       read={read}
+      onOpenChild={onOpenChild}
     />
   );
 }
@@ -127,13 +134,15 @@ export function LoopEntriesView({
   counts,
   filter,
   onFilterChange,
-  read
+  read,
+  onOpenChild
 }: {
   loop: WorkflowStepView;
   counts: WorkflowLoopCounts;
   filter: EntryFilter;
   onFilterChange(filter: EntryFilter): void;
   read: LoopEntriesRead;
+  onOpenChild(step: WorkflowStepView, stepRun: WorkflowStepRunView): void;
 }) {
   const { t } = useTranslation();
   const entries = read.stepRuns === undefined ? undefined : loopEntries(read.stepRuns);
@@ -173,7 +182,7 @@ export function LoopEntriesView({
       ) : (
         <List aria-label={t("workflows.run.entries")}>
           {entries.map((entry) => (
-            <LoopEntryRow key={entry.index} entry={entry} loop={loop} />
+            <LoopEntryRow key={entry.index} entry={entry} loop={loop} onOpenChild={onOpenChild} />
           ))}
         </List>
       )}
@@ -192,12 +201,28 @@ export function LoopEntriesView({
   );
 }
 
-/** One entry: its label and where it stands. A failed one unfolds to why. */
-function LoopEntryRow({ entry, loop }: { entry: LoopEntry; loop: WorkflowStepView }) {
+/**
+ * One entry: its label and where it stands. A failed one says why; where it failed in a child
+ * run, the row opens that run, which tells the rest. Any other failed one unfolds to why.
+ */
+function LoopEntryRow({
+  entry,
+  loop,
+  onOpenChild
+}: {
+  entry: LoopEntry;
+  loop: WorkflowStepView;
+  onOpenChild(step: WorkflowStepView, stepRun: WorkflowStepRunView): void;
+}) {
   const { t } = useTranslation();
   const name = entry.label ?? t("workflows.run.entry", { number: entry.index + 1 });
   const failure = entry.failed?.failure;
-  const failedAt = loop.steps.find((step) => step.id === entry.failed?.stepId)?.name;
+  const failedStep = loop.steps.find((step) => step.id === entry.failed?.stepId);
+  const failedAt = failedStep?.name;
+  const failedChild =
+    failedStep?.kind === "workflow" && entry.failed?.childRunId !== undefined
+      ? { step: failedStep, stepRun: entry.failed }
+      : undefined;
   const reason =
     failure === undefined
       ? undefined
@@ -224,12 +249,20 @@ function LoopEntryRow({ entry, loop }: { entry: LoopEntry; loop: WorkflowStepVie
               {t("workflows.run.publishedAsksShort")}
             </Badge>
           ) : null}
-          <RunStateBadge status={entry.status} />
+          <RunStateBadge
+            status={entry.status}
+            withFailedEntries={entry.withFailedEntries === true}
+          />
         </>
       }
-      expandable={failure !== undefined}
+      {...(failedChild === undefined
+        ? { expandable: failure !== undefined }
+        : { onClick: () => onOpenChild(failedChild.step, failedChild.stepRun) })}
+      data-child-run={failedChild?.stepRun.childRunId}
     >
-      {failure === undefined ? null : <FailureBanner failure={failure} />}
+      {failure === undefined || failedChild !== undefined ? null : (
+        <FailureBanner failure={failure} />
+      )}
     </ListRow>
   );
 }

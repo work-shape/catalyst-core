@@ -7,6 +7,8 @@ import {
   WORKFLOW_CODE_LANGUAGES,
   WORKFLOW_EXECUTED_STEP_TYPES,
   WORKFLOW_STEP_FILES_MAX_BYTES,
+  checkChildContracts,
+  childRulesRevisionWarnings,
   parseWorkflowManifest,
   readWorkflowManifest,
   workflowAuthoringSkill,
@@ -221,6 +223,105 @@ describe("the skill for writing a Workflow", () => {
       // And it names no code of a file that the check never answers.
       const named = [...section.matchAll(/^- `(code_[a-z_]+)` at /gmu)].map((match) => match[1]);
       expect(named.sort()).toEqual([...codes].sort());
+    });
+  });
+
+  describe("on what the manifest holds beside the steps", () => {
+    const { content } = workflowAuthoringSkill;
+    const manifest = (fields: Record<string, unknown>) =>
+      parseWorkflowManifest({
+        id: "example",
+        name: "Example",
+        runAs: "workflow-runner",
+        inputs: { type: "object" },
+        outputs: { type: "object" },
+        steps: [
+          { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+          { id: "result", name: "Result", type: "output", input: {} }
+        ],
+        ...fields
+      });
+    const codes = (parsed: ReturnType<typeof manifest>) =>
+      parsed.ok ? [] : parsed.issues.map((issue) => issue.code);
+
+    it("says of onFailure and labels what the parser says", () => {
+      expect(codes(manifest({ onFailure: "notify" }))).toEqual([]);
+      expect(codes(manifest({ onFailure: "workflow.cleanup" }))).toEqual(["not_supported_yet"]);
+      expect(codes(manifest({ labels: { client: { value: "acme" } } }))).toEqual([
+        "not_supported_yet"
+      ]);
+      const [, fields = ""] = content.split("## What a manifest is");
+      expect(fields.split("## ")[0]).toContain("- `onFailure`: optional. `notify`, the default");
+      const notRun = content.split("## What this engine does not run yet")[1] ?? "";
+      expect(notRun).toContain(
+        "- `labels` on the manifest, and `onFailure: workflow.<id>` (EW-13);"
+      );
+      // What it said before NOTIFY-b ran `notify`.
+      expect(content).not.toContain("`labels` and `onFailure` on the manifest");
+      const mappings = content.split("## Mappings and references")[1]?.split("## ")[0] ?? "";
+      expect(mappings).not.toContain("onFailure");
+    });
+  });
+
+  describe("on the rules revision of a child", () => {
+    const { content } = workflowAuthoringSkill;
+    const child = parseWorkflowManifest({
+      id: "check-client",
+      name: "Check one client",
+      runAs: "workflow-runner",
+      inputs: {
+        type: "object",
+        properties: { client: { type: "string" }, rulesRevision: { type: "string" } },
+        required: ["client", "rulesRevision"],
+        additionalProperties: false
+      },
+      outputs: { type: "object" },
+      steps: [
+        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "parent" }] },
+        { id: "result", name: "Result", type: "output", input: {} }
+      ]
+    });
+    if (!child.ok) throw new Error(JSON.stringify(child.issues));
+    const source = { read: async () => ({ revisionId: "r1", manifest: child.manifest }) };
+    /** The parent's steps the skill shows, inside a whole definition. */
+    const shown = () => {
+      const scope = content.split("## Preparing data scope")[1]?.split("## ")[0] ?? "";
+      const steps = /```yaml\n([\s\S]*?)\n {2}```/u.exec(scope)?.[1] ?? "";
+      return readWorkflowManifest(
+        [
+          "id: check-month",
+          "name: Check the month",
+          "runAs: workflow-runner",
+          "inputs: { type: object }",
+          "outputs: { type: object }",
+          "steps:",
+          "  - { id: start, name: Start, type: trigger, triggers: [{ kind: manual }] }",
+          steps,
+          "  - { id: result, name: Result, type: output, input: {} }"
+        ].join("\n")
+      );
+    };
+
+    it("shows one authored value that the child's input and its key both reference", async () => {
+      const parsed = shown();
+      if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+      const literals = JSON.stringify(parsed.manifest).match(/rules-4/gu) ?? [];
+      expect(literals).toHaveLength(1);
+      await expect(checkChildContracts(parsed.manifest, source)).resolves.toBeUndefined();
+      expect(await childRulesRevisionWarnings(parsed.manifest, source)).toEqual([]);
+      // It promises no reference into another definition, and names the warning a check gives.
+      expect(content).toContain("the parent cannot read the child's revision");
+      expect(content).toContain("`child_key_without_rules_revision`");
+      // What it showed before: a key the parser does not read, and the revision in three places.
+      expect(content).not.toContain('key: ["2026-09"');
+      expect(content).not.toContain("Nothing checks the key");
+    });
+
+    it("tells how a load that may find no rows names the group it owns", () => {
+      expect(content).toContain(
+        "`replace: { by: [client_id, month, rules_revision], values: { client_id, month, rules_revision } }`"
+      );
+      expect(content).toContain("An empty dataset then clears that group only");
     });
   });
 });

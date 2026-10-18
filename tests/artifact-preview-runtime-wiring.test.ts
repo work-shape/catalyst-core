@@ -168,6 +168,7 @@ describe("artifact preview runtime wiring", () => {
     const api = extractDockerStage(dockerfile, "api");
     const workspaceWorker = extractDockerStage(dockerfile, "workspace-command-worker");
     const artifactRuntime = extractDockerStage(dockerfile, "workspace-artifact-runtime");
+    const runnerRuntime = extractDockerStage(dockerfile, "workspace-runner-runtime");
     const workspaceRunner = extractDockerStage(dockerfile, "workspace-command-runner");
     const previewRuntime = extractDockerStage(dockerfile, "artifact-preview-runtime");
     const artifactWorker = extractDockerStage(dockerfile, "artifact-preview-worker");
@@ -175,9 +176,8 @@ describe("artifact preview runtime wiring", () => {
     expect(api).toContain("FROM node:24-bookworm-slim AS api");
     expect(workspaceWorker).toContain("FROM api AS workspace-command-worker");
     expect(workspaceWorker).toContain("COPY --from=docker-cli");
-    expect(workspaceRunner).toContain(
-      "FROM workspace-artifact-runtime AS workspace-command-runner"
-    );
+    expect(workspaceRunner).toContain("FROM workspace-runner-runtime AS workspace-command-runner");
+    expect(runnerRuntime).toContain("FROM workspace-artifact-runtime AS workspace-runner-runtime");
     expect(workspaceRunner).toContain("WORKDIR /workspace");
     // The runner carries the command that builds a saved Page, and its build runs the command:
     // an image without it, or with one that cannot build, does not come out of the build.

@@ -21,8 +21,8 @@ import {
   WEB_SOURCE_PROVIDERS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
-import { localeCodeSchema, reasoningEffortSchema } from "./configuration";
-import { timestampSchema } from "./shared";
+import { reasoningEffortSchema } from "./configuration";
+import { localeCodeSchema, timestampSchema } from "./shared";
 
 export const conversationVisibilitySchema = z.enum(CONVERSATION_VISIBILITIES);
 

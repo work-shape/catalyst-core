@@ -56,6 +56,8 @@ export interface InstanceWorkflowsParts extends Pick<
   operationCalls: Pick<OperationCalls, "registry" | "deps">;
   /** Validated at startup, with the release schema's default for direct assembly callers. */
   notices?: WorkflowEngineOptions["notices"];
+  /** `localization.defaultLocale`: the language of the notices the engine writes itself. */
+  locale?: WorkflowEngineOptions["locale"];
   stepSlots?: number;
   datasetObjects?: WorkflowEngineOptions["datasetObjects"];
   datasetLimits?: WorkflowEngineOptions["datasetLimits"];
@@ -150,6 +152,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     clientInstanceId,
     stores,
     notices: parts.notices,
+    ...(parts.locale ? { locale: parts.locale } : {}),
     ...(parts.datasetObjects
       ? {
           datasetObjects: parts.datasetObjects,
@@ -296,6 +299,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
         stores,
         operationCalls,
         notices,
+        locale: config.localization.defaultLocale,
         stepSlots: config.workflows.stepSlots,
         ...(files
           ? {

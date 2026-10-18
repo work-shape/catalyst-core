@@ -598,8 +598,9 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       };
       allowed(await workflow.authorizeValidate(call.access, input));
       try {
-        const { issues } = await workflow.validate(call, input);
+        const { issues, warnings } = await workflow.validate(call, input);
         return {
+          ...(warnings ? { warnings } : {}),
           issues: issues.map((issue) => ({
             path: (issue.path ?? []).join("."),
             message: issue.message,

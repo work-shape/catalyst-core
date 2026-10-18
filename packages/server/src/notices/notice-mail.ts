@@ -75,7 +75,8 @@ export function createNoticeMailJobs(
               {
                 template: "workflow-notice",
                 to: { email: user.email },
-                locale: options.config.localization.defaultLocale,
+                // Each recipient's own language at delivery, the instance's where they chose none.
+                locale: user.locale ?? options.config.localization.defaultLocale,
                 params: { count, link: `${mail.appUrl.replace(/\/+$/u, "")}/inbox` }
               },
               { signal: control.signal }

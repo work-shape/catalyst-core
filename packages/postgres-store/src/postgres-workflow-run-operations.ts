@@ -1,8 +1,9 @@
 import { runIsWaiting } from "./postgres-workflow-run-waiting";
+import { countWorkflowFailures } from "./postgres-workflow-failure-counts";
+import { countWorkflowLoops, listWorkflowStepRuns } from "./postgres-workflow-step-reads";
 import { endWorkflowRun } from "./postgres-workflow-run-end";
 import { childWorkflowRuns } from "./postgres-workflow-child-operations";
 import {
-  stepPreview,
   runColumns,
   stepRunColumns,
   previewOf,
@@ -19,7 +20,6 @@ import {
   WORKFLOW_KEY_RELEASING_STATUSES,
   type JsonObject,
   type JsonValue,
-  type WorkflowBodyCounts,
   type WorkflowCodeOutcome,
   type WorkflowLastRun,
   type WorkflowLoopCounts,
@@ -30,8 +30,7 @@ import {
   type WorkflowRunView,
   type WorkflowStagedCode,
   type WorkflowStepRun,
-  type WorkflowStepRunId,
-  type WorkflowStepRunView
+  type WorkflowStepRunId
 } from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
 import { type PostgresConnection } from "./postgres-database";
@@ -203,7 +202,21 @@ async function readWorkflowRun(
     .select({ ...runColumns, preview: previewOf(workflowRuns.output) })
     .from(workflowRuns)
     .where(runIs(input));
-  return row ? { ...mapRun(row), ...mapPreview(row.preview) } : undefined;
+  if (!row) return undefined;
+  return { ...mapRun(row), ...mapPreview(row.preview) };
+}
+
+async function readWorkflowRunView(
+  db: PostgresConnection,
+  input: Input<"readRunView">
+): Promise<WorkflowRunView | undefined> {
+  const run = await readWorkflowRun(db, input);
+  if (!run) return undefined;
+  const counts = await countWorkflowFailures(db, {
+    clientInstanceId: input.clientInstanceId,
+    runIds: [run.id]
+  });
+  return { ...run, failedDescendantCount: counts.get(run.id) ?? 0 };
 }
 
 async function listWorkflowRuns(
@@ -228,7 +241,15 @@ async function listWorkflowRuns(
     )
     .orderBy(desc(workflowRuns.createdAt), desc(workflowRuns.id))
     .limit(input.page?.limit ?? 2147483647);
-  return rows.map((row) => ({ ...mapRun(row), ...mapPreview(row.preview) }));
+  const counts = await countWorkflowFailures(db, {
+    clientInstanceId: input.clientInstanceId,
+    runIds: rows.map((row) => row.id)
+  });
+  return rows.map((row) => ({
+    ...mapRun(row),
+    ...mapPreview(row.preview),
+    failedDescendantCount: counts.get(row.id) ?? 0
+  }));
 }
 
 async function listLastWorkflowRuns(
@@ -242,6 +263,7 @@ async function listLastWorkflowRuns(
       workflow: workflowRuns.workflow,
       id: workflowRuns.id,
       status: workflowRuns.status,
+      failedItemCount: workflowRuns.failedItemCount,
       startedAt: workflowRuns.startedAt,
       finishedAt: workflowRuns.finishedAt
     })
@@ -253,10 +275,16 @@ async function listLastWorkflowRuns(
       )
     )
     .orderBy(workflowRuns.workflow, desc(workflowRuns.createdAt), desc(workflowRuns.id));
+  const counts = await countWorkflowFailures(db, {
+    clientInstanceId: input.clientInstanceId,
+    runIds: rows.map((row) => row.id)
+  });
   for (const row of rows) {
     last.set(row.workflow, {
       id: row.id,
       status: row.status,
+      failedDescendantCount: counts.get(row.id) ?? 0,
+      ...(row.failedItemCount === null ? {} : { failedItemCount: row.failedItemCount }),
       ...(row.startedAt === null ? {} : { startedAt: row.startedAt.toISOString() }),
       ...(row.finishedAt === null ? {} : { endedAt: row.finishedAt.toISOString() })
     });
@@ -464,134 +492,6 @@ async function listOpenWorkflowStepRuns(
   return rows.map(mapStepRun);
 }
 
-async function listWorkflowStepRuns(
-  db: PostgresConnection,
-  input: Input<"listStepRuns">
-): Promise<WorkflowStepRunView[]> {
-  const { filter } = input;
-  const rows = await db
-    .select({ ...stepRunColumns, preview: stepPreview, log: workflowStepRuns.log })
-    .from(workflowStepRuns)
-    .where(
-      and(
-        eq(workflowStepRuns.clientInstanceId, input.clientInstanceId),
-        eq(workflowStepRuns.runId, input.runId),
-        // An id no step run has matches none: it is a text like any other.
-        // The steps of the definition's own list: a loop's step run, and none of its items.
-        filter?.topLevel === true ? isNull(workflowStepRuns.containerStepRunId) : undefined,
-        filter?.containerStepRunId === undefined
-          ? undefined
-          : sql`${workflowStepRuns.containerStepRunId} = ${filter.containerStepRunId}`,
-        filter?.status === undefined ? undefined : eq(workflowStepRuns.status, filter.status),
-        filter?.iteration === undefined
-          ? undefined
-          : eq(workflowStepRuns.iteration, filter.iteration),
-        keysetFilter(input.page, [workflowStepRuns.createdAt, workflowStepRuns.id], false)
-      )
-    )
-    .orderBy(asc(workflowStepRuns.createdAt), asc(workflowStepRuns.id))
-    .limit(input.page?.limit ?? 2147483647);
-  const loops = rows.filter((row) => row.stepType === "loop").map((row) => row.id);
-  const counts = await countWorkflowLoops(db, loops);
-  const bodies = await countWorkflowLoopBodies(db, loops, counts);
-  return rows.map((row) => {
-    const loop = counts.get(row.id);
-    const bodyCounts = bodies.get(row.id);
-    return {
-      ...mapStepRun(row),
-      ...mapPreview(row.preview),
-      ...(row.log === null ? {} : { log: row.log }),
-      ...(loop ? { loop } : {}),
-      ...(bodyCounts ? { bodyCounts } : {})
-    };
-  });
-}
-
-/**
- * How the step runs of each step directly inside each of the named loop step runs stand, by
- * step id. `total` is the number of the loop's items: each step runs once for an item. A step
- * no item has reached yet has no entry here; whoever knows the definition adds it.
- */
-async function countWorkflowLoopBodies(
-  db: PostgresConnection,
-  loopStepRunIds: WorkflowStepRunId[],
-  loops: Map<string, WorkflowLoopCounts>
-): Promise<Map<string, WorkflowBodyCounts>> {
-  const bodies = new Map<string, WorkflowBodyCounts>();
-  if (loopStepRunIds.length === 0) return bodies;
-  for (const id of loopStepRunIds) bodies.set(id, {});
-  const rows = await db
-    .select({
-      loop: workflowStepRuns.containerStepRunId,
-      stepId: workflowStepRuns.stepId,
-      done: sql<number>`(count(*) filter (where ${workflowStepRuns.status} = 'done'))::int`,
-      failed: sql<number>`(count(*) filter (where ${workflowStepRuns.status} = 'failed'))::int`,
-      running: sql<number>`(count(*) filter (where ${workflowStepRuns.status} in ('queued', 'running', 'waiting')))::int`
-    })
-    .from(workflowStepRuns)
-    .where(inArray(workflowStepRuns.containerStepRunId, loopStepRunIds))
-    .groupBy(workflowStepRuns.containerStepRunId, workflowStepRuns.stepId);
-  for (const row of rows) {
-    const body = row.loop === null ? undefined : bodies.get(row.loop);
-    if (!body || row.loop === null) continue;
-    body[row.stepId] = {
-      total: loops.get(row.loop)?.total ?? 0,
-      done: row.done,
-      failed: row.failed,
-      running: row.running
-    };
-  }
-  return bodies;
-}
-
-/**
- * How far each of the named loop step runs is. An item is failed when one of its step runs
- * is, running while one of them has not ended, and done when the step run of the loop's last
- * step is. An item no step run exists for yet, and one that a cancel or a limit cut off
- * between two of its steps, is in `total` alone.
- */
-async function countWorkflowLoops(
-  db: PostgresConnection,
-  loopStepRunIds: WorkflowStepRunId[]
-): Promise<Map<string, WorkflowLoopCounts>> {
-  const counts = new Map<string, WorkflowLoopCounts>();
-  if (loopStepRunIds.length === 0) return counts;
-  const totals = await db
-    .select({
-      id: workflowStepRuns.id,
-      last: sql<string | null>`${workflowStepRuns.input}->>'last'`,
-      // A loop whose list was removed with its run's values kept the length of the list.
-      total: sql<number>`coalesce((${workflowStepRuns.input}->>'total')::int, jsonb_array_length(${workflowStepRuns.input}->'items'), 0)::int`
-    })
-    .from(workflowStepRuns)
-    .where(inArray(workflowStepRuns.id, loopStepRunIds));
-  const last = new Map(totals.map((loop) => [loop.id, loop.last]));
-  for (const { id, total } of totals) counts.set(id, { total, done: 0, failed: 0, running: 0 });
-  const items = await db
-    .select({
-      loop: workflowStepRuns.containerStepRunId,
-      failed: sql<boolean>`bool_or(${workflowStepRuns.status} = 'failed')`,
-      open: sql<boolean>`bool_or(${workflowStepRuns.status} in ('queued', 'running', 'waiting'))`,
-      // The step ids of the item's step runs that ended as done.
-      done: sql<
-        string[]
-      >`coalesce(array_agg(${workflowStepRuns.stepId}) filter (where ${workflowStepRuns.status} = 'done'), '{}')`
-    })
-    .from(workflowStepRuns)
-    .where(inArray(workflowStepRuns.containerStepRunId, loopStepRunIds))
-    .groupBy(workflowStepRuns.containerStepRunId, workflowStepRuns.iteration);
-  for (const item of items) {
-    const count = item.loop === null ? undefined : counts.get(item.loop);
-    if (!count) continue;
-    if (item.failed) count.failed += 1;
-    else if (item.open) count.running += 1;
-    else if (item.done.includes((item.loop === null ? null : last.get(item.loop)) ?? "")) {
-      count.done += 1;
-    }
-  }
-  return counts;
-}
-
 async function findWorkflowStepOutput(
   db: PostgresConnection,
   input: Input<"findStepOutput">
@@ -768,6 +668,7 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
     markRunWaiting: (ref) => markWorkflowRunWaiting(db, ref),
     endRunWait: (ref) => endWorkflowRunWait(db, ref),
     readRun: (input) => readWorkflowRun(db, input),
+    readRunView: (input) => readWorkflowRunView(db, input),
     listRuns: (input) => listWorkflowRuns(db, input),
     listLastRuns: (input) => listLastWorkflowRuns(db, input),
     readRunInput: (ref) => readWorkflowRunInput(db, ref),

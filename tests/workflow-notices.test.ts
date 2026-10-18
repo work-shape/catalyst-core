@@ -22,6 +22,7 @@ import {
   type RenderedMail
 } from "@work-shape/catalyst-mail";
 import { createNoticeMailJobs, createNotices } from "@work-shape/catalyst-server";
+import { required } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestConfig, type TestInstance } from "./support/test-instance";
 
@@ -328,6 +329,35 @@ describe("Workflow notices and counts-only mail digests", () => {
     expect(f.logs.join("\n")).not.toContain(TITLE);
     await f.deliver();
     expect(f.mails()).toHaveLength(3);
+  });
+
+  it("writes each digest in its recipient's language at delivery, the instance's where they chose none", async () => {
+    const f = await fixture();
+    for (let index = 0; index < 2; index++)
+      await f.send({ to: { users: [f.id("ada"), f.id("ben")] } });
+    // Chosen after the notices were queued: the language is read when the mail goes out.
+    const chosen = await f.app.call("me.update", {
+      headers: f.headers("ada"),
+      payload: { locale: "en" }
+    });
+    expect(chosen.statusCode).toBe(200);
+    await f.deliver();
+    const mailTo = (address: string) =>
+      required(f.mails().find((mail) => mail.to.email === address));
+    expect(mailTo("ada@example.test")).toMatchObject({
+      subject: "New notices in Example Chat",
+      text: expect.stringContaining("2 notices are waiting for you")
+    });
+    expect(mailTo("ben@example.test")).toMatchObject({
+      subject: "Neue Mitteilungen in Example Chat",
+      text: expect.stringContaining("warten 2 Mitteilungen")
+    });
+    for (const mail of f.mails()) {
+      const rendered = JSON.stringify(mail);
+      for (const secret of [TITLE, TEXT, "Muster GmbH", "4711"])
+        expect(rendered).not.toContain(secret);
+      expect(rendered).toContain(`${APP_URL}inbox`);
+    }
   });
 
   it("counts only waiting notices in a mixed digest", async () => {

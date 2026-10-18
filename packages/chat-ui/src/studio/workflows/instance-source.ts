@@ -47,6 +47,7 @@ function runsSource(client: WorkflowsClient): WorkflowRunsSource {
       toWorkflowRun(await client.workflows.get_run({ params: { runId }, signal })),
     listFrameStepRuns: async (runId, signal) => {
       const stepRuns: WorkflowStepRunView[] = [];
+      const entryLoops: WorkflowStepRunView[] = [];
       let cursor: string | undefined;
       for (let read = 0; read < FRAME_MAX_PAGES; read += 1) {
         const page = await client.workflows.list_step_runs({
@@ -56,16 +57,19 @@ function runsSource(client: WorkflowsClient): WorkflowRunsSource {
         });
         for (const stepRun of page.items) {
           // A step run of an item of a loop is one of many: the loop's counts stand for them.
+          // A loop in an item is kept apart: its counts say what failed inside it.
           if (stepRun.iteration === undefined) {
             stepRuns.push(toWorkflowStepRun(stepRun));
+          } else if (stepRun.loop !== undefined) {
+            entryLoops.push(toWorkflowStepRun(stepRun));
           }
         }
         cursor = page.nextCursor;
         if (cursor === undefined) {
-          return { stepRuns, complete: true };
+          return { stepRuns, entryLoops, complete: true };
         }
       }
-      return { stepRuns, complete: false };
+      return { stepRuns, entryLoops, complete: false };
     },
     listEntryStepRuns: async (runId, query, signal) => {
       const page = await client.workflows.list_step_runs({

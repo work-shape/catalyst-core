@@ -229,6 +229,11 @@ export interface WorkflowRunRead {
    * arrived.
    */
   stepRuns: readonly WorkflowStepRunView[] | undefined;
+  /**
+   * The step runs of loops inside an item of another loop, which the canvas never draws: their
+   * counts say what failed inside a run that ended `done`. Absent until they arrived.
+   */
+  entryLoops?: readonly WorkflowStepRunView[] | undefined;
   /** The run has more step runs than the page reads: steps late in the run may show no state. */
   stepRunsCut: boolean;
   retry(): void;
@@ -256,7 +261,10 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
     queryFn: ({ signal }) => runsOf(runs).listFrameStepRuns(runId, signal),
     enabled: run !== undefined,
     retry: retryUnlessGone,
-    placeholderData: (previous) => previous,
+    // The steps stay in view while the key moves from "going" to the run's end, never into the
+    // page of another run, whose state they would claim until its own steps arrive.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey.includes(runId) === true ? previous : undefined,
     refetchInterval: () => runRefreshMs(run)
   });
   return {
@@ -264,6 +272,7 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
     problem: query.isError && run === undefined ? readProblem(query.error) : undefined,
     silentSince: query.isError && run !== undefined ? query.dataUpdatedAt : undefined,
     stepRuns: steps.data?.stepRuns,
+    entryLoops: steps.data?.entryLoops,
     stepRunsCut: steps.data?.complete === false,
     retry: () => void query.refetch().catch(() => undefined)
   };

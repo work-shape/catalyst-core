@@ -179,6 +179,8 @@ export interface WorkflowOutputPreview {
 
 /** A run as a read shows it: no definition and no input, and the result as a preview. */
 export type WorkflowRunView = WorkflowRun & {
+  /** Descendants that failed, reached a limit or contain failed items, excluding this run. */
+  failedDescendantCount?: number;
   outputPreview?: WorkflowOutputPreview;
   datasets?: Pick<WorkflowRunDataset, "id" | "rowSchema" | "rowCount" | "bytes" | "state">[];
 };
@@ -235,6 +237,8 @@ export type NewWorkflowStepRun = Pick<
  */
 export type WorkflowStepRunView = WorkflowStepRun &
   WorkflowBlockStepRunView & {
+    /** The child run this step owns, resolved when reading; distinct from a reused keyed run. */
+    childRunId?: WorkflowRunId;
     outputPreview?: WorkflowOutputPreview;
     datasets?: Pick<WorkflowRunDataset, "id" | "rowSchema" | "rowCount" | "bytes" | "state">[];
     /** On the step run of a loop step alone. */
@@ -399,7 +403,12 @@ export interface WorkflowRunsStore {
    * stands, or nothing where it was not waiting.
    */
   endRunWait(ref: WorkflowRunRef & { at: ISODateString }): Promise<WorkflowRun | undefined>;
-  /** `id` is whatever a caller named: an id no run has answers `undefined`. */
+  /** API projection, including failed descendants. Never used by engine execution paths. */
+  readRunView(ref: {
+    clientInstanceId: ClientInstanceId;
+    id: string;
+  }): Promise<WorkflowRunView | undefined>;
+  /** A single-row engine read, without descendant aggregation. Unknown ids answer undefined. */
   readRun(input: {
     clientInstanceId: ClientInstanceId;
     id: string;

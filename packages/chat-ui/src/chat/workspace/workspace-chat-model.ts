@@ -63,6 +63,7 @@ import {
   NO_MODEL_PICKS,
   type ModelPicks
 } from "./agent-model-selection";
+import { useAccountLocale } from "./account-locale";
 import { useConversationListRefresh } from "./use-conversation-list-refresh";
 import { useUnreadableDockConversation } from "./use-workspace-dock";
 import {
@@ -128,11 +129,20 @@ export function useWorkspaceChatModel({
 
   const meQuery = useWorkspaceMeQuery({ apiBaseUrl, client });
   const isAuthenticated = Boolean(meQuery.data);
+  const { localePreference, selectLocale } = useAccountLocale({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    account: meQuery.data,
+    stored: preferences.localePreference,
+    selectStored: preferences.selectLocale,
+    onErrorMessage: setNotice
+  });
   const configQuery = useWorkspaceConfigQuery({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
-    localePreference: preferences.localePreference,
+    localePreference,
     enabled: isAuthenticated
   });
   const configFailure = !configQuery.error
@@ -309,7 +319,7 @@ export function useWorkspaceChatModel({
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
     collaborationWorkspaceId: activeCollaborationWorkspaceId,
-    localePreference: preferences.localePreference,
+    localePreference,
     enabled: isAuthenticated && collaborationWorkspacesAvailable
   });
   const {
@@ -340,7 +350,7 @@ export function useWorkspaceChatModel({
   );
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
   const attachmentAccept = config?.features.attachments.accept ?? "";
-  const activeLocale = useWorkspaceLocale(config?.localization.locale);
+  const activeLocale = useWorkspaceLocale(config?.localization.locale, localePreference);
   const controllerTerminalNotice = terminalRunNotice(
     controller.error,
     createTranslationContext(activeLocale).t,
@@ -470,7 +480,7 @@ export function useWorkspaceChatModel({
     view,
     supportedLocales,
     activeLocale,
-    selectLocale: preferences.selectLocale,
+    selectLocale,
     showContextIndicator: preferences.showContextIndicator,
     setShowContextIndicator: preferences.setShowContextIndicator,
     themePreference,
@@ -725,13 +735,13 @@ export function useWorkspaceChatModel({
       retrying: configQuery.isFetching,
       retry: retryConfig,
       activeLocale,
-      localePreference: preferences.localePreference,
+      localePreference,
       supportedLocales,
       resolvedThemeMode,
       theme,
       activeAgentName,
       selectAgentName: setSelectedAgentName,
-      selectLocale: preferences.selectLocale,
+      selectLocale,
       toggleTheme,
       attachmentsEnabled,
       attachmentAccept

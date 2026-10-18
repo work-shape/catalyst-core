@@ -427,7 +427,7 @@ it("accepts raised paging operator ceilings and Workflow minutes without a fixed
     { path: "limits.pagedStepMinutes" }
   ]);
   expect(workflowLimitRaises({ limits: { pagedStepMinutes: 120 } }, context)).toEqual([
-    "Raises the minutes of a paged step of each run from 60 to 120."
+    { field: "pagedStepMinutes", standard: 60, asked: 120 }
   ]);
   expect(release.datasets.pages).toBe(25_000);
   expect(release.datasets.pageBytes).toBe(16 * 1024 ** 2);

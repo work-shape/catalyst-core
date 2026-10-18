@@ -51,6 +51,19 @@ export async function endWorkflowRun(
     .update(workflowRuns)
     .set({
       status: ref.status,
+      // Count an item once even when several of its steps failed. This runs behind the run
+      // lock, once at its end, and survives pruning without copying any step values.
+      failedItemCount: sql`(
+        select count(*)::integer from (
+          select step.container_step_run_id, step.iteration
+          from workflow_step_runs step
+          where step.client_instance_id = ${workflowRuns.clientInstanceId}
+            and step.run_id = ${workflowRuns.id}
+            and step.container_step_run_id is not null
+            and step.iteration is not null and step.status = 'failed'
+          group by step.container_step_run_id, step.iteration
+        ) failed_items
+      )`,
       empty:
         ref.status === "done"
           ? sql`${workflowRuns.mode} = 'live' and coalesce(${workflowRuns.definition}->>'kind' = 'data', false) and ${noHandledWrite}`

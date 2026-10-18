@@ -11,6 +11,7 @@ import {
   type CollaborationWorkspaceId,
   type ConversationId,
   type OperationAuthorization,
+  type OperationCallRuntime,
   type OperationRunId,
   type ServedFileSetAsset
 } from "@work-shape/catalyst-core";
@@ -33,6 +34,8 @@ export interface AssetCall {
   runId?: OperationRunId;
   /** The workspace the call is made in: the conversation's for a call of an agent. */
   workspaceId?: CollaborationWorkspaceId;
+  /** The language the request names, where a person's request made the call. */
+  runtime?: Pick<OperationCallRuntime, "locale">;
 }
 
 /** What a right on one asset is decided on: its kind, its name, its id and its owner. */

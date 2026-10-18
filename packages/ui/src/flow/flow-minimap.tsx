@@ -36,6 +36,7 @@ const itemTones: Record<FlowStatus, string> = {
   running: "bg-info",
   waiting: "bg-warning",
   done: "bg-success opacity-55",
+  doneWithFailures: "bg-warning",
   failed: "bg-destructive"
 };
 

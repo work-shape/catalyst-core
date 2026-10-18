@@ -3,7 +3,7 @@ import { Badge, Button, List, ListRow, SkeletonList } from "@work-shape/catalyst
 import { formatMomentShort } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import type { WorkflowRunList } from "./workflow-data";
-import { runFailedBecause } from "./workflow-model";
+import { doneWithFailedRuns, runFailedBecause } from "./workflow-model";
 import type { WorkflowRunView } from "./workflow-views";
 import {
   LoadError,
@@ -41,7 +41,8 @@ const FOLD_FROM = 2;
 /**
  * The rows of the list in their order, with each stretch of empty runs folded into one. A run
  * counts as empty by its own mark, not by the Workflow's kind now, so a Workflow whose kind
- * changed folds the runs it made as the kind it had. A test run and a failed run always stand.
+ * changed folds the runs it made as the kind it had. A test run, a failed run and one with
+ * failed runs below it always stand.
  */
 function foldEmptyRuns(runs: readonly WorkflowRunView[]): RunsListEntry[] {
   const entries: RunsListEntry[] = [];
@@ -55,7 +56,7 @@ function foldEmptyRuns(runs: readonly WorkflowRunView[]): RunsListEntry[] {
     stretch = [];
   };
   for (const run of runs) {
-    if (run.empty && run.status === "done" && !run.test) {
+    if (run.empty && run.status === "done" && !run.test && !doneWithFailedRuns(run)) {
       stretch.push(run);
     } else {
       close();
@@ -152,7 +153,9 @@ export function RunsList({
                         to: formatMomentShort(newest.createdAt, locale)
                       })
                 }
-                chips={<RunStateBadge status="done" />}
+                // Only runs without failed runs below them fold (`foldEmptyRuns`), so the
+                // group's state is a plain done.
+                chips={<RunStateBadge status="done" withFailedEntries={false} />}
               >
                 <List aria-label={label}>
                   {entry.runs.map((run) => (
@@ -232,7 +235,7 @@ function RunRow({
               {t("workflows.run.testBadge")}
             </Badge>
           ) : null}
-          <RunStateBadge status={run.status} />
+          <RunStateBadge status={run.status} withFailedEntries={doneWithFailedRuns(run)} />
         </>
       }
       link={

@@ -73,6 +73,8 @@ export const workflowRuns = pgTable(
     depth: integer("depth").notNull().default(0),
     itemIndex: integer("item_index"),
     itemLabel: text("item_label"),
+    // Nullable for runs finalized before this count existed. Written only by endRun.
+    failedItemCount: integer("failed_item_count"),
     stepRunCount: integer("step_run_count").notNull().default(0),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }).notNull(),
     // The bounds the run was opened under: its Workflow's limits within the ceilings. A run
@@ -102,6 +104,10 @@ export const workflowRuns = pgTable(
   (table) => [
     uniqueIndex("workflow_runs_operation_idx").on(table.clientInstanceId, table.operationRunId),
     uniqueIndex("workflow_runs_parent_step_idx").on(table.clientInstanceId, table.parentStepRunId),
+    // API projections visit only failure-bearing runs in the requested trees.
+    index("workflow_runs_failures_idx")
+      .on(table.clientInstanceId, table.rootRunId)
+      .where(sql`${table.status} in ('failed', 'limit_reached') or ${table.failedItemCount} > 0`),
     index("workflow_runs_parent_idx").on(table.clientInstanceId, table.parentRunId),
     check("workflow_runs_depth_check", sql`${table.depth} between 0 and 2`),
     check(

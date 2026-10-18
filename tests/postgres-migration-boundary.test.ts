@@ -340,7 +340,7 @@ describe("the migration boundary", () => {
       "0000_table":
         "create table duplicates (value int);--> statement-breakpoint\ninsert into duplicates values (1), (1);",
       "0001_unique":
-        "create unique index concurrently if not exists duplicates_value_idx on duplicates (value);"
+        "alter table duplicates add column if not exists failed_item_count integer;--> statement-breakpoint\ncreate unique index concurrently if not exists duplicates_value_idx on duplicates (value);"
     });
     await expect(migrateDatabase({ databaseUrl, migrationsDirectory })).rejects.toThrow(
       /^Migration 0001_unique failed: /u

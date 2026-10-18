@@ -197,7 +197,15 @@ function CanvasSamples({ text }: { text: GalleryText }) {
   );
 }
 
-const statuses: readonly FlowStatus[] = ["idle", "running", "waiting", "done", "failed", "skipped"];
+const statuses: readonly FlowStatus[] = [
+  "idle",
+  "running",
+  "waiting",
+  "done",
+  "doneWithFailures",
+  "failed",
+  "skipped"
+];
 
 function NodeSamples({ text }: { text: GalleryText }) {
   const labels = useUiLabels("NodeSamples");
@@ -206,6 +214,7 @@ function NodeSamples({ text }: { text: GalleryText }) {
     running: labels.stateRunning,
     waiting: labels.stateWaiting,
     done: labels.stateDone,
+    doneWithFailures: labels.stateDoneWithFailures,
     failed: labels.stateFailed,
     skipped: labels.stateSkipped
   };

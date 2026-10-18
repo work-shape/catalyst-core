@@ -38,7 +38,18 @@ export interface WorkflowListItem {
   /** What a start asks for: the fields of the published revision's inputs. */
   startForm: StartForm;
   /** The latest run, where the instance names it on the list. */
-  lastRun?: { id: string; status: WorkflowRunStatus; startedAt?: string };
+  lastRun?: WorkflowLastRunView;
+}
+
+/** The latest run of a Workflow, as its row of the list names it. */
+interface WorkflowLastRunView {
+  id: string;
+  status: WorkflowRunStatus;
+  startedAt?: string;
+  /** Runs below it, at any depth, that failed, reached a limit or left failed items. */
+  failedDescendantCount: number;
+  /** Items of its own loops that failed, as the instance counted them when the run ended. */
+  failedItemCount: number;
 }
 
 export type WorkflowStepKind =
@@ -253,6 +264,16 @@ export interface WorkflowRunView {
   test: boolean;
   /** The run whose step started this one, where it is a child run. */
   parent?: { runId: string; workflowId: string };
+  /**
+   * Runs below this one, at any depth, that failed, reached a limit or left failed items, as
+   * the instance counts them. A run that ended `done` with some reads as a warning.
+   */
+  failedDescendantCount: number;
+  /**
+   * Items of this run's own loops that failed, as the instance counted them when the run ended.
+   * A run that ended `done` with some reads as a warning.
+   */
+  failedItemCount: number;
   /** The run key its start gave it, such as `2026-09/1402`. */
   runKey?: string;
   /**

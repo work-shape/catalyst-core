@@ -106,6 +106,15 @@ RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locke
 # The command that builds a saved Page (the `apps` module). It runs in the runner image, so it
 # is built here from the lockfile and copied there with its production dependencies only. The
 # first three steps are those of `deps`, so both stages share their layers.
+# The runner's tabular packages are separate from the shared artifact-preview layer.
+# Its manifest is also copied into API/worker images, which validate Workflow requirements.
+FROM workspace-artifact-runtime AS workspace-runner-runtime
+
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+    numpy==2.1.3 \
+    pandas==2.2.3 \
+  && python3 -m pip list --format=json > /usr/local/share/catalyst/runner-packages.json
+
 FROM base AS page-build-command
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -127,7 +136,7 @@ RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
   && pnpm --filter "@work-shape/catalyst-asset-repo..." build \
   && pnpm --config.inject-workspace-packages=true --filter "@work-shape/catalyst-asset-repo" deploy --prod --offline /opt/catalyst-asset-repo
 
-FROM workspace-artifact-runtime AS workspace-command-runner
+FROM workspace-runner-runtime AS workspace-command-runner
 
 # Git is in this image alone: `catalyst-asset-repo` runs it here, in a container without a
 # network. The API image and the worker images, which build on other stages, carry none.
@@ -198,6 +207,8 @@ RUN dependencies=$(dependency-filters "${APP_PACKAGE}") \
 
 FROM deps AS api-dev
 
+COPY --from=workspace-runner-runtime /usr/local/share/catalyst/runner-packages.json /usr/local/share/catalyst/runner-packages.json
+
 ENV NODE_ENV=development
 
 EXPOSE 4100
@@ -223,7 +234,7 @@ ARG SERVER_ENTRY
 ENV SERVER_ENTRY=${SERVER_ENTRY}
 
 COPY --from=server-build /app ./
-COPY --from=workspace-artifact-runtime /usr/local/share/catalyst/runner-packages.json /usr/local/share/catalyst/runner-packages.json
+COPY --from=workspace-runner-runtime /usr/local/share/catalyst/runner-packages.json /usr/local/share/catalyst/runner-packages.json
 
 EXPOSE 4100
 CMD ["sh", "-c", "node ${SERVER_ENTRY}"]
@@ -251,13 +262,15 @@ ARG ARTIFACT_PREVIEW_WORKER_ENTRY
 ENV ARTIFACT_PREVIEW_WORKER_ENTRY=${ARTIFACT_PREVIEW_WORKER_ENTRY}
 
 COPY --from=server-build /app ./
-COPY --from=workspace-artifact-runtime /usr/local/share/catalyst/runner-packages.json /usr/local/share/catalyst/runner-packages.json
+COPY --from=workspace-runner-runtime /usr/local/share/catalyst/runner-packages.json /usr/local/share/catalyst/runner-packages.json
 RUN test -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" \
   && test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}"
 
 CMD ["sh", "-c", "node ${ARTIFACT_PREVIEW_WORKER_ENTRY}"]
 
 FROM artifact-preview-runtime AS artifact-preview-worker-dev
+
+COPY --from=workspace-runner-runtime /usr/local/share/catalyst/runner-packages.json /usr/local/share/catalyst/runner-packages.json
 
 ENV NODE_ENV=development
 

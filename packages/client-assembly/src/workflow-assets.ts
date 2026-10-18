@@ -33,6 +33,7 @@ import {
   WORKFLOW_MANIFEST_MAX_BYTES,
   assertWorkflowPackages,
   checkChildContracts,
+  childRulesRevisionWarnings,
   checkDatasetContracts,
   enqueueDatasetCleanup,
   checkChildCycles,
@@ -45,7 +46,6 @@ import {
   workflowStepFilesRefusal,
   workflowKindIssues,
   workflowLimitIssues,
-  workflowLimitRaises,
   workflowRunPrincipal,
   type WorkflowDefinitionResult,
   type WorkflowLimitContext,
@@ -57,6 +57,7 @@ import {
 } from "@work-shape/catalyst-workflows";
 import { z } from "zod";
 import { runnerPackageManifest } from "./runner-packages";
+import { workflowPublishQuestion } from "./workflow-publish-question";
 
 // A Workflow as an asset: the kind the asset operations register, and the published revisions
 // of that kind as the engine reads its definitions. A revision's config is the id of the
@@ -285,24 +286,25 @@ export function createWorkflowAssetKind(
         options.registry?.()
       );
     },
-    publishReach: workflowPublishReach,
-    // A raise of a limit above the release's default is named before the publish.
-    publishQuestion: ({ config }) => {
-      const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
-      return Promise.resolve(
-        parsed.ok
-          ? [
-              ...workflowLimitRaises(parsed.manifest, limits),
-              ...[...indexWorkflowSteps(parsed.manifest).values()].flatMap(({ step }) =>
-                step.type === "notify"
-                  ? [
-                      `Step '${step.id}' notifies users: ${(step.to.users ?? []).join(", ") || "none"}; Shared Workspaces: ${(step.to.workspaces ?? []).join(", ") || "none"}; channels: ${step.channels.join(", ")}. Mail contains counts and a link only.`
-                    ]
-                  : []
-              )
-            ]
-          : []
+    validationWarnings: async ({ definition, stores }) => {
+      const parsed = parseStoredManifest(
+        manifestOfConfigSchema.safeParse(definition).data?.manifest
       );
+      return parsed.ok
+        ? childRulesRevisionWarnings(
+            parsed.manifest,
+            createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
+          )
+        : [];
+    },
+    publishReach: workflowPublishReach,
+    // A raise of a limit above the release's default and whom a notify step reaches are named
+    // before the publish, in the reader's language.
+    publishQuestion: async ({ config, locale, names }) => {
+      const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
+      return parsed.ok
+        ? workflowPublishQuestion({ manifest: parsed.manifest, limits, locale, names })
+        : [];
     },
     // What the accounts of a publish need, for the screen that asks it before the publish.
     principalRights: (workflow) =>

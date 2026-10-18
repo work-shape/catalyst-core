@@ -12,6 +12,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { readKeyIndexes, readTables } from "./catalog";
+import { replacementStatements } from "./load-replace";
 import { statementsOf, rowOf, type LoadStatements } from "./load-statements";
 import { storeSizeBytes } from "./size";
 import {
@@ -146,6 +147,11 @@ export const load: StoreVerb = {
         column.generated ? [] : [[column.name, column.nativeType] as const]
       )
     );
+    const scope = input.replace?.values;
+    const scopedReplace =
+      input.replace && scope !== undefined
+        ? replacementStatements(tableName, typeOf, input.replace.by)
+        : undefined;
     let keyMayBeEmpty = false;
     if (input.key) {
       const indexes = await readKeyIndexes(runtime.server.executor, target, table.name, input.key);
@@ -177,6 +183,18 @@ export const load: StoreVerb = {
       first: number
     ): Promise<void> {
       const part = `[${rows.join(",")}]`;
+      if (
+        scopedReplace &&
+        deletedRow.parse((await sql.run(scopedReplace.outside, [part, JSON.stringify(scope)]))[0])
+          .count > 0
+      ) {
+        throw refused(
+          "Every row of a scoped replacement must match 'replace.values'. Nothing was loaded.",
+          {
+            reason: "replace_scope_mismatch"
+          }
+        );
+      }
       if (check) {
         const { empty, twice } = checkedRow.parse((await sql.run(check, [part]))[0]);
         if (empty !== null) {
@@ -224,6 +242,14 @@ export const load: StoreVerb = {
             await sql.run("select set_config('statement_timeout', $1, true)", [
               String(limits.timeoutMs)
             ]);
+            if (scopedReplace) {
+              const group = JSON.stringify([scope]);
+              await sql.run(scopedReplace.lock, [group, tableName]);
+              wrote = true;
+              counts.deleted += deletedRow.parse(
+                (await sql.run(scopedReplace.remove, [group]))[0]
+              ).count;
+            }
             let pending: string[] = [];
             let pendingBytes = 0;
             let written = 0;
