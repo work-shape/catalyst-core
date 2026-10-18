@@ -41,3 +41,6 @@ The skill tells the tool to pull before it pushes, to show you a change before i
 ## Keys stay with you
 
 Nobody sends you a key, and no agent can make one. The page itself issues nothing: a key exists only after you confirm the code your own terminal shows. An agent in the chat that is asked for a key answers with the link to Connect a local agent. Never confirm a code somebody else sent you.
+
+Run `catalyst docs` for this release's product docs index, or `catalyst docs <page>` for a page from it.
+When `catalyst context` finds an older CLI than the published version the instance names, it prints an npm update command on stderr; it leaves stdout unchanged and never updates itself.

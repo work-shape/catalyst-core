@@ -4405,6 +4405,7 @@ function unlistedInHelp(skill: string, help: string): string[] {
       [
         "config",
         "context",
+        "docs",
         "kinds",
         "references",
         "operation",
