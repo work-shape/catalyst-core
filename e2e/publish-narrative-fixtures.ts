@@ -229,7 +229,9 @@ export async function publishQuestionsLeadWithTheSentence(
     );
     expect(principal.ok(), await principal.text()).toBe(true);
     principalId = z.object({ principal: idSchema }).parse(await principal.json()).principal.id;
-    const storeAsset = idSchema.parse(await (await page.request.get(storeUrl)).json());
+    const storeRead = await page.request.get(`${storeUrl}?workspaceId=${workspaceId}`);
+    expect(storeRead.ok(), await storeRead.text()).toBe(true);
+    const storeAsset = idSchema.parse(await storeRead.json());
     const insertGranted = await requestWithOrigin(
       page,
       "post",
