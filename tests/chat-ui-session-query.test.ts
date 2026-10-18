@@ -49,6 +49,26 @@ describe("workspace session query", () => {
     expect(requestSignal?.aborted).toBe(true);
   });
 
+  it("does not send a request if its session ends while the token is resolving", async () => {
+    const controller = new AbortController();
+    let resolveToken: (token: string) => void = () => undefined;
+    const token = new Promise<string>((resolve) => {
+      resolveToken = resolve;
+    });
+    const fetchImpl = vi.fn();
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      getToken: () => token,
+      signal: controller.signal,
+      fetchImpl
+    });
+    const reading = client.me.get();
+    controller.abort();
+    resolveToken("test-token");
+    await expect(reading).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("passes the signal through the API client to fetch", async () => {
     const controller = new AbortController();
     let requestSignal: AbortSignal | undefined;

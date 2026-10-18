@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Page } from "@playwright/test";
+import type { Page, Request, Route } from "@playwright/test";
 import { apiBaseUrl, reviewer, signIn } from "./inbox-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
@@ -33,8 +33,9 @@ async function createPerson(page: Page, label: string): Promise<Person> {
     }
   });
   expect(created.ok()).toBe(true);
-  const signedOut = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-out`);
-  expect(signedOut.ok()).toBe(true);
+  await page.getByRole("button", { name: / account$/u }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
   return person;
 }
 
@@ -95,9 +96,86 @@ test("the next person in the same tab after a sign-out sees nothing of the perso
   // The same document all along: a reload would forget everything and prove nothing.
   await page.evaluate(() => document.documentElement.setAttribute("data-session-probe", "kept"));
 
-  await page.getByRole("button", { name: `${a.displayLabel} account` }).click();
-  await page.getByRole("menuitem", { name: "Sign out" }).click();
-  await signInOnPage(page, b);
+  // Hold all three workspace reads across sign-out. They must be cancelled before the
+  // server can revoke the cookie, even when a query does not pass its own AbortSignal.
+  const held = new Map<Request, Route>();
+  const cancelled = new Set<Request>();
+  const oldWorkspaceReads: string[] = [];
+  const nextPersonReads = new Set<string>();
+  let leaving = false;
+  let finishSignOut = () => {};
+  const signOutHeld = new Promise<void>((resolve) => {
+    finishSignOut = resolve;
+  });
+  const isWorkspaceRead = (url: URL) =>
+    (url.pathname === "/api/v1/conversations" &&
+      url.searchParams.has("collaborationWorkspaceId")) ||
+    /^\/api\/v1\/workspaces\/[^/]+\/agents$/u.test(url.pathname) ||
+    (url.pathname === "/api/v1/assets/app" && url.searchParams.has("workspaceId"));
+  let oldWorkspaceId: string | null = null;
+  const workspaceIdOf = (url: URL) =>
+    url.searchParams.get("collaborationWorkspaceId") ??
+    url.searchParams.get("workspaceId") ??
+    url.pathname.split("/")[4];
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (
+      response.ok() &&
+      isWorkspaceRead(url) &&
+      oldWorkspaceId !== null &&
+      workspaceIdOf(url) !== oldWorkspaceId
+    )
+      nextPersonReads.add(url.pathname);
+  });
+  page.on("requestfailed", (request) => {
+    if (held.has(request)) cancelled.add(request);
+  });
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== "GET" || !isWorkspaceRead(url)) {
+      await route.continue();
+      return;
+    }
+    const workspaceId = workspaceIdOf(url);
+    oldWorkspaceId ??= workspaceId ?? null;
+    if (workspaceId !== oldWorkspaceId) {
+      await route.continue();
+    } else if (leaving) {
+      oldWorkspaceReads.push(request.url());
+      await route.continue();
+    } else {
+      held.set(request, route);
+    }
+  });
+  await page.route("**/api/auth/sign-out", async (route) => {
+    await signOutHeld;
+    await route.continue();
+  });
+  try {
+    await page.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange", { bubbles: true }))
+    );
+    await expect.poll(() => held.size).toBe(3);
+    leaving = true;
+    await page.getByRole("button", { name: `${a.displayLabel} account` }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    await expect.poll(() => cancelled.size).toBe(3);
+    finishSignOut();
+    await signInOnPage(page, b);
+    await expect.poll(() => nextPersonReads.size).toBe(3);
+    nextPersonReads.clear();
+    // Focus the new session too: none of A's keys may be refetched for B.
+    await page.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange", { bubbles: true }))
+    );
+    await expect.poll(() => nextPersonReads.size).toBe(3);
+    await expectNothingOf(page, left);
+    expect(oldWorkspaceReads).toEqual([]);
+  } finally {
+    finishSignOut();
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  }
 
   await expect(page.locator("html")).toHaveAttribute("data-session-probe", "kept");
   await expectNothingOf(page, left);

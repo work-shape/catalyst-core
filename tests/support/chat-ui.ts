@@ -253,7 +253,10 @@ export {
   latestSavingLocale,
   savingLocaleFilters
 } from "../../packages/chat-ui/src/chat/workspace/account-locale";
-export { currentUserUpdateOptions } from "../../packages/chat-ui/src/shared/api/workspace-mutations";
+export {
+  currentUserUpdateOptions,
+  useWorkspaceSignOutMutation
+} from "../../packages/chat-ui/src/shared/api/workspace-mutations";
 export {
   MarkdownArtifact,
   MarkdownLinkPolicyProvider
