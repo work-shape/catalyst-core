@@ -706,8 +706,19 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       const cancelled = await stores.transaction(async (tx) => {
         const known = await tx.workflowRuns.readRun({ clientInstanceId, id: input.runId });
         if (!known) return false;
-        const run = await tx.workflowRuns.lockRun({ clientInstanceId, id: known.id });
-        if (!run) return false;
+        // Use the same lock order as claims and continuation settlement. A cancel queued
+        // during handoff holds the Lauf root before any successor can claim its trigger.
+        const chain = await waiting.lockChain(tx, known.id);
+        if (!chain) return false;
+        let run = chain.run;
+        while (run.continuation?.successorRunId) {
+          const successor = await tx.workflowRuns.lockRun({
+            clientInstanceId,
+            id: run.continuation.successorRunId
+          });
+          if (!successor) return false;
+          run = successor;
+        }
         const { cancelledBy } = input;
         const audit = {
           actor: auditActorFromIdentity(cancelledBy),
@@ -725,7 +736,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           },
           audit
         );
-        if (!ended) return true;
+        if (!ended) return run.id;
         await tx.audit.appendAuditEvent({
           clientInstanceId,
           type: "workflow_run.cancelled",
@@ -738,10 +749,10 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
             stepRunCount: run.stepRunCount
           }
         });
-        return true;
+        return run.id;
       });
       if (!cancelled) return undefined;
-      return stores.workflowRuns.readRunView({ clientInstanceId, id: input.runId });
+      return stores.workflowRuns.readRunView({ clientInstanceId, id: cancelled });
     },
 
     ...createRunReads({ clientInstanceId, stores, definitions, stepSlots: options.stepSlots })

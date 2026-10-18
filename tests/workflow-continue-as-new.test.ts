@@ -1,3 +1,5 @@
+import { deferred, eventually } from "./support/assertions";
+import { withTestSql } from "./support/test-sql";
 import type { JsonValue } from "@work-shape/catalyst-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +13,7 @@ let open: WorkflowFixture | undefined;
 afterEach(async () => {
   await open?.instance.close();
   open = undefined;
+  vi.restoreAllMocks();
 });
 
 function definition(after?: number) {
@@ -183,44 +186,49 @@ describe("continue-as-new", () => {
     expect(written).toBe(2);
   });
 
-  it("checkpoints a nested loop frontier without repeating the completed steps of its outer item", async () => {
-    const manifest = definition();
-    const before = {
-      id: "before",
-      name: "Before inner",
-      type: "operation",
-      operation: "connection.crm.write",
-      input: { client: { ref: { step: "each_client", path: "id" } }, phase: { value: "before" } }
-    };
-    const inner = {
-      id: "inner",
-      name: "Inner",
-      type: "loop",
-      items: { step: "clients", path: "clients" },
-      steps: [
-        {
-          id: "pair",
-          name: "Write pair",
-          type: "operation",
-          operation: "connection.crm.write",
-          input: {
-            client: { ref: { step: "each_client", path: "id" } },
-            inner: { ref: { step: "inner", path: "id" } }
+  it.each(
+    [1, 3, 8].flatMap((concurrency) => [7, 10, 12, 16].map((budget) => ({ concurrency, budget })))
+  )(
+    "checkpoints nested items once at outer concurrency $concurrency and budget $budget",
+    async ({ concurrency, budget }) => {
+      const manifest = definition();
+      const before = {
+        id: "before",
+        name: "Before inner",
+        type: "operation",
+        operation: "connection.crm.write",
+        input: { client: { ref: { step: "each_client", path: "id" } }, phase: { value: "before" } }
+      };
+      const inner = {
+        id: "inner",
+        name: "Inner",
+        type: "loop",
+        items: { step: "clients", path: "clients" },
+        steps: [
+          {
+            id: "pair",
+            name: "Write pair",
+            type: "operation",
+            operation: "connection.crm.write",
+            input: {
+              client: { ref: { step: "each_client", path: "id" } },
+              inner: { ref: { step: "inner", path: "id" } }
+            }
           }
-        }
-      ]
-    };
-    manifest.steps = manifest.steps.map((step) =>
-      step.id === "each_client" ? { ...step, steps: [before, inner] } : step
-    );
-    const { t } = await ready({ ...manifest, limits: { stepRuns: 10 } });
-    await start(t);
-    const chain = await finishChain(t);
-    expect(chain.some((run) => run.status === "done")).toBe(true);
-    expect(chain.every((run) => run.status === "continued" || run.status === "done")).toBe(true);
-    expect(writesOf(t)).toHaveLength(12);
-    expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(12);
-  });
+        ]
+      };
+      manifest.steps = manifest.steps.map((step) =>
+        step.id === "each_client" ? { ...step, concurrency, steps: [before, inner] } : step
+      );
+      const { t } = await ready({ ...manifest, limits: { stepRuns: budget } });
+      await start(t);
+      const chain = await finishChain(t);
+      expect(chain.some((run) => run.status === "done")).toBe(true);
+      expect(chain.every((run) => run.status === "continued" || run.status === "done")).toBe(true);
+      expect(writesOf(t)).toHaveLength(12);
+      expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(12);
+    }
+  );
 
   it("carries a last-key cursor through declared input and continues nonempty pages until the source is empty", async () => {
     const manifest = definition();
@@ -320,5 +328,108 @@ describe("continue-as-new", () => {
     }
     expect(calls).toBe(50);
     expect(reads.mock.calls.length).toBeLessThanOrEqual(3);
+  });
+});
+
+it.each([1, 2])("cancels the live Lauf by member %i's id", async (member) => {
+  const { t } = await ready(definition(1));
+  await start(t);
+  const worker = t.worker();
+  let chain = await runs(t);
+  for (let pass = 0; pass < 30 && chain.length < 3; pass++) {
+    await worker.runDue();
+    chain = await runs(t);
+  }
+  const prior = chain.find((run) => run.continuation?.number === member);
+  const live = chain.find((run) => run.continuation?.number === 3);
+  if (!prior || !live) throw new Error("Missing continued members");
+  const calls = writesOf(t).length;
+  const response = await t.expectOk(t.root.id, "workflows.cancel_run", {
+    params: { runId: prior.id }
+  });
+  expect(response.json()).toMatchObject({ id: live.id, status: "cancelled" });
+  await worker.runDue();
+  expect(writesOf(t)).toHaveLength(calls);
+  expect((await runs(t)).find((run) => run.id === live.id)?.status).toBe("cancelled");
+});
+
+it("a cancel pending during handoff wins before the successor claims its trigger", async () => {
+  const { t, definitions } = await ready(definition(1));
+  const first = await start(t);
+  const atHandoff = deferred<void>();
+  const release = deferred<void>();
+  const read = definitions.source.read;
+  let held = false;
+  vi.spyOn(definitions.source, "read").mockImplementation(async (id) => {
+    // Continuation reads its revision inside the settlement transaction, with the root held.
+    if (!held && writesOf(t).length === 1) {
+      held = true;
+      atHandoff.resolve();
+      await release.promise;
+    }
+    return read(id);
+  });
+  const worker = t.worker();
+  let pending: Promise<unknown> | undefined;
+  let cancelling: ReturnType<typeof t.call> | undefined;
+  try {
+    for (let pass = 0; pass < 20 && !held; pass++) {
+      pending = worker.runDue();
+      await Promise.race([pending, atHandoff.promise]);
+    }
+    expect(held).toBe(true);
+    cancelling = t.call(t.root.id, "workflows.cancel_run", { params: { runId: first.id } });
+    await withTestSql(async (sql) => {
+      await eventually(async () => {
+        const [row] = await sql<{ waiting: boolean }[]>`
+          select exists(select 1 from pg_stat_activity
+            where datname = current_database() and pid <> pg_backend_pid()
+              and cardinality(pg_blocking_pids(pid)) > 0
+              and query ilike '%workflow_runs%for update%') as waiting`;
+        expect(row?.waiting).toBe(true);
+      });
+    });
+    release.resolve();
+    await pending;
+    const response = await cancelling;
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: "cancelled", continuation: { number: 2 } });
+    await worker.runDue();
+    expect(writesOf(t)).toHaveLength(1);
+    const chain = await runs(t);
+    expect(chain.map((run) => run.status).sort()).toEqual(["cancelled", "continued"]);
+    const successor = chain.find((run) => run.status === "cancelled");
+    expect(successor?.startedAt).toBeUndefined();
+  } finally {
+    release.resolve();
+    await pending;
+    await cancelling;
+  }
+});
+
+it("fails a cursor Lauf clearly when its source ignores the carried cursor", async () => {
+  const manifest = definition();
+  const { t } = await ready({
+    ...manifest,
+    inputs: {
+      type: "object",
+      properties: { note: { type: "string" }, offset: { type: "string" } },
+      required: ["offset"]
+    },
+    steps: manifest.steps.map((step) =>
+      step.id === "each_client"
+        ? { ...step, continueAsNew: { position: "offset", cursor: "id" } }
+        : step
+    )
+  });
+  await t.expectOk(t.root.id, "workflows.start", {
+    params: { workflow: "notify-clients" },
+    payload: { input: { note: "Ignored cursor", offset: "" } }
+  });
+  const chain = await finishChain(t);
+  expect(chain.map((run) => run.status).sort()).toEqual(["continued", "failed"]);
+  expect(chain.find((run) => run.status === "failed")?.error).toMatchObject({
+    code: "continuation_no_progress",
+    message: "The continuation cursor did not advance"
   });
 });

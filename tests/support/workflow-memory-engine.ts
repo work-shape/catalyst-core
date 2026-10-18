@@ -34,6 +34,7 @@ import {
   type PlatformStores,
   type ServicePrincipalRecord,
   type WorkflowRun,
+  type WorkflowManifest,
   type WorkflowRunDataset,
   type WorkflowRunDatasetsStore,
   type WorkflowRunsStore,
@@ -90,7 +91,12 @@ type LoopState = {
   failed: number;
 };
 
-export async function memoryWorkflowEngine(rowCount: number) {
+export async function memoryWorkflowEngine(
+  rowCount: number,
+  options: {
+    manifest?(manifest: WorkflowManifest): unknown;
+  } = {}
+) {
   const manifests = new Map<string, NewWorkflowRun["definition"]>();
   const inputs = new Map<string, NewWorkflowRun["input"]>();
   const checkpoints = new Map<string, NewWorkflowRun["checkpoint"]>();
@@ -168,7 +174,9 @@ export async function memoryWorkflowEngine(rowCount: number) {
     ]
   });
   if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
-  const manifest = parsed.manifest;
+  const configured = parseWorkflowManifest(options.manifest?.(parsed.manifest) ?? parsed.manifest);
+  if (!configured.ok) throw new Error(JSON.stringify(configured.issues));
+  const manifest = configured.manifest;
   const source: WorkflowRun = {
     id: sourceId,
     clientInstanceId,
@@ -458,8 +466,9 @@ export async function memoryWorkflowEngine(rowCount: number) {
     operationCalls: { registry, deps },
     notices: () => ({
       async send(input) {
-        if (seen.has(input.text)) throw new Error("A dataset row ran twice");
-        seen.add(input.text);
+        const key = `${input.title}:${input.text}`;
+        if (seen.has(key)) throw new Error("A dataset row ran twice");
+        seen.add(key);
         if (seen.size === 19_990) revision = "published-2";
         return { addressees: 1, inactive: 0, mailsQueued: 0, mailsSent: 0, mailsUnsent: 0 };
       }
@@ -479,13 +488,14 @@ export async function memoryWorkflowEngine(rowCount: number) {
     runs,
     inputs,
     async execute() {
-      await engine.start({
+      const input = {
         workflow: manifest.id,
         key: "2026-10-18",
         input: { rows: { $dataset: dataset.id, rowCount, bytes: dataset.bytes } },
         startedBy: user,
         correlationId: "scale"
-      });
+      };
+      await engine.start(input);
       const handler = engine.jobHandlers.find(
         (item) => item.kind.kind === workflowStepJobKind.kind
       );

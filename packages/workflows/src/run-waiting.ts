@@ -27,7 +27,7 @@ export function createRunWaiting(options: { clientInstanceId: ClientInstanceId; 
     if (!known) return undefined;
     const above = [
       ...new Set(
-        [known.rootRunId, known.parentRunId].filter(
+        [known.rootRunId, known.parentRunId, known.continuation?.rootRunId].filter(
           (id): id is NonNullable<typeof id> => id !== undefined && id !== known.id
         )
       )
@@ -35,7 +35,9 @@ export function createRunWaiting(options: { clientInstanceId: ClientInstanceId; 
     const ancestors: WorkflowRun[] = [];
     for (const id of above) {
       const locked = await tx.workflowRuns.lockRun({ clientInstanceId, id });
-      if (locked) ancestors.unshift(locked);
+      // The Lauf root serializes cancellation and successor claims; it is historical,
+      // not a waiting parent whose deadline should move with this run.
+      if (locked && (id === known.rootRunId || id === known.parentRunId)) ancestors.unshift(locked);
     }
     const run = await tx.workflowRuns.lockRun({ clientInstanceId, id: known.id });
     return run ? { run, ancestors } : undefined;

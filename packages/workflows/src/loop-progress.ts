@@ -1,3 +1,4 @@
+import { loopItemReservation } from "./loop-reservation";
 import { loopFailureRowSchema } from "./dataset-values";
 import { WorkflowStepFailure } from "./step-failure";
 import type {
@@ -109,13 +110,19 @@ export function createLoopProgress(options: {
     let going = progress.running;
     // Reserve a whole next item before admitting it. Already admitted items drain before the
     // checkpoint, so no call is skipped or repeated at a concurrency boundary.
+    const reservation =
+      loop?.type === "loop" && loop.continueAsNew
+        ? await loopItemReservation(tx, run, index, loopRun, loop.steps)
+        : 0;
     const mustContinue = () =>
       loop?.type === "loop" &&
       loop.continueAsNew &&
       started < total &&
       (Date.parse(run.deadlineAt) <= now().getTime() ||
         started >= (loop.continueAsNew.after ?? Infinity) ||
-        run.stepRunCount + (going + 1) * loop.steps.length > run.limits.stepRuns);
+        (run.stepRunCount + (going + 1) * reservation > run.limits.stepRuns &&
+          // An item larger than a fresh history runs alone and may checkpoint inside it.
+          !(started === 0 && going === 0 && run.stepRunCount < run.limits.stepRuns)));
     while (first && started < total && going < width && !mustContinue()) {
       const place = await itemPlace(tx, index, loopRun, first, started);
       // The run ended at its limit of step runs: no further item starts.

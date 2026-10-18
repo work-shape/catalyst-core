@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { indexWorkflowSteps } from "./definition";
 import { fieldAt } from "./references";
 import type { WorkflowDatasets } from "./datasets";
@@ -58,27 +59,39 @@ export function createContinuation(options: {
     if (!loop.continueAsNew) return false;
     const previous = await tx.workflowRuns.readCheckpoint({ clientInstanceId, id: run.id });
     const checkpoint = await continuationCheckpoint(tx, run, loopRun, completed, before);
-    if (sameContinuationPosition(previous, checkpoint)) return false;
+    if (sameContinuationPosition(previous, checkpoint)) {
+      await options.finish(tx, run, {
+        status: "failed",
+        error: {
+          code: "continuation_no_progress",
+          message: "The continuation position did not advance"
+        }
+      });
+      return true;
+    }
     const { offset } = checkpoint;
+    const original = await tx.workflowRuns.readRunInput({ clientInstanceId, id: run.id });
     const input: JsonObject = {
-      ...(await tx.workflowRuns.readRunInput({ clientInstanceId, id: run.id })),
+      ...original,
       [loop.continueAsNew.position]: offset
     };
     const completePage =
       loop.continueAsNew.cursor !== undefined &&
       before === undefined &&
       completed === (await tx.workflowRuns.countLoopItems({ clientInstanceId, id: loopRun.id }));
-    const published = await options.definitions.read(run.workflow);
     const priorDefinition = await tx.workflowRuns.readRunDefinition({
       clientInstanceId,
       id: run.id
     });
+    const published =
+      run.mode === "test"
+        ? priorDefinition && { revisionId: run.definitionRevisionId, manifest: priorDefinition }
+        : await options.definitions.read(run.workflow);
     let prepared: PreparedStart | undefined;
     let error: WorkflowRunError | undefined;
     try {
       if (loop.continueAsNew.cursor !== undefined) {
         if (completed === 0) {
-          const original = await tx.workflowRuns.readRunInput({ clientInstanceId, id: run.id });
           input[loop.continueAsNew.position] = original?.[loop.continueAsNew.position] ?? null;
         } else {
           let item = await tx.workflowRuns.readLoopItem({
@@ -109,6 +122,22 @@ export function createContinuation(options: {
             });
           input[loop.continueAsNew.position] = cursor.value;
         }
+      }
+      if (
+        completePage &&
+        isDeepStrictEqual(
+          input[loop.continueAsNew.position],
+          original?.[loop.continueAsNew.position]
+        )
+      ) {
+        await options.finish(tx, run, {
+          status: "failed",
+          error: {
+            code: "continuation_no_progress",
+            message: "The continuation cursor did not advance"
+          }
+        });
+        return true;
       }
       if (!published) throw new AppError("NOT_FOUND", "The Workflow is no longer published");
       if (!completePage) {
@@ -208,8 +237,6 @@ export function createContinuation(options: {
         ...origin
       });
       successor = failed;
-      if (failed)
-        await options.finish(tx, failed, { status: "failed", ...(error ? { error } : {}) });
     }
     if (!successor) throw new AppError("INTERNAL", "The successor could not be recorded");
     await tx.workflowRuns.handoffContinuation({
