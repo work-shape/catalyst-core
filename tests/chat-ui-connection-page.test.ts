@@ -182,7 +182,8 @@ describe("Connection page", () => {
     );
     // Where it comes from is a sentence at the top of the page and no chip.
     expect(markup).not.toContain("Defined in release config");
-    expect(markup).toContain("Enabled");
+    // The head says how the enabled Connection is, as its last test or call left it.
+    expect(markup).toContain('data-connection-head-health="never_tested"');
     expect(markup).toContain('aria-label="Back to Connections"');
     // Nothing on the page writes: no field, no save. Its history is read, its menu offers
     // "Copy ID", and a reader who may create one starts a copy of it.
@@ -422,6 +423,71 @@ describe("Connection page", () => {
     expect(renderPage({ run: { status: "held" }, locale: "de" })).toContain(
       "Der Test wartet auf eine Freigabe im Eingang. Er ist noch nicht gelaufen."
     );
+  });
+
+  it("says in the head what the last test or call found, not only that the Connection is on (ACCEPT-FIX-7 C5)", () => {
+    const head = (markup: string) => /data-connection-head-health="([a-z_]+)"/u.exec(markup)?.[1];
+    expect(head(renderPage({ detail: recordedStates.unauthorized }))).toBe("unauthorized");
+    expect(head(renderPage({ detail: recordedStates.ready }))).toBe("ready");
+    const german = renderPage({ detail: recordedStates.unauthorized, locale: "de" });
+    expect(german).toMatch(/data-connection-head-health="unauthorized"[^>]*>.*Nicht autorisiert/su);
+    // An enabled Connection the server refused is not "Enabled"; a disabled one says it is off.
+    expect(renderPage({ detail: recordedStates.unauthorized })).not.toContain(">Enabled<");
+    const off = renderPage({ asset: connectionAsset("ledger", { enabled: false }) });
+    expect(head(off)).toBeUndefined();
+    expect(off).toContain("Disabled");
+  });
+
+  it("says nothing in the head of an enabled Connection until its health is read (ACCEPT-FIX-7 C5)", () => {
+    // Loading, or a read that failed, is no evidence the Connection works: no green "Enabled".
+    const pending: ConnectionDetailRead[] = [
+      { status: "loading" },
+      { status: "failed", message: undefined, retry: noop }
+    ];
+    for (const detailRead of pending) {
+      for (const locale of ["en", "de"] as const) {
+        const markup = renderPage({ detailRead, locale });
+        expect(markup).not.toContain(locale === "en" ? ">Enabled<" : ">Aktiv<");
+        expect(markup).not.toContain("data-connection-head-health");
+        expect(markup).not.toContain("bg-success-soft");
+      }
+    }
+    // A disabled Connection says it is off even before the detail arrives.
+    const off = renderPage({
+      asset: connectionAsset("ledger", { enabled: false }),
+      detailRead: { status: "loading" }
+    });
+    expect(off).toContain("Disabled");
+  });
+
+  it("tells a writer of a Connection that sends no key how to send one when the server asks for it (ACCEPT-FIX-7 C6)", () => {
+    const asset = connectionAsset("ledger", { origin: "runtime", authScheme: "none" });
+    const markup = renderPage({ asset, detail: recordedStates.unauthorized });
+    expect(healthOf(markup)).toBe("unauthorized");
+    expect(markup).toContain(
+      "The server asks for a key, and this connection sends none. Under Settings, choose Edit, set how the key is sent and save. Then enter the key."
+    );
+    expect(markup).not.toContain("Enter a new key under Credential.");
+    // It sends no credential, so none was refused: the server refuses access without one.
+    expect(markup).toContain(
+      "The outside system refuses access without a credential, and this connection sends none."
+    );
+    expect(markup).not.toContain("refused the credential");
+    const german = renderPage({ asset, detail: recordedStates.unauthorized, locale: "de" });
+    expect(german).toContain(
+      "Der Server verlangt einen Schlüssel, und diese Verbindung sendet keinen."
+    );
+    expect(german).toContain(
+      "Das externe System lässt ohne Zugangsdaten keinen Zugriff zu, und diese Verbindung sendet keine."
+    );
+    expect(german).not.toContain("hat die Zugangsdaten abgelehnt");
+    // A Connection that sends a key keeps the way to a new one.
+    const withKey = renderPage({
+      asset: connectionAsset("ledger", { origin: "runtime" }),
+      detail: recordedStates.unauthorized
+    });
+    expect(withKey).toContain("Enter a new key under Credential.");
+    expect(withKey).toContain("The outside system refused the credential.");
   });
 
   it("offers the test to whoever may run it and tells the others why not", () => {

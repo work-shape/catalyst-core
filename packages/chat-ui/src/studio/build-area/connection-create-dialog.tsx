@@ -17,6 +17,7 @@ import { readBuildRefusal } from "./build-refusals";
 import {
   approvalRefusals,
   connectionWriteErrors,
+  egressRefusal,
   type ApprovalRefused
 } from "./connection-refusals";
 import { RefusalDetail } from "./refusal-notice";
@@ -279,11 +280,10 @@ export function ConnectionCreateFlow({
           });
         } else {
           setErrors({
-            url: t(
+            url:
               outcome.reason === "network_denied"
-                ? "connectionCreate.errorUrlDenied"
-                : "connectionCreate.errorUrl"
-            )
+                ? egressRefusal(fields.form.url, t)
+                : t("connectionCreate.errorUrl")
           });
         }
         return;
@@ -300,7 +300,7 @@ export function ConnectionCreateFlow({
 
   /** The fields a refused definition is about, in the reader's words. */
   const writeErrors = (error: unknown): CreateFieldErrors => {
-    const { errors: found, detail } = connectionWriteErrors(error, name, t);
+    const { errors: found, detail } = connectionWriteErrors(error, name, t, fields.form.url);
     return detail === undefined ? found : { ...found, detail };
   };
 
@@ -361,7 +361,11 @@ export function ConnectionCreateFlow({
   const approve = async (candidates: ApprovalCandidate[]) => {
     const revision = memory.current.revision;
     if (revision === undefined) return;
-    const chosen = selectedCandidates(candidates, approval.choice.selected);
+    const chosen = selectedCandidates(
+      candidates,
+      approval.choice.selected,
+      approval.choice.effects
+    );
     const config = withApprovedOperations(written.current, chosen, [...approval.choice.surfaces]);
     setBusy(true);
     setRefusals(undefined);
@@ -573,6 +577,7 @@ export function ConnectionCreateFlow({
                 choice={approval.choice}
                 onSelectedChange={approval.setSelected}
                 onSurfacesChange={approval.setSurfaces}
+                onEffectsChange={approval.setEffects}
                 disabled={busy}
               />
             ) : null}
@@ -681,7 +686,11 @@ export function ConnectionCreateFlow({
       case "tools":
       case "review": {
         const { candidates } = stage;
-        const count = selectedCandidates(candidates, approval.choice.selected).length;
+        const count = selectedCandidates(
+          candidates,
+          approval.choice.selected,
+          approval.choice.effects
+        ).length;
         return (
           <>
             <Button

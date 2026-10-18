@@ -399,7 +399,11 @@ export function createConnectionManagement(
       return {
         name: connection.config.name,
         health: state?.health ?? "unknown",
-        ...(state?.lastTestedAt === undefined ? {} : { lastTestedAt: state.lastTestedAt }),
+        ...(state?.lastTestedAt === undefined ||
+        state.health === "unknown" ||
+        (state.health === "needs_configuration" && !state.lastErrorCode)
+          ? {}
+          : { lastTestedAt: state.lastTestedAt }),
         ...(state?.lastErrorCode === undefined ? {} : { lastErrorCode: state.lastErrorCode }),
         secret: await secretOf(connection),
         sharedCredential: connection.config.credentialMode === "shared",
