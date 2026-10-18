@@ -22,7 +22,7 @@ export function workflowLoopMinimumSteps(index: WorkflowStepIndex, loopId: strin
 
 /**
  * Histories replay their prefix until EW-CAN-RESUME carries a resume position and outputs.
- * Refuse replayed changes and dynamic loop tails before publish or a draft test run.
+ * Refuse replayed changes, dynamic loop tails and concurrent ancestors before publish or a draft test run.
  */
 export async function workflowContinuationIssues(
   manifest: WorkflowManifest,
@@ -45,6 +45,11 @@ export async function workflowContinuationIssues(
     if (entry.step.type !== "loop" || !entry.step.continueAsNew) continue;
     let current: typeof entry | undefined = entry;
     while (current) {
+      if (current !== entry && current.step.type === "loop" && (current.step.concurrency ?? 1) > 1)
+        issues.push({
+          path: `steps.${current.step.id}.concurrency`,
+          message: `Loop '${current.step.id}' cannot use concurrency above 1 while enclosing continueAsNew loop '${id}': a continuation checkpoint cannot record unfinished sibling items. / Schleife '${current.step.id}' darf keine concurrency über 1 verwenden, wenn sie die continueAsNew-Schleife '${id}' umschließt: Ein Fortsetzungspunkt kann den Fortschritt noch laufender Geschwisterelemente nicht speichern.`
+        });
       for (const step of current.sequence.steps.slice(0, current.position)) {
         if (await changing(step))
           issues.push({

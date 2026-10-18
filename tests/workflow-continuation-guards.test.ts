@@ -45,7 +45,11 @@ const child: WorkflowStep = {
   workflow: "another",
   input: {}
 };
-function loop(id: string, steps: WorkflowStep[], continues = false): WorkflowStep {
+function loop(
+  id: string,
+  steps: WorkflowStep[],
+  continues = false
+): Extract<WorkflowStep, { type: "loop" }> {
   return {
     id,
     name: id,
@@ -72,7 +76,30 @@ function enclosing(step: WorkflowStep, later = false): WorkflowManifest {
   base.steps.splice(later ? -1 : 2, 0, step);
   return base;
 }
+function concurrentAncestor(depth: number, continues: boolean): WorkflowManifest {
+  const base = manifest();
+  let inner = loop("inner", [{ ...write, id: "pair" }], true);
+  for (let level = 1; level < depth; level++) inner = loop(`middle_${level}`, [inner]);
+  base.steps.splice(2, 1, {
+    ...loop(
+      "each_client",
+      [inner, { ...write, id: "after_inner" }, { ...write, id: "outer_tail" }],
+      continues
+    ),
+    concurrency: 3
+  });
+  return base;
+}
 const refused = [
+  ...[1, 2, 3].flatMap((depth) =>
+    [false, true].map((continues) => ({
+      name: `concurrent ancestor at depth ${depth}, continuing=${continues}`,
+      make: () => concurrentAncestor(depth, continues),
+      step: "each_client",
+      rule: "cannot use concurrency above 1 while enclosing continueAsNew loop 'inner'",
+      de: "darf keine concurrency über 1 verwenden, wenn sie die continueAsNew-Schleife 'inner' umschließt"
+    }))
+  ),
   {
     name: "loop A then plain loop B",
     make: () => after(false),

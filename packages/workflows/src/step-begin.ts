@@ -9,7 +9,7 @@ import {
   type WorkflowStepRunPlacement,
   type WorkflowRunError
 } from "@work-shape/catalyst-core";
-import { workflowLoopTailSteps, type WorkflowStepIndex } from "./definition";
+import type { WorkflowStepIndex } from "./definition";
 import { stepJobConcurrency, workflowStepJobKind } from "./step-job";
 import { loopContinuation } from "./loop-reservation";
 import { checkpointFrame } from "./continuation-checkpoint";
@@ -44,9 +44,8 @@ export function createStepBeginning(options: {
     const loopId = index.get(step.id)?.sequence.loop;
     const loop = loopId ? index.get(loopId)?.step : undefined;
     const configuration = loopId ? loopContinuation(index, loopId) : undefined;
-    // Oversized items may split inside a plain nested loop, before spending any tail slot.
-    const tail = configuration && loopId ? workflowLoopTailSteps(index, loopId) : 0;
-    if (run.stepRunCount + tail >= run.limits.stepRuns) {
+    // Loop admission already reserves enclosing tails, also for plain nested loops.
+    if (run.stepRunCount >= run.limits.stepRuns) {
       const loopRun =
         place.containerStepRunId === undefined
           ? undefined

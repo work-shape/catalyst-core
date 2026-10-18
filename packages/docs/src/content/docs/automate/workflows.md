@@ -102,6 +102,9 @@ and draft test runs refuse these shapes, naming the step and rule in English and
   `continueAsNew` loop at the same or any enclosing level. Reads, triggers and code
   steps may precede it; those steps run again in every history.
 - A loop after a `continueAsNew` loop at the same or any enclosing level.
+- A loop with `concurrency` above 1 enclosing a `continueAsNew` loop, at any depth.
+  The refusal names both loops: a checkpoint cannot record unfinished sibling items.
+  Concurrency on the continuing loop itself remains allowed.
 - A `limits.stepRuns` budget smaller than the steps before the loop, the loop containers,
   one item and the tail together. The refusal states the minimum count and the limit.
 

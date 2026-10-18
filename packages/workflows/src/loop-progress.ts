@@ -126,11 +126,7 @@ export function createLoopProgress(options: {
         (run.stepRunCount + (going + 1) * reservation.item + reservation.tail >
           run.limits.stepRuns &&
           // An item larger than a fresh history runs alone and may checkpoint inside it.
-          !(
-            started === 0 &&
-            going === 0 &&
-            run.stepRunCount + reservation.tail < run.limits.stepRuns
-          )));
+          !(started === 0 && going === 0 && run.stepRunCount < run.limits.stepRuns)));
     while (first && started < total && going < width && !mustContinue()) {
       const place = await itemPlace(tx, index, loopRun, first, started);
       // The run ended at its limit of step runs: no further item starts.
