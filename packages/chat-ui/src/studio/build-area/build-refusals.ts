@@ -214,6 +214,9 @@ export function readBuildRefusal(
     return refused({ message: t("build.pendingApproval") });
   }
   const details = readRefusalDetails(error);
+  if (details.reason === "person_context_app_unavailable") {
+    return refused({ message: t("connections.personContextAppUnavailable") });
+  }
   const namespace = details.namespace ?? "";
   if (details.reason === "tool_not_allowed" && details.toolName !== undefined) {
     return refused({

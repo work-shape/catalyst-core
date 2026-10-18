@@ -11,6 +11,7 @@ import {
   connectionCallReasonOf,
   isAppError,
   operationDenialError,
+  personContextHeaderOf,
   type ConnectionCallReason,
   type ConnectionHealth,
   type ConnectionOperationEffect,
@@ -646,7 +647,23 @@ function idempotencyKeyOf(
  * run to read and no recorder.
  */
 export type ConnectionCallContext = Pick<OperationExecutionContext, "runtime" | "idempotencyKey"> &
-  Partial<Pick<OperationExecutionContext, "runId" | "audit" | "actor">>;
+  Partial<Pick<OperationExecutionContext, "runId" | "audit" | "actor" | "origin" | "byAppAction">>;
+
+/**
+ * Refuses a call an App action makes of a Connection that sends person context, before
+ * anything is sent, whoever called the action: a frame, an agent carrying it as a tool, or
+ * anything else. Apps do not keep one person's outside data from another yet (APP-16). The
+ * save of App exposure on such a Connection is refused too; this holds for a row stored before
+ * that refusal and for a Connection an action reaches by another exposure.
+ */
+function refuseAppPersonContext(found: Callable, context: ConnectionCallContext): void {
+  if (
+    (context.byAppAction === true || context.origin?.kind === "app") &&
+    personContextHeaderOf(found.type, found.connection.config.settings) !== undefined
+  ) {
+    throw connectionCallError("person_context_app_unavailable");
+  }
+}
 
 /** The auth scheme of a Connection that signs in at its outside system. */
 const AUTH_SCHEME_OAUTH = "oauth";
@@ -764,6 +781,7 @@ async function call(
       )?.effect;
     }
     const found = callable(stored, target);
+    refuseAppPersonContext(found, context);
     await checkInput(deps, found, input);
     return found;
   };

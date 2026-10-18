@@ -331,6 +331,20 @@ describe("Studio refusals", () => {
       error: { code, message, ...(details ? { details } : {}) }
     });
 
+  it.each(["en", "de"] as const)("explains the person context App refusal in %s", (locale) => {
+    const { t: translate } = createTranslationContext(locale);
+    const outcome = readBuildRefusal(
+      refusal("VALIDATION_FAILED", "Server sentence", { reason: "person_context_app_unavailable" }),
+      translate,
+      locale
+    );
+    expect(refusalsOf(outcome, undefined)).toEqual([
+      locale === "en"
+        ? "Person context is not available in Apps yet. Remove App exposure or the person context header."
+        : "Personenkontext ist in Apps noch nicht verfügbar. Entfernen Sie die App-Freigabe oder den Header für den Personenkontext."
+    ]);
+  });
+
   it("answers a write over a newer revision as a conflict, with no sentence of its own", () => {
     const outcome = readBuildRefusal(
       refusal("REVISION_CONFLICT", "Config agent 'tax' is not at the revision the call names", {

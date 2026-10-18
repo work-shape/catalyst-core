@@ -746,8 +746,50 @@ export const CONNECTION_REFUSALS = {
   /** The Connection's auth scheme sends no credential, so none is stored for it. */
   takesNoSecret: "connection_takes_no_secret",
   /** The instance names no key of the Secret Store, so no secret can be stored. */
-  secretStoreUnavailable: "secret_store_unavailable"
+  secretStoreUnavailable: "secret_store_unavailable",
+  /** Apps do not send person context yet, so a Connection that sends it is not for Apps. */
+  personContextAppUnavailable: "person_context_app_unavailable"
 } as const;
+
+/** What a person is told where App exposure and a person context header meet. */
+export const PERSON_CONTEXT_APP_UNAVAILABLE_MESSAGE =
+  "Person context is not available in Apps yet. Remove App exposure or the person context header.";
+
+/**
+ * The person context header a Connection of this type sends, read from settings its schema
+ * accepts. None where the type sends none or the settings are not the type's.
+ */
+export function personContextHeaderOf(
+  type: ConnectorTypeDefinition | undefined,
+  settings: JsonObject
+): string | undefined {
+  if (!type?.personContextHeaderName) return undefined;
+  const parsed = type.settingsSchema.safeParse(settings);
+  return parsed.success ? type.personContextHeaderName(parsed.data) : undefined;
+}
+
+/**
+ * Refuses App exposure (`bridge`) on a Connection that sends person context. An App's data
+ * may reach every viewer of it, and Apps do not yet keep one person's outside data from
+ * another (APP-16). Every writer of a Connection asks it: an administrator's save and the
+ * release seed.
+ */
+export function findPersonContextAppIssue(
+  registry: ConnectorTypeRegistry,
+  connection: Pick<ConnectionConfig, "connectorType" | "settings" | "operations">
+): AssetValidationIssue | undefined {
+  const type = registry.get(connection.connectorType);
+  if (personContextHeaderOf(type, connection.settings) === undefined) return undefined;
+  const index = connection.operations.findIndex((operation) =>
+    operation.exposure.includes("bridge")
+  );
+  if (index < 0) return undefined;
+  return {
+    message: PERSON_CONTEXT_APP_UNAVAILABLE_MESSAGE,
+    path: ["operations", index, "exposure"],
+    code: CONNECTION_REFUSALS.personContextAppUnavailable
+  };
+}
 
 /**
  * What the type refuses of the accepted operations: a declaration it does not read, or for a

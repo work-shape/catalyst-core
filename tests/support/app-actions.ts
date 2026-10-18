@@ -108,6 +108,8 @@ export interface AppActionsOptions extends Pick<
   /** What the real build answered, changed: a build is a sandboxed process that is not trusted. */
   tamper?(built: PageBuildOutcome): PageBuildOutcome;
   rateLimiter?: RateLimiter;
+  /** The person context header the Connector type `test` sends. None when absent. */
+  personContextHeader?: string;
   /** Further server options, made with the ones the fixture built, such as its call path. */
   server?: (
     ...input: [
@@ -118,24 +120,28 @@ export interface AppActionsOptions extends Pick<
 }
 
 const instance = (further: AppActionsOptions) =>
-  fixtureOn((options) =>
-    setupAppInstance({
-      modules: { ...options.modules, ...further.modules },
-      furtherKinds: [...(options.furtherKinds ?? []), ...(further.furtherKinds ?? [])],
-      server: (stores, config) => {
-        const built = {
-          ...options.server?.(stores, config),
-          ...(further.rateLimiter ? { rateLimiter: further.rateLimiter } : {})
-        };
-        return { ...built, ...further.server?.(stores, config, built) };
-      },
-      ...(further.register ? { register: further.register } : {}),
-      // The real build, in this process: it compiles the action files into the manifest.
-      build: async ({ files, signal }) => {
-        const built = await buildPage({ files, signal });
-        return further.tamper?.(built) ?? built;
-      }
-    })
+  fixtureOn(
+    (options) =>
+      setupAppInstance({
+        modules: { ...options.modules, ...further.modules },
+        furtherKinds: [...(options.furtherKinds ?? []), ...(further.furtherKinds ?? [])],
+        server: (stores, config) => {
+          const built = {
+            ...options.server?.(stores, config),
+            ...(further.rateLimiter ? { rateLimiter: further.rateLimiter } : {})
+          };
+          return { ...built, ...further.server?.(stores, config, built) };
+        },
+        ...(further.register ? { register: further.register } : {}),
+        // The real build, in this process: it compiles the action files into the manifest.
+        build: async ({ files, signal }) => {
+          const built = await buildPage({ files, signal });
+          return further.tamper?.(built) ?? built;
+        }
+      }),
+    further.personContextHeader === undefined
+      ? {}
+      : { personContextHeader: further.personContextHeader }
   );
 type Base = Awaited<ReturnType<typeof instance>>;
 type Called = Awaited<ReturnType<Base["call"]>>;

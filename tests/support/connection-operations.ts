@@ -224,6 +224,8 @@ export async function fixtureOn<Instance extends AccessInstance>(
     catalog?: ConnectorOperationDescriptor[];
     /** The events of the call path, such as one whose guardrails run. Audited ones when absent. */
     events?: (stores: AccessInstance["stores"]) => PlatformEventEmitter;
+    /** The person context header the static type sends. None when absent. */
+    personContextHeader?: string;
   } = {}
 ): Promise<ConnectionOperationsFixture & Instance> {
   /** What happened, in order, across the call path, the stores and the Connector type. */
@@ -267,10 +269,14 @@ export async function fixtureOn<Instance extends AccessInstance>(
       return state.limits;
     }
   };
+  const { personContextHeader } = options;
   const staticType: ConnectorTypeDefinition = {
     ...base,
     type: "test",
-    catalog: options.catalog ?? [echo, write]
+    catalog: options.catalog ?? [echo, write],
+    ...(personContextHeader === undefined
+      ? {}
+      : { personContextHeaderName: () => personContextHeader })
   };
   Object.defineProperty(staticType, "limits", { get: () => state.limits });
   const discoveringType: ConnectorTypeDefinition = {

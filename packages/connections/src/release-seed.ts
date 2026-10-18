@@ -11,6 +11,7 @@ import {
   createConnectionSecretHandle,
   endConnectionSignIn,
   findConnectorTypeIssues,
+  findPersonContextAppIssue,
   isAppError,
   resolveOptionalSecret,
   unknownToJsonValue,
@@ -193,6 +194,10 @@ function definitionOf(
   const typeIssues = findConnectorTypeIssues(connectorTypes, parsed.data);
   if (typeIssues.length > 0) {
     throw invalidConfig(name, typeIssues);
+  }
+  const appIssue = findPersonContextAppIssue(connectorTypes, parsed.data);
+  if (appIssue) {
+    throw invalidConfig(name, [appIssue]);
   }
   return parsed.data;
 }

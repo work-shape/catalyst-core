@@ -229,7 +229,8 @@ export async function appActionDefinition(
       if (!mapped.success) {
         throw binding.inputRefusal();
       }
-      return admitted.operation.execute(mapped.data, context);
+      // The operation learns the call is the App's, whatever origin called the action.
+      return admitted.operation.execute(mapped.data, { ...context, byAppAction: true });
     }
   };
   return { definition, callable: !("refusal" in admitted) };

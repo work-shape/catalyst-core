@@ -91,6 +91,12 @@ export interface OperationExecutionContext {
   /** Writes audit rows that carry the run's id and correlation id. */
   audit: AuditRecorder;
   /**
+   * Set where an App action hands the call on to the operation it stands for, whoever called
+   * the action: a frame, an agent that carries it as a tool, or anything else. The App action
+   * sets it when it executes; no caller does.
+   */
+  byAppAction?: true;
+  /**
    * The events of the operation's own `beforeEvents` as they were asked for this call, just
    * before it executes: a call that waited for an approval is asked again first. An operation
    * whose subject can change between the check and the write, such as the newest revision of

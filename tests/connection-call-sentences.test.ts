@@ -25,6 +25,7 @@ const REASONS: ConnectionCallReason[] = [
   "connection_disabled",
   "connection_not_configured",
   "person_context_unmapped",
+  "person_context_app_unavailable",
   "secret_unreadable",
   "connection_not_connected",
   "connection_needs_reconnect",

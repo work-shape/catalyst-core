@@ -3,6 +3,8 @@ import { defineTranslations } from "./translation-area";
 
 export const connections = defineTranslations({
   en: {
+    "connections.personContextAppUnavailable":
+      "Person context is not available in Apps yet. Remove App exposure or the person context header.",
     "connections.description":
       "Connections give agents, apps and workflows access to outside systems. Those from the release config are read-only here.",
     "connections.releaseNotice":
@@ -237,6 +239,8 @@ export const connections = defineTranslations({
       "The connections could not be read, so this was not checked. The agent keeps it until you remove it."
   },
   de: {
+    "connections.personContextAppUnavailable":
+      "Personenkontext ist in Apps noch nicht verfügbar. Entfernen Sie die App-Freigabe oder den Header für den Personenkontext.",
     "connections.description":
       "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Release-Konfiguration sind hier schreibgeschützt.",
     "connections.releaseNotice":

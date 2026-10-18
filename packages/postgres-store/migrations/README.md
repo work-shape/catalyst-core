@@ -2,6 +2,8 @@
 
 Generated with `pnpm db:generate --name <name>` and committed with the schema change. Migrations land in number order.
 
+For DDL that takes table locks, set `SET lock_timeout` to a bounded duration before the DDL so a busy table fails the migration rather than blocking other work indefinitely.
+
 ## Two lines of work that both add migrations
 
 No number is reserved. `pnpm db:generate` compares the schema with the latest snapshot under `meta/`, which it finds by file name, and numbers the new file after the last entry of `meta/_journal.json`. A migration that was renamed to another number, or generated against a snapshot that is no longer the latest, gives a wrong next migration. So:

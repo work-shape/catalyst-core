@@ -40,7 +40,7 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
 
-async function world() {
+async function world(exposure: string[] = ["agent", "workflow"]) {
   const outside = await startRestTestServer((request, response) =>
     json({ audience: request.headers[header] })(request, response)
   );
@@ -77,7 +77,7 @@ async function world() {
             method: "GET",
             path: "/clients",
             effect: "reading",
-            exposure: ["agent", "workflow", "bridge"]
+            exposure
           }
         ]
       }
@@ -243,6 +243,67 @@ async function save(
 }
 
 describe("person context on a shared Connection, with Postgres and real HTTP", () => {
+  it.each(["header", "bridge"] as const)(
+    "refuses adding %s to a Connection with the other already set until APP-16",
+    async (adding) => {
+      const w = await world();
+      const name = "app-context-guard";
+      const params = { kind: "connection", name };
+      const original = w.config.connections[connection];
+      if (!original) throw new Error("Missing fixture connection");
+      const config = {
+        ...original,
+        name,
+        displayName: "App context guard",
+        settings: adding === "header" ? { baseUrl: original.settings.baseUrl } : original.settings,
+        operations: original.operations.map((operation) => ({
+          ...operation,
+          exposure: adding === "header" ? ["bridge"] : ["agent", "workflow"]
+        }))
+      };
+      const created = await w.http("assets.put", {
+        params,
+        payload: { config, expectedRevision: null }
+      });
+      expect(created.status, JSON.stringify(created.body)).toBe(200);
+      const refused = await w.http("assets.put", {
+        params,
+        payload: {
+          config: {
+            ...config,
+            settings: original.settings,
+            operations: config.operations.map((operation) => ({
+              ...operation,
+              exposure: ["bridge"]
+            }))
+          },
+          expectedRevision: 1
+        }
+      });
+      expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+      expect(refused.body).toMatchObject({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: expect.stringContaining("Person context is not available in Apps yet."),
+          details: { reason: "person_context_app_unavailable" }
+        }
+      });
+      const stored = await w.api.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        ...params
+      });
+      expect(stored).toMatchObject({ revision: 1, config });
+      expect(w.outside.requests).toHaveLength(0);
+    }
+  );
+
+  it("stops startup on release config that sets person context and App exposure", async () => {
+    await expect(world(["agent", "bridge"])).rejects.toThrow(
+      /Release config defines a Connection the instance cannot run\. connections\.scoped-rest\.operations\.0\.exposure: Person context is not available in Apps yet\./u
+    );
+    expect(servers[0]?.requests).toHaveLength(0);
+  });
+
   it("always sends the mapped person's value and refuses an unmapped person without sending anything", async () => {
     const w = await world();
     expect((await w.map("user", w.userActor("alice").id, "team-a")).status).toBe(200);

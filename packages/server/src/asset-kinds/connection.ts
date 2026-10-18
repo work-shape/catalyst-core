@@ -14,6 +14,7 @@ import {
   egressOriginOf,
   egressSettingFor,
   findConnectorTypeIssues,
+  findPersonContextAppIssue,
   parseConnectionOperationName,
   endConnectionSignIn,
   type AssetValidationIssue,
@@ -255,6 +256,12 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
             }
             const typeIssues = findConnectorTypeIssues(options.connectorTypes, connection);
             if (typeIssues.length > 0) return typeIssues;
+            const appIssue = findPersonContextAppIssue(options.connectorTypes, connection);
+            if (appIssue) {
+              throw new AppError("VALIDATION_FAILED", appIssue.message, {
+                reason: CONNECTION_REFUSALS.personContextAppUnavailable
+              });
+            }
             const egress = egressIssue(options, connection);
             return egress ? [egress] : [];
           });
