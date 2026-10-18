@@ -269,12 +269,23 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
   });
   return {
     run,
-    problem: query.isError && run === undefined ? readProblem(query.error) : undefined,
+    // The run's own problem comes first. A failed reading of the steps is said until a reading
+    // succeeds, also where earlier steps are held.
+    problem:
+      query.isError && run === undefined
+        ? readProblem(query.error)
+        : steps.isError
+          ? readProblem(steps.error)
+          : undefined,
     silentSince: query.isError && run !== undefined ? query.dataUpdatedAt : undefined,
     stepRuns: steps.data?.stepRuns,
     entryLoops: steps.data?.entryLoops,
     stepRunsCut: steps.data?.complete === false,
-    retry: () => void query.refetch().catch(() => undefined)
+    retry: () => {
+      void query.refetch().catch(() => undefined);
+      // Before the run arrived there are no steps to ask for.
+      if (run !== undefined) void steps.refetch().catch(() => undefined);
+    }
   };
 }
 
