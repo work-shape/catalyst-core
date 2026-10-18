@@ -1,3 +1,4 @@
+import { takeGrantTurn } from "./grant-turn";
 import { createHash } from "node:crypto";
 import type {
   PostgresChangeStatements,
@@ -232,12 +233,8 @@ export function ensureCallRecords(
         ...(signal ? { signal } : {})
       },
       async (sql) => {
-        // Two processes that make the table at once would each find it missing.
-        await sql.run(
-          `select pg_catalog.pg_advisory_xact_lock(
-             pg_catalog.hashtextextended('catalyst call records', 0)
-           )::pg_catalog.text as held`
-        );
+        // Setup rewrites the same catalog grants as provisioning and owned-store upgrades.
+        await takeGrantTurn(sql, record.location.database);
         await sql.script(
           `create schema if not exists catalyst;${callRecordsSetup(record.roles.app)}`
         );

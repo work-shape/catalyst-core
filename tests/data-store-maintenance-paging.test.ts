@@ -1,13 +1,14 @@
 import * as connector from "@work-shape/catalyst-postgres-connector";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DataStoreRecord, JobControl, JsonObject } from "@work-shape/catalyst-core";
-import { required } from "./support/assertions";
+import { holdTransaction } from "./support/postgres-concurrency-harness";
+import { eventually, required } from "./support/assertions";
 import { useDataStoreWorld } from "./support/data-store-world";
 
 const STORE_COUNT = 2_001;
 
 describe("Data Store maintenance beyond the former 2000-store cap", () => {
-  const { db, published, jobs } = useDataStoreWorld("store_maintenance_paging");
+  const { db, published, jobs, connect } = useDataStoreWorld("store_maintenance_paging");
 
   let seedRecord: DataStoreRecord | undefined;
   afterEach(async () => {
@@ -73,6 +74,50 @@ describe("Data Store maintenance beyond the former 2000-store cap", () => {
         and kind = ${kind} and id <> ${job.id}`;
     }
   }
+
+  it("serializes measurement catalog grants with an in-flight store migration", async () => {
+    const world = await published("catalog_grants");
+    const database = world.record.location.database;
+    const holder = await holdTransaction(connect(database), async (sql) => {
+      await sql`select pg_advisory_xact_lock(hashtextextended('catalyst data store grants ' || ${database}::text, 0))`;
+      await sql.unsafe(`grant usage on schema catalyst to "${world.record.roles.app}"`);
+    });
+    const handler = required(
+      world.dataStores.jobHandlers.find(({ kind }) => kind.kind === "data_store.measure_size_page")
+    );
+    const job = await db.store.jobs.enqueue(
+      handler.kind,
+      {},
+      { clientInstanceId: world.clientInstanceId }
+    );
+    const control: JobControl = {
+      leaseToken: "grant-probe",
+      signal: AbortSignal.timeout(30_000),
+      attempt: 1,
+      logger: world.logger,
+      transaction: (work) => db.store.transaction(work)
+    };
+    const measuring = handler.bind(job).run(control);
+    let waitingFor: string | undefined;
+    try {
+      waitingFor = await eventually(async () => {
+        const [waiting] = await db.sql<{ wait_event: string }[]>`
+          select wait_event from pg_stat_activity
+          where datname = ${database} and wait_event_type = 'Lock'`;
+        return required(waiting).wait_event;
+      });
+    } finally {
+      await holder.commit();
+      await measuring;
+    }
+    // The shared turn is taken before any catalog DDL, rather than racing on its row locks.
+    expect(waitingFor).toBe("advisory");
+    expect(world.logged).not.toContainEqual(
+      expect.objectContaining({
+        message: "The old call records of a Data Store were not removed"
+      })
+    );
+  });
 
   it.each([
     ["data_store.upgrade_owned", "data_store.upgrade_owned_page"],
