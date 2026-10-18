@@ -39,6 +39,7 @@ export const GRANTABLE_ACTION_SCOPES = {
   "data_store.write": ["workspace", "asset", "instance"],
   "data_store.publish": ["workspace", "asset", "instance"],
   "data_store.delete": ["workspace", "asset", "instance"],
+  "data_store.records": ["workspace", "asset", "instance"],
   // A Knowledge Base's rights are granted on one Knowledge Base or on all of them: `use`
   // queries the published revision, `read` shows it and its state, `write` changes the draft,
   // `publish` makes it live and `delete` removes it.

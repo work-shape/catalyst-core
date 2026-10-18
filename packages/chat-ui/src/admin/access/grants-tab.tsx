@@ -651,7 +651,9 @@ function GrantDialog({
               label={
                 verb === "read_run_data"
                   ? actionLabel("workflow.read_run_data", t)
-                  : verbLabel(verb, t)
+                  : verb === "records"
+                    ? actionLabel("data_store.records", t)
+                    : verbLabel(verb, t)
               }
               description={rightDescription(verb)}
               checked={selectedVerbs.includes(verb)}

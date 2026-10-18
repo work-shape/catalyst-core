@@ -1,3 +1,4 @@
+import { RECORD_FIELDS_SCHEMA } from "./records/schema";
 import { callRecordsSetup } from "./calls";
 import { z } from "zod";
 import type { DataStoreCondition, DataStoreRecord } from "@work-shape/catalyst-core";
@@ -143,7 +144,8 @@ export async function ensureStoreSchema(
          create index if not exists migrations_proof on catalyst.migrations (proof);
          grant usage on schema catalyst to ${migration};
          grant insert on catalyst.migrations to ${migration};
-         ${callRecordsSetup(record.roles.app)}`
+         ${callRecordsSetup(record.roles.app)};
+         ${RECORD_FIELDS_SCHEMA}`
       );
     }
   );

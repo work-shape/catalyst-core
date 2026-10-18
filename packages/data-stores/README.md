@@ -115,3 +115,46 @@ Workflow dataset consumers: `data_store.<id>.load` reads only datasets the calli
 `dataStores.load.rows`, `dataStores.load.bytes` and `dataStores.load.timeoutMs` set the operator ceilings for one atomic load (100,000 rows, 64 MiB and 10 minutes by default). Raise them when the instance can handle a larger call, or produce smaller datasets upstream for separate loads. A load takes the store's size limit before and after its writes. A Workflow query with `dataset: { at: rows }` reads its complete result through a cursor; other callers keep the inline query caps. `dataStores.queryTimeoutMs` bounds the complete streamed read (10 minutes by default).
 
 Result downloads use `GET /api/v1/workflow-runs/<run>/datasets/<dataset>?format=jsonl|csv`. Only result datasets are exposed, to the run starter or a holder of `workflow.read_run_data`. JSON Lines preserves arbitrary object rows; CSV quotes every cell and JSON-encodes nested values. Dataset storage, retention and region are unchanged.
+
+### Records contract (REC-0)
+
+`store.yaml` may hold a `records` array. Each entry names a `table`, a `key` with
+`column` and either `fromPath` (one `{column}` capture) or `fromField`, evidence
+`precedence` (strongest first), `review.always`, and `retainWithoutSource` (false
+by default). Publish table/key migrations and records rules together. Each migration
+checks the latest published rules inside its own transaction after its SQL and
+deferred triggers have run. The key must have a valid, immediate, non-partial unique
+index over that column alone. Included columns do not count as key columns. A
+migration that breaks a rule rolls back, including its ledger entry, and fails with
+`record_key_invalid`, naming `records.<table>.key.<column>`. Correct the pending
+migration and republish. A publish without pending migrations checks the catalog
+immediately and refuses an invalid rule.
+
+Publish and migration share the store's row lock through the schema transaction's
+commit and level update. Rules added while DDL is queued are checked against the
+resulting schema; a publish racing running DDL waits for that store's migration.
+
+The frozen `DATA_STORE_RECORD_OPERATIONS` inventory in core describes
+`data_store.<id>.records.propose`, `.decide` and `.flagged`, all under the dedicated
+`data_store.records` right. These are contracts, with no callable records handlers
+in REC-0. A future batch writer uses `propose.itemSchemaFor(catalogColumns)` on each
+whole item before any write; its column parameter type is exported as `RecordColumn`.
+A proposal accepts at most 1,000 items per call and 1,000 fields per item; send larger
+work as further batches. `flagged` accepts at most 10,000 items per page; pass its
+`nextCursor` as `cursor` to continue. These bounds do not limit stored capacity.
+Unknown, duplicate, generated or incompatible fields
+fail that item with `record_field_unknown`. Extraction's value/page/quote shape is
+KBW-0's, reused directly. Evidence checks are necessary conditions, never confidence
+scores. Cite both Knowledge Base ID and document ID, and require Knowledge Base
+access before displaying a citation.
+
+Provisioning creates `catalyst.record_fields` as platform-owned SQL, inaccessible
+to the app and migration roles. Its unique document identity includes both IDs;
+SQL NULL keys represent documents awaiting assignment. Values and quotes are
+customer data under the spec's "Synced sources and records" retention table.
+REC-1a/1b add the writers, pinned decisions, and purge/recompute implementation.
+The frozen `DataStoreRecordWithdrawalOutbox` port is bound to the Knowledge Base's
+withdrawal transaction. Its relay must queue `dataStoreRecordWithdrawalJob` after
+commit, retaining the outbox row until acknowledgement. It must not directly enqueue
+a separately committed platform job before the withdrawal commits. Delivery and
+idempotent recomputation belong to REC-1b and work with every Workflow disabled.

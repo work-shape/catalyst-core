@@ -1,7 +1,13 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { z } from "zod";
-import type { DataStoreAppliedMigration, DataStoreRecord } from "@work-shape/catalyst-core";
+import {
+  isAppError,
+  type DataStoreAppliedMigration,
+  type DataStoreRecord,
+  type DataStoreRecordsRule
+} from "@work-shape/catalyst-core";
 import type { DataStoreMigration } from "./definition";
+import { checkRecordsKeys } from "./records/publish";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 import { ROLE_STATE, roleNames, rolesAreUnchanged } from "./roles";
 import { storeSizeBytes } from "./size";
@@ -64,7 +70,7 @@ export async function readSignedMigrations(
 
 /** Why a migration was not applied although the database raised no error of its own. */
 export class DataStoreMigrationRefusal extends Error {
-  readonly code: "migration_changed_role" | "data_store_size_limit";
+  readonly code: "migration_changed_role" | "data_store_size_limit" | "record_key_invalid";
   /** Whether the migration was applied all the same: its role changed only as it committed. */
   readonly applied: boolean;
   /** The size the store's database had with the migration, where that is why it was refused. */
@@ -72,9 +78,9 @@ export class DataStoreMigrationRefusal extends Error {
 
   constructor(
     code: DataStoreMigrationRefusal["code"],
-    detail: { applied?: true; sizeBytes?: number } = {}
+    detail: { applied?: true; sizeBytes?: number; message?: string } = {}
   ) {
-    super(code);
+    super(detail.message ?? code);
     this.name = "DataStoreMigrationRefusal";
     this.code = code;
     this.applied = detail.applied ?? false;
@@ -122,7 +128,12 @@ export async function applyMigration(
   server: DataStoreServer,
   record: StoreDatabase,
   migration: DataStoreMigration,
-  held: { ledgerKey: string; superuser: boolean; sizeLimitBytes: number },
+  held: {
+    ledgerKey: string;
+    superuser: boolean;
+    sizeLimitBytes: number;
+    records?: readonly DataStoreRecordsRule[];
+  },
   signal: AbortSignal
 ): Promise<void> {
   const database = record.location.database;
@@ -147,6 +158,14 @@ export async function applyMigration(
         await sql.script("set constraints all immediate");
         // A trigger that fired just now may have set the path again.
         await sql.run(OWN_SEARCH_PATH);
+        try {
+          await checkRecordsKeys(sql, held.records);
+        } catch (error) {
+          if (isAppError(error) && error.code === "VALIDATION_FAILED") {
+            refuse(new DataStoreMigrationRefusal("record_key_invalid", { message: error.message }));
+          }
+          throw error;
+        }
         const roles = await sql.run(ROLE_STATE, roleNames(record));
         if (!rolesAreUnchanged(record, held.superuser, roles)) {
           refuse(new DataStoreMigrationRefusal("migration_changed_role"));

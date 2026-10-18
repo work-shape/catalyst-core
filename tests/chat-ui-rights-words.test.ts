@@ -118,6 +118,15 @@ describe("the words of a right", () => {
     expect(actionLabel("workflow.read", en)).toBe("View workflows");
   });
 
+  it("say the data store's records right in words of its own", () => {
+    expect(actionLabel("data_store.records", createTranslationContext("en").t)).toBe(
+      "Review extracted fields in data stores"
+    );
+    expect(actionLabel("data_store.records", createTranslationContext("de").t)).toBe(
+      "Extrahierte Felder in Datenspeichern prüfen"
+    );
+  });
+
   it("hold no id of a right in the copy of a rights screen", () => {
     for (const path of RIGHTS_WORDS) {
       for (const locale of locales) {

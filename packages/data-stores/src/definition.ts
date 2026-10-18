@@ -3,6 +3,7 @@ import {
   ASSET_OWNER_KINDS,
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_RESERVED_SCHEMA,
+  dataStoreRecordsRuleSchema,
   readYamlData,
   type AssetValidationIssue,
   type DataStoreAppliedMigration,
@@ -42,6 +43,7 @@ const scopeSchema = z.enum(ASSET_OWNER_KINDS);
 // Strict: a key the manifest does not know is refused, never ignored.
 const manifestSchema = z.strictObject({
   id: z.string(),
+  records: z.array(dataStoreRecordsRuleSchema).optional(),
   scope: scopeSchema.optional(),
   /** Table metadata is not read yet; a data scope must never appear to be enforced. */
   tables: z
@@ -74,9 +76,20 @@ export const dataStoreDefinitionSchema = z
     /** Checked against the owner of the asset when the revision is published. */
     scope: scopeSchema.optional(),
     sizeLimitBytes: z.number().int().positive().optional(),
+    records: z.array(dataStoreRecordsRuleSchema).optional(),
     migrations: z.array(migrationSchema).max(DATA_STORE_MAX_MIGRATIONS)
   })
   .superRefine((definition, context) => {
+    const tables = new Set<string>();
+    definition.records?.forEach((rule, index) => {
+      if (tables.has(rule.table))
+        context.addIssue({
+          code: "custom",
+          path: ["records", index, "table"],
+          message: `records names table '${rule.table}' twice`
+        });
+      tables.add(rule.table);
+    });
     definition.migrations.forEach((migration, index) => {
       if (migration.number !== index + 1) {
         context.addIssue({
@@ -226,6 +239,7 @@ export function readDataStoreFiles(
   if (!manifest || issues.length > 0) throw refused(issues);
   const definition = dataStoreDefinitionSchema.safeParse({
     name: manifest.id,
+    ...(manifest.records === undefined ? {} : { records: manifest.records }),
     title: manifest.name ?? manifest.id,
     ...(manifest.description === undefined ? {} : { description: manifest.description }),
     ...(manifest.scope === undefined ? {} : { scope: manifest.scope }),

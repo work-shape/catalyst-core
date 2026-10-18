@@ -43,6 +43,7 @@ const ownActionKeys: Record<Exclude<PlatformAction, VerbAction>, TranslationKey>
   "workflow.read_run_data": "rights.actionWorkflowReadRunData",
   "data_store.insert": "rights.actionDataStoreInsert",
   "data_store.execute": "rights.actionDataStoreExecute",
+  "data_store.records": "rights.actionDataStoreRecords",
   "operations.approve": "rights.actionOperationsApprove",
   "users.manage": "rights.actionUsersManage",
   "usage.view": "rights.actionUsageView",

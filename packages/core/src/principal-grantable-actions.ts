@@ -12,6 +12,7 @@ export const PRINCIPAL_GRANTABLE_ACTIONS = [
   "data_store.read",
   "data_store.insert",
   "data_store.execute",
+  "data_store.records",
   "knowledge_base.use",
   "workflow.use"
 ] as const satisfies readonly PlatformAction[];

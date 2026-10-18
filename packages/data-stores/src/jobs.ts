@@ -1,3 +1,4 @@
+import { checkRecordsCatalog } from "./records/publish";
 import { z } from "zod";
 import {
   AppError,
@@ -210,6 +211,11 @@ export async function publishDataStore(
   const issue = current && appliedMigrationIssue(current.migrations, definition);
   if (issue) {
     throw new AppError("VALIDATION_FAILED", issue, { reason: "applied_migration_changed" });
+  }
+  // A one-step publish may introduce the table and rules together. Check its final schema
+  // in the migration transaction, never the old catalog while DDL is still queued.
+  if (definition.migrations.length === (current?.level ?? 0)) {
+    await checkRecordsCatalog(server, current, definition.records);
   }
   const now = new Date().toISOString();
   const names = server.namesOf(storeId);
@@ -529,9 +535,10 @@ async function removeAbandoned(
 /** The published definition of a store, or nothing where its asset is gone or unpublished. */
 async function publishedDefinition(
   runtime: DataStoreRuntime,
-  record: DataStoreRecord
+  record: DataStoreRecord,
+  stores: PlatformStores = runtime.stores
 ): Promise<{ revision: number; definition: DataStoreDefinition } | undefined> {
-  const asset = await runtime.stores.configAssets.getConfigAsset({
+  const asset = await stores.configAssets.getConfigAsset({
     clientInstanceId: runtime.clientInstanceId,
     kind: DATA_STORE_ASSET_KIND,
     name: record.name
@@ -631,32 +638,53 @@ async function migrate(
     let failed: (DataStoreFailure & { retryable: boolean; sqlState?: string }) | undefined;
     let appliedNow = true;
     try {
-      await applyMigration(
-        runtime.server,
-        record,
-        migration,
-        // The limit as the record holds it now: a publish since the job began may have set it.
-        {
-          ledgerKey: ledger,
-          superuser,
-          sizeLimitBytes: (
-            (await runtime.stores.dataStores.getDataStore({
-              clientInstanceId: runtime.clientInstanceId,
-              id: storeId
-            })) ?? record
-          ).sizeLimitBytes
-        },
-        control.signal
-      );
+      await control.transaction(async (stores) => {
+        // Publish takes this same store lock before checking its catalog or committing rules.
+        // Hold it through the store transaction's commit: a rule cannot slip between the
+        // schema check and DDL commit. Only this store's publishes wait for this migration.
+        const current = await stores.dataStores.getDataStore({
+          clientInstanceId: runtime.clientInstanceId,
+          id: storeId,
+          lock: true
+        });
+        if (!current || current.status !== "ready") {
+          throw new AppError("CONFLICT", "The Data Store is no longer ready for migrations");
+        }
+        const latest = await publishedDefinition(runtime, current, stores);
+        await applyMigration(
+          runtime.server,
+          current,
+          migration,
+          {
+            ledgerKey: ledger,
+            superuser,
+            sizeLimitBytes: current.sizeLimitBytes,
+            records: latest?.definition.records
+          },
+          control.signal
+        );
+        // Publish must not see the pre-migration level after the DDL has committed.
+        await stores.dataStores.putDataStore({
+          ...current,
+          level: migration.number,
+          migrations: [
+            ...applied,
+            { number: migration.number, name: migration.name, sha256: migration.sha256 }
+          ],
+          updatedAt: new Date().toISOString()
+        });
+      });
     } catch (error) {
       if (error instanceof DataStoreMigrationRefusal) {
         appliedNow = error.applied;
         failed = {
           code: error.code,
           message:
-            error.code === "data_store_size_limit"
-              ? `${file} would leave the store at ${error.sizeBytes} bytes, over its size limit (sizeLimit). Nothing of it was applied.`
-              : `${file} changed the settings of a role of its store${error.applied ? " as its transaction ended. It is applied, and the roles were set back." : ". Nothing of it was applied."}`,
+            error.code === "record_key_invalid"
+              ? `${file} violates ${error.message} Nothing of it was applied.`
+              : error.code === "data_store_size_limit"
+                ? `${file} would leave the store at ${error.sizeBytes} bytes, over its size limit (sizeLimit). Nothing of it was applied.`
+                : `${file} changed the settings of a role of its store${error.applied ? " as its transaction ended. It is applied, and the roles were set back." : ". Nothing of it was applied."}`,
           retryable: false
         };
       } else {

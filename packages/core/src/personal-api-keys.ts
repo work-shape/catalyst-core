@@ -163,6 +163,7 @@ export const PERSONAL_API_KEY_USE_ACTIONS = [
   "connection.use",
   "data_store.insert",
   "data_store.execute",
+  "data_store.records",
   "knowledge_base.use",
   "workflow.use"
 ] as const satisfies readonly PlatformAction[];

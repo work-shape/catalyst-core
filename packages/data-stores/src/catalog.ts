@@ -1,4 +1,5 @@
 import type {
+  PostgresChangeStatements,
   PostgresExecutor,
   PostgresQueryResult,
   PostgresTarget
@@ -150,4 +151,55 @@ export async function readTables(
     tables.set(row.table_name, known);
   }
   return [...tables.values()];
+}
+
+/**
+ * The unique indexes over exactly the columns of a key that hold for every row at once: not
+ * over a part of the rows, not deferrable, and over no expression.
+ */
+const KEY_INDEXES = `
+  select i.indnullsnotdistinct as nulls_not_distinct
+  from pg_catalog.pg_index i
+  join pg_catalog.pg_class c on c.oid = i.indrelid
+  join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relname = $1 and c.relkind in ('r', 'p')
+    and i.indisvalid and i.indisready and i.indislive
+    and i.indisunique and i.indimmediate and i.indpred is null and i.indexprs is null
+    and array(
+      select a.attname::text
+      from pg_catalog.pg_attribute a
+      where a.attrelid = i.indrelid
+        and a.attnum = any ((i.indkey::int2[])[0:i.indnkeyatts - 1])
+      order by a.attname::text collate "C"
+    ) = $2::text[]
+`;
+
+const keyIndexRow = z.object({ nulls_not_distinct: z.boolean() });
+
+/** The same key test for a load and for publishing records rules. INCLUDE columns are not keys. */
+export async function readKeyIndexes(
+  executor: PostgresExecutor,
+  target: PostgresTarget,
+  table: string,
+  key: readonly string[]
+): Promise<z.infer<typeof keyIndexRow>[]> {
+  return readKeyIndexesIn(
+    {
+      run: async (sql, parameters) =>
+        (await executor.query({ ...catalogTarget(target), sql, parameters })).rows
+    },
+    table,
+    key
+  );
+}
+
+/** The same catalog check on the connection that just changed the schema. */
+export async function readKeyIndexesIn(
+  sql: Pick<PostgresChangeStatements, "run">,
+  table: string,
+  key: readonly string[]
+): Promise<z.infer<typeof keyIndexRow>[]> {
+  return z
+    .array(keyIndexRow)
+    .parse(await sql.run(KEY_INDEXES, [table, { type: "text[]", value: [...key].sort() }]));
 }

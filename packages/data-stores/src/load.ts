@@ -11,7 +11,7 @@ import {
   type JsonObject
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
-import { catalogTarget, readTables } from "./catalog";
+import { readKeyIndexes, readTables } from "./catalog";
 import { quoteIdentifier } from "./server";
 import { storeSizeBytes } from "./size";
 import {
@@ -56,27 +56,6 @@ function tooLarge(
   );
 }
 
-/**
- * The unique indexes over exactly the columns of a key that hold for every row at once: not
- * over a part of the rows, not deferrable, and over no expression.
- */
-const KEY_INDEXES = `
-  select i.indnullsnotdistinct as nulls_not_distinct
-  from pg_catalog.pg_index i
-  join pg_catalog.pg_class c on c.oid = i.indrelid
-  join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-  where n.nspname = 'public' and c.relname = $1
-    and i.indisunique and i.indimmediate and i.indpred is null and i.indexprs is null
-    and array(
-      select a.attname::text
-      from pg_catalog.pg_attribute a
-      where a.attrelid = i.indrelid
-        and a.attnum = any ((i.indkey::int2[])[0:i.indnkeyatts - 1])
-      order by a.attname::text collate "C"
-    ) = $2::text[]
-`;
-
-const keyIndexRow = z.object({ nulls_not_distinct: z.boolean() });
 const checkedRow = z.object({ empty: z.number().nullable(), twice: z.number().nullable() });
 const deletedRow = z.object({ count: z.number().int() });
 const writtenRow = z.object({ inserted: z.number().int(), updated: z.number().int() });
@@ -318,15 +297,7 @@ export const load: StoreVerb = {
     );
     let keyMayBeEmpty = false;
     if (input.key) {
-      const indexes = z.array(keyIndexRow).parse(
-        (
-          await runtime.server.executor.query({
-            ...catalogTarget(target),
-            sql: KEY_INDEXES,
-            parameters: [table.name, { type: "text[]", value: [...input.key].sort() }]
-          })
-        ).rows
-      );
+      const indexes = await readKeyIndexes(runtime.server.executor, target, table.name, input.key);
       if (indexes.length === 0) {
         throw refused(
           `The table '${table.name}' has no unique constraint over exactly the columns of the key (${input.key.join(", ")}) that holds for all rows and is not deferrable. Name as key the columns of such a constraint.`,

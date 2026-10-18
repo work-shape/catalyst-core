@@ -13,3 +13,4 @@ export * from "./knowledge-write";
 export * from "./operation-paging";
 
 export * from "./workflow-data-flows";
+export * from "./data-store-records";

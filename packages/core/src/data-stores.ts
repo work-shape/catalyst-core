@@ -37,8 +37,9 @@ export const DATA_STORE_ACTIONS = {
   publish: "data_store.publish",
   delete: "data_store.delete",
   insert: "data_store.insert",
-  execute: "data_store.execute"
-} as const satisfies AssetKindActions & { insert: string; execute: string };
+  execute: "data_store.execute",
+  records: "data_store.records"
+} as const satisfies AssetKindActions & { insert: string; execute: string; records: string };
 
 /**
  * The prefix of every operation on the rows of one Data Store: `data_store.<id>.<verb>`. The
@@ -433,3 +434,32 @@ export function dataStoreRefusalOf(error: unknown): DataStoreRefusal | undefined
     (known): known is DataStoreRefusal => known === reason
   );
 }
+
+// Frozen separately from the callable row verbs: REC-0 registers no handlers.
+export {
+  dataStoreRecordsContracts as DATA_STORE_RECORD_OPERATIONS,
+  dataStoreRecordsRuleSchema,
+  recordEvidenceResultSchema,
+  RECORDS_PROPOSE_MAX_ITEMS_PER_CALL,
+  RECORDS_PROPOSE_MAX_FIELDS_PER_ITEM,
+  RECORDS_FLAGGED_MAX_ITEMS_PER_PAGE,
+  RECORD_FIELD_STATES,
+  RECORD_FIELD_FAILURE_CODES,
+  dataStoreRecordProposalItemSchema,
+  dataStoreRecordsProposeInputSchema,
+  dataStoreRecordsDecideInputSchema,
+  dataStoreRecordsDecideOutputSchema,
+  dataStoreRecordsFlaggedInputSchema,
+  dataStoreRecordsFlaggedOutputSchema,
+  dataStoreRecordFieldSchema,
+  type RecordColumn,
+  type DataStoreRecordsRule,
+  type RecordEvidenceResult,
+  type DataStoreRecordProposalItem,
+  type DataStoreRecordsProposeInput,
+  type DataStoreRecordsDecideInput,
+  type DataStoreRecordField,
+  type DataStoreRecordsDecideOutput,
+  type DataStoreRecordsFlaggedInput,
+  type DataStoreRecordsFlaggedOutput
+} from "@work-shape/catalyst-asset-schemas";

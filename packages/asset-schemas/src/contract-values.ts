@@ -81,6 +81,7 @@ export const ACTIONS = [
   "data_store.delete",
   "data_store.insert",
   "data_store.execute",
+  "data_store.records",
   "knowledge_base.read",
   "knowledge_base.write",
   "knowledge_base.publish",

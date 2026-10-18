@@ -191,6 +191,15 @@ describe("rights on a Workflow", () => {
   });
 });
 
+describe("rights on a Data Store", () => {
+  it("list reviewing extracted fields after the verbs of the table, in its own words", () => {
+    expect(grantVerbs("data_store")).toEqual(["read", "write", "publish", "delete", "records"]);
+    const rows = [rowOf("data_store.records", 0)];
+    expect(rights({ grants: rows })).toContain("Review extracted fields in data stores");
+    expect(rights({ grants: rows }, "de")).toContain("Extrahierte Felder in Datenspeichern prüfen");
+  });
+});
+
 describe("a refused right", () => {
   const refusal = (status: number, code: string, details: Record<string, string>) =>
     new ApiError(status, "refused", { error: { code, message: "refused", details } });
