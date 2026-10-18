@@ -5,6 +5,7 @@ import { sendToolCall } from "./page-surface-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { shootLocales } from "./surface-shots";
 import { expect, test } from "./test";
+import { showWorkflowsUntil } from "./workflow-list-paging";
 
 // "New" opens the dock and creates nothing; the agent's first save creates the asset and takes
 // the person to its page (NAV-2, navigation checks 30 and 36, Platform Access check 44). The
@@ -126,31 +127,11 @@ test("New workflow opens the dock, and the agent's first save creates the draft 
   });
   await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
 
-  // Back on the list, the draft is there. The list shows the published Workflows first, then
-  // the drafts, a page at a time, and the instance of the e2e run holds many: the draft is
-  // reached through the list's own "Show more". Each press must read a page not read before,
-  // so a list that stops advancing fails here instead of pressing on until the test times out.
-  const listReads = new Set<string>();
-  page.on("request", (request) => {
-    const url = new URL(request.url());
-    if (url.pathname === "/api/v1/workflows" || url.pathname === "/api/v1/assets/workflow") {
-      listReads.add(`${url.pathname}?${url.searchParams.get("cursor") ?? ""}`);
-    }
-  });
+  // Back on the list, the draft is there: behind the published Workflows, reached through the
+  // list's own "Show more" (DISCOVERY-PAGING).
   await page.goto(listPath);
   const draft = page.getByRole("list", { name: "Workflows" }).getByText(title).first();
-  const more = page.locator("[data-workflows-more] button");
-  await expect(draft.or(more).first()).toBeVisible();
-  while (!(await draft.isVisible())) {
-    const read = listReads.size;
-    // Absent "Show more" with no draft shown fails this click: the draft was never listed.
-    await more.click({ timeout: 10_000 });
-    await expect.poll(() => listReads.size, { timeout: 10_000 }).toBeGreaterThan(read);
-    // The page arrived: the draft, or a "Show more" that can be pressed again.
-    await expect(
-      draft.or(page.locator("[data-workflows-more] button:enabled")).first()
-    ).toBeVisible({ timeout: 10_000 });
-  }
+  await showWorkflowsUntil(page, draft);
   await expect(draft).toBeVisible();
 });
 
