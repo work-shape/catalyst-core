@@ -111,7 +111,7 @@ export function withinLimits(
 export interface LockedCounter {
   scope_kind: ModelUsageRefusal["scope"];
   scope_id: string;
-  period_kind: "day" | "month";
+  period_kind: ModelUsageRefusal["period"];
   model_call_count: number;
   tokens: number;
   cost_micros: number;

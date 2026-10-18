@@ -54,8 +54,6 @@ export interface ModelUsageRefusal {
  * a caller words the refusal without reading the message.
  */
 export class ModelUsageLimitReachedError extends AppError {
-  declare readonly details: ModelUsageRefusal & { reason: typeof MODEL_USAGE_LIMIT_REACHED_CODE };
-
   constructor(message: string, refusal: ModelUsageRefusal) {
     super("FORBIDDEN", message, { reason: MODEL_USAGE_LIMIT_REACHED_CODE, ...refusal });
   }
