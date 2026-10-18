@@ -1,3 +1,4 @@
+import { WORKFLOW_RETENTION_VERSION } from "../workflow-retention-version";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -155,10 +156,17 @@ export const workflowRuns = pgTable(
       .where(
         sql`${table.runKey} is not null and ${table.status} not in ('failed', 'cancelled', 'limit_reached', 'continued')`
       ),
-    // Pending normal pruning and repair share one bounded, indexed queue.
+    // Expiry and repair each have an indexed range, including an empty final pass.
     index("workflow_runs_retention_idx")
       .on(table.clientInstanceId, table.finishedAt, table.id)
-      .where(sql`${table.dataPruneVersion} < 1 and ${table.finishedAt} is not null`),
+      .where(
+        sql`${table.dataPruneVersion} < ${sql.raw(String(WORKFLOW_RETENTION_VERSION))} and ${table.dataPrunedAt} is null and ${table.finishedAt} is not null`
+      ),
+    index("workflow_runs_retention_repair_idx")
+      .on(table.clientInstanceId, table.finishedAt, table.id)
+      .where(
+        sql`${table.dataPruneVersion} < ${sql.raw(String(WORKFLOW_RETENTION_VERSION))} and ${table.dataPrunedAt} is not null and ${table.finishedAt} is not null`
+      ),
     // Kept for the previous release while its workers drain.
     index("workflow_runs_data_prune_idx")
       .on(table.clientInstanceId, table.finishedAt)

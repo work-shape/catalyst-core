@@ -1,3 +1,4 @@
+import { WORKFLOW_RETENTION_VERSION } from "./workflow-retention-version";
 import {
   and,
   asc,
@@ -8,6 +9,7 @@ import {
   lt,
   notExists,
   or,
+  isNull,
   sql,
   type SQL
 } from "drizzle-orm";
@@ -20,18 +22,14 @@ import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 // Dataset bytes have their own lifetime owner (dataset-lifetime); references to them here
 // expire with other run values. Child and continuation IDs are governance links, not values:
 // each linked run is pruned independently, without losing the names/counts of its history.
-// No script, literal, cursor, log text, label derived from an item, or run key survives.
-// Bump with any expanded value policy and update the matching partial index predicate.
-// Version-zero rows include every run marked by the pre-owner pruner.
-const RETENTION_VERSION = 1;
+// Keys and labels hold identifiers, not content; done runs keep their keys to prevent replays.
+// No script, literal, cursor or log text survives. Version zero includes pre-owner prunes.
 
 const runValues = {
   definition: sql`null`,
   input: sql`'{}'::jsonb`,
   output: sql`null`,
   checkpoint: sql`null`,
-  runKey: sql`null`,
-  labels: sql`null`,
   itemLabel: sql`null`
 } satisfies Partial<Record<keyof typeof workflowRuns.$inferSelect, SQL>>;
 
@@ -57,6 +55,8 @@ const runGovernance = {
   id: true,
   clientInstanceId: true,
   workflow: true,
+  runKey: true,
+  labels: true,
   definitionRevisionId: true,
   mode: true,
   trigger: true,
@@ -145,26 +145,39 @@ export function workflowRetention(
   assertColumns(getTableColumns(workflowStepRuns), stepValues, stepGovernance);
   return {
     async listRunsWithDataEndedBefore(input) {
-      const rows = await db
-        .select({ id: workflowRuns.id })
-        .from(workflowRuns)
-        .where(
+      const pending = and(
+        eq(workflowRuns.clientInstanceId, input.clientInstanceId),
+        sql`${workflowRuns.dataPruneVersion} < ${sql.raw(String(WORKFLOW_RETENTION_VERSION))}`,
+        isNotNull(workflowRuns.finishedAt),
+        inArray(workflowRuns.status, [...WORKFLOW_ENDED_STATUSES])
+      );
+      // Separate indexed ranges: an empty repair pass must not walk every recent run.
+      // Each side reads at most one batch; merge only those bounded candidates.
+      const candidates = await Promise.all(
+        [
+          isNotNull(workflowRuns.dataPrunedAt),
           and(
-            eq(workflowRuns.clientInstanceId, input.clientInstanceId),
-            sql`${workflowRuns.dataPruneVersion} < ${sql.raw(String(RETENTION_VERSION))}`,
-            isNotNull(workflowRuns.finishedAt),
-            // Already marked rows lost their retention window on an older release. Repair them
-            // even if the operator has since increased the number of retention days.
-            or(
-              isNotNull(workflowRuns.dataPrunedAt),
-              lt(workflowRuns.finishedAt, new Date(input.endedBefore))
-            ),
-            inArray(workflowRuns.status, [...WORKFLOW_ENDED_STATUSES])
+            isNull(workflowRuns.dataPrunedAt),
+            lt(workflowRuns.finishedAt, new Date(input.endedBefore))
           )
+        ].map((due) =>
+          db
+            .select({ id: workflowRuns.id, finishedAt: workflowRuns.finishedAt })
+            .from(workflowRuns)
+            .where(and(pending, due))
+            .orderBy(asc(workflowRuns.finishedAt), asc(workflowRuns.id))
+            .limit(input.limit)
         )
-        .orderBy(asc(workflowRuns.finishedAt), asc(workflowRuns.id))
-        .limit(input.limit);
-      return rows.map((row) => row.id);
+      );
+      return candidates
+        .flat()
+        .sort(
+          (a, b) =>
+            (a.finishedAt?.getTime() ?? 0) - (b.finishedAt?.getTime() ?? 0) ||
+            a.id.localeCompare(b.id)
+        )
+        .slice(0, input.limit)
+        .map((row) => row.id);
     },
     async pruneStepRunData(ref) {
       const due = db
@@ -204,12 +217,12 @@ export function workflowRetention(
           ...runValues,
           // Preserve when values first expired, including when repairing an older prune.
           dataPrunedAt: sql`coalesce(${workflowRuns.dataPrunedAt}, ${ref.prunedAt}::timestamptz)`,
-          dataPruneVersion: RETENTION_VERSION
+          dataPruneVersion: WORKFLOW_RETENTION_VERSION
         })
         .where(
           and(
             runIs(ref),
-            sql`${workflowRuns.dataPruneVersion} < ${sql.raw(String(RETENTION_VERSION))}`,
+            sql`${workflowRuns.dataPruneVersion} < ${sql.raw(String(WORKFLOW_RETENTION_VERSION))}`,
             inArray(workflowRuns.status, [...WORKFLOW_ENDED_STATUSES]),
             notExists(remaining)
           )

@@ -12,7 +12,14 @@ import {
   type workflowFixture,
   type WorkflowFixture
 } from "./support/workflow-instance";
-import { notifyClients, readyWorkflows, start, stepRunsOf } from "./support/workflow-runs";
+import {
+  notifyClients,
+  readyWorkflows,
+  start,
+  stepRunsOf,
+  writesOf,
+  NOTE
+} from "./support/workflow-runs";
 
 // Run data is bounded: a number of days after a run ended, the job `workflow_run.prune_data`
 // removes the inputs and outputs of its step runs and the run's own input and result. The run
@@ -103,6 +110,77 @@ describe("the values of a Workflow Run", () => {
 
     // A second run of the job finds nothing.
     expect(await t.workflows.pruneRunData()).toEqual({ runs: 0, stepRuns: 0, batches: 0 });
+  });
+
+  it("keeps a done run's key and label filter after pruning so a backfill sends nothing twice", async () => {
+    const time = clock();
+    const definitions = publishedDefinitions();
+    definitions.publish({ ...notifyClients(), labels: { month: { value: "2026-09" } } });
+    const t = await ready({ definitions: definitions.source, now: time.now });
+    const begin = async () =>
+      runSchema.parse(
+        (
+          await t.expectOk(t.root.id, "workflows.start", {
+            params: { workflow: "notify-clients" },
+            payload: { input: { note: NOTE }, key: "2026-09/1" }
+          })
+        ).json()
+      );
+    const run = await t.finish((await begin()).id);
+    const sent = writesOf(t).length;
+    expect(sent).toBe(3);
+    time.pass(DAYS + 1);
+    expect((await t.workflows.pruneRunData()).runs).toBe(1);
+    const again = await begin();
+    expect(again).toMatchObject({ id: run.id, status: "done" });
+    await t.worker().runDue();
+    expect(writesOf(t)).toHaveLength(sent);
+    const page = await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: run.id } });
+    expect(page.json()).toMatchObject({ runKey: "2026-09/1", labels: { month: "2026-09" } });
+    // Labels have no public list filter yet. Exercise the persisted label predicate itself.
+    await withTestSql(async (sql) => {
+      const rows = await sql<{ id: string }[]>`select id from workflow_runs
+        where client_instance_id = ${clientInstanceId} and workflow = 'notify-clients'
+        and labels @> '{"month":"2026-09"}'::jsonb`;
+      expect(rows).toEqual([{ id: run.id }]);
+    });
+  });
+
+  it("reads reached loop steps and counts after pruning without reconstructing steps that never ran", async () => {
+    const time = clock();
+    const definitions = publishedDefinitions();
+    definitions.publish(
+      notifyClients({}, [
+        {
+          id: "after_send",
+          name: "After send",
+          type: "operation",
+          operation: "connection.crm.write",
+          input: { note: { value: "after" } }
+        }
+      ])
+    );
+    const t = await ready({ definitions: definitions.source, now: time.now });
+    t.setBehaviour((operation) =>
+      operation === "echo"
+        ? Promise.resolve({ clients: [{ id: "1" }] })
+        : Promise.reject(connectionCallError("upstream_conflict"))
+    );
+    const run = await t.finish((await start(t)).id);
+    expect(run.status).toBe("failed");
+    const before = (await stepRunsOf(t, run.id)).find((step) => step.stepId === "each_client");
+    expect(before?.bodyCounts?.after_send).toEqual({ total: 1, done: 0, failed: 0, running: 0 });
+    time.pass(DAYS + 1);
+    expect((await t.workflows.pruneRunData()).runs).toBe(1);
+    expect(
+      await t.stores.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id })
+    ).toBeUndefined();
+    const after = (await stepRunsOf(t, run.id)).find((step) => step.stepId === "each_client");
+    expect(after?.loop).toEqual(before?.loop);
+    expect(after?.bodyCounts?.send).toEqual(before?.bodyCounts?.send);
+    expect(after?.bodyCounts?.after_send).toBeUndefined();
+    expect(after?.concurrency).toBeUndefined();
+    expect((await readRun(t, run.id)).dataPrunedAt).toBeDefined();
   });
 
   it("stay while the run ended less long ago than the limit", async () => {
@@ -265,8 +343,7 @@ async function expectNoValues(ids: string[]) {
   await withTestSql(async (sql) => {
     const [runs] = await sql<{ remaining: number; repaired: number }[]>`
       select count(*) filter (where definition is not null or input <> '{}'::jsonb
-        or output is not null or checkpoint is not null or labels is not null
-        or run_key is not null or item_label is not null)::int as remaining,
+        or output is not null or checkpoint is not null or item_label is not null)::int as remaining,
         count(*) filter (where data_prune_version = 1 and data_pruned_at is not null)::int as repaired
       from workflow_runs where id in ${sql(ids)}`;
     const [steps] = await sql<{ remaining: number }[]>`
