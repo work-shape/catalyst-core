@@ -7,6 +7,7 @@ import {
   type PlatformContext
 } from "@work-shape/catalyst-api-contract";
 import { ConfigApiError, type ConfigApi } from "./api";
+import { publishFileChanges } from "./publish-file-changes";
 import { appPublishData } from "./app-publish-data";
 import {
   APP_STATE_FILE,
@@ -296,11 +297,15 @@ async function publish(
 ): Promise<number> {
   if (values.revision !== undefined) revisionNumber(values.revision);
   const target = await openApp(options, values, undefined);
-  const get = (revision: string) =>
+  const get = (revision: string, files = false) =>
     target.api.read((client) =>
       client.assets.get({
         params: { kind: APP_KIND, name: app },
-        query: { workspaceId: target.workspaceId, revision }
+        query: {
+          workspaceId: target.workspaceId,
+          revision,
+          ...(files ? { files: "true" as const } : {})
+        }
       })
     );
   const candidate = await get(values.revision ?? "draft");
@@ -329,14 +334,35 @@ async function publish(
   const review = publishReview(candidate, live);
   const storedData = await appPublishData(target.api, app, candidate);
   const question = [formatReview(app, review), storedData].filter(Boolean).join("\n");
-  if (values.json) writeErr(options, question);
-  else writeOut(options, question);
+  const say = (text: string) => (values.json ? writeErr(options, text) : writeOut(options, text));
+  const narrative = values.yes ? undefined : candidate.publishNarrative;
+  say(narrative ? [narrative.summary, ...narrative.warnings].join("\n") : question);
   const answer = await askBeforePublish(options, {
     kind: APP_KIND,
     command: APP_KIND,
     name: app,
     revision: number,
-    yes: values.yes
+    yes: values.yes,
+    ...(narrative
+      ? {
+          details: async () => {
+            const detailed = await get(String(number), true);
+            const before =
+              candidate.publishedRevision === undefined
+                ? undefined
+                : await get(String(candidate.publishedRevision), true);
+            say(
+              [
+                question,
+                ...publishFileChanges(detailed, before),
+                ...(detailed.filesOmitted || before?.filesOmitted
+                  ? ["Some files are omitted from this review."]
+                  : [])
+              ].join("\n")
+            );
+          }
+        }
+      : {})
   });
   if (answer === "refused") return EXIT.refused;
   const outcome = await target.api.change(
