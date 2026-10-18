@@ -38,7 +38,7 @@ export class PostgresExecutorError extends Error {
   /** The SQLSTATE the database answered with, when it answered. */
   readonly sqlState: string | undefined;
 
-  /** Object names reported for a constraint violation; never the database's detail or message. */
+  /** Object names from a database constraint check; never fields supplied by PL/pgSQL RAISE. */
   readonly constraint: { name?: string; table?: string; column?: string } | undefined;
 
   constructor(
@@ -110,15 +110,19 @@ export function toPostgresExecutorError(
   if (code.startsWith("28") && fromCallerStatement) {
     return new PostgresExecutorError("failed", code);
   }
-  // These protocol fields identify schema objects. Detail, message, where and the driver
-  // object itself may hold row values and must never leave this adapter.
-  const constraint = code.startsWith("23")
-    ? {
-        name: stringField(error, "constraint_name"),
-        table: stringField(error, "table_name"),
-        column: stringField(error, "column_name")
-      }
-    : undefined;
+  // PL/pgSQL RAISE can choose any SQLSTATE and put row values in these fields. Only
+  // retain names when the server identifies a routine other than exec_stmt_raise. A real
+  // violation inside a trigger still reports the constraint checker, not the trigger.
+  // Missing routine metadata cannot establish that the names came from a check.
+  const routine = stringField(error, "routine");
+  const constraint =
+    code.startsWith("23") && routine && routine !== "exec_stmt_raise"
+      ? {
+          name: stringField(error, "constraint_name"),
+          table: stringField(error, "table_name"),
+          column: stringField(error, "column_name")
+        }
+      : undefined;
   return new PostgresExecutorError(kindOfSqlState(code), code, constraint);
 }
 
