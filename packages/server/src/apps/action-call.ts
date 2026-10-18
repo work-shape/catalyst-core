@@ -85,6 +85,8 @@ export interface ShownRevision {
   revisionId: string;
   /** The App the frame shows, by its name. A Page of a conversation has none. */
   appName?: string;
+  /** The durable App id; personal storage does not follow a revision or a name. */
+  appId?: string;
   /**
    * The workspace the frame belongs to: the App's, or the one of the Page's conversation.
    * Every call of the frame carries it, so a setting that is narrowed to a workspace counts
@@ -233,6 +235,7 @@ export class AppActionCalls {
       ...shared,
       mode: view,
       appName: asset.name,
+      appId: asset.id,
       workspaceId: resource.workspaceId,
       host: appRevisionHost(asset.name, resource, view, shared.dataStores),
       revisionId:

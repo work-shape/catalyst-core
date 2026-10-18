@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { RELEASED_KIT_VERSIONS } from "@work-shape/catalyst-app-build";
 import {
   createPlatformTools,
   platformDocsSkill,
@@ -196,7 +197,9 @@ describe("the shipped skill platform-docs", () => {
     expect(guide?.content).toContain(
       "Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load."
     );
-    expect(guide?.content).toContain("/app-runtime/kit/1.5.0/fonts/fonts.css");
+    expect(guide?.content).toContain(
+      `/app-runtime/kit/${RELEASED_KIT_VERSIONS.at(-1)}/fonts/fonts.css`
+    );
   });
   it("carries every page of the platform's docs as a reference that its index names", async () => {
     const pages = (await readdir(docsRoot, { recursive: true }))

@@ -1,3 +1,4 @@
+import { appStorageBootstrap, type AppStorageBootstrap } from "./app-storage";
 import type { ClientInstanceId, FileSetId, ServedFileSetAsset } from "@work-shape/catalyst-core";
 import { APP_MODES } from "@work-shape/catalyst-core";
 import { createHash, createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
@@ -291,10 +292,9 @@ function appContentPolicy(
 ): string {
   const outsideHosts = document?.outsideHosts ?? [];
   return [
-    // No origin: the Page cannot read the instance's cookies or storage. Scripts run. Forms,
-    // popups, downloads, top navigation and same-origin are not allowed, each of them is a way
-    // out of the frame.
-    "sandbox allow-scripts",
+    // No origin: the Page cannot read the instance's cookies or storage. Form submit
+    // events run, but form-action below prevents sending to a navigation target.
+    "sandbox allow-scripts allow-forms allow-downloads",
     "default-src 'none'",
     // 'self' is the instance. It takes no path; see `view-shell.ts` for why none is named.
     // No inline script and no eval: the build moves inline scripts into files. The one hash is
@@ -647,8 +647,8 @@ const PAGE_GUARD_SOURCE = `(function (page) {
  * The script of one Page document: the guard, called with the stored HTML as a text. No `<` of
  * the HTML is in the script as such, so nothing in it ends the script element early.
  */
-function composePageScript(storedHtml: string): string {
-  return `${PAGE_GUARD_SOURCE}(${JSON.stringify(storedHtml).replaceAll("<", "\\u003c")});`;
+function composePageScript(storedHtml: string, storage?: AppStorageBootstrap): string {
+  return `${storage ? appStorageBootstrap(storage) : ""}${PAGE_GUARD_SOURCE}(${JSON.stringify(storedHtml).replaceAll("<", "\\u003c")});`;
 }
 
 // The document the frame is given holds the platform's script and nothing else. The stored
@@ -675,19 +675,19 @@ export interface PageShell {
 
 /**
  * The shell document for one HTML file of a file set. The Page's frame is written here, by the
- * server, with the sandbox it always has: scripts and nothing else. The Page document is the
+ * server, with scripts, form events and downloads, but without an origin. The Page document is the
  * value of an attribute, so only the two characters that end or change an attribute value are
  * escaped. The answer that carries the shell names `pageScriptHash` in its policy.
  */
-export function composePageShell(storedHtml: string): PageShell {
-  const pageScript = composePageScript(storedHtml);
+export function composePageShell(storedHtml: string, storage?: AppStorageBootstrap): PageShell {
+  const pageScript = composePageScript(storedHtml, storage);
   const pageDocument = composePageDocument(pageScript);
   const document = [
     "<!doctype html>",
     '<html><head><meta charset="utf-8"><title>Page</title>',
     `<style>${SHELL_STYLE}</style>`,
     "</head><body>",
-    `<iframe sandbox="allow-scripts" title="Page" srcdoc="${escapeAttribute(pageDocument)}"></iframe>`,
+    `<iframe sandbox="allow-scripts allow-forms allow-downloads" title="Page" srcdoc="${escapeAttribute(pageDocument)}"></iframe>`,
     "</body></html>",
     ""
   ].join("\n");

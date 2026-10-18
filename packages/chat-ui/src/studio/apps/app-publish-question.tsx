@@ -89,30 +89,46 @@ function appAudienceDiffers(
 }
 
 /**
+ * Who the live revision is for, in the words of the dialog. A workspace audience is named by
+ * the workspace's name as the interface shows it: the instance's label carries the name stored
+ * on the workspace's row, which for a Personal Workspace is "Personal workspace" in every
+ * language (ACCEPT-FIX-2 C5). Every other audience keeps the instance's label, which can name a
+ * person the interface does not know.
+ */
+function appAudienceLiveLabel(
+  live: NonNullable<AppAudienceOffer["live"]>,
+  workspaceName: string,
+  t: TranslationContextValue["t"]
+): string | undefined {
+  return live.audience === "workspace"
+    ? t("apps.publishAudienceWorkspace", { workspace: workspaceName })
+    : live.label;
+}
+
+/**
  * The line that says who the live revision is for and who it will be for, where the choice
  * shown changes it: "Shared now: Everyone in the instance. After publishing: Everyone in Sales."
  * It waits for the people of the choice shown, so it never names those of another choice.
  */
 export function AppAudienceChange({
   offer,
-  selected
+  selected,
+  workspaceName
 }: {
   offer: AppAudienceOffer | undefined;
   selected: AppAudience | undefined;
+  /** The name of the App's workspace as the interface shows it. */
+  workspaceName: string;
 }) {
   const { t } = useTranslation();
   const live = offer?.live;
-  if (
-    !offer ||
-    !live?.label ||
-    offer.selected !== selected ||
-    !appAudienceDiffers(offer, selected)
-  ) {
+  const liveLabel = live ? appAudienceLiveLabel(live, workspaceName, t) : undefined;
+  if (!offer || !liveLabel || offer.selected !== selected || !appAudienceDiffers(offer, selected)) {
     return null;
   }
   return (
     <p className="text-body text-muted-foreground" data-testid="app-publish-audience-change">
-      {t("apps.publishAudienceChange", { live: live.label, next: offer.label })}
+      {t("apps.publishAudienceChange", { live: liveLabel, next: offer.label })}
     </p>
   );
 }

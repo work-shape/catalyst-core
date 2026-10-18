@@ -41,7 +41,7 @@ import {
   type AppPublishDataRead
 } from "./app-data";
 import { AppDraftFiles } from "./app-draft-files";
-import { AppDeleteDialog, AppFrame, AppHeader, NameList } from "./app-header";
+import { AppDeleteDialog, AppFrame, AppHeader, AppStateBadge, NameList } from "./app-header";
 import {
   APP_RIGHT_NAMES,
   appDescription,
@@ -521,11 +521,18 @@ export function AppEditFrame({
             description={description}
             state={
               known ? (
-                <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
-                  {publishedRevision === undefined
-                    ? t("apps.draftNotPublished")
-                    : t("apps.draftRevision", { number: draftRevision })}
-                </Badge>
+                // A draft that is what is published says so, as the list and the App do.
+                publishedRevision !== undefined && !ahead ? (
+                  <AppStateBadge
+                    state={{ kind: "published", revision: publishedRevision, draftAhead: false }}
+                  />
+                ) : (
+                  <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
+                    {publishedRevision === undefined
+                      ? t("apps.draftNotPublished")
+                      : t("apps.draftRevision", { number: draftRevision })}
+                  </Badge>
+                )
               ) : (
                 <Badge size="sm">{t("apps.draft")}</Badge>
               )
@@ -799,7 +806,7 @@ export function PublishDialog({
             onChange={(next) => audience?.onChange(next)}
           />
         ) : null}
-        <AppAudienceChange offer={offer} selected={selected} />
+        <AppAudienceChange offer={offer} selected={selected} workspaceName={workspace.name} />
         <div className="grid gap-3">
           <PublishNarrativeReadLead read={narrative} />
           {narrative.status === "none" && offer === undefined ? (

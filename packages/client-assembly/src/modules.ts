@@ -88,6 +88,7 @@ const appsModule = defineModule({
     "apps.preview",
     "apps.sessions.context",
     "apps.sessions.call_action",
+    "apps.sessions.write_storage",
     "apps.sessions.get_workflow_run"
   ],
   kinds: ["app"],

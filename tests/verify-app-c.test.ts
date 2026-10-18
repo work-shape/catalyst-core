@@ -104,7 +104,7 @@ describe("APP-15: the bridge page states what the spec asks of it", () => {
       schema.options.map((option) => option.shape.type.value).sort();
     const tableTypes = (heading: string) => {
       const section = doc.split(`## ${heading}`)[1]?.split("\n## ")[0] ?? "";
-      return [...section.matchAll(/^\| `([a-z_]+)` \|/gmu)]
+      return [...section.matchAll(/^\| `([a-z_]+)`\s+\|/gmu)]
         .map((match) => match[1])
         .filter((type) => type !== "type")
         .sort();

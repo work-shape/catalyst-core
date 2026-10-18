@@ -2,6 +2,10 @@ import { APP_ASSET_KIND, apiOperations } from "@work-shape/catalyst-api-contract
 import {
   AppError,
   PAGE_FILE_SET_HELD_KEY,
+  getSubjectUserId,
+  isAuthenticatedServicePrincipal,
+  type AppUserStorageMutation,
+  asUserId,
   asCollaborationWorkspaceId
 } from "@work-shape/catalyst-core";
 import { AppActionCalls } from "../apps/action-call";
@@ -87,6 +91,43 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
       { pageSessionId: params.pageSessionId, fileSetId: body.fileSetId, token: body.token }
     );
     return { can: await actions.can(session) };
+  });
+
+  route.operation(apiOperations["apps.sessions.write_storage"], {
+    module: APPS_MODULE,
+    changeClass: "reversible",
+    defaultPolicy: "allow",
+    // The token and personal value never enter a held input, fingerprint or audit row.
+    inputWithoutSecrets: (input) => {
+      const mutation: AppUserStorageMutation =
+        input.mutation.type === "set"
+          ? { type: "set", key: "[redacted]", value: "[redacted]" }
+          : input.mutation.type === "remove"
+            ? { type: "remove", key: "[redacted]" }
+            : { type: "clear" };
+      return { ...input, token: "[redacted]", mutation };
+    },
+    authorize: async (input, { actor, access }) => {
+      if (isAuthenticatedServicePrincipal(actor))
+        return { allowed: false, action: "apps.sessions.write_storage", reason: "no_grant" };
+      const session = await actions.session({ user: actor, access }, input);
+      if (!session.appId) throw new AppError("NOT_FOUND", "App storage is not available");
+      return { allowed: true };
+    },
+    execute: async (input, { actor, access }) => {
+      if (isAuthenticatedServicePrincipal(actor))
+        throw new AppError("NOT_FOUND", "App storage is not available");
+      // Recheck the same parsed proof at dispatch, after policy and admission awaited.
+      const session = await actions.session({ user: actor, access }, input);
+      if (!session.appId) throw new AppError("NOT_FOUND", "App storage is not available");
+      await options.stores.pages.mutateAppUserStorage({
+        clientInstanceId: options.clientInstanceId,
+        appId: session.appId,
+        userId: asUserId(getSubjectUserId(actor)),
+        mutation: input.mutation
+      });
+      return { saved: true };
+    }
   });
 
   route(
