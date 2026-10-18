@@ -30,6 +30,61 @@ import {
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 
 describe("execution workspace source attachments", () => {
+  it("accepts chat Markdown and TXT without document processing and advertises them in the picker", async () => {
+    const root = await mkdtemp(join(tmpdir(), "catalyst-text-upload-"));
+    const app = await createTestInstance({
+      config: createWorkspaceAttachmentConfig({ root }),
+      capabilities: [],
+      tools: []
+    });
+    try {
+      const configuration = await app.call("config.get", {});
+      const accept = configuration.json().features.attachments.accept.split(",");
+      expect(accept).toEqual(expect.arrayContaining([".txt", ".md", "text/markdown"]));
+      const created = await app.call("conversations.create", {
+        payload: { title: "Create a Knowledge Base with these text files" }
+      });
+      expect(created.statusCode).toBe(200);
+      const conversationId: string = created.json().id;
+      for (const file of [
+        {
+          filename: "reisen.md",
+          contentType: "text/markdown",
+          content: "# Reisen\nBahnreisen",
+          expectedFormat: "markdown"
+        },
+        {
+          filename: "urlaub.txt",
+          contentType: "text/plain",
+          content: "Urlaubstage",
+          expectedFormat: "txt"
+        },
+        {
+          filename: "support.md",
+          contentType: "application/octet-stream",
+          content: "# Support",
+          expectedFormat: "md"
+        }
+      ]) {
+        await expectUpload(app, conversationId, file);
+      }
+      const listed = await app.call("conversations.draft_attachments.list", {
+        params: { conversationId }
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ filename: "reisen.md", status: "ready" }),
+          expect.objectContaining({ filename: "urlaub.txt", status: "ready" }),
+          expect.objectContaining({ filename: "support.md", status: "ready" })
+        ])
+      );
+    } finally {
+      await app.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("accepts source artifact formats used by workspace skills", () => {
     expect(detectWorkspaceSourceFileFormat("analysis.xlsx", undefined)).toBe("xlsx");
     expect(
@@ -40,6 +95,11 @@ describe("execution workspace source attachments", () => {
     ).toBe("pptx");
     expect(detectWorkspaceSourceFileFormat("source.csv", "text/csv; charset=utf-8")).toBe("csv");
     expect(detectWorkspaceSourceFileFormat("notes.rtf", undefined)).toBe("rtf");
+    expect(detectWorkspaceSourceFileFormat("notes.txt", undefined)).toBe("txt");
+    expect(detectWorkspaceSourceFileFormat("notes.md", undefined)).toBe("md");
+    expect(detectWorkspaceSourceFileFormat("notes", "text/markdown; charset=utf-8")).toBe(
+      "markdown"
+    );
     expect(detectWorkspaceSourceFileFormat("archive.zip", "application/zip")).toBeUndefined();
     expect(WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES).toEqual(
       expect.arrayContaining([
@@ -47,6 +107,8 @@ describe("execution workspace source attachments", () => {
         ".pptx",
         ".doc",
         ".csv",
+        ".txt",
+        ".md",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       ])
     );

@@ -41,6 +41,9 @@ const ARTIFACT_PREVIEW_IMAGE_KINDS = new Set([
 
 const WORKSPACE_SOURCE_EXTENSIONS = new Set([
   "csv",
+  "txt",
+  "md",
+  "markdown",
   "doc",
   "odp",
   "ods",
@@ -55,6 +58,9 @@ const WORKSPACE_SOURCE_EXTENSIONS = new Set([
 ]);
 
 const WORKSPACE_SOURCE_MIME_TYPES = new Map<string, string>([
+  ["text/plain", "txt"],
+  ["text/markdown", "markdown"],
+  ["text/x-markdown", "markdown"],
   ["application/msword", "doc"],
   ["application/rtf", "rtf"],
   ["application/vnd.ms-excel", "xls"],
@@ -70,6 +76,12 @@ const WORKSPACE_SOURCE_MIME_TYPES = new Map<string, string>([
 ]);
 
 export const WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES = [
+  ".txt",
+  ".md",
+  ".markdown",
+  "text/plain",
+  "text/markdown",
+  "text/x-markdown",
   ".csv",
   ".doc",
   ".odt",
