@@ -3,14 +3,12 @@ import {
   AppError,
   moduleOffError,
   operationDenialError,
-  unknownToJsonValue,
   type AuditRecorder,
   type Conversation,
   type ConversationSubject,
   type JsonObject,
   type LocaleCode,
   type OperationAuthorization,
-  type OperationDefinition,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
 import {
@@ -21,10 +19,8 @@ import {
   type AppSaved,
   type PlatformAssetCalls,
   type PlatformAssetPut,
-  type PlatformAssetFound,
-  type PlatformCallableOperation
+  type PlatformAssetFound
 } from "@work-shape/catalyst-tool-execution";
-import { z } from "zod";
 import {
   DRAFT_CHANGED_ELSEWHERE,
   DRAFT_MOVED_TO_OTHER_PAGE,
@@ -39,7 +35,7 @@ import type { AssetCall } from "../assets/asset-access";
 import { assetWriteEvent } from "../guardrails/asset-guardrail-events";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { AssetWorkflow } from "../assets/asset-service";
-import { callableByAudience, listingOrigin } from "./platform-operations-audience";
+import { listCallableOperations } from "./platform-callable-operations";
 import { createPlatformAssetPolicy } from "./platform-asset-policy";
 import { readPlatformContext } from "./platform-context";
 import { workflowAuthoringContext } from "./workflow-authoring-context";
@@ -54,7 +50,6 @@ import {
   requireReadableSubject,
   subjectUnavailable
 } from "../conversations/platform-asset-subject";
-import { resolveOperationResource } from "../operations/operation-resource";
 import { findWorkspaceFiles } from "../workspaces/workspace-files";
 import type { AssetWorkflowOptions } from "../types";
 
@@ -81,24 +76,6 @@ const APP_FROM_PAGE_OPERATIONS = {
 
 /** How many revisions of an App back a save of a Page looks for one written from that Page. */
 const APP_REVISIONS_LOOKED_BACK = 200;
-
-/** How many operations one list answers. The list has no pages, so this is its bound. */
-const CALLABLE_OPERATION_LIST_MAX = 200;
-
-const jsonObjectSchema = z.record(z.string(), z.unknown());
-
-/** The input or output of an operation as JSON Schema, where it can be told as one. */
-function jsonSchemaOf(given: JsonObject | undefined, schema: z.ZodType): JsonObject | undefined {
-  if (given) return given;
-  try {
-    const derived = jsonObjectSchema.safeParse(z.toJSONSchema(schema, { unrepresentable: "any" }));
-    if (!derived.success || Object.keys(derived.data).length <= 1) return undefined;
-    const value = unknownToJsonValue(derived.data);
-    return typeof value === "object" && value !== null && !Array.isArray(value) ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 /** The refusal of a call that names no asset in a conversation about none yet. */
 const withoutSubject = () =>
@@ -858,58 +835,16 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       };
     },
 
-    async listOperations(context, audience) {
-      // The list is of the instance, so it needs no subject: an agent asks it while it builds
-      // a Page, before the conversation is about any asset.
+    async listOperations(context, audience, input = {}) {
+      // An agent asks while building, before the conversation is about any asset.
       const conversation = await conversationOf(context);
-      const call = await callOf(context);
-      const listing = await options.operationCalls?.registry.list({});
-      const candidates = (listing?.operations ?? [])
-        .filter((definition) => callableByAudience(definition.name, audience))
-        .sort((left, right) => (left.name < right.name ? -1 : 1));
-      const visible = async (definition: OperationDefinition): Promise<boolean> => {
-        try {
-          const { resource, resourceNotFound } = await resolveOperationResource(
-            options,
-            definition.resource({})
-          );
-          if (resourceNotFound) return false;
-          if (definition.action !== null) {
-            return call.access.authorize(definition.action, resource).allowed;
-          }
-          const decision = await definition.authorize(
-            {},
-            {
-              actor: call.actor,
-              origin: listingOrigin(audience, conversation.id),
-              correlationId: call.correlationId,
-              access: call.access,
-              resource
-            }
-          );
-          return decision.allowed;
-        } catch {
-          return false;
-        }
-      };
-      const operations: PlatformCallableOperation[] = [];
-      let truncated = (listing?.truncated.length ?? 0) > 0;
-      for (const definition of candidates) {
-        if (!(await visible(definition))) continue;
-        if (operations.length >= CALLABLE_OPERATION_LIST_MAX) {
-          truncated = true;
-          break;
-        }
-        const inputSchema = jsonSchemaOf(definition.inputJsonSchema, definition.inputSchema);
-        const outputSchema = jsonSchemaOf(definition.outputJsonSchema, definition.outputSchema);
-        operations.push({
-          name: definition.name,
-          effect: definition.effect,
-          ...(inputSchema ? { inputSchema } : {}),
-          ...(outputSchema ? { outputSchema } : {})
-        });
-      }
-      return { operations, truncated };
+      return listCallableOperations(
+        options,
+        await callOf(context),
+        conversation.id,
+        audience,
+        input
+      );
     }
   };
 }
