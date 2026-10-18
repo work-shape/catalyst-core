@@ -151,7 +151,7 @@ export function findIssuesOfChange(
           ofChange.push({
             message:
               locale === "de"
-                ? `${assetKindLabel(kind.kind, locale)} '${name}' verweist auf unbekanntes Asset: ${assetKindLabel(ref.kind, locale)} '${ref.name}'`
+                ? `${assetKindLabel(kind.kind, locale)} '${name}' verweist auf ein unbekanntes Asset: ${assetKindLabel(ref.kind, locale)} '${ref.name}'`
                 : `${assetKindLabel(kind.kind, locale)} '${name}' references unknown ${assetKindLabel(ref.kind, locale)} '${ref.name}'`,
             assetKind: kind.kind,
             assetName: name
