@@ -12,6 +12,7 @@ import {
   KNOWLEDGE_DOCUMENT_WAIT_CODES,
   KNOWLEDGE_EXTRACTED_FORMATS,
   KNOWLEDGE_OPERATION_PREFIX,
+  KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
   knowledgeRetryInputSchema,
   knowledgeRetryOutputSchema,
   type KnowledgeDocumentStore,
@@ -61,6 +62,8 @@ const documentSchema = z.object({
   originalStatus: z.enum(MANAGED_FILE_STATUSES).exclude(["deleted"]).optional(),
   state: z.enum(KNOWLEDGE_DOCUMENT_STATES),
   failureCode: z.enum(KNOWLEDGE_DOCUMENT_FAILURE_CODES).optional(),
+  /** Current release-config limit, so Retry after an operator raises it names the new limit. */
+  failurePageLimit: z.number().int().positive().optional(),
   /** Why a `pending` document waits, such as a usage limit that refuses its embedding. */
   waitCode: z.enum(KNOWLEDGE_DOCUMENT_WAIT_CODES).optional(),
   /** The source the document was synced from: only source withdrawal removes it. */
@@ -114,6 +117,9 @@ export function listDocumentsOperation(
       return {
         documents: page.documents.map((document) => ({
           ...document,
+          ...(document.failureCode === "knowledge_file_too_many_pages"
+            ? { failurePageLimit: runtime.maxPages ?? KNOWLEDGE_MAX_PAGES_PER_DOCUMENT }
+            : {}),
           bytes: filesById.get(document.fileId)?.byteSize ?? 0,
           originalStatus:
             filesById.get(document.fileId)?.status === "released" ? "released" : "available"

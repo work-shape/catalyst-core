@@ -88,6 +88,7 @@ const documentsSchema = z.object({
       bytes: z.number(),
       state: z.enum(["pending", "indexed", "failed"]),
       failureCode: z.string().optional(),
+      failurePageLimit: z.number().optional(),
       addedAt: z.string(),
       updatedAt: z.string()
     })
@@ -754,7 +755,11 @@ describe("indexing the documents of a Knowledge Base", () => {
       new Map([
         [
           long.id,
-          expect.objectContaining({ state: "failed", failureCode: "knowledge_file_too_many_pages" })
+          expect.objectContaining({
+            state: "failed",
+            failureCode: "knowledge_file_too_many_pages",
+            failurePageLimit: 1_000
+          })
         ],
         [atLimit.id, expect.objectContaining({ state: "indexed" })]
       ])

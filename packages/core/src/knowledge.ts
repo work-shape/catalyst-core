@@ -420,12 +420,12 @@ export const KNOWLEDGE_TEXT_FORMATS: readonly KnowledgeDocumentFormat[] = ["txt"
 export { KNOWLEDGE_FILE_MAX_BYTES } from "@work-shape/catalyst-asset-schemas";
 
 /**
- * How many pages of one PDF or DOCX a Knowledge Base reads by default, and at most where release
- * config raises it (`knowledge.maxPagesPerDocument`). Extraction counts the pages before it
- * reads their text, and refuses a longer document with `knowledge_file_too_many_pages`.
+ * How many pages of one PDF or DOCX a Knowledge Base reads by default. Release config
+ * may raise it (`knowledge.maxPagesPerDocument`) without a fixed upper bound. Extraction counts
+ * the pages before it reads their text, and refuses a longer document with
+ * `knowledge_file_too_many_pages`.
  */
 export const KNOWLEDGE_MAX_PAGES_PER_DOCUMENT = 500;
-export const KNOWLEDGE_MAX_PAGES_PER_DOCUMENT_CEILING = 5_000;
 
 /**
  * How many files one call of `knowledge.<id>.add_files` adds at most. It bounds what one call

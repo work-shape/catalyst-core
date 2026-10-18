@@ -723,6 +723,7 @@ modelBindings:
     dimensions: 1536
 knowledge:
   defaultEmbeddingBinding: knowledgeEmbedding
+  maxPagesPerDocument: 500
 usage:
   costs:
     customer:
@@ -751,6 +752,12 @@ usage:
   the purpose `knowledge_embedding` for ingestion and re-index or `knowledge_query` for a search,
   and the provider entry, its region and the binding. Its cost comes from the rate card's
   uncached input price; under a spend budget the model needs a row there.
+
+`knowledge.maxPagesPerDocument` defaults to 500 and accepts any positive integer, with no fixed
+upper bound. It limits PDF and DOCX extraction for Knowledge Bases only; chat uploads keep their
+own limits. The extractor counts pages before conversion and fails a longer document with
+`knowledge_file_too_many_pages`. The Documents section shows the configured limit. After raising
+it and restarting the API and knowledge extraction worker, retry the document to extract it again.
 
 Startup stops, naming the binding, when:
 

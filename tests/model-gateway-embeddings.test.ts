@@ -95,18 +95,24 @@ describe("embedding bindings in release config", () => {
     });
   });
 
-  it("reads 500 pages per document by default, takes a raised limit and refuses one above 5,000", () => {
-    const raised = parseClientInstanceConfig(
-      releaseConfig({ knowledge: { maxPagesPerDocument: 1_200 } })
-    );
-    expect(raised.knowledge.maxPagesPerDocument).toBe(1_200);
-    expect(() =>
-      parseClientInstanceConfig(releaseConfig({ knowledge: { maxPagesPerDocument: 5_001 } }))
-    ).toThrow(/maxPagesPerDocument/u);
-    expect(() =>
-      parseClientInstanceConfig(releaseConfig({ knowledge: { maxPagesPerDocument: 0 } }))
-    ).toThrow(/maxPagesPerDocument/u);
-  });
+  it.each([1, 1_200, 5_001, 100_000_000])(
+    "accepts a configured page limit of %i without a fixed upper bound",
+    (maxPagesPerDocument) => {
+      const config = parseClientInstanceConfig(
+        releaseConfig({ knowledge: { maxPagesPerDocument } })
+      );
+      expect(config.knowledge.maxPagesPerDocument).toBe(maxPagesPerDocument);
+    }
+  );
+
+  it.each([0, -1, 1.5, Infinity, NaN, "5000", null])(
+    "refuses an invalid page limit of %s",
+    (maxPagesPerDocument) => {
+      expect(() =>
+        parseClientInstanceConfig(releaseConfig({ knowledge: { maxPagesPerDocument } }))
+      ).toThrow(/maxPagesPerDocument/u);
+    }
+  );
 
   it("accepts an embedding binding on a provider that keeps data inside the instance", () => {
     const config = parseClientInstanceConfig(

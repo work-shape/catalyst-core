@@ -234,24 +234,44 @@ describe("the Documents section", () => {
   });
 
   it("names the page limit of a document with too many pages, in both languages", () => {
-    const long = document_("akte", "failed", {
+    const showDocument = (long: KnowledgeDocument, locale?: "de") =>
+      show(
+        createElement(KnowledgeDocuments, {
+          source: plantedSource({ useDocuments: () => ready({ documents: [long] }) }),
+          knowledgeBase: "objektunterlagen",
+          publishedRevision: 1,
+          canWrite: true
+        }),
+        locale
+      );
+    const overLimit: Partial<KnowledgeDocument> = {
       format: "pdf",
       fileName: "akte.pdf",
       failureCode: "knowledge_file_too_many_pages"
-    });
-    const source = plantedSource({ useDocuments: () => ready({ documents: [long] }) });
-    const props = {
-      source,
-      knowledgeBase: "objektunterlagen",
-      publishedRevision: 1,
-      canWrite: true
     };
-    show(createElement(KnowledgeDocuments, props));
-    expect(row("akte").textContent).toContain("More than 500 pages.");
+    const long = document_("akte", "failed", { ...overLimit, failurePageLimit: 12_345 });
+
+    showDocument(long);
+    expect(row("akte").textContent).toContain(
+      "Page limit reached. The current limit is 12,345 pages. Split the file, or ask the operator for a higher limit and retry."
+    );
     expect(button("Retry", row("akte"))).toBeDefined();
-    show(createElement(KnowledgeDocuments, props), "de");
-    expect(row("akte").textContent).toContain("Mehr als 500 Seiten.");
+    showDocument(long, "de");
+    expect(row("akte").textContent).toContain(
+      "Seitengrenze erreicht. Die aktuelle Grenze liegt bei 12.345 Seiten."
+    );
     expect(row("akte").textContent).not.toContain("knowledge_file_too_many_pages");
+
+    // An older instance sends no limit: the sentence names no number.
+    const withoutLimit = document_("akte", "failed", overLimit);
+    showDocument(withoutLimit);
+    expect(row("akte").textContent).toContain(
+      "Page limit reached. Split the file, or ask the operator for a higher limit and retry."
+    );
+    expect(row("akte").textContent).not.toMatch(/\d+ pages|undefined/);
+    showDocument(withoutLimit, "de");
+    expect(row("akte").textContent).toContain("Seitengrenze erreicht. Teile die Datei");
+    expect(row("akte").textContent).not.toMatch(/\d+ Seiten|undefined/);
   });
 
   it("has a sentence for every failure code the instance sends", () => {

@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
-  KNOWLEDGE_MAX_PAGES_PER_DOCUMENT_CEILING,
   MODEL_BINDING_KINDS,
   MODEL_EMBEDDING_MAX_DIMENSIONS,
   MODEL_USAGE_TIERS,
@@ -77,12 +76,7 @@ export const knowledgeConfigSchema = z
     defaultEmbeddingBinding: z.string().min(1).optional(),
     withdrawShareConfirm: z.number().min(0).max(1).default(0.2),
     maxDocuments: z.number().int().positive().max(1_000_000).default(10_000),
-    maxPagesPerDocument: z
-      .number()
-      .int()
-      .positive()
-      .max(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT_CEILING)
-      .default(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT)
+    maxPagesPerDocument: z.number().int().positive().default(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT)
   })
   .strict()
   .prefault({});

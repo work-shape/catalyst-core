@@ -142,7 +142,9 @@ export const knowledge = defineTranslations({
       "A knowledge base cannot read this format. It reads PDF, DOCX, TXT and Markdown.",
     "knowledge.failureOverLimit": "The file or its text is too large to read.",
     "knowledge.failureTooManyPages":
-      "More than 500 pages. A knowledge base reads up to 500 pages of a document unless the operator set another limit. Split the file, or ask the operator for a higher limit and retry.",
+      "Page limit reached. Split the file, or ask the operator for a higher limit and retry.",
+    "knowledge.failureTooManyPagesLimit":
+      "Page limit reached. The current limit is {limit} pages. Split the file, or ask the operator for a higher limit and retry.",
     "knowledge.failureFileUnreadable":
       "The file is damaged, encrypted, or not the format its name says.",
     "knowledge.failureFileMissing": "The file is gone. Add it again.",
@@ -326,7 +328,9 @@ export const knowledge = defineTranslations({
       "Dieses Format kann eine Wissensbasis nicht lesen. Sie liest PDF, DOCX, TXT und Markdown.",
     "knowledge.failureOverLimit": "Die Datei oder ihr Text ist zu groß zum Auslesen.",
     "knowledge.failureTooManyPages":
-      "Mehr als 500 Seiten. Eine Wissensbasis liest bis zu 500 Seiten eines Dokuments, wenn der Betreiber keine andere Grenze eingestellt hat. Teile die Datei, oder bitte den Betreiber um eine höhere Grenze und versuche es dann erneut.",
+      "Seitengrenze erreicht. Teile die Datei, oder bitte den Betreiber um eine höhere Grenze und versuche es dann erneut.",
+    "knowledge.failureTooManyPagesLimit":
+      "Seitengrenze erreicht. Die aktuelle Grenze liegt bei {limit} Seiten. Teile die Datei, oder bitte den Betreiber um eine höhere Grenze und versuche es dann erneut.",
     "knowledge.failureFileUnreadable":
       "Die Datei ist beschädigt, verschlüsselt oder nicht das Format, das ihr Name angibt.",
     "knowledge.failureFileMissing": "Die Datei ist nicht mehr da. Füge sie neu hinzu.",

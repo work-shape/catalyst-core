@@ -182,11 +182,22 @@ export const KNOWLEDGE_DOCUMENT_FAILURES: Record<
   knowledge_processor_output_invalid: "knowledge.failureProcessorOutput"
 };
 
-/** The sentence of why a document failed. A failed one without a code gets the general one. */
+/**
+ * The sentence of why a document failed. A failed one without a code gets the general one. A
+ * document over the page limit names the limit when the instance sent it (`{limit}`); an older
+ * instance sends none, and the sentence names no number.
+ */
 export function documentFailureText(document: KnowledgeDocument): TranslationKey {
-  return document.failureCode === undefined
-    ? "knowledge.failureIndex"
-    : KNOWLEDGE_DOCUMENT_FAILURES[document.failureCode];
+  if (document.failureCode === undefined) {
+    return "knowledge.failureIndex";
+  }
+  if (
+    document.failureCode === "knowledge_file_too_many_pages" &&
+    document.failurePageLimit !== undefined
+  ) {
+    return "knowledge.failureTooManyPagesLimit";
+  }
+  return KNOWLEDGE_DOCUMENT_FAILURES[document.failureCode];
 }
 
 /** The limits of one Add: how many files at once, and how large each may be. */
