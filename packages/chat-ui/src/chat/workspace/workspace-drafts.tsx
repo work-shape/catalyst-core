@@ -17,7 +17,6 @@ interface WorkspaceDraftsContextValue {
   setDraft(target: WorkspaceDraftTarget, value: string): void;
   clearDraft(target: WorkspaceDraftTarget): void;
   moveDraft(input: MoveWorkspaceDraftInput): void;
-  clearDrafts(): void;
 }
 
 const WorkspaceDraftsContext = createContext<WorkspaceDraftsContextValue | undefined>(undefined);
@@ -78,19 +77,14 @@ export function WorkspaceDraftsProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const clearDrafts = useCallback(() => {
-    setDraftsByTarget({});
-  }, []);
-
   const value = useMemo<WorkspaceDraftsContextValue>(
     () => ({
       draftFor,
       setDraft,
       clearDraft,
-      moveDraft,
-      clearDrafts
+      moveDraft
     }),
-    [clearDraft, clearDrafts, draftFor, moveDraft, setDraft]
+    [clearDraft, draftFor, moveDraft, setDraft]
   );
 
   return (

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { forgetWhenSessionEnds } from "../../shared/shell-session";
 import type { BuildAssetStart } from "./build-asset-kind";
 
 /**
@@ -57,3 +58,8 @@ export function clearBuildCreateDialogRequest(): void {
   dialogRequested = undefined;
   for (const listener of dialogListeners) listener();
 }
+
+forgetWhenSessionEnds(() => {
+  clearBuildStartRequest();
+  clearBuildCreateDialogRequest();
+});

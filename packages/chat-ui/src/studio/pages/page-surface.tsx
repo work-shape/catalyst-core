@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { forgetWhenSessionEnds } from "../../shared/shell-session";
 import { TriangleAlert } from "lucide-react";
 import {
   useCallback,
@@ -54,6 +55,12 @@ const PAGE_ACCESS_CHECK_MS = 30_000;
 const pageViews = new Map<string, PageView>();
 const pageRoutes = new Map<string, string>();
 const viewListeners = new Set<() => void>();
+
+forgetWhenSessionEnds(() => {
+  pageViews.clear();
+  pageRoutes.clear();
+  for (const listener of viewListeners) listener();
+});
 
 function subscribeToViews(listener: () => void): () => void {
   viewListeners.add(listener);

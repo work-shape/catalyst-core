@@ -62,7 +62,6 @@ interface WorkspaceRouteContextValue {
   showRoute(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
   selectWorkspaceView(view: WorkspaceRouteView): void;
   isConversationVisible(conversationId: string): boolean;
-  resetRouteMemory(): void;
 }
 
 interface WorkspaceChromeContextValue {
@@ -100,7 +99,6 @@ interface WorkspaceConversationActivityContextValue {
   locallyUnreadConversationIds: ReadonlySet<string>;
   syncConversationActivity(conversations: ReadonlyArray<ListedConversationActivity>): string[];
   clearUnreadConversation(conversationId: string): void;
-  resetConversationActivity(): void;
 }
 
 const WorkspaceRouteContext = createContext<WorkspaceRouteContextValue | undefined>(undefined);
@@ -236,11 +234,6 @@ export function WorkspaceUiStateProvider({
     []
   );
 
-  const resetRouteMemory = useCallback(() => {
-    selectedConversationIdRef.current = undefined;
-    lastChatRouteRef.current = defaultWorkspaceRoute();
-  }, []);
-
   const syncConversationActivity = useCallback(
     (conversations: ReadonlyArray<ListedConversationActivity>) => {
       const activeRunConversationIds = new Set<string>();
@@ -296,11 +289,6 @@ export function WorkspaceUiStateProvider({
     });
   }, []);
 
-  const resetConversationActivity = useCallback(() => {
-    backgroundActiveRunsRef.current = new Set();
-    setLocallyUnreadConversationIds(new Set());
-  }, []);
-
   const toggleSidebarCollapsed = useCallback(() => {
     setSidebarCollapsed((collapsed) => !collapsed);
   }, []);
@@ -348,15 +336,13 @@ export function WorkspaceUiStateProvider({
       showSettings,
       showRoute: onRouteChange,
       selectWorkspaceView,
-      isConversationVisible,
-      resetRouteMemory
+      isConversationVisible
     }),
     [
       dock,
       goToDefaultChat,
       isConversationVisible,
       onRouteChange,
-      resetRouteMemory,
       route,
       selectWorkspaceView,
       selectedConversationId,
@@ -419,15 +405,9 @@ export function WorkspaceUiStateProvider({
     () => ({
       locallyUnreadConversationIds,
       syncConversationActivity,
-      clearUnreadConversation,
-      resetConversationActivity
+      clearUnreadConversation
     }),
-    [
-      clearUnreadConversation,
-      locallyUnreadConversationIds,
-      resetConversationActivity,
-      syncConversationActivity
-    ]
+    [clearUnreadConversation, locallyUnreadConversationIds, syncConversationActivity]
   );
 
   return (

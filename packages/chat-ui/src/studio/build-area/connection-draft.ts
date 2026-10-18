@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { forgetWhenSessionEnds, sessionMark, sessionStillOn } from "../../shared/shell-session";
 import { toolAnswer } from "../../chat/conversation/subject-run";
 import {
   declaredCandidate,
@@ -107,6 +108,11 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+forgetWhenSessionEnds(() => {
+  requested = undefined;
+  changed();
+});
+
 /**
  * Opens a draft: on the page of its Connection where one of its id exists, as a REST API;
  * else in the New connection dialog. `connectorTypeOf` reads the type of the Connection of an
@@ -122,12 +128,15 @@ export async function openConnectionDraft(
     requestCreateDialog(): void;
   }
 ): Promise<ConnectionDraftOpening> {
+  const mark = sessionMark();
   let connectorType: string | undefined;
   try {
     connectorType = await host.connectorTypeOf(draft.connection.name);
   } catch {
     return "failed";
   }
+  // The person signed in changed while the read was on its way: the draft is theirs no more.
+  if (!sessionStillOn(mark)) return "failed";
   if (connectorType !== undefined && connectorType !== HTTP_API) return "not_rest";
   requested = { draft, place: connectorType === undefined ? "new" : "page" };
   changed();

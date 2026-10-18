@@ -49,7 +49,6 @@ import { startApprovalRevision } from "../approvals/approval-revision-host";
 import { resolveContextUsage } from "../assistant/context-usage";
 import { isLiveRunStatus } from "../conversation/conversation-controller-state";
 import { useDraftAttachmentController } from "../conversation/draft-attachment-controller";
-import { clearRunCursors } from "../conversation/run-connection-manager";
 import { useAgentOpens } from "../conversation/use-agent-opens";
 import { useConversationController } from "../conversation/use-conversation-controller";
 import { useFollowUpSource } from "../conversation/use-follow-up-queue";
@@ -452,11 +451,8 @@ export function useWorkspaceChatModel({
   const buildWithAgent = buildingAgentName === undefined ? undefined : startBuilding;
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
 
-  function resetAuthenticatedWorkspaceState() {
-    draftController.clearDrafts();
-    conversationActivity.resetConversationActivity();
-    clearRunCursors();
-    routeState.resetRouteMemory();
+  // The shell forgets everything else of the person, as it starts a new session.
+  function leaveSignedOutSession() {
     routeState.goToDefaultChat(undefined, { replace: true });
   }
 
@@ -487,7 +483,7 @@ export function useWorkspaceChatModel({
     selectThemePreference,
     goToDefaultChat: goToActiveCollaborationWorkspaceChat,
     showRoute: routeState.showRoute,
-    onAccountDeleted: resetAuthenticatedWorkspaceState,
+    onAccountDeleted: leaveSignedOutSession,
     onCollaborationWorkspaceDeleted: collaborationWorkspace.collaborationWorkspaceDeleted,
     ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
     startDockedChat
@@ -657,9 +653,7 @@ export function useWorkspaceChatModel({
   });
   const signOutMutation = useWorkspaceSignOutMutation({
     apiBaseUrl,
-    onSignedOut: () => {
-      resetAuthenticatedWorkspaceState();
-    }
+    onSignedOut: leaveSignedOutSession
   });
   const cancelRunMutation = useCancelRunMutation({
     apiBaseUrl,
