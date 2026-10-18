@@ -273,7 +273,7 @@ export const administration = defineTranslations({
     "infrastructure.classSandbox": "Befehls-Sandbox",
     "infrastructure.classSecrets": "Geheimnisse",
     "infrastructure.classWorkers": "Dienste",
-    "infrastructure.workerKnowledge": "Dienst für Wissensdatenbanken",
+    "infrastructure.workerKnowledge": "Dienst für Wissensbasen",
     "infrastructure.regionEu": "EU",
     "infrastructure.regionGlobal": "Weltweit",
     "infrastructure.regionInside": "Intern",

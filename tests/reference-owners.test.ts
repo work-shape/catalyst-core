@@ -79,7 +79,7 @@ describe("asset reference owners through the assembled API", () => {
               owner ? `gehört zum Arbeitsbereich '${other.name}'` : "gehört zur Instanz"
             );
             expect(error.message).toContain(`im Arbeitsbereich '${workspace.name}'`);
-            if (kind === "agent") expect(error.message).toContain("Wissensdatenbank");
+            if (kind === "agent") expect(error.message).toContain("Wissensbasis");
           }
           expect(error.message).toContain(
             locale === "de" ? "im selben Arbeitsbereich" : "own workspace or the instance"
@@ -385,7 +385,7 @@ describe("asset reference owners through the assembled API", () => {
       expect(response.statusCode, response.body).toBe(422);
       expect(response.body).toContain(
         locale === "de"
-          ? "verweist auf ein unbekanntes Asset: Wissensdatenbank"
+          ? "verweist auf ein unbekanntes Asset: Wissensbasis"
           : "references unknown Knowledge Base"
       );
       expect(response.body).not.toContain("Reference team");

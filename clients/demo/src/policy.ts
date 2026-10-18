@@ -11,6 +11,10 @@ type Operations = NonNullable<
  * the config CLI, and nothing at all while no Namespace `hr-` is registered. Whoever holds
  * `operations.approve` decides a held call, the caller too if they hold it.
  *
+ * A name starting with `hr-` does not place a workspace-owned skill in that Namespace:
+ * a skill created from chat belongs to the conversation's workspace. Such a first save
+ * asks its person to confirm under the platform's live-write floor, not this approval rule.
+ *
  * It gives the Inbox a registered operation to hold without a model call, which
  * `pnpm demo:seed` uses. No screen sets such a setting yet, so the demo's server names it.
  */
