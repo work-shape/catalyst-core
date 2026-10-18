@@ -294,6 +294,22 @@ export function createAppAssetKind(): WorkflowAssetKind {
         ...(app.description === undefined ? {} : { description: app.description })
       })
     }),
+    references: (config) => {
+      const manifest = manifestOfConfigSchema.safeParse(config).data?.manifest;
+      return [
+        ...appConnectionNames(config).map((name) => ({ kind: CONNECTION_ASSET_KIND, name })),
+        ...declaredDataStoresOf(manifest).map(({ name }) => ({
+          kind: DATA_STORE_ASSET_KIND,
+          name
+        })),
+        ...compiledActionsOf(manifest).map((action) => {
+          if (action.kind === "connection")
+            return { kind: CONNECTION_ASSET_KIND, name: action.connection };
+          if (action.kind === "sql") return { kind: DATA_STORE_ASSET_KIND, name: action.dataStore };
+          return { kind: "workflow", name: action.workflow };
+        })
+      ];
+    },
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,

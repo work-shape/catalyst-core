@@ -1,3 +1,4 @@
+import { assertReferencesWithinOwners } from "./asset-owner-references";
 import {
   AppError,
   type ConfigAssetMutation,
@@ -126,6 +127,20 @@ export async function upsertAsset(
   );
   if (!write.releaseDraft)
     assertUpsertWithinLimits(call.access, surface, kind, { name, current, next, namespaces });
+  assertReferencesWithinOwners(
+    kinds,
+    [
+      {
+        type: "upsert",
+        kind: kind.kind,
+        name,
+        scope: target.scope,
+        config: next
+      }
+    ],
+    stored.assets,
+    call.runtime?.locale ?? options.config.localization.defaultLocale
+  );
   await kind.assertScopedWrite?.({
     clientInstanceId: options.clientInstanceId,
     scope: target.scope,

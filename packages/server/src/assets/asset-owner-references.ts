@@ -2,6 +2,7 @@ import {
   AppError,
   INSTANCE_ASSET_SCOPE,
   type AssetScope,
+  type LocaleCode,
   type ConfigAssetRecord
 } from "@work-shape/catalyst-core";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
@@ -20,17 +21,15 @@ interface Owned {
 }
 
 /**
- * Refuses a write that would leave an asset naming what a workspace owns while its own owner
- * is another: the instance or another workspace (WS-OWN-1a). A workspace's asset may name the
- * instance's own. Only a pair the write touches is asked, so a write is never refused for what
- * it leaves as it is. The writer asks this of every write; a caller that may not read the
- * named asset was refused before, as for a reference to nothing, so the refusal names no
- * workspace.
+ * Only saved sources are checked. Existing invalid references keep running and do not block
+ * edits to their targets or unrelated assets; the next save or publish of the source refuses
+ * them. Ownership is immutable, so changing a target cannot create an invalid owner pair.
  */
 export function assertReferencesWithinOwners(
   kinds: readonly WorkflowAssetKind[],
   mutations: readonly OwnedWrite[],
-  assets: readonly ConfigAssetRecord[]
+  assets: readonly ConfigAssetRecord[],
+  locale: LocaleCode = "en"
 ): void {
   const key = (kind: string, name: string) => `${kind}:${name}`;
   const owned = new Map<string, Owned>(
@@ -61,15 +60,22 @@ export function assertReferencesWithinOwners(
   );
   for (const [at, asset] of owned) {
     const references = referencesOf.get(asset.kind);
-    if (!references) continue;
+    if (!references || !touched.has(at)) continue;
     for (const reference of references(asset.definition)) {
       const named = owned.get(key(reference.kind, reference.name));
-      if (!named || (!touched.has(at) && !touched.has(key(named.kind, named.name)))) continue;
+      if (!named) continue;
       if (named.scope.kind === "workspace" && !sameWorkspace(asset.scope, named.scope)) {
+        const owner = named.scope.workspaceId;
         throw new AppError(
           "VALIDATION_FAILED",
-          `Config ${asset.kind} '${asset.name}' names the ${named.kind} '${named.name}', which a workspace owns: only an asset of that workspace may name it`,
-          { reason: "invalid_scope" }
+          locale === "de"
+            ? `Config ${asset.kind} '${asset.name}' verweist auf ${named.kind} '${named.name}' im Arbeitsbereich '${owner}'. Ein Asset darf nur Assets desselben Arbeitsbereichs oder der Instanz referenzieren; ein Asset der Instanz darf keine Arbeitsbereichs-Assets referenzieren.`
+            : `Config ${asset.kind} '${asset.name}' references ${named.kind} '${named.name}' owned by workspace '${owner}'. An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets.`,
+          {
+            reason: "invalid_scope",
+            reference: { kind: named.kind, name: named.name, owner: named.scope },
+            owner: asset.scope
+          }
         );
       }
     }

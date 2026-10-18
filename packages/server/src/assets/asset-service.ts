@@ -572,7 +572,12 @@ export class AssetWorkflow {
             () => {
               const { scope } = target;
               const write = { type: "upsert", kind: kind.kind, name: name ?? "", scope } as const;
-              assertReferencesWithinOwners(kinds, [{ ...write, config: prepared }], stored.assets);
+              assertReferencesWithinOwners(
+                kinds,
+                [{ ...write, config: prepared }],
+                stored.assets,
+                call.runtime?.locale ?? this.options.config.localization.defaultLocale
+              );
             },
             {
               names: kind.kind === "agent" && name !== undefined ? [name] : [],
@@ -685,11 +690,15 @@ export class AssetWorkflow {
     const within = target.kind.withinWrite?.bind(target.kind);
     try {
       if (within === undefined || write === undefined) {
-        return await applyValidatedConfigAssetMutations(this.options, {
-          clientInstanceId: this.options.clientInstanceId,
-          actor,
-          ...batch
-        });
+        return await applyValidatedConfigAssetMutations(
+          this.options,
+          {
+            clientInstanceId: this.options.clientInstanceId,
+            actor,
+            ...batch
+          },
+          call.runtime?.locale
+        );
       }
       // The kind's part of the write commits with the revision or not at all.
       const followUps: AssetWriteFollowUp[] = [];
@@ -701,7 +710,8 @@ export class AssetWorkflow {
               ...this.options,
               configAssets: { ...this.options.configAssets, store: stores.configAssets }
             },
-            { clientInstanceId: this.options.clientInstanceId, actor, ...batch }
+            { clientInstanceId: this.options.clientInstanceId, actor, ...batch },
+            call.runtime?.locale
           );
           const followUp = await within({
             clientInstanceId: this.options.clientInstanceId,

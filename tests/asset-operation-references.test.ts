@@ -55,7 +55,7 @@ const missing = (agentName: string, skillName: string) =>
 
 describe("a reference to an asset the caller may not read", () => {
   it("is answered by assets.validate as a reference to nothing", async () => {
-    const { t } = await setup();
+    const { t, workspaceId } = await setup();
     const check = (userId: string, ...skillNames: string[]) =>
       validate(t, userId, reader("kai-intake", skillNames));
     const valid = { valid: true, issues: [] };
@@ -77,7 +77,7 @@ describe("a reference to an asset the caller may not read", () => {
     expect(await check(t.admin.id, "team-notes")).toEqual({
       valid: false,
       issues: [
-        "Config agent 'kai-intake' names the skill 'team-notes', which a workspace owns: only an asset of that workspace may name it"
+        `Config agent 'kai-intake' references skill 'team-notes' owned by workspace '${workspaceId}'. An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets.`
       ]
     });
     expect(await check(t.admin.id, "nowhere")).toEqual({

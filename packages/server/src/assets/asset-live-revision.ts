@@ -3,6 +3,7 @@ import {
   type ConfigAssetRevisionRecord,
   type JsonObject
 } from "@work-shape/catalyst-core";
+import { assertReferencesWithinOwners } from "./asset-owner-references";
 import type { AssetCall } from "./asset-access";
 import type { AssetTarget } from "./asset-target";
 import type { AssetWorkflowOptions } from "../types";
@@ -15,7 +16,7 @@ import type { AssetWorkflowOptions } from "../types";
  */
 export async function liveRevision(
   options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">,
-  call: Pick<AssetCall, "actor" | "access">,
+  call: Pick<AssetCall, "actor" | "access" | "runtime">,
   target: AssetTarget,
   number: number
 ): Promise<ConfigAssetRevisionRecord & { config: JsonObject }> {
@@ -33,6 +34,23 @@ export async function liveRevision(
       { reason: "revision_unknown", revision: number }
     );
   }
+  const assets = await options.configAssets.store.listActiveConfigAssets({
+    clientInstanceId: options.clientInstanceId
+  });
+  assertReferencesWithinOwners(
+    options.configAssets.kinds.kinds,
+    [
+      {
+        type: "upsert",
+        kind: kind.kind,
+        name,
+        scope: target.scope,
+        config: revision.config
+      }
+    ],
+    assets,
+    call.runtime?.locale
+  );
   await kind.authorizeLive?.({
     actor: call.actor,
     access: call.access,

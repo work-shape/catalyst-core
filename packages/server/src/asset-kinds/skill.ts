@@ -98,6 +98,7 @@ export function createSkillAssetKind(options: {
       })
     }),
     inRelease: true,
+    references: () => [],
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,

@@ -47,7 +47,7 @@ import {
   type WorkflowAssetKind
 } from "../asset-kinds/shared";
 import type { AssetWorkflowOptions } from "../types";
-import { accessResource, decide, deleteDecision, errorIssues } from "./asset-access";
+import { decide, deleteDecision, errorIssues, listedTo } from "./asset-access";
 import {
   INVALID_ASSET_SET_MESSAGE,
   assetSetOf,
@@ -108,18 +108,18 @@ const UNREAD_ASSET_ISSUE = "The change would break an asset the caller may not r
 /** The stored assets as one caller's change is checked against them. */
 interface ReferableAssets {
   /**
-   * What a definition of the caller is resolved against: the assets the caller may read and
+   * What a definition of the caller is resolved against: the assets the chooser offers and
    * the instance's default.
    */
   set: AssetSet;
-  /** The assets the caller may read, and no other. */
+  /** The assets the chooser offers, and no other. */
   readable: AssetSet;
   /** Nothing was left out of `set`: it is the stored set itself. */
   complete: boolean;
 }
 
 /**
- * What a caller's definition is resolved against: the stored assets the caller may read.
+ * What a caller's definition is resolved against: exactly the assets the choosers offer.
  * Every other asset is left out, one beside the written asset in its Namespace included, so a
  * reference to it reads as a reference to nothing. The instance's default stays in, because
  * the rule that an instance with agents has one is about the set and not about the change.
@@ -132,12 +132,8 @@ export function loadReferableAssets(
   const isReadable = (asset: ConfigAssetRecord) => {
     const kind = options.configAssets.kinds.get(asset.kind);
     return (
-      // No registered kind reads the definition, so no check resolves anything against it.
       kind === undefined ||
-      access.authorize(
-        kind.actions.read,
-        accessResource(asset.kind, asset.name, asset.scope, asset.id)
-      ).allowed
+      listedTo(kind, access, { ...asset, published: asset.publishedRevisionId !== undefined })
     );
   };
   const unread = new Set(stored.assets.filter((asset) => !isReadable(asset)));

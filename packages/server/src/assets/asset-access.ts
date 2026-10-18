@@ -10,6 +10,7 @@ import {
   type AuthenticatedIdentity,
   type CollaborationWorkspaceId,
   type ConversationId,
+  type ConfigAssetKey,
   type OperationAuthorization,
   type OperationCallRuntime,
   type OperationRunId,
@@ -141,4 +142,20 @@ export function errorIssues(error: AppError): AssetSetIssue[] {
         ...(code === undefined ? {} : { code })
       }))
     : [{ message: error.message }];
+}
+
+/** What a chooser offers is also what a write may reference; use alone exposes no draft. */
+export function listedTo(
+  kind: WorkflowAssetKind,
+  access: ActorAccess,
+  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published">
+): boolean {
+  const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
+  return (
+    access.authorize(kind.actions.read, resource).allowed ||
+    (kind.lifecycle === "draft_published" &&
+      asset.published === true &&
+      kind.actions.use !== undefined &&
+      access.authorize(kind.actions.use, resource).allowed)
+  );
 }

@@ -33,6 +33,7 @@ export { dataStoresModule };
 function workflowAssetKind(dataStores: DataStores): WorkflowAssetKind {
   return {
     ...dataStores.assetKind,
+    references: () => [],
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,

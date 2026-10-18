@@ -2,6 +2,7 @@ import {
   AppError,
   ObjectNotFound,
   type AssetScope,
+  type LocaleCode,
   type ConfigAssetRecord,
   type ConfigAssetState,
   type ConfigAssetStore,
@@ -67,7 +68,8 @@ export async function applyValidatedConfigAssetMutations(
      * a state no other write can change any more.
      */
     underLock?(): Promise<void>;
-  }
+  },
+  locale: LocaleCode = options.config.localization.defaultLocale
 ) {
   const { kinds } = options.configAssets;
   for (const mutation of input.mutations) {
@@ -94,7 +96,7 @@ export async function applyValidatedConfigAssetMutations(
     );
     if (live.length !== mutations.length && live.some((mutation) => mutation.type === "delete"))
       validateMutations(kinds.kinds, live, stored);
-    assertReferencesWithinOwners(kinds.kinds, mutations, stored.assets);
+    assertReferencesWithinOwners(kinds.kinds, mutations, stored.assets, locale);
     assertDefaultOwnedByInstance(kinds.kinds, mutations, stored.assets);
   };
   validate({ state, assets });
