@@ -153,8 +153,7 @@ export function listedTo(
   const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
   return (
     access.authorize(kind.actions.read, resource).allowed ||
-    (kind.lifecycle === "draft_published" &&
-      asset.published === true &&
+    ((kind.lifecycle === "active" || asset.published === true) &&
       kind.actions.use !== undefined &&
       access.authorize(kind.actions.use, resource).allowed)
   );

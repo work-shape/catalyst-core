@@ -122,8 +122,7 @@ describe("scope on a config asset", () => {
     // The instance's agent and another workspace's agent may not name the workspace's skill.
     const invalidScope = {
       code: "VALIDATION_FAILED",
-      message:
-        "Config agent 'outside' names the skill 'team-notes', which a workspace owns: only an asset of that workspace may name it",
+      message: `Config agent 'outside' references skill 'team-notes' owned by workspace '${workspaceId}'. An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets.`,
       details: { reason: "invalid_scope" }
     };
     await expect(

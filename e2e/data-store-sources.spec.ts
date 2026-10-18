@@ -264,9 +264,8 @@ test("a store's page names the Workflow that fills it with its Connection and ac
   try {
     await plantConnection(connection);
 
-    // The store, with one table, published in the workspace.
+    // The instance-owned Workflow and the workspace's App may both reference this store.
     await publishAsset(page, "data_store", store, {
-      workspaceId,
       files: [
         { path: "store.yaml", text: `id: ${store}\nname: Kunden ${tag}\n` },
         {
