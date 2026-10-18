@@ -394,6 +394,60 @@ describe("source changes and withdrawal (SRC-3a, KB 78)", () => {
     expect(hits.body).toContain("retained.txt");
   });
 
+  it("KB 78 / SRC-3b: a later pass supersedes pending withdrawal confirmation when items reappear", async () => {
+    let missing = false;
+    const world = await setup((source) => ({
+      ...source,
+      async list(input, context) {
+        const page = await source.list(input, context);
+        return missing ? { ...page, items: [] } : page;
+      }
+    }));
+    world.world.put(file("rediscovered.txt"));
+    await world.drain(await world.sync());
+    missing = true;
+    const waiting = await world.sync("full");
+    await world.worker.runDue();
+    const inbox = await world.instance.api.call("approval_requests.list", {
+      query: { status: "pending" }
+    });
+    const request = required(inbox.json<{ items: { id: string }[] }>().items[0]);
+    missing = false;
+    // The stable sync operation must start a fresh pass instead of joining the held run.
+    const response = await world.instance.api.call("knowledge_bases.sync", {
+      params: { knowledgeBase: KB },
+      payload: { source: SOURCE, mode: "full" }
+    });
+    expect(response.statusCode, response.body).toBe(202);
+    const [replacement] =
+      await world.sql`select id from catalyst_kb.sync_runs where state='running'`;
+    expect(replacement?.id).not.toBe(waiting);
+    await world.drain(String(required(replacement).id));
+    expect(
+      await world.instance.stores.approvals.getApprovalRequest({
+        clientInstanceId,
+        requestId: request.id
+      })
+    ).toMatchObject({ status: "superseded" });
+    const pending = await world.instance.api.call("approval_requests.list", {
+      query: { status: "pending" }
+    });
+    expect(pending.json<{ items: { id: string }[] }>().items).toEqual([]);
+    const stale = await world.instance.api.call("approval_requests.decide", {
+      params: { requestId: request.id },
+      payload: { decision: "approve" }
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(await world.sql`select state from catalyst_kb.source_items`).toEqual([
+      { state: "fetched" }
+    ]);
+    const hits = await world.instance.api.call("knowledge_bases.search", {
+      params: { knowledgeBase: KB },
+      payload: { query: "rediscovered" }
+    });
+    expect(hits.body).toContain("rediscovered.txt");
+  });
+
   it("a full pass catches a deletion that the feed never reports", async () => {
     const world = await setup((source) => ({
       ...source,

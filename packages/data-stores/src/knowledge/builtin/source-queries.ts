@@ -48,6 +48,7 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
   return {
     async start(payload: KnowledgeSyncJobPayload, mode: KnowledgeListingMode, signal: AbortSignal) {
       return store(payload.knowledgeBaseId, signal).change(async (sql) => {
+        await sql.run("lock table catalyst_kb.documents in share row exclusive mode");
         const bound = createSourceStore(
           runtime,
           payload.knowledgeBaseId,
