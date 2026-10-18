@@ -214,17 +214,24 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
     // Whatever the page shows at any moment, not only at the end: the raw error of a missing
     // documents table, and the notice that the store is being made.
     await page.addInitScript(() => {
+      window.localStorage.setItem("vivd-catalyst:locale", "en");
+      window.localStorage.setItem("vivd-catalyst:theme", "light");
       const seen = { sqlState: false, preparing: false };
       Object.assign(window, { knowledgeFreshSeen: seen });
       new MutationObserver(() => {
-        if (document.body.innerText.includes("SQLSTATE")) seen.sqlState = true;
+        if (document.body?.innerText.includes("SQLSTATE")) seen.sqlState = true;
         if (document.querySelector("[data-knowledge-documents-preparing]")) seen.preparing = true;
       }).observe(document, { subtree: true, childList: true, characterData: true });
     });
     const created = await requestWithOrigin(page, "put", assetUrl, {
       data: {
         expectedRevision: null,
-        config: { name, title: "Handbuch", methods: ["keyword"] }
+        config: {
+          name,
+          title: "Handbuch",
+          description: "Staff handbook for the first view after publishing",
+          methods: ["keyword"]
+        }
       }
     });
     expect(created.ok(), await created.text()).toBe(true);
@@ -233,12 +240,14 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
         route.continue({ url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl) })
       );
       await page.setViewportSize({ width: 1280, height: 900 });
+      await page.emulateMedia({ colorScheme: "light" });
       const published = await requestWithOrigin(page, "post", `${assetUrl}/publish`, {
         data: { revision: 1 }
       });
       expect(published.ok(), await published.text()).toBe(true);
       // At once, before its store stands: no wait for the documents to be readable.
-      await view(page, name, "en", "light");
+      await page.goto(`/build/knowledge-bases/${name}`);
+      await expect(page.getByRole("heading", { name: "Handbuch", level: 1 })).toBeVisible();
       const documents = page.locator("[data-knowledge-documents]");
       await expect(documents).toBeVisible();
       await picture(page, "fresh-publish-en-light-1280");
