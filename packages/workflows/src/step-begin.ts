@@ -61,7 +61,9 @@ export function createStepBeginning(options: {
             clientInstanceId,
             id: parent.id
           });
-          if (progress.running > 1 || progress.started > childIndex + 1) quiet = false;
+          const alreadyStarted = progress.started > childIndex;
+          if (progress.running > (alreadyStarted ? 1 : 0) || progress.started > childIndex + 1)
+            quiet = false;
           childIndex = parent.iteration?.index ?? 0;
           parent = parent.containerStepRunId
             ? await tx.workflowRuns.getStepRun({

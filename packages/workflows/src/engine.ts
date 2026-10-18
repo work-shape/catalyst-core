@@ -129,8 +129,9 @@ export interface WorkflowEngine {
    */
   test(input: TestWorkflowRunInput): Promise<WorkflowRunView>;
   /**
-   * Ends a run as `cancelled`. No further step starts. A call a step is making finishes and
-   * is recorded on its step run. A run that has ended is answered as it is.
+   * Cancels the live member of a Lauf, addressed by any member's id. No further step starts.
+   * A call in flight finishes and is recorded on its step run. An ended Lauf answers its
+   * final member as it is.
    */
   cancel(input: {
     runId: string;

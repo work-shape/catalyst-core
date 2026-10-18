@@ -27,7 +27,7 @@ export async function loopItemReservation(
       if (step.type !== "loop") continue;
       // A reference to the current item, or an output not produced yet, is not known at
       // admission. Reserve the loop's ceiling and admit such an oversized item on its own.
-      let items = run.limits.loopItems;
+      let items = step.continueAsNew ? Infinity : run.limits.loopItems;
       if (!nested.has(step.items.step)) {
         try {
           const value = await resolveReference(
