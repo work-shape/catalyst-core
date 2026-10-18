@@ -203,6 +203,78 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
     }
   });
 
+  test("opens a Knowledge Base right after its publish without a SQL error, and lists it once its store stands (ACCEPT-FIX-8, E7)", async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    const name = `e2e-fresh-${randomUUID().slice(0, 8)}`;
+    const assetUrl = `${knowledgeApiUrl}/api/v1/assets/knowledge_base/${name}`;
+    await signIn(page, apiBaseUrl);
+    await signIn(page, knowledgeApiUrl);
+    // Whatever the page shows at any moment, not only at the end: the raw error of a missing
+    // documents table, and the notice that the store is being made.
+    await page.addInitScript(() => {
+      window.localStorage.setItem("vivd-catalyst:locale", "en");
+      window.localStorage.setItem("vivd-catalyst:theme", "light");
+      const seen = { sqlState: false, preparing: false };
+      Object.assign(window, { knowledgeFreshSeen: seen });
+      new MutationObserver(() => {
+        if (document.body?.innerText.includes("SQLSTATE")) seen.sqlState = true;
+        if (document.querySelector("[data-knowledge-documents-preparing]")) seen.preparing = true;
+      }).observe(document, { subtree: true, childList: true, characterData: true });
+    });
+    const created = await requestWithOrigin(page, "put", assetUrl, {
+      data: {
+        expectedRevision: null,
+        config: {
+          name,
+          title: "Handbuch",
+          description: "Staff handbook for the first view after publishing",
+          methods: ["keyword"]
+        }
+      }
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    try {
+      await page.route(`${apiBaseUrl}/**`, (route) =>
+        route.continue({ url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl) })
+      );
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.emulateMedia({ colorScheme: "light" });
+      const published = await requestWithOrigin(page, "post", `${assetUrl}/publish`, {
+        data: { revision: 1 }
+      });
+      expect(published.ok(), await published.text()).toBe(true);
+      // At once, before its store stands: no wait for the documents to be readable.
+      await page.goto(`/build/knowledge-bases/${name}`);
+      await expect(page.getByRole("heading", { name: "Handbuch", level: 1 })).toBeVisible();
+      const documents = page.locator("[data-knowledge-documents]");
+      await expect(documents).toBeVisible();
+      await picture(page, "fresh-publish-en-light-1280");
+      // The list comes by itself once the store stands, without a reload or Try again.
+      await expect(documents).toContainText(
+        "No documents yet. Upload files from your computer or add files from your conversations.",
+        { timeout: 90_000 }
+      );
+      await expect(page.locator("[data-knowledge-documents-preparing]")).toHaveCount(0);
+      const seen = await page.evaluate(() =>
+        "knowledgeFreshSeen" in window ? window.knowledgeFreshSeen : undefined
+      );
+      expect(seen).toMatchObject({ sqlState: false });
+      test.info().annotations.push({
+        type: "store",
+        description: JSON.stringify(seen)
+      });
+    } finally {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      if ((await page.request.get(assetUrl)).ok()) {
+        await requestWithOrigin(page, "post", `${assetUrl}/delete`, {
+          data: { expectedRevision: await assetRevision(page, assetUrl) }
+        });
+      }
+    }
+  });
+
   test("adds three text files from the computer and the test search finds each", async ({
     page
   }) => {

@@ -9,6 +9,8 @@ import {
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import {
+  KNOWLEDGE_ADD_FILES_TOOL_NAME,
+  createKnowledgeAddFilesTool,
   APP_SAVE_TOOL_NAME,
   APP_PUBLISH_TOOL_NAME,
   createAppPublishTool,
@@ -94,7 +96,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...(subject ? { subject } : {}),
         toolNames: [
           ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
-          ...(holds ? WORKFLOW_TEST_TOOL_NAMES : []),
+          ...(holds ? [...WORKFLOW_TEST_TOOL_NAMES, KNOWLEDGE_ADD_FILES_TOOL_NAME] : []),
           ...(holds || subject?.kind === "connection" ? [CONNECTION_DRAFT_TOOL_NAME] : []),
           ...appToolNames(input.hasTool),
           ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
@@ -154,6 +156,7 @@ export function createPlatformTools(
       ...createPlatformDiscoveryTools(platformAssets.calls),
       ...createPlatformAssetTools(platformAssets.calls),
       ...createWorkflowTestTools(),
+      createKnowledgeAddFilesTool(),
       createRunAgentTool(),
       createAppSaveTool(platformAssets.calls),
       createAppPublishTool(),

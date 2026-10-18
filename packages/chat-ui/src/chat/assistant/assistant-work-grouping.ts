@@ -1,5 +1,5 @@
 import { groupPartByType, type GroupByContext, type PartState } from "@assistant-ui/react";
-import { RUN_AGENT_TOOL_NAME } from "@work-shape/catalyst-core";
+import { readKnowledgeCitationSources, RUN_AGENT_TOOL_NAME } from "@work-shape/catalyst-core";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
@@ -134,6 +134,8 @@ interface AssistantPartOutline {
   isError?: boolean;
   toolName?: string;
   args?: unknown;
+  sourceType?: string;
+  providerMetadata?: { vivdCatalyst?: { knowledge?: unknown } };
 }
 
 export function createCompletedAssistantWorkIndices(
@@ -300,12 +302,13 @@ function isSourcePart(part: PartState): boolean {
   return part.type === "source";
 }
 
-function isVisibleFinalAssistantPart(part: {
-  type: string;
-  data?: unknown;
-  name?: string;
-}): boolean {
+function isVisibleFinalAssistantPart(part: AssistantPartOutline): boolean {
   if (part.type === "file" || part.type === "image") {
+    return true;
+  }
+  // A Knowledge Base citation is how the reader checks the answer, so its chip stays beside it.
+  // A web source folds into the work with the search that found it.
+  if (isKnowledgeCitationPart(part)) {
     return true;
   }
   if (part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE) {
@@ -323,6 +326,14 @@ function isVisibleFinalAssistantPart(part: {
     );
   }
   return false;
+}
+
+function isKnowledgeCitationPart(part: AssistantPartOutline): boolean {
+  return (
+    part.type === "source" &&
+    part.sourceType === "document" &&
+    readKnowledgeCitationSources([part.providerMetadata?.vivdCatalyst?.knowledge]).length > 0
+  );
 }
 
 function isStandaloneToolCall(
