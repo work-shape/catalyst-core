@@ -593,9 +593,48 @@ describe("a schedule in words", () => {
   });
 
   it("says nothing of an expression it cannot put into words", () => {
-    for (const cron of ["*/5 * * * *", "0 6 1 1 *", "0 6 1 * 1", "61 6 * * *", "0 6 * *"]) {
+    for (const cron of ["*/5 * * * *", "0 6 31 2 *", "0 6 1 * 1", "61 6 * * *", "0 6 * *"]) {
       expect(scheduleInWords(cron, en)).toBeUndefined();
     }
+  });
+});
+
+// ACCEPT-2a E1: the schedule's clock time is in its zone, and the canvas names that zone. The
+// time is the cron's as written: it is never converted to the reader's zone.
+describe("a schedule's zone on the canvas", () => {
+  const titleOf = (
+    schedule: Record<string, unknown>,
+    text = de,
+    instance?: { timeZone: string; defaulted: boolean }
+  ) =>
+    workflowGraph(
+      definition([{ ...trigger, triggers: [{ kind: "schedule", ...schedule }] }, operation("load")])
+        .steps,
+      text,
+      undefined,
+      undefined,
+      instance
+    ).nodes[0]?.title;
+
+  it("names the schedule's own zone, else the instance's, and the default where none is set", () => {
+    const instance = { timeZone: "America/New_York", defaulted: false };
+    expect(titleOf({ cron: "25 23 * * *", timeZone: "Europe/Berlin" }, de, instance)).toBe(
+      "Jeden Tag, 23:25 (Europe/Berlin)"
+    );
+    // Saved before schedules named a zone: it runs in the instance's.
+    expect(titleOf({ cron: "25 23 * * *" }, de, instance)).toBe(
+      "Jeden Tag, 23:25 (America/New_York)"
+    );
+    expect(titleOf({ cron: "25 23 * * *" }, en, { timeZone: "UTC", defaulted: true })).toBe(
+      "Every day, 11:25 PM (UTC, the default time zone)"
+    );
+    // A fixed date reads as one, and a form without words still names its zone.
+    expect(titleOf({ cron: "34 21 18 10 *", timeZone: "Europe/Berlin" })).toBe(
+      "Jedes Jahr am 18. Oktober, 21:34 (Europe/Berlin)"
+    );
+    expect(titleOf({ cron: "*/5 * * * *", timeZone: "Europe/Berlin" })).toBe(
+      "Nach Zeitplan (Europe/Berlin)"
+    );
   });
 });
 

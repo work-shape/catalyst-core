@@ -304,7 +304,7 @@ test("a failed run opens on the step that failed, and a loop at work lists its f
   await expect(failed.locator('[data-flow-id="clients"]')).toHaveAttribute("data-status", "failed");
   await expect(failed.locator('[data-step-panel="clients"]')).toBeVisible();
   await expect(failed.locator('[data-step-panel="clients"]')).toContainText(
-    "The workflow may not do this: its account lacks the right “connection.use”."
+    "The workflow may not do this: its account may not use the Connection “Bookings”."
   );
 
   const running = await openSample(page, "monthly-booking-check/runs/run-running");

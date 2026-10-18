@@ -78,7 +78,12 @@ export const platformContextWorkspaceSchema = z.object({
 
 /** Where a caller is and what it can do there: the first read of an outside editor. */
 export const platformContextSchema = z.object({
-  instance: z.object({ id: z.string(), name: z.string() }),
+  instance: z.object({
+    id: z.string(),
+    name: z.string(),
+    timeZone: z.string(),
+    timeZoneDefaulted: z.boolean()
+  }),
   release: z.object({
     version: z.string(),
     /**

@@ -3,7 +3,7 @@ import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { useWorkspaceUsersQuery } from "../../shared/api/workspace-queries";
 import type { WorkspaceRoute, WorkspaceRouteChangeOptions } from "../../shared/workspace-route";
 import { NO_RECIPIENT_NAMES, type RecipientNames } from "./recipient-names";
-import type { WorkflowRights } from "./workflow-model";
+import type { InstanceTimeZone, WorkflowRights } from "./workflow-model";
 
 /**
  * What the workspace shell tells the Workflows area: what the reader may do, who the reader
@@ -11,6 +11,8 @@ import type { WorkflowRights } from "./workflow-model";
  */
 export interface WorkflowsHost {
   rights: WorkflowRights;
+  /** The instance's time zone, for a schedule saved without one of its own. */
+  instanceTimeZone?: InstanceTimeZone;
   /** The id of the person who looks at the page: a run they started is theirs to cancel. */
   viewerId: string;
   /** The open workspace. Absent while none is open. */

@@ -1,5 +1,9 @@
 import type { PlatformContext } from "@work-shape/catalyst-api-client";
-import { WORKFLOW_ACTIONS, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
+import {
+  CONNECTION_ACTIONS,
+  WORKFLOW_ACTIONS,
+  WORKFLOW_ASSET_KIND
+} from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import {
   assetRightsBy,
@@ -8,6 +12,7 @@ import {
   resolveBuildRights,
   type AssetRights
 } from "../../shared/build-rights";
+import { canManageServicePrincipals } from "../../shared/governance";
 import type { TranslationKey } from "../../shared/i18n";
 import { startFormUsable } from "./start-form";
 import type {
@@ -45,6 +50,8 @@ export interface WorkflowRights {
    * on itself alone, as it keeps Workflows today, names none there.
    */
   workspace?: { id: string; rights: AssetRights };
+  /** The reader administers technical accounts and may give a Workflow's account a right. */
+  administersAccounts?: boolean;
 }
 
 /**
@@ -60,6 +67,7 @@ export function resolveWorkflowRights(
   const build = resolveBuildRights(undefined, context);
   return {
     instance: assetRightsBy((verb) => onAll.includes(WORKFLOW_ACTIONS[verb])),
+    ...(canManageServicePrincipals(context) ? { administersAccounts: true } : {}),
     ...(workspaceId === undefined
       ? {}
       : {
@@ -418,19 +426,59 @@ export function failedEntriesOf(
   };
 }
 
+/** The instance's time zone; `defaulted`: the instance sets none, so it is UTC. */
+export interface InstanceTimeZone {
+  timeZone: string;
+  defaulted: boolean;
+}
+
+/** The instance's zone as its context names it, for a schedule saved without one. */
+export function instanceTimeZoneOf(
+  context: Pick<PlatformContext, "instance"> | undefined
+): InstanceTimeZone | undefined {
+  return context === undefined
+    ? undefined
+    : { timeZone: context.instance.timeZone, defaulted: context.instance.timeZoneDefaulted };
+}
+
+/** What the screen knows of a failed step beside its failure: its account and its Connection. */
+export interface FailureNames {
+  /** The label of the account the Workflow runs as. */
+  account?: string | undefined;
+  /** The Connection the step uses. */
+  connection?: string | undefined;
+}
+
+/** The Connection an operation step uses, where the instance names it: its step run first. */
+export function stepConnection(
+  step: Pick<WorkflowStepView, "source" | "sourceKind"> | undefined,
+  stepRun?: { source?: string | undefined }
+): string | undefined {
+  return step?.sourceKind === "connection" ? (stepRun?.source ?? step.source) : undefined;
+}
+
 /**
  * What happened, as one sentence. A missing right is named where the instance names it: the
- * action the account of the Workflow does not hold.
+ * action the account of the Workflow does not hold, with the account and the Connection where
+ * the screen knows them (C7).
  */
 export function failureHappened(
   failure: Pick<WorkflowFailure, "reason" | "action" | "workflow"> & { detail?: string },
-  t: (key: TranslationKey, values?: Record<string, string>) => string
+  t: (key: TranslationKey, values?: Record<string, string>) => string,
+  { account, connection }: FailureNames = {}
 ): string {
   if (failure.workflow !== undefined && failure.reason === "runKeyCycle") {
     return t("workflows.reason.runKeyCycleNamed", { workflow: failure.workflow });
   }
   if (failure.action !== undefined && failure.reason === "missingRight") {
-    return t("workflows.reason.missingRightNamed", { right: failure.action });
+    if (failure.action === CONNECTION_ACTIONS.use && connection !== undefined) {
+      return account === undefined
+        ? t("workflows.reason.connectionUse", { connection })
+        : t("workflows.reason.connectionUseNamed", { account, connection });
+    }
+    return account === undefined
+      ? t("workflows.reason.missingRightNamed", { right: failure.action })
+      : t("workflows.reason.missingRightAccount", { account, right: failure.action });
   }
   if (failure.action !== undefined && failure.reason === "testerMissingRight") {
     return t("workflows.reason.testerMissingRightNamed", { right: failure.action });
@@ -458,8 +506,33 @@ export function runFailedBecause(
   return runFailed(run) ? failureHappened(run.failure ?? { reason: "other" }, t) : undefined;
 }
 
+/**
+ * What the reader can do about a failure. An administrator of technical accounts is told where
+ * to give the missing right, never to ask an administrator (C7).
+ */
+export function failureAdvice(
+  failure: Pick<WorkflowFailure, "reason" | "action">,
+  t: (key: TranslationKey, values?: Record<string, string>) => string,
+  {
+    account,
+    connection,
+    administers,
+    place
+  }: FailureNames & { administers: boolean; place: string }
+): string {
+  if (failure.reason !== "missingRight" || !administers) {
+    return t(failureSentences(failure.reason).advice, { place });
+  }
+  if (account === undefined) {
+    return t("workflows.advice.missingRightAdmin", { place });
+  }
+  return failure.action === CONNECTION_ACTIONS.use && connection !== undefined
+    ? t("workflows.advice.connectionUseAdmin", { account, connection, place })
+    : t("workflows.advice.missingRightAdminAccount", { account, place });
+}
+
 /** What happened, and what the reader can do about it, for why something did not end as done. */
-export function failureSentences(reason: WorkflowFailureReason): {
+function failureSentences(reason: WorkflowFailureReason): {
   happened: TranslationKey;
   advice: TranslationKey;
 } {

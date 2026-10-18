@@ -35056,11 +35056,19 @@
               },
               "name": {
                 "type": "string"
+              },
+              "timeZone": {
+                "type": "string"
+              },
+              "timeZoneDefaulted": {
+                "type": "boolean"
               }
             },
             "required": [
               "id",
-              "name"
+              "name",
+              "timeZone",
+              "timeZoneDefaulted"
             ]
           },
           "release": {

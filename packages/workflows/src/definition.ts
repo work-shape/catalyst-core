@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { workflowValueSchema } from "./dataset-schema";
 import { codeFileIssue } from "./code-step";
-import { parseCron } from "./cron";
+import { isTimeZone, parseCron } from "./cron";
 import { workflowOperationTimeoutSchema } from "./operation-wait";
 import {
   holdsBrokenDatasetReference,
@@ -101,6 +101,11 @@ const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
             z.strictObject({
               kind: z.literal("schedule"),
               cron: z.string().min(1),
+              timeZone: z
+                .string()
+                .min(1)
+                .refine(isTimeZone, "Use an IANA time zone such as Europe/Berlin, or UTC")
+                .optional(),
               ...workflowScheduleOptionsSchema.shape
             }),
             z.strictObject({ kind: z.literal("parent") })

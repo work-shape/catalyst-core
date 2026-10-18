@@ -5,7 +5,7 @@ import { LoopEntries } from "./loop-entries";
 import { StepPanel, stepPanelTabs, type StepPanelRun, type StepPanelTab } from "./step-panel";
 import type { LiveOnceControl } from "./test-run";
 import { placedSteps, workflowGraph } from "./workflow-canvas-model";
-import { useRecipientNames } from "./workflows-host";
+import { useRecipientNames, useWorkflowsHost } from "./workflows-host";
 import type {
   WorkflowRunView,
   WorkflowStepRunView,
@@ -67,6 +67,7 @@ export function WorkflowCanvas({
   const translation = useTranslation();
   const { locale, t } = translation;
   const recipients = useRecipientNames();
+  const host = useWorkflowsHost();
   const [selectedId, setSelectedId] = useState<string>();
   const [tab, setTab] = useState<StepPanelTab>("what");
   // Once the reader chose a step, or closed the panel, it no longer opens by itself.
@@ -89,7 +90,8 @@ export function WorkflowCanvas({
       steps ?? [],
       { locale, t },
       run === undefined ? undefined : { run: run.run, stepRuns: stepRuns ?? [], now: run.now },
-      recipients
+      recipients,
+      host?.instanceTimeZone
     )
   );
 
@@ -208,6 +210,7 @@ export function WorkflowCanvas({
         selected === undefined || part === undefined ? undefined : (
           <StepPanel
             step={selected.step}
+            account={workflow?.runsAs}
             part={part}
             run={selectedRun}
             tab={tab}

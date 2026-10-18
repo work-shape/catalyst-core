@@ -242,6 +242,8 @@ export async function readPlatformContext(
   ]);
   return {
     instance: {
+      timeZone: options.config.clientInstance.timeZone ?? "UTC",
+      timeZoneDefaulted: options.config.clientInstance.timeZone === undefined,
       id: options.clientInstanceId,
       name: options.config.clientInstance.displayName
     },

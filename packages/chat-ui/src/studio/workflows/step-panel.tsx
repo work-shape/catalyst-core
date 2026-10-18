@@ -30,7 +30,7 @@ import type { LiveOnceControl } from "./test-run";
 import { StepDatasets } from "./step-datasets";
 import { simulatedCall, stepDatasets, stepOutputRows } from "./step-output";
 import { countsLine } from "./workflow-canvas-model";
-import { stepFallbackSentence } from "./workflow-model";
+import { stepConnection, stepFallbackSentence } from "./workflow-model";
 import type {
   WorkflowDatasetView,
   WorkflowLoopCounts,
@@ -186,6 +186,7 @@ function OutputPreview({
  */
 export function StepPanel({
   step,
+  account,
   part,
   run,
   tab,
@@ -195,6 +196,8 @@ export function StepPanel({
   onClose
 }: {
   step: WorkflowStepView;
+  /** The label of the account the Workflow runs as, for a refusal that names it. */
+  account?: string | undefined;
   /** The step as the canvas draws it: its icon, the words above its title and its title. */
   part: FlowGraphNode | FlowGraphGroup;
   run: StepPanelRun | undefined;
@@ -240,7 +243,7 @@ export function StepPanel({
       {shown === "what" ? (
         <StepDescription step={step} summary={part.summary} onOpenChild={onOpenChild} />
       ) : shown === "run" && run !== undefined ? (
-        <StepRunDetails step={step} run={run} onOpenChild={onOpenChild} />
+        <StepRunDetails step={step} account={account} run={run} onOpenChild={onOpenChild} />
       ) : (
         entries
       )}
@@ -378,10 +381,12 @@ function StepDescription({
 /** What a run made of a step. */
 function StepRunDetails({
   step,
+  account,
   run,
   onOpenChild
 }: {
   step: WorkflowStepView;
+  account: string | undefined;
   run: StepPanelRun;
   onOpenChild: (() => void) | undefined;
 }) {
@@ -449,7 +454,13 @@ function StepRunDetails({
       {stepRun.loop === undefined ? null : (
         <p>{countsLine(stepRun.loop, translation, stepRun.finishedAt !== undefined)}</p>
       )}
-      {stepRun.failure ? <FailureBanner failure={stepRun.failure} /> : null}
+      {stepRun.failure ? (
+        <FailureBanner
+          failure={stepRun.failure}
+          account={account}
+          connection={stepConnection(step, stepRun)}
+        />
+      ) : null}
       {stepRun.publishedWouldAsk === "approval" ? <PublishedAsksApproval /> : null}
       {run.liveOnce === undefined ? null : <LiveOnce control={run.liveOnce} />}
       {stepRun.target === "dry_run" ? (

@@ -753,7 +753,11 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
           input,
           options.modules.isEnabled("workflows")
         )),
-        instance: { name: read.instance.name },
+        instance: {
+          name: read.instance.name,
+          timeZone: options.config.clientInstance.timeZone ?? "UTC",
+          timeZoneDefaulted: options.config.clientInstance.timeZone === undefined
+        },
         modules: options.modules.modules.filter((module) => module.enabled).map(({ name }) => name),
         kinds: kinds.map((kind) => ({
           kind: kind.kind,
