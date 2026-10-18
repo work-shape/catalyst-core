@@ -1,6 +1,7 @@
 import {
   AppError,
   type OperationExecutionStop,
+  type ExecutionStopKind,
   isOperationTimeout,
   operationStopResult,
   type OperationDefinition,
@@ -21,12 +22,10 @@ export class OperationNotBegunError extends Error {
   }
 }
 
-type OperationCallStop = "timeout" | "aborted";
-
 /** A deadline or caller stop, distinguished from an implementation's own error. */
 export class OperationCallStoppedError extends Error {
   constructor(
-    readonly kind: OperationCallStop,
+    readonly kind: ExecutionStopKind,
     readonly reason: unknown
   ) {
     super("The operation call was stopped");
@@ -75,7 +74,7 @@ export function startOperationCall(
   if (!execution.runtime.readPages && until <= now.getTime()) throw timeout();
   const stop = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let cut: (cause: OperationCallStop) => void = () => undefined;
+  let cut: (cause: ExecutionStopKind) => void = () => undefined;
   const stopped = new Promise<never>((_resolve, reject) => {
     cut = (cause) =>
       reject(

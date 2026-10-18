@@ -1,9 +1,12 @@
 import type { ToolExecutionResult } from "./tool-execution";
 
+/** The two ways a live execution can be stopped. */
+export type ExecutionStopKind = "timeout" | "aborted";
+
 /** Why the executor stopped a live implementation, carried by `runtime.signal.reason`. */
 export class OperationExecutionStop extends Error {
   constructor(
-    readonly kind: "timeout" | "aborted",
+    readonly kind: ExecutionStopKind,
     override readonly cause: unknown
   ) {
     super("The operation execution was stopped");

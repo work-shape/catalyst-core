@@ -1,3 +1,4 @@
+import type { ExecutionStopKind } from "@work-shape/catalyst-core";
 import { readDocumentExecutionEnv } from "./env";
 import { spawn, type ChildProcess } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
@@ -55,7 +56,7 @@ export async function runNativeProcess(
 
     let stdout: Buffer<ArrayBufferLike> = Buffer.alloc(0);
     let stderr: Buffer<ArrayBufferLike> = Buffer.alloc(0);
-    let forcedFailure: "aborted" | "timeout" | undefined;
+    let forcedFailure: ExecutionStopKind | undefined;
     let settled = false;
     const timeout = setTimeout(() => terminate("timeout"), input.timeoutMs);
     const onAbort = () => terminate("aborted");
@@ -66,7 +67,7 @@ export async function runNativeProcess(
       clearTimeout(timeout);
       input.signal?.removeEventListener("abort", onAbort);
     };
-    function terminate(reason: "aborted" | "timeout") {
+    function terminate(reason: ExecutionStopKind) {
       if (settled || forcedFailure) return;
       forcedFailure = reason;
       kill(child, "SIGKILL");
