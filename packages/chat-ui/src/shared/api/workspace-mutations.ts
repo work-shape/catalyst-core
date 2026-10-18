@@ -20,6 +20,7 @@ import { completedOutput, signOut } from "@work-shape/catalyst-api-client";
 import { apiErrorMessage } from "../workspace-utils";
 import { updateRailConversations } from "./rail-conversations";
 import { workspaceQueryKeys } from "./workspace-query-keys";
+import { useWorkspaceApiClient } from "./workspace-api-client";
 import {
   createApiAccessRevealController,
   type RevealedApiCredential
@@ -313,13 +314,25 @@ export function useMoveConversationMutation(
 
 export function useWorkspaceSignOutMutation(input: { apiBaseUrl: string; onSignedOut(): void }) {
   const queryClient = useQueryClient();
+  const { cancelRequests } = useWorkspaceApiClient();
 
   return useMutation({
+    onMutate: async () => {
+      // Stop HTTP requests and query retries before the server revokes the session cookie.
+      const resumeRequests = cancelRequests();
+      await queryClient.cancelQueries();
+      return resumeRequests;
+    },
     mutationFn: () => signOut(input.apiBaseUrl),
     onSuccess: () => {
+      // Let the shell unmount the old observers before it clears their cache. Clearing it
+      // here lets those observers recreate queries with the previous person's workspace.
+      queryClient.setQueryData(workspaceQueryKeys.me(input.apiBaseUrl), null);
       input.onSignedOut();
-      void queryClient.clear();
-      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.me(input.apiBaseUrl) });
+    },
+    onError: async (_error, _variables, resumeRequests) => {
+      resumeRequests?.();
+      await queryClient.invalidateQueries();
     }
   });
 }
