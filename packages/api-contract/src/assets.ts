@@ -1,4 +1,5 @@
 import {
+  ASSET_ACCESS_VERBS,
   ASSET_NAME_REFUSAL_REASONS,
   ASSET_SYNC_CHANGE_TYPES
 } from "@work-shape/catalyst-asset-schemas";
@@ -116,7 +117,7 @@ const pointerShape = {
 };
 
 /** What the instance allows the caller to do to one asset. */
-export const assetVerbSchema = z.enum(["read", "write", "delete", "publish"]);
+export const assetVerbSchema = z.enum(ASSET_ACCESS_VERBS);
 
 /** One asset as a list shows it: what every kind can say about itself, without its content. */
 export const assetSummarySchema = z.object({
