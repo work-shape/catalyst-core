@@ -345,6 +345,23 @@ export function indexWorkflowSteps(manifest: Pick<WorkflowManifest, "steps">): W
   return index;
 }
 
+/**
+ * Non-loop steps needed after a loop, at every enclosing level. The next loop reserves
+ * its own work; a cursor source need not know whether this is its last item.
+ */
+export function workflowLoopTailSteps(index: WorkflowStepIndex, loopId: string): number {
+  let current = index.get(loopId);
+  let total = 0;
+  while (current) {
+    for (const step of current.sequence.steps.slice(current.position + 1)) {
+      if (step.type === "loop") break;
+      total++;
+    }
+    current = current.sequence.loop ? index.get(current.sequence.loop) : undefined;
+  }
+  return total;
+}
+
 /** The schema's properties that are named like the key that marks a dataset in step data. */
 function datasetKeyIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
   const properties = z.object({ properties: z.record(z.string(), z.unknown()) });

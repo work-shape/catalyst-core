@@ -5,7 +5,7 @@ import type {
   WorkflowStepRun
 } from "@work-shape/catalyst-core";
 import { workflowDatasetReferenceSchema } from "@work-shape/catalyst-core";
-import type { WorkflowStepIndex } from "./definition";
+import { workflowLoopTailSteps, type WorkflowStepIndex } from "./definition";
 import { resolveReference } from "./references";
 import { WorkflowStepFailure } from "./step-failure";
 
@@ -16,7 +16,7 @@ export async function loopItemReservation(
   index: WorkflowStepIndex,
   loopRun: WorkflowStepRun,
   steps: readonly WorkflowStep[]
-): Promise<number> {
+): Promise<{ item: number; tail: number }> {
   async function cost(
     steps: readonly WorkflowStep[],
     nested: ReadonlySet<string>
@@ -56,5 +56,8 @@ export async function loopItemReservation(
     }
     return total;
   }
-  return cost(steps, new Set([loopRun.stepId]));
+  return {
+    item: await cost(steps, new Set([loopRun.stepId])),
+    tail: workflowLoopTailSteps(index, loopRun.stepId)
+  };
 }

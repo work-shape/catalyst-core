@@ -108,19 +108,20 @@ export function createLoopProgress(options: {
     const progress = await tx.workflowRuns.readLoopProgress(loopRef);
     let started = progress.started;
     let going = progress.running;
-    // Reserve a whole next item before admitting it. Already admitted items drain before the
-    // checkpoint, so no call is skipped or repeated at a concurrency boundary.
+    // Reserve whole admitted items and their shared tail before admitting another. Items
+    // drain before the checkpoint, so no call is skipped or repeated at a concurrency boundary.
     const reservation =
       loop?.type === "loop" && loop.continueAsNew
         ? await loopItemReservation(tx, run, index, loopRun, loop.steps)
-        : 0;
+        : { item: 0, tail: 0 };
     const mustContinue = () =>
       loop?.type === "loop" &&
       loop.continueAsNew &&
       started < total &&
       (Date.parse(run.deadlineAt) <= now().getTime() ||
         started >= (loop.continueAsNew.after ?? Infinity) ||
-        (run.stepRunCount + (going + 1) * reservation > run.limits.stepRuns &&
+        (run.stepRunCount + (going + 1) * reservation.item + reservation.tail >
+          run.limits.stepRuns &&
           // An item larger than a fresh history runs alone and may checkpoint inside it.
           !(started === 0 && going === 0 && run.stepRunCount < run.limits.stepRuns)));
     while (first && started < total && going < width && !mustContinue()) {

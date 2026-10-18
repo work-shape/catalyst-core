@@ -1,6 +1,6 @@
 import { deferred, eventually } from "./support/assertions";
 import { withTestSql } from "./support/test-sql";
-import type { JsonValue } from "@work-shape/catalyst-core";
+import type { JsonValue, WorkflowStep } from "@work-shape/catalyst-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
@@ -72,8 +72,233 @@ async function finishChain(t: WorkflowFixture) {
     const chain = await runs(t);
     if (chain.some((run) => run.status === "done" || run.status === "failed")) return chain;
   }
-  throw new Error("The continuation chain did not end");
+  throw new Error(`The continuation chain did not end: ${JSON.stringify(await runs(t))}`);
 }
+
+// Three item writes need six steps before the output, or eighteen when nested.
+// Reserve the output even on a page whose last item cannot be known in advance.
+it.each([
+  ...[5, 6, 7].map((budget) => ({ nested: false, concurrency: 1, budget })),
+  ...[1, 3].flatMap((concurrency) =>
+    [17, 18, 19].map((budget) => ({ nested: true, concurrency, budget }))
+  )
+])(
+  "reserves the final tail at nested=$nested concurrency=$concurrency budget=$budget",
+  async ({ nested, concurrency, budget }) => {
+    const manifest = definition();
+    if (nested)
+      manifest.steps = manifest.steps.map((step) =>
+        step.id === "each_client"
+          ? {
+              ...step,
+              concurrency,
+              steps: [
+                {
+                  id: "before",
+                  name: "Before",
+                  type: "operation",
+                  operation: "connection.crm.write",
+                  input: {
+                    client: { ref: { step: "each_client", path: "id" } },
+                    phase: { value: "before" }
+                  }
+                },
+                {
+                  id: "inner",
+                  name: "Inner",
+                  type: "loop",
+                  items: { step: "clients", path: "clients" },
+                  steps: [
+                    {
+                      id: "pair",
+                      name: "Pair",
+                      type: "operation",
+                      operation: "connection.crm.write",
+                      input: {
+                        client: { ref: { step: "each_client", path: "id" } },
+                        inner: { ref: { step: "inner", path: "id" } }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          : step
+      );
+    const { t } = await ready({ ...manifest, limits: { stepRuns: budget } });
+    const started = await t.expectOk(t.root.id, "workflows.start", {
+      params: { workflow: "notify-clients" },
+      payload: { input: { note: "Tail edge" }, key: "tail-edge" }
+    });
+    expect(started.statusCode).toBe(200);
+    const chain = (await finishChain(t)).sort(
+      (a, b) => (a.continuation?.number ?? 1) - (b.continuation?.number ?? 1)
+    );
+    expect(chain.map((run) => run.status)).toEqual(
+      budget === (nested ? 19 : 7)
+        ? ["done"]
+        : !nested && budget === 5
+          ? ["continued", "continued", "done"]
+          : ["continued", "done"]
+    );
+    expect(chain.every((run) => run.stepRunCount <= budget)).toBe(true);
+    const last = chain.at(-1);
+    if (!last) throw new Error("Missing final history");
+    expect(
+      await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: last.id })
+    ).toMatchObject({ value: { failed: 0 } });
+    expect(writesOf(t)).toHaveLength(nested ? 12 : 3);
+    expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(nested ? 12 : 3);
+    for (const run of chain)
+      expect(
+        await t.stores.workflowNotices.failureCount({ clientInstanceId, rootRunId: run.id })
+      ).toBe(0);
+  }
+);
+
+it("reserves the inner tail, the rest of the outer item and the outer tail", async () => {
+  const manifest = definition();
+  const write = (id: string): WorkflowStep => ({
+    id,
+    name: id,
+    type: "operation",
+    operation: "connection.crm.write",
+    input: { phase: { value: id }, client: { ref: { step: "each_client", path: "id" } } }
+  });
+  manifest.steps = manifest.steps.map((step) =>
+    step.id === "each_client"
+      ? {
+          ...step,
+          steps: [
+            {
+              id: "inner",
+              name: "Inner",
+              type: "loop",
+              items: { step: "clients", path: "clients" },
+              continueAsNew: { position: "offset" },
+              steps: [
+                {
+                  ...write("pair"),
+                  input: {
+                    client: { ref: { step: "each_client", path: "id" } },
+                    inner: { ref: { step: "inner", path: "id" } }
+                  }
+                }
+              ]
+            },
+            write("after_inner"),
+            write("outer_tail")
+          ]
+        }
+      : step
+  );
+  const { t } = await ready({ ...manifest, limits: { stepRuns: 8 } });
+  await start(t);
+  const chain = await finishChain(t);
+  expect(chain.some((run) => run.status === "continued")).toBe(true);
+  expect(chain.every((run) => run.status === "continued" || run.status === "done")).toBe(true);
+  expect(chain.every((run) => run.stepRunCount <= 8)).toBe(true);
+  expect(writesOf(t)).toHaveLength(15);
+  expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(15);
+});
+
+it("drains concurrent children of an oversized item before checkpointing a quiet frontier", async () => {
+  const manifest = definition();
+  const { t } = await ready({
+    ...manifest,
+    inputs: { type: "object", properties: { offset: { type: "string" } }, required: ["offset"] },
+    limits: { stepRuns: 8 },
+    steps: manifest.steps.map((step) => {
+      if (step.id === "clients")
+        return { ...step, input: { text: { ref: { step: "start", path: "input.offset" } } } };
+      if (step.id !== "each_client") return step;
+      return {
+        ...step,
+        continueAsNew: { position: "offset", cursor: "id" },
+        items: { step: "clients", path: "batches" },
+        steps: [
+          {
+            id: "inner",
+            name: "Inner",
+            type: "loop",
+            concurrency: 3,
+            items: { step: "clients", path: "clients" },
+            steps: ["first", "second"].map((id) => ({
+              id,
+              name: id,
+              type: "operation",
+              operation: "connection.crm.write",
+              input: {
+                phase: { value: id },
+                inner: { ref: { step: "inner", path: "id" } },
+                outer: { ref: { step: "each_client", path: "id" } }
+              }
+            }))
+          }
+        ]
+      };
+    })
+  });
+  t.setBehaviour((operation, input) =>
+    Promise.resolve<JsonValue>(
+      operation === "echo"
+        ? {
+            clients: [{ id: "a" }, { id: "b" }, { id: "c" }],
+            batches: JSON.stringify(input).includes('"text":""') ? [{ id: "page" }] : []
+          }
+        : { received: input }
+    )
+  );
+  await t.expectOk(t.root.id, "workflows.start", {
+    params: { workflow: "notify-clients" },
+    payload: { input: { offset: "" } }
+  });
+  const chain = await finishChain(t);
+  expect(chain.every((run) => run.status === "continued" || run.status === "done")).toBe(true);
+  // All three first steps are admitted together (seven steps including the containers).
+  // Their second steps cross the budget while siblings are unfinished: quiet is false.
+  expect(chain.find((run) => run.status === "continued")?.stepRunCount).toBe(10);
+  // The one oversized outer item has three concurrent children, each writing twice.
+  expect(chain.map((run) => run.status).sort()).toEqual(["continued", "done"]);
+  expect(writesOf(t)).toHaveLength(6);
+  expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(6);
+});
+
+it("refuses a continuation tail larger than limits.stepRuns at publish", async () => {
+  const t = await readyWorkflows(
+    (fixture) => {
+      open = fixture;
+    },
+    { definitions: "assets" }
+  );
+  const manifest = definition();
+  const steps = [
+    ...manifest.steps.slice(0, -1),
+    ...["tail_a", "tail_b"].map((id) => ({
+      id,
+      name: id,
+      type: "operation",
+      operation: "connection.crm.echo",
+      input: {}
+    })),
+    ...manifest.steps.slice(-1)
+  ];
+  const address = { kind: "workflow", name: "notify-clients" };
+  const draft = await t.expectOk(t.admin.id, "assets.put", {
+    params: address,
+    payload: {
+      config: { name: "notify-clients", manifest: { ...manifest, steps, limits: { stepRuns: 2 } } },
+      expectedRevision: null
+    }
+  });
+  const revision = draft.json().revision;
+  const refused = await t.call(t.root.id, "assets.publish", {
+    params: address,
+    payload: { revision }
+  });
+  expect(refused.statusCode, refused.body).toBe(422);
+  expect(refused.json().error.message).toContain("needs 3 tail steps, above limits.stepRuns of 2");
+});
 
 describe("continue-as-new", () => {
   it("carries labels, input, datasets and onFailure onto a newly published revision without repeating an item", async () => {
@@ -273,7 +498,7 @@ describe("continue-as-new", () => {
     expect(writesOf(t)).toHaveLength(3);
   });
 
-  it("persists three bounded histories across the real store with exactly one call per dataset row", async () => {
+  it("persists bounded histories across the real store with exactly one call per dataset row", async () => {
     const objects = new MemoryObjectStorage();
     const reads = vi.spyOn(objects, "get");
     const definitions = publishedDefinitions();
@@ -312,13 +537,14 @@ describe("continue-as-new", () => {
     const chain = (await runs(t)).sort(
       (a, b) => (a.continuation?.number ?? 1) - (b.continuation?.number ?? 1)
     );
-    expect(chain.map((run) => run.status)).toEqual(["continued", "continued", "done"]);
-    expect(chain.map((run) => run.stepRunCount)).toEqual([20, 20, 20]);
-    expect(chain.reduce((sum, run) => sum + run.stepRunCount, 0)).toBe(60);
+    expect(chain.map((run) => run.status)).toEqual(["continued", "continued", "continued", "done"]);
+    expect(chain.map((run) => run.stepRunCount)).toEqual([19, 19, 19, 6]);
+    expect(chain.reduce((sum, run) => sum + run.stepRunCount, 0)).toBe(63);
     expect(chain.map((run) => `${run.runKey}/${run.continuation?.number}`)).toEqual([
       "2026-10-18/1",
       "2026-10-18/2",
-      "2026-10-18/3"
+      "2026-10-18/3",
+      "2026-10-18/4"
     ]);
     for (let index = 1; index < chain.length; index++) {
       const next = chain[index];
@@ -327,7 +553,7 @@ describe("continue-as-new", () => {
       expect(Date.parse(next.createdAt) - Date.parse(prior.finishedAt)).toBeLessThan(60_000);
     }
     expect(calls).toBe(50);
-    expect(reads.mock.calls.length).toBeLessThanOrEqual(3);
+    expect(reads.mock.calls.length).toBeLessThanOrEqual(4);
   });
 });
 
