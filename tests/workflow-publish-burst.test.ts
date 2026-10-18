@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { asUserId, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { clientInstanceId, useDataStoreInstance } from "./support/data-store-instance";
 import { fileTestDatabaseUrl } from "./support/test-database";
+import { waitUntil } from "./support/assertions";
 
 // A publish holds a platform connection and the definition-graph lock. Reading an operation
 // through the pool instead of that transaction stalls every publish once all ten default
@@ -72,13 +73,16 @@ describe("Workflows published at once beyond the platform's pool", () => {
         }
 
         const started = performance.now();
+        let completed = 0;
         const answers = Promise.all(
-          params.map((param) =>
-            world.api.call("assets.publish", {
+          params.map(async (param) => {
+            const answer = await world.api.call("assets.publish", {
               params: param,
               payload: { revision: 1 }
-            })
-          )
+            });
+            completed += 1;
+            return answer;
+          })
         );
         let timer: NodeJS.Timeout | undefined;
         const ended = await Promise.race([
@@ -89,19 +93,21 @@ describe("Workflows published at once beyond the platform's pool", () => {
         ]);
         clearTimeout(timer);
         if (!ended) {
-          // Terminate only transactions in this file's disposable database. This releases both
-          // the graph lock and its waiters so a regression fails without hanging file teardown.
+          console.info(
+            `${completed} of ${count} Workflow publishes completed within ${STALLED_AFTER_MS} ms`
+          );
+          // Cancel only graph-lock waiters in this file's disposable database. Their rollbacks
+          // return connections to the pool so the lock holder and queued requests can finish.
           const url = await fileTestDatabaseUrl();
           const sql = postgres(url, { max: 1, onnotice: () => undefined });
           try {
             let left = true;
             void answers.finally(() => (left = false)).catch(() => undefined);
-            while (left) {
-              await sql`select pg_catalog.pg_terminate_backend(pid) from pg_catalog.pg_stat_activity
-              where datname = ${new URL(url).pathname.slice(1)} and pid <> pg_backend_pid()
-                and xact_start is not null`;
-              await new Promise((resolve) => setTimeout(resolve, 200));
-            }
+            await waitUntil(async () => {
+              await sql`select pg_catalog.pg_cancel_backend(pid) from pg_catalog.pg_stat_activity
+                where datname = ${new URL(url).pathname.slice(1)} and wait_event_type = 'Lock' and wait_event = 'advisory'`;
+              return !left;
+            }, "the stalled publish transactions to end");
           } finally {
             await sql.end();
           }

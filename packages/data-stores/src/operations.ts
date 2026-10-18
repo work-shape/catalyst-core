@@ -699,24 +699,25 @@ function readOperation(
  */
 export function createDataStoreOperationSource(runtime: DataStoreRuntime): OperationSource {
   return {
-    async resolve(name) {
+    async resolve(name, stores = runtime.stores) {
+      const lookup = { clientInstanceId: runtime.clientInstanceId, stores };
       const split = splitOperationName(name);
       if (split?.part === DATA_STORE_STATE_VERB) {
         // The state of a store is answered from its record, whether its database is there or not.
-        const store = await readStore(runtime, split.store);
+        const store = await readStore(lookup, split.store);
         return store && stateOperation(store, DATA_STORES_MODULE);
       }
       if (split?.part === DATA_STORE_USED_BY_PART) {
-        const store = await readStore(runtime, split.store);
+        const store = await readStore(lookup, split.store);
         return store && usedByOperation(runtime, store, DATA_STORES_MODULE);
       }
       const read = split && READS.find((candidate) => candidate.part === split.part);
       if (read) {
-        const store = await readStore(runtime, split.store);
+        const store = await readStore(lookup, split.store);
         return store && readOperation(runtime, store, read);
       }
       const parsed = parseOperationName(name);
-      const store = parsed && (await readStore(runtime, parsed.store));
+      const store = parsed && (await readStore(lookup, parsed.store));
       return store ? operationOf(runtime, store, parsed.verb) : undefined;
     },
     async list(scope) {
