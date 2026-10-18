@@ -358,9 +358,11 @@ export function appResourceOf(asset: {
   id: string;
   name: string;
   workspaceId?: string;
+  appAvailability?: ConfigAssetRecord["appAvailability"];
 }): OperationResource {
   return {
     kind: APP_ASSET_KIND,
+    ...(asset.appAvailability ? { appAvailability: asset.appAvailability } : {}),
     id: asset.id,
     assetId: asset.id,
     name: asset.name,
@@ -378,7 +380,10 @@ export function authorizePublishedApp(
   context: Pick<OperationAuthorizeContext, "access">,
   resource: OperationResource
 ): OperationAuthorization {
-  if (context.access.authorize(APP_ACTIONS.write, resource).allowed) {
+  if (
+    resource.appAvailability?.audience !== "self" &&
+    context.access.authorize(APP_ACTIONS.write, resource).allowed
+  ) {
     return { allowed: true };
   }
   return decide(context.access, APP_ACTIONS.use, resource);
@@ -419,6 +424,7 @@ function publishedApp(asset: ConfigAssetRecord | undefined): PublishedApp | unde
     return undefined;
   }
   const resource = appResourceOf({
+    appAvailability: asset.appAvailability,
     id: asset.id,
     name: asset.name,
     workspaceId: asset.scope.workspaceId

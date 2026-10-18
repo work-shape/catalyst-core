@@ -5,6 +5,7 @@ import {
   PRINCIPAL_HOLDER_KINDS,
   type PolicySource
 } from "@work-shape/catalyst-core";
+import { appAudienceSchema, type Asset } from "@work-shape/catalyst-api-client";
 import {
   narrativeReadOf,
   parsePublishNarrative,
@@ -129,6 +130,27 @@ export interface PublishReview {
    * client cannot read whole.
    */
   narrative?: Exclude<PublishNarrativeRead, { status: "none" | "loading" }>;
+  /**
+   * Who an App's publish makes it live for, frozen when the request was filed (SHARE-1), with
+   * the people it names in the reader's language. Absent for other kinds and older requests.
+   */
+  audience?: { selected: PublishAudience; label: string };
+  /**
+   * Whether this publish lets people use the App who cannot now, frozen when the request was
+   * filed (SHARE-1). Absent for other kinds and older requests.
+   */
+  widens?: boolean;
+}
+
+/** The audiences an App's publish can choose, as the contract names them. */
+type PublishAudience = NonNullable<Asset["appAudience"]>["selected"];
+
+function parseAudience(value: unknown): PublishReview["audience"] {
+  if (!isRecord(value)) return undefined;
+  const parsed = appAudienceSchema.safeParse(value.selected);
+  const selected = parsed.success ? parsed.data : undefined;
+  const label = readText(value.label);
+  return selected && label ? { selected, label } : undefined;
 }
 
 /** The values of `heldBy` that are a standing rule of the instance, not one finding. */
@@ -279,6 +301,8 @@ function parseReview(value: unknown): PublishReview | undefined {
   const runAs = readText(value.runAs);
   const stale = staleReasons.find((reason) => reason === value.stale);
   const narrative = narrativeReadOf(parsePublishNarrative(value.publishNarrative));
+  const audience = parseAudience(value.audience);
+  const widens = typeof value.publish_widens === "boolean" ? value.publish_widens : undefined;
   return {
     kind,
     name,
@@ -305,7 +329,9 @@ function parseReview(value: unknown): PublishReview | undefined {
       : [],
     ...(runAs ? { runAs } : {}),
     ...(stale ? { stale } : {}),
-    ...(narrative.status === "ready" || narrative.status === "failed" ? { narrative } : {})
+    ...(narrative.status === "ready" || narrative.status === "failed" ? { narrative } : {}),
+    ...(audience ? { audience } : {}),
+    ...(widens === undefined ? {} : { widens })
   };
 }
 

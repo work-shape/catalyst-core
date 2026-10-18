@@ -95,6 +95,7 @@ async function publish(kind: "app" | "workflow", answers: string[], summary: str
       kind,
       "publish",
       "nightly",
+      ...(kind === "app" ? ["--audience", "workspace"] : []),
       "--revision",
       "7",
       "--workspace",

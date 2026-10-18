@@ -4,6 +4,7 @@ import {
   type ActorAccess,
   type OperationApproval,
   type OperationCall,
+  type OperationRun,
   resolvePolicy,
   strictestOutcome,
   type OperationDenial,
@@ -22,6 +23,7 @@ import type { RunContext, RunOperationDeps } from "./operation-execution";
 /** The read-only inputs shared by runtime admission and publish previews. */
 export interface OperationPolicyContext {
   definition: RunContext["definition"];
+  run?: Pick<OperationRun, "decision">;
   call: Pick<OperationCall, "input" | "origin" | "workspaceId" | "draft" | "workflowDeleted">;
   resource: RunContext["resource"];
   deps: Pick<RunOperationDeps, "policy">;
@@ -51,7 +53,9 @@ async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInp
     targets: definition.policyTargets
       ? await definition.policyTargets(call.input)
       : [{ workspaceId: call.workspaceId, assetKind: resource?.kind }],
-    callerCanConfirm: callConfirmedByCaller(call),
+    callerCanConfirm:
+      callConfirmedByCaller(call) ||
+      (isAgentAppPublish(context) && context.run?.decision?.mode === "confirmed"),
     // A step of a run of what is published carries no draft; one of a test run always does.
     publishedRun: call.origin.kind === "workflow" && call.draft === undefined,
     workflowDeleted: call.workflowDeleted === true,
@@ -92,7 +96,7 @@ export async function resolveGuardedPolicy(
   const answers = await askBeforeEvents(context);
   const guardrailOutcome = strictestOutcome(answers.map((answer) => answer.outcome));
   const policy = resolvePolicy({ ...policyInput, guardrailOutcome });
-  if (confirmsFirst(context.call, before, policy)) return { policy: before };
+  if (confirmsFirst(context, before, policy)) return { policy: before };
   if (policy.next !== "refuse") {
     const asking = policy.source === "guardrail" ? approvalAskedBy(answers) : undefined;
     return { policy, ...(asking ? { approvalAskedBy: asking } : {}) };
@@ -107,20 +111,32 @@ export async function resolveGuardedPolicy(
 }
 
 /**
- * Whether the person an unattended CLI call acts for confirms it before anybody approves it:
- * their Allow in the Inbox makes it their own call, which is asked the guardrails again and
- * then waits for the approvers where one still asks (Confirmation in the Inbox, check 33).
+ * The person's click precedes an approver's: an unattended CLI call asks in the Inbox;
+ * an agent's App publish asks for the audience in its confirmation. Both recheck the
+ * guardrails after that click and wait for an approver where one still asks.
  */
 function confirmsFirst(
-  call: Pick<OperationCall, "origin">,
+  context: OperationPolicyContext,
   before: PolicyResolution,
   policy: PolicyResolution
 ): boolean {
   return (
-    call.origin.kind === "cli" &&
     before.next === "await_confirmation" &&
-    before.deliver === "inbox" &&
+    ((context.call.origin.kind === "cli" && before.deliver === "inbox") ||
+      isAgentAppPublish(context)) &&
     policy.next === "await_approval"
+  );
+}
+
+function isAgentAppPublish(context: OperationPolicyContext): boolean {
+  const input = context.call.input;
+  return (
+    context.call.origin.kind === "agent" &&
+    context.definition.name === "assets.publish" &&
+    typeof input === "object" &&
+    input !== null &&
+    "kind" in input &&
+    input.kind === "app"
   );
 }
 

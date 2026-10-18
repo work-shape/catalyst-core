@@ -309,12 +309,13 @@ export class AppWorkflow {
       kind.kind,
       input.app,
       asset?.scope ?? { kind: "instance" },
-      asset?.id
+      asset?.id,
+      asset?.appAvailability
     );
     const writes = caller.access.authorize(APP_ACTIONS.write, resource).allowed;
     if (input.mode === "draft") {
       caller.access.require(APP_ACTIONS.write, resource);
-    } else if (!writes) {
+    } else if (!writes || asset?.appAvailability?.audience === "self") {
       // Whoever writes an App sees what its users are served. Everyone else needs the use.
       caller.access.require(APP_ACTIONS.use, resource);
     }

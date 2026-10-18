@@ -22,6 +22,7 @@ const stand = (name: string) =>
 const PAGE_TOOLS = [
   "workspace.open",
   "app.save",
+  "assets.publish",
   "workspace.write_file",
   "workspace.edit_file",
   "workspace.read_file"

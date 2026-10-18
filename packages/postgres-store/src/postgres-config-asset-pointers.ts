@@ -1,3 +1,4 @@
+import { appAudienceWidens, asCollaborationWorkspaceId } from "@work-shape/catalyst-core";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   AppError,
@@ -6,12 +7,16 @@ import {
   type ConfigAssetStore,
   type FileSetId
 } from "@work-shape/catalyst-core";
+import { appAvailabilityColumn } from "./app-availability";
 import { sweepAssetRepoBundlesOf } from "./postgres-asset-repo-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import type { ConfigAssetRow } from "./rows";
 import {
+  collaborationWorkspaces,
   configAssetRevisions,
   configAssets,
+  configAssetAvailability,
+  configAssetWorkspaceAvailability,
   configAssetState,
   fileSets,
   permissionGrants
@@ -88,6 +93,44 @@ export async function publishConfigAssetRevision(
 ): ReturnType<ConfigAssetStore["publishConfigAssetRevision"]> {
   return db.transaction(async (tx) => {
     const asset = await lockAuthorizedAsset(tx, input);
+    let publishWidens: boolean | undefined;
+    if (input.appPublishReview && input.audience) {
+      const [live] = await tx
+        .select({ availability: appAvailabilityColumn })
+        .from(configAssets)
+        .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+        .where(eq(configAssets.id, asset.id))
+        .limit(1);
+      const availability = live?.availability ?? { audience: "workspace" as const };
+      const reviewed = input.appPublishReview;
+      if (
+        asset.publishedRevisionId !== reviewed.liveRevisionId ||
+        availability.audience !== reviewed.liveAudience.audience ||
+        availability.userId !== reviewed.liveAudience.userId
+      ) {
+        throw new AppError(
+          "CONFLICT",
+          "The App's live audience changed. Review and publish again.",
+          { reason: "live_moved" }
+        );
+      }
+      const [person] = input.audienceWorkspaceId
+        ? await tx
+            .select({ userId: collaborationWorkspaces.personalUserId })
+            .from(collaborationWorkspaces)
+            .where(eq(collaborationWorkspaces.id, input.audienceWorkspaceId))
+            .limit(1)
+        : [];
+      publishWidens =
+        !asset.publishedRevisionId ||
+        reviewed.contentWidens ||
+        appAudienceWidens(
+          input.audience,
+          availability.audience,
+          person?.userId ?? undefined,
+          availability.userId
+        );
+    }
     const [target] = await tx
       .select({
         id: configAssetRevisions.id,
@@ -130,6 +173,42 @@ export async function publishConfigAssetRevision(
         { reason: "revision_files_removed", revision: input.revision }
       );
     }
+    if (input.audience !== undefined) {
+      if (input.audience === "self" && !input.audienceWorkspaceId)
+        throw new AppError("VALIDATION_FAILED", "Only me needs a personal workspace");
+      if (input.kind !== "app")
+        throw new AppError("VALIDATION_FAILED", "Only Apps have a publish audience");
+      await tx
+        .insert(configAssetAvailability)
+        .values({
+          assetId: asset.id,
+          clientInstanceId: input.clientInstanceId,
+          mode: input.audience === "instance" ? "all" : "selected",
+          personalWorkspaces: input.audience === "self",
+          updatedAt: new Date()
+        })
+        .onConflictDoUpdate({
+          target: configAssetAvailability.assetId,
+          set: {
+            mode: input.audience === "instance" ? "all" : "selected",
+            personalWorkspaces: input.audience === "self",
+            updatedAt: new Date()
+          }
+        });
+      await tx
+        .delete(configAssetWorkspaceAvailability)
+        .where(eq(configAssetWorkspaceAvailability.assetId, asset.id));
+      const selectedWorkspace =
+        input.audience === "self"
+          ? input.audienceWorkspaceId
+          : input.audience === "workspace" && asset.scopeId
+            ? asCollaborationWorkspaceId(asset.scopeId)
+            : undefined;
+      if (selectedWorkspace)
+        await tx
+          .insert(configAssetWorkspaceAvailability)
+          .values({ assetId: asset.id, collaborationWorkspaceId: selectedWorkspace });
+    }
     const [replaced] = asset.publishedRevisionId
       ? await tx
           .select({ revision: configAssetRevisions.revision })
@@ -144,6 +223,7 @@ export async function publishConfigAssetRevision(
     return {
       assetId: asset.id,
       revision: input.revision,
+      ...(publishWidens === undefined ? {} : { publishWidens }),
       ...(replaced ? { replacedRevision: replaced.revision } : {}),
       ...(target.fileSetId ? { fileSetId: target.fileSetId } : {})
     };

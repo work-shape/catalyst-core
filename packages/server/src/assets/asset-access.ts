@@ -44,10 +44,12 @@ export function accessResource(
   kind: string,
   name: string,
   scope: AssetScope,
-  assetId: string | undefined
+  assetId: string | undefined,
+  appAvailability?: AccessResource["appAvailability"]
 ): AccessResource {
   return {
     kind,
+    ...(appAvailability ? { appAvailability } : {}),
     ...(name === "" ? {} : { name }),
     ...(assetId === undefined ? {} : { assetId }),
     ...(scope.kind === "workspace" ? { workspaceId: scope.workspaceId } : {})
@@ -102,7 +104,8 @@ export function mayOpenAssetFileSet(
     asset.workspaceId === undefined
       ? INSTANCE_ASSET_SCOPE
       : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(asset.workspaceId) },
-    asset.id
+    asset.id,
+    asset.appAvailability
   );
   if (access.authorize(kind.actions.write, resource).allowed) {
     return true;
@@ -148,9 +151,15 @@ export function errorIssues(error: AppError): AssetSetIssue[] {
 export function listedTo(
   kind: WorkflowAssetKind,
   access: ActorAccess,
-  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published">
+  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published" | "appAvailability">
 ): boolean {
-  const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
+  const resource = accessResource(
+    asset.kind,
+    asset.name,
+    asset.scope,
+    asset.id,
+    asset.appAvailability
+  );
   return (
     access.authorize(kind.actions.read, resource).allowed ||
     readsAssetDraft(kind, access, resource) ||

@@ -1,3 +1,10 @@
+import { appPublishReview } from "../apps/app-publish-reach";
+import {
+  getSubjectUserId,
+  isAuthenticatedServicePrincipal,
+  type AuthenticatedIdentity,
+  type AppAudience
+} from "@work-shape/catalyst-core";
 import {
   DATA_STORE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
@@ -137,7 +144,8 @@ const PUBLISH_EVENTS: Readonly<Record<string, OperationBeforeEvent["name"]>> = {
  */
 export async function publishEvents(
   options: RevisionOptions,
-  input: RevisionAddress
+  input: RevisionAddress,
+  actor?: AuthenticatedIdentity
 ): Promise<OperationBeforeEvent[]> {
   if (input.kind === "agent") {
     const asset = await options.configAssets.store.getConfigAsset({
@@ -159,6 +167,25 @@ export async function publishEvents(
     return [];
   }
   const revision = await callersRevision(options, input);
+  const asset =
+    input.kind === "app"
+      ? await options.configAssets.store.getConfigAsset({
+          clientInstanceId: options.clientInstanceId,
+          kind: input.kind,
+          name: input.name
+        })
+      : undefined;
+  const kind = input.kind === "app" ? options.configAssets.kinds.get(input.kind) : undefined;
+  const widening =
+    asset && revision && kind?.publishReach
+      ? appPublishReview(
+          asset,
+          kind,
+          revision.config,
+          input.audience,
+          actor && !isAuthenticatedServicePrincipal(actor) ? getSubjectUserId(actor) : undefined
+        ).publishWidens
+      : undefined;
   if (!revision) {
     // Nothing of the caller's to make live: the publish itself refuses it.
     return [];
@@ -169,7 +196,8 @@ export async function publishEvents(
       subject: { kind: input.kind, id: revision.assetId, name: input.name },
       checkable: async (): Promise<GuardrailFields> => ({
         name: input.name,
-        content: await revisionText(options, revision)
+        content: await revisionText(options, revision),
+        ...(widening === undefined ? {} : { publish_widens: String(widening) })
       })
     }
   ];
@@ -213,6 +241,7 @@ interface RevisionAddress {
   kind: string;
   name: string;
   revision: number;
+  audience?: AppAudience;
   workspaceId?: string | undefined;
 }
 

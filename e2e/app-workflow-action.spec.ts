@@ -324,7 +324,7 @@ test("an App button starts a published Workflow and shows its output; the draft 
     const written = await write("Visit log", null);
     expect(written.ok(), await written.text()).toBe(true);
     const published = await requestWithOrigin(page, "post", `${appUrl}/publish`, {
-      data: { workspaceId, revision: 1 }
+      data: { workspaceId, revision: 1, audience: "workspace" }
     });
     expect(published.ok(), await published.text()).toBe(true);
     const appPath = `/w/${workspaceId}/apps/${appId}`;

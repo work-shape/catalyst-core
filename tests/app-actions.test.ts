@@ -433,4 +433,43 @@ describe("a call a frame makes through the interface", () => {
     const frame = await openApp(t.admin.id, "published");
     expectStatus(await callAction(t.admin.id, frame, "load", { text: "strong" }), 200);
   });
+  it("check 56: private publication runs the builder's changing actions for real and refuses another member's retained frame", async () => {
+    await withRight(t.kai.id, "connection.use", { assetId: crm }, async () => {
+      const memberFrame = await openApp(t.kai.id, "published");
+      const publish = (audience: "self" | "workspace") =>
+        t.call(t.admin.id, "assets.publish", {
+          params: { kind: "app", name: "orders" },
+          payload: { workspaceId: t.workspaceId, revision: 1, audience }
+        });
+      expectStatus(await publish("self"), 200);
+      try {
+        const frame = await openApp(t.admin.id, "published");
+        const before = t.handed.length;
+        const changed = await callAction(
+          t.admin.id,
+          frame,
+          "save",
+          { note: "private live" },
+          { "idempotency-key": "share-private-live" }
+        );
+        expectStatus(changed, 200);
+        expect(resultSchema.parse(changed.json())).toMatchObject({
+          status: "done",
+          result: { note: "private live", source: "app" }
+        });
+        expect(t.handed.length).toBe(before + 1);
+        const refused = await callAction(
+          t.kai.id,
+          memberFrame,
+          "save",
+          { note: "must not run" },
+          { "idempotency-key": "share-private-refused" }
+        );
+        expect(refused.statusCode).toBe(404);
+        expect(t.handed.length).toBe(before + 1);
+      } finally {
+        expectStatus(await publish("workspace"), 200);
+      }
+    });
+  });
 });

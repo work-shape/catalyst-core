@@ -417,10 +417,16 @@ export class AppActionList {
 }
 
 /** The App with its workspace as a right is decided on it. */
-function scoped(asset: ConfigAssetRecord): { id: string; name: string; workspaceId?: string } {
+function scoped(asset: ConfigAssetRecord): {
+  id: string;
+  name: string;
+  workspaceId?: string;
+  appAvailability?: ConfigAssetRecord["appAvailability"];
+} {
   return {
     id: asset.id,
     name: asset.name,
+    ...(asset.appAvailability ? { appAvailability: asset.appAvailability } : {}),
     ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
   };
 }

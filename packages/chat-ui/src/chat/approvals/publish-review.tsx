@@ -133,6 +133,23 @@ export function PublishReviewBody({
           {t(STALE[review.stale])}
         </Banner>
       ) : null}
+      {/* "For whom?" as the requester answered it, before the sentence that names them. */}
+      {review.audience ? (
+        <KeyValueList layout="stacked">
+          <KeyValue label={t("operations.publishAudience")} data-field="audience">
+            <span data-testid="publish-review-audience">{review.audience.label}</span>
+          </KeyValue>
+        </KeyValueList>
+      ) : null}
+      {review.widens === undefined ? null : (
+        <p
+          className="text-body text-muted-foreground"
+          data-testid="publish-review-widens"
+          data-widens={review.widens ? "true" : "false"}
+        >
+          {t(review.widens ? "operations.publishWidens" : "operations.publishNarrows")}
+        </p>
+      )}
       {/* The same sentence the Publish dialog leads with, then the lists behind "Details". */}
       {review.narrative ? <PublishNarrativeReadLead read={review.narrative} /> : null}
       {review.narrative ? (
@@ -214,7 +231,11 @@ function PublishReviewLists({ review }: { review: PublishReview }) {
       ) : null}
       {/* Who sees which stored data, read for the version this request would make live. */}
       {reviewReadsStoredData(review) ? (
-        <AppPublishData app={review.name} revision={review.revision} />
+        <AppPublishData
+          app={review.name}
+          revision={review.revision}
+          audienceLabel={review.audience?.label}
+        />
       ) : null}
       {review.runAs ? (
         <KeyValue label={t("operations.publishRunsAs")} data-field="runs-as">

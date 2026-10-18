@@ -132,6 +132,11 @@ export function appDataLines(sources: AppDataSources, t: Translate, locale: stri
 export interface AppPublishData {
   /** Who may use the App, as the store's page names an App's audience. */
   audience: string;
+  /**
+   * Who holds a right on the App by a grant row, named as `audience` names them: they see the
+   * data whoever the App is published for. Absent where nobody does.
+   */
+  holders?: string;
   stores: {
     name: string;
     title: string;
@@ -166,6 +171,15 @@ export function appPublishData(
   const count = (value: number) => new Intl.NumberFormat(locale).format(value);
   return {
     audience: audienceLine(sources.audience, t, locale),
+    ...(sources.audience.holders.length > 0 || sources.audience.hiddenHolders > 0
+      ? {
+          holders: audienceLine(
+            { holders: sources.audience.holders, hiddenHolders: sources.audience.hiddenHolders },
+            t,
+            locale
+          )
+        }
+      : {}),
     stores: sources.stores.map((store) => {
       const actions = store.actions ?? [];
       return {
