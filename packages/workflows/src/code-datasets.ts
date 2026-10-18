@@ -29,7 +29,7 @@ export interface CodeStepDatasets {
   /** The longest line a row may be, in bytes. */
   rowBytes: number;
   /** The rows of a dataset the run may read, in order. Refuses one it may not. */
-  rows(id: string): Promise<AsyncIterable<JsonObject>>;
+  rows(id: string, reference?: WorkflowDatasetReference): Promise<AsyncIterable<JsonObject>>;
   /** Stores rows as a dataset of the step run at `field`, each checked against `rowSchema`. */
   store(input: {
     field: string;
@@ -94,10 +94,11 @@ export async function writeInputDatasets(input: {
     const reference = workflowDatasetReferenceSchema.safeParse(value);
     if (reference.success) {
       const id = reference.data.$dataset;
-      const already = written.get(id);
+      const key = `${id}:${reference.data.offset ?? "all"}:${reference.data.rowCount}`;
+      const already = written.get(key);
       if (already) return { ...already };
       const name = inputFileName(path, taken);
-      const rows = await input.datasets.rows(id);
+      const rows = await input.datasets.rows(id, reference.data);
       let rowCount = 0;
       async function* lines(): AsyncIterable<string> {
         for await (const row of rows) {
@@ -115,7 +116,7 @@ export async function writeInputDatasets(input: {
         { signal: input.signal }
       );
       const file: CodeInputDatasetFile = { path: `${input.seenAs}/${name}`, rowCount };
-      written.set(id, file);
+      written.set(key, file);
       return { ...file };
     }
     if (Array.isArray(value)) {

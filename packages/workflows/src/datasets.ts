@@ -5,6 +5,7 @@ import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   AppError,
   ObjectNotFound,
+  workflowDatasetReferenceSchema,
   WORKFLOW_RUN_OBJECT_PREFIX,
   type ActorAccess,
   type ClientInstanceId,
@@ -211,6 +212,7 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
     id: string;
     runId?: string;
     access?: ActorAccess;
+    reference?: WorkflowDatasetReference;
     offset?: number;
     limit?: number;
     signal?: AbortSignal;
@@ -248,9 +250,33 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
         ...(asset ? { assetId: asset.id } : {})
       });
     }
+    const parsed = workflowDatasetReferenceSchema.safeParse(input.reference);
+    if (input.reference !== undefined && !parsed.success)
+      throw new WorkflowStepFailure(
+        "dataset_reference_invalid",
+        "The dataset reference is malformed"
+      );
+    const reference = parsed.success ? parsed.data : undefined;
+    const start = reference?.offset ?? 0;
+    const count = reference?.offset === undefined ? row.rowCount : reference.rowCount;
+    if (
+      reference &&
+      (reference.$dataset !== row.id || start > row.rowCount || count > row.rowCount - start)
+    )
+      throw new WorkflowStepFailure(
+        "dataset_reference_invalid",
+        "The dataset view is outside its parent row range"
+      );
+    const offset = input.offset ?? 0;
+    const limit = input.limit ?? count;
+    if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 0)
+      throw new WorkflowStepFailure(
+        "dataset_reference_invalid",
+        "Dataset offsets and limits must be nonnegative integers"
+      );
     async function* rows(): AsyncIterable<JsonObject> {
-      let skip = input.offset ?? 0,
-        left = input.limit ?? Infinity;
+      let skip = start + offset,
+        left = Math.min(limit, Math.max(0, count - offset));
       for (const part of row.parts) {
         input.signal?.throwIfAborted();
         if (left <= 0) return;

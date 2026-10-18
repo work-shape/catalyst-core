@@ -186,7 +186,12 @@ export function createRunOpening(options: {
           ...(asset ? { assetId: asset.id } : {})
         });
       }
-      if (ref.rowCount !== row.rowCount || ref.bytes !== row.bytes)
+      const offset = ref.offset ?? 0;
+      const matchesRows =
+        ref.offset === undefined
+          ? ref.rowCount === row.rowCount
+          : offset <= row.rowCount && ref.rowCount <= row.rowCount - offset;
+      if (!matchesRows || ref.bytes !== row.bytes)
         throw new AppError(
           "VALIDATION_FAILED",
           "The dataset reference does not match its stored counts",

@@ -1,3 +1,4 @@
+import { batchResultError } from "./batch-result";
 import {
   workflowDurationMs,
   workflowDurationSchema,
@@ -43,7 +44,7 @@ export type OperationWaitOutcome =
  */
 export async function operationWaitOutcome(
   call: OperationRun,
-  definition: Pick<OperationDefinition, "outputSchema"> | undefined
+  definition: Pick<OperationDefinition, "outputSchema" | "batch"> | undefined
 ): Promise<OperationWaitOutcome | undefined> {
   const operation = call.operation;
   switch (call.status) {
@@ -64,6 +65,8 @@ export async function operationWaitOutcome(
           `The result of '${operation}' does not fit the operation's output schema`
         );
       }
+      const batchError = definition?.batch ? batchResultError(output.data) : undefined;
+      if (batchError) return failed(batchError.code, batchError.message);
       return { kind: "done", output: output.data };
     }
     case "failed":

@@ -8,6 +8,7 @@ import {
   DATA_STORE_OPERATION_RIGHTS,
   dataStoreOperationName,
   dataStoreLoadInputSchema,
+  type WorkflowDatasetReference,
   type OperationExecutionContext,
   type DataStoreOperationVerb
 } from "@work-shape/catalyst-core";
@@ -124,11 +125,16 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
     throw error;
   }
   let datasets: ReturnType<typeof createWorkflowDatasets> | undefined;
-  const openDataset = (id: string, context: OperationExecutionContext, signal?: AbortSignal) => {
+  const openDataset = (
+    reference: WorkflowDatasetReference,
+    context: OperationExecutionContext,
+    signal?: AbortSignal
+  ) => {
     if (!datasets) throw new AppError("NOT_FOUND", "Dataset storage is not available");
     return datasets
       .reader({
-        id,
+        id: reference.$dataset,
+        reference,
         ...(context.origin.kind === "workflow"
           ? { runId: context.origin.workflowRunId }
           : { access: context.access }),
@@ -150,12 +156,12 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
     },
     datasets: {
       async authorize(input, context) {
-        await openDataset(dataStoreLoadInputSchema.parse(input).dataset.$dataset, context);
+        await openDataset(dataStoreLoadInputSchema.parse(input).dataset, context);
       },
       async *read(reference, signal, context) {
         if (!context) throw new AppError("FORBIDDEN", "Dataset loads need a caller");
         try {
-          const reader = await openDataset(reference.$dataset, context, signal);
+          const reader = await openDataset(reference, context, signal);
           for await (const row of reader.rows) yield [row];
         } catch (error) {
           datasetReadFailure(error);

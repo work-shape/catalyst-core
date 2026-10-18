@@ -4,7 +4,10 @@ import { z } from "zod";
 export const workflowDatasetReferenceSchema = z.strictObject({
   $dataset: z.string().min(1),
   rowCount: z.number().int().min(0),
-  bytes: z.number().int().min(0)
+  // A view keeps the parent byte count as an upper bound.
+  bytes: z.number().int().min(0),
+  /** Absolute offset in the parent; rowCount bounds the view. No rows are copied. */
+  offset: z.number().int().nonnegative().optional()
 });
 
 /** One row of a batch's failures dataset, preserving the input item for a retry. */

@@ -500,3 +500,49 @@ it.each([1, 50])(
     });
   }
 );
+
+it("reads dataset views relative to their range, refuses overflow and still checks ownership", async () => {
+  const { t, run, step, datasets } = await prepared();
+  const parent = await datasets.write({
+    run,
+    stepRun: step,
+    field: "view",
+    rowSchema,
+    rows: rows(5)
+  });
+  await complete(t, step);
+  const view = { ...parent, offset: 1, rowCount: 3 };
+  expect(
+    await readAll(await datasets.reader({ id: parent.$dataset, runId: run.id, reference: view }))
+  ).toEqual([1, 2, 3].map((index) => ({ index, text: "x".repeat(10) })));
+  expect(
+    await readAll(
+      await datasets.reader({
+        id: parent.$dataset,
+        runId: run.id,
+        reference: view,
+        offset: 1,
+        limit: 1
+      })
+    )
+  ).toEqual([{ index: 2, text: "x".repeat(10) }]);
+  expect(
+    await readAll(
+      await datasets.reader({
+        id: parent.$dataset,
+        runId: run.id,
+        reference: { ...parent, offset: 5, rowCount: 0 }
+      })
+    )
+  ).toEqual([]);
+  await expect(
+    datasets.reader({ id: parent.$dataset, runId: run.id, reference: { ...view, offset: 4 } })
+  ).rejects.toMatchObject({ code: "dataset_reference_invalid" });
+  const foreign = await start(t);
+  await expect(
+    datasets.reader({ id: parent.$dataset, runId: foreign.id, reference: view })
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  const held = await datasets.reader({ id: parent.$dataset, runId: run.id, reference: view });
+  await t.stores.workflowRunDatasets.claimRun({ clientInstanceId, runId: run.id });
+  await expect(readAll(held)).rejects.toMatchObject({ code: "dataset_expired" });
+});

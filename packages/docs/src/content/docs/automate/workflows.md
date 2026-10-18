@@ -62,3 +62,18 @@ An administrator gives these rights under **Settings > Instance > Access** ("Ein
 | Publish workflows | Make a draft the version that runs. Publishing also needs every right of the service principal the Workflow runs as. |
 
 Administrators hold every right. A test run needs the right to edit the Workflow.
+
+## Process rows in batches
+
+An operation marked `batch: true` takes a list or dataset and returns `{ done, failed, failures }`.
+`failures` is a dataset of `{ item, code, message }` for retrying individual items. The operation
+step completes when the call succeeds, even when some items failed. Messages name the field and
+error code, without repeating item values or provider responses.
+
+Use `batch: 500` on a dataset loop to hand each iteration a dataset view: 1,200 rows become
+500, 500 and 200 rows. Reference the loop with an empty path to pass that view to an operation,
+code step or child Workflow. The loop item limit counts batches; `onItemFailure` still decides
+what to do when an iteration itself fails. A batch loop requires a dataset, rather than an
+inline list. It shares the parent's objects, permissions and expiry; it does not copy rows.
+A view adds `offset` to the dataset reference and reports its own `rowCount`. Its `bytes` is
+the parent's upper bound; consumers enforce byte limits against the rows actually read.

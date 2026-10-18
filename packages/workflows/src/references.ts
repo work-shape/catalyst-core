@@ -3,6 +3,7 @@ import {
   WORKFLOW_RUN_KEY_MAX_LENGTH,
   WORKFLOW_RUN_KEY_SEPARATOR,
   workflowRunKeySchema,
+  type WorkflowDatasetReference,
   type JsonObject,
   type JsonValue,
   type WorkflowInputMapping,
@@ -105,13 +106,25 @@ export async function resolveReference(
       if (!item && scope.datasets) {
         const dataset = await store.readLoopDataset({ clientInstanceId, id: containerStepRunId });
         if (dataset) {
-          const reader = await scope.datasets.reader({
-            id: dataset.$dataset,
-            runId: run.id,
-            offset: iteration ?? 0,
-            limit: 1
-          });
-          for await (const row of reader.rows) item = { value: row };
+          const loop = scope.index.get(reference.step)?.step;
+          if (loop?.type === "loop" && loop.batch !== undefined) {
+            const offset = (iteration ?? 0) * loop.batch;
+            const view: WorkflowDatasetReference = {
+              ...dataset,
+              offset: (dataset.offset ?? 0) + offset,
+              rowCount: Math.min(loop.batch, dataset.rowCount - offset)
+            };
+            item = { value: { ...view } };
+          } else {
+            const reader = await scope.datasets.reader({
+              id: dataset.$dataset,
+              runId: run.id,
+              offset: iteration ?? 0,
+              limit: 1,
+              reference: dataset
+            });
+            for await (const row of reader.rows) item = { value: row };
+          }
         }
       }
       if (!item) throw unresolved(reference, "the loop has no such item");

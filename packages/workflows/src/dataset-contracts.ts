@@ -1,5 +1,7 @@
+import { z } from "zod";
 import {
   AppError,
+  operationBatchFailureSchema,
   type JsonObject,
   type OperationRegistry,
   type WorkflowManifest
@@ -9,6 +11,7 @@ import type { WorkflowDefinitionSource } from "./definition-source";
 import { indexWorkflowSteps } from "./definition";
 import { jsonObjectSchema } from "./json";
 import { rowSchemaOf, schemaAt, schemaFits } from "./dataset-schema";
+import { loopFailureRowSchema } from "./dataset-values";
 
 /** Structural dataset compatibility, using the same contracts at save, publish and start. */
 export async function checkDatasetContracts(
@@ -18,6 +21,17 @@ export async function checkDatasetContracts(
 ): Promise<void> {
   const outputs = new Map<string, JsonObject>();
   const inputs = new Map<string, JsonObject>();
+  const loopItems = new Map<string, JsonObject>();
+  const index = indexWorkflowSteps(manifest);
+  // A loop id means the current item inside its body, and counts outside it.
+  function sourceOf(id: string, reader: string): JsonObject | undefined {
+    let sequence = index.get(reader)?.sequence;
+    while (sequence) {
+      if (sequence.loop === id) return loopItems.get(id);
+      sequence = sequence.parent;
+    }
+    return outputs.get(id);
+  }
   function expanded(schema: JsonObject, types: WorkflowManifest["types"]): JsonObject {
     if (schema.type === "dataset")
       return { ...schema, row: rowSchemaOf(jsonObjectSchema.parse(schema.row), types) };
@@ -47,7 +61,7 @@ export async function checkDatasetContracts(
       }
     };
   }
-  for (const { step } of indexWorkflowSteps(manifest).values()) {
+  for (const { step } of index.values()) {
     if (step.type === "trigger")
       outputs.set(step.id, {
         type: "object",
@@ -91,6 +105,12 @@ export async function checkDatasetContracts(
         jsonObjectSchema.parse(descriptor.outputJsonSchema ?? {}),
         manifest.types
       );
+      if (descriptor.batch && schemaAt(output, "failures")?.type !== "dataset")
+        output = replace(
+          output,
+          "failures",
+          jsonObjectSchema.parse(z.toJSONSchema(operationBatchFailureSchema))
+        );
       if (step.dataset) {
         const list = schemaAt(output, step.dataset.at);
         if (list && list.type !== "array")
@@ -120,17 +140,37 @@ export async function checkDatasetContracts(
     }
     if (step.type === "output") inputs.set(step.id, expanded(manifest.outputs, manifest.types));
     if (step.type === "loop") {
-      const source = outputs.get(step.items.step);
+      const source = sourceOf(step.items.step, step.id);
       const shape = source ? schemaAt(source, step.items.path) : undefined;
-      if (shape?.type === "dataset") outputs.set(step.id, jsonObjectSchema.parse(shape.row));
+      if (step.batch !== undefined && shape && shape.type !== "dataset")
+        throw new AppError("VALIDATION_FAILED", "batch on a loop needs a dataset", {
+          reason: "batch_requires_dataset"
+        });
+      if (shape?.type === "dataset")
+        loopItems.set(
+          step.id,
+          step.batch === undefined ? jsonObjectSchema.parse(shape.row) : shape
+        );
       else if (shape?.type === "array")
-        outputs.set(step.id, jsonObjectSchema.parse(shape.items ?? {}));
+        loopItems.set(step.id, jsonObjectSchema.parse(shape.items ?? {}));
+      outputs.set(step.id, {
+        type: "object",
+        properties: {
+          total: { type: "integer" },
+          done: { type: "integer" },
+          failed: { type: "integer" },
+          ...(step.onItemFailure === "continue"
+            ? { failures: { type: "dataset", row: loopFailureRowSchema } }
+            : {})
+        },
+        required: ["total", "done", "failed"]
+      });
     }
     if (!("input" in step)) continue;
     for (const [field, mapping] of Object.entries(step.input)) {
       const to = schemaAt(inputs.get(step.id) ?? {}, field);
       if (!to || !mapping.ref) continue;
-      const source = outputs.get(mapping.ref.step);
+      const source = sourceOf(mapping.ref.step, step.id);
       const from = source ? schemaAt(source, mapping.ref.path) : undefined;
       if (
         to.type === "dataset" &&

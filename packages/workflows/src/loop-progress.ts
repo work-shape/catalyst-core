@@ -53,14 +53,15 @@ export function createLoopProgress(options: {
       loop?.type === "loop" && loop.itemLabel !== undefined
         ? await tx.workflowRuns.readLoopItem({ clientInstanceId, id: loopRun.id, index: iteration })
         : undefined;
-    if (!item && datasets && loop?.type === "loop" && loop.itemLabel) {
+    if (!item && datasets && loop?.type === "loop" && loop.itemLabel && loop.batch === undefined) {
       const dataset = await tx.workflowRuns.readLoopDataset({ clientInstanceId, id: loopRun.id });
       if (dataset) {
         const reader = await datasets.reader({
           id: dataset.$dataset,
           runId: loopRun.runId,
           offset: iteration,
-          limit: 1
+          limit: 1,
+          reference: dataset
         });
         for await (const row of reader.rows) item = { value: row };
       }

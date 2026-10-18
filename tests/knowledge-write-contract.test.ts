@@ -44,7 +44,7 @@ describe("KBW-0 write contracts", () => {
     expectTypeOf<OperationBatchResult>().toEqualTypeOf<{
       done: number;
       failed: number;
-      failures: typeof dataset;
+      failures: { $dataset: string; rowCount: number; bytes: number; offset?: number };
     }>();
     expect(operationBatchResultSchema.parse({ done: 997, failed: 3, failures: dataset })).toEqual({
       done: 997,

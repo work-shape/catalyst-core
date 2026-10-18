@@ -96,8 +96,9 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): CodeStepJobs {
     if (!stepRun || !run) return undefined;
     return {
       rowBytes: options.datasets.limits.rowBytes,
-      async rows(id) {
-        return (await datasets.reader({ id, runId: run.id })).rows;
+      async rows(id, reference) {
+        return (await datasets.reader({ id, runId: run.id, ...(reference ? { reference } : {}) }))
+          .rows;
       },
       store: (input) => datasets.write({ run, stepRun, ...input })
     };

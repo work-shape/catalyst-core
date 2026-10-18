@@ -562,6 +562,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       await tx.workflowRuns.markLoopWaiting({
         ...ref,
         items: end.items,
+        ...(end.total === undefined ? {} : { total: end.total }),
         ...(last === undefined ? {} : { lastStepId: last })
       });
       await fillLoop(tx, run, index, stepRun);

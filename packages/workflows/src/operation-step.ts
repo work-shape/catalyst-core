@@ -1,3 +1,4 @@
+import { batchResultError } from "./batch-result";
 import {
   AppError,
   CONNECTION_TRANSIENT_CALL_REASONS,
@@ -355,6 +356,8 @@ export async function callStepOperation(input: {
           trace
         );
       }
+      const batchError = definition.batch ? batchResultError(output.data) : undefined;
+      if (batchError) throw new OperationStepFailure(batchError.code, batchError.message, trace);
       return { output: output.data, ...trace };
     }
     case "denied": {

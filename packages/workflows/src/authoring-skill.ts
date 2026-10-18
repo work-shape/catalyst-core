@@ -85,6 +85,8 @@ const STEP_REFERENCE: {
       itemName: "What one item is called in a sentence, such as `client`. Optional.",
       itemLabel:
         "The dotted path of the field of an item that names it for a person on the run's page. Optional.",
+      batch:
+        "Rows per iteration when items is a dataset. Each iteration receives a dataset view at the loop reference with an empty path; no rows are copied. The loop item limit counts batches. Omit itemLabel for batches. Use code or a batch operation to process the view.",
       onItemFailure: `What a failed item does: ${WORKFLOW_LOOP_ITEM_FAILURE_MODES.map((mode) => `\`${mode}\``).join(" or ")}. \`stop\`, the default, fails the loop and the run at the first failed item; \`continue\` goes on and counts it under \`failed\`.`,
       concurrency: `How many items run at once, from 1 to ${WORKFLOW_LOOP_MAX_CONCURRENCY}. 1 when left out. It is an upper bound.`,
       collect: "Reserved for EW-13. Leave it out."

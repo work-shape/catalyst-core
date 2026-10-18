@@ -266,6 +266,8 @@ export type WorkflowStep =
        * items returned.
        */
       collect?: WorkflowReference;
+      /** Dataset rows per iteration; the item limit counts iterations. */
+      batch?: number;
       steps: readonly WorkflowStep[];
     })
   /** Runs one script file of the step files folder on its input as JSON and returns JSON. */
@@ -370,6 +372,7 @@ export const WORKFLOW_LOOP_MAX_CONCURRENCY = 8;
 export const workflowLoopOptionsSchema = z.object({
   onItemFailure: z.enum(WORKFLOW_LOOP_ITEM_FAILURE_MODES).default("stop"),
   concurrency: z.number().int().min(1).max(WORKFLOW_LOOP_MAX_CONCURRENCY).default(1),
+  batch: z.number().int().positive().optional(),
   collect: z.strictObject({ step: z.string().min(1), path: z.string() }).optional()
 });
 

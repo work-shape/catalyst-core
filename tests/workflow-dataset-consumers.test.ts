@@ -26,7 +26,7 @@ describe("Workflow dataset consumers", () => {
           { path: "store.yaml", text: "id: findings\nname: Findings\n" },
           {
             path: "migrations/0001_init.sql",
-            text: "create table bulk_rows(id integer primary key, month text not null);"
+            text: "create table bulk_rows(id integer primary key, month text not null); create table batch_rows(id integer primary key, month text not null);"
           }
         ])
       ).statusCode
@@ -187,6 +187,62 @@ describe("Workflow dataset consumers", () => {
       expect(
         await sql`select count(*)::integer as count from catalyst.loads where step_run_id = ${step.id}`
       ).toEqual([{ count: 1 }]);
+      await save("view-load", [
+        {
+          id: "load",
+          name: "Load view",
+          type: "operation",
+          operation: "data_store.findings.load",
+          input: {
+            table: { value: "batch_rows" },
+            dataset: { ref: { step: "start", path: "input.dataset" } }
+          }
+        },
+        {
+          id: "result",
+          name: "Result",
+          type: "output",
+          input: {
+            rows: { ref: { step: "start", path: "input.dataset" } },
+            more: { ref: { step: "start", path: "input.more" } },
+            inserted: { ref: { step: "load", path: "inserted" } }
+          }
+        }
+      ]);
+      const malformed = await world.api.call("workflows.start", {
+        params: { workflow: "view-load" },
+        payload: { input: { dataset: { ...input.dataset, offset: -1, rowCount: 100 } } }
+      });
+      expect(malformed.statusCode, malformed.body).toBe(422);
+      // Valid reference shape, invalid stored range: this must fail at start, before a worker.
+      const outOfRange = await world.api.call("workflows.start", {
+        params: { workflow: "view-load" },
+        payload: {
+          input: { dataset: { ...input.dataset, offset: dataset.rowCount + 1, rowCount: 1 } }
+        }
+      });
+      expect(outOfRange.statusCode, outOfRange.body).toBe(422);
+      expect(outOfRange.json()).toMatchObject({
+        error: { details: { reason: "dataset_reference_invalid" } }
+      });
+      const view = await finish(
+        await start("view-load", {
+          dataset: { ...input.dataset, offset: 100, rowCount: 100 },
+          more: { ...input.dataset, offset: 150, rowCount: 100 }
+        })
+      );
+      expect(view, JSON.stringify(view.error)).toMatchObject({ status: "done" });
+      expect(
+        await sql`select count(*)::integer as count, min(id)::integer as first, max(id)::integer as last from public.batch_rows`
+      ).toEqual([{ count: 100, first: 101, last: 200 }]);
+      const downloaded = await fetch(
+        `${url}${apiOperations["workflows.download_dataset"].buildPath({ params: { runId: view.id, datasetId: dataset.id } })}`
+      );
+      expect(downloaded.status).toBe(200);
+      const lines = (await downloaded.text()).trim().split("\n");
+      expect(lines).toHaveLength(150);
+      expect(JSON.parse(lines[0] ?? "null").id).toBe("101");
+      expect(JSON.parse(lines.at(-1) ?? "null").id).toBe("250");
     } finally {
       await sql.end();
     }
@@ -228,7 +284,7 @@ describe("Workflow dataset consumers", () => {
       clientInstanceId,
       type: "workflow_run.dataset_loaded"
     });
-    expect(loaded.filter((event) => event.subject === dataset.id)).toHaveLength(1);
+    expect(loaded.filter((event) => event.subject === dataset.id)).toHaveLength(2);
     expect(JSON.stringify(loaded)).not.toContain("2026-09");
   });
 });

@@ -89,6 +89,7 @@ export type StepEnd =
   | {
       kind: "loop";
       items: JsonValue[] | import("@work-shape/catalyst-core").WorkflowDatasetReference;
+      total?: number;
     }
   | { kind: "child"; operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
   /**
@@ -162,7 +163,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
   ): Promise<StepEnd> {
     const { run, stepRun, index, definition } = attempt;
     const input = await resolveInput(
-      { store: stores.workflowRuns, index, run, stepRun },
+      { store: stores.workflowRuns, datasets: options.datasets, index, run, stepRun },
       step.input
     );
     withinStepData(input, "The input of the step");
@@ -182,7 +183,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           "This instance has no files object store"
         );
       for (const ref of datasetReferences(input))
-        await options.datasets.reader({ id: ref.$dataset, runId: run.id });
+        await options.datasets.reader({ id: ref.$dataset, runId: run.id, reference: ref });
       await checkDatasetValues(input, step.inputSchema, definition, run.id, options.datasets);
     }
     if (!options.codeRunner) {
@@ -349,7 +350,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
             );
           if (options.datasets)
             for (const ref of datasetReferences(input))
-              await options.datasets.reader({ id: ref.$dataset, runId: run.id });
+              await options.datasets.reader({ id: ref.$dataset, runId: run.id, reference: ref });
           // The key goes beside the child's inputs, as the start operation takes it.
           if (step.key !== undefined) {
             input[WORKFLOW_START_KEY_INPUT] = await resolveRunKey(scope, step.key);
@@ -387,7 +388,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           withinStepData(input, "The input of the step");
           if (options.datasets)
             for (const ref of datasetReferences(input))
-              await options.datasets.reader({ id: ref.$dataset, runId: run.id });
+              await options.datasets.reader({ id: ref.$dataset, runId: run.id, reference: ref });
           const caller = await callerOf(run, stepRun);
           const captureOutput =
             !step.paginate && step.dataset && options.datasets
@@ -539,16 +540,27 @@ export function createStepExecutor(options: StepExecutorOptions) {
                 "dataset_storage_unavailable",
                 "This instance has no files object store"
               );
-            await options.datasets.reader({ id: dataset.$dataset, runId: run.id });
+            await options.datasets.reader({
+              id: dataset.$dataset,
+              runId: run.id,
+              reference: dataset
+            });
             const record = await options.datasets.metadata(dataset.$dataset);
+            const canonical = dataset.offset === undefined ? datasetReference(record) : dataset;
+            const total = Math.ceil(canonical.rowCount / (step.batch ?? 1));
             // The run's own bound, as for a list: its Workflow's `limits.loopItems`.
-            if (record.rowCount > attempt.run.limits.loopItems)
+            if (total > attempt.run.limits.loopItems)
               throw new WorkflowStepFailure(
                 "loop_too_long",
                 `A loop runs over at most ${attempt.run.limits.loopItems} items`
               );
-            return { kind: "loop", items: datasetReference(record) };
+            return { kind: "loop", items: canonical, total };
           }
+          if (step.batch !== undefined)
+            throw new WorkflowStepFailure(
+              "batch_requires_dataset",
+              "batch on a loop needs a dataset"
+            );
           if (!Array.isArray(items)) {
             throw new WorkflowStepFailure("loop_items_not_a_list", "A loop runs over a list");
           }
@@ -582,7 +594,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           }
           if (options.datasets) {
             for (const ref of datasetReferences(output))
-              await options.datasets.reader({ id: ref.$dataset, runId: run.id });
+              await options.datasets.reader({ id: ref.$dataset, runId: run.id, reference: ref });
             await checkDatasetValues(
               output,
               attempt.definition.outputs,

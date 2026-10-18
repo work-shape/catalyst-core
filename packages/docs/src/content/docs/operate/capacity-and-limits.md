@@ -229,3 +229,37 @@ The separate `@work-shape/catalyst-postgres-connector` executor enforces the fol
 | Connector connection startup, idle close and replacement | 30-second connect timeout; 60-second idle close; 2,700-second maximum lifetime | Connections                | Fixed `POSTGRES_CONNECT_TIMEOUT_SECONDS`, `POSTGRES_POOL_IDLE_CLOSE_SECONDS`, `POSTGRES_CONNECTION_MAX_LIFETIME_SECONDS`.                                                             | Connection startup can fail; idle or aged connections are replaced.                                                     |
 
 For 5,000 to 10,000 people, record the expected peak active runs, model calls per run, documents and bytes per day, asset count, and retained conversation volume before assigning hardware. Validate those workloads against the instance's actual configuration and capability packages. This page supplies code limits; it supplies no measured throughput claim.
+
+## Workflow batch measurements
+
+EW-BATCH was measured on 2026-10-18 at core commit `6c9136836`, on a Blacksmith 4-vCPU
+Ubuntu runner with real Postgres 17 and an in-memory object store. The source streams
+synthetic `{ index, valid }` rows. Elapsed time covers start, dataset capture, batch calls,
+audit and step persistence, and completion; fixture setup and upstream network latency are
+outside the measurement. Other test files share the runner. These figures describe the
+engine workload exercised, with 100,000 rows as the largest measured input.
+
+| Input rows | Rows per batch | Iterations | Step runs | Elapsed |
+| ---------- | -------------- | ---------- | --------- | ------- |
+| 1,200 | 500 | 3 | 7 | 0.323 s |
+| 600 client rows | 1 | 600 | 604 | 16.069 s |
+| 100,000 | 500 | 200 | 204 | 18.226 s |
+
+The acceptance test verifies every row exactly once and one parent dataset for all views.
+It also writes one failures dataset per batch call, including empty failure results; those
+are operation outputs, so the three cases have 4, 601 and 201 dataset records respectively.
+No parent rows are copied into slice objects or iteration records. The 600-row and
+100,000-row measurements are separate workloads; upstream per-client processing adds its
+own work.
+
+Scheduling and persistence grow with batch iterations, and reads grow with decoded bytes.
+A range can reread its boundary compressed part. `DATASET_PART_BYTES` in
+`workflows/src/datasets.ts` bounds a part at 4 MiB; `batch` changes the number of iterations
+and boundary rereads, and loop concurrency and instance step slots bound concurrent work.
+The normal dataset byte/row limits and run budgets apply. The tests lower `limits.loopItems`
+to 600 and 200 respectively to prove that it counts iterations, while using the normal four
+step slots. Raising a customer limit is unnecessary for either workload.
+
+Evidence: `tests/workflow-batch.test.ts` (WF 114) and the
+[hosted measurement run](https://github.com/work-shape/catalyst-core/actions/runs/39090640234).
+The same test emits timings on subsequent hosted runs; timings vary with runner contention.

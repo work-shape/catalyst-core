@@ -457,6 +457,8 @@ export interface WorkflowRunsStore {
   markLoopWaiting(
     ref: WorkflowStepRunRef & {
       items: readonly JsonValue[] | WorkflowDatasetReference;
+      /** Dataset batches count iterations rather than rows. */
+      total?: number;
       /** The id of the loop's last step. An item is done when the step run of that step is. */
       lastStepId?: string;
     }

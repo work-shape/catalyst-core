@@ -27,11 +27,10 @@ export function createDatasetDownload(options: WorkflowDatasetsOptions) {
     const run = await stores.workflowRuns.readRun({ clientInstanceId, id: input.runId });
     const output =
       run && (await stores.workflowRuns.readRunOutput({ clientInstanceId, id: run.id }));
-    if (
-      !run ||
-      !output ||
-      !datasetReferences(output.value).some((ref) => ref.$dataset === input.datasetId)
-    )
+    const references = output
+      ? datasetReferences(output.value).filter((ref) => ref.$dataset === input.datasetId)
+      : [];
+    if (!run || !output || references.length === 0)
       throw new AppError("NOT_FOUND", "There is no such result dataset");
     const starter =
       run.startedBy.kind ===
@@ -50,10 +49,16 @@ export function createDatasetDownload(options: WorkflowDatasetsOptions) {
       });
     // A result can carry a forged reference only if dispatch checks were missed. Keep this
     // final check even for the starter: the result grants no access the run never held.
+    const reference = references.find((ref) => ref.offset === undefined);
+    // A result may return several disjoint views of one parent. Download their union.
+    const ranges = reference
+      ? [reference]
+      : references.sort((a, b) => (a.offset ?? 0) - (b.offset ?? 0));
     const reader = await datasets
       .reader({
         id: input.datasetId,
         runId: run.id,
+        reference: ranges[0],
         ...(input.signal ? { signal: input.signal } : {})
       })
       .catch((error: unknown) => {
@@ -75,10 +80,31 @@ export function createDatasetDownload(options: WorkflowDatasetsOptions) {
       rowCount: record.rowCount,
       bytes: record.bytes
     };
+    const runId = run.id;
+    async function* resultRows() {
+      let end = 0;
+      for (const reference of ranges) {
+        const start = reference.offset ?? 0;
+        const skip = Math.max(0, end - start);
+        const next = await datasets.reader({
+          id: input.datasetId,
+          runId,
+          reference,
+          offset: skip,
+          ...(input.signal ? { signal: input.signal } : {})
+        });
+        for await (const row of next.rows) yield row;
+        end = Math.max(end, start + reference.rowCount);
+      }
+    }
     async function* body() {
       let columns: string[] | undefined;
-      for await (const row of reader.rows) {
+      let rowCount = 0,
+        bytes = 0;
+      for await (const row of resultRows()) {
         input.signal?.throwIfAborted();
+        rowCount++;
+        bytes += Buffer.byteLength(JSON.stringify(row)) + 1;
         if (input.format === "jsonl") yield `${JSON.stringify(row)}\n`;
         else {
           if (!columns) {
@@ -109,7 +135,7 @@ export function createDatasetDownload(options: WorkflowDatasetsOptions) {
         actor: auditActorFromIdentity(input.actor),
         subject: input.datasetId,
         correlationId: input.correlationId,
-        metadata
+        metadata: { ...metadata, rowCount, bytes }
       });
     }
     return {

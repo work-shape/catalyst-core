@@ -237,7 +237,8 @@ interface OperationDefinitionBase<Input, Output> {
    * `timeoutMs` is how long the work may take before the run counts as interrupted.
    */
   completion?: OperationAsyncCompletion;
-  /** Takes items or a dataset and answers OperationBatchResult, with a failures dataset. */
+  /** Takes items or a dataset and answers OperationBatchResult. Per-item failures do not fail the call.
+   * Failure messages name only the invalid field and code, never item values or provider text. */
   batch?: true;
   /** A Workflow start called by a draft starts a test run of its published revision. */
   draftTarget?: "test";

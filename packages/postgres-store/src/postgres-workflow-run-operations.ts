@@ -406,7 +406,7 @@ async function markWorkflowLoopWaiting(
       status: "waiting",
       input: {
         ...("$dataset" in ref.items
-          ? { dataset: ref.items, total: ref.items.rowCount }
+          ? { dataset: ref.items, total: ref.total ?? ref.items.rowCount }
           : { items: [...ref.items] }),
         ...(ref.lastStepId === undefined ? {} : { last: ref.lastStepId })
       }

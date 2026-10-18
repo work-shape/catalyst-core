@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import type { JsonObject } from "@work-shape/catalyst-core";
+import { createPlatformId, type JsonObject } from "@work-shape/catalyst-core";
 import { eventually, required } from "./support/assertions";
 import {
   init,
@@ -385,9 +385,54 @@ describe("a load into a Data Store", () => {
       found(index, { note: "n".repeat(1024 ** 2) })
     ]);
     expect(
-      await refusal(load(world, { ...world.datasets.put("ds_bytes", heavy), bytes: 10 }))
+      await refusal(load(world, { ...world.datasets.put("ds_bytes", heavy), offset: 0, bytes: 10 }))
     ).toMatchObject({ details: { reason: "load_too_large", cap: "dataStores.load.bytes" } });
     expect(await count(world)).toBe(0);
+  });
+
+  it("refuses an oversized known view before reading, using its own parts rather than its parent's bytes", async () => {
+    const world = await store("view-bound");
+    const small = world.datasets.put("ds_view_bound", [[found(1)]]);
+    const largeBytes = 67_108_865;
+    const metadata = vi.spyOn(db.store.workflowRunDatasets, "get").mockResolvedValue({
+      id: small.$dataset,
+      clientInstanceId: world.clientInstanceId,
+      runId: createPlatformId<"WorkflowRunId">("wfr"),
+      stepRunId: createPlatformId<"WorkflowStepRunId">("wfs"),
+      field: "rows",
+      rowSchema: { type: "object" },
+      state: "complete",
+      rowCount: 3,
+      bytes: largeBytes + small.bytes,
+      parts: [
+        { key: "large", rows: 2, bytes: largeBytes, hash: "large" },
+        { key: "small", rows: 1, bytes: small.bytes, hash: "small" }
+      ]
+    });
+    try {
+      for (const rowCount of [2, 3]) {
+        expect(
+          await refusal(
+            load(world, { ...small, offset: 0, rowCount, bytes: largeBytes + small.bytes })
+          )
+        ).toMatchObject({ details: { reason: "load_too_large", cap: "dataStores.load.bytes" } });
+      }
+      expect(world.datasets.reads()).toBe(0);
+      // The small part fits, even though its parent is over the byte ceiling.
+      expect(
+        await load(world, { ...small, offset: 2, bytes: largeBytes + small.bytes })
+      ).toMatchObject({ inserted: 1 });
+      // A cut inside a part has no known size; the streaming count still decides.
+      expect(
+        await load(
+          world,
+          { ...small, offset: 1, bytes: largeBytes + small.bytes },
+          { key: KEY, onConflict: "skip" }
+        )
+      ).toMatchObject({ skipped: 1 });
+    } finally {
+      metadata.mockRestore();
+    }
   });
 
   it("takes the whole bound in one call", async () => {

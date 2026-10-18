@@ -283,8 +283,33 @@ export const load: StoreVerb = {
     if (input.dataset.rowCount > limits.rows) {
       throw tooLarge("ROWS", input.dataset.rowCount, limits);
     }
-    if (input.dataset.bytes > limits.bytes) {
-      throw tooLarge("BYTES", input.dataset.bytes, limits);
+    let knownBytes = input.dataset.offset === undefined ? input.dataset.bytes : undefined;
+    if (input.dataset.offset !== undefined) {
+      // A view's `bytes` belongs to its parent. Part-aligned views have a known size of their
+      // own, including an offset-zero view over the whole dataset. Other cuts are counted below.
+      const parent = await runtime.stores.workflowRunDatasets.get({
+        clientInstanceId: runtime.clientInstanceId,
+        id: input.dataset.$dataset
+      });
+      if (parent?.state === "complete") {
+        let skip = input.dataset.offset;
+        let left = input.dataset.rowCount;
+        let bytes = 0;
+        for (const part of parent.parts) {
+          if (left === 0) break;
+          if (skip >= part.rows) {
+            skip -= part.rows;
+            continue;
+          }
+          if (skip !== 0 || left < part.rows) break;
+          bytes += part.bytes;
+          left -= part.rows;
+        }
+        if (skip === 0 && left === 0) knownBytes = bytes;
+      }
+    }
+    if (knownBytes !== undefined && knownBytes > limits.bytes) {
+      throw tooLarge("BYTES", knownBytes, limits);
     }
     const [table] = await readTables(runtime.server.executor, target, input.table);
     if (!table) throw tableUnknown(input.table);

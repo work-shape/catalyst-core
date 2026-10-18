@@ -1,6 +1,7 @@
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   AppError,
+  workflowDatasetReferenceSchema,
   type JsonObject,
   type JsonValue,
   type WorkflowManifest,
@@ -38,7 +39,8 @@ export function workflowValueSchema(
         properties: {
           $dataset: { type: "string", minLength: 1 },
           rowCount: { type: "integer", minimum: 0 },
-          bytes: { type: "integer", minimum: 0 }
+          bytes: { type: "integer", minimum: 0 },
+          offset: { type: "integer", minimum: 0 }
         },
         required: ["$dataset", "rowCount", "bytes"],
         additionalProperties: false
@@ -111,7 +113,13 @@ export function datasetReferences(value: JsonValue): WorkflowDatasetReference[] 
     typeof value.$dataset === "string" &&
     typeof value.rowCount === "number" &&
     typeof value.bytes === "number"
-  )
-    return [{ $dataset: value.$dataset, rowCount: value.rowCount, bytes: value.bytes }];
+  ) {
+    const reference = workflowDatasetReferenceSchema.safeParse(value);
+    if (!reference.success)
+      throw new AppError("VALIDATION_FAILED", "The dataset reference is malformed", {
+        reason: "dataset_reference_invalid"
+      });
+    return [reference.data];
+  }
   return Object.values(value).flatMap(datasetReferences);
 }
