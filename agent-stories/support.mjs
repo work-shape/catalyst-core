@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { until } from "../scripts/agent-stories/processes.mjs";
-import { evidence, hash } from "../scripts/agent-stories/safety.mjs";
+import { evidence, hash, usageTotal } from "../scripts/agent-stories/safety.mjs";
 import { createdOracle } from "../scripts/agent-stories/oracles.mjs";
 
 const folder = process.env.AGENT_STORIES_OUTPUT;
@@ -68,6 +68,7 @@ export const test = base.extend({
     };
     const startedAt = new Date().toISOString(),
       deadline = Date.now() + testInfo.timeout;
+    const baseline = new Set((await sql`select id from model_usage_events`).map((row) => row.id));
     const root = await browser.newContext({ baseURL: ui });
     const people = [];
     let workspace;
@@ -295,12 +296,22 @@ export const test = base.extend({
         if (actor.page.url().startsWith(`${ui}/w/`))
           await actor.page.screenshot({ path: resolve(folder, `${id}.png`) }).catch(() => {});
         const status = testInfo.status === "passed" && errors.length === 0 ? "pass" : "fail";
+        const usageRows = await until(
+          async () =>
+            (
+              await sql`select id,status,total_tokens,counted_tokens,counted_cost_micros,customer_billable_cost from model_usage_events`
+            ).filter((row) => !baseline.has(row.id)),
+          (rows) => rows.every((row) => !["pending", "abandoned"].includes(row.status)),
+          Math.min(deadline, Date.now() + 30_000)
+        );
         const result = evidence(
           {
             scenario: id,
             status,
             startedAt,
             endedAt: new Date().toISOString(),
+            elapsedMs: Date.now() - Date.parse(startedAt),
+            usage: usageTotal(usageRows),
             observations,
             assertions: observations,
             runs: runs.map(({ conversationId, runId }) => ({ conversationId, runId })),

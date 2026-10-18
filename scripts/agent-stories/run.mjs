@@ -203,7 +203,7 @@ try {
     (error.message.startsWith("three story cases:") ? "case_failure" : "tooling_or_prerequisite");
   await write("failure.json", {
     code: reason,
-    message: "Invocation ended; see prerequisite plan and per-case state observations"
+    message: `Invocation ended during ${supervisor.phase ?? "stack setup"}; see prerequisite plan and per-case state observations`
   });
 } finally {
   cleaning = true;

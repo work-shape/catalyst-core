@@ -88,7 +88,7 @@ export async function modelKey(root) {
 }
 export async function coldStack(root, folder, supervisor, deadline) {
   const privateDir = resolve(folder, ".private");
-  await mkdir(privateDir, { mode: 0o700 });
+  await mkdir(privateDir, { recursive: true, mode: 0o700 });
   const owner = random();
   const worktree = dirname(root).split("/").at(-1);
   const runId = folder.split("/").at(-1).toLowerCase();

@@ -13,6 +13,7 @@ export class Processes {
   }
   start(command, args, label, env = this.env, cwd = this.cwd) {
     if (this.stopping || this.failure) throw new Error("Child supervisor stopped");
+    this.phase = label;
     const child = spawn(command, args, {
       cwd,
       env,
