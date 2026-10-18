@@ -783,7 +783,20 @@ export interface KnowledgeProcessingContent {
   path: string;
   mime: string;
   sourceId?: string;
+}
+/** Compiled first-match rules; regexes use the shared glob compiler, never raw SQL. */
+export interface KnowledgeProcessingRule {
+  match: { path?: readonly string[]; name?: readonly string[]; mime?: readonly string[] };
+  keys: Record<KnowledgeDocumentFormat, string>;
+  processorRevision: string;
+}
+export interface KnowledgeProcessingGroup {
+  processingKey: string;
+  processorRevision: string;
+  count: number;
   tokens: number;
+  fingerprint: string;
+  unestimated: number;
 }
 export interface KnowledgeDocumentStore {
   /** Authorizes one effective processing revision after publish confirmation, before queuing it. */
@@ -791,7 +804,15 @@ export interface KnowledgeDocumentStore {
     input: { contentSha256: string; processingKey: string },
     signal?: AbortSignal
   ): Promise<void>;
-  /** A cold publish review/reconciliation walks content metadata in bounded hash order. */
+  /** One set-based review, grouped by effective type/fingerprint; no per-content reads. */
+  processingSummary(
+    input: {
+      previous: readonly KnowledgeProcessingRule[];
+      next: readonly KnowledgeProcessingRule[];
+    },
+    signal?: AbortSignal
+  ): Promise<KnowledgeProcessingGroup[]>;
+  /** Background reconciliation walks content metadata in bounded hash order. */
   processingContents(
     input: { after: string; limit: number },
     signal?: AbortSignal

@@ -153,7 +153,8 @@ export function createKnowledgeBases(input: {
         question.config,
         asset?.publishedConfig,
         question.assetId,
-        input.embedding
+        input.embedding,
+        true
       );
       return [
         ...(await knowledgePublishQuestion(input.stores, input.clientInstanceId, question)),

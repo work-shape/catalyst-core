@@ -743,6 +743,9 @@ importers:
       '@work-shape/catalyst-postgres-connector':
         specifier: workspace:*
         version: link:../postgres-connector
+      minimatch:
+        specifier: 10.2.6
+        version: 10.2.6
       zod:
         specifier: 4.4.3
         version: 4.4.3

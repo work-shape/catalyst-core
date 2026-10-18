@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { matchesGlob } from "node:path";
+import { matchesProcessing } from "./processing-glob";
 import { z } from "zod";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
@@ -71,17 +71,7 @@ export function knowledgeProcessingOf(
   types: readonly KnowledgeDocumentType[] | undefined,
   item: { path: string; name: string; mime: string; format: KnowledgeDocumentFormat }
 ): KnowledgeProcessing {
-  const type = types?.find(({ match }) =>
-    (["path", "name", "mime"] as const).every(
-      (field) =>
-        !match[field] ||
-        match[field].some(
-          (pattern) =>
-            matchesGlob(item[field], pattern) ||
-            (field === "path" && matchesGlob(item.path.replace(/^\//u, ""), pattern))
-        )
-    )
-  );
+  const type = types?.find(({ match }) => matchesProcessing(match, item));
   const processor = type?.processor ?? "text";
   const processing = {
     type: type?.id ?? "default",

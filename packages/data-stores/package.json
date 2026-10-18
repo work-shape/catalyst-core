@@ -42,6 +42,7 @@
     "@work-shape/catalyst-connections": "workspace:*",
     "@work-shape/catalyst-core": "workspace:*",
     "@work-shape/catalyst-postgres-connector": "workspace:*",
+    "minimatch": "10.2.6",
     "zod": "4.4.3"
   },
   "devDependencies": {

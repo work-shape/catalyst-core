@@ -198,6 +198,7 @@ export function useKnowledgeSync() {
     const files: KnowledgeFiles = { objects, open: async () => undefined };
     const embedding = {
       defaultBinding: "embedding",
+      processingPrices: [{ bindingId: "embedding", currency: "USD", perMillionTokens: 1 }],
       models: [{ bindingId: "embedding", model: "test", dimensions: 8 }]
     };
     const dataStores = createDataStores({

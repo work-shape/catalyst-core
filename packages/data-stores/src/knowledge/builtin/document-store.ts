@@ -1,3 +1,4 @@
+import { processingSummary } from "./processing-summary";
 import { processingContents } from "./processing-store";
 import { visibleSourceHits } from "./source-search-visibility";
 import { z } from "zod";
@@ -56,8 +57,6 @@ const CHUNK_INSERT_BATCH = 500;
 
 // Bound cross-database file lookups while finding a live original among shared copies.
 const CONTENT_COPY_BATCH = 100;
-// Cost estimates for unindexed content have no passage tokens yet; this is not a token cap.
-const UNINDEXED_ESTIMATED_BYTES_PER_TOKEN = 3;
 
 const contentCopyRow = z.object({
   id: z.string(),
@@ -224,31 +223,20 @@ export function createBuiltinDocumentStore(
         }
       );
     },
+    processingSummary(input, signal) {
+      return inStore(
+        "Reviewing document processing",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        (sql) => processingSummary(sql, input)
+      );
+    },
     processingContents(input, signal) {
       return inStore(
         "Reviewing document processing",
         KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
         signal,
-        async (sql) => {
-          const contents = await processingContents(sql, input);
-          const files = await runtime.stores.files.listOwnedManagedFilesById({
-            clientInstanceId: runtime.clientInstanceId,
-            owner: { kind: "knowledge_base", id: target.assetId },
-            fileIds: contents
-              .filter((content) => content.tokens === 0)
-              .map((content) => content.fileId)
-          });
-          const estimates = new Map<string, number>(
-            files.map((file) => [
-              file.id,
-              Math.ceil(file.byteSize / UNINDEXED_ESTIMATED_BYTES_PER_TOKEN)
-            ])
-          );
-          return contents.map((content) => ({
-            ...content,
-            tokens: content.tokens || estimates.get(content.fileId) || 0
-          }));
-        }
+        (sql) => processingContents(sql, input)
       );
     },
     releaseOriginalPage(input, release, signal) {

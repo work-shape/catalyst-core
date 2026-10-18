@@ -1,3 +1,4 @@
+import { processingRules } from "./processing-rules";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
@@ -6,6 +7,7 @@ import {
   defineJobHandler,
   enqueueKnowledgeIndex,
   KNOWLEDGE_JOB_KINDS,
+  KNOWLEDGE_FILE_MAX_BYTES,
   type KnowledgeProcessingContent,
   type KnowledgeDocumentStore,
   type PlatformStores
@@ -20,7 +22,7 @@ import {
 import type { KnowledgeRuntime } from "./runtime";
 import { initialSyncIds } from "./builtin/source-lifecycle";
 
-// Cold review/reconciliation only: bounded metadata pages, never document text in a job.
+// Background reconciliation only: bounded metadata pages, never document text in a job.
 const PROCESSING_PAGE_CONTENTS = 100;
 const knowledgeReprocessJob = defineJobKind({
   kind: KNOWLEDGE_JOB_KINDS.reprocess,
@@ -62,11 +64,17 @@ export async function knowledgeProcessingReview(
   config: unknown,
   previous: unknown,
   assetId: string,
-  embedding: KnowledgeEmbedding
+  embedding: KnowledgeEmbedding,
+  draftOnly = false
 ) {
   const next = knowledgeBaseDefinitionSchema.parse(config);
   const before = knowledgeBaseDefinitionSchema.safeParse(previous);
   if (!before.success || "backend" in next) return undefined;
+  const previousRules = processingRules(before.data.documentTypes);
+  const nextRules = processingRules(next.documentTypes);
+  // An ordinary GET must never inspect the owned store. Publish deliberately still checks
+  // persisted fingerprints, including a processor version changed by a release.
+  if (draftOnly && JSON.stringify(previousRules) === JSON.stringify(nextRules)) return undefined;
   const record = await runtime.stores.dataStores.getDataStore({
     clientInstanceId: runtime.clientInstanceId,
     id: assetId
@@ -77,16 +85,10 @@ export async function knowledgeProcessingReview(
   const hash = createHash("sha256").update(
     JSON.stringify([assetId, next.methods, next.documentTypes, embedding.processingPrices])
   );
-  let count = 0,
-    tokens = 0;
-  for await (const content of contents(store))
-    if (changed(content, before.data, next)) {
-      count++;
-      tokens += content.tokens;
-      hash
-        .update(content.contentSha256)
-        .update(knowledgeProcessingOf(next.documentTypes, content).key);
-    }
+  const groups = await store.processingSummary({ previous: previousRules, next: nextRules });
+  const count = groups.reduce((sum, group) => sum + group.count, 0);
+  const tokens = groups.reduce((sum, group) => sum + group.tokens, 0);
+  hash.update(JSON.stringify(groups));
   if (!count) return undefined;
   const generations = await store.embeddingGenerations();
   const bindings = generations.length
@@ -111,12 +113,26 @@ export async function knowledgeProcessingReview(
         perMillionTokens: rates.reduce((sum, rate) => sum + (rate?.perMillionTokens ?? 0), 0)
       }
     : undefined;
+  // Cross-database file metadata is not read one upload at a time. Until passage tokens
+  // exist, use the accepted file byte limit as an explicit conservative estimate.
+  const unestimated = groups.reduce((sum, group) => sum + group.unestimated, 0);
+  const conservativeTokens = tokens + unestimated * Math.ceil(KNOWLEDGE_FILE_MAX_BYTES / 3);
+  const basis = unestimated
+    ? `existing passages/source byte sizes; ${unestimated} contents without size estimates use the ${KNOWLEDGE_FILE_MAX_BYTES}-byte file limit conservatively`
+    : "existing passages or original byte sizes";
   const cost = !next.methods.includes("semantic")
     ? "0 (keyword only)"
     : price
-      ? `${(((tokens * price.perMillionTokens) / 1_000_000) * 0.5).toFixed(6)}–${(((tokens * price.perMillionTokens) / 1_000_000) * 2).toFixed(6)} ${price.currency} estimated from existing passages or original byte sizes; changed output may cost more`
+      ? `${(((tokens * price.perMillionTokens) / 1_000_000) * 0.5).toFixed(6)}–${(((conservativeTokens * price.perMillionTokens) / 1_000_000) * 2).toFixed(6)} ${price.currency} estimated from ${basis}; changed output may cost more`
       : "embedding cost unavailable: configure the approved binding's customer rate";
-  const confirmation = hash.update(String(tokens)).digest("hex");
+  const confirmation = hash
+    .update(
+      JSON.stringify({
+        tokens: conservativeTokens,
+        ...(next.methods.includes("semantic") ? { bindings, price } : {})
+      })
+    )
+    .digest("hex");
   return {
     count,
     confirmation,

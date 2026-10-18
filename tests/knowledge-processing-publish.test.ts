@@ -6,8 +6,76 @@ import { clientInstanceId } from "./support/data-store-instance";
 import { useKnowledgeSync } from "./support/knowledge-sync";
 const params = { kind: "knowledge_base", name: "sync-test" };
 
+function publisherAccess() {
+  return createActorAccess(
+    {
+      clientInstanceId,
+      kind: "user",
+      id: "publisher",
+      roles: ["superadmin"],
+      permissionRefs: []
+    },
+    { holderActive: true, grants: [] }
+  );
+}
+
 describe("confirmed, selective processing at publish (KB 80)", () => {
   const { setup } = useKnowledgeSync();
+  it("can confirm a failed upload with no passage or source-size estimate", async () => {
+    const world = await setup();
+    world.world.put({
+      folderId: "folder",
+      name: "report.md",
+      mime: "text/markdown",
+      bytes: new TextEncoder().encode("Report")
+    });
+    await world.drain(await world.sync());
+    // Uploads have no source size. A prior failed index may have removed its chunks, so
+    // waiting for indexing before confirmation would deadlock a processor-version change.
+    await world.sql`update catalyst_kb.documents set source_item_id=null`;
+    await world.sql`delete from catalyst_kb.chunks`;
+    await world.sql`update catalyst_kb.contents set state='failed',processing_key='old-release',processor_revision='text@0'`;
+    const asset = required(
+      await world.instance.stores.configAssets.getConfigAsset({ clientInstanceId, ...params })
+    );
+    const config = {
+      ...asset.publishedConfig,
+      documentTypes: [{ id: "reports", match: { name: ["report*"] }, chunking: "whole" }]
+    };
+    const put = await world.instance.api.call("assets.put", {
+      params,
+      payload: { config, expectedRevision: asset.revision }
+    });
+    expect(put.statusCode, put.body).toBe(200);
+    const revision = z.object({ revision: z.number() }).parse(put.json()).revision;
+    const lines = await world.knowledge.publishQuestion({
+      assetId: asset.id,
+      scope: asset.scope,
+      config
+    });
+    expect(lines.join("\n")).toContain("1 contents without size estimates");
+    expect(lines.join("\n")).toContain("file limit conservatively");
+    expect(lines.join("\n")).toMatch(/0\.000000–[1-9]\d*\.\d{6} USD/u);
+    const confirmation = required(lines.join("\n").match(/confirmProcessing: '([a-f0-9]+)'/u)?.[1]);
+    const publish = () =>
+      world.instance.stores.transaction((stores) =>
+        world.knowledge.publish(stores, {
+          access: publisherAccess(),
+          assetId: asset.id,
+          revision,
+          config,
+          replaced: asset.publishedConfig,
+          confirmProcessing: confirmation
+        })
+      );
+    await publish();
+    // A newly building generation changes the embedding cost without changing content.
+    // A confirmation must cover the current rate/binding selection too.
+    await world.sql`insert into catalyst_kb.index_generations (generation,binding_id,model,dimensions,state) values (2,'embedding','test',8,'building')`;
+    await expect(publish()).rejects.toMatchObject({
+      details: { reason: "knowledge_processing_confirmation_required" }
+    });
+  });
   it("states count and cost, refuses an absent/stale confirmation, and re-chunks only the changed type", async () => {
     const world = await setup();
     for (const name of ["report-a.md", "report-b.md", "other.md"])
@@ -47,16 +115,7 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
           revision
         })
       );
-      const access = createActorAccess(
-        {
-          clientInstanceId,
-          kind: "user",
-          id: "publisher",
-          roles: ["superadmin"],
-          permissionRefs: []
-        },
-        { holderActive: true, grants: [] }
-      );
+      const access = publisherAccess();
       return world.instance.stores.transaction(async (stores) => {
         await world.knowledge.publish(stores, {
           access,
@@ -76,7 +135,7 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       });
     };
     const before =
-      await world.sql`select content_sha256,id,text from catalyst_kb.chunks order by id`;
+      await world.sql`select ch.content_sha256,ch.id,ch.text,ch.xmin::text as xmin,c.xmin::text as content_xmin from catalyst_kb.chunks ch join catalyst_kb.contents c on c.sha256=ch.content_sha256 order by ch.id`;
     const missing: unknown = await publish().catch((error: unknown) => error);
     expect(missing).toBeInstanceOf(AppError);
     const refusal = z
@@ -88,7 +147,7 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
     expect(refusal.details.count).toBe(2);
     expect(refusal.message).toContain("0 (keyword only)");
     expect(
-      await world.sql`select content_sha256,id,text from catalyst_kb.chunks order by id`
+      await world.sql`select ch.content_sha256,ch.id,ch.text,ch.xmin::text as xmin,c.xmin::text as content_xmin from catalyst_kb.chunks ch join catalyst_kb.contents c on c.sha256=ch.content_sha256 order by ch.id`
     ).toEqual(before);
     await expect(publish("0".repeat(64))).rejects.toMatchObject({
       details: { reason: "knowledge_processing_confirmation_required" }
@@ -120,10 +179,27 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       ]);
     });
     const untouched =
-      await world.sql`select ch.content_sha256,ch.id,ch.text from catalyst_kb.chunks ch join catalyst_kb.documents d on d.content_sha256=ch.content_sha256 where d.file_name='other.md' order by ch.id`;
+      await world.sql`select ch.content_sha256,ch.id,ch.text,ch.xmin::text as xmin,c.xmin::text as content_xmin from catalyst_kb.chunks ch join catalyst_kb.contents c on c.sha256=ch.content_sha256 join catalyst_kb.documents d on d.content_sha256=ch.content_sha256 where d.file_name='other.md' order by ch.id`;
     expect(untouched).toEqual(
       before.filter((row) => untouched.some((each) => each.content_sha256 === row.content_sha256))
     );
+    // Exercise the index skip independently of reconciliation: deterministic text is not row identity.
+    const [other] =
+      await world.sql`select c.sha256,d.managed_file_id from catalyst_kb.contents c join catalyst_kb.documents d on d.content_sha256=c.sha256 where d.file_name='other.md'`;
+    await enqueueKnowledgeIndex(
+      world.instance.stores.jobs,
+      {
+        knowledgeBaseId: world.record.id,
+        contentSha256: String(required(other).sha256),
+        fileId: String(required(other).managed_file_id),
+        operationRunId: "redundant-index"
+      },
+      { clientInstanceId }
+    );
+    await world.worker.runDue();
+    expect(
+      await world.sql`select ch.content_sha256,ch.id,ch.text,ch.xmin::text as xmin,c.xmin::text as content_xmin from catalyst_kb.chunks ch join catalyst_kb.contents c on c.sha256=ch.content_sha256 join catalyst_kb.documents d on d.content_sha256=ch.content_sha256 where d.file_name='other.md' order by ch.id`
+    ).toEqual(untouched);
     // A processor revision changed in a release; identical config still selects only its types.
     await world.sql`update catalyst_kb.contents set processing_key='previous-release',processor_revision='tables@0' where document_type='reports'`;
     const reports =
@@ -157,7 +233,7 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       ).toEqual([{ n: 2 }]);
     });
     expect(
-      await world.sql`select ch.content_sha256,ch.id,ch.text from catalyst_kb.chunks ch join catalyst_kb.documents d on d.content_sha256=ch.content_sha256 where d.file_name='other.md' order by ch.id`
+      await world.sql`select ch.content_sha256,ch.id,ch.text,ch.xmin::text as xmin,c.xmin::text as content_xmin from catalyst_kb.chunks ch join catalyst_kb.contents c on c.sha256=ch.content_sha256 join catalyst_kb.documents d on d.content_sha256=ch.content_sha256 where d.file_name='other.md' order by ch.id`
     ).toEqual(untouched);
   });
 });
