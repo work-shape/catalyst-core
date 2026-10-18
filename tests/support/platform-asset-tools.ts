@@ -137,12 +137,12 @@ interface AssetToolsFixture {
 export async function createAssetToolsFixture(
   agentRuns: "in_process" | "separate" = "in_process",
   editableAgentFields: AgentEditableField[] = [],
-  { filesStore = false }: { filesStore?: boolean } = {}
+  { filesStore = false, publishTool = false }: { filesStore?: boolean; publishTool?: boolean } = {}
 ): Promise<AssetToolsFixture> {
   // No release names `read_skill` here: the skill of a subject is readable all the same.
   const config = createTestConfig({
     // The agent holds the platform's tools: its definition lists them.
-    toolNames: [...PLATFORM_TOOL_NAMES],
+    toolNames: [...PLATFORM_TOOL_NAMES, ...(publishTool ? ["assets.publish"] : [])],
     developmentAuth: {
       enabled: true,
       defaultUserId: OWNER,
@@ -157,17 +157,29 @@ export async function createAssetToolsFixture(
       ]
     }
   });
-  config.modules = { assetManagement: { enabled: true }, workflows: { enabled: true } };
+  config.modules = {
+    assetManagement: { enabled: true },
+    workflows: { enabled: true },
+    ...(publishTool ? { apps: { enabled: true } } : {})
+  };
+  if (publishTool) config.executionWorkspaces.enabled = true;
   config.administration.agentConfiguration.enabled = true;
   config.administration.agentConfiguration.editableAgentFields = editableAgentFields;
   if (filesStore) {
     const root = await mkdtemp(join(tmpdir(), "catalyst-asset-tools-files-"));
     directories.push(root);
     config.infrastructure.objectStorage.files = { provider: "filesystem", root };
+    if (publishTool)
+      config.infrastructure.objectStorage.workspaces = {
+        provider: "filesystem",
+        root: join(root, "workspaces")
+      };
   }
   const app = await createTestInstance({
     config,
-    env: {},
+    env: publishTool
+      ? { CHAT_SESSION_TOKEN_SECRET: "workflow-publish-test-session-key-32-characters" }
+      : {},
     tools: [],
     ...(agentRuns === "separate" ? { agentRunWorker: "separate" as const } : {})
   });

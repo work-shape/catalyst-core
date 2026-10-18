@@ -6,6 +6,7 @@ const PURPOSE_LABELS: Record<string, TranslationKey> = {
   document_extraction: "settings.usagePurposeDocumentExtraction",
   guardrail_judge: "settings.usagePurposeGuardrailJudge",
   knowledge_embedding: "settings.usagePurposeKnowledgeEmbedding",
+  knowledge_field_extraction: "settings.usagePurposeKnowledgeFieldExtraction",
   knowledge_query: "settings.usagePurposeKnowledgeQuery"
 };
 

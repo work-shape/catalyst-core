@@ -282,8 +282,9 @@ export interface UsageBudgetConfig {
 /**
  * Protection against a runaway loop, held per person: each value is what one person's calls
  * may use, and apart from those what the calls the product makes for that person may use (a
- * title, a guardrail check, an import). The calls no person made share one larger bucket
- * (`UNATTENDED_SAFEGUARD_FACTOR` in usage-governance). An absent value is no safeguard.
+ * title or a guardrail check). The calls no person made share one larger bucket
+ * (`UNATTENDED_SAFEGUARD_FACTOR` in usage-governance). Release config parsing fills absent
+ * values with the shipped defaults. Knowledge Base ingestion is outside these safeguards.
  */
 export interface UsageSafeguardsConfig {
   modelCallsPerDay?: number;

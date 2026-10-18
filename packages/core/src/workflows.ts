@@ -52,6 +52,8 @@ export type WorkflowTrigger =
   | {
       kind: "schedule";
       cron: string;
+      /** Wall-clock time zone. Older definitions inherit the instance zone (UTC if unset). */
+      timeZone?: string;
       /** The ticks that were due while the instance was down. `last` when left out. */
       missed?: WorkflowScheduleMissedMode;
       /** A tick that comes due while the run of an earlier tick is open. `skip` when left out. */

@@ -264,7 +264,34 @@ export function createWorkflowAssetKind(
     },
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
-    prepareInteractiveUpsert: ({ next }) => next,
+    prepareInteractiveUpsert: ({ next }) => {
+      const config = z
+        .object({ manifest: z.object({ steps: z.array(z.unknown()) }).loose() })
+        .safeParse(next);
+      if (!config.success) return next;
+      const steps = config.data.manifest.steps.map((step) => {
+        const trigger = z
+          .object({ type: z.literal("trigger"), triggers: z.array(z.unknown()) })
+          .loose()
+          .safeParse(step);
+        if (!trigger.success) return step;
+        return {
+          ...trigger.data,
+          triggers: trigger.data.triggers.map((value) => {
+            const schedule = z
+              .object({ kind: z.literal("schedule"), timeZone: z.string().optional() })
+              .loose()
+              .safeParse(value);
+            return schedule.success &&
+              schedule.data.timeZone === undefined &&
+              options.timeZone !== undefined
+              ? { ...schedule.data, timeZone }
+              : value;
+          })
+        };
+      });
+      return { ...next, manifest: { ...config.data.manifest, steps } };
+    },
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
@@ -567,7 +594,7 @@ export function createWorkflowAssetDefinitions(options: {
       }
       return { revisionId: asset.activeRevisionId, manifest: parsed.manifest };
     },
-    async readScheduleCrons(id) {
+    async readSchedules(id) {
       const asset = await assetOf(id);
       if (asset?.status !== "active" || asset.publishedConfig === undefined) return [];
       const parsed = z
@@ -578,9 +605,13 @@ export function createWorkflowAssetDefinitions(options: {
         .safeParse(parsed.data?.manifest.steps[0]);
       return (trigger.data?.triggers ?? []).flatMap((value) => {
         const schedule = z
-          .object({ kind: z.literal("schedule"), cron: z.string() })
+          .object({
+            kind: z.literal("schedule"),
+            cron: z.string(),
+            timeZone: z.string().optional()
+          })
           .safeParse(value);
-        return schedule.success ? [schedule.data.cron] : [];
+        return schedule.success ? [schedule.data] : [];
       });
     },
     async read(id, configAssets) {

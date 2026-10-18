@@ -37,6 +37,14 @@ describe("the skill for writing a Workflow", () => {
     expect(workflowAuthoringSkill.content).toContain("never ask the person to type an id");
     expect(workflowAuthoringSkill.content).toContain("sends no Inbox item or mail");
   });
+  it("offers publishing confirmation, the sole account and a named schedule zone", () => {
+    expect(workflowAuthoringSkill.content).toContain("use assets.publish if it is available");
+    expect(workflowAuthoringSkill.content).toContain(
+      "If exactly one is offered, use it without asking"
+    );
+    expect(workflowAuthoringSkill.content).toContain("instance.timeZone");
+    expect(workflowAuthoringSkill.content).toContain("German time means Europe/Berlin");
+  });
   it("has one section per step type the engine runs, and no other", () => {
     expect(headings).toEqual([...WORKFLOW_EXECUTED_STEP_TYPES]);
   });

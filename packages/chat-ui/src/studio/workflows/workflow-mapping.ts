@@ -572,7 +572,9 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
     const service = text(raw.service);
     const child = text(raw.workflow);
     const triggers = records(raw.triggers);
-    const cron = triggers.map((trigger) => text(trigger.cron)).find((entry) => entry !== undefined);
+    const schedule = triggers.find((trigger) => text(trigger.cron) !== undefined);
+    const cron = text(schedule?.cron);
+    const timeZone = text(schedule?.timeZone);
     const sourceKind = kind === "operation" ? sourceKindOf(text(raw.operation)) : undefined;
     const inside: StepNames =
       kind === "loop" ? { ...known, loops: new Map([...known.loops, [id, itemName]]) } : known;
@@ -607,7 +609,8 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
             starts: {
               byHand: triggers.some((trigger) => trigger.kind === "manual"),
               onSchedule: triggers.some((trigger) => trigger.kind === "schedule"),
-              ...(cron === undefined ? {} : { cron })
+              ...(cron === undefined ? {} : { cron }),
+              ...(timeZone === undefined ? {} : { timeZone })
             }
           }
         : {}),

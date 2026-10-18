@@ -445,6 +445,9 @@ function ChatWorkspaceContent({
     model.workflows.access === "open"
       ? {
           rights: model.workflows.rights,
+          ...(model.workflows.instanceTimeZone
+            ? { instanceTimeZone: model.workflows.instanceTimeZone }
+            : {}),
           viewerId: model.auth.user.id,
           workspace: activeWorkspace
             ? { id: activeWorkspace.id, name: activeWorkspace.name }

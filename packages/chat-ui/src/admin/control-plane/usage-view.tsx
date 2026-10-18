@@ -1,5 +1,6 @@
 import { CalendarDays, DollarSign, Search, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import type { ModelUsageRefusal } from "@work-shape/catalyst-core";
 import type {
   ModelUsageDailyBucket,
   ModelUsageMonthlyBucket,
@@ -26,6 +27,11 @@ import {
 } from "@work-shape/catalyst-ui";
 import { formatDate, formatTime } from "../../shared/locale-format";
 import { usageCaller, usageRegion, usageStatus } from "./usage-attribution-labels";
+import {
+  formatBillableCost,
+  formatMicrosCost,
+  formatWebSearchBillableCost
+} from "./usage-cost-format";
 import {
   useTranslation,
   type TranslationContextValue,
@@ -268,7 +274,7 @@ export function UsageView({
 
 type DailyUsageMetric = "cost" | "tokens";
 type UsageWindow = UsageSummary["today"];
-type BudgetPeriod = "day" | "month";
+type BudgetPeriod = ModelUsageRefusal["period"];
 
 /** The messages of a spend budget, by the period it covers. */
 const BUDGET_TEXT_KEYS: Record<
@@ -288,37 +294,48 @@ const BUDGET_TEXT_KEYS: Record<
 };
 
 /**
- * The month in one answer: what it cost against the monthly budget, with its calls and tokens
- * under it, then how each configured budget stands, up to the block once one is reached.
+ * The month in one answer: what it cost, against the monthly budget when the budget counts all
+ * of it, with its calls and tokens under it, then how each configured budget stands, up to the
+ * block once one is reached. A budget reads only the spend the server counts against it, which
+ * leaves out knowledge base ingestion; an older server that does not say it shows it unknown.
  */
 function UsageMonthCard({ usage }: { usage: UsageSummary }) {
   const i18n = useTranslation();
   const { t, locale } = i18n;
   const month = usage.currentMonth;
-  const currency = usage.spendBudget.currency ?? month.cost.currency;
-  const spentMicros = month.cost.billableCostMicros;
-  const monthlyLimitMicros = usage.spendBudget.monthlyLimitMicros;
+  const { spendBudget } = usage;
+  const currency = spendBudget.currency ?? month.cost.currency;
+  const totalMicros = month.cost.billableCostMicros;
+  const monthlyLimitMicros = spendBudget.monthlyLimitMicros;
+  const costUnknown = totalMicros === undefined || currency === undefined;
+  const headlineSaysBudget =
+    !costUnknown &&
+    monthlyLimitMicros !== undefined &&
+    spendBudget.monthlySpentMicros === totalMicros;
   const budgets = [
     {
       period: "month" as const,
-      spentMicros,
+      spentMicros: spendBudget.monthlySpentMicros,
       limitMicros: monthlyLimitMicros
     },
     {
       period: "day" as const,
-      spentMicros: usage.today.cost.billableCostMicros,
-      limitMicros: usage.spendBudget.dailyLimitMicros
+      spentMicros: spendBudget.dailySpentMicros,
+      limitMicros: spendBudget.dailyLimitMicros
     }
   ].filter((budget): budget is SpendBudgetProgressInput => budget.limitMicros !== undefined);
-  const costUnknown = spentMicros === undefined || currency === undefined;
+  const budgetLeavesOutCost = [
+    [spendBudget.monthlySpentMicros, totalMicros],
+    [spendBudget.dailySpentMicros, usage.today.cost.billableCostMicros]
+  ].some(([spent, total]) => spent !== undefined && total !== undefined && spent !== total);
   const cost = costUnknown
     ? t("settings.usageCostNotKnownYet")
-    : monthlyLimitMicros === undefined
-      ? formatMicrosCost(spentMicros, currency, i18n)
-      : t("settings.usageBudgetSpent", {
-          spent: formatMicrosCost(spentMicros, currency, i18n),
+    : headlineSaysBudget
+      ? t("settings.usageBudgetSpent", {
+          spent: formatMicrosCost(totalMicros, currency, i18n),
           limit: formatMicrosCost(monthlyLimitMicros, currency, i18n)
-        });
+        })
+      : formatMicrosCost(totalMicros, currency, i18n);
 
   return (
     <Card padding="md" data-testid="usage-month-budget">
@@ -336,6 +353,11 @@ function UsageMonthCard({ usage }: { usage: UsageSummary }) {
               tokens: month.totalTokens.toLocaleString(locale)
             })}
           </p>
+          {budgetLeavesOutCost ? (
+            <p className="text-caption text-muted-foreground" data-testid="usage-budget-scope">
+              {t("settings.usageBudgetExcludesKnowledge")}
+            </p>
+          ) : null}
         </div>
         {budgets.length ? (
           <div className="grid gap-5 md:grid-cols-2">
@@ -345,6 +367,7 @@ function UsageMonthCard({ usage }: { usage: UsageSummary }) {
                 {...budget}
                 currency={currency}
                 headlineSaysCostUnknown={costUnknown}
+                saysSpent={budget.period === "day" || !headlineSaysBudget}
               />
             ))}
           </div>
@@ -365,8 +388,14 @@ function SpendBudgetProgress({
   spentMicros,
   limitMicros,
   currency,
-  headlineSaysCostUnknown
-}: SpendBudgetProgressInput & { currency?: string; headlineSaysCostUnknown: boolean }) {
+  headlineSaysCostUnknown,
+  saysSpent
+}: SpendBudgetProgressInput & {
+  currency?: string;
+  headlineSaysCostUnknown: boolean;
+  /** False where the card's headline already says this spend against its budget. */
+  saysSpent: boolean;
+}) {
   const i18n = useTranslation();
   const { t } = i18n;
   const text = BUDGET_TEXT_KEYS[period];
@@ -399,8 +428,7 @@ function SpendBudgetProgress({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium">{label}</p>
-          {/* The month's spend against its budget is the card's headline. */}
-          {period === "day" ? (
+          {saysSpent ? (
             <p className="text-xs text-muted-foreground">
               {t("settings.usageBudgetSpent", {
                 spent: formatMicrosCost(spentMicros, currency, i18n),
@@ -763,44 +791,4 @@ function shouldShowWebSearchCosts(usage: UsageSummary | undefined): boolean {
     usage.allTime.cost.webSearchCostVisible ||
     usage.recentEvents.some((event) => event.cost.webSearchCostVisible)
   );
-}
-
-function formatBillableCost(
-  cost:
-    Pick<UsageSummary["today"]["cost"], "currency" | "billableCostMicros" | "complete"> | undefined,
-  i18n: TranslationContextValue
-): string {
-  if (cost && !cost.complete) {
-    return i18n.t("settings.usageIncomplete");
-  }
-  return formatMicrosCost(cost?.billableCostMicros, cost?.currency, i18n);
-}
-
-function formatWebSearchBillableCost(
-  cost:
-    | Pick<UsageSummary["today"]["cost"], "currency" | "webSearchBillableCostMicros" | "complete">
-    | undefined,
-  i18n: TranslationContextValue
-): string {
-  if (cost && !cost.complete) {
-    return i18n.t("settings.usageIncomplete");
-  }
-  return formatMicrosCost(cost?.webSearchBillableCostMicros, cost?.currency, i18n);
-}
-
-function formatMicrosCost(
-  micros: number | undefined,
-  currency: string | undefined,
-  { t, locale }: TranslationContextValue
-): string {
-  if (micros === undefined || currency === undefined) {
-    return t("settings.usageNotPriced");
-  }
-  const amount = micros / 1_000_000;
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: amount > 0 && amount < 1 ? 4 : 2
-  }).format(amount);
 }

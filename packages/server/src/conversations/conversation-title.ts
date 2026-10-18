@@ -1,4 +1,5 @@
 import {
+  attachedFileTitles,
   type ChatMessage,
   type JsonObject,
   type LocaleCode,
@@ -83,18 +84,9 @@ export function temporaryAttachmentTitles(message: ChatMessage): string[] {
     )
     .filter((filename): filename is string => Boolean(filename));
 
-  return [...filenames, ...attachmentPlaceholders(attachments.length)];
-}
-
-/**
- * The titles the chat gives a conversation its first message only attached files to, in each
- * language it writes them in (`conversationAttachedFile`, `conversationAttachedFiles`). The
- * title job replaces them as it replaces "New conversation"; a title a person wrote stays.
- */
-function attachmentPlaceholders(count: number): string[] {
-  return count === 1
-    ? ["Attached file", "Angehängte Datei"]
-    : [`${count} attached files`, `${count} angehängte Dateien`];
+  // The titles the chat gives a conversation its first message only attached files to. The
+  // title job replaces them as it replaces "New conversation"; a title a person wrote stays.
+  return [...filenames, ...attachedFileTitles(attachments.length)];
 }
 
 function readAttachmentManifestEntries(message: ChatMessage): JsonObject[] {

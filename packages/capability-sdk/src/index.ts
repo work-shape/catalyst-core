@@ -117,7 +117,10 @@ export interface ClientInstanceCapabilityContext {
 }
 
 /** What a capability calls a model for. It names the call on its usage record. */
-export type CapabilityModelPurpose = Extract<ModelSystemPurpose, "document_extraction">;
+export type CapabilityModelPurpose = Extract<
+  ModelSystemPurpose,
+  "document_extraction" | "knowledge_field_extraction"
+>;
 
 /** What a capability hands a model to read. */
 export type CapabilityModelContentPart =

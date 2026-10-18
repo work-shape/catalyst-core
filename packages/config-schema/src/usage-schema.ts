@@ -14,14 +14,14 @@ export const usageBudgetConfigSchema = z
  * has their next model call refused with `MODEL_USAGE_LIMIT_REACHED` until the day or the
  * month is over.
  *
- * The defaults fit a long working day of a busy person about ten times. Measured 2026-10-18
+ * The defaults fit a long working day of a busy person about five times. Measured 2026-10-18
  * (ACCEPT-1c): one person's normal agent use made 91 model calls holding 2.5 million tokens in
  * 35 minutes. Over 8 hours that is about 1,250 calls and 34 million tokens, and over 22 working
  * days 754 million tokens.
  */
 const DEFAULT_MODEL_CALLS_PER_DAY = 20_000;
-const DEFAULT_TOKENS_PER_DAY = 500_000_000;
-const DEFAULT_TOKENS_PER_MONTH = 10_000_000_000;
+const DEFAULT_TOKENS_PER_DAY = 200_000_000;
+const DEFAULT_TOKENS_PER_MONTH = 4_000_000_000;
 
 export const usageSafeguardsConfigSchema = z
   .object({
