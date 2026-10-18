@@ -27,6 +27,31 @@ export async function checkRecordsKeys(
   }
 }
 
+/** Keys that already hold must survive every transaction of the pending batch. */
+export async function readExistingRecordsKeys(
+  server: DataStoreServer,
+  current: DataStoreRecord,
+  rules: readonly DataStoreRecordsRule[] | undefined,
+  signal: AbortSignal
+): Promise<DataStoreRecordsRule[]> {
+  if (!rules?.length) return [];
+  return server.executor.change(
+    {
+      ...server.asPlatform(current.location.database),
+      timeoutMs: RECORDS_CATALOG_TIMEOUT_MS,
+      signal
+    },
+    async (sql) => {
+      const existing: DataStoreRecordsRule[] = [];
+      for (const rule of rules) {
+        if ((await readKeyIndexesIn(sql, rule.table, [rule.key.column])).length)
+          existing.push(rule);
+      }
+      return existing;
+    }
+  );
+}
+
 /** A revision without pending DDL must already meet its rules. Pending DDL is checked at commit. */
 export async function checkRecordsCatalog(
   server: DataStoreServer,

@@ -1,7 +1,8 @@
-import { checkRecordsCatalog } from "./records/publish";
+import { checkRecordsCatalog, readExistingRecordsKeys } from "./records/publish";
 import { z } from "zod";
 import {
   AppError,
+  isAppError,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_JOB_KINDS,
   DATA_STORE_MANIFEST_FILE,
@@ -16,6 +17,7 @@ import {
   type DataStoreCondition,
   type DataStoreFailure,
   type DataStoreRecord,
+  type DataStoreRecordsRule,
   type Job,
   type JobControl,
   type JobRetry,
@@ -597,6 +599,7 @@ async function migrate(
   }
   const known = definition.migrations.map(({ number, name, sha256 }) => ({ number, name, sha256 }));
   let signed;
+  let existingKeys: DataStoreRecordsRule[];
   let superuser: boolean;
   try {
     // Both roles as the platform gave them, before anything connects as one, and what the
@@ -617,6 +620,12 @@ async function migrate(
       }
     });
     signed = await readSignedMigrations(runtime.server, record, known, ledger, control.signal);
+    existingKeys = await readExistingRecordsKeys(
+      runtime.server,
+      record,
+      definition.records,
+      control.signal
+    );
   } catch (error) {
     return unreachable(error, "Reading the level of the Data Store");
   }
@@ -659,7 +668,19 @@ async function migrate(
             ledgerKey: ledger,
             superuser,
             sizeLimitBytes: current.sizeLimitBytes,
-            records: latest?.definition.records
+            // Keep every key that held before the batch. Newly published rules whose keys
+            // already hold are protected too; only the last file requires all new keys.
+            records: [
+              ...existingKeys,
+              ...(migration === pending.at(-1)
+                ? (latest?.definition.records ?? [])
+                : await readExistingRecordsKeys(
+                    runtime.server,
+                    current,
+                    latest?.definition.records,
+                    control.signal
+                  ))
+            ]
           },
           control.signal
         );
@@ -691,6 +712,16 @@ async function migrate(
         appliedNow = false;
         const failure = describeDatabaseFailure(error, file);
         failed = { ...failure, code: "migration_failed", message: failure.sentence };
+        // A partial new schema is allowed when a later file would have added its key.
+        // Keep the SQL failure and explain why records cannot be written there yet.
+        try {
+          const latest = await publishedDefinition(runtime, record);
+          await checkRecordsCatalog(runtime.server, record, latest?.definition.records);
+        } catch (keyError) {
+          if (isAppError(keyError) && keyError.code === "VALIDATION_FAILED") {
+            failed.message += ` A records key is not there yet: ${keyError.message}`;
+          }
+        }
       }
     }
     // A role may change its own password, and nobody is shown that it did: whatever the
