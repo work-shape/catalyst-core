@@ -22,8 +22,6 @@ import {
   createRunContext,
   deniedEnd,
   executeAdmitted,
-  failRun,
-  OperationNotBegunError,
   requireModuleOn,
   type ApprovedOperationEnd,
   type RunContext,
@@ -31,6 +29,7 @@ import {
 } from "./operation-execution";
 import { approvedByCaller, resolveGuardedPolicy } from "./operation-policy-call";
 import { hashInput } from "./input-hash";
+import { OperationNotBegunError } from "./operation-call";
 
 /** The frozen call of a run that waits for an approval, as its approval request keeps it. */
 export interface WaitingOperationCall {
@@ -103,7 +102,7 @@ export async function executeApprovedOperation(
   if ("end" in admitted) {
     return admitted.end;
   }
-  return executeWithinTime(admitted.context, decision, options.signal);
+  return executeWaitingCall(admitted.context, decision, options.signal);
 }
 
 /**
@@ -137,13 +136,13 @@ export async function executeConfirmedOperation(
     const access = await deps.authorizer.forActor(context.call.actor);
     if (!approval || !access.authorize(approval.action).allowed)
       return holdForApproval(context, policy, waiting.heldInput, approval);
-    return executeWithinTime(
+    return executeWaitingCall(
       context,
       { ...decision, mode: "approved", reason: "approved_by_caller" },
       options.signal
     );
   }
-  return executeWithinTime(context, decision, options.signal);
+  return executeWaitingCall(context, decision, options.signal);
 }
 
 /**
@@ -190,13 +189,13 @@ export async function executeInboxConfirmedOperation(
   }
   const { context, policy } = admitted;
   if (policy.next !== "await_approval") {
-    return executeWithinTime(context, decision, options.signal);
+    return executeWaitingCall(context, decision, options.signal);
   }
   const approval = await context.definition.approval?.(context.call.input);
   const access = await deps.authorizer.forActor(context.call.actor);
   if (approval && approvedByCaller(context.call, policy, approval, access)) {
     // An approver's own click is the approval, as when they click Publish themselves.
-    return executeWithinTime(
+    return executeWaitingCall(
       context,
       {
         mode: "approved",
@@ -570,7 +569,9 @@ async function waitingContext(
     run,
     definition,
     call,
-    resource: definition.resource(call.input),
+    ...(definition.action === null
+      ? { resource: definition.resource(call.input) }
+      : await deps.resolveResource(definition.resource(call.input))),
     deps,
     // The call is executed later and elsewhere than it was made: nothing of the live call is
     // left but, for a call an Agent Run's worker executes, that run's hold and language. Its
@@ -586,29 +587,17 @@ async function waitingContext(
  * Takes the run and calls the operation, for at most the time its operation names and until
  * `signal` is aborted.
  */
-async function executeWithinTime(
+async function executeWaitingCall(
   admitted: RunContext,
   decision: OperationRunDecision,
   signal: AbortSignal | undefined
 ): Promise<ApprovedOperationEnd> {
-  const { definition, deps, call } = admitted;
-  const { timeoutMs } = definition;
-  const stop = new AbortController();
+  const { deps, call } = admitted;
   const context: RunContext = {
     ...admitted,
-    runtime: {
-      ...admitted.runtime,
-      signal: stop.signal,
-      deadline: new Date(admitted.now().getTime() + timeoutMs)
-    }
+    runtime: { ...admitted.runtime, signal }
   };
   const access = await deps.authorizer.forActor(call.actor);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let cutAfter: (cause: "timeout" | "aborted") => void = () => undefined;
-  const cut = new Promise<"timeout" | "aborted">((resolve) => {
-    cutAfter = resolve;
-  });
-  const onAbort = () => cutAfter("aborted");
   /** What kept the call from being dispatched, where something did. */
   let notBegun: ApprovedOperationEnd | "still_waiting" | undefined;
   /**
@@ -630,53 +619,10 @@ async function executeWithinTime(
       notBegun = await readApprovedOperationEnd(context.run.id, deps);
       throw new OperationNotBegunError();
     }
-    if (signal?.aborted) {
-      // The stop came while the run was being taken. Nothing is dispatched after a stop, and
-      // the run that is marked as started cannot be taken a second time.
-      const interrupted = await deps.runs.markInterrupted({
-        clientInstanceId: deps.clientInstanceId,
-        id: taken.id
-      });
-      notBegun = interrupted
-        ? { execution: "interrupted", run: interrupted, error: INTERRUPTED_RUN_ERROR }
-        : await readApprovedOperationEnd(taken.id, deps);
-      throw new OperationNotBegunError();
-    }
-    timer = setTimeout(() => cutAfter("timeout"), timeoutMs);
-    signal?.addEventListener("abort", onAbort, { once: true });
+    // Dispatch rechecks the signal after this await; a stop here is still unexecuted.
   };
-  const execution = executeAdmitted(context, access, undefined, begin);
   try {
-    const first = await Promise.race([execution, cut]);
-    if (first === "timeout") {
-      const error = new AppError(
-        "TIMEOUT",
-        `'${definition.name}' did not end within its ${timeoutMs / 1000} seconds`,
-        undefined,
-        { exposeMessage: true }
-      );
-      // The run ends before the implementation is told to stop, so one that stops at once
-      // cannot record itself as done. What it writes later is refused by the run store.
-      const failed = await failRun(context, error, false);
-      stop.abort(error);
-      void execution.catch(() => undefined);
-      return {
-        execution: "failed",
-        run: failed.run,
-        error: { code: error.code, message: error.message }
-      };
-    }
-    if (first === "aborted") {
-      const interrupted = await deps.runs.markInterrupted({
-        clientInstanceId: deps.clientInstanceId,
-        id: context.run.id
-      });
-      stop.abort(signal?.reason);
-      void execution.catch(() => undefined);
-      return interrupted
-        ? { execution: "interrupted", run: interrupted, error: INTERRUPTED_RUN_ERROR }
-        : await readApprovedOperationEnd(context.run.id, deps);
-    }
+    const first = await executeAdmitted(context, access, undefined, begin);
     const { result, run } = first;
     switch (result.status) {
       case "done":
@@ -685,7 +631,7 @@ async function executeWithinTime(
         return { execution: "refused", run, outcome: first, error: run.error ?? UNKNOWN_END };
       case "failed":
         return {
-          execution: "failed",
+          execution: result.error.code === INTERRUPTED_RUN_ERROR.code ? "interrupted" : "failed",
           run,
           outcome: first,
           error: { code: result.error.code, message: result.error.message }
@@ -699,9 +645,6 @@ async function executeWithinTime(
       return notBegun;
     }
     throw error;
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", onAbort);
   }
 }
 

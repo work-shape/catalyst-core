@@ -34,5 +34,5 @@ export const RECORD_FIELDS_SCHEMA = `
   );
 `;
 
-/** Additive for existing stores; migration 8 also applies this to owned stores. */
+/** Owned releases 8 and 11 share this additive step; existing columns keep their values. */
 export const RECORD_FIELDS_CONTENT_HASH = `alter table catalyst.record_fields add column if not exists content_sha256 text;`;

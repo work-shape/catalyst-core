@@ -96,7 +96,7 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 9 });
+      expect(record).toMatchObject({ status: "ready", level: 12 });
       return required(record);
     });
   }
@@ -321,7 +321,8 @@ describe("adding files to a Knowledge Base", () => {
         drop function catalyst_kb.source_document_purged();
         drop trigger source_freshness_changed on catalyst_kb.contents;
         drop function catalyst_kb.source_freshness_changed();
-        alter table catalyst_kb.documents drop column source_item_id;
+        alter table catalyst_kb.documents drop column source_item_id, drop column fields_pending, drop column fields_pending_reason;
+        drop table catalyst_kb.field_budgets;
         drop table catalyst_kb.source_cursors, catalyst_kb.sync_runs, catalyst_kb.source_items;
         alter table catalyst_kb.contents drop column document_type, drop column processor_revision, drop column processing_key, drop column requested_processing_key;
         delete from catalyst_kb.migrations where number >= 2;`)
@@ -356,10 +357,12 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(current).toMatchObject({ status: "ready", level: 9 });
+      expect(current).toMatchObject({ status: "ready", level: 12 });
       return required(current);
     });
-    expect(upgraded.migrations.map(({ number }) => number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(upgraded.migrations.map(({ number }) => number)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+    ]);
 
     const added = await addFiles(instance, [source]);
     expect(added.statusCode, added.body).toBe(200);

@@ -12,6 +12,7 @@ import {
 } from "@work-shape/catalyst-server";
 import { ASSET_REPO_MAX_BUNDLE_BYTES } from "@work-shape/catalyst-asset-repo";
 import {
+  OperationExecutionStop,
   createPlatformId,
   readObjectBytes,
   scheduleDedupeKey,
@@ -194,6 +195,25 @@ describe("the commit of a save of an asset's repository as a job", () => {
     }
     return result;
   }
+
+  it.each(["timeout", "aborted"] as const)(
+    "preserves the executor's %s reason while waiting for a repository save",
+    async (kind) => {
+      const fixture = arrange(`executor_${kind}`, { worker: false });
+      const client = createAssetRepoCommitClient({ stores: db.store, unclaimedMs: 0 });
+      const { result } = await client.commit({
+        clientInstanceId: fixture.clientInstanceId,
+        assetId: fixture.assetId,
+        operationRunId: runId(),
+        request: await fixture.folder({ "index.html": "probe" }, null),
+        signal: AbortSignal.abort(new OperationExecutionStop(kind, undefined))
+      });
+      expect(result).toMatchObject({
+        status: "failed",
+        reason: kind === "timeout" ? "timeout" : "stopped"
+      });
+    }
+  );
 
   it("makes the commit, names its bundle before the object is put, and the revision takes it", async () => {
     const { assetId, clientInstanceId, objects, folder, save, write, rows } = arrange("commit");

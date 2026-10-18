@@ -42,6 +42,8 @@ export async function countWorkflowFailures(
         eq(workflowRuns.clientInstanceId, input.clientInstanceId),
         // Literal predicate matches the partial index even for a generic prepared plan.
         sql`(${workflowRuns.status} in ('failed', 'limit_reached') or ${workflowRuns.failedItemCount} > 0)`,
+        // A successor carries prior failures; count a completed Lauf once, at its last part.
+        ne(workflowRuns.status, "continued"),
         inArray(workflowRuns.rootRunId, roots),
         or(
           inArray(sql<string>`${workflowRuns.rootRunId}`, [...input.runIds]),

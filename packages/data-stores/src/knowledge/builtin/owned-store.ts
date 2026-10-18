@@ -1,5 +1,5 @@
 import type { DataStoreRecord, KnowledgeCheckResult } from "@work-shape/catalyst-core";
-import { KNOWLEDGE_STORE_LEVEL } from "./store-schema";
+import { knowledgeStoreNeedsMigration } from "./store-schema";
 
 // The store a Knowledge Base on the built-in backend owns: its name, and whether it can hold
 // the Knowledge Base's documents now.
@@ -25,7 +25,7 @@ export function ownedStoreCheck(record: DataStoreRecord | undefined): KnowledgeC
     return { status: "needs_attention", tables: [], problem: record.failure.message };
   }
   // Being made is no fault: it takes no files yet, and says why to a caller who sends some.
-  if (record.status === "provisioning" || record.level < KNOWLEDGE_STORE_LEVEL) {
+  if (record.status === "provisioning" || knowledgeStoreNeedsMigration(record)) {
     return {
       status: "preparing",
       tables: [],

@@ -12,7 +12,12 @@ import {
   type PublishNarrativeRead
 } from "../../shared/publish-narrative";
 import { useWorkflowDraftWrites } from "./workflow-data";
-import { draftState, editOffered, type WorkflowDraftState } from "./workflow-model";
+import {
+  draftState,
+  editOffered,
+  workflowRightsOn,
+  type WorkflowDraftState
+} from "./workflow-model";
 import type { WorkflowView } from "./workflow-views";
 import { useWorkflowsHost } from "./workflows-host";
 import { WorkflowPublishRights } from "./workflow-publish-rights";
@@ -41,7 +46,7 @@ export interface WorkflowEdit {
  */
 export function useEditWithAgent(
   workflow: string,
-  view: Pick<WorkflowView, "draft"> | undefined
+  view: Pick<WorkflowView, "draft" | "allowed" | "ownerWorkspaceId"> | undefined
 ): WorkflowEdit | undefined {
   const { t } = useTranslation();
   const host = useWorkflowsHost();
@@ -156,7 +161,7 @@ type DraftChange = DraftDecision;
  */
 export function useWorkflowDraft(
   workflow: string,
-  view: Pick<WorkflowView, "name" | "draft"> | undefined
+  view: Pick<WorkflowView, "name" | "draft" | "allowed" | "ownerWorkspaceId"> | undefined
 ): { bar: WorkflowDraftBarState | undefined; dialog: ReactNode } {
   const { t } = useTranslation();
   const host = useWorkflowsHost();
@@ -205,11 +210,13 @@ export function useWorkflowDraft(
       setBusy(false);
     }
   };
+  // What this Workflow lets the reader do, as its record says.
+  const rights = workflowRightsOn(host.rights, view);
   return {
     bar: {
       state,
-      ...(writes !== undefined && host.rights.publish ? { onPublish: ask("publish") } : {}),
-      ...(writes !== undefined && host.rights.write && state === "ahead"
+      ...(writes !== undefined && rights.publish ? { onPublish: ask("publish") } : {}),
+      ...(writes !== undefined && rights.write && state === "ahead"
         ? { onDiscard: ask("discard") }
         : {})
     },

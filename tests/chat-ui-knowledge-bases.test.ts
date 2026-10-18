@@ -233,7 +233,7 @@ describe("Knowledge Bases in Build", () => {
 
 describe("the data Workflows of a Knowledge Base (WF-KIND)", () => {
   const workflows: WorkflowsHost = {
-    rights: { read: true, write: false, publish: false },
+    rights: { instance: { read: true, write: false, publish: false, delete: false } },
     viewerId: "user_1",
     workspace: { id: "ws_1", name: "Mine" },
     showRoute: noop

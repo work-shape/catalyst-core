@@ -249,6 +249,7 @@ export interface GalleryText
   stateFailed: string;
   stateNew: string;
   errorMessage: string;
+  loadFailed: string;
 }
 
 export const galleryText: Record<GalleryLanguage, GalleryText> = {
@@ -518,7 +519,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     stateNeedsReconnect: "Needs reconnect",
     stateFailed: "Failed",
     stateNew: "New",
-    errorMessage: "The changes could not be saved. Try again."
+    errorMessage: "The changes could not be saved. Try again.",
+    loadFailed: "The agents could not be loaded."
   },
   de: {
     title: "UI-Bibliothek",
@@ -787,6 +789,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     stateNeedsReconnect: "Neu verbinden",
     stateFailed: "Fehlgeschlagen",
     stateNew: "Neu",
-    errorMessage: "Die Änderungen konnten nicht gespeichert werden. Versuche es erneut."
+    errorMessage: "Die Änderungen konnten nicht gespeichert werden. Versuche es erneut.",
+    loadFailed: "Die Agenten konnten nicht geladen werden."
   }
 };

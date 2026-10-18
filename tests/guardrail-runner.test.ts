@@ -620,6 +620,7 @@ async function skillFixture() {
   };
   const skillHandler = createSkillChangeApprovalHandler({
     config: f.config,
+    stores: f.store,
     clientInstanceId,
     configAssets: {
       store: f.store.configAssets,

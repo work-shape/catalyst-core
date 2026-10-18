@@ -86,6 +86,24 @@ describe("the use level of a personal key", () => {
       tim.id
     );
     expect(withUse.key.scopes).toContain("connection.use");
+    const headers = await personalKeyToken(t, withUse.secret);
+    const choices = await t.call(t.root.id, "assets.list", {
+      params: { kind: "connection" },
+      headers
+    });
+    expect(choices.statusCode, choices.body).toBe(200);
+    expect(
+      z
+        .object({ items: z.array(z.object({ name: z.string() })) })
+        .parse(choices.json())
+        .items.map((item) => item.name)
+    ).toContain("crm");
+    // Selecting the Connection never grants access to its configuration.
+    const configuration = await t.call(t.root.id, "assets.get", {
+      params: { kind: "connection", name: "crm" },
+      headers
+    });
+    expect(configuration.statusCode, configuration.body).toBe(403);
     const first = await writeAndPublish(t, await personalKeyToken(t, withUse.secret), null, "one");
     expect(first.published.statusCode, first.published.body).toBe(200);
 
@@ -109,13 +127,25 @@ describe("the use level of a personal key", () => {
     const { t, tim } = await ready();
     const key = await issuePersonalKey(t, [...AUTHORING, "connection.use"], tim.id);
     const headers = await personalKeyToken(t, key.secret);
+    // The draft was selectable when saved; revocation is checked again at publish.
+    const written = await t.call(t.root.id, "assets.put", {
+      params: address,
+      payload: { config: { name: WORKFLOW, manifest: notifyClients() }, expectedRevision: null },
+      headers
+    });
+    expect(written.statusCode, written.body).toBe(200);
+    const { revision } = writeSchema.parse(written.json());
 
     const rows = await t.stores.access.listGrants({ clientInstanceId, holderId: tim.id });
     const use = rows.find((row) => row.action === "connection.use");
     if (!use) throw new Error("Tim holds no row for connection.use");
     await t.stores.access.deleteGrant({ clientInstanceId, grantId: use.id });
 
-    const { published } = await writeAndPublish(t, headers, null, "one");
+    const published = await t.call(t.root.id, "assets.publish", {
+      params: address,
+      payload: { revision },
+      headers
+    });
     expect(published.statusCode).toBe(403);
     expect(errorSchema.parse(published.json()).error.details).toEqual({
       action: "connection.use",

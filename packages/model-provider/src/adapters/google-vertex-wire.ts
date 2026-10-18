@@ -37,6 +37,7 @@ export interface VertexGenerateContentRequest {
   tools?: { functionDeclarations: VertexFunctionDeclaration[] }[];
   generationConfig?: {
     temperature?: number;
+    maxOutputTokens?: number;
     responseMimeType?: string;
     responseSchema?: VertexSchema;
   };

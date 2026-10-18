@@ -68,6 +68,7 @@ import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import {
   STATE_FILENAME,
   canonicalBundleFiles,
+  CANONICAL_FORM_VERSION,
   canonicalizeAgentConfig,
   canonicalizeSkillConfig,
   createConfigApi,
@@ -148,20 +149,18 @@ describe("config CLI serialization", () => {
     ]);
   });
 
-  it("round-trips fastMode and leaves it out of the YAML when it is off", () => {
+  it("round-trips fastMode including an explicit false", () => {
     const fast = { ...agentConfig("Fast"), modelBindingId: "primary", fastMode: true };
     const serialized = serializeAgentYaml(fast);
 
     expect(serialized).toContain("fastMode: true\n");
     expect(parseAgentYaml(serialized)).toMatchObject({ fastMode: true });
     expect(serializeAgentYaml(parseAgentYaml(serialized))).toBe(serialized);
-    expect(serializeAgentYaml({ ...fast, fastMode: false })).not.toContain("fastMode");
-    expect(serializeAgentYaml({ ...fast, fastMode: false })).toBe(
-      serializeAgentYaml({ ...agentConfig("Fast"), modelBindingId: "primary" })
-    );
+    expect(serializeAgentYaml({ ...fast, fastMode: false })).toContain("fastMode: false");
+    expect(parseAgentYaml(serializeAgentYaml({ ...fast, fastMode: false })).fastMode).toBe(false);
   });
 
-  it("round-trips userSelectableModelBindingIds and leaves an empty list out of the YAML", () => {
+  it("round-trips selectable models including explicit empty lists and maps", () => {
     const agent = { ...agentConfig("Chooser"), modelBindingId: "primary" };
     const serialized = serializeAgentYaml({
       ...agent,
@@ -173,9 +172,10 @@ describe("config CLI serialization", () => {
       userSelectableModelBindingIds: ["fast", "cheap"]
     });
     expect(serializeAgentYaml(parseAgentYaml(serialized))).toBe(serialized);
-    expect(serializeAgentYaml({ ...agent, userSelectableModelBindingIds: [] })).toBe(
-      serializeAgentYaml(agent)
-    );
+    expect(
+      parseAgentYaml(serializeAgentYaml({ ...agent, userSelectableModelBindingIds: [] }))
+        .userSelectableModelBindingIds
+    ).toEqual([]);
 
     const withEfforts = serializeAgentYaml({
       ...agent,
@@ -184,9 +184,10 @@ describe("config CLI serialization", () => {
     });
     expect(withEfforts).toContain("modelReasoningEfforts:\n  fast: low\n");
     expect(serializeAgentYaml(parseAgentYaml(withEfforts))).toBe(withEfforts);
-    expect(serializeAgentYaml({ ...agent, modelReasoningEfforts: {} })).toBe(
-      serializeAgentYaml(agent)
-    );
+    expect(
+      parseAgentYaml(serializeAgentYaml({ ...agent, modelReasoningEfforts: {} }))
+        .modelReasoningEfforts
+    ).toEqual({});
   });
 
   it("round-trips SKILL.md with provenance comments inside frontmatter", () => {
@@ -463,6 +464,35 @@ describe("config CLI command flows", () => {
         expect.objectContaining({ message: expect.stringContaining("Unsupported skill resource") })
       ])
     });
+  });
+
+  it("clears all extra skill frontmatter across remove, push and pull", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    const skill = { ...skillConfig("review", "Review"), frontmatter: { license: "MIT" } };
+    const syncs: unknown[] = [];
+    const { fetchImpl } = await instanceHolding({ agents: [], skills: [skill] }, syncs);
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_frontmatter" },
+      fetchImpl
+    };
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    await writeFile(
+      resolve(directory, "skills/review/SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Review"))
+    );
+    expect(await runConfigCommand("push", options)).toBe(0);
+    expect(syncs.at(-1)).toMatchObject({ items: [{ kind: "skill", config: { frontmatter: {} } }] });
+    // Force a server read so local reuse cannot hide retained server frontmatter.
+    await rm(resolve(directory, "skills/review/SKILL.md"));
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    const local = await readWorkingCopy(directory, await readManifest(directory));
+    expect(local.skills[0]?.frontmatter).toBeUndefined();
+    expect(await runConfigCommand("diff", options)).toBe(0);
+    const writes = syncs.length;
+    expect(await runConfigCommand("push", options)).toBe(0);
+    expect(syncs).toHaveLength(writes);
   });
 
   it("preserves the existing package and cleans temporary files when a package write fails", async () => {
@@ -1087,6 +1117,7 @@ skills:
           assets: {
             "agent:assistant": {
               id: "cfga_held_agent_assistant",
+              canonicalFormVersion: CANONICAL_FORM_VERSION,
               revision: 1,
               hash: expect.any(String),
               draftRevision: null
@@ -2332,7 +2363,13 @@ describe("config CLI against an instance", () => {
         local: {
           lastPulledVersion: 1,
           defaultAgentName: null,
-          assets: { "skill:review": { revision: 1, hash: "0".repeat(64) } }
+          assets: {
+            "skill:review": {
+              canonicalFormVersion: CANONICAL_FORM_VERSION,
+              revision: 1,
+              hash: "0".repeat(64)
+            }
+          }
         }
       }
     });
@@ -2615,6 +2652,7 @@ describe("config CLI guardrails in the working copy", () => {
     // The batch holds the skill alone; the guardrail is put after it, against its pulled revision.
     const { origin: _origin, ...definition } = judge;
     expect(writes.map((write) => write.path)).toEqual([
+      "POST /api/v1/assets/guardrail/validate",
       "POST /api/v1/assets/sync/check",
       "POST /api/v1/assets/sync",
       "PUT /api/v1/assets/guardrail/privacy"
@@ -2631,7 +2669,7 @@ describe("config CLI guardrails in the working copy", () => {
         ]
       }
     ]);
-    expect(writes[2]?.body).toEqual({
+    expect(writes[3]?.body).toEqual({
       config: { ...definition, check: { ...judge.check, instruction } },
       expectedRevision: 1
     });
@@ -2653,7 +2691,7 @@ describe("config CLI guardrails in the working copy", () => {
     expect(output.join("")).toContain("guardrail:no_iban: changed locally");
     expect(output.join("")).not.toContain("guardrail:privacy");
 
-    // Changed on the instance since: the put is refused and names the pull that repairs it.
+    // Changed on the instance since: preflight refuses before any write and names the pull.
     await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
@@ -2668,10 +2706,13 @@ describe("config CLI guardrails in the working copy", () => {
     });
     await writeFile(checkPath, "Edited here as well.\n", "utf8");
     output.length = 0;
+    writes.length = 0;
     expect(await runConfigCommand("push", { ...options, only: ["guardrail:privacy"] })).toBe(1);
-    expect(output.join("")).toContain("Push conflict; nothing was applied.");
-    expect(output.join("")).toContain("- guardrail:privacy: revision 3");
+    expect(output.join("")).toContain(
+      "Push refused; nothing was applied. guardrail:privacy changed since the last pull."
+    );
     expect(output.join("")).toContain("catalyst config pull --only guardrail:privacy");
+    expect(writes).toEqual([]);
 
     expect(await runConfigCommand("pull", { ...options, only: ["guardrails:privacy"] })).toBe(1);
     expect(output.join("")).toContain("guardrail:<name>");
@@ -3844,6 +3885,7 @@ function pulledBaseline(
         asset.key,
         {
           id: heldAssetId(asset.key),
+          canonicalFormVersion: CANONICAL_FORM_VERSION,
           revision: 1,
           hash: createHash("sha256").update(asset.contents).digest("hex"),
           // A pull of this CLI saw no agent draft.
@@ -4698,6 +4740,10 @@ describe("a working copy bound to a workspace", () => {
     expect(await runConfigCommand("push", options), output.join("")).toBe(0);
     expect(output.join("")).toContain(`Wrote guardrail:${guardrail.name} as draft revision 1`);
     expect(writes).toEqual([
+      {
+        path: "POST /api/v1/assets/guardrail/validate",
+        body: { config: guardrail, workspaceId: team.id }
+      },
       {
         path: `PUT /api/v1/assets/guardrail/${guardrail.name}`,
         body: { config: guardrail, expectedRevision: null, workspaceId: team.id }

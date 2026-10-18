@@ -16,7 +16,6 @@ import {
   type ActorAccess,
   type AgentAvailability,
   type AssetScope,
-  type ConfigAssetKey,
   type ConfigAssetRecord,
   type FileSet,
   type JsonObject,
@@ -26,7 +25,7 @@ import {
   type StorePage
 } from "@work-shape/catalyst-core";
 import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
-import { accessResource, decide, type AssetCall } from "./asset-access";
+import { accessResource, decide, listedTo, readsAssetDraft, type AssetCall } from "./asset-access";
 import { isReleaseSync } from "./asset-write-rules";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { AddresseeNames, WorkflowAssetKind } from "../asset-kinds/shared";
@@ -104,7 +103,8 @@ export class AssetReadWorkflow {
     const [after] = page?.after ?? [];
     // Whoever reads the asset is shown all of it; a holder of the use right its published view.
     const reads = (resource: AssetTarget["resource"]) =>
-      call.access.authorize(kind.actions.read, resource).allowed;
+      call.access.authorize(kind.actions.read, resource).allowed ||
+      readsAssetDraft(kind, call.access, resource);
     const [namespaces, defaultName, records] = await Promise.all([
       this.namespaces(scope),
       this.defaultName(kind, scope),
@@ -123,7 +123,8 @@ export class AssetReadWorkflow {
                   summarizeAsset(
                     kind,
                     asset.name,
-                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id))
+                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id)) ||
+                      kind.lifecycle === "active"
                       ? revisions.active
                       : revisions.published
                   ).title
@@ -150,12 +151,15 @@ export class AssetReadWorkflow {
     });
     return records.map((record) => {
       const namespace = findNamespaceOfAssetName(namespaces, record.name);
-      if (!reads(accessResource(record.kind, record.name, record.scope, record.id))) {
-        return this.publishedSummary(kind, record, namespace?.prefix, locale);
+      const resource = accessResource(record.kind, record.name, record.scope, record.id);
+      const allowed = allowedOn(kind, call, resource);
+      if (!reads(resource)) {
+        return { ...this.publishedSummary(kind, record, namespace?.prefix, locale), allowed };
       }
       return {
         id: record.id,
         kind: record.kind,
+        allowed,
         ...summarizeAsset(kind, record.name, record.config, locale),
         scope: record.scope,
         ...(namespace ? { namespace: namespace.prefix } : {}),
@@ -252,20 +256,7 @@ export class AssetReadWorkflow {
       target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;
     // What the caller may do here, decided as each write decides it, so the page offers no
     // action the instance refuses and hides none it allows (AD-4).
-    const { write, delete: remove, publish } = target.kind.actions;
-    const allowed = (
-      [
-        ["write", write],
-        ["delete", remove],
-        // Only a person publishes: a key or a service publishes nothing.
-        ["publish", isAuthenticatedServicePrincipal(call.actor) ? undefined : publish]
-      ] as const
-    )
-      .filter(
-        ([, action]) =>
-          action !== undefined && call.access.authorize(action, target.resource).allowed
-      )
-      .map(([verb]) => verb);
+    const allowed = allowedOn(target.kind, call, target.resource);
     return {
       ...(agentStatus ?? {}),
       ...(draftSummary ? { agentDraft: draftSummary } : {}),
@@ -414,7 +405,12 @@ export class AssetReadWorkflow {
     return {
       id: record.id,
       kind: record.kind,
-      ...summarizeAsset(kind, record.name, record.publishedConfig, locale),
+      ...summarizeAsset(
+        kind,
+        record.name,
+        kind.lifecycle === "active" ? record.config : record.publishedConfig,
+        locale
+      ),
       scope: record.scope,
       ...(namespace ? { namespace } : {}),
       revision: record.publishedRevision ?? record.revision,
@@ -633,23 +629,7 @@ function isPublished(kind: WorkflowAssetKind, asset: ConfigAssetRecord | undefin
  * Whether a list of the kind shows the caller this asset: whoever reads it is shown all of it,
  * a holder of the use right its published view.
  */
-export function listedTo(
-  kind: WorkflowAssetKind,
-  access: ActorAccess,
-  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published" | "appAvailability">
-): boolean {
-  const resource = accessResource(
-    asset.kind,
-    asset.name,
-    asset.scope,
-    asset.id,
-    asset.appAvailability
-  );
-  return (
-    access.authorize(kind.actions.read, resource).allowed ||
-    showsPublishedView(kind, access, resource, asset.published === true)
-  );
-}
+export { listedTo } from "./asset-access";
 
 /**
  * The rule of every kind with a published revision: whoever holds its read right or its use
@@ -693,4 +673,20 @@ function summarizeAsset(
     }
     throw error;
   }
+}
+
+/** List and detail answers use the write paths' in-memory authorization decision. */
+function allowedOn(kind: WorkflowAssetKind, call: AssetCall, resource: AssetTarget["resource"]) {
+  const { read, write, delete: remove, publish } = kind.actions;
+  return (
+    [
+      ["read", read],
+      ["write", write],
+      ["delete", remove],
+      // Only a person publishes: a key or a service publishes nothing.
+      ["publish", isAuthenticatedServicePrincipal(call.actor) ? undefined : publish]
+    ] as const
+  )
+    .filter(([, action]) => action !== undefined && call.access.authorize(action, resource).allowed)
+    .map(([verb]) => verb);
 }

@@ -185,7 +185,9 @@ function runsOf(runs: WorkflowRunsSource | undefined): WorkflowRunsSource {
 export function useWorkflowRuns(
   workflow: string,
   pageSize: number,
-  keyPrefix?: string
+  keyPrefix?: string,
+  /** False while the list is not to be read, such as for a reader known not to read the runs. */
+  enabled = true
 ): WorkflowRunList {
   const { runs } = useWorkflowsSource();
   const keys = useWorkflowKeys();
@@ -201,7 +203,7 @@ export function useWorkflowRuns(
         },
         signal
       ),
-    enabled: runs !== undefined,
+    enabled: enabled && runs !== undefined,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor,
     retry: retryUnlessGone,
@@ -224,6 +226,11 @@ export interface WorkflowRunRead {
   problem: WorkflowReadProblem | undefined;
   /** When the instance last answered about the run, while the readings since have failed. */
   silentSince: number | undefined;
+  /**
+   * The run was read and the latest reading of its steps failed. While the run's own reading
+   * fails too, the page says only that it lost the instance.
+   */
+  stepsFailed: boolean;
   /**
    * The step runs outside every entry of a loop: what the canvas draws. Absent until they
    * arrived.
@@ -271,10 +278,16 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
     run,
     problem: query.isError && run === undefined ? readProblem(query.error) : undefined,
     silentSince: query.isError && run !== undefined ? query.dataUpdatedAt : undefined,
+    // Said until a reading of the steps succeeds, also where earlier steps are held.
+    stepsFailed: steps.isError && !query.isError,
     stepRuns: steps.data?.stepRuns,
     entryLoops: steps.data?.entryLoops,
     stepRunsCut: steps.data?.complete === false,
-    retry: () => void query.refetch().catch(() => undefined)
+    retry: () => {
+      void query.refetch().catch(() => undefined);
+      // Before the run arrived there are no steps to ask for.
+      if (run !== undefined) void steps.refetch().catch(() => undefined);
+    }
   };
 }
 

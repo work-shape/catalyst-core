@@ -1,3 +1,6 @@
+import { RECORD_PROJECTION_SCHEMA } from "../../records/projection-schema";
+import { takeGrantTurn } from "../../provisioning";
+import { KNOWLEDGE_FIELD_SCHEMA } from "./field-schema";
 import { RECORD_FIELDS_SCHEMA, RECORD_FIELDS_CONTENT_HASH } from "../../records/schema";
 import { SOURCE_WITHDRAWAL_SCHEMA } from "./source-withdrawal-schema";
 import { createHash } from "node:crypto";
@@ -292,11 +295,17 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
       alter table catalyst_kb.sync_runs add constraint sync_runs_state_check
         check (state in ('running','done','failed','superseded')) not valid;
       alter table catalyst_kb.sync_runs validate constraint sync_runs_state_check;`
-  }
+  },
+  { number: 10, name: "field_extraction_budget", sql: KNOWLEDGE_FIELD_SCHEMA },
+  { number: 11, name: "record_content_hash_upgrade", sql: RECORD_FIELDS_CONTENT_HASH },
+  { number: 12, name: "record_projection_frame", sql: RECORD_PROJECTION_SCHEMA }
 ];
 
-/** The level the store of a built-in Knowledge Base is at when its tables are this release's. */
-export const KNOWLEDGE_STORE_LEVEL = KNOWLEDGE_STORE_MIGRATIONS.length;
+/** A later applied number never proves that earlier migrations were applied. */
+export function knowledgeStoreNeedsMigration(record: Pick<DataStoreRecord, "migrations">): boolean {
+  const applied = new Set(record.migrations.map(({ number }) => number));
+  return KNOWLEDGE_STORE_MIGRATIONS.some(({ number }) => !applied.has(number));
+}
 
 const appliedRow = z.object({ number: z.number().int() });
 
@@ -307,9 +316,13 @@ const appliedRow = z.object({ number: z.number().int() });
  */
 export async function applyKnowledgeStoreSchema(
   server: DataStoreServer,
-  record: Pick<DataStoreRecord, "location">,
+  record: Pick<DataStoreRecord, "location" | "roles">,
   signal: AbortSignal
-): Promise<DataStoreAppliedMigration[]> {
+): Promise<{
+  migrations: DataStoreAppliedMigration[];
+  appliedCount: number;
+  appliedNumbers: number[];
+}> {
   return server.executor.change(
     {
       ...server.asPlatform(record.location.database),
@@ -317,6 +330,9 @@ export async function applyKnowledgeStoreSchema(
       signal
     },
     async (sql) => {
+      // Schema creation and ACL updates race before the migrations table can be locked.
+      await takeGrantTurn(sql, record.location.database);
+      await sql.run("select set_config('catalyst.records_app_role', $1, true)", [record.roles.app]);
       await sql.script(
         `create schema if not exists catalyst_kb;
          revoke all on schema catalyst_kb from public;
@@ -333,19 +349,25 @@ export async function applyKnowledgeStoreSchema(
           .parse(await sql.run("select number from catalyst_kb.migrations"))
           .map((row) => row.number)
       );
-      for (const migration of KNOWLEDGE_STORE_MIGRATIONS) {
-        if (applied.has(migration.number)) continue;
+      const pending = KNOWLEDGE_STORE_MIGRATIONS.filter(
+        (migration) => !applied.has(migration.number)
+      ).sort((left, right) => left.number - right.number);
+      for (const migration of pending) {
         await sql.script(migration.sql);
         await sql.run(
           "insert into catalyst_kb.migrations (number, name) values ($1::pg_catalog.int4, $2::pg_catalog.text)",
           [migration.number, migration.name]
         );
       }
-      return KNOWLEDGE_STORE_MIGRATIONS.map(({ number, name, sql: text }) => ({
-        number,
-        name,
-        sha256: createHash("sha256").update(text).digest("hex")
-      }));
+      return {
+        appliedCount: pending.length,
+        appliedNumbers: pending.map(({ number }) => number),
+        migrations: KNOWLEDGE_STORE_MIGRATIONS.map(({ number, name, sql: text }) => ({
+          number,
+          name,
+          sha256: createHash("sha256").update(text).digest("hex")
+        }))
+      };
     }
   );
 }

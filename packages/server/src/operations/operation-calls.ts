@@ -19,6 +19,7 @@ import {
 import { publishApprovalKinds } from "../approvals/publish-approval";
 import { createNoticeHandler } from "../notices/notice-kind";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
+import { resolveOperationResource } from "./operation-resource";
 import { createAuditingEventEmitter } from "./event-emitter";
 import type { GuardrailRunner } from "../guardrails/guardrail-runner";
 import { createPublishNarrator } from "../publish-narrative/publish-narrator";
@@ -41,8 +42,8 @@ export type OperationCallsOptions = Pick<
   /** Runs the guardrails at every before-event of a call. Without it nothing is checked. */
   guardrails?: GuardrailRunner;
   /**
-   * The asset kinds of the instance. With them a held `assets.put` is shown as the asset it
-   * saves; without them it is shown as any other call.
+   * The asset kinds of the instance: incomplete resources of declared rights are resolved
+   * against them, and a held `assets.put` is shown as the asset it saves.
    */
   configAssets?: Pick<ResolvedChatServerOptions["configAssets"], "kinds">;
   /** The tools an agent's definition lists. Without it this process serves no agent. */
@@ -132,6 +133,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       store: options.stores.configAssets,
       modules: options.modules
     }),
+    resolveResource: (resource) => resolveOperationResource(options, resource),
     runs: options.stores.operationRuns,
     authorizer: options.authorizer,
     events:
@@ -176,6 +178,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
   // read from the App when it is called, so nothing is read here.
   registry.addSource(
     createAppActionOperationSource({
+      resolveResource: deps.resolveResource,
       clientInstanceId,
       store: options.stores.configAssets,
       modules: options.modules,

@@ -130,15 +130,26 @@ export interface KnowledgeBaseSource {
   query(knowledgeBase: string, sql: string): Promise<KnowledgeCall<KnowledgeQueryAnswer>>;
   /** Searches the documents of the published revision, as an agent does. */
   search(knowledgeBase: string, query: string): Promise<KnowledgeCall<KnowledgeSearchAnswer>>;
-  /** A hook: the Data Stores the reader may read whose name or id holds `search`. */
-  useDataStores(search: string): KnowledgeRead<readonly KnowledgeChoice[]>;
+  /**
+   * A hook: the Data Stores the reader may read whose name or id holds `search`: those of the
+   * workspace `owner` names first, then the instance's own.
+   */
+  useDataStores(
+    search: string,
+    owner: string | undefined
+  ): KnowledgeRead<readonly KnowledgeChoice[]>;
   /** A hook: the tables of one Data Store. Without a store it reads nothing and stays loading. */
   useStoreTables(store: string | undefined): KnowledgeRead<readonly string[]>;
   /**
-   * A hook: the Knowledge Bases the reader may see whose name or id holds `search`. It reads
-   * nothing while `enabled` is false, as where the instance has no Knowledge Bases.
+   * A hook: the Knowledge Bases the reader may see whose name or id holds `search`: those of
+   * the workspace `owner` names first, then the instance's own. It reads nothing while
+   * `enabled` is false, as where the instance has no Knowledge Bases.
    */
-  useKnowledgeBases(search: string, enabled: boolean): KnowledgeRead<readonly KnowledgeChoice[]>;
+  useKnowledgeBases(
+    search: string,
+    enabled: boolean,
+    owner: string | undefined
+  ): KnowledgeRead<readonly KnowledgeChoice[]>;
   /**
    * A hook: the documents of a published Knowledge Base that keeps documents. While one of them
    * is still being indexed, they are read again every few seconds.
@@ -207,9 +218,10 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
       called(() => client.knowledge_bases.query({ params: { knowledgeBase }, body: { sql } })),
     search: (knowledgeBase, query) =>
       called(() => client.knowledge_bases.search({ params: { knowledgeBase }, body: { query } })),
-    useDataStores: (search) =>
-      useChoices(client, key("choice", "data_store", search), {
+    useDataStores: (search, owner) =>
+      useChoices(client, key("choice", "data_store", owner ?? "", search), {
         kind: "data_store",
+        owner,
         search,
         limit: DATA_STORE_CHOICE_PAGE_SIZE,
         enabled: true
@@ -223,9 +235,10 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
           ).tables.map((table) => table.name),
         { enabled: store !== undefined }
       ),
-    useKnowledgeBases: (search, enabled) =>
-      useChoices(client, key("choice", "knowledge_base", search), {
+    useKnowledgeBases: (search, enabled, owner) =>
+      useChoices(client, key("choice", "knowledge_base", owner ?? "", search), {
         kind: "knowledge_base",
+        owner,
         search,
         limit: KNOWLEDGE_BASE_CHOICE_PAGE_SIZE,
         enabled
@@ -348,31 +361,41 @@ function useDocuments(
   return { status: "loading" };
 }
 
-/** The assets of one kind whose name or id holds the search, one page of them. */
+/**
+ * The assets of one kind whose name or id holds the search, one page of each owner an asset
+ * may name: the workspace that owns it, then the instance, as an agent's skills are offered.
+ */
 function useChoices(
   client: ApiClient,
   queryKey: (string | number)[],
   {
     kind,
+    owner,
     search,
     limit,
     enabled
-  }: { kind: string; search: string; limit: number; enabled: boolean }
+  }: { kind: string; owner: string | undefined; search: string; limit: number; enabled: boolean }
 ): KnowledgeRead<readonly KnowledgeChoice[]> {
   return useRead(
     queryKey,
-    async (signal) =>
-      (
-        await client.assets.list({
-          params: { kind },
-          query: { limit, ...(search ? { text: search } : {}) },
-          signal
-        })
-      ).items.map((asset) => ({
+    async (signal) => {
+      const query = { limit, ...(search ? { text: search } : {}) };
+      const [own, instance] = await Promise.all([
+        owner === undefined
+          ? undefined
+          : client.assets.list({
+              params: { kind },
+              query: { ...query, workspaceId: owner },
+              signal
+            }),
+        client.assets.list({ params: { kind }, query, signal })
+      ]);
+      return [...(own?.items ?? []), ...instance.items].map((asset) => ({
         name: asset.name,
         title: asset.title,
         ...(asset.description ? { description: asset.description } : {})
-      })),
+      }));
+    },
     { keepPrevious: true, enabled }
   );
 }

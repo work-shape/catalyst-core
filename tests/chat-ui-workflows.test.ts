@@ -14,7 +14,7 @@ import {
   startFormOf,
   startOffered,
   toWorkflow,
-  toDraftWorkflowListItem,
+  toAssetWorkflowListItem,
   toWorkflowListItem,
   toWorkflowRun,
   toWorkflowStepRun,
@@ -35,7 +35,10 @@ const render = (node: ReactNode, locale: "en" | "de" = "en") =>
 
 const now = new Date("2026-10-12T09:12:00.000Z");
 const noop = () => undefined;
-const READER = { read: true, write: false };
+/** Rights on the instance's Workflows: `write` as given, reading always. */
+const onInstance = (write: boolean) => ({
+  instance: { read: true, write, publish: false, delete: false }
+});
 
 type RunResource = Parameters<typeof toWorkflowRun>[0];
 type StepRunResource = Parameters<typeof toWorkflowStepRun>[0];
@@ -143,6 +146,7 @@ function runRead(run: RunResource, stepRuns: readonly StepRunResource[]): Workfl
     run: toWorkflowRun(run),
     problem: undefined,
     silentSince: undefined,
+    stepsFailed: false,
     stepRuns: stepRuns.map(toWorkflowStepRun),
     stepRunsCut: false,
     retry: noop
@@ -294,14 +298,14 @@ describe("the list of Workflows", () => {
   });
 
   it("lists a draft never published to who may write Workflows, opening on its page (NAV-2)", () => {
-    const draft = toDraftWorkflowListItem({
+    const draft = toAssetWorkflowListItem({
       name: "first-draft",
       title: "First draft",
       updatedAt: "2026-10-12T09:00:00.000Z"
     });
-    expect(listedToReader(draft, { write: true })).toBe(true);
-    expect(listedToReader(draft, { write: false })).toBe(false);
-    expect(listedToReader(toWorkflowListItem(summary), { write: false })).toBe(true);
+    expect(listedToReader(draft, onInstance(true))).toBe(true);
+    expect(listedToReader(draft, onInstance(false))).toBe(false);
+    expect(listedToReader(toWorkflowListItem(summary), onInstance(false))).toBe(true);
     const markup = render(
       createElement(WorkflowsPageView, {
         workspaceId: "cw_1",
@@ -379,11 +383,11 @@ describe("the list of Workflows", () => {
     // A Workflow the list names without a kind, and a draft never published, are processes.
     expect(toWorkflowListItem(summary).kind).toBe("process");
     expect(
-      toDraftWorkflowListItem({ name: "d", title: "D", updatedAt: now.toISOString() }).kind
+      toAssetWorkflowListItem({ name: "d", title: "D", updatedAt: now.toISOString() }).kind
     ).toBe("process");
     // A draft never published takes the kind its asset row names, a process where it names none.
     const draft = (attributes?: Record<string, string | boolean>) =>
-      toDraftWorkflowListItem({
+      toAssetWorkflowListItem({
         name: "d",
         title: "D",
         updatedAt: now.toISOString(),
@@ -899,15 +903,16 @@ describe("the page of a run", () => {
   it("offers the cancel to whoever started the run, and to whoever may write Workflows", () => {
     const going = toWorkflowRun(runResource());
     const ended = toWorkflowRun(runResource({ status: "done" }));
-    expect(cancelOffered(going, "user_1", READER)).toBe(true);
-    expect(cancelOffered(going, "user_2", READER)).toBe(false);
-    expect(cancelOffered(going, "user_2", { ...READER, write: true })).toBe(true);
-    expect(cancelOffered(ended, "user_1", { ...READER, write: true })).toBe(false);
+    expect(cancelOffered(going, "user_1", onInstance(false), undefined)).toBe(true);
+    expect(cancelOffered(going, "user_2", onInstance(false), undefined)).toBe(false);
+    expect(cancelOffered(going, "user_2", onInstance(true), undefined)).toBe(true);
+    expect(cancelOffered(ended, "user_1", onInstance(true), undefined)).toBe(false);
   });
 
   const unread = {
     run: undefined,
     silentSince: undefined,
+    stepsFailed: false,
     stepRuns: undefined,
     stepRunsCut: false,
     retry: noop

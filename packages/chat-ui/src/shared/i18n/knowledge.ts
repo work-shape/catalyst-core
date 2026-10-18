@@ -126,6 +126,11 @@ export const knowledge = defineTranslations({
     "knowledge.documentIndexed": "Searchable",
     "knowledge.documentFailed": "Failed",
     "knowledge.originalReleased": "Original is stored at the source",
+    "knowledge.fieldsPending": "Fields pending",
+    "knowledge.fieldsPendingMonthlyBudget":
+      "Fields are filled in once the budget resets or is raised",
+    "knowledge.fieldsPendingTokenBudget":
+      "Fields wait: this document needs an estimated {estimated} input tokens plus {reserve} reserved output tokens, exceeding the limit of {limit} tokens per document. Raise the limit to fill them in",
     "knowledge.retry": "Retry",
     "knowledge.retryFailed": "The document could not be retried.",
     "knowledge.retryRefused": "You may not change this knowledge base.",
@@ -316,6 +321,11 @@ export const knowledge = defineTranslations({
     "knowledge.documentIndexed": "Durchsuchbar",
     "knowledge.documentFailed": "Fehlgeschlagen",
     "knowledge.originalReleased": "Original liegt in der Quelle",
+    "knowledge.fieldsPending": "Felder ausstehend",
+    "knowledge.fieldsPendingMonthlyBudget":
+      "Felder werden gefüllt, sobald das Budget zurückgesetzt oder erhöht wird",
+    "knowledge.fieldsPendingTokenBudget":
+      "Felder warten: Dieses Dokument braucht geschätzt {estimated} Eingabe-Tokens plus {reserve} reservierte Ausgabe-Tokens und überschreitet damit die Grenze von {limit} Tokens je Dokument. Erhöhe die Grenze, damit sie gefüllt werden",
     "knowledge.retry": "Erneut versuchen",
     "knowledge.retryFailed": "Der neue Versuch konnte nicht gestartet werden.",
     "knowledge.retryRefused": "Du darfst diese Wissensbasis nicht ändern.",

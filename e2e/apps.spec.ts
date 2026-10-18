@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FrameLocator, Page } from "@playwright/test";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { z } from "zod";
 import {
   overviewRoute,
@@ -39,7 +40,6 @@ const DRAFT_HEADING = "Revenue forecast";
 const HELD_HOST = "rates.example.com";
 
 const idSchema = z.object({ id: z.string() });
-const contextSchema = z.looseObject({ actions: z.array(z.string()) });
 
 async function signIn(page: Page, person: { email: string; password: string }): Promise<void> {
   const signedIn = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
@@ -108,7 +108,8 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   page,
   browser,
   baseURL,
-  pageErrors
+  pageErrors,
+  accessState: _accessState
 }, testInfo) => {
   // An App's id is taken once for the whole instance, so a repeated or retried run on the same
   // instance names its App after the attempt.
@@ -329,6 +330,107 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     ).toBeVisible();
     await expect(memberView.getByRole("heading", { name: appName })).toBeVisible();
   });
+  // A write on this App alone opens its editor, even without workspace build rights.
+  // The workspace delete grant is explicitly denied on this App, so no Delete is offered.
+  const person = apiOperations["me.get"].response.schema.parse(
+    await (await memberPage.request.get(`${apiOrigin}/api/v1/me`)).json()
+  );
+  const asset = apiOperations["assets.get"].response.schema.parse(
+    await (
+      await page.request.get(`${apiOrigin}/api/v1/assets/app/${appId}?workspaceId=${workspaceId}`)
+    ).json()
+  );
+  const grants: string[] = [];
+  try {
+    for (const [action, effect, scopeKind, scopeId] of [
+      ["app.write", "allow", "asset", asset.id],
+      ["app.delete", "allow", "workspace", workspaceId],
+      ["app.delete", "deny", "asset", asset.id]
+    ] as const) {
+      const granted = await requestWithOrigin(
+        page,
+        "post",
+        `${apiOrigin}/api/v1/instance/access/grants`,
+        {
+          data: { holderKind: "user", holderId: person.id, action, effect, scopeKind, scopeId }
+        }
+      );
+      expect(granted.ok(), await granted.text()).toBe(true);
+      grants.push(idSchema.parse(await granted.json()).id);
+    }
+    await memberPage.goto(appsPath);
+    await expect(memberCard.getByRole("link", { name: "Edit", exact: true })).toBeVisible();
+    await memberCard.getByRole("button", { name: `Actions for ${appName}` }).click();
+    await expect(memberPage.getByRole("menuitem", { name: "Delete", exact: true })).toHaveCount(0);
+    await memberPage.keyboard.press("Escape");
+    await expect(memberPage.getByRole("menu")).toBeHidden();
+    await shoot(
+      memberPage,
+      "apps-list-asset-write-delete-denied",
+      [
+        ["light", "en", 1440],
+        ["dark", "en", 1440],
+        ["light", "de", 1440],
+        ["dark", "de", 1440],
+        ["light", "en", 390],
+        ["dark", "en", 390],
+        ["light", "de", 390],
+        ["dark", "de", 390]
+      ],
+      async () => {
+        await expect(
+          memberCard.getByRole("link", { name: /^(?:Edit|Bearbeiten)$/u })
+        ).toBeVisible();
+        await memberCard.getByRole("button").click();
+        await expect(memberPage.getByRole("menu")).toBeVisible();
+        await expect(
+          memberPage.getByRole("menuitem", { name: /^(?:Delete|Löschen)$/u })
+        ).toHaveCount(0);
+      }
+    );
+    if (shotsDir) {
+      await memberPage.keyboard.press("Escape");
+      await expect(memberPage.getByRole("menu")).toBeHidden();
+    }
+    await memberCard.getByRole("link", { name: "Edit", exact: true }).click();
+    const memberEdit = memberPage.getByTestId("app-edit");
+    await expect(memberEdit).toContainText("Draft · revision 2");
+    // The conversation subject keeps the server's separate read requirement. The editor
+    // above needs write alone; grant read on this App too before starting its conversation.
+    const readable = await requestWithOrigin(
+      page,
+      "post",
+      `${apiOrigin}/api/v1/instance/access/grants`,
+      {
+        data: {
+          holderKind: "user",
+          holderId: person.id,
+          action: "app.read",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: asset.id
+        }
+      }
+    );
+    expect(readable.ok(), await readable.text()).toBe(true);
+    grants.push(idSchema.parse(await readable.json()).id);
+    await memberPage.reload();
+    await expect(memberEdit).toContainText("Draft · revision 2");
+    await memberEdit.getByRole("button", { name: "Edit with the agent", exact: true }).click();
+    await expect(memberPage).toHaveURL(
+      (url) => url.pathname === draftPathOf(appPath) && url.searchParams.has("chat")
+    );
+    await expect(memberPage.getByTestId("dock-head")).toHaveAttribute("data-subject-kind", "app");
+  } finally {
+    for (const grantId of grants.reverse()) {
+      const revoked = await requestWithOrigin(
+        page,
+        "delete",
+        `${apiOrigin}/api/v1/instance/access/grants/${grantId}`
+      );
+      expect(revoked.ok()).toBe(true);
+    }
+  }
   await memberContext.close();
   await page.reload();
   const draftReady = async () => {
@@ -400,18 +502,46 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await page.keyboard.press("Escape");
   await expect(revisions).toBeHidden();
 
-  // A builder who may write and not publish finds Publish held, with the right named.
-  // No grant gives the write right without the publish right yet: every holder of one holds
-  // both through the role. So the instance's answer about the builder's rights is passed on
-  // without `app.publish`, as it will say it once such a grant exists.
-  await builderPage.route(`${apiOrigin}/api/v1/context`, async (route) => {
-    const answer = await route.fetch();
-    const context = contextSchema.parse(await answer.json());
-    await route.fulfill({
-      response: answer,
-      json: { ...context, actions: context.actions.filter((action) => action !== "app.publish") }
-    });
-  });
+  // A builder who may write and not publish finds Publish held, with the right named. The
+  // instance's answers to this builder, in this workspace and for this App, are passed on
+  // without the publish right, as a grant of write without publish answers them.
+  const contextOperation = apiOperations["platform.context.get"];
+  await builderPage.route(
+    (url) => url.origin === apiOrigin && url.pathname === contextOperation.path,
+    async (route) => {
+      const answer = await route.fetch();
+      const context = contextOperation.response.schema.parse(await answer.json());
+      await route.fulfill({
+        response: answer,
+        json: {
+          ...context,
+          actions: context.actions.filter((action) => action !== "app.publish"),
+          workspaces: context.workspaces.map((each) =>
+            each.id === workspaceId
+              ? { ...each, actions: each.actions.filter((action) => action !== "app.publish") }
+              : each
+          )
+        }
+      });
+    }
+  );
+  const assetOperation = apiOperations["assets.get"];
+  const assetPath = assetOperation.path.replace(":kind", "app").replace(":name", appId);
+  await builderPage.route(
+    (url) => url.origin === apiOrigin && url.pathname === assetPath,
+    async (route) => {
+      if (route.request().method() !== assetOperation.method) {
+        await route.continue();
+        return;
+      }
+      const answer = await route.fetch();
+      const asset = assetOperation.response.schema.parse(await answer.json());
+      await route.fulfill({
+        response: answer,
+        json: { ...asset, allowed: asset.allowed?.filter((verb) => verb !== "publish") }
+      });
+    }
+  );
   await builderPage.goto(draftPathOf(appPath));
   const builderEdit = builderPage.getByTestId("app-edit");
   await expect(builderEdit).toContainText("Draft · revision 2");

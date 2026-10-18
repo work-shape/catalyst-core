@@ -7,6 +7,7 @@ import {
   Button,
   Dialog,
   InlineError,
+  LoadError,
   PageHeader,
   PageLead,
   TextLink
@@ -42,7 +43,6 @@ import {
 } from "./workflow-model";
 import {
   BackLink,
-  LoadError,
   RunStateBadge,
   TitlePlaceholder,
   WorkflowsFrame,
@@ -75,12 +75,21 @@ function useNow(ticking: boolean): Date {
 }
 
 /** One run of a Workflow on the canvas, followed while it is going, with the way to cancel it. */
-export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; run: string }) {
+export function WorkflowRunPage({
+  workflow: addressed,
+  run: runId
+}: {
+  workflow: string;
+  run: string;
+}) {
   const { t } = useTranslation();
   const host = useWorkflowsHost();
   const workspaceId = host?.workspace?.id;
-  const definition = useWorkflow(workspaceId, workflow);
   const read = useWorkflowRun(runId);
+  // The run names its Workflow: its rights, its start and its draft are that one's, whatever
+  // Workflow the address names. Until the run arrives the address stands for it.
+  const workflow = read.run?.workflowId ?? addressed;
+  const definition = useWorkflow(workspaceId, workflow);
   const writes = useWorkflowWrites();
   const [cancelling, setCancelling] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -126,7 +135,11 @@ export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; ru
         workflow={definition.workflow}
         read={read}
         now={now}
-        canCancel={read.run !== undefined && cancelOffered(read.run, host.viewerId, host.rights)}
+        canCancel={
+          read.run !== undefined &&
+          cancelOffered(read.run, host.viewerId, host.rights, definition.workflow)
+        }
+        {...(definition.problem === "failed" ? { retryDefinition: definition.retry } : {})}
         // A test run is run again as a test of the draft, a run of what is published as a run.
         canRunAgain={
           test
@@ -175,13 +188,19 @@ export function WorkflowRunPageView({
   onRunAgain,
   onOpenRoute,
   edit,
-  liveOnce
+  liveOnce,
+  retryDefinition
 }: {
   workspaceId: string;
   workflowId: string;
   /** The Workflow of the run, as far as the reader may read it: it is what the canvas draws. */
   workflow: WorkflowView | undefined;
   read: WorkflowRunRead;
+  /**
+   * Present where the reading of the run's Workflow failed: the page says so with Try again. A
+   * Workflow the reader may not read, or one that is gone, leaves the run without its steps.
+   */
+  retryDefinition?(): void;
   now: Date;
   canCancel: boolean;
   /** The reader may start the Workflow, and it takes no input: an ended run can be run again. */
@@ -381,6 +400,14 @@ export function WorkflowRunPageView({
         <p className="p-(--layout-gutter) text-body text-muted-foreground">
           {t(PROBLEM_SENTENCES[read.problem])}
         </p>
+      ) : read.stepsFailed ? (
+        <div className="p-(--layout-gutter)">
+          <LoadError onRetry={read.retry}>{t("workflows.run.stepsFailedToLoad")}</LoadError>
+        </div>
+      ) : retryDefinition !== undefined ? (
+        <div className="p-(--layout-gutter)">
+          <LoadError onRetry={retryDefinition}>{t("workflows.failed")}</LoadError>
+        </div>
       ) : (
         <>
           {run === undefined ? null : (

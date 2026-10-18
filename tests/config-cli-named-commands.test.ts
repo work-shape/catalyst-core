@@ -206,7 +206,16 @@ const cases: CommandCase[] = [
     operation: "apps.actions.list",
     query: { app: "offers" },
     response: {
-      apps: [{ name: "offers", title: "Offers", view: "published", revision: 1, actions: [] }],
+      apps: [
+        {
+          name: "offers",
+          title: "Offers",
+          scope: { kind: "workspace", workspaceId: "workspace-1" },
+          view: "published",
+          revision: 1,
+          actions: []
+        }
+      ],
       truncated: false
     }
   },

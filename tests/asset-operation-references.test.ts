@@ -77,7 +77,7 @@ describe("a reference to an asset the caller may not read", () => {
     expect(await check(t.admin.id, "team-notes")).toEqual({
       valid: false,
       issues: [
-        "Config agent 'kai-intake' names the skill 'team-notes', which a workspace owns: only an asset of that workspace may name it"
+        `Agent 'kai-intake' owned by the instance references Skill 'team-notes' owned by workspace 'Team'. An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets.`
       ]
     });
     expect(await check(t.admin.id, "nowhere")).toEqual({
@@ -307,6 +307,17 @@ describe("an issue of an asset the caller may not read", () => {
     expect(issues.length).toBe(2);
     expect(issues.at(-1)?.message).toBe(unread);
     withoutNames(draft.body);
+
+    const german = await t.expectOk(t.kai.id, "assets.validate", {
+      ...address,
+      params: { kind: "skill" },
+      payload: { config: untitled },
+      headers: { "accept-language": "de" }
+    });
+    expect(german.body).toContain(
+      "Die Änderung würde ein Asset beschädigen, das der Aufrufer nicht lesen darf"
+    );
+    expect(german.body).not.toContain("lena-helper");
 
     const calls = [
       await t.call(t.kai.id, "assets.put", { ...address, payload: { config: untitled } }),

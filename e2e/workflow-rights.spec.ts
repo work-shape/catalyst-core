@@ -47,7 +47,12 @@ async function sessionOf(
 }
 
 /** Stores and publishes a Workflow that starts by hand and returns a number. */
-async function publishWorkflow(root: Page, id: string, runAs: string): Promise<void> {
+async function publishWorkflow(
+  root: Page,
+  id: string,
+  runAs: string,
+  name = "Rights walk"
+): Promise<void> {
   const principal = await requestWithOrigin(
     root,
     "post",
@@ -63,7 +68,7 @@ async function publishWorkflow(root: Page, id: string, runAs: string): Promise<v
         name: id,
         manifest: {
           id,
-          name: "Rights walk",
+          name,
           description: "A Workflow a spec gives rights on.",
           runAs,
           inputs: { type: "object", additionalProperties: false },
@@ -244,6 +249,123 @@ test("an admin gives a member reading and using on one Workflow and removes both
         page,
         "delete",
         `${apiBaseUrl}/api/v1/instance/access/grants/${grant.id}`
+      );
+    }
+    await memberPage.context().close();
+    await root.context().close();
+  }
+});
+
+/** The person's own workspace, which the instance makes when the person first opens it. */
+async function personalWorkspaceId(memberPage: Page): Promise<string> {
+  await memberPage.goto("/");
+  let id = "";
+  await expect
+    .poll(async () => {
+      const body: { items: { id: string; kind: string }[] } = await (
+        await memberPage.request.get(`${apiBaseUrl}/api/v1/workspaces?limit=100`)
+      ).json();
+      id = body.items.find((workspace) => workspace.kind === "personal")?.id ?? "";
+      return id;
+    })
+    .not.toBe("");
+  return id;
+}
+
+test("a write on one Workflow offers that one's draft, and no runs, start or sibling", async ({
+  page,
+  browser,
+  pageErrors,
+  accessState: _accessState
+}) => {
+  test.setTimeout(120_000);
+  const suffix = randomUUID().slice(0, 8);
+  const granted = { id: `rights-granted-${suffix}`, name: `Rights granted ${suffix}` };
+  const sibling = { id: `rights-sibling-${suffix}`, name: `Rights sibling ${suffix}` };
+  const root = await sessionOf(browser, pageErrors.watch, superadmin);
+  for (const workflow of [granted, sibling]) {
+    await publishWorkflow(root, workflow.id, `${workflow.id}-runner`, workflow.name);
+  }
+  const memberPage = await sessionOf(browser, pageErrors.watch, member);
+  const me: { id: string } = await (await memberPage.request.get(`${apiBaseUrl}/api/v1/me`)).json();
+  const asset: { id: string } = await (
+    await root.request.get(`${apiBaseUrl}/api/v1/assets/workflow/${granted.id}`)
+  ).json();
+  await signIn(page, admin);
+  const grants: string[] = [];
+  try {
+    const given = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/v1/instance/access/grants`,
+      {
+        data: {
+          holderKind: "user",
+          holderId: me.id,
+          action: "workflow.write",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: asset.id
+        }
+      }
+    );
+    expect(given.ok(), await given.text()).toBe(true);
+    const grant: { id: string } = await given.json();
+    grants.push(grant.id);
+    // Writing reads no run and starts nothing: the engine lists the Workflow to neither.
+    expect(await memberActions(memberPage, granted.id)).toBeUndefined();
+
+    const personalId = await personalWorkspaceId(memberPage);
+    await memberPage.goto(`/w/${personalId}/workflows`);
+    const area = memberPage.getByTestId("workflows-area");
+    await expect(area.getByRole("link", { name: `Open ${granted.name}` })).toBeVisible();
+    await expect(area.getByRole("link", { name: `Open ${sibling.name}` })).toHaveCount(0);
+    await expect(area.getByRole("button", { name: /Start now/u })).toHaveCount(0);
+    await expect(area.getByRole("link", { name: "Runs", exact: true })).toHaveCount(0);
+
+    await area.getByRole("link", { name: `Open ${granted.name}` }).click();
+    await expect(
+      memberPage.getByRole("button", { name: "Edit with the agent", exact: true })
+    ).toBeVisible();
+    const opened = memberPage.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.origin === new URL(apiBaseUrl).origin &&
+        url.pathname === "/api/v1/conversations" &&
+        response.request().method() === "POST"
+      );
+    });
+    await memberPage.getByRole("button", { name: "Edit with the agent", exact: true }).click();
+    const conversation = await opened;
+    expect(conversation.ok()).toBe(true);
+    expect(await conversation.json()).toMatchObject({
+      subject: { kind: "workflow", name: granted.id }
+    });
+    // The page leads to no runs the member may not read, and holds no Delete.
+    await expect(memberPage.getByRole("link", { name: "Runs", exact: true })).toHaveCount(0);
+    await expect(memberPage.getByRole("button", { name: /Delete/u })).toHaveCount(0);
+
+    // The runs' own address says they are not the member's, and asks the instance for none.
+    const refused: string[] = [];
+    memberPage.on("request", (request) => {
+      const url = new URL(request.url());
+      if (
+        url.origin === new URL(apiBaseUrl).origin &&
+        url.pathname === `/api/v1/workflows/${granted.id}/runs`
+      )
+        refused.push(request.url());
+    });
+    await memberPage.goto(`/w/${personalId}/workflows/${granted.id}/runs`);
+    await expect(
+      memberPage.getByText("The runs of this workflow are not available to you.")
+    ).toBeVisible();
+    expect(refused).toEqual([]);
+  } finally {
+    for (const grantId of grants) {
+      await requestWithOrigin(
+        page,
+        "delete",
+        `${apiBaseUrl}/api/v1/instance/access/grants/${grantId}`
       );
     }
     await memberPage.context().close();

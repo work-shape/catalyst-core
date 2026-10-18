@@ -17,7 +17,7 @@ export function WorkflowHead({
   workflowId,
   workflow,
   tab,
-  runsAvailable,
+  runsShown,
   canStart,
   startOff = false,
   edit,
@@ -29,7 +29,8 @@ export function WorkflowHead({
   /** The Workflow, once its record arrived. */
   workflow: Pick<WorkflowView, "name" | "description" | "runsAs"> | undefined;
   tab: "workflow" | "runs";
-  runsAvailable: boolean;
+  /** The instance runs Workflows and the reader may read this one's runs: the tabs stand. */
+  runsShown: boolean;
   canStart: boolean;
   /** The reader may start the Workflow and the instance accepts no start of it now. */
   startOff?: boolean;
@@ -88,7 +89,7 @@ export function WorkflowHead({
         }
         menu={edit === undefined ? undefined : <CopyIdItem id={workflowId} />}
       />
-      {runsAvailable ? (
+      {runsShown ? (
         <TabsNav label={t("workflows.tabs")} className="shrink-0 px-(--layout-gutter)">
           <TabsLink selected={tab === "workflow"} asChild>
             <a {...routeLink({ kind: "workflow", ...address }, onOpenRoute)}>

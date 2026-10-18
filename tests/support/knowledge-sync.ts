@@ -18,7 +18,9 @@ import {
   type ConnectorContext,
   type DocumentSourceCapability,
   type KnowledgeFiles,
-  type Logger
+  type Logger,
+  type LocaleCode,
+  type OperationBatchFailure
 } from "@work-shape/catalyst-core";
 import { eventually, required } from "./assertions";
 import { clientInstanceId, useDataStoreInstance } from "./data-store-instance";
@@ -51,7 +53,8 @@ function context(signal: AbortSignal): ConnectorContext {
   };
 }
 
-export function useKnowledgeSync() {
+// Opt in only when a test publishes stores: migration claims otherwise add unrelated transactions.
+export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
   const { start } = useDataStoreInstance();
   const cleanups: (() => Promise<unknown>)[] = [];
   afterEach(async () => {
@@ -62,7 +65,9 @@ export function useKnowledgeSync() {
     wrap: (source: DocumentSourceCapability) => DocumentSourceCapability = (source) => source,
     extractor?: KnowledgeExtractor,
     withFileRoute = false,
-    developmentAuth?: unknown
+    developmentAuth?: unknown,
+    fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor,
+    defaultLocale: LocaleCode = "de"
   ) {
     const logs: unknown[] = [];
     const logger: Logger = {
@@ -82,8 +87,17 @@ export function useKnowledgeSync() {
     };
     const instance = await start(true, undefined, developmentAuth, undefined, {
       embedding: true,
+      defaultLocale,
       apiAccess: true,
       ...(extractor ? { documents: true as const } : {}),
+      ...(fieldExtractor
+        ? {
+            attachments: {
+              name: "fake-field-binding",
+              create: () => ({ knowledgeFieldExtractor: fieldExtractor })
+            }
+          }
+        : {}),
       ...(withFileRoute
         ? { attachments: createManagedObjectTestAttachmentCapability().capability }
         : {})
@@ -118,7 +132,7 @@ export function useKnowledgeSync() {
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(9);
+      expect(row?.level).toBe(12);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());
@@ -201,7 +215,9 @@ export function useKnowledgeSync() {
       processingPrices: [{ bindingId: "embedding", currency: "USD", perMillionTokens: 1 }],
       models: [{ bindingId: "embedding", model: "test", dimensions: 8 }]
     };
+    const recordFailures: OperationBatchFailure[][] = [];
     const dataStores = createDataStores({
+      defaultLocale,
       embedding,
       clientInstanceId,
       stores: instance.stores,
@@ -211,6 +227,16 @@ export function useKnowledgeSync() {
         secrets: { resolve: async () => randomBytes(32).toString("base64") }
       }),
       limits: { sizeLimitBytes: 1024 ** 3, poolMaxConnections: 3 },
+      recordFailures: {
+        write: async (items) => {
+          recordFailures.push([...items]);
+          return {
+            $dataset: "proc2-failures",
+            rowCount: items.length,
+            bytes: JSON.stringify(items).length
+          };
+        }
+      },
       logger
     });
     cleanups.push(() => dataStores.close());
@@ -218,6 +244,8 @@ export function useKnowledgeSync() {
       vectors: texts.map(() => Array.from({ length: 8 }, () => 0.25))
     }));
     const knowledge = createKnowledgeBases({
+      defaultLocale,
+      assertFieldBudgetPriced: () => fieldExtractor?.assertBudgetPriced?.(),
       clientInstanceId,
       stores: instance.stores,
       backend: dataStores.knowledgeBackend,
@@ -247,6 +275,7 @@ export function useKnowledgeSync() {
       stores: instance.stores,
       handlers: [
         ...handlers,
+        ...(withDataStoreJobs ? dataStores.jobHandlers : []),
         ...fileJobs.handlers,
         ...(extractor
           ? [
@@ -302,7 +331,8 @@ export function useKnowledgeSync() {
         folders: string[];
         include?: string[];
         exclude?: string[];
-      }[]
+      }[],
+      extra: { extraction?: { budget: { perMonth?: number; maxTokensPerDocument: number } } } = {}
     ) {
       const asset = required(
         await instance.stores.configAssets.getConfigAsset({
@@ -311,7 +341,7 @@ export function useKnowledgeSync() {
           name: KB
         })
       );
-      const config = { ...definition, sources };
+      const config = { ...definition, sources, ...extra };
       const put = await instance.api.call("assets.put", {
         params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB },
         payload: { config, expectedRevision: asset.revision }
@@ -363,6 +393,7 @@ export function useKnowledgeSync() {
     }
     return {
       publishSources,
+      recordFailures,
       ...fixture,
       dataStores,
       openSource,

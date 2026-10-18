@@ -49,6 +49,7 @@ export interface ModuleAssemblyParts {
  * run does, asks whether a principal may, calls a model and runs the tools of the instance.
  */
 interface ModuleRuntime {
+  knowledgeFieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor;
   notices?: (stores: PlatformStores) => Notices;
   operationCalls: OperationCalls;
   authorizer: Authorizer;

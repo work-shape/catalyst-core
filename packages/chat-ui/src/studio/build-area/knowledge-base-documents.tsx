@@ -224,8 +224,8 @@ export function KnowledgeDocuments({
 }
 
 /**
- * One document: its name, format and size, when it was added, its state, and whether its
- * original is stored at the source.
+ * One document: its name, format and size, when it was added, its state, whether its
+ * original is stored at the source, and whether its fields wait, with the reason.
  */
 function DocumentRow({
   document,
@@ -244,22 +244,36 @@ function DocumentRow({
   const view = KNOWLEDGE_DOCUMENT_STATE_VIEWS[document.state];
   const title = document.title || document.fileName;
   const facts = `${FORMAT_NAMES[document.format] ?? document.format} · ${formatFileBytes(document.bytes, locale)}`;
-  const pages = new Intl.NumberFormat(locale);
+  const numbers = new Intl.NumberFormat(locale);
   const failurePages = {
     ...(document.failurePageLimit === undefined
       ? {}
-      : { limit: pages.format(document.failurePageLimit) }),
+      : { limit: numbers.format(document.failurePageLimit) }),
     ...(document.failurePageCount === undefined
       ? {}
-      : { count: pages.format(document.failurePageCount) })
+      : { count: numbers.format(document.failurePageCount) })
   };
   const summary =
     document.state === "failed" ? t(documentFailureText(document), failurePages) : facts;
+  // Field extraction paused: the document is searchable, its fields follow.
+  const fieldsPending = document.fieldsPending === true && document.state !== "failed";
+  const pendingReason = document.fieldsPendingReason;
+  // Too large for the per-document limit: name the input, output reserve and limit. Otherwise the monthly budget,
+  // also for an instance that sends no reason.
+  const fieldsPendingText =
+    pendingReason?.reason === "token_budget"
+      ? t("knowledge.fieldsPendingTokenBudget", {
+          estimated: numbers.format(pendingReason.estimatedTokens),
+          reserve: numbers.format(pendingReason.reservedOutputTokens),
+          limit: numbers.format(pendingReason.maxTokensPerDocument)
+        })
+      : t("knowledge.fieldsPendingMonthlyBudget");
   // A synced document whose original stays at its source keeps no copy of the file here.
-  const description =
-    document.originalStatus === "released"
-      ? `${summary} · ${t("knowledge.originalReleased")}`
-      : summary;
+  const description = [
+    summary,
+    ...(document.originalStatus === "released" ? [t("knowledge.originalReleased")] : []),
+    ...(fieldsPending ? [fieldsPendingText] : [])
+  ].join(" · ");
   return (
     <ListRow
       data-knowledge-document={document.id}
@@ -267,15 +281,19 @@ function DocumentRow({
       leading={<FileText aria-hidden="true" />}
       title={title}
       description={description}
-      descriptionWraps={document.state === "failed"}
+      data-knowledge-fields-pending={fieldsPending ? "" : undefined}
+      descriptionWraps="always"
       chips={
-        <Badge
-          tone={view.tone}
-          dot={document.state !== "pending"}
-          leading={document.state === "pending" ? <Spinner size="sm" /> : undefined}
-        >
-          {t(view.label)}
-        </Badge>
+        <>
+          <Badge
+            tone={view.tone}
+            dot={document.state !== "pending"}
+            leading={document.state === "pending" ? <Spinner size="sm" /> : undefined}
+          >
+            {t(view.label)}
+          </Badge>
+          {fieldsPending ? <Badge tone="neutral">{t("knowledge.fieldsPending")}</Badge> : null}
+        </>
       }
       time={formatMomentShort(document.addedAt, locale)}
       actionsVisible

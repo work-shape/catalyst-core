@@ -115,6 +115,57 @@ describe("a test run of a Workflow draft", () => {
     return { started, ended, steps: await stepRunsOf(t, started.id) };
   }
 
+  it("continues on the same draft revision, with its labels, while a different revision is published", async () => {
+    const draft = {
+      kind: "data",
+      ...notifyClients({ continueAsNew: { position: "offset", after: 1 } }),
+      labels: { customer: { value: "Draft label" } },
+      inputs: {
+        type: "object",
+        properties: { note: { type: "string" }, offset: { type: "integer" } },
+        required: ["note"]
+      }
+    };
+    const t = await ready(draft);
+    const initial = testRunSchema.parse((await startTest(t)).json());
+    // Publish a different draft while the test Lauf still owns its original definition.
+    const revision = await save(
+      t,
+      {
+        ...draft,
+        description: "A newer published definition",
+        labels: { customer: { value: "Published label" } }
+      },
+      1
+    );
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: address,
+      payload: { revision }
+    });
+    const worker = t.worker();
+    for (let pass = 0; pass < 40; pass++) {
+      await worker.runDue();
+      const chain = await t.stores.workflowRuns.listRuns({
+        clientInstanceId,
+        workflow: WORKFLOW,
+        page: { limit: 20 }
+      });
+      if (chain.some((run) => run.status === "done" || run.status === "failed")) {
+        expect(chain).toHaveLength(3);
+        expect(
+          chain.every(
+            (run) =>
+              run.definitionRevisionId === initial.definitionRevisionId && run.mode === "test"
+          )
+        ).toBe(true);
+        expect(chain.every((run) => run.labels?.customer === "Draft label")).toBe(true);
+        expect(chain.map((run) => run.status).sort()).toEqual(["continued", "continued", "done"]);
+        return;
+      }
+    }
+    throw new Error("The draft Lauf did not end");
+  });
+
   async function operationRun(t: WorkflowFixture, runId: string | undefined) {
     if (runId === undefined) throw new Error("The step made no call");
     // A refused run carries its refusal under `error`, so its read is not checked for one.

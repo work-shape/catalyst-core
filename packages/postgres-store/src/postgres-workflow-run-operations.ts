@@ -1,6 +1,14 @@
+import { lockWorkflowRun, lockWorkflowRunByKey } from "./postgres-workflow-run-lock-order";
+import { failedItemCount } from "./postgres-workflow-item-counts";
 import { runIsWaiting } from "./postgres-workflow-run-waiting";
 import { countWorkflowFailures } from "./postgres-workflow-failure-counts";
 import { countWorkflowLoops, listWorkflowStepRuns } from "./postgres-workflow-step-reads";
+import {
+  createWorkflowRun,
+  continuationWorkflowRuns,
+  noteLoopStarted,
+  noteLoopEnded
+} from "./postgres-workflow-continuation";
 import { endWorkflowRun } from "./postgres-workflow-run-end";
 import { childWorkflowRuns } from "./postgres-workflow-child-operations";
 import {
@@ -14,10 +22,9 @@ import {
   stepRunIs,
   notEnded
 } from "./postgres-workflow-run-mapping";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import {
   WORKFLOW_ENDED_STATUSES,
-  WORKFLOW_KEY_RELEASING_STATUSES,
   type JsonObject,
   type JsonValue,
   type WorkflowCodeOutcome,
@@ -37,70 +44,6 @@ import { type PostgresConnection } from "./postgres-database";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 
 type Input<Method extends keyof WorkflowRunsStore> = Parameters<WorkflowRunsStore[Method]>[0];
-
-async function createWorkflowRun(
-  db: PostgresConnection,
-  run: Input<"createRun">
-): Promise<WorkflowRun | undefined> {
-  const [row] = await db
-    .insert(workflowRuns)
-    .values({
-      id: run.id,
-      clientInstanceId: run.clientInstanceId,
-      workflow: run.workflow,
-      definitionRevisionId: run.definitionRevisionId,
-      mode: run.mode,
-      trigger: run.trigger,
-      status: "queued",
-      definition: run.definition,
-      input: run.input,
-      principalId: run.principal.id,
-      principalName: run.principal.name,
-      principalLabel: run.principal.displayLabel,
-      startedBy: run.startedBy,
-      rootRunId: run.rootRunId ?? run.id,
-      depth: run.depth ?? 0,
-      parentRunId: run.parentRunId ?? null,
-      parentStepRunId: run.parentStepRunId ?? null,
-      itemIndex: run.itemIndex ?? null,
-      itemLabel: run.itemLabel ?? null,
-      operationRunId: run.operationRunId ?? null,
-      deadlineAt: new Date(run.deadlineAt),
-      limits: run.limits,
-      correlationId: run.correlationId,
-      createdAt: new Date(run.createdAt),
-      scheduledFor: run.scheduledFor === undefined ? null : new Date(run.scheduledFor),
-      runKey: run.runKey ?? null
-    })
-    // The conflicts a new id can meet: the due time of a schedule that has its run, the run
-    // key of an open or done run, and the Operation Run of a start that wrote its run. An
-    // insert that meets a key another start has written and not committed waits for it.
-    .onConflictDoNothing()
-    .returning(runColumns);
-  return row ? mapRun(row) : undefined;
-}
-
-async function lockWorkflowRunByKey(
-  db: PostgresConnection,
-  input: Input<"lockRunByKey">
-): Promise<WorkflowRun | undefined> {
-  // The predicate of `workflow_runs_run_key_idx`: the run that holds the key, read again
-  // behind its lock, so one that ended `failed` while this waited is no longer it.
-  const [row] = await db
-    .select(runColumns)
-    .from(workflowRuns)
-    .where(
-      and(
-        eq(workflowRuns.clientInstanceId, input.clientInstanceId),
-        eq(workflowRuns.workflow, input.workflow),
-        eq(workflowRuns.mode, input.mode),
-        eq(workflowRuns.runKey, input.runKey),
-        notInArray(workflowRuns.status, [...WORKFLOW_KEY_RELEASING_STATUSES])
-      )
-    )
-    .for("update");
-  return row ? mapRun(row) : undefined;
-}
 
 async function linkWorkflowStepRun(
   db: PostgresConnection,
@@ -133,6 +76,9 @@ async function readWorkflowScheduleState(
   db: PostgresConnection,
   input: Input<"readScheduleState">
 ): Promise<{ fired: boolean; open: boolean }> {
+  // Held until the caller commits the run insertion: different due times share admission.
+  const key = `workflow-schedule:${input.clientInstanceId}:${input.workflow}`;
+  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
   const [row] = await db
     .select({
       fired: sql<boolean>`coalesce(bool_or(${workflowRuns.scheduledFor} = ${input.scheduledFor}::timestamptz), false)`,
@@ -147,14 +93,6 @@ async function readWorkflowScheduleState(
       )
     );
   return { fired: row?.fired ?? false, open: row?.open ?? false };
-}
-
-async function lockWorkflowRun(
-  db: PostgresConnection,
-  ref: Input<"lockRun">
-): Promise<WorkflowRun | undefined> {
-  const [row] = await db.select(runColumns).from(workflowRuns).where(runIs(ref)).for("update");
-  return row ? mapRun(row) : undefined;
 }
 
 async function markWorkflowRunWaiting(
@@ -347,6 +285,7 @@ async function createWorkflowStepRun(
     .update(workflowRuns)
     .set({ stepRunCount: sql`${workflowRuns.stepRunCount} + 1` })
     .where(runIs({ clientInstanceId: stepRun.clientInstanceId, id: stepRun.runId }));
+  await noteLoopStarted(db, row);
   return mapStepRun(row);
 }
 
@@ -392,7 +331,22 @@ async function endWorkflowStepRun(
       error: ref.error ?? null
     })
     .where(and(stepRunIs(ref), notEnded(workflowStepRuns.status)))
-    .returning({ id: workflowStepRuns.id });
+    .returning(stepRunColumns);
+  if (ended[0]) {
+    await noteLoopEnded(db, ended[0]);
+    // Cancellation leaves running attempts to record their real outcome. The terminal
+    // run's original count predates this failure; refresh it behind the same run lock.
+    if (ref.status === "failed")
+      await db
+        .update(workflowRuns)
+        .set({ failedItemCount })
+        .where(
+          and(
+            runIs({ clientInstanceId: ref.clientInstanceId, id: ended[0].runId }),
+            inArray(workflowRuns.status, [...WORKFLOW_ENDED_STATUSES])
+          )
+        );
+  }
   return ended.length > 0;
 }
 
@@ -408,6 +362,9 @@ async function markWorkflowLoopWaiting(
         ...("$dataset" in ref.items
           ? { dataset: ref.items, total: ref.total ?? ref.items.rowCount }
           : { items: [...ref.items] }),
+        started: 0,
+        ended: 0,
+        ...(ref.firstStepId === undefined ? {} : { first: ref.firstStepId }),
         ...(ref.lastStepId === undefined ? {} : { last: ref.lastStepId })
       }
     })
@@ -639,7 +596,7 @@ async function markWorkflowRunDataPruned(
 ): Promise<boolean> {
   const pruned = await db
     .update(workflowRuns)
-    .set({ input: {}, output: null, dataPrunedAt: new Date(ref.prunedAt) })
+    .set({ input: {}, output: null, checkpoint: null, dataPrunedAt: new Date(ref.prunedAt) })
     .where(
       and(
         runIs(ref),
@@ -654,6 +611,7 @@ async function markWorkflowRunDataPruned(
 export function createPostgresWorkflowRunsStore(db: PostgresConnection): WorkflowRunsStore {
   return {
     ...childWorkflowRuns(db),
+    ...continuationWorkflowRuns(db),
     createRun: (run) => createWorkflowRun(db, run),
     lockRunByKey: (input) => lockWorkflowRunByKey(db, input),
     linkStepRun: (ref) => linkWorkflowStepRun(db, ref),

@@ -308,7 +308,7 @@ describe("a right on a Connection", () => {
     expect(await assetActionsOf(t.kai.id, "chat:read")).toEqual([]);
   });
 
-  it("to use is no right to read: the holder is shown nothing of the Connection", async () => {
+  it("access-and-permissions.md:56: use lists Connection summary fields only, with no configuration or secret", async () => {
     const t = await setupConnectionInstance();
     const a = await t.seed("alpha");
     await t.grant(t.lena.id, "connection.use", { assetId: a });
@@ -326,7 +326,23 @@ describe("a right on a Connection", () => {
       t.forbidden("connection.read", "no_grant")
     );
     const listed = await t.expectOk(t.lena.id, "assets.list", { params: { kind: "connection" } });
-    expect(assetPageSchema.parse(listed.json()).items).toEqual([]);
+    const items = assetPageSchema.parse(listed.json()).items;
+    expect(items.map((item) => item.name)).toEqual(["alpha"]);
+    const summary = listed.json<{ items: unknown[] }>().items[0];
+    expect(summary).toEqual({
+      id: a,
+      kind: "connection",
+      name: "alpha",
+      title: "Connection alpha",
+      attributes: { connectorType: "fixture", origin: "release", enabled: true },
+      scope: { kind: "instance" },
+      allowed: [],
+      revision: expect.any(Number),
+      updatedAt: expect.any(String)
+    });
+    // Exact summary keys exclude configuration, operation metadata and the secret binding.
+    expect(JSON.stringify(summary)).not.toContain("secret_");
+    expect(JSON.stringify(summary)).not.toContain("outside.example.test");
   });
 
   it("is taken from an administrator by a deny on the Connection", async () => {

@@ -10,12 +10,12 @@ export { stepOutputRows } from "./step-output";
 export { countsLine, placedSteps, workflowGraph, type CanvasRun } from "./workflow-canvas-model";
 export {
   toWorkflow,
-  toDraftWorkflowListItem,
+  toAssetWorkflowListItem,
   toWorkflowListItem,
   toWorkflowRun,
   toWorkflowStepRun
 } from "./workflow-mapping";
-export { WorkflowRunsPageView } from "./runs-page";
+export { WorkflowRunsPage, WorkflowRunsPageView } from "./runs-page";
 export {
   runListRefreshMs,
   runRefreshMs,
@@ -46,8 +46,8 @@ export {
   workflowPublishRefusal,
   type WorkflowPublishRightsView
 } from "./workflow-publish-rights-model";
-export { WorkflowPageView } from "./workflow-page";
-export { WorkflowsPageView } from "./workflows-page";
+export { WorkflowPage, WorkflowPageView } from "./workflow-page";
+export { WorkflowsPage, WorkflowsPageView } from "./workflows-page";
 // The address of the area and its row in the rail, which the same tests hold.
 export { areaOfRoute, workspaceRouteFromPath, workspaceRoutePath } from "../../shared/routes";
 export { railSections, shownRailSections } from "../../chat/workspace/rail-sections";

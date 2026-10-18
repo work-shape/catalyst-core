@@ -18,7 +18,7 @@ export {
   type AppActionsRead,
   type AppPublishDataRead
 } from "./app-data";
-export { AppEditFrame, appDraftIsAhead, PublishDialog, SharePublishDialog } from "./app-edit";
+export { AppEdit, AppEditFrame, appDraftIsAhead, PublishDialog, SharePublishDialog } from "./app-edit";
 export { AppSavedLine } from "./app-saved-line";
 export { AppAudienceChange, appPublishMaySend } from "./app-publish-question";
 export {
@@ -43,10 +43,10 @@ export {
 } from "./app-model";
 export { AppPreviewNotice, appPreviewState } from "./app-preview";
 export { AppPublishDataView, AppStoredDataFact } from "./app-publish-data";
-export { AppToolsGroup, appToolsView, type AppToolsRead } from "./app-tools-group";
-export { AppViewFrame } from "./app-view";
+export { AppToolsGroup, appsOfOwner, appToolsView, type AppToolsRead } from "./app-tools-group";
+export { AppView, AppViewFrame } from "./app-view";
 export { AppsHostProvider, type AppsHost } from "./apps-host";
-export { appRowRoute, AppsPageView } from "./apps-page";
+export { appRowRoute, AppsPage, AppsPageView } from "./apps-page";
 export { RevisionsDrawerView } from "./revisions-drawer";
 export { pageAppChoice } from "./page-app-action";
 export { SaveAsAppAction, SaveAsAppDialogView, saveAsAppInput } from "./save-as-app-dialog";

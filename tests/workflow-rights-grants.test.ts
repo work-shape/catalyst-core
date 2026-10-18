@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  assetSchema,
+  assetSummarySchema,
+  platformContextSchema
+} from "@work-shape/catalyst-api-contract";
+import {
   GRANTABLE_ACTION_SCOPES,
   GRANTABLE_ACTIONS,
   WORKFLOW_ACTIONS,
@@ -334,6 +339,137 @@ describe("a right on a Workflow given through grant administration", () => {
       },
       t.forbidden("workflow.write", "no_grant")
     );
+  });
+
+  it("lists an unpublished Workflow for its asset-only writer with the record's allowed rights", async () => {
+    const t = await ready();
+    const name = "draft-for-one-writer";
+    await put(t, t.admin.id, name, { ...notifyClients(), id: name }, null);
+    const assetId = await t.assetId(WORKFLOW_ASSET_KIND, name);
+    await t.grant(t.kai.id, WORKFLOW_ACTIONS.write, { assetId });
+    const rows = z
+      .object({ items: z.array(assetSummarySchema) })
+      .parse(
+        (
+          await t.expectOk(t.kai.id, "assets.list", { params: { kind: WORKFLOW_ASSET_KIND } })
+        ).json()
+      ).items;
+    const record = assetSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "assets.get", { params: { kind: WORKFLOW_ASSET_KIND, name } })
+      ).json()
+    );
+    expect(rows.map((row) => row.name)).toEqual([name]);
+    expect(rows[0]).toMatchObject({
+      id: assetId,
+      allowed: ["write"],
+      draftRevision: record.revision
+    });
+    expect(record.allowed).toEqual(["write"]);
+    expect(rows[0]?.allowed).toEqual(record.allowed);
+  });
+
+  it("opens the Workflow area for an asset-only publisher of an unpublished draft", async () => {
+    const t = await ready();
+    const name = "draft-for-one-publisher";
+    await put(t, t.admin.id, name, { ...notifyClients(), id: name }, null);
+    await t.grant(t.kai.id, WORKFLOW_ACTIONS.publish, {
+      assetId: await t.assetId(WORKFLOW_ASSET_KIND, name)
+    });
+    const context = platformContextSchema.parse(
+      (await t.expectOk(t.kai.id, "platform.context.get")).json()
+    );
+    expect(context.visibleSections).toContain("workflows");
+    const rows = z
+      .object({ items: z.array(assetSummarySchema) })
+      .parse(
+        (
+          await t.expectOk(t.kai.id, "assets.list", { params: { kind: WORKFLOW_ASSET_KIND } })
+        ).json()
+      ).items;
+    expect(rows.map((row) => row.name)).toEqual([name]);
+    expect(rows[0]?.allowed).toEqual(["publish"]);
+    const conversation = await t.expectOk(t.kai.id, "conversations.create", {
+      payload: { title: "Publish Workflow", subject: { kind: WORKFLOW_ASSET_KIND, name } }
+    });
+    expect(conversation.json()).toMatchObject({ subject: { kind: WORKFLOW_ASSET_KIND, name } });
+  });
+
+  it("opens an edit conversation with a write-only grant on that Workflow and no other", async () => {
+    const t = await ready();
+    await t.grant(t.kai.id, WORKFLOW_ACTIONS.write, {
+      assetId: await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY)
+    });
+    const edit = await t.expectOk(t.kai.id, "conversations.create", {
+      payload: { title: "Edit Workflow", subject: { kind: WORKFLOW_ASSET_KIND, name: NOTIFY } }
+    });
+    expect(edit.json()).toMatchObject({
+      subject: { kind: WORKFLOW_ASSET_KIND, name: NOTIFY }
+    });
+    await t.expectRefused(
+      t.kai.id,
+      "conversations.create",
+      {
+        payload: { title: "Edit Workflow", subject: { kind: WORKFLOW_ASSET_KIND, name: ARCHIVE } }
+      },
+      { status: 404, code: "NOT_FOUND", details: { reason: "subject_unavailable" } }
+    );
+    await put(t, t.kai.id, NOTIFY, { ...notifyClients(), name: "Changed by its writer" }, 1);
+  });
+
+  it("keeps use-only access to a published Workflow out of asset-subject conversations", async () => {
+    const t = await ready();
+    await t.grant(t.kai.id, WORKFLOW_ACTIONS.use, {
+      assetId: await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY)
+    });
+    await t.expectOk(t.kai.id, "assets.get", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: NOTIFY }
+    });
+    await t.expectRefused(
+      t.kai.id,
+      "conversations.create",
+      {
+        payload: { title: "Workflow subject", subject: { kind: WORKFLOW_ASSET_KIND, name: NOTIFY } }
+      },
+      { status: 404, code: "NOT_FOUND", details: { reason: "subject_unavailable" } }
+    );
+  });
+
+  it("keeps an asset delete deny in Workflow list and record answers over an instance grant", async () => {
+    const t = await ready();
+    const assetId = await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY);
+    for (const action of [WORKFLOW_ACTIONS.read, WORKFLOW_ACTIONS.delete]) {
+      await t.expectOk(t.admin.id, "permissions.grant", {
+        payload: { holderKind: "user", holderId: t.kai.id, action, scopeKind: "instance" }
+      });
+    }
+    await t.expectOk(t.admin.id, "permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: WORKFLOW_ACTIONS.delete,
+        effect: "deny",
+        scopeKind: "asset",
+        scopeId: assetId
+      }
+    });
+    const rows = z
+      .object({ items: z.array(assetSummarySchema) })
+      .parse(
+        (
+          await t.expectOk(t.kai.id, "assets.list", { params: { kind: WORKFLOW_ASSET_KIND } })
+        ).json()
+      ).items;
+    const record = assetSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "assets.get", {
+          params: { kind: WORKFLOW_ASSET_KIND, name: NOTIFY }
+        })
+      ).json()
+    );
+    expect(record.allowed).toEqual(["read"]);
+    expect(rows.find((row) => row.id === assetId)?.allowed).toEqual(record.allowed);
+    expect(rows.find((row) => row.name === ARCHIVE)?.allowed).toEqual(["read", "delete"]);
   });
 
   it("gives a service principal the use right on one Workflow, and no other right of the kind", async () => {

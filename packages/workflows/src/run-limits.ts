@@ -1,10 +1,15 @@
+import { workflowLoopMinimumSteps } from "./continuation-rules";
 import {
   workflowDurationMs,
   type WorkflowLimits,
   type WorkflowManifest,
   type WorkflowRunBounds
 } from "@work-shape/catalyst-core";
-import { WORKFLOW_LIMIT_ABOVE_CEILING, type WorkflowDefinitionIssue } from "./definition";
+import {
+  indexWorkflowSteps,
+  WORKFLOW_LIMIT_ABOVE_CEILING,
+  type WorkflowDefinitionIssue
+} from "./definition";
 import {
   WORKFLOW_DATASET_MAX_BYTES,
   WORKFLOW_PAGED_STEP_MAX_MINUTES,
@@ -118,21 +123,43 @@ function entriesOf(limits: WorkflowLimits, context: WorkflowLimitContext): Limit
  * default is still refused by the definition's parser.
  */
 export function workflowLimitIssues(
-  manifest: Pick<WorkflowManifest, "limits">,
+  manifest: Pick<WorkflowManifest, "limits"> & Partial<Pick<WorkflowManifest, "steps">>,
   context: WorkflowLimitContext
 ): WorkflowDefinitionIssue[] {
-  if (!manifest.limits) return [];
-  return entriesOf(manifest.limits, context).flatMap((entry) =>
-    entry.asked !== undefined && entry.asked > entry.ceiling
-      ? [
-          {
-            path: `limits.${entry.field}`,
-            code: WORKFLOW_LIMIT_ABOVE_CEILING,
-            message: `The ${entry.label} of ${entry.text ?? entry.show(entry.asked)} is above the ceiling of ${entry.show(entry.ceiling)} that this instance allows`
-          }
-        ]
-      : []
+  const issues = entriesOf(manifest.limits ?? {}, context).flatMap<WorkflowDefinitionIssue>(
+    (entry) =>
+      entry.asked !== undefined && entry.asked > entry.ceiling
+        ? [
+            {
+              path: `limits.${entry.field}`,
+              code: WORKFLOW_LIMIT_ABOVE_CEILING,
+              message: `The ${entry.label} of ${entry.text ?? entry.show(entry.asked)} is above the ceiling of ${entry.show(entry.ceiling)} that this instance allows`
+            }
+          ]
+        : []
   );
+  const budget = Math.min(
+    manifest.limits?.stepRuns ?? context.defaults?.maxStepRuns ?? WORKFLOW_RUN_LIMITS.maxStepRuns,
+    context.ceilings.stepRuns
+  );
+  const index = indexWorkflowSteps({ steps: manifest.steps ?? [] });
+  for (const [id, entry] of index) {
+    if (entry.step.type !== "loop") continue;
+    let current: typeof entry | undefined = entry;
+    let continuingId: string | undefined;
+    while (current && !continuingId) {
+      if (current.step.type === "loop" && current.step.continueAsNew)
+        continuingId = current.step.id;
+      current = current.sequence.loop ? index.get(current.sequence.loop) : undefined;
+    }
+    const needed = workflowLoopMinimumSteps(index, id);
+    if (continuingId && needed > budget)
+      issues.push({
+        path: `steps.${continuingId}.continueAsNew`,
+        message: `The loop '${continuingId}' needs at least ${needed} step runs for steps before the loop, one item and the tail, above limits.stepRuns of ${budget}. / Schleife '${continuingId}' benötigt mindestens ${needed} Schrittläufe für die Schritte vor der Schleife, ein Element und die nachfolgenden Schritte; limits.stepRuns erlaubt ${budget}.`
+      });
+  }
+  return issues;
 }
 
 /** One limit a Workflow raises above its default: what the publish question names. */

@@ -146,6 +146,7 @@ function read(
     run: toWorkflowRun(resource),
     problem: undefined,
     silentSince: undefined,
+    stepsFailed: false,
     stepRuns: stepRuns?.map(toWorkflowStepRun),
     entryLoops: entryLoops.map(toWorkflowStepRun),
     stepRunsCut: false,

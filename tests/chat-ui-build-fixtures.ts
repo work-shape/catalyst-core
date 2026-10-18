@@ -58,6 +58,43 @@ export function platformContext(
   };
 }
 
+/**
+ * What the instance answers a caller who holds these actions in these Shared Workspaces, by id,
+ * and these on the instance's assets as a whole, where the instance runs Apps.
+ */
+export function appsContext(
+  workspaces: Record<string, readonly string[]>,
+  instance: string[] = []
+): PlatformContext {
+  const base = platformContext([], instance);
+  return {
+    ...base,
+    kinds: [
+      ...base.kinds,
+      {
+        kind: "app",
+        plural: "apps",
+        lifecycle: "active",
+        representation: "files",
+        owners: ["workspace"],
+        actions: {
+          read: "app.read",
+          write: "app.write",
+          publish: "app.publish",
+          delete: "app.delete"
+        }
+      }
+    ],
+    workspaces: Object.entries(workspaces).map(([id, actions]) => ({
+      id,
+      name: id,
+      kind: "shared" as const,
+      member: true,
+      actions: [...actions]
+    }))
+  };
+}
+
 /** Writes agents in the Namespace and only reads its skills. */
 export const taxNamespace: Namespaces[number] = {
   prefix: "tax-",
@@ -69,3 +106,43 @@ export const legalNamespace: Namespaces[number] = {
   displayName: "Legal",
   actions: ["agent.read", "skill.read"]
 };
+
+/**
+ * What the instance answers a caller who holds these actions on the instance's own assets as a
+ * whole, these on single assets, and these in these Shared Workspaces, by id, where the
+ * instance runs Workflows. The instance keeps Workflows on itself, so it names no Workflow
+ * action in a workspace today; a test that names one there stands for a kind a workspace owns.
+ */
+export function workflowsContext(
+  actions: string[],
+  workspaces: Record<string, readonly string[]> = {},
+  assetActions: string[] = []
+): PlatformContext {
+  const base = platformContext([], actions, assetActions);
+  return {
+    ...base,
+    kinds: [
+      ...base.kinds,
+      {
+        kind: "workflow",
+        plural: "workflows",
+        lifecycle: "draft_published",
+        representation: "config",
+        owners: ["instance"],
+        actions: {
+          read: "workflow.read",
+          write: "workflow.write",
+          publish: "workflow.publish",
+          delete: "workflow.delete"
+        }
+      }
+    ],
+    workspaces: Object.entries(workspaces).map(([id, held]) => ({
+      id,
+      name: id,
+      kind: "shared" as const,
+      member: true,
+      actions: [...held]
+    }))
+  };
+}

@@ -4,7 +4,7 @@ import { principalGrantRequest } from "../../admin/access/principal-grants-model
 import { PendingApprovalError } from "../build-area/build-refusals";
 import {
   listedOf,
-  toDraftWorkflowListItem,
+  toAssetWorkflowListItem,
   toWorkflow,
   toWorkflowListItem,
   toWorkflowRun,
@@ -107,8 +107,11 @@ function done<Output>(
 export function createInstanceSource(client: WorkflowsClient, key: string): WorkflowsSource {
   return {
     key,
-    // The engine lists what is published; a Workflow never published is listed from its
-    // asset, as a draft. The screen shows a draft only to who may write Workflows.
+    // The engine lists the published Workflows the reader may read or start. Every other
+    // Workflow the asset list names is listed from its asset: a draft never published, and a
+    // published one its writer or publisher may neither read nor start. The screen shows a
+    // draft only to who may write it. What the reader may do to a Workflow, and who owns it,
+    // is said by its asset's row: the engine names its start alone.
     listWorkflows: async (_workspaceId, _query, signal) => {
       const [{ items }, assets] = await Promise.all([
         client.workflows.list({ signal }),
@@ -117,18 +120,19 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
         )
       ]);
       const listed = new Set(items.map((entry) => entry.id));
-      const drafts = assets.filter(
-        (asset) => asset.publishedRevision === undefined && !listed.has(asset.name)
-      );
+      const rowOf = new Map(assets.map((asset) => [asset.name, asset]));
       return {
-        items: [...items.map(toWorkflowListItem), ...drafts.map(toDraftWorkflowListItem)],
-        // The engine's list is whole in one answer, and the drafts are read to their end.
+        items: [
+          ...items.map((entry) => toWorkflowListItem(entry, rowOf.get(entry.id))),
+          ...assets.filter((asset) => !listed.has(asset.name)).map(toAssetWorkflowListItem)
+        ],
+        // The engine's list is whole in one answer, and the asset rows are read to their end.
         nextCursor: undefined
       };
     },
-    // The definition is the Workflow's asset; whether the instance starts it, and the id of
-    // its published revision, are on its entry of the list. A Workflow the list does not name
-    // has no published revision.
+    // The definition is the Workflow's asset, and so is whether a revision is published;
+    // whether the instance starts it, and the id of its published revision, are on its entry
+    // of the list. A Workflow the list does not name is not the reader's to start.
     getWorkflow: async (_workspaceId, workflow, signal) => {
       const [asset, { items }] = await Promise.all([
         client.assets.get({ params: { kind: WORKFLOW_ASSET_KIND, name: workflow }, signal }),
@@ -140,7 +144,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
         {
           name: asset.name,
           config: isRecord(manifest) ? manifest : {},
-          publishedRevision: summary === undefined ? undefined : asset.publishedRevision
+          publishedRevision: asset.publishedRevision
         },
         summary === undefined ? { ...listedOf(summary), runsAs: asset.runsAs } : listedOf(summary),
         asset

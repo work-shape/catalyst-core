@@ -67,7 +67,8 @@ export function childWorkflowRuns(
         .where(
           and(
             eq(workflowRuns.clientInstanceId, ref.clientInstanceId),
-            sql`${workflowRuns.parentStepRunId} = ${ref.id}`
+            sql`${workflowRuns.parentStepRunId} = ${ref.id}`,
+            sql`${workflowRuns.status} <> 'continued'`
           )
         );
       if (!row) return undefined;

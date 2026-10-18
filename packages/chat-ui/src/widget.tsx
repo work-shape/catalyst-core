@@ -9,16 +9,12 @@ export interface ChatWidgetHandle {
   unmount(): void;
 }
 
-export function mountChatWidget(options: MountChatWidgetOptions): ChatWidgetHandle {
-  const root: Root = createRoot(options.container);
-  root.render(
-    <ChatShell
-      apiBaseUrl={options.apiBaseUrl}
-      token={options.token}
-      getToken={options.getToken}
-      className={options.className}
-    />
-  );
+export function mountChatWidget({
+  container,
+  ...shellProps
+}: MountChatWidgetOptions): ChatWidgetHandle {
+  const root: Root = createRoot(container);
+  root.render(<ChatShell {...shellProps} />);
 
   return {
     unmount() {

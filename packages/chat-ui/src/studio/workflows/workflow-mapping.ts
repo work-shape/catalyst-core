@@ -16,6 +16,7 @@ import {
   type WorkflowStepRunPlacement,
   type WorkflowStepRunStatus
 } from "@work-shape/catalyst-core";
+import type { AssetVerb } from "../../shared/build-rights";
 import { NO_START_FORM, nameFromId, startFormOf, type StartForm } from "./start-form";
 import type {
   WorkflowBranchView,
@@ -116,6 +117,11 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   parentWorkflow?: string;
   /** The run key its start gave the run. */
   runKey?: string;
+  labels?: Readonly<Record<string, string>>;
+  /** On a part of a run that continued as new (EW-CAN). */
+  continuation?: { rootRunId: string; previousRunId?: string; number: number };
+  /** How many step runs the run made. */
+  stepRunCount?: number;
   /** The revision of the definition the run started on. */
   definitionRevisionId?: string;
   error?: ErrorResource;
@@ -127,7 +133,7 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   empty?: boolean;
   /** Runs below it, at any depth, that failed, reached a limit or left failed items. */
   failedDescendantCount?: number;
-  /** Items of its own loops that failed, counted once when the run ended. */
+  /** Failed loop items through this continuation part, counted when the run ended. */
   failedItemCount?: number;
 }
 
@@ -264,6 +270,11 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     ...(run.definitionRevisionId === undefined ? {} : { revisionId: run.definitionRevisionId }),
     test: run.mode === "test",
     ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
+    ...(run.continuation === undefined ? {} : { continuation: run.continuation }),
+    ...(run.labels === undefined || Object.keys(run.labels).length === 0
+      ? {}
+      : { labels: run.labels }),
+    ...(run.stepRunCount === undefined ? {} : { stepRuns: run.stepRunCount }),
     empty: run.empty === true && run.status === "done",
     failedDescendantCount: run.failedDescendantCount ?? 0,
     failedItemCount: run.failedItemCount ?? 0,
@@ -345,7 +356,7 @@ export interface WorkflowSummaryResource {
     startedAt?: string;
     /** Runs below it, at any depth, that failed, reached a limit or left failed items. */
     failedDescendantCount?: number;
-    /** Items of its own loops that failed, counted once when the run ended. */
+    /** Failed loop items through this continuation part, counted when the run ended. */
     failedItemCount?: number;
   };
 }
@@ -398,8 +409,14 @@ export interface WorkflowListed {
   runsAs?: string;
 }
 
-/** A Workflow as a row of the list. */
-export function toWorkflowListItem(summary: WorkflowSummaryResource): WorkflowListItem {
+/**
+ * A Workflow as a row of the list. `asset` is the Workflow's asset row: what the reader may do
+ * to it and who owns it. The engine's entry names the start alone.
+ */
+export function toWorkflowListItem(
+  summary: WorkflowSummaryResource,
+  asset?: Pick<WorkflowAssetListed, "allowed" | "scope">
+): WorkflowListItem {
   const description = summary.description?.trim();
   const { lastRun } = summary;
   return {
@@ -413,6 +430,7 @@ export function toWorkflowListItem(summary: WorkflowSummaryResource): WorkflowLi
     startsByHand: !(summary.reasons ?? []).some(({ code }) => code === "no_manual_trigger"),
     refusedFor: startIssues(summary),
     mayStart: mayStartOf(summary),
+    ...assetRightsOf(asset),
     startForm: startFormOf(summary.inputs),
     ...(lastRun === undefined
       ? {}
@@ -437,25 +455,41 @@ export interface WorkflowAssetListed {
   updatedAt: string;
   /** What the kind's summary adds to the row, such as `workflowKind`. */
   attributes?: Readonly<Record<string, string | boolean>>;
+  /** What the reader may do to the Workflow, where the instance says it. */
+  allowed?: readonly AssetVerb[];
+  /** Who owns it: the instance, or one workspace. */
+  scope?: Asset["scope"];
+}
+
+/** What a record or a row says of the reader's rights on a Workflow and of its owner. */
+function assetRightsOf(
+  asset: Pick<WorkflowAssetListed, "allowed" | "scope"> | undefined
+): Pick<WorkflowListItem, "allowed" | "ownerWorkspaceId"> {
+  return {
+    ...(asset?.allowed === undefined ? {} : { allowed: asset.allowed }),
+    ...(asset?.scope?.kind === "workspace" ? { ownerWorkspaceId: asset.scope.workspaceId } : {})
+  };
 }
 
 /**
- * A Workflow never published, as a row of the list: the engine names it nowhere, so its asset
- * does. Nothing starts it until a person publishes it.
+ * A Workflow the engine does not list to the reader, as a row of the list from its asset: one
+ * never published, or a published one the reader may write or publish but neither read nor
+ * start. The engine names no start for it, so none is offered here.
  */
-export function toDraftWorkflowListItem(asset: WorkflowAssetListed): WorkflowListItem {
+export function toAssetWorkflowListItem(asset: WorkflowAssetListed): WorkflowListItem {
   const description = asset.description?.trim();
   return {
     id: asset.name,
     name: asset.title.trim() || nameFromId(asset.name),
     ...(description ? { description } : {}),
-    published: false,
+    published: asset.publishedRevision !== undefined,
     // The asset list names the draft's kind; a row without it is a process.
     kind: asset.attributes?.workflowKind === "data" ? "data" : "process",
     updatedAt: asset.updatedAt,
     startsByHand: false,
     refusedFor: [],
     mayStart: false,
+    ...assetRightsOf(asset),
     startForm: NO_START_FORM
   };
 }
@@ -620,8 +654,13 @@ export function toWorkflow(
     startForm = NO_START_FORM,
     runsAs
   }: WorkflowListed = {},
-  /** The asset's own pointers. The instance names a draft only to who may read it. */
-  pointers: Pick<Asset, "draftRevision" | "publishedRevision" | "publishQuestion"> = {}
+  /**
+   * The asset's own pointers, and what the reader may do to it. The instance names a draft only
+   * to who may read it.
+   */
+  pointers: Partial<
+    Pick<Asset, "draftRevision" | "publishedRevision" | "publishQuestion" | "allowed" | "scope">
+  > = {}
 ): WorkflowView {
   const definition = asset.config;
   const description = text(definition.description);
@@ -645,6 +684,7 @@ export function toWorkflow(
     startForm,
     refusedFor,
     mayStart,
+    ...assetRightsOf(pointers),
     ...(pointers.draftRevision === undefined
       ? {}
       : {

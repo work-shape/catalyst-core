@@ -1,3 +1,6 @@
+import postgres from "postgres";
+import { fileTestDatabaseUrl } from "./support/test-database";
+import { deferred, waitUntil } from "./support/assertions";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -307,6 +310,72 @@ describe("run-key wait cycles", () => {
       expect((await startWith(t, "py", "", "p2")).id).not.toBe(py.id);
     }
   );
+
+  it("returns run_key_cycle while a concurrent root-to-child transaction probes the lock order", async () => {
+    const definitions = publishedDefinitions();
+    definitions.publish(chain("pong"));
+    definitions.publish(chain("ping", "pong", "b"));
+    const t = await ready(definitions);
+    await allowChain(t, ["ping", "pong"]);
+    const root = await startWith(t, "ping", "", "a");
+    definitions.publish(chain("ping"));
+    definitions.publish(chain("pong", "ping", "a"));
+    const linking = deferred<void>();
+    const startLink = deferred<void>();
+    const original = t.stores.transaction.bind(t.stores);
+    let links = 0;
+    vi.spyOn(t.stores, "transaction").mockImplementation(
+      <T>(work: (tx: PlatformStores) => Promise<T>) =>
+        original((tx) =>
+          work({
+            ...tx,
+            workflowRuns: {
+              ...tx.workflowRuns,
+              async lockRunLinks(input) {
+                await tx.workflowRuns.lockRunLinks(input);
+                if (++links === 2) {
+                  linking.resolve();
+                  await startLink.promise;
+                }
+              }
+            }
+          })
+        )
+    );
+    // Stop at the child start, before it takes any run row. This isolates the two
+    // transactions of the probe from the step's earlier claim and settlement.
+    const finishing = t.finish(root.id, undefined, 40);
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 2, onnotice() {} });
+    try {
+      await linking.promise;
+      const [childRun] = await children(t, root.id);
+      if (!childRun) throw new Error("Missing child for lock-order probe");
+      await sql.begin(async (tx) => {
+        await tx`set local lock_timeout = '3s'`;
+        const [held] = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+        if (!held) throw new Error("Missing probe backend");
+        await tx`select id from workflow_runs where id = ${root.id} for update`;
+        startLink.resolve();
+        // Both implementations wait for the root. With the old order the start
+        // already holds the child; this second lock then deadlocks or times out.
+        await waitUntil(async () => {
+          const [blocked] = await sql<{ waiting: boolean }[]>`
+            select exists (select 1 from pg_stat_activity
+              where ${held.pid} = any(pg_blocking_pids(pid))) as waiting`;
+          return blocked?.waiting === true;
+        }, "the child start waits for the probe's root lock");
+        await tx`select id from workflow_runs where id = ${childRun.id} for update`;
+      });
+      expect(await finishing).toMatchObject({ status: "failed", error: { code: "run_key_cycle" } });
+      expect(
+        await t.stores.workflowRuns.readRun({ clientInstanceId, id: childRun.id })
+      ).toMatchObject({ status: "failed", error: { code: "run_key_cycle" } });
+    } finally {
+      startLink.resolve();
+      await finishing;
+      await sql.end();
+    }
+  });
 
   it("refuses a link to a keyed ancestor after published call direction changes; both runs end and release their keys", async () => {
     const definitions = publishedDefinitions();

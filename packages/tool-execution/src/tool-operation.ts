@@ -2,6 +2,7 @@ import {
   AGENTS_RUN_OPERATION,
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
+  INTERRUPTED_RUN_ERROR,
   KNOWLEDGE_OPERATION_PREFIX,
   KNOWLEDGE_QUERY_TOOL_NAME,
   KNOWLEDGE_SEARCH_TOOL_NAME,
@@ -325,7 +326,12 @@ export function toolResultFromOperationResult(
         ? internalFailure(names.correlationId)
         : // The message is all the model reads. A fixed reason stays in the run and in the
           // details of the result, and is not handed on: a model repeats a code to the person.
-          failed("handler_failed", result.error.message);
+          failed(
+            "handler_failed",
+            result.error.code === INTERRUPTED_RUN_ERROR.code
+              ? `${INTERRUPTED_RUN_ERROR.message}. Its outcome is not known; check before calling again.`
+              : result.error.message
+          );
     case "expired":
     case "pending_confirmation":
     case "pending_approval":

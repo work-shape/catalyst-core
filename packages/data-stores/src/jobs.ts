@@ -32,7 +32,10 @@ import {
   type DataStoreDefinition
 } from "./definition";
 import { describeDatabaseFailure } from "./failures";
-import { KNOWLEDGE_STORE_LEVEL, applyKnowledgeStoreSchema } from "./knowledge/builtin/store-schema";
+import {
+  knowledgeStoreNeedsMigration,
+  applyKnowledgeStoreSchema
+} from "./knowledge/builtin/store-schema";
 import { knowledgeBaseDefinitionSchema } from "./knowledge/definition";
 import { DataStoreMigrationRefusal, applyMigration, readSignedMigrations } from "./migrating";
 import {
@@ -810,7 +813,7 @@ async function upgradeOwnedStores(runtime: DataStoreRuntime, control: JobControl
       (record) =>
         record.ownerKnowledgeBaseId !== undefined &&
         record.status === "ready" &&
-        record.level < KNOWLEDGE_STORE_LEVEL
+        knowledgeStoreNeedsMigration(record)
     );
   if (behind.length === 0) return;
   await control.transaction(async (stores) => {
@@ -839,9 +842,9 @@ async function migrateOwnedStore(
       provisioningFailure(error)
     );
   }
-  let applied;
+  let result;
   try {
-    applied = await applyKnowledgeStoreSchema(runtime.server, record, control.signal);
+    result = await applyKnowledgeStoreSchema(runtime.server, record, control.signal);
   } catch (error) {
     const failure = describeDatabaseFailure(error, "Making the tables of the Knowledge Base");
     return failAttempt(runtime, control, job, "data_store.migration_failed", {
@@ -850,19 +853,21 @@ async function migrateOwnedStore(
       message: failure.sentence
     });
   }
+  const { migrations: applied, appliedCount, appliedNumbers } = result;
   const level = applied.at(-1)?.number ?? 0;
   const done = await writeOutcome(runtime, control, record.id, (current) =>
     Promise.resolve({ ...current, level, migrations: applied })
   );
-  if (done && record.level !== level) {
-    await runtime.auditRecorder.record({
-      type: "data_store.migrated",
-      status: "success",
-      subject: done.id,
-      correlationId: job.correlationId,
-      metadata: { name: done.name, level, appliedCount: level - record.level }
-    });
-  }
+  if (done)
+    for (const migrationNumber of appliedNumbers) {
+      await runtime.auditRecorder.record({
+        type: "data_store.migrated",
+        status: "success",
+        subject: done.id,
+        correlationId: job.correlationId,
+        metadata: { name: done.name, level, appliedCount, migrationNumber }
+      });
+    }
 }
 
 /**

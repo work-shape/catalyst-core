@@ -1,10 +1,18 @@
 import {
+  APP_ASSET_KIND,
   ApiError,
   type AssetSummary,
   type CollaborationWorkspaceAgents,
   type PlatformContext
 } from "@work-shape/catalyst-api-client";
 import { APP_MODES } from "@work-shape/catalyst-core";
+import {
+  assetRightsBy,
+  assetRightsOn,
+  NO_ASSET_RIGHTS,
+  resolveBuildRights,
+  type AssetRights
+} from "../../shared/build-rights";
 import type { TranslationKey } from "../../shared/i18n";
 
 /** The four rights of an App, by the names the instance decides them under. */
@@ -18,37 +26,32 @@ export const APP_RIGHT_NAMES = {
 /**
  * What the reader may do with the Apps of a workspace, as far as the browser can know it.
  * Opening a published App needs none of these: every member of the App's workspace may.
+ * `read` reads an App's record: its name, its description, its manifest and its revisions.
  */
-export interface AppRights {
-  /** Reads an App's record: its name, its description, its manifest and its revisions. */
-  read: boolean;
-  write: boolean;
-  publish: boolean;
-  delete: boolean;
-}
+export type AppRights = AssetRights;
 
-export const NO_APP_RIGHTS: AppRights = {
-  read: false,
-  write: false,
-  publish: false,
-  delete: false
-};
+export const NO_APP_RIGHTS: AppRights = NO_ASSET_RIGHTS;
 
 /**
- * The reader's rights on Apps, from what the instance says the reader holds on every asset of
- * the kind. This is the one place the interface decides what it offers: a right that is
- * granted per workspace (AP-3) is added here and nowhere else. The instance decides every
- * call itself.
+ * The reader's rights on the Apps of the open workspace, as the instance names them for that
+ * workspace: a grant there, a membership's role or a right on the whole instance. An App always
+ * belongs to a workspace, so a right in another workspace offers nothing here. This is the one
+ * place the interface decides what it offers in a workspace; the instance decides every call.
  */
-export function resolveAppRights(context: Pick<PlatformContext, "actions"> | undefined): AppRights {
-  const held = context?.actions ?? [];
-  return {
-    read: held.includes(APP_RIGHT_NAMES.read),
-    write: held.includes(APP_RIGHT_NAMES.write),
-    publish: held.includes(APP_RIGHT_NAMES.publish),
-    delete: held.includes(APP_RIGHT_NAMES.delete)
-  };
+export function resolveAppRights(
+  context: PlatformContext | undefined,
+  workspaceId: string | undefined
+): AppRights {
+  if (workspaceId === undefined) {
+    return NO_APP_RIGHTS;
+  }
+  // No session: its legacy keys name agents and skills, never Apps.
+  const rights = resolveBuildRights(undefined, context);
+  return assetRightsBy((verb) => rights.holdsInWorkspace(APP_ASSET_KIND, verb, workspaceId));
 }
+
+/** The reader's rights on one App, by its record or its row of the list: `assetRightsOn`. */
+export const appRightsOn = assetRightsOn;
 
 /**
  * Whether the Apps row of the sidebar shows: the module is on and the instance says the row is

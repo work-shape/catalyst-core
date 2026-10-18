@@ -1,11 +1,19 @@
 import type { PlatformContext } from "@work-shape/catalyst-api-client";
-import { WORKFLOW_ACTIONS } from "@work-shape/catalyst-core";
+import { WORKFLOW_ACTIONS, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
+import {
+  assetRightsBy,
+  assetRightsOn,
+  NO_ASSET_RIGHTS,
+  resolveBuildRights,
+  type AssetRights
+} from "../../shared/build-rights";
 import type { TranslationKey } from "../../shared/i18n";
 import { startFormUsable } from "./start-form";
 import type {
   WorkflowFailure,
   WorkflowFailureReason,
+  WorkflowListItem,
   WorkflowRunStatus,
   WorkflowRunView,
   WorkflowStepRunView,
@@ -19,29 +27,75 @@ const WORKFLOWS_MODULE = "workflows";
 /** What the instance says the reader holds, as far as Workflows read it. */
 type HeldActions = Pick<PlatformContext, "actions" | "assetActions">;
 
-/** What the reader may do with Workflows, as far as the browser can know it. */
+/**
+ * What the reader may do with Workflows, as far as the browser can know it, by the owner of a
+ * Workflow. One Workflow's own record or row decides for it where it says (`workflowRightsOn`);
+ * these stand where it does not.
+ */
 export interface WorkflowRights {
-  /** Reads some Workflow: the area has something to show. */
-  read: boolean;
-  /** Writes every Workflow, which also cancels a run someone else started. */
-  write: boolean;
-  /** Publishes every Workflow, as far as the right of the kind goes. */
-  publish: boolean;
+  /**
+   * On the instance's own Workflows, as the instance names its rights on them. Every Workflow
+   * belongs to the instance today, and a new one is made there. `write` also cancels a run
+   * someone else started.
+   */
+  instance: AssetRights;
+  /**
+   * The open workspace and the rights the instance names on that workspace's own Workflows: a
+   * grant there, a membership's role or a right on the whole instance. A kind the instance keeps
+   * on itself alone, as it keeps Workflows today, names none there.
+   */
+  workspace?: { id: string; rights: AssetRights };
 }
 
 /**
- * The reader's rights on Workflows as a whole. Whether one Workflow is theirs to start is not
+ * The reader's rights on Workflows, by owner. Whether one Workflow is theirs to start is not
  * among them: the list says it of each Workflow.
  */
-export function resolveWorkflowRights(context: HeldActions | undefined): WorkflowRights {
+export function resolveWorkflowRights(
+  context: PlatformContext | undefined,
+  workspaceId: string | undefined
+): WorkflowRights {
   const onAll = context?.actions ?? [];
+  // No session: its legacy keys name agents and skills, never Workflows.
+  const build = resolveBuildRights(undefined, context);
   return {
-    read:
-      onAll.includes(WORKFLOW_ACTIONS.read) ||
-      (context?.assetActions ?? []).includes(WORKFLOW_ACTIONS.read),
-    write: onAll.includes(WORKFLOW_ACTIONS.write),
-    publish: onAll.includes(WORKFLOW_ACTIONS.publish)
+    instance: assetRightsBy((verb) => onAll.includes(WORKFLOW_ACTIONS[verb])),
+    ...(workspaceId === undefined
+      ? {}
+      : {
+          workspace: {
+            id: workspaceId,
+            rights: assetRightsBy((verb) =>
+              build.holdsInWorkspace(WORKFLOW_ASSET_KIND, verb, workspaceId)
+            )
+          }
+        })
   };
+}
+
+/**
+ * The reader's rights on one Workflow: what its record or its row says the reader may do to
+ * it, with every grant and deny there is. Where it says nothing, and until it arrives, the
+ * rights on its owner stand: the instance's, or the open workspace's for a Workflow that
+ * workspace owns. A right in the open workspace is never lent to what another owner holds.
+ */
+export function workflowRightsOn(
+  rights: WorkflowRights,
+  workflow: Pick<WorkflowView, "allowed" | "ownerWorkspaceId"> | undefined
+): AssetRights {
+  const owner = workflow?.ownerWorkspaceId;
+  const onOwner =
+    owner === undefined
+      ? rights.instance
+      : owner === rights.workspace?.id
+        ? rights.workspace.rights
+        : NO_ASSET_RIGHTS;
+  return assetRightsOn(onOwner, workflow);
+}
+
+/** The reader reads some Workflow: the area has something to show. */
+function readsSomeWorkflow(context: HeldActions): boolean {
+  return [...context.actions, ...context.assetActions].includes(WORKFLOW_ACTIONS.read);
 }
 
 /** Whether the area is there for the reader. `unknown` until the instance has said both. */
@@ -69,7 +123,7 @@ export function workflowsAccess(input: {
   if (input.context === undefined) {
     return "unknown";
   }
-  return resolveWorkflowRights(input.context).read ||
+  return readsSomeWorkflow(input.context) ||
     input.context.visibleSections?.includes("workflows") === true
     ? "open"
     : "closed";
@@ -89,14 +143,27 @@ export function workflowsRowShown(
 
 /**
  * Whether the list shows a Workflow to the reader: a published one to whoever the instance
- * lists it to, a draft never published only to who may write Workflows (Platform Access
- * check 44).
+ * lists it to, a draft never published only to who builds it, by writing or publishing it
+ * (Platform Access check 44).
  */
 export function listedToReader(
-  workflow: Pick<WorkflowView, "published">,
-  rights: Pick<WorkflowRights, "write">
+  workflow: Pick<WorkflowListItem, "published" | "allowed" | "ownerWorkspaceId">,
+  rights: WorkflowRights
 ): boolean {
-  return workflow.published || rights.write;
+  if (workflow.published) return true;
+  const onIt = workflowRightsOn(rights, workflow);
+  return onIt.write || onIt.publish;
+}
+
+/**
+ * Whether the runs of a Workflow are the reader's to read: the instance lists them to who may
+ * read the Workflow. Writing, publishing or starting it reads none of them.
+ */
+export function runsReadable(
+  rights: WorkflowRights,
+  workflow: Pick<WorkflowView, "allowed" | "ownerWorkspaceId"> | undefined
+): boolean {
+  return workflowRightsOn(rights, workflow).read;
 }
 
 /**
@@ -145,24 +212,30 @@ export function draftState(
 }
 
 /**
- * Whether "Edit with the agent" stands on the page of a Workflow: the reader may write
- * Workflows, and the instance showed them the draft of this one, which is what the agent of
- * such a conversation reads and saves.
+ * Whether "Edit with the agent" stands on the page of a Workflow: the reader may write this
+ * Workflow, and the instance showed them its draft, which is what the agent of such a
+ * conversation reads and saves.
  */
 export function editOffered(
-  rights: Pick<WorkflowRights, "write">,
-  workflow: Pick<WorkflowView, "draft"> | undefined
+  rights: WorkflowRights,
+  workflow: Pick<WorkflowView, "draft" | "allowed" | "ownerWorkspaceId"> | undefined
 ): boolean {
-  return rights.write && workflow?.draft !== undefined;
+  return workflowRightsOn(rights, workflow).write && workflow?.draft !== undefined;
 }
 
-/** Whether "Cancel run" stands on the page of a run: it is going, and the reader may end it. */
+/**
+ * Whether "Cancel run" stands on the page of a run: it is going, and the reader started it or
+ * may write its Workflow, as the instance decides a cancel. `workflow` counts only where it is
+ * the run's own; until it is, the rights on the instance's Workflows stand.
+ */
 export function cancelOffered(
-  run: Pick<WorkflowRunView, "ended" | "startedBy">,
+  run: Pick<WorkflowRunView, "ended" | "startedBy" | "workflowId">,
   viewerId: string,
-  rights: Pick<WorkflowRights, "write">
+  rights: WorkflowRights,
+  workflow: Pick<WorkflowView, "id" | "allowed" | "ownerWorkspaceId"> | undefined
 ): boolean {
-  return !run.ended && (rights.write || run.startedBy?.id === viewerId);
+  const own = workflow?.id === run.workflowId ? workflow : undefined;
+  return !run.ended && (run.startedBy?.id === viewerId || workflowRightsOn(rights, own).write);
 }
 
 /** The sentence of a step whose definition gives none. A loop has its steps to say it. */
@@ -205,7 +278,9 @@ const RUN_STATES: Readonly<Record<WorkflowRunStatus, RunStatePresentation>> = {
   done: { label: "workflows.run.done", tone: "success", spins: false },
   failed: { label: "workflows.run.failed", tone: "danger", spins: false },
   cancelled: { label: "workflows.run.cancelled", tone: "neutral", spins: false },
-  limit_reached: { label: "workflows.run.limitReached", tone: "danger", spins: false }
+  limit_reached: { label: "workflows.run.limitReached", tone: "danger", spins: false },
+  // A part that handed on to the next one: it ended well, and the Lauf goes on.
+  continued: { label: "workflows.run.continued", tone: "success", spins: false }
 };
 
 /**
@@ -276,7 +351,7 @@ function stepById(
 }
 
 /**
- * Whether a run that ended `done` left failed items in its own loops, or runs with failures
+ * Whether a run that ended `done` left failed items in this or preceding parts, or runs with failures
  * below it, at any depth. A list reads this: it holds no step runs.
  */
 export function doneWithFailedRuns(

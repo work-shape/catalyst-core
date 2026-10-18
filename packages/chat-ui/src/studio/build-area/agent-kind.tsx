@@ -78,7 +78,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
     retry: false
   });
   const connectionTools = useConnectionToolChoice();
-  const appTools = useAppToolsRead();
+  const appTools = useAppToolsRead(owner);
   const [skillSearch, setSkillSearch] = useState("");
   // An agent names skills of its own owner and of the instance: a workspace's agent is offered
   // that workspace's skills first, then the instance's own.
@@ -113,7 +113,12 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   const context = usePlatformContextQuery({ ...api, enabled: true }).data;
   const knowledgeOn = context?.kinds.some((kind) => kind.kind === "knowledge_base") ?? false;
   const [knowledgeSearch, setKnowledgeSearch] = useState("");
-  const knowledgeRead = useKnowledgeBaseSource().useKnowledgeBases(knowledgeSearch, knowledgeOn);
+  // Of its own owner and of the instance, as its skills.
+  const knowledgeRead = useKnowledgeBaseSource().useKnowledgeBases(
+    knowledgeSearch,
+    knowledgeOn,
+    owner
+  );
   const administeredWorkspacesQuery = useAdministeredCollaborationWorkspacesQuery({
     ...api,
     enabled: instanceWrite && asset !== undefined
