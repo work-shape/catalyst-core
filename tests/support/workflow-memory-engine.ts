@@ -380,6 +380,7 @@ export async function memoryWorkflowEngine(
     }
   });
   const jobs = port<JobsStore>(unusedJobsStore, {
+    async runAgainAfter() {},
     async enqueue(kind, payload, options) {
       const job = {
         id: createPlatformId<"JobId">("job"),

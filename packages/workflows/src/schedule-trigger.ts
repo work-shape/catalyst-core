@@ -37,14 +37,21 @@ export const workflowScheduleJobKind = defineJobKind({
 });
 
 /** The cron expressions of the `schedule` triggers of a definition. None where it has none. */
-function scheduleCrons(manifest: Pick<WorkflowManifest, "steps">): CronExpression[] {
+function scheduleTexts(manifest: Pick<WorkflowManifest, "steps">): string[] {
   const [trigger] = manifest.steps;
   if (trigger?.type !== "trigger") return [];
-  return trigger.triggers.flatMap((candidate) => {
-    const cron = candidate.kind === "schedule" ? parseCron(candidate.cron) : undefined;
-    return cron ? [cron] : [];
-  });
+  return trigger.triggers.flatMap((candidate) =>
+    candidate.kind === "schedule" ? [candidate.cron] : []
+  );
 }
+
+const parsedCrons = (texts: readonly string[]): CronExpression[] =>
+  texts.flatMap((text) => parseCron(text) ?? []);
+
+const refusalReason = (error: AppError): string => {
+  const parsed = z.object({ reason: z.string() }).safeParse(error.details);
+  return parsed.success ? parsed.data.reason : error.code;
+};
 
 /** The key of the job of one due time of one Workflow: that job is queued once. */
 const scheduleJobKey = (workflow: string, dueAt: string) =>
@@ -97,7 +104,7 @@ export async function replaceScheduleJob(
 ): Promise<Date | undefined> {
   const { clientInstanceId, workflow, timeZone, now } = input;
   const dueOf = (manifest: Pick<WorkflowManifest, "steps"> | undefined) =>
-    manifest ? nextDueAfter(scheduleCrons(manifest), now, timeZone) : undefined;
+    manifest ? nextDueAfter(parsedCrons(scheduleTexts(manifest)), now, timeZone) : undefined;
   const before = dueOf(input.previous);
   const next = dueOf(input.published);
   if (before && before.getTime() !== next?.getTime()) {
@@ -165,34 +172,44 @@ export function createScheduleTrigger(options: ScheduleTriggerOptions): Schedule
     );
   }
 
-  /** The published definition, or nothing where there is none that can be run. */
-  async function published(workflow: string): Promise<WorkflowDefinitionRevision | undefined> {
+  async function published(workflow: string) {
     try {
-      return await definitions.read(workflow);
+      return { revision: await definitions.read(workflow) };
     } catch (error) {
-      // A definition that is refused is no definition a schedule starts.
-      if (isAppError(error)) return undefined;
-      throw error;
+      if (!isAppError(error)) throw error;
+      return { refused: refusalReason(error) };
     }
   }
 
   const queue = (tx: Pick<PlatformStores, "jobs">, workflow: string, due: Date) =>
     queueScheduleJob(tx, clientInstanceId, workflow, due);
 
+  async function cadence(workflow: string, result: Awaited<ReturnType<typeof published>>) {
+    if (result.revision) return scheduleTexts(result.revision.manifest);
+    // A refused definition is still published. Its trigger is read independently so
+    // validation of another step cannot terminate the schedule. Missing assets end it.
+    return result.refused ? ((await definitions.readScheduleCrons?.(workflow)) ?? []) : [];
+  }
+
   const handler = defineJobHandler({
     kind: workflowScheduleJobKind,
     slots: 1,
     async run(job, control) {
       const { workflow, dueAt } = job.payload;
-      const revision = await published(workflow);
-      const crons = revision ? scheduleCrons(revision.manifest) : [];
-      // The Workflow is gone or has no schedule any more: its line of jobs ends here.
-      if (!revision || crons.length === 0) return;
+      const result = await published(workflow);
+      const texts = await cadence(workflow, result);
+      const crons = parsedCrons(texts);
+      // Only a missing Workflow or a removed schedule ends the line of jobs.
+      if (crons.length === 0) return;
       const moment = firedAt(dueAt);
       // Of the times that came due since the job was queued, the latest. A time the instance
       // was down for is not made up for one by one.
       const due = lastDueWithin(crons, new Date(dueAt), moment, timeZone);
-      const prepared = due ? await options.prepare(revision) : undefined;
+      const prepared = due
+        ? result.revision
+          ? await options.prepare(result.revision)
+          : { refused: result.refused ?? "definition_invalid" }
+        : undefined;
       // After the moment the job fired at, so never the job's own time: the job of the next
       // due time is another job than this one, and it exists when this one ends.
       const next = nextDueAfter(crons, moment, timeZone);
@@ -225,8 +242,9 @@ export function createScheduleTrigger(options: ScheduleTriggerOptions): Schedule
     // the next due time is queued, and this time is the one that was lost.
     async onExhausted(job, tx) {
       const { workflow, dueAt } = job.payload;
-      const revision = await published(workflow);
-      const crons = revision ? scheduleCrons(revision.manifest) : [];
+      const result = await published(workflow);
+      const texts = await cadence(workflow, result);
+      const crons = parsedCrons(texts);
       const next = nextDueAfter(crons, firedAt(dueAt), timeZone);
       if (next) await queue(tx, workflow, next);
     }
@@ -245,10 +263,9 @@ export function createScheduleTrigger(options: ScheduleTriggerOptions): Schedule
   async function planOne(
     workflow: string
   ): Promise<{ workflow: string; dueAt: string } | undefined> {
-    const revision = await published(workflow);
-    const next = revision
-      ? nextDueAfter(scheduleCrons(revision.manifest), now(), timeZone)
-      : undefined;
+    const result = await published(workflow);
+    const texts = await cadence(workflow, result);
+    const next = nextDueAfter(parsedCrons(texts), now(), timeZone);
     if (!next) return undefined;
     await queue(stores, workflow, next);
     return { workflow, dueAt: next.toISOString() };
