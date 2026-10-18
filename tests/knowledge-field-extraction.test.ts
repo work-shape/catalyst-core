@@ -422,4 +422,26 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
       0
     );
   });
+  it("refuses an unpriced monthly field budget at publish while allowing startup and unbudgeted definitions", async () => {
+    const assertBudgetPriced = vi.fn(() => {
+      throw new Error(
+        "Model binding 'approved-extraction' has no usage.costs.customer.models rate-card row"
+      );
+    });
+    const world = await setup(undefined, undefined, false, undefined, {
+      currency: "EUR",
+      reserveCost: () => 0,
+      extract: vi.fn<KnowledgeFieldExtractor["extract"]>(),
+      assertBudgetPriced
+    });
+    expect(assertBudgetPriced).not.toHaveBeenCalled();
+    await expect(
+      world.publishSources(sources, {
+        extraction: { budget: { perMonth: 1, maxTokensPerDocument: 8000 } }
+      })
+    ).rejects.toThrow(
+      "Model binding 'approved-extraction' has no usage.costs.customer.models rate-card row"
+    );
+    expect(assertBudgetPriced).toHaveBeenCalledOnce();
+  });
 });

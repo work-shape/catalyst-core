@@ -143,6 +143,51 @@ describe("catalyst_kb source migrations", () => {
     }
   });
 
+  it("repairs migration 9 when the owned store already holds 8 and 10, and audits the missing migration", async () => {
+    const instance = await start(true, undefined, undefined, undefined, true);
+    await writeAndPublish(instance, 1);
+    const made = await settle(instance, 10);
+    const url = new URL(await fileTestDatabaseUrl());
+    url.pathname = `/${made.location.database}`;
+    const store = postgres(url.toString(), { max: 1, onnotice() {} });
+    const platform = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
+    try {
+      await store`delete from catalyst_kb.migrations where number=9`;
+      await instance.stores.dataStores.putDataStore({
+        ...made,
+        migrations: made.migrations.filter(({ number }) => number !== 9)
+      });
+      await platform`update platform_jobs set run_after=now() where kind='data_store.upgrade_owned' and client_instance_id=${clientInstanceId} and status='queued'`;
+      await eventually(async () => {
+        await getTestJobs(instance.api).runDue();
+        const record = required(await ownedRecord(instance));
+        expect(record.level).toBe(10);
+        expect(record.migrations.map(({ number }) => number)).toEqual([
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+        ]);
+      });
+      expect(
+        (await store`select number from catalyst_kb.migrations order by number`).map(
+          ({ number }) => number
+        )
+      ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(
+        await instance.stores.audit.listAuditEvents({
+          clientInstanceId,
+          type: "data_store.migrated"
+        })
+      ).toContainEqual(
+        expect.objectContaining({
+          subject: made.id,
+          metadata: expect.objectContaining({ level: 10, appliedCount: 1, migrationNumber: 9 })
+        })
+      );
+    } finally {
+      await store.end();
+      await platform.end();
+    }
+  });
+
   it("upgrades connector cursors unchanged and constrains Workflow source identity (KBW-0)", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
     await writeAndPublish(instance, 1);
@@ -295,7 +340,7 @@ describe("catalyst_kb source migrations", () => {
       ).toContainEqual(
         expect.objectContaining({
           subject: made.id,
-          metadata: expect.objectContaining({ level: 10, appliedCount: 8 })
+          metadata: expect.objectContaining({ level: 10, appliedCount: 9 })
         })
       );
 
