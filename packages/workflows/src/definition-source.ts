@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   AppError,
   WORKFLOW_MANIFEST_FILE,
+  type ConfigAssetStore,
   type WorkflowKind,
   type WorkflowManifest
 } from "@work-shape/catalyst-core";
@@ -34,7 +35,11 @@ export interface WorkflowDefinitionSummary {
  */
 export interface WorkflowDefinitionSource {
   /** The published revision of the Workflow of this id, or nothing where none is published. */
-  read(id: string): Promise<WorkflowDefinitionRevision | undefined>;
+  read(
+    id: string,
+    /** Database-backed sources use these readers while a publish holds its transaction. */
+    configAssets?: Pick<ConfigAssetStore, "getConfigAsset">
+  ): Promise<WorkflowDefinitionRevision | undefined>;
   /** The Workflows that have a published definition, by id. */
   list(): Promise<WorkflowDefinitionSummary[]>;
 }

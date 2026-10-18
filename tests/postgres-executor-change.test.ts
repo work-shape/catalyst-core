@@ -100,6 +100,26 @@ describe("a change through the Postgres executor", () => {
     expect(await firstStatement({ transaction: false })).toEqual([{ first_statement: true }]);
   });
 
+  it.each([
+    { source: "without routine metadata", routine: undefined },
+    { source: "from PL/pgSQL RAISE", routine: "exec_stmt_raise" }
+  ])("discards constraint diagnostics $source", async ({ routine }) => {
+    const refused = calls().change(asWriter(), async () => {
+      throw {
+        code: "23514",
+        routine,
+        constraint_name: "private-row-value",
+        table_name: "private-row-value",
+        column_name: "private-row-value"
+      };
+    });
+    expect(await failure(refused)).toMatchObject({
+      kind: "failed",
+      sqlState: "23514",
+      constraint: undefined
+    });
+  });
+
   it("ends a change at its own time limit", async () => {
     const slow = calls().change(asWriter({ timeoutMs: 200 }), (change) =>
       change.run("select pg_sleep(30)")

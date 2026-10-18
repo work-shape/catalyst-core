@@ -645,6 +645,42 @@ describe("a Workflow stored as an asset", () => {
     );
   });
 
+  it("keeps an asset deny on retained runs before and after another user deletes the Workflow", async () => {
+    const t = await ready();
+    const revision = await put(t, notifyClients(), null);
+    expect((await publish(t, revision)).statusCode).toBe(200);
+    const started = await start(t);
+    await t.finish(started.id);
+    const assetId = await t.assetId(WORKFLOW_ASSET_KIND, WORKFLOW);
+    await t.allow({ kind: "user", id: t.kai.id }, "workflow.read");
+    await t.allow({ kind: "user", id: t.lena.id }, "workflow.read");
+    await t.grant(t.kai.id, "workflow.read", { assetId }, "deny");
+
+    const checkReads = async () => {
+      for (const operation of ["workflows.get_run", "workflows.list_step_runs"] as const) {
+        const refused = await t.call(t.kai.id, operation, { params: { runId: started.id } });
+        expect(refused.statusCode, `${operation}: ${refused.body}`).toBe(404);
+        await t.expectOk(t.lena.id, operation, { params: { runId: started.id } });
+      }
+      await t.expectRefused(
+        t.kai.id,
+        "workflows.list_runs",
+        { params: { workflow: WORKFLOW } },
+        t.forbidden("workflow.read", "denied")
+      );
+      const listed = await t.expectOk(t.lena.id, "workflows.list_runs", {
+        params: { workflow: WORKFLOW }
+      });
+      expect(listed.json()).toMatchObject({ items: [{ id: started.id }] });
+    };
+    await checkReads();
+    await t.expectOk(t.admin.id, "assets.delete", {
+      params: address,
+      payload: { expectedRevision: revision }
+    });
+    await checkReads();
+  });
+
   it("registers no kind and serves no call where the module is off", async () => {
     const t = await workflowFixture({ moduleOn: false, definitions: "assets" });
     open = t;

@@ -176,6 +176,8 @@ export interface OpenConnectorContextInput {
    * refreshed before a token is handed out again. Only for auth scheme `oauth`.
    */
   refused?: string;
+  /** Rechecks a held call's approval after its token has been selected, including refresh waits. */
+  checkSignIn?: () => Promise<void>;
   /** Read afresh for this attempt, never cached on the shared Connection. */
   resolvePersonContext?: (header: string, origin: string) => Promise<string>;
 }
@@ -221,6 +223,10 @@ export async function openConnectorContext(
           });
     // A call that ended while its credential was read is handed none: the secret stays where
     // it was resolved and no type sees it.
+    if (signal.aborted) throw connectionCallError("upstream_timeout");
+    // A resolver may wait or refresh, and a reconnect reuses the secret handle. Read the
+    // binding after token selection so no newer account can inherit a held call's approval.
+    if (config.authScheme === AUTH_SCHEME_OAUTH) await input.checkSignIn?.();
     if (signal.aborted) throw connectionCallError("upstream_timeout");
     credential = credentialOf(type, config.authScheme, settings.data, secret);
   }

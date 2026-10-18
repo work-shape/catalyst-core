@@ -22,6 +22,8 @@ import {
   type OperationResource
 } from "@work-shape/catalyst-core";
 
+import type { RunOperationDeps } from "@work-shape/catalyst-tool-execution";
+
 // What each kind of named action stands for. An action of every kind is one operation of the
 // registry, reached through that operation's own definition: a `connection` action an
 // operation of a Connection, an `sql` action the query or the insert of a Data Store, a
@@ -81,7 +83,8 @@ export interface AppActionBinding {
   authorize(
     operation: OperationDefinition,
     context: OperationAuthorizeContext,
-    host: { published: boolean }
+    host: { published: boolean },
+    resolveResource: RunOperationDeps["resolveResource"]
   ): OperationAuthorization | Promise<OperationAuthorization>;
   /** The input of the operation, made of the parameters a caller passed. */
   inputOf(parameters: JsonObject): unknown;
@@ -101,19 +104,23 @@ export interface AppActionBinding {
  * The caller's right on an operation, by that operation's own rule. `input` is what of the
  * operation's input the action fixes, where its rule reads that.
  */
-function authorizeCaller(
+async function authorizeCaller(
   operation: OperationDefinition,
   context: OperationAuthorizeContext,
+  resolveResource: RunOperationDeps["resolveResource"],
   input?: JsonObject
-): OperationAuthorization | Promise<OperationAuthorization> {
-  const resource = operation.resource(input);
+): Promise<OperationAuthorization> {
+  const { resource, resourceNotFound } = await resolveResource(operation.resource(input));
   if (operation.action !== null) {
     const decision = context.access.authorize(operation.action, resource);
+    if (decision.allowed && resourceNotFound) throw new AppError("NOT_FOUND", resourceNotFound);
     return decision.allowed
       ? { allowed: true }
       : { allowed: false, action: operation.action, reason: decision.reason };
   }
-  return operation.authorize(input, { ...context, resource });
+  const decision = await operation.authorize(input, { ...context, resource });
+  if (decision.allowed && resourceNotFound) throw new AppError("NOT_FOUND", resourceNotFound);
+  return decision;
 }
 
 type ActionOfKind<Kind extends CompiledAppAction["kind"]> = Extract<
@@ -147,7 +154,8 @@ function connectionBinding(action: ActionOfKind<"connection">): AppActionBinding
         : { operation };
     },
     // The viewer needs the right on the Connection as well as the one on the App.
-    authorize: authorizeCaller,
+    authorize: (operation, context, _host, resolveResource) =>
+      authorizeCaller(operation, context, resolveResource),
     inputOf: (parameters) => applyAppActionMapping(action.input.mapping, parameters),
     inputRefusal: () => connectionCallError("input_invalid"),
     describe: (appTitle) => `The action '${action.name}' of the App '${appTitle}'.`
@@ -196,8 +204,8 @@ function dataStoreBinding(action: ActionOfKind<"sql">): AppActionBinding {
         ? { operation }
         : { refusal: unavailable() };
     },
-    authorize: (operation, context, host) =>
-      host.published ? { allowed: true } : authorizeCaller(operation, context),
+    authorize: (operation, context, host, resolveResource) =>
+      host.published ? { allowed: true } : authorizeCaller(operation, context, resolveResource),
     inputOf: (parameters) =>
       action.effect === "reading"
         ? {
@@ -248,8 +256,8 @@ function workflowBinding(action: ActionOfKind<"workflow">): AppActionBinding {
       operation
         ? { operation }
         : { refusal: new AppError("NOT_FOUND", "This instance has no Workflows") },
-    authorize: (operation, context) =>
-      authorizeCaller(operation, context, { workflow: action.workflow }),
+    authorize: (operation, context, _host, resolveResource) =>
+      authorizeCaller(operation, context, resolveResource, { workflow: action.workflow }),
     inputOf: startOf,
     inputRefusal: () =>
       new AppError(

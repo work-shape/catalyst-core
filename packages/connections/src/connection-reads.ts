@@ -11,6 +11,7 @@ import {
   type ConnectorTypeRegistry,
   type EgressChecker,
   type Logger,
+  type OperationResolutionStores,
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import { readConnectionCatalog } from "./catalog";
@@ -52,13 +53,16 @@ type ReadDeps = Pick<
   ConnectionOperationSourceDeps,
   "clientInstanceId" | "stores" | "connectorTypes"
 >;
+type PointReadDeps = Omit<ReadDeps, "stores"> & {
+  stores: Pick<OperationResolutionStores, "configAssets" | "connections">;
+};
 
 /**
  * A Connection belongs to the instance. An asset of the kind that a workspace owns, or one
  * whose stored definition this build does not read, is no Connection here.
  */
 function storedConnection(
-  deps: ReadDeps,
+  deps: PointReadDeps,
   asset: ConfigAssetRecord,
   state: ConnectionStateRecord | undefined
 ): StoredConnection | undefined {
@@ -80,7 +84,7 @@ function storedConnection(
  * transaction, the Connection keeps the revision that is read until the transaction ends.
  */
 export async function readConnection(
-  deps: ReadDeps,
+  deps: PointReadDeps,
   name: string,
   options: { held?: true } = {}
 ): Promise<StoredConnection | undefined> {

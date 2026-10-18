@@ -554,7 +554,9 @@ async function waitingContext(
     run,
     definition,
     call,
-    resource: definition.resource(call.input),
+    ...(definition.action === null
+      ? { resource: definition.resource(call.input) }
+      : await deps.resolveResource(definition.resource(call.input))),
     deps,
     // The call is executed later and elsewhere than it was made: nothing of the live call is
     // left but, for a call an Agent Run's worker executes, that run's hold and language. Its
