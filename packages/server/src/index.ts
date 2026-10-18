@@ -352,3 +352,5 @@ function adaptLogger(logger: Logger): FastifyInstance["log"] {
 }
 export { createPlatformAssetCalls } from "./platform/platform-asset-calls";
 export type { AssetWorkflowOptions } from "./types";
+
+export { createNoticeMailJobs } from "./notices/notice-mail";

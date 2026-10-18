@@ -48,18 +48,30 @@ const copy: {
     })
   },
   "workflow-notice": {
-    en: (_params, productName) => ({
-      subject: `A new notice in ${productName}`,
-      intro: `A new notice is waiting for you in your ${productName} Inbox. Sign in to read it.`,
-      action: "Open the notice",
-      footer: "This email does not repeat what the notice says."
-    }),
-    de: (_params, productName) => ({
-      subject: `Neue Mitteilung in ${productName}`,
-      intro: `In deinem Eingang in ${productName} wartet eine neue Mitteilung. Melde dich an, um sie zu lesen.`,
-      action: "Mitteilung öffnen",
-      footer: "Diese E-Mail gibt den Inhalt der Mitteilung nicht wieder."
-    })
+    en: (params, productName) => {
+      const count = params.count ?? 1;
+      return {
+        subject: `${count === 1 ? "A new notice" : "New notices"} in ${productName}`,
+        intro:
+          count === 1
+            ? `1 notice is waiting for you in your ${productName} Inbox. Sign in to read it.`
+            : `${count} notices are waiting for you in your ${productName} Inbox. Sign in to read them.`,
+        action: count === 1 ? "Open the notice" : "Open the notices",
+        footer: "This email does not repeat what the notice says."
+      };
+    },
+    de: (params, productName) => {
+      const count = params.count ?? 1;
+      return {
+        subject: `${count === 1 ? "Neue Mitteilung" : "Neue Mitteilungen"} in ${productName}`,
+        intro:
+          count === 1
+            ? `In deinem Eingang in ${productName} wartet 1 Mitteilung. Melde dich an, um sie zu lesen.`
+            : `In deinem Eingang in ${productName} warten ${count} Mitteilungen. Melde dich an, um sie zu lesen.`,
+        action: count === 1 ? "Mitteilung öffnen" : "Mitteilungen öffnen",
+        footer: "Diese E-Mail gibt den Inhalt der Mitteilung nicht wieder."
+      };
+    }
   }
 };
 

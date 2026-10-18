@@ -1,5 +1,6 @@
 import {
   NOTIFY_CHANNELS,
+  NOTICE_ID_PATTERN,
   WORKFLOW_KINDS,
   WORKFLOW_DATASET_KEY,
   WORKFLOW_START_KEY_INPUT,
@@ -51,6 +52,7 @@ export const WORKFLOW_EXECUTED_STEP_TYPES = [
   "workflow",
   "loop",
   "code",
+  "notify",
   "output"
 ] as const satisfies readonly WorkflowStepType[];
 
@@ -149,8 +151,31 @@ const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
     z.strictObject({
       ...named,
       type: z.literal("notify"),
-      channel: z.enum(NOTIFY_CHANNELS),
-      input: inputMappingSchema
+      to: z
+        .strictObject({
+          users: z.array(z.string().regex(NOTICE_ID_PATTERN)).optional(),
+          workspaces: z.array(z.string().regex(NOTICE_ID_PATTERN)).optional()
+        })
+        .refine(
+          (to) => (to.users?.length ?? 0) + (to.workspaces?.length ?? 0) > 0,
+          "A notify step needs recipients"
+        ),
+      channels: z
+        .array(z.enum(NOTIFY_CHANNELS))
+        .min(1)
+        .refine((channels) => channels.includes("inbox"), "A notice always includes inbox"),
+      title: workflowInputValueSchema,
+      text: workflowInputValueSchema,
+      link: z
+        .discriminatedUnion("kind", [
+          z.strictObject({ kind: z.literal("run") }),
+          z.strictObject({
+            kind: z.literal("app"),
+            workspaceId: z.string().min(1),
+            app: z.string().min(1)
+          })
+        ])
+        .optional()
     }),
     z.strictObject({
       ...named,
@@ -231,8 +256,11 @@ export function stepOperationRefusal(
  */
 function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
   const issues: WorkflowDefinitionIssue[] = [];
-  for (const field of ["labels", "onFailure"] as const) {
+  for (const field of ["labels"] as const) {
     if (manifest[field] !== undefined) issues.push(notSupported(field, `'${field}'`));
+  }
+  if (manifest.onFailure !== undefined && manifest.onFailure !== "notify") {
+    issues.push(notSupported("onFailure", "onFailure: workflow.<id> (EW-13 failure Workflow)"));
   }
   // The dataset-byte raise remains reserved; paging minutes use the operator ceiling.
   const { datasetBytes } = manifest.limits ?? {};
@@ -396,7 +424,12 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
         message: `A '${step.type}' step stands at the top, not in a loop`
       });
     }
-    const mapped = "input" in step ? Object.entries(step.input) : [];
+    const mapped =
+      step.type === "notify"
+        ? Object.entries({ title: step.title, text: step.text })
+        : "input" in step
+          ? Object.entries(step.input)
+          : [];
     for (const [field, source] of mapped) {
       // A literal is no dataset, so it never carries the key that marks one.
       if (source.value !== undefined && holdsBrokenDatasetReference(source.value)) {

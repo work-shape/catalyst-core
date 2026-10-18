@@ -468,6 +468,8 @@ export class AssetDraftWorkflow {
       ? await this.options.stores.transaction(async (stores) => {
           const moved = await move(stores.configAssets);
           await onPublish({
+            actor: call.actor,
+            revisionId: revision.id,
             clientInstanceId: this.options.clientInstanceId,
             access: call.access,
             assetId: moved.assetId,

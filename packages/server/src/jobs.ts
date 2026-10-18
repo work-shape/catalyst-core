@@ -1,3 +1,4 @@
+import { createNoticeMailJobs } from "./notices/notice-mail";
 import {
   asCollaborationWorkspaceId,
   asConversationId,
@@ -298,6 +299,10 @@ export function createChatServerJobs(
   });
   handlers.push(...operationRuns.handlers);
   schedules.push(...operationRuns.schedules);
+
+  const noticeMail = createNoticeMailJobs(options, now);
+  handlers.push(...noticeMail.handlers);
+  schedules.push(...noticeMail.schedules);
 
   const connectionJobs = createConnectionDiscoveryJobs(options);
   handlers.push(...connectionJobs.handlers);

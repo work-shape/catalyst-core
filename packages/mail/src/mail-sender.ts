@@ -13,7 +13,7 @@ export class TemplateMailSender implements MailSender {
     private readonly identity: MailSenderIdentity
   ) {}
 
-  send(message: MailMessage): Promise<MailSendResult> {
-    return this.transport.deliver(renderMail(message, this.identity), this.identity);
+  send(message: MailMessage, context?: { signal?: AbortSignal }): Promise<MailSendResult> {
+    return this.transport.deliver(renderMail(message, this.identity), this.identity, context);
   }
 }

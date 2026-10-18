@@ -60,11 +60,13 @@ export const manifest = (steps: unknown[] = []) => ({
 export const configOf = (steps: unknown[] = []) => ({ name: WORKFLOW, manifest: manifest(steps) });
 /** A step the engine of this release does not run, and the one the agent writes after it. */
 export const notRun = {
-  id: "tell",
-  name: "Tell the team",
-  type: "notify",
-  channel: "inbox",
-  input: {}
+  id: "ask",
+  name: "Ask the agent",
+  type: "agent",
+  instructions: "check.md",
+  input: {},
+  inputSchema: { type: "object" },
+  outputSchema: { type: "object" }
 };
 export const added = {
   id: "books",

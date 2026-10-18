@@ -550,7 +550,11 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
       ...(kind === "workflow" && child !== undefined ? { workflow: child } : {}),
       steps: kind === "loop" ? readSteps(raw.steps, inside) : [],
       ...(branches === undefined ? {} : { branches }),
-      ...(kind === "notify" ? { channel: raw.channel === "mail" ? "mail" : "inbox" } : {}),
+      ...(kind === "notify"
+        ? {
+            channel: Array.isArray(raw.channels) && raw.channels.includes("mail") ? "mail" : "inbox"
+          }
+        : {}),
       sources: stepSources(raw.input, known)
     });
   }

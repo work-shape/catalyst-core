@@ -1,3 +1,4 @@
+import type { NoticeLink, NoticeRecipients } from "./notice-address";
 import type { NotifyChannel } from "@work-shape/catalyst-asset-schemas";
 import type { AuthenticatedIdentity } from "./identity";
 
@@ -5,10 +6,8 @@ import type { AuthenticatedIdentity } from "./identity";
 // asked, as a mail that leads there. It is an Inbox item of its own kind, addressed to one
 // person each, whose only answer is "mark handled" (`operations-and-policy.md`, Inbox).
 //
-// What a notice may carry is counts and a link. A mail leaves the instance through the mail
-// provider, and what it may contain is the operator's decision (§ 203 StGB for a tax firm), so
-// until that is decided a mail carries no word the author wrote: not the title, not the text.
-// It says that a notice is waiting and links to it; the person reads it after signing in.
+// Title and text stay in the Inbox. Mail always carries a notice count and a link only;
+// no author-supplied title, paragraph, client name or finding leaves through the mailer.
 
 /** The Inbox item kind of a notice. */
 export const NOTICE_KIND = "notice";
@@ -27,23 +26,7 @@ export const NOTICE_TEXT_MAX_LENGTH = 1000;
 export const NOTICE_RECIPIENTS_MAX = 100;
 
 /** Where a notice leads: the run it is about, or an App. Ids only, never a value of a run. */
-export type NoticeLink =
-  | { kind: "workflow_run"; workspaceId: string; workflowId: string; runId: string }
-  | { kind: "app"; workspaceId: string; app: string };
-
-/**
- * Who a notice is for: users of the instance by id, and the members of Shared Workspaces of the
- * instance by the workspace's id. A workspace stands for a group until groups exist (AP-7). No
- * address is taken: a mail goes only to the address the instance holds for an addressee. An id
- * that names no user or no Shared Workspace refuses the whole notice (`VALIDATION_FAILED`,
- * `details.unknownRecipients`), and so does a notice that would reach no active person
- * (`CONFLICT`, `details.reason: "no_active_recipient"`).
- */
-export interface NoticeRecipients {
-  users?: readonly string[];
-  workspaces?: readonly string[];
-}
-
+export type { NoticeLink, NoticeRecipients } from "./notice-address";
 export interface NoticeSendInput {
   /** Who sends it: the Workflow's principal, or the person testing it. Named on the item. */
   from: AuthenticatedIdentity;
@@ -65,7 +48,9 @@ export interface NoticeSendResult {
   inactive: number;
   /** Mails handed to the mail provider. */
   mailsSent: number;
-  /** Mails asked for and not sent: no address, no mailer, or the provider refused. */
+  /** Mails waiting for the configured digest job. */
+  mailsQueued: number;
+  /** Mails asked for and not sent: no address, no mailer, or no mailer was configured. */
   mailsUnsent: number;
 }
 

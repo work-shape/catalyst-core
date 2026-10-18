@@ -1,3 +1,4 @@
+import { noticeMailSettingsSchema } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   NOTICE_KIND,
@@ -6,19 +7,14 @@ import {
   asCollaborationWorkspaceId,
   asUserId,
   auditActorFromIdentity,
-  type ApprovalRequestStore,
   type AuditRecorder,
   type ClientInstanceId,
-  type CollaborationWorkspaceStore,
-  type LocaleCode,
-  type Logger,
   type NoticeSendInput,
   type NoticeSendResult,
   type Notices,
   type UserRecord,
-  type UserStore
+  type PlatformStores
 } from "@work-shape/catalyst-core";
-import type { MailSender } from "@work-shape/catalyst-mail";
 import { z } from "zod";
 import { NOTICE_ID, noticeContentSchema, type NoticePayload } from "./notice-kind";
 
@@ -40,17 +36,13 @@ import { NOTICE_ID, noticeContentSchema, type NoticePayload } from "./notice-kin
 
 export interface NoticesOptions {
   clientInstanceId: ClientInstanceId;
-  stores: {
-    users: Pick<UserStore, "getUser">;
-    workspaces: Pick<CollaborationWorkspaceStore, "getWorkspace" | "listMemberships">;
-    approvals: Pick<ApprovalRequestStore, "createApprovalRequest">;
-  };
+  stores: Pick<PlatformStores, "users" | "workspaces" | "approvals" | "noticeMail" | "transaction">;
+  /** The minimum window before a new notice becomes eligible for its recipient's digest. */
+  delivery?: { digestIntervalMs: number };
+  now?: () => Date;
   auditRecorder: AuditRecorder;
-  /** Without it a notice asked for by mail is in the Inbox only, and its mails count unsent. */
-  mail?: { sender: MailSender; appUrl: string };
-  /** The language of the mail. A user has no language of their own yet. */
-  locale: LocaleCode;
-  logger?: Logger;
+  /** Without a configured adapter, mail is counted unsent and the Inbox still receives it. */
+  mailConfigured?: boolean;
 }
 
 // Ids only: an address or any other value is refused before anything is looked up.
@@ -70,6 +62,7 @@ const addressingSchema = z
 
 export function createNotices(options: NoticesOptions): Notices {
   const { clientInstanceId, stores } = options;
+  const delivery = noticeMailSettingsSchema.parse(options.delivery ?? {});
 
   /** A user of this instance, active or not, or nothing. */
   async function userOf(id: string): Promise<UserRecord | undefined> {
@@ -119,28 +112,6 @@ export function createNotices(options: NoticesOptions): Notices {
     return { users: [...users.values()], inactive: inactive.size, unknown };
   }
 
-  /** Mails one addressee that a notice waits. False where no mail went. */
-  async function mailTo(user: UserRecord, itemId: string): Promise<boolean> {
-    const { mail } = options;
-    if (!mail || !user.email) return false;
-    try {
-      const result = await mail.sender.send({
-        template: "workflow-notice",
-        to: { email: user.email, displayLabel: user.displayLabel },
-        locale: options.locale,
-        params: { link: `${mail.appUrl.replace(/\/+$/u, "")}/inbox/${encodeURIComponent(itemId)}` }
-      });
-      return result.ok;
-    } catch (error) {
-      // The provider's own failure; it holds no word of the notice.
-      options.logger?.warn(
-        { error: error instanceof Error ? error.name : "unknown" },
-        "A notice mail could not be handed to the mail provider"
-      );
-      return false;
-    }
-  }
-
   return {
     async send(input, context) {
       if (input.from.clientInstanceId !== clientInstanceId) {
@@ -150,7 +121,14 @@ export function createNotices(options: NoticesOptions): Notices {
       const content = noticeContentSchema.safeParse({
         title: input.title,
         text: input.text,
-        ...(input.link ? { link: input.link } : {})
+        ...(input.link
+          ? {
+              link:
+                input.link.kind === "workflow_run"
+                  ? { ...input.link, workspaceId: input.link.workspaceId ?? "recipient" }
+                  : input.link
+            }
+          : {})
       });
       // The refusal names the field, never what it held.
       if (!addressing.success || !content.success) {
@@ -192,25 +170,61 @@ export function createNotices(options: NoticesOptions): Notices {
           }
         );
       }
-      let mailsSent = 0;
-      let mailsUnsent = 0;
-      for (const user of users) {
-        const item = await stores.approvals.createApprovalRequest({
-          clientInstanceId,
-          kind: NOTICE_KIND,
-          summary: payload.title,
-          payload,
-          requestedBy: { id: input.from.id, displayLabel: input.from.displayLabel },
-          addresseeUserId: user.id
-        });
-        if (!channels.includes("mail")) continue;
-        if (await mailTo(user, item.id)) mailsSent += 1;
-        else mailsUnsent += 1;
+      const mailsSent = 0;
+      let mailsQueued = 0;
+      const deliveryDate = new Date(
+        (options.now?.() ?? new Date()).getTime() + delivery.digestIntervalMs
+      );
+      if (!Number.isFinite(deliveryDate.getTime())) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "digestIntervalMs must produce a valid delivery date",
+          {
+            fields: ["infrastructure.mail.notices.digestIntervalMs"]
+          }
+        );
       }
+      const dueAt = deliveryDate.toISOString();
+      let mailsUnsent = 0;
+      await stores.transaction(async (tx) => {
+        for (const user of users) {
+          const link = payload.link;
+          const personal =
+            link?.kind === "workflow_run" &&
+            input.link?.kind === "workflow_run" &&
+            !input.link.workspaceId
+              ? await tx.workspaces.ensurePersonalWorkspace({ clientInstanceId, userId: user.id })
+              : undefined;
+          const item = await tx.approvals.createApprovalRequest({
+            clientInstanceId,
+            kind: NOTICE_KIND,
+            summary: payload.title,
+            payload:
+              personal && link
+                ? { ...payload, link: { ...link, workspaceId: personal.id } }
+                : payload,
+            requestedBy: { id: input.from.id, displayLabel: input.from.displayLabel },
+            addresseeUserId: user.id
+          });
+          if (!channels.includes("mail")) continue;
+          if (!options.mailConfigured || !user.email) {
+            mailsUnsent += 1;
+            continue;
+          }
+          await tx.noticeMail.enqueue({
+            clientInstanceId,
+            noticeId: item.id,
+            userId: user.id,
+            dueAt
+          });
+          mailsQueued += 1;
+        }
+      });
       const result: NoticeSendResult = {
         addressees: users.length,
         inactive,
         mailsSent,
+        mailsQueued,
         mailsUnsent
       };
       await options.auditRecorder.record({

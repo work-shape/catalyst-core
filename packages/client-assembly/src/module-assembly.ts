@@ -11,6 +11,7 @@ import type {
   KnowledgeBackend,
   KnowledgeFiles,
   Logger,
+  Notices,
   ModuleSnapshot,
   OperationSource,
   PlatformStores,
@@ -47,6 +48,7 @@ export interface ModuleAssemblyParts {
  * run does, asks whether a principal may, calls a model and runs the tools of the instance.
  */
 interface ModuleRuntime {
+  notices?: (stores: PlatformStores) => Notices;
   operationCalls: OperationCalls;
   authorizer: Authorizer;
   auditRecorder: AuditRecorder;

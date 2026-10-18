@@ -1,3 +1,5 @@
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { createJobWorker, resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -19,7 +21,7 @@ import {
   type MailTransport,
   type RenderedMail
 } from "@work-shape/catalyst-mail";
-import { createNotices } from "@work-shape/catalyst-server";
+import { createNoticeMailJobs, createNotices } from "@work-shape/catalyst-server";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestConfig, type TestInstance } from "./support/test-instance";
 
@@ -56,9 +58,13 @@ afterEach(async () => {
 /** A transport that keeps mails, and fails for one address as a provider would. */
 class FlakyCapture implements MailTransport {
   readonly capture = new CaptureMailTransport();
+  private failed = false;
   constructor(private readonly failFor?: string) {}
   async deliver(mail: RenderedMail) {
-    if (mail.to.email === this.failFor) throw new Error(`provider refused ${TITLE}`);
+    if (mail.to.email === this.failFor && !this.failed) {
+      this.failed = true;
+      throw new Error(`provider refused ${TITLE}`);
+    }
     return this.capture.deliver(mail);
   }
 }
@@ -77,7 +83,7 @@ function capturingLogger(lines: string[]): Logger {
   return logger;
 }
 
-async function fixture(options: { failMailFor?: string } = {}) {
+async function fixture(options: { failMailFor?: string; batchSize?: number; now?: Date } = {}) {
   const config = createTestConfig({
     developmentAuth: {
       enabled: true,
@@ -132,20 +138,62 @@ async function fixture(options: { failMailFor?: string } = {}) {
   });
   const transport = new FlakyCapture(options.failMailFor);
   const logs: string[] = [];
+  let clock = options.now ?? new Date();
+  const mail = {
+    sender: new TemplateMailSender(transport, {
+      fromAddress: "noreply@example.test",
+      fromName: "Example Chat",
+      productName: "Example Chat"
+    }),
+    appUrl: APP_URL
+  };
+  const mailConfig = parseClientInstanceConfig({
+    ...config,
+    localization: { defaultLocale: "de", supportedLocales: ["de", "en"] },
+    infrastructure: {
+      ...config.infrastructure,
+      mail: {
+        provider: "capture",
+        appUrl: APP_URL,
+        sender: { fromAddress: "noreply@example.test" },
+        notices: { batchSize: options.batchSize ?? 100, digestIntervalMs: 1000 }
+      }
+    }
+  });
+  const jobs = createNoticeMailJobs(
+    {
+      config: mailConfig,
+      clientInstanceId,
+      stores: app.stores,
+      mail,
+      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: app.stores.audit })
+    },
+    () => clock
+  );
+  const worker = createJobWorker({
+    stores: app.stores,
+    clientInstanceId,
+    handlers: jobs.handlers,
+    modules: resolveInstanceModules(mailConfig, []).snapshot,
+    logger: capturingLogger(logs)
+  });
+  close = async () => {
+    await worker.stop();
+    await app.close();
+  };
+  const deliver = async (advanceMs = 1001) => {
+    clock = new Date(clock.getTime() + advanceMs);
+    for (const schedule of jobs.schedules)
+      await app.stores.jobs.enqueue(schedule.kind, {}, { clientInstanceId });
+    await worker.runDue();
+  };
   const notices = createNotices({
+    delivery: { digestIntervalMs: 1000 },
+    now: () => clock,
     clientInstanceId,
     stores: app.stores,
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: app.stores.audit }),
-    mail: {
-      sender: new TemplateMailSender(transport, {
-        fromAddress: "noreply@example.test",
-        fromName: "Example Chat",
-        productName: "Example Chat"
-      }),
-      appUrl: APP_URL
-    },
-    locale: "de",
-    logger: capturingLogger(logs)
+    mailConfigured: true
   });
   const principal: WorkflowRunPrincipal = {
     kind: "service",
@@ -187,6 +235,7 @@ async function fixture(options: { failMailFor?: string } = {}) {
     send,
     list,
     logs,
+    deliver,
     mails: () => transport.capture.list()
   };
 }
@@ -195,7 +244,159 @@ async function auditOf(app: TestInstance, clientInstanceId: ClientInstanceId) {
   return app.stores.audit.listAuditEvents({ clientInstanceId });
 }
 
-describe("Workflow notices (NOTIFY-a)", () => {
+describe("Workflow notices and counts-only mail digests", () => {
+  it("rolls back the Inbox and queue together when queueing a mail fails", async () => {
+    const f = await fixture();
+    const failing = createNotices({
+      clientInstanceId: f.clientInstanceId,
+      stores: {
+        ...f.app.stores,
+        transaction: (fn) =>
+          f.app.stores.transaction((tx) =>
+            fn({
+              ...tx,
+              noticeMail: {
+                ...tx.noticeMail,
+                enqueue: () => Promise.reject(new Error("Queue unavailable"))
+              }
+            })
+          )
+      },
+      auditRecorder: new StoreBackedAuditRecorder({
+        clientInstanceId: f.clientInstanceId,
+        store: f.app.stores.audit
+      }),
+      mailConfigured: true
+    });
+    await expect(
+      failing.send(
+        {
+          from: {
+            id: f.id("ada"),
+            externalUserId: "ada",
+            displayLabel: "Ada",
+            roles: ["user"],
+            permissionRefs: [],
+            clientInstanceId: f.clientInstanceId,
+            authSource: "test"
+          },
+          to: { users: [f.id("ben")] },
+          title: TITLE,
+          text: TEXT,
+          channels: ["inbox", "mail"]
+        },
+        { correlationId: "queue-failure" }
+      )
+    ).rejects.toThrow("Queue unavailable");
+    expect(await f.stored()).toEqual([]);
+    expect(
+      await f.app.stores.noticeMail.dueRecipients({
+        clientInstanceId: f.clientInstanceId,
+        now: new Date(Date.now() + 86400000).toISOString(),
+        limit: 10
+      })
+    ).toEqual([]);
+  });
+
+  it("batches recipient digests, retries a provider failure, and never includes sensitive notice content", async () => {
+    const f = await fixture({ batchSize: 1, failMailFor: "finn@example.test" });
+    for (let index = 0; index < 3; index++)
+      await f.send({ to: { users: [f.id("ada"), f.id("ben")] } });
+    await f.deliver(999);
+    expect(f.mails()).toEqual([]);
+    await f.deliver(2);
+    expect(f.mails()).toHaveLength(1);
+    expect(f.mails()[0]?.text).toContain("3 Mitteilungen");
+    await f.deliver();
+    expect(f.mails()).toHaveLength(2);
+    await f.deliver();
+    expect(f.mails()).toHaveLength(2); // already delivered rows are removed
+    for (const mail of f.mails()) {
+      const rendered = JSON.stringify(mail);
+      for (const secret of [TITLE, TEXT, "Muster GmbH", "4711"])
+        expect(rendered).not.toContain(secret);
+    }
+    await f.send({ to: { users: [f.id("finn")] } });
+    await f.deliver();
+    expect(
+      await f.app.stores.noticeMail.countPending({
+        clientInstanceId: f.clientInstanceId,
+        userId: asUserId(f.id("finn")),
+        before: new Date(Date.now() + 60_000).toISOString()
+      })
+    ).toBe(1);
+    expect(f.logs.join("\n")).not.toContain(TITLE);
+    await f.deliver();
+    expect(f.mails()).toHaveLength(3);
+  });
+
+  it("counts only waiting notices in a mixed digest", async () => {
+    const f = await fixture();
+    for (let index = 0; index < 2; index++) await f.send({ to: { users: [f.id("ben")] } });
+    const [first] = await f.list("ben");
+    if (!first) throw new Error("Expected a notice");
+    expect(
+      (
+        await f.app.call("approval_requests.decide", {
+          headers: f.headers("ben"),
+          params: { requestId: first.id },
+          payload: { decision: "approve" }
+        })
+      ).statusCode
+    ).toBe(200);
+    await f.deliver();
+    expect(f.mails()).toHaveLength(1);
+    expect(f.mails()[0]?.text).toContain("wartet 1 Mitteilung.");
+  });
+
+  it("sends no mail and clears due rows when every notice was handled", async () => {
+    const f = await fixture();
+    await f.send({ to: { users: [f.id("ben")] } });
+    const items = await f.list("ben");
+    expect(items).toHaveLength(1);
+    for (const item of items) {
+      expect(
+        (
+          await f.app.call("approval_requests.decide", {
+            headers: f.headers("ben"),
+            params: { requestId: item.id },
+            payload: { decision: "approve" }
+          })
+        ).statusCode
+      ).toBe(200);
+    }
+    await f.deliver();
+    expect(f.mails()).toEqual([]);
+    expect(
+      await f.app.stores.noticeMail.dueRecipients({
+        clientInstanceId: f.clientInstanceId,
+        now: new Date(Date.now() + 60_000).toISOString(),
+        limit: 10
+      })
+    ).toEqual([]);
+  });
+
+  it("refuses an unrepresentable delivery date before writing Inbox or outbox rows", async () => {
+    const f = await fixture({ now: new Date(8_640_000_000_000_000) });
+    await expect(f.send({ to: { users: [f.id("ben")] } })).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: "digestIntervalMs must produce a valid delivery date"
+    });
+    expect(await f.stored()).toEqual([]);
+  });
+
+  it("rechecks a recipient at delivery and suppresses mail after disablement", async () => {
+    const f = await fixture();
+    await f.send({ to: { users: [f.id("ben")] } });
+    await f.app.stores.users.updateUser({
+      clientInstanceId: f.clientInstanceId,
+      userId: asUserId(f.id("ben")),
+      status: "disabled"
+    });
+    await f.deliver();
+    expect(f.mails()).toEqual([]);
+  });
+
   it("reaches each active member of a group once, in the Inbox and by a mail without its words", async () => {
     const f = await fixture();
     // Ada, Ben and Finn, who all have an address; Dora is disabled.
@@ -214,8 +415,13 @@ describe("Workflow notices (NOTIFY-a)", () => {
     const result = await f.send({ to: { workspaces: [f.team.id] } });
 
     // Dora, disabled, is skipped and counted.
-    expect(result).toEqual({ addressees: 3, inactive: 1, mailsSent: 3, mailsUnsent: 0 });
-    const items = new Map<string, z.infer<typeof itemSchema>>();
+    expect(result).toEqual({
+      addressees: 3,
+      inactive: 1,
+      mailsSent: 0,
+      mailsQueued: 3,
+      mailsUnsent: 0
+    });
     for (const name of ["ada", "ben", "finn"]) {
       const own = await f.list(name);
       expect(own).toHaveLength(1);
@@ -232,13 +438,14 @@ describe("Workflow notices (NOTIFY-a)", () => {
           link: { kind: "app", workspaceId: f.team.id, app: "findings" }
         }
       });
-      if (item) items.set(name, item);
     }
     // Three items in all: none for Dora, none for anyone twice.
     expect((await f.stored()).map((item) => item.addresseeUserId).sort()).toEqual(
       [f.id("ada"), f.id("ben"), f.id("finn")].sort()
     );
 
+    expect(f.mails()).toEqual([]);
+    await f.deliver();
     const mails = f.mails();
     expect(mails.map((mail) => mail.to.email).sort()).toEqual([
       "ada@example.test",
@@ -246,9 +453,8 @@ describe("Workflow notices (NOTIFY-a)", () => {
       "finn@example.test"
     ]);
     for (const mail of mails) {
-      const name = mail.to.email.split("@")[0] ?? "";
       // The link leads to the addressee's own item, and nothing of the notice is in the mail.
-      expect(mail.text).toContain(`https://chat.example.test/inbox/${items.get(name)?.id}`);
+      expect(mail.text).toContain("https://chat.example.test/inbox");
       expect(mail.subject).toBe("Neue Mitteilung in Example Chat");
       for (const part of [mail.subject, mail.text, mail.html]) {
         expect(part).not.toContain("Muster");
@@ -266,7 +472,8 @@ describe("Workflow notices (NOTIFY-a)", () => {
         channels: ["inbox", "mail"],
         addressees: 3,
         inactive: 1,
-        mailsSent: 3,
+        mailsSent: 0,
+        mailsQueued: 3,
         mailsUnsent: 0
       }
     });
@@ -285,7 +492,14 @@ describe("Workflow notices (NOTIFY-a)", () => {
     });
 
     // Ada, Ben, Cleo (through the group) and Finn. Cleo has no address; Finn's provider failed.
-    expect(result).toEqual({ addressees: 4, inactive: 1, mailsSent: 2, mailsUnsent: 2 });
+    expect(result).toEqual({
+      addressees: 4,
+      inactive: 1,
+      mailsSent: 0,
+      mailsQueued: 3,
+      mailsUnsent: 1
+    });
+    await f.deliver();
     expect(
       f
         .mails()
@@ -299,10 +513,15 @@ describe("Workflow notices (NOTIFY-a)", () => {
     const events = (await auditOf(f.app, f.clientInstanceId)).filter(
       (event) => event.type === "notice.sent"
     );
-    expect(events[0]?.metadata).toMatchObject({ inactive: 1, mailsSent: 2, mailsUnsent: 2 });
+    expect(events[0]?.metadata).toMatchObject({
+      inactive: 1,
+      mailsSent: 0,
+      mailsQueued: 3,
+      mailsUnsent: 1
+    });
     // The provider's failure is logged without what it said, which here held the title.
     expect(f.logs.join("\n")).not.toContain("Muster");
-    expect(f.logs).toHaveLength(1);
+    expect(f.logs).toHaveLength(0);
   });
 
   it("refuses the whole notice when an id names no user or Shared Workspace, naming the id", async () => {
@@ -514,8 +733,7 @@ describe("Workflow notices (NOTIFY-a)", () => {
       auditRecorder: new StoreBackedAuditRecorder({
         clientInstanceId: f.clientInstanceId,
         store: f.app.stores.audit
-      }),
-      locale: "en"
+      })
     })
       .send(
         {

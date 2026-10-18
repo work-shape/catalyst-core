@@ -1,3 +1,4 @@
+import type { NoticeRecipients } from "./notice-address";
 import type { WorkflowKind } from "@work-shape/catalyst-asset-schemas";
 import { workflowDatasetReferenceSchema } from "@work-shape/catalyst-asset-schemas";
 import {
@@ -282,8 +283,11 @@ export type WorkflowStep =
   /** Puts a notice into an Inbox or sends a mail through the platform mailer. */
   | (WorkflowStepBase & {
       type: "notify";
-      channel: (typeof NOTIFY_CHANNELS)[number];
-      input: WorkflowInputMapping;
+      to: NoticeRecipients;
+      channels: readonly (typeof NOTIFY_CHANNELS)[number][];
+      title: WorkflowInputValue;
+      text: WorkflowInputValue;
+      link?: { kind: "run" } | { kind: "app"; workspaceId: string; app: string };
     })
   | WorkflowConditionStep
   | WorkflowParallelStep;

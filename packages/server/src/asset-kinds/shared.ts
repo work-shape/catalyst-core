@@ -304,6 +304,8 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * transaction that moves it. A throw refuses the publish and leaves the pointer where it was.
    */
   onPublish?(input: {
+    actor: AuthenticatedIdentity;
+    revisionId: string;
     clientInstanceId: ClientInstanceId;
     /** What the caller of the publish may do: a kind asks it for what the revision reaches. */
     access: ActorAccess;

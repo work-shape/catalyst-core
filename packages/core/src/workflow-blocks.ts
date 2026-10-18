@@ -130,7 +130,7 @@ const mappedReferences = (values: unknown): string[] =>
  */
 function referencesOf(step: ReadStep): string[] {
   return [
-    ...mappedReferences(step.input),
+    ...mappedReferences(step.type === "notify" ? [step.title, step.text] : step.input),
     ...mappedReferences(step.key),
     ...(step.type === "loop" ? referenceOf(step.items) : []),
     ...(step.type === "condition" && isRecord(step.when) ? referenceOf(step.when.ref) : [])

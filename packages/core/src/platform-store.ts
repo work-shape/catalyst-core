@@ -1,3 +1,5 @@
+import type { WorkflowNoticesStore } from "./workflow-notices";
+import type { NoticeMailStore } from "./notice-mail";
 import type { ConversationFollowUpStore } from "./follow-up-store";
 import type { AgentProposalStore } from "./agent-proposals";
 import type { AgentTryConversationStore } from "./agent-try-conversations";
@@ -86,6 +88,8 @@ export interface PlatformStores {
   agentProposals: AgentProposalStore;
   agentTryConversations: AgentTryConversationStore;
   approvals: ApprovalsStore;
+  noticeMail: NoticeMailStore;
+  workflowNotices: WorkflowNoticesStore;
   executionWorkspaces: ExecutionWorkspacesStore;
   structuredData: StructuredDataStore;
   jobs: JobsStore;

@@ -235,7 +235,7 @@ describe("the definitions a folder holds", () => {
         "steps[1].collect"
       ],
       [{ steps: [trigger, output()], labels: { month: { value: "2026-10" } } }, "labels"],
-      [{ steps: [trigger, output()], onFailure: "notify" }, "onFailure"]
+      [{ steps: [trigger, output()], onFailure: "workflow.recover" }, "onFailure"]
     ];
     for (const [fields, path] of cases) {
       expect(refused(fields)).toEqual([["not_supported_yet", path]]);
@@ -250,6 +250,34 @@ describe("the definitions a folder holds", () => {
         ]
       })
     ).toContainEqual(["reference_out_of_scope", "steps.each"]);
+  });
+
+  it("checks both notify mappings against the same reference scope as every other step", () => {
+    const notify = {
+      id: "tell",
+      name: "Tell",
+      type: "notify",
+      to: { users: ["usr_ada"] },
+      channels: ["inbox"],
+      title: { value: "Ready" },
+      text: ref("start")
+    };
+    expect(refused({ steps: [trigger, notify, output()] })).toEqual([]);
+    for (const field of ["title", "text"]) {
+      expect(
+        refused({ steps: [trigger, { ...notify, [field]: ref("result") }, output()] })
+      ).toContainEqual(["reference_out_of_scope", "steps.tell"]);
+      expect(
+        refused({
+          steps: [
+            trigger,
+            loop("each", [operation("inside")]),
+            { ...notify, [field]: ref("inside") },
+            output()
+          ]
+        })
+      ).toContainEqual(["reference_out_of_scope", "steps.tell"]);
+    }
   });
 
   it("takes a field of a mapping as a literal or a reference, never both", () => {

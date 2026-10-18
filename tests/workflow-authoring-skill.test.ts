@@ -54,7 +54,17 @@ describe("the skill for writing a Workflow", () => {
       steps: [
         { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
         ...(type === "notify"
-          ? [{ id: "tell", name: "Tell", type, channel: "inbox", input: {} }]
+          ? [
+              {
+                id: "tell",
+                name: "Tell",
+                type,
+                to: { users: ["usr_ada"] },
+                channels: ["inbox"],
+                title: { value: "Notice" },
+                text: { value: "Ready" }
+              }
+            ]
           : type === "agent"
             ? [
                 {
@@ -72,7 +82,8 @@ describe("the skill for writing a Workflow", () => {
       ]
     });
     expect(parseWorkflowManifest(withStep("none")).ok).toBe(true);
-    for (const type of ["notify", "agent"]) {
+    expect(parseWorkflowManifest(withStep("notify")).ok).toBe(true);
+    for (const type of ["agent"]) {
       expect(workflowStepTypesNotRun()).toContain(type);
       const parsed = parseWorkflowManifest(withStep(type));
       expect(parsed.ok ? [] : parsed.issues.map((issue) => issue.code)).toEqual([

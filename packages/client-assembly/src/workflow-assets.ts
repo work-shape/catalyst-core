@@ -1,4 +1,9 @@
 import { checkWorkflowPersonContexts } from "./workflow-person-context";
+import {
+  getSubjectUserId,
+  asUserId,
+  isAuthenticatedServicePrincipal
+} from "@work-shape/catalyst-core";
 import { checkPublishedChildren } from "./workflow-child-assets";
 import {
   createWorkflowLiveCheck,
@@ -211,7 +216,16 @@ export function createWorkflowAssetKind(
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
-    async onPublish({ stores, replaced, config }) {
+    async onPublish({ stores, replaced, config, actor, revisionId }) {
+      const publisher = isAuthenticatedServicePrincipal(actor)
+        ? undefined
+        : getSubjectUserId(actor);
+      if (publisher)
+        await stores.workflowNotices.recordPublisher({
+          clientInstanceId,
+          revisionId,
+          userId: asUserId(publisher)
+        });
       const parsed = workflowConfigSchema.parse(config);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
@@ -273,7 +287,20 @@ export function createWorkflowAssetKind(
     // A raise of a limit above the release's default is named before the publish.
     publishQuestion: ({ config }) => {
       const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
-      return Promise.resolve(parsed.ok ? workflowLimitRaises(parsed.manifest, limits) : []);
+      return Promise.resolve(
+        parsed.ok
+          ? [
+              ...workflowLimitRaises(parsed.manifest, limits),
+              ...[...indexWorkflowSteps(parsed.manifest).values()].flatMap(({ step }) =>
+                step.type === "notify"
+                  ? [
+                      `Step '${step.id}' notifies users: ${(step.to.users ?? []).join(", ") || "none"}; Shared Workspaces: ${(step.to.workspaces ?? []).join(", ") || "none"}; channels: ${step.channels.join(", ")}. Mail contains counts and a link only.`
+                    ]
+                  : []
+              )
+            ]
+          : []
+      );
     },
     async authorizeLive(input) {
       const config = workflowConfigSchema.parse(input.config);

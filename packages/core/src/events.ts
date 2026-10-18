@@ -658,6 +658,22 @@ export const EVENTS = {
   "namespace.deleted": { ...LEGACY_AUDIT, name: "namespace.deleted", subject: "namespace" },
   "namespace.updated": { ...LEGACY_AUDIT, name: "namespace.updated", subject: "namespace" },
   // A notice left for people of the instance (NOTIFY-a): counts only, never what it said.
+  "notice.mail_delivery": {
+    name: "notice.mail_delivery",
+    subject: "notice",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["notices", "delivered"],
+      properties: {
+        notices: { type: "integer", minimum: 0 },
+        delivered: { type: "integer", minimum: 0 }
+      }
+    }
+  },
   "notice.sent": {
     name: "notice.sent",
     subject: "notice",
@@ -673,6 +689,7 @@ export const EVENTS = {
         addressees: { type: "integer", minimum: 0 },
         inactive: { type: "integer", minimum: 0 },
         mailsSent: { type: "integer", minimum: 0 },
+        mailsQueued: { type: "integer", minimum: 0 },
         mailsUnsent: { type: "integer", minimum: 0 }
       }
     }

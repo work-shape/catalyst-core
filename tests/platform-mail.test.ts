@@ -54,19 +54,20 @@ describe("mail templates", () => {
 
   it("renders a Workflow notice mail as the link to the notice and nothing of what it says", () => {
     for (const [locale, subject] of [
-      ["de", "Neue Mitteilung in Example Chat"],
-      ["en", "A new notice in Example Chat"]
+      ["de", "Neue Mitteilungen in Example Chat"],
+      ["en", "New notices in Example Chat"]
     ] as const) {
       const mail = renderMail(
         {
           template: "workflow-notice",
           to: { email: "ada@example.test" },
           locale,
-          params: { link: "https://chat.example.test/inbox/apr_1" }
+          params: { link: "https://chat.example.test/inbox/apr_1", count: 50 }
         },
         identity
       );
       expect(mail.subject).toBe(subject);
+      expect(mail.text).toContain("50");
       expect(mail.text).toContain("https://chat.example.test/inbox/apr_1");
       expect(mail.html).toContain('href="https://chat.example.test/inbox/apr_1"');
     }

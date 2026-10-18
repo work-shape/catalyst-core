@@ -99,6 +99,16 @@ const STEP_REFERENCE: {
       outputSchema: "The JSON Schema of what the script returns. Required."
     }
   },
+  notify: {
+    does: "Leaves a notice in each active recipient's Inbox. With mail, queues a counts-only digest and a link; no title, text, client name or finding leaves by mail. A test notifies only its tester.",
+    fields: {
+      to: "Instance user ids under users and Shared Workspace ids under workspaces (their active members). No free e-mail address.",
+      channels: "[inbox], or [inbox, mail]. Every notice has an Inbox item.",
+      title: "A mapping { value: text } or { ref: { step, path } }; Inbox only, one line.",
+      text: "A mapping { value: text } or { ref: { step, path } }; Inbox only, one paragraph.",
+      link: "{ kind: run } (default), or { kind: app, workspaceId: id, app: id }. Ids only."
+    }
+  },
   output: {
     does: "The result of the run. It is the last step, and its mapped value is checked against the definition's `outputs`.",
     fields: {
@@ -409,7 +419,7 @@ packages. Adding a package requires a runner image release. There is no package-
 
 ## Mappings and references
 
-The \`input\` of a step is a mapping: one entry per field, and each entry is exactly one of
+A manifest may set \`onFailure: notify\` (the default). Failed descendants of one root produce one notice to the root revision publisher when the root ends. \`onFailure: workflow.<id>\` is reserved for EW-13.\n\nThe \`input\` of a step is a mapping: one entry per field, and each entry is exactly one of
 
 - \`value: <any JSON>\`: a literal, and
 - \`ref: { step: <id of an earlier step>, path: <dotted path into its output> }\`: a field of

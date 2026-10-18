@@ -65,7 +65,7 @@ import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
 import { seedInstance } from "./instance-seed";
 import { shippedSkillNamesOf, shippedSkillsOf } from "./shipped-skills";
-import { createClientInstanceMail } from "./mail";
+import { createClientInstanceMail, createInstanceNotices } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
   ClientInstanceCapabilityContribution,
@@ -230,11 +230,7 @@ export async function createClientInstanceApp(
     modelGateway,
     allowedOrigins,
     standaloneAuth,
-    mail: await createClientInstanceMail({
-      config,
-      registry: execution.infrastructure.registry,
-      context: execution.infrastructure.context
-    }),
+    mail: execution.noticeMail,
     sessionToken,
     serviceAccessToken
   };
@@ -540,7 +536,13 @@ export async function createClientInstanceExecutionAssembly(
     capabilities,
     hasTool: (toolName) => toolRegistry.has(toolName)
   });
+  const noticeMail = await createClientInstanceMail({
+    config,
+    registry: infrastructure.registry,
+    context: infrastructure.context
+  });
   const modulesStarted = await moduleAssembly.start({
+    notices: createInstanceNotices({ config, clientInstanceId, mail: noticeMail }),
     operationCalls,
     authorizer,
     auditRecorder,
@@ -640,6 +642,7 @@ export async function createClientInstanceExecutionAssembly(
     approvalRequestHandlers: handlers,
     connections,
     modulesStarted,
+    noticeMail,
     async close() {
       await modulesStarted.close();
       await closeCapabilityContributions(capabilityContributions);

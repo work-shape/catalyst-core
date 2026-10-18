@@ -22,15 +22,13 @@ export interface PlatformInvitationMail {
   };
 }
 
-/**
- * A Workflow notice waits in the addressee's Inbox. The mail says so and links there. It
- * carries no word of the notice: what a mail may contain is the operator's decision, and until
- * it is made nothing the author wrote leaves the instance by mail.
- */
+/** A counts-only digest and an Inbox link; no notice title, text or run value. */
 export interface WorkflowNoticeMail {
   template: "workflow-notice";
   params: {
-    /** The notice's own Inbox address. */
+    /** Number of notices in this digest. Never derived from the title or text. */
+    count?: number;
+    /** The addressee's Inbox address. */
     link: string;
   };
 }
@@ -50,7 +48,7 @@ export type MailSendResult = { ok: true } | { ok: false; reason: string };
  * they never compose subjects, bodies, or provider payloads.
  */
 export interface MailSender {
-  send(message: MailMessage): Promise<MailSendResult>;
+  send(message: MailMessage, context?: { signal?: AbortSignal }): Promise<MailSendResult>;
 }
 
 export interface MailSenderIdentity {
@@ -70,7 +68,11 @@ export interface RenderedMail {
 
 /** Provider adapter: delivers one already-rendered mail. */
 export interface MailTransport {
-  deliver(mail: RenderedMail, identity: MailSenderIdentity): Promise<MailSendResult>;
+  deliver(
+    mail: RenderedMail,
+    identity: MailSenderIdentity,
+    context?: { signal?: AbortSignal }
+  ): Promise<MailSendResult>;
 }
 
 /** A mail that a provider kept instead of delivering it. */

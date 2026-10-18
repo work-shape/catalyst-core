@@ -190,8 +190,10 @@ const manifest: WorkflowManifest = {
       id: "tell",
       name: "Send the summary",
       type: "notify",
-      channel: "mail",
-      input: { text: { ref: { step: "summarise", path: "summary" } } }
+      to: { users: ["usr_reviewer"] },
+      channels: ["inbox", "mail"],
+      title: { value: "Summary" },
+      text: { ref: { step: "summarise", path: "summary" } }
     },
     { id: "result", name: "Result", type: "output", input: { findings: { value: 0 } } }
   ]

@@ -1,5 +1,6 @@
 import {
   NOTICE_KIND,
+  NOTICE_ID_PATTERN,
   NOTICE_TEXT_MAX_LENGTH,
   NOTICE_TITLE_MAX_LENGTH,
   type ApprovalRequestHandler
@@ -16,7 +17,7 @@ const LINE = /^[^\p{Cc}]*$/u;
 /** One paragraph: no control character beyond a line break. */
 const PARAGRAPH = /^[^\p{Cc}]*(?:\n[^\p{Cc}]*)*$/u;
 /** An id in an address: what the platform's ids and asset names are made of. */
-export const NOTICE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u;
+export const NOTICE_ID = NOTICE_ID_PATTERN;
 
 const linkSchema = z.discriminatedUnion("kind", [
   z

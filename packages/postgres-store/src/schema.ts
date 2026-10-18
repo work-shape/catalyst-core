@@ -1,3 +1,9 @@
+import {
+  noticeMail,
+  workflowRevisionPublishers,
+  workflowFailureNotices
+} from "./schema/noticeMail";
+export { noticeMail, workflowRevisionPublishers, workflowFailureNotices };
 export * from "./schema/followUps";
 export * from "./schema/users";
 export * from "./schema/workspaces";
@@ -77,6 +83,9 @@ import {
 } from "./schema/workflowDatasets";
 
 export const schema = {
+  noticeMail,
+  workflowRevisionPublishers,
+  workflowFailureNotices,
   workflowRunDatasets,
   workflowDatasetUsage,
   workflowDatasetReaders,

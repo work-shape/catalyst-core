@@ -33,3 +33,9 @@ export * from "./notices";
 export * from "./web-source";
 export * from "./structured-data";
 export * from "./structured-result";
+
+export * from "./notice-mail";
+
+export * from "./workflow-notices";
+
+export { NOTICE_ID_PATTERN } from "./notice-address";

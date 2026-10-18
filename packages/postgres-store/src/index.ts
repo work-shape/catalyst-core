@@ -1,3 +1,5 @@
+import { createPostgresWorkflowNoticesStore } from "./postgres-workflow-notices";
+import { createPostgresNoticeMailStore } from "./postgres-notice-mail";
 import {
   listAgentAvailability as listPostgresAgentAvailability,
   setAgentAvailability as setPostgresAgentAvailability
@@ -155,6 +157,8 @@ function bindStores(
     agentProposals: createPostgresAgentProposalStore(db),
     agentTryConversations: createPostgresAgentTryConversationStore(db),
     approvals: createPostgresApprovalsStore(db, transact),
+    noticeMail: createPostgresNoticeMailStore(db),
+    workflowNotices: createPostgresWorkflowNoticesStore(db),
     executionWorkspaces: createPostgresExecutionWorkspacesStore(db),
     structuredData: createPostgresStructuredDataStore(db),
     jobs: createPostgresJobsStore(db, enqueued),

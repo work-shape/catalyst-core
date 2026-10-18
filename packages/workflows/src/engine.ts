@@ -1,3 +1,5 @@
+import { settleNoticeStep } from "./notice-step";
+import { createFailureNotices } from "./failure-notices";
 import { createLoopProgress } from "./loop-progress";
 import { datasetReferences } from "./dataset-schema";
 import { createStepClaim } from "./step-claim";
@@ -17,6 +19,7 @@ import {
   type ClientInstanceId,
   type JobSchedule,
   type PlatformStores,
+  type Notices,
   type RegisteredJobHandler,
   type StorePage,
   type WorkflowLastRun,
@@ -85,6 +88,8 @@ export interface WorkflowEngineOptions {
   stores: PlatformStores;
   /** Where the published definition of a Workflow is read when a run is started. */
   definitions: WorkflowDefinitionSource;
+  /** Bound to the transaction that settles the step: Inbox and mail queue commit together. */
+  notices?: (stores: PlatformStores) => Notices;
   /** The call path of the instance. An operation step calls through it and nothing else. */
   operationCalls: WorkflowOperationCalls;
   /** Defaults below the release's own, for a test. A Workflow's `limits` set its own. */
@@ -433,6 +438,28 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       if (live) await failStep(tx, run, index, stepRun, end.error, systemic);
       return;
     }
+    if (end.kind === "notice") {
+      if (!live) {
+        await tx.workflowRuns.endStepRun({ ...ref, status: "cancelled", finishedAt });
+        return;
+      }
+      const error = await settleNoticeStep({
+        tx,
+        ref,
+        run,
+        notice: end.notice,
+        notices: options.notices,
+        finishedAt
+      });
+      if (error)
+        await settle(tx, ref, index, {
+          kind: "failed",
+          error,
+          systemic: error.code === "principal_inactive"
+        });
+      else await advance(tx, run, index, stepRun);
+      return;
+    }
     if (end.kind === "child") {
       if (!live) {
         await tx.workflowRuns.endStepRun({ ...ref, status: "cancelled", finishedAt });
@@ -694,6 +721,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   return {
     jobHandlers: [
       ...datasetLifetime.handlers,
+      createFailureNotices({ clientInstanceId, notices: options.notices }),
       stepHandler,
       deadlineHandler,
       schedule.handler,

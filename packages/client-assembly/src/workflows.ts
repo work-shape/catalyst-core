@@ -55,6 +55,7 @@ export interface InstanceWorkflowsParts extends Pick<
   /** The call path of the process. An operation step calls through it and nothing else. */
   operationCalls: Pick<OperationCalls, "registry" | "deps">;
   /** Validated at startup, with the release schema's default for direct assembly callers. */
+  notices?: WorkflowEngineOptions["notices"];
   stepSlots?: number;
   datasetObjects?: WorkflowEngineOptions["datasetObjects"];
   datasetLimits?: WorkflowEngineOptions["datasetLimits"];
@@ -148,6 +149,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     ceilings: parts.ceilings ?? workflowLimitCeilingsOf(),
     clientInstanceId,
     stores,
+    notices: parts.notices,
     ...(parts.datasetObjects
       ? {
           datasetObjects: parts.datasetObjects,
@@ -286,13 +288,14 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
           ]
         }
       : {}),
-    async start({ operationCalls, files }) {
+    async start({ operationCalls, files, notices }) {
       registry = operationCalls.registry;
       const workflows = createInstanceWorkflows({
         modules,
         clientInstanceId,
         stores,
         operationCalls,
+        notices,
         stepSlots: config.workflows.stepSlots,
         ...(files
           ? {

@@ -19,7 +19,7 @@ export { PROVIDER_PORTS, PROVIDER_REGIONS, type ProviderPort, type ProviderRegio
  */
 export const PROVIDER_PORT_FIELDS: Record<ProviderPort, readonly string[]> = {
   models: ["model", "api", "reasoningEffort", "contextManagement"],
-  mail: ["appUrl", "sender"],
+  mail: ["appUrl", "sender", "notices"],
   objectStorage: [],
   sandbox: [],
   secrets: []

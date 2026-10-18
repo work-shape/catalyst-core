@@ -32,7 +32,23 @@ const modelEntrySchema = z.looseObject({
     .optional()
 });
 
+/** Operator controls for counts-only notice mail; raising the batch drains a larger backlog. */
+export const noticeMailSettingsSchema = z
+  .strictObject({
+    batchSize: z.number().int().positive().default(100),
+    digestIntervalMs: z
+      .number()
+      .int()
+      .positive()
+      .refine((intervalMs) => Number.isFinite(new Date(Date.now() + intervalMs).getTime()), {
+        message: "digestIntervalMs must produce a valid delivery date"
+      })
+      .default(5 * 60 * 1000)
+  })
+  .prefault({});
+
 const mailEntrySchema = z.looseObject({
+  notices: noticeMailSettingsSchema,
   ...providerEntryFields,
   /** Public URL of the chat UI; emailed links point here. */
   appUrl: z.string().url(),

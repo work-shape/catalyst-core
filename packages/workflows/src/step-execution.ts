@@ -20,6 +20,7 @@ import {
   type ClientInstanceId,
   type JsonObject,
   type JsonValue,
+  type NoticeSendInput,
   type OperationDraftContext,
   type OperationRun,
   type OperationRunId,
@@ -73,6 +74,7 @@ import { testRunCall } from "./test-run";
 
 /** How the attempt of a step went, before anything of it is written. */
 export type StepEnd =
+  | { kind: "notice"; notice: NoticeSendInput }
   | { kind: "done"; output: JsonValue; operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
   | {
       kind: "failed";
@@ -459,6 +461,33 @@ export function createStepExecutor(options: StepExecutorOptions) {
             throw new OperationStepFailure(error.code, error.message, trace);
           }
           return { kind: "done", ...result };
+        }
+        case "notify": {
+          const mapped = await resolveInput(scope, { title: step.title, text: step.text });
+          withinStepData(mapped, "The notice");
+          if (typeof mapped.title !== "string" || typeof mapped.text !== "string") {
+            throw new WorkflowStepFailure(
+              "notice_invalid",
+              "A notice title and text must be strings"
+            );
+          }
+          const { actor } = await callerOf(run, stepRun);
+          const tester = run.mode === "test" ? run.startedBy.id : undefined;
+          const to = tester ? { users: [tester] } : step.to;
+          return {
+            kind: "notice",
+            notice: {
+              from: actor,
+              to,
+              title: mapped.title,
+              text: mapped.text,
+              channels: step.channels,
+              link:
+                step.link?.kind === "app"
+                  ? step.link
+                  : { kind: "workflow_run", workflowId: run.workflow, runId: run.id }
+            }
+          };
         }
         case "loop": {
           if (step.collect !== undefined) throw notSupportedFailure("'collect' on a loop");

@@ -1,3 +1,5 @@
+import { createNotices } from "@work-shape/catalyst-server";
+import { StoreBackedAuditRecorder } from "@work-shape/catalyst-core";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -304,6 +306,12 @@ export async function workflowFixture(
             ...(options.datasetLimits ? { datasetLimits: options.datasetLimits } : {}),
             clientInstanceId,
             stores,
+            notices: (tx) =>
+              createNotices({
+                clientInstanceId,
+                stores: tx,
+                auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: tx.audit })
+              }),
             operationCalls: server.operationCalls,
             ...(options.stepSlots === undefined ? {} : { stepSlots: options.stepSlots }),
             ceilings,

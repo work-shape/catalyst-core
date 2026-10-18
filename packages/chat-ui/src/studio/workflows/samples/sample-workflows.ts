@@ -213,8 +213,10 @@ function quarterClose(locale: LocaleCode): SampleWorkflow {
                         en: "Puts the list of findings in the team's Inbox.",
                         de: "Legt die Liste der Auffälligkeiten in die Inbox des Teams."
                       }),
-                      channel: "inbox",
-                      input: {}
+                      to: { users: ["sample-reviewer"] },
+                      channels: ["inbox"],
+                      title: { value: "Review ready" },
+                      text: { value: "Open the run to review its findings." }
                     }
                   ]
                 },
@@ -300,11 +302,13 @@ function sendReminders(locale: LocaleCode): SampleWorkflow {
           type: "notify",
           name: say(locale, { en: "Write to the client", de: "Mandanten anschreiben" }),
           description: say(locale, {
-            en: "Sends one mail per client with what is open.",
-            de: "Sendet je Mandant eine Mail mit dem, was offen ist."
+            en: "Sends a notice count and an Inbox link to the reviewer.",
+            de: "Sendet eine Mitteilungsanzahl und einen Inbox-Link an die prüfende Person."
           }),
-          channel: "mail",
-          input: { findings: { ref: { step: "open_findings", path: "rows" } } }
+          to: { users: ["sample-reviewer"] },
+          channels: ["inbox", "mail"],
+          title: { value: "Review ready" },
+          text: { value: "Open the run to review what is pending." }
         },
         {
           id: "result",

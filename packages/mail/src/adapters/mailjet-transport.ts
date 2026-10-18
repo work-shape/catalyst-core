@@ -28,7 +28,11 @@ export class MailjetTransport implements MailTransport {
     this.fetch = options.fetch ?? fetch;
   }
 
-  async deliver(mail: RenderedMail, identity: MailSenderIdentity): Promise<MailSendResult> {
+  async deliver(
+    mail: RenderedMail,
+    identity: MailSenderIdentity,
+    context?: { signal?: AbortSignal }
+  ): Promise<MailSendResult> {
     let response: Response;
     try {
       response = await this.fetch(MAILJET_SEND_URL, {
@@ -54,7 +58,9 @@ export class MailjetTransport implements MailTransport {
             }
           ]
         }),
-        signal: AbortSignal.timeout(MAILJET_SEND_TIMEOUT_MS)
+        signal: context?.signal
+          ? AbortSignal.any([context.signal, AbortSignal.timeout(MAILJET_SEND_TIMEOUT_MS)])
+          : AbortSignal.timeout(MAILJET_SEND_TIMEOUT_MS)
       });
     } catch {
       return { ok: false, reason: "provider_unreachable" };

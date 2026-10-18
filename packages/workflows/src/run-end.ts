@@ -1,3 +1,4 @@
+import { workflowFailureNoticeJob } from "./failure-notices";
 import {
   WORKFLOW_ENDED_STATUSES,
   isWorkflowRunEnded,
@@ -80,6 +81,18 @@ export function createRunEnd(options: {
           parentRunId: run.id
         }
       });
+    }
+    if (!run.parentRunId) {
+      await tx.jobs.enqueue(
+        workflowFailureNoticeJob,
+        { rootRunId: run.id },
+        {
+          clientInstanceId,
+          subject: run.id,
+          dedupeKey: `${workflowFailureNoticeJob.kind}:${run.id}`,
+          correlationId: run.correlationId
+        }
+      );
     }
     // The step that owns the run, and every step a run key linked to it, wake to its end. A
     // link is written behind this run's lock, so this read sees every link made before.
