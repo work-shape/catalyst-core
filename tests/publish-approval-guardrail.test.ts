@@ -218,8 +218,10 @@ describe("publishing needs an instance admin's approval", () => {
       await created(name);
       const held = heldSchema.parse((await t.publish(t.kai.id, name, 1)).json());
       const calls = await getTestOperationCalls(t.instance);
+      const narrator = calls.publishNarrator;
+      if (!narrator) throw new Error("The assembled test instance needs a publish narrator");
       const failed = vi
-        .spyOn(calls.publishNarrator, "narrate")
+        .spyOn(narrator, "narrate")
         .mockRejectedValue(new Error("private Connection error"));
       await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, locale });
       try {
