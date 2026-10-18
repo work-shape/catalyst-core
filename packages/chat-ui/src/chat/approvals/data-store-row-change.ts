@@ -35,10 +35,17 @@ export function dataStoreRowChange(
   if (!operation.startsWith(DATA_STORE_OPERATION_PREFIX) || !isFields(input)) return undefined;
   // The id of a store holds no dot, so the name is the prefix, the id and the verb.
   const [store, verb, ...rest] = operation.slice(DATA_STORE_OPERATION_PREFIX.length).split(".");
-  const table = typeof input.table === "string" ? input.table.trim() : "";
-  if (verb !== "insert" && verb !== "update" && verb !== "delete_rows") return undefined;
+  const table = input.table;
   const list = verb === "delete_rows" ? input.keys : input.rows;
-  if (!store || rest.length > 0 || !table || !Array.isArray(list) || list.length === 0) {
+  if (
+    !store ||
+    rest.length > 0 ||
+    (verb !== "insert" && verb !== "update" && verb !== "delete_rows") ||
+    typeof table !== "string" ||
+    !table ||
+    !Array.isArray(list) ||
+    list.length === 0
+  ) {
     return undefined;
   }
   const rows: DataStoreRowChange["rows"] = [];
@@ -50,8 +57,7 @@ export function dataStoreRowChange(
       rows.push({ key: row.key, values: row.set });
     } else return undefined;
   }
-  const title = targetTitle?.trim();
-  return { verb, table, ...(title ? { title } : {}), rows };
+  return { verb, table, ...(targetTitle ? { title: targetTitle } : {}), rows };
 }
 
 /** "Add 1 row to Holiday requests?", in the reader's language and with the count as it writes it. */
@@ -68,11 +74,13 @@ export function rowChangeSummary(
 }
 
 /**
- * Every row of a write, a block each for the key that finds a row and the values it gets, one
- * `column: value` line per field, as `CallInputs` draws them. The operation bounds the rows.
+ * The table of a write, then every row of it, a block each for the key that finds a row and the
+ * values it gets, one `column: value` line per field, as `CallInputs` draws them. The operation
+ * bounds the rows.
  */
 export function rowChangeInputs(change: DataStoreRowChange, t: Translate) {
-  return change.rows.flatMap(({ key, values }, index) => {
+  const table = { key: t("operations.rowTable"), value: change.table, truncated: false };
+  const rows = change.rows.flatMap(({ key, values }, index) => {
     const n = index + 1;
     const blocks = [];
     if (key)
@@ -83,6 +91,7 @@ export function rowChangeInputs(change: DataStoreRowChange, t: Translate) {
     }
     return blocks;
   });
+  return [table, ...rows];
 }
 
 function lines(fields: Fields): string {

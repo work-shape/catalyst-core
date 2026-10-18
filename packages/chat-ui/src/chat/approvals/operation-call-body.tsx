@@ -130,7 +130,7 @@ export function OperationCallBody({
     "preview" | "status" | "applyResult" | "payload" | "addresseeUserId"
   >;
 }) {
-  const { locale, t } = useTranslation();
+  const { t } = useTranslation();
   const call = parseOperationCallPreview(request.preview);
   if (!call) {
     return (
@@ -157,7 +157,6 @@ export function OperationCallBody({
         call.targetTitle
       )
     : undefined;
-  const summary = rowChange ? rowChangeSummary(rowChange, t, locale) : undefined;
 
   // A publish that waits shows what it makes live, and the call itself only in the fold.
   const review = pending ? call.review : undefined;
@@ -174,7 +173,7 @@ export function OperationCallBody({
 
   return (
     <div className="grid min-w-0 gap-4" data-testid="operation-call" data-run-id={call.runId}>
-      {confirmation && pending ? <ConfirmationLead call={call} summary={summary} /> : null}
+      {confirmation && pending ? <ConfirmationLead call={call} /> : null}
       {review ? (
         <PublishReviewBody
           actor={actor}
@@ -199,11 +198,6 @@ export function OperationCallBody({
                   { actor }
                 )}
           </p>
-          {summary ? (
-            <p className="text-foreground wrap-anywhere" data-testid="operation-call-summary">
-              {summary}
-            </p>
-          ) : null}
           <p className="text-caption text-muted-foreground">{t(effectKey(asset), { actor })}</p>
           {/* A reason is given only where it names the rule that holds the request. */}
           {asset?.kind === SKILL_ASSET_KIND && call.heldByRule ? (
@@ -374,17 +368,18 @@ export function CallInputs({
   );
 }
 
-/** The table of a Data Store write, then every row of it, a block per key and per values. */
+/**
+ * A Data Store write as one question, "Add 1 row to Holiday requests?", then its table and every
+ * row of it, a block per key and per values.
+ */
 export function RowChangeInputs({ change }: { change: DataStoreRowChange }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const inputs = rowChangeInputs(change, t);
   return (
     <div className="grid min-w-0 gap-3" data-testid="row-change-inputs" data-verb={change.verb}>
-      <KeyValueList>
-        <KeyValue label={t("operations.rowTable")} data-field="table">
-          <span className="font-mono text-code wrap-anywhere">{change.table}</span>
-        </KeyValue>
-      </KeyValueList>
+      <p className="text-foreground wrap-anywhere" data-testid="operation-call-summary">
+        {rowChangeSummary(change, t, locale)}
+      </p>
       <CallInputs
         call={{ inputs, inputFieldCount: inputs.length, inputRemoved: false }}
         hiddenFields={0}

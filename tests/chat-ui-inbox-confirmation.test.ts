@@ -235,12 +235,14 @@ describe("a confirmation waiting in its person's Inbox", () => {
       verb: string,
       input: Record<string, unknown>,
       state: Partial<ApprovalRequestView> = {},
-      targetTitle = "Urlaubsanträge"
+      targetTitle = "Urlaubsanträge",
+      mode = "confirmation"
     ) =>
       confirmation({
         summary: `data_store.ds_7f3a.${verb}`,
         preview: {
           ...agentCall,
+          mode,
           operation: `data_store.ds_7f3a.${verb}`,
           ...(targetTitle ? { targetTitle } : {}),
           inputs: [{ key: "table", value: "holiday_requests" }]
@@ -251,14 +253,12 @@ describe("a confirmation waiting in its person's Inbox", () => {
     const alex = { employee: "Alex", starts_on: "2026-11-02", ends_on: "2026-11-06" };
     const summaryOf = (markup: string) =>
       /data-testid="operation-call-summary"[^>]*>([^<]*)</u.exec(markup)?.[1];
-    const tableOf = (markup: string) =>
-      /data-field="table"[\s\S]*?<span class="font-mono[^"]*">([^<]*)</u.exec(markup)?.[1];
 
     const insert = renderItem(rowWrite("insert", { table: "holiday_requests", rows: [alex] }));
     // Who asks stays the headline; the question names the store by its title, never its id.
     expect(insert).toContain("steuer-agent möchte für dich eine ändernde Aktion ausführen.");
     expect(summaryOf(insert)).toBe("1 Datensatz zu Urlaubsanträge hinzufügen?");
-    expect(tableOf(insert)).toBe("holiday_requests");
+    expect(insert).toMatch(/data-input-key="Tabelle"[\s\S]*?holiday_requests/u);
     expect(insert).toContain('data-input-key="Datensatz 1"');
     expect(insert).toMatch(/employee: Alex[\s\S]*starts_on: 2026-11-02[\s\S]*ends_on: 2026-11-06/u);
     // The operation, which names the store's id, is only in the folded technical details.
@@ -281,7 +281,7 @@ describe("a confirmation waiting in its person's Inbox", () => {
       { locale: "en" }
     );
     expect(summaryOf(english)).toBe("Change 2 rows in Holiday requests?");
-    expect(english).toMatch(/data-field="table"[\s\S]*Table[\s\S]*holiday_requests/u);
+    expect(english).toMatch(/data-input-key="Table"[\s\S]*?holiday_requests/u);
     expect(english).toMatch(/data-input-key="Row 1, key"[\s\S]*id: 7/u);
     expect(english).toMatch(/data-input-key="Row 1, new values"[\s\S]*ends_on: 2026-11-05/u);
     expect(english).toContain('data-input-key="Row 2, key"');
@@ -323,6 +323,29 @@ describe("a confirmation waiting in its person's Inbox", () => {
     );
     expect(done).not.toContain('data-testid="operation-call-summary"');
     expect(done).toContain("Erlaubt. Der Aufruf lief einmal.");
+
+    // The question stands once, in a person's own confirmation and in an approval for another.
+    const writes: Record<string, Record<string, unknown>> = {
+      insert: { table: "holiday_requests", rows: [alex] },
+      update: { table: "holiday_requests", rows: [{ key: { id: 7 }, set: { ends_on: "x" } }] },
+      delete_rows: { table: "holiday_requests", keys: [{ id: 7 }] }
+    };
+    for (const [verb, input] of Object.entries(writes)) {
+      const own = rowWrite(verb, input);
+      const others = rowWrite(
+        verb,
+        input,
+        { addresseeUserId: undefined },
+        "Urlaubsanträge",
+        "approval"
+      );
+      for (const request of [own, others]) {
+        for (const locale of ["en", "de"] as const) {
+          const markup = renderItem(request, { locale });
+          expect(markup.match(/data-testid="operation-call-summary"/gu)).toHaveLength(1);
+        }
+      }
+    }
   });
 
   it("is listed in To decide as a confirmation asked for the person", () => {

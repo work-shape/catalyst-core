@@ -211,7 +211,7 @@ describe("the confirmation card", () => {
 
     const insert = renderView(rowWrite("insert", { table: "holiday_requests", rows: [alex] }));
     expect(summaryOf(insert)).toBe("Add 1 row to Holiday requests?");
-    expect(insert).toMatch(/data-field="table"[\s\S]*Table[\s\S]*holiday_requests/u);
+    expect(insert).toMatch(/data-input-key="Table"[\s\S]*?holiday_requests/u);
     expect(insert).toMatch(
       /data-input-key="Row 1"[\s\S]*employee: Alex[\s\S]*ends_on: 2026-11-06/u
     );
@@ -233,7 +233,7 @@ describe("the confirmation card", () => {
     expect(summaryOf(renderView(update))).toBe("Change 1 row in Holiday requests?");
     const german = renderView(update, {}, "de");
     expect(summaryOf(german)).toBe("1 Datensatz in Holiday requests ändern?");
-    expect(german).toMatch(/data-field="table"[\s\S]*Tabelle[\s\S]*holiday_requests/u);
+    expect(german).toMatch(/data-input-key="Tabelle"[\s\S]*?holiday_requests/u);
     expect(german).toMatch(/data-input-key="Datensatz 1, Schlüssel"[\s\S]*id: 7/u);
     expect(german).toMatch(/data-input-key="Datensatz 1, neue Werte"[\s\S]*ends_on: 2026-11-05/u);
 
@@ -259,6 +259,18 @@ describe("the confirmation card", () => {
       rowWrite("delete_rows", { table: "holiday_requests", keys: [] })
     ]) {
       expect(renderView(decision)).not.toContain('data-testid="operation-call-summary"');
+    }
+
+    // The question stands once on the card, in either language.
+    for (const decision of [
+      rowWrite("insert", { table: "holiday_requests", rows: [alex] }),
+      update,
+      removal
+    ]) {
+      for (const locale of ["en", "de"] as const) {
+        const markup = renderView(decision, {}, locale);
+        expect(markup.match(/data-testid="operation-call-summary"/gu)).toHaveLength(1);
+      }
     }
   });
 

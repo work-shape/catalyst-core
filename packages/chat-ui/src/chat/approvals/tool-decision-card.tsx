@@ -26,7 +26,7 @@ import { workspaceRoutePath } from "../../shared/routes";
 import { useApprovalRevisionHost } from "./approval-revision-host";
 import { ApprovalRequestCard } from "./approval-request-card";
 import { formatApprovalDate } from "./approval-request-model";
-import { dataStoreRowChange, rowChangeSummary } from "./data-store-row-change";
+import { dataStoreRowChange } from "./data-store-row-change";
 import { CallInputs, RowChangeInputs } from "./operation-call-body";
 import {
   useToolDecisionDecide,
@@ -258,11 +258,6 @@ export function ToolDecisionCardView({
           <p className="text-caption text-muted-foreground">{t("toolDecisionWaiting")}</p>
         )}
       </div>
-      {rowChange ? (
-        <p className="text-foreground wrap-anywhere" data-testid="operation-call-summary">
-          {rowChangeSummary(rowChange, t, locale)}
-        </p>
-      ) : null}
       {outcome ? (
         <Banner
           layout="line"
