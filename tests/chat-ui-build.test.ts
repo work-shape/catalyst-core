@@ -548,7 +548,7 @@ describe("Studio frame", () => {
   });
 });
 
-describe("Studio for a Namespace holder", () => {
+describe("Studio with access to prefixed assets", () => {
   const holder = (namespaces: Namespaces, input: SourceInput = {}) =>
     source({ permissions: [], namespaces, ...input });
 
@@ -773,42 +773,44 @@ describe("Studio asset page", () => {
 describe("Studio addresses", () => {
   const kinds = visibleBuildKinds(buildAssetKinds, source().kinds);
 
-  it("opens the kind last visited at /build, else the first one, and marks the address for correction", () => {
-    expect(resolveBuildPlace(kinds, {}, undefined)).toMatchObject({
+  it("opens the first kind at /build and at a kind the reader has not, and marks the address for correction", () => {
+    expect(resolveBuildPlace(kinds, {})).toMatchObject({
       kind: { entry: agentKind },
       corrected: true
     });
-    expect(resolveBuildPlace(kinds, {}, "skills")).toMatchObject({
-      kind: { entry: skillKind },
-      corrected: true
-    });
-    expect(resolveBuildPlace(kinds, { kindPath: "nothing", name: "x" }, "gone")).toMatchObject({
+    expect(resolveBuildPlace(kinds, { kindPath: "nothing", name: "x" })).toMatchObject({
       kind: { entry: agentKind },
       name: undefined,
       corrected: true
     });
-    expect(resolveBuildPlace(kinds, { kindPath: "skills", name: "tax-review" }, undefined)).toEqual(
-      { kind: kinds[1], name: "tax-review", corrected: false }
-    );
-    expect(resolveBuildPlace([], {}, undefined)).toBeUndefined();
+    expect(resolveBuildPlace(kinds, { kindPath: "skills", name: "tax-review" })).toEqual({
+      kind: kinds[1],
+      name: "tax-review",
+      corrected: false
+    });
+    expect(resolveBuildPlace([], {})).toBeUndefined();
     // A kind that only lists has no asset page: the address of an asset is corrected to its list.
     const listed = {
       entry: listedConnections,
       state: { kind: "connection", canCreate: false, canDelete: false }
     };
-    expect(
-      resolveBuildPlace([listed], { kindPath: "connections", name: "crm" }, undefined)
-    ).toEqual({ kind: listed, name: undefined, corrected: true });
-    expect(resolveBuildPlace([listed], { kindPath: "connections" }, undefined)).toEqual({
+    expect(resolveBuildPlace([listed], { kindPath: "connections", name: "crm" })).toEqual({
+      kind: listed,
+      name: undefined,
+      corrected: true
+    });
+    expect(resolveBuildPlace([listed], { kindPath: "connections" })).toEqual({
       kind: listed,
       name: undefined,
       corrected: false
     });
     // A kind with a page that shows an asset keeps the asset's address.
     const viewed = { ...listed, entry: connectionKind };
-    expect(
-      resolveBuildPlace([viewed], { kindPath: "connections", name: "crm" }, undefined)
-    ).toEqual({ kind: viewed, name: "crm", corrected: false });
+    expect(resolveBuildPlace([viewed], { kindPath: "connections", name: "crm" })).toEqual({
+      kind: viewed,
+      name: "crm",
+      corrected: false
+    });
   });
 
   it("maps a place in Studio to its route and back", () => {

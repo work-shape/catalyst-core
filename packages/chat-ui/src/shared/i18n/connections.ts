@@ -47,6 +47,18 @@ export const connections = defineTranslations({
     "connections.settingsEdit": "Edit",
     "connections.settingsSave": "Save settings",
     "connections.settingsCancel": "Cancel",
+    "connections.refusedAddress":
+      "Enter the address as a web address that starts with https:// or http://, such as https://example.com/api, without user name, password, query (?) or fragment (#).",
+    "connections.refusedHeaders":
+      "The instance did not accept these headers. Check each header's name and value.",
+    "connections.refusedName": "The instance did not accept this name. Choose another one.",
+    "connections.refusedOperation": "The instance did not accept this tool.",
+    "connections.refusedSettings":
+      "The instance did not accept these settings. Check that the address starts with https:// or http:// and has no user name, password, query or fragment.",
+    "connections.refusedTestPath":
+      "Enter the test path as a path that starts with /, without query (?).",
+    "connections.refusedUnknown":
+      "The instance did not accept this connection. An administrator of the instance sees why under Technical details.",
     "connections.writeFailed": "The change could not be saved.",
     "connections.discoveredTitle": "Discovered tools",
     "connections.discoveredDescription":
@@ -285,6 +297,19 @@ export const connections = defineTranslations({
     "connections.settingsEdit": "Bearbeiten",
     "connections.settingsSave": "Einstellungen speichern",
     "connections.settingsCancel": "Abbrechen",
+    "connections.refusedAddress":
+      "Gib die Adresse als Webadresse an, die mit https:// oder http:// beginnt, etwa https://example.com/api, ohne Benutzername, Passwort, Abfrage (?) oder Fragment (#).",
+    "connections.refusedHeaders":
+      "Die Instanz hat diese Header nicht angenommen. Prüfe Name und Wert jedes Headers.",
+    "connections.refusedName":
+      "Die Instanz hat diesen Namen nicht angenommen. Wähle einen anderen.",
+    "connections.refusedOperation": "Die Instanz hat dieses Tool nicht angenommen.",
+    "connections.refusedSettings":
+      "Die Instanz hat diese Einstellungen nicht angenommen. Prüfe, ob die Adresse mit https:// oder http:// beginnt und keinen Benutzernamen, kein Passwort, keine Abfrage und kein Fragment enthält.",
+    "connections.refusedTestPath":
+      "Gib den Testpfad als Pfad an, der mit / beginnt, ohne Abfrage (?).",
+    "connections.refusedUnknown":
+      "Die Instanz hat diese Verbindung nicht angenommen. Ein Administrator der Instanz sieht den Grund unter Technische Details.",
     "connections.writeFailed": "Die Änderung konnte nicht gespeichert werden.",
     "connections.discoveredTitle": "Gefundene Tools",
     "connections.discoveredDescription":

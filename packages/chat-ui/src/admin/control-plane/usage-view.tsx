@@ -161,6 +161,9 @@ export function UsageView({
         <Card data-testid="configured-safeguards">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-base">{t("settings.usageSafeguards")}</CardTitle>
+            <p className="text-caption text-muted-foreground" data-usage-safeguards-meaning="">
+              {t("settings.usageSafeguardsMeaning")}
+            </p>
           </CardHeader>
           <CardContent className="p-4 pt-2">
             <dl className="grid gap-3 md:grid-cols-3">

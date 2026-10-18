@@ -11,6 +11,7 @@ import type {
   ModelUsageEventId,
   UserId
 } from "./ids";
+import type { ModelUsageRefusal } from "./errors";
 import type { JsonObject } from "./json";
 import type { StorePage } from "./paging";
 import type { ProviderRegion } from "./providers";
@@ -238,10 +239,24 @@ export interface ModelUsageCounterLimits {
   costMicros?: number;
 }
 
-/** The limit that refused a call. */
-export interface ModelUsageRefusal {
-  period: "day" | "month";
-  metric: "modelCallCount" | "tokens" | "costMicros";
+/** The most the counters of one scope may hold in a day and in a month. */
+export interface ModelUsagePeriodLimits {
+  day: ModelUsageCounterLimits;
+  month: ModelUsageCounterLimits;
+}
+
+/**
+ * What a call is held against. Every call counts on the instance. A call a person made counts
+ * on that person (`user`); a call the product made for a person, such as a title or a guardrail
+ * check, counts on that person's `system` bucket; a call no person made counts on the shared
+ * `system` bucket. The query of a Knowledge Base search is the person's own, as chat is.
+ */
+export interface ModelUsageLimits {
+  instance: ModelUsagePeriodLimits;
+  /** A person's own bucket and their `system` bucket, each on its own. */
+  person: ModelUsagePeriodLimits;
+  /** The `system` bucket the calls of no person share. */
+  unattended: ModelUsagePeriodLimits;
 }
 
 /** What settlement writes onto the usage event of an admitted call. */
@@ -359,15 +374,16 @@ export interface ModelUsageEventStore {
   ): Promise<ModelUsageEvent>;
   /**
    * Admits a call in one statement: it adds one call and the reservation to the counters of the
-   * instance's day and month when every limit still holds afterwards, and writes the event as
-   * `pending` with it. Otherwise it changes nothing and names the limit. The day and the month
-   * are those of the database clock. It reads no usage event, except once per period to start
-   * a counter that does not exist yet from the events the period already has.
+   * day and the month of the instance and of the call's scope (`ModelUsageLimits`) when every
+   * limit still holds afterwards, and writes the event as `pending` with it. Otherwise it
+   * changes nothing and names the limit. The day and the month are those of the database
+   * clock. It reads no usage event, except once per period and scope to start a counter that
+   * does not exist yet from the events the period already has.
    */
   admitModelUsageEvent(input: {
     event: ModelUsageEventRecordInput;
     reservation: ModelUsageCounted;
-    limits: { day: ModelUsageCounterLimits; month: ModelUsageCounterLimits };
+    limits: ModelUsageLimits;
   }): Promise<{ id: ModelUsageEventId } | { refused: ModelUsageRefusal }>;
   /**
    * Ends the call of an event in one statement: writes what it used and its status, replaces

@@ -6,7 +6,6 @@ import {
   Checkbox,
   Chip,
   EmptyState,
-  FormNotice,
   List,
   type BadgeTone
 } from "@work-shape/catalyst-ui";
@@ -16,6 +15,7 @@ import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { operationTitle } from "./connection-approval-model";
 import { useConnectionWrite } from "./connection-editing";
 import { operationPagingText } from "./connection-paging";
+import { RefusalNotice } from "./refusal-notice";
 import {
   withOperationExposure,
   withReviewedOperation,
@@ -155,7 +155,7 @@ export function EditableOperations({
           </div>
         )}
       />
-      {write.failure ? <FormNotice tone="error">{write.failure}</FormNotice> : null}
+      {write.failure ? <RefusalNotice {...write.failure} /> : null}
     </>
   );
 }

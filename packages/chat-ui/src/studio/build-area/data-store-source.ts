@@ -48,11 +48,28 @@ export type DataStoreRead<Answer> =
   | { status: "ready"; data: Answer; renewing?: boolean };
 
 /**
+ * What the database server leaves open around a store, as far as the reader can close it: all
+ * of it for whoever runs the server, nothing for anybody else. The list and the page both read
+ * it here, so neither counts what the other does not show.
+ */
+export function serverConditionsShown(
+  source: Pick<DataStoreSource, "seesServerConditions">,
+  state: Pick<DataStoreState, "conditions">
+): DataStoreState["conditions"] {
+  return source.seesServerConditions ? state.conditions : [];
+}
+
+/**
  * Everything the Data Store list and page read beyond the asset the frame hands them. The page
  * is handed this and reads nothing else, so a test hands it answers of its own. Every read is
  * the store's own operation and needs the right to read the store. Nothing here writes.
  */
 export interface DataStoreSource {
+  /**
+   * The reader runs the database server, as a superadmin does: only they can close what the
+   * server leaves open around a store, so only they are shown it.
+   */
+  seesServerConditions: boolean;
   /** A hook: where the store's migrations stand, its size and what the server leaves open. */
   useStoreState(store: string): DataStoreRead<DataStoreState>;
   /** A hook: the tables and columns of the store. */
@@ -87,7 +104,7 @@ export interface DataStoreSource {
  * `.value` and `.used_by`.
  */
 export function useDataStoreSource(): DataStoreSource {
-  const { apiBaseUrl, authScope, client } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
   const calls = client.data_stores;
   const key = (read: string, ...parts: string[]) => [
     "data-store",
@@ -97,6 +114,7 @@ export function useDataStoreSource(): DataStoreSource {
     ...parts
   ];
   return {
+    seesServerConditions: user.roles.includes("superadmin"),
     useStoreState: (store) =>
       useRead(key("state", store), (signal) => calls.get({ params: { store }, signal })),
     useSchema: (store) =>

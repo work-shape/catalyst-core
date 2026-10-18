@@ -184,7 +184,11 @@ export function definitionsByName(set: AssetSet): (kind: string) => Map<string, 
 }
 
 function plainIssue(issue: AssetValidationIssue): AssetSetIssue {
-  return { message: issue.message, ...(issue.path === undefined ? {} : { path: issue.path }) };
+  return {
+    message: issue.message,
+    ...(issue.path === undefined ? {} : { path: issue.path }),
+    ...(issue.code === undefined ? {} : { code: issue.code })
+  };
 }
 
 /**

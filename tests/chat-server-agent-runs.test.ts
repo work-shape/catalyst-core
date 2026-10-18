@@ -1023,7 +1023,9 @@ describe("client instance app vertical slice", () => {
       expect.objectContaining({
         type: "run_failed",
         payload: expect.objectContaining({
+          // The stable code a client words the refusal from, never the message.
           error: expect.objectContaining({
+            code: "MODEL_USAGE_LIMIT_REACHED",
             message: "Daily model call safeguard has been reached"
           })
         })
@@ -1051,7 +1053,7 @@ describe("client instance app vertical slice", () => {
         type: "message.failed",
         metadata: expect.objectContaining({
           errorCategory: "app_error",
-          errorCode: "FORBIDDEN"
+          errorCode: "MODEL_USAGE_LIMIT_REACHED"
         })
       })
     );
