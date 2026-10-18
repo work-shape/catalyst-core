@@ -10220,12 +10220,14 @@
                                 "connection": {
                                   "type": "string"
                                 },
+                                "knowledgeBase": {
+                                  "type": "string"
+                                },
                                 "title": {
                                   "type": "string"
                                 }
                               },
                               "required": [
-                                "connection",
                                 "title"
                               ]
                             }
@@ -10329,12 +10331,14 @@
                                 "connection": {
                                   "type": "string"
                                 },
+                                "knowledgeBase": {
+                                  "type": "string"
+                                },
                                 "title": {
                                   "type": "string"
                                 }
                               },
                               "required": [
-                                "connection",
                                 "title"
                               ]
                             }

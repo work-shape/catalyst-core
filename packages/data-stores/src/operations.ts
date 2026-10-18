@@ -1,3 +1,4 @@
+import { recordsPropose } from "./records/propose";
 import { query, rowsSchema } from "./query";
 import {
   POSTGRES_STATEMENT_TIMEOUT_MS,
@@ -424,7 +425,7 @@ const previewRows: StoreVerb = {
   }
 };
 
-const VERBS: readonly StoreVerb[] = [query, insert, load, describe, previewRows];
+const VERBS: readonly StoreVerb[] = [query, insert, load, recordsPropose, describe, previewRows];
 
 function publishedStore(
   asset: ConfigAssetRecord,
@@ -509,8 +510,9 @@ export async function readStores(
 /** The store and the last part of a name of the form `data_store.<id>.<part>`. */
 function splitOperationName(name: string): { store: string; part: string } | undefined {
   if (!name.startsWith(DATA_STORE_OPERATION_PREFIX)) return undefined;
-  const [store, part, ...rest] = name.slice(DATA_STORE_OPERATION_PREFIX.length).split(".");
-  return store && part && rest.length === 0 ? { store, part } : undefined;
+  const [store, ...parts] = name.slice(DATA_STORE_OPERATION_PREFIX.length).split(".");
+  const part = parts.join(".");
+  return store && part ? { store, part } : undefined;
 }
 
 function parseOperationName(name: string): { store: string; verb: StoreVerb } | undefined {
@@ -553,10 +555,17 @@ async function runVerb(
         { reason: "data_store_not_ready" }
       );
     }
+    // Let the verb refuse direct proposals before role repair or call-record DDL touches the store.
+    if (verb.verb === "records.propose" && context.origin.kind !== "workflow")
+      return await verb.run(
+        { runtime, store, target: runtime.server.asRole(record, "app"), context },
+        input
+      );
     // The app role as the platform gave it, before anything runs as that role.
     return await asStoreRole(runtime, record, signal, async () => {
       const target = { ...runtime.server.asRole(record, "app"), ...(signal ? { signal } : {}) };
-      if (keyed || verb.verb === "load") await ensureCallRecords(runtime, record, signal);
+      if (keyed || verb.verb === "load" || verb.verb === "records.propose")
+        await ensureCallRecords(runtime, record, signal);
       if (verb.verb === "load" && runtime.datasets?.authorize)
         await runtime.datasets.authorize(input, context);
       if (keyed) {
@@ -622,6 +631,7 @@ function operationOf(
   return {
     name: dataStoreOperationName(store.record.name, verb.verb),
     effect: verb.effect,
+    ...(verb.batch ? { batch: true as const } : {}),
     ...(verb.streams ? { streams: true as const } : {}),
     // A read of a customer's rows is recorded, every time.
     ...(verb.effect === "reading" ? { recordsEveryCall: true as const } : {}),
@@ -640,7 +650,7 @@ function operationOf(
     timeoutMs:
       verb.verb === "query" && runtime.limits.queryTimeoutMs
         ? runtime.limits.queryTimeoutMs + DATA_STORE_RUN_GRACE_MS
-        : verb.verb === "load" && runtime.limits.load
+        : (verb.verb === "load" || verb.verb === "records.propose") && runtime.limits.load
           ? runtime.limits.load.timeoutMs + DATA_STORE_RUN_GRACE_MS
           : (verb.timeoutMs ?? RUN_TIMEOUT_MS),
     execute: (input, context) => runVerb(runtime, store, verb, input, context)
@@ -755,6 +765,7 @@ export function createDataStoreToolSource(runtime: DataStoreRuntime): DataToolSo
           {
             name: dataStoreOperationName(name, verb.verb),
             effect: verb.effect,
+            ...(verb.batch ? { batch: true as const } : {}),
             description: `A tool of the Data Store '${title}'${description ? ` (${description})` : ""}. ${verb.use}`,
             inputJsonSchema: jsonObjectSchema.parse(
               z.toJSONSchema(verb.inputSchema, {

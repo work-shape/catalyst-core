@@ -210,6 +210,7 @@ export function createDataStores(input: {
    * refused as `not_supported_yet`.
    */
   datasets?: DataStoreDatasetReader;
+  recordFailures?: DataStoreRuntime["recordFailures"];
   /** The embedding model release config approves for Knowledge Bases (`knowledge`), if any. */
   embedding?: KnowledgeEmbedding;
   logger: Logger;
@@ -232,6 +233,7 @@ export function createDataStores(input: {
     credentials,
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
     ...(input.datasets ? { datasets: input.datasets } : {}),
+    ...(input.recordFailures ? { recordFailures: input.recordFailures } : {}),
     callRecords: new Map(),
     logger
   };

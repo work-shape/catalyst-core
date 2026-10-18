@@ -401,6 +401,15 @@ describe("a Data Store on an assembled instance", () => {
       ],
       ["load", DATA_STORE_OPERATION_SCOPES.load, "principal", "changing", null, false, undefined],
       [
+        "records.propose",
+        DATA_STORE_OPERATION_SCOPES["records.propose"],
+        "principal",
+        "changing",
+        DATA_STORE_ACTIONS.records,
+        false,
+        undefined
+      ],
+      [
         "describe",
         DATA_STORE_OPERATION_SCOPES.describe,
         "principal",
@@ -540,7 +549,7 @@ describe("a Data Store on an assembled instance", () => {
 
     const tools = await required(source).describe([...names, "data_store.unknown.query"], {});
 
-    // `load` is reserved: no agent is offered a tool that only refuses.
+    // Workflow-only verbs are resolved for steps, but never offered as agent tools.
     expect(tools.map((tool) => [tool.name, tool.effect])).toEqual([
       ["data_store.findings.query", "reading"],
       ["data_store.findings.insert", "changing"],

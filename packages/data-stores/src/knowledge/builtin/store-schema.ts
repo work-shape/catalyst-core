@@ -1,3 +1,4 @@
+import { RECORD_FIELDS_SCHEMA, RECORD_FIELDS_CONTENT_HASH } from "../../records/schema";
 import { SOURCE_WITHDRAWAL_SCHEMA } from "./source-withdrawal-schema";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -278,7 +279,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
       add column processor_revision text,
       add column processing_key text,
       add column requested_processing_key text;`
-  }
+  },
+  { number: 8, name: "record_content_hash", sql: RECORD_FIELDS_SCHEMA + RECORD_FIELDS_CONTENT_HASH }
 ];
 
 /** The level the store of a built-in Knowledge Base is at when its tables are this release's. */

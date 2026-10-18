@@ -64,6 +64,7 @@ export const DATA_STORE_OPERATION_VERBS = [
   "query",
   "insert",
   "load",
+  "records.propose",
   "describe",
   "preview_rows"
 ] as const;
@@ -75,6 +76,7 @@ export const DATA_STORE_OPERATION_RIGHTS = {
   query: DATA_STORE_ACTIONS.read,
   insert: DATA_STORE_ACTIONS.insert,
   load: DATA_STORE_ACTIONS.insert,
+  "records.propose": DATA_STORE_ACTIONS.records,
   describe: DATA_STORE_ACTIONS.read,
   preview_rows: DATA_STORE_ACTIONS.read
 } as const satisfies Record<DataStoreOperationVerb, string>;
@@ -88,6 +90,7 @@ export const DATA_STORE_OPERATION_SCOPES = {
   query: "data_store_rows:read",
   insert: "data_store_rows:write",
   load: "data_store_rows:write",
+  "records.propose": "data_store_rows:write",
   describe: "config_assets:read",
   preview_rows: "data_store_rows:read"
 } as const satisfies Record<DataStoreOperationVerb, OperationScope>;

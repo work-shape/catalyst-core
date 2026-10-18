@@ -46,6 +46,7 @@ export interface StoreVerb {
   verb: DataStoreOperationVerb;
   effect: OperationEffect;
   streams?: true;
+  batch?: true;
   changeClass?: OperationChangeClass;
   inputSchema: z.ZodType;
   outputSchema: z.ZodType;

@@ -1,3 +1,4 @@
+import { recordKnowledgeSources } from "./records/lineage";
 import { workflowDataFlowsSchema } from "@work-shape/catalyst-core";
 import { DATA_STORE_USED_BY_MAX_ASSETS, workflowDataFlows } from "./workflow-data-flows";
 import {
@@ -61,7 +62,8 @@ const APP_REVISION_RIGHTS = [APP.write, APP.publish, APP.approve] as const;
 
 const sourceSchema = z.object({
   /** The id of the Connection whose operations the definition calls. */
-  connection: z.string(),
+  connection: z.string().optional(),
+  knowledgeBase: z.string().optional(),
   /** Its name people read, where the caller may see the Connection; its id otherwise. */
   title: z.string()
 });
@@ -121,6 +123,7 @@ interface StoreUse {
   reads: boolean;
   writes: boolean;
   connections: readonly string[];
+  knowledge?: readonly string[];
 }
 
 /** Whether an operation of the store adds rows: one that needs more than the right to read. */
@@ -145,7 +148,15 @@ function useOfOperations(
     title,
     reads: verbs.some((verb) => !verbWrites(verb)),
     writes: verbs.some(verbWrites),
-    connections: connectionsOf(operations)
+    connections: connectionsOf(operations),
+    knowledge: [
+      ...new Set(
+        operations.flatMap((operation) => {
+          const [prefix, name] = operation.split(".");
+          return prefix === "knowledge" && name ? [name] : [];
+        })
+      )
+    ]
   };
 }
 
@@ -308,6 +319,14 @@ async function usedBy(
         )
       : new Map<string, string>()
   ]);
+  const knowledgeSources = recordKnowledgeSources(
+    usingWorkflows.shown.map(({ asset, use }) => ({
+      id: asset.id,
+      knowledge: use.knowledge ?? []
+    })),
+    knowledgeBases,
+    access
+  );
   const using = ({ asset, use }: { asset: ConfigAssetRecord; use: StoreUse }) => ({
     id: asset.id,
     name: asset.name,
@@ -315,10 +334,13 @@ async function usedBy(
     reads: use.reads,
     writes: use.writes,
     sources: use.writes
-      ? use.connections.map((connection) => ({
-          connection,
-          title: sourceTitles.get(connection) ?? connection
-        }))
+      ? [
+          ...use.connections.map((connection) => ({
+            connection,
+            title: sourceTitles.get(connection) ?? connection
+          })),
+          ...(knowledgeSources.get(asset.id) ?? [])
+        ]
       : []
   });
   const audiences = createAudienceReader(runtime, access);

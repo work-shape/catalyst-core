@@ -33,3 +33,6 @@ export const RECORD_FIELDS_SCHEMA = `
     unique nulls not distinct (table_name, record_key, field_name, knowledge_base_id, document_id)
   );
 `;
+
+/** Additive for existing stores; migration 8 also applies this to owned stores. */
+export const RECORD_FIELDS_CONTENT_HASH = `alter table catalyst.record_fields add column if not exists content_sha256 text;`;

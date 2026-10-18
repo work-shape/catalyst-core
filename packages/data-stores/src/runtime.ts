@@ -5,6 +5,7 @@ import type {
   Logger,
   PlatformStores,
   OperationExecutionContext,
+  OperationBatchFailure,
   WorkflowDatasetReference
 } from "@work-shape/catalyst-core";
 import type { DataStoreCredentials } from "./credentials";
@@ -58,6 +59,13 @@ export interface DataStoreRuntime {
   auditRecorder: AuditRecorder;
   /** Where `load` reads authorized rows; absent in a process without dataset storage. */
   datasets?: DataStoreDatasetReader;
+  recordFailures?: {
+    /** Persist these exact failure rows, including on retries after a rolled-back projection. */
+    write(
+      items: readonly OperationBatchFailure[],
+      context: OperationExecutionContext
+    ): Promise<WorkflowDatasetReference>;
+  };
   /** The stores this process has seen to hold the table of their call records, by id. */
   callRecords: Map<string, Promise<void>>;
   logger: Logger;

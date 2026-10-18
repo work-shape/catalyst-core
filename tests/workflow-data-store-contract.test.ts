@@ -423,11 +423,12 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       "query",
       "insert",
       "load",
+      "records.propose",
       "describe",
       "preview_rows"
     ]);
     expectTypeOf<DataStoreOperationVerb>().toEqualTypeOf<
-      "query" | "insert" | "load" | "describe" | "preview_rows"
+      "query" | "insert" | "load" | "records.propose" | "describe" | "preview_rows"
     >();
     // Adding rows is a right of its own: a run's principal holds `data_store.insert` on the
     // store and cannot edit its migrations, which is `data_store.write`.
@@ -435,6 +436,7 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       query: "data_store.read",
       insert: "data_store.insert",
       load: "data_store.insert",
+      "records.propose": "data_store.records",
       describe: "data_store.read",
       preview_rows: "data_store.read"
     });

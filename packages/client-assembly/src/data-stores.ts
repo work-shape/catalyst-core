@@ -1,9 +1,12 @@
+import { createHash } from "node:crypto";
 import { createWorkflowDatasets, WorkflowStepFailure } from "@work-shape/catalyst-workflows";
+import { z } from "zod";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { RouteRegistration, WorkflowAssetKind } from "@work-shape/catalyst-server";
 import { loadSecretKeyring } from "@work-shape/catalyst-connections";
 import {
   AppError,
+  operationBatchFailureSchema,
   DATA_STORE_ACTIONS,
   DATA_STORE_OPERATION_RIGHTS,
   dataStoreOperationName,
@@ -166,6 +169,43 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
         } catch (error) {
           datasetReadFailure(error);
         }
+      }
+    },
+    recordFailures: {
+      async write(items, context) {
+        if (!datasets) throw new AppError("CONFLICT", "Dataset storage is not available");
+        if (context.origin.kind !== "workflow")
+          throw new AppError(
+            "VALIDATION_FAILED",
+            context.runtime.locale === "de"
+              ? "`records.propose` läuft nur als Schritt eines Workflow Runs."
+              : "`records.propose` runs only as a step of a Workflow Run.",
+            { reason: "workflow_dataset_owner_required" }
+          );
+        const run = await parts.stores.workflowRuns.readRun({
+          clientInstanceId: parts.clientInstanceId,
+          id: context.origin.workflowRunId
+        });
+        const stepRun = await parts.stores.workflowRuns.getStepRun({
+          clientInstanceId: parts.clientInstanceId,
+          id: context.origin.stepRunId
+        });
+        if (!run || !stepRun || stepRun.runId !== run.id)
+          throw new AppError("NOT_FOUND", "The Workflow step is not available");
+        return datasets.write({
+          run,
+          stepRun,
+          // An aborted projection may retry after catalog/source validation changed.
+          // Completed datasets are immutable, so only identical failure rows share a field.
+          field: `failures.${createHash("sha256").update(JSON.stringify(items)).digest("hex")}`,
+          rowSchema: z
+            .record(z.string(), z.json())
+            .parse(z.toJSONSchema(operationBatchFailureSchema)),
+          rows: (async function* () {
+            yield* items;
+          })(),
+          ...(context.runtime.signal ? { signal: context.runtime.signal } : {})
+        });
       }
     },
     embedding: knowledgeEmbedding(config),

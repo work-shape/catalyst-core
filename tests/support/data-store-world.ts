@@ -142,9 +142,10 @@ export function useDataStoreWorld(prefix: string) {
   /** The Data Stores of one instance of a test, with the worker that serves their jobs. */
   async function setup(
     label: string,
-    limits: { sizeLimitBytes?: number; poolMaxConnections?: number } = {},
+    limits: Partial<Parameters<typeof createDataStores>[0]["limits"]> = {},
     databaseUrl = db.databaseUrl,
-    datasets?: DatasetReader
+    datasets?: DatasetReader,
+    recordFailures?: Parameters<typeof createDataStores>[0]["recordFailures"]
   ) {
     const clientInstanceId = db.clientInstance(label);
     const key = randomBytes(32).toString("base64");
@@ -158,6 +159,7 @@ export function useDataStoreWorld(prefix: string) {
       }),
       limits: { sizeLimitBytes: 5 * 1024 ** 3, poolMaxConnections: 5, ...limits },
       ...(datasets ? { datasets } : {}),
+      ...(recordFailures ? { recordFailures } : {}),
       logger: silent
     });
     opened.push(dataStores);
@@ -228,9 +230,11 @@ export function useDataStoreWorld(prefix: string) {
   async function published(
     label: string,
     files: StoreFile[] = [manifest(), init],
-    datasets?: DatasetReader
+    datasets?: DatasetReader,
+    recordFailures?: Parameters<typeof createDataStores>[0]["recordFailures"],
+    limits: Partial<Parameters<typeof createDataStores>[0]["limits"]> = {}
   ) {
-    const world = await setup(label, {}, db.databaseUrl, datasets);
+    const world = await setup(label, limits, db.databaseUrl, datasets, recordFailures);
     const id = await publish(world, files);
     const record = await settle(world, id, files.length - 1);
     return { ...world, id, record };
@@ -249,6 +253,16 @@ export function useDataStoreWorld(prefix: string) {
     );
     return operation.execute(operation.inputSchema.parse(input), {
       ...callContext,
+      ...(verb === "records.propose"
+        ? {
+            origin: {
+              kind: "workflow" as const,
+              workflowRunId: "records-run",
+              stepRunId: createPlatformId("step")
+            }
+          }
+        : {}),
+      runId: createPlatformId<"OperationRunId">("opr"),
       ...(idempotencyKey === undefined ? {} : { idempotencyKey })
     });
   }

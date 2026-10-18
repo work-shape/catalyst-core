@@ -203,7 +203,8 @@ const dataStoreValueResponseSchema = z.object({ value: z.unknown() });
 
 /** Where the rows an App or a Workflow writes come from: a Connection it calls. */
 const dataStoreSourceSchema = z.object({
-  connection: z.string(),
+  connection: z.string().optional(),
+  knowledgeBase: z.string().optional(),
   /** The Connection's name people read, where the caller may see it; its id otherwise. */
   title: z.string()
 });

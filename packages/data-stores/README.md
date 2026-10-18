@@ -136,8 +136,8 @@ resulting schema; a publish racing running DDL waits for that store's migration.
 
 The frozen `DATA_STORE_RECORD_OPERATIONS` inventory in core describes
 `data_store.<id>.records.propose`, `.decide` and `.flagged`, all under the dedicated
-`data_store.records` right. These are contracts, with no callable records handlers
-in REC-0. A future batch writer uses `propose.itemSchemaFor(catalogColumns)` on each
+`data_store.records` right. REC-1a registers `records.propose`; `decide` and `flagged`
+remain contracts for REC-1b/REC-2. The proposal writer uses `propose.itemSchemaFor(catalogColumns)` on each
 whole item before any write; its column parameter type is exported as `RecordColumn`.
 A proposal accepts at most 1,000 items per call and 1,000 fields per item; send larger
 work as further batches. `flagged` accepts at most 10,000 items per page; pass its
@@ -152,9 +152,36 @@ Provisioning creates `catalyst.record_fields` as platform-owned SQL, inaccessibl
 to the app and migration roles. Its unique document identity includes both IDs;
 SQL NULL keys represent documents awaiting assignment. Values and quotes are
 customer data under the spec's "Synced sources and records" retention table.
-REC-1a/1b add the writers, pinned decisions, and purge/recompute implementation.
+REC-1a adds the proposal writer. Pinned decisions and purge/recompute belong to REC-1b.
 The frozen `DataStoreRecordWithdrawalOutbox` port is bound to the Knowledge Base's
 withdrawal transaction. Its relay must queue `dataStoreRecordWithdrawalJob` after
 commit, retaining the outbox row until acknowledgement. It must not directly enqueue
 a separately committed platform job before the withdrawal commits. Delivery and
 idempotent recomputation belong to REC-1b and work with every Workflow disabled.
+
+### Records merge and projection (REC-1a)
+
+`records.propose` validates each whole item against the published table and keeps its
+Knowledge Base/document/content hash, page, quote, evidence result and date. Missing keys
+remain SQL NULL for assignment. Eligible fields merge by evidence precedence and then the
+document's date; an equal-rank/date disagreement clears the projected field and marks it
+`conflict`. Failed evidence and `review.always` fields are withheld. Existing confirmed and
+corrected candidates are preserved. Withdrawal and correction changes belong to REC-1b.
+
+The customer row uses the same SQL builder as `load`, with one key and `onConflict: update`.
+The provenance and the customer row commit together. The app role's privileges, table and
+deferred constraints, store size limit and operator `dataStores.load` ceilings still apply.
+A temporary app-owned SECURITY DEFINER wrapper prevents a customer trigger from resetting
+the platform connection's role; it is removed before commit. No grants or wrapper survive.
+`catalyst.loads` keeps the projection counts and batch result per Workflow step so retries
+replay without reading source documents or projecting again. Values and quotes are absent
+from errors, logs and audit.
+
+Owned-store migration 8 creates the provenance table if a pre-REC-0 store lacks it, then adds the nullable `content_sha256` column with `ADD COLUMN IF NOT
+EXISTS`. Customer stores receive the same additive setup on their first proposal. The
+`recordFailures.write` port stores retry items in a dataset; the standard assembly uses the
+calling Workflow step's dataset owner. Proposals run only as a Workflow Run step and are
+not offered as agent tools. Direct chat, App and CLI calls fail before store work with
+`workflow_dataset_owner_required`: "`records.propose` runs only as a step of a Workflow Run."
+The refusal follows the caller's EN/DE locale. The store's existing Filled by section
+receives the published Workflow and the readable Knowledge Bases its operation steps name.
