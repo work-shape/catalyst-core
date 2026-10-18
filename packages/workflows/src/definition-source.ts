@@ -59,10 +59,12 @@ export async function* workflowDefinitionPages(source: WorkflowDefinitionSource)
       limit: WORKFLOW_DEFINITION_PAGE_SIZE,
       ...(after ? { after } : {})
     });
-    yield items;
-    if (items.length < WORKFLOW_DEFINITION_PAGE_SIZE) return;
     const last = items.at(-1);
-    if (!last) return;
+    if (last && typeof after?.[0] === "string" && last.id <= after[0]) {
+      throw new Error("Workflow definition discovery cursor did not advance");
+    }
+    yield items;
+    if (items.length < WORKFLOW_DEFINITION_PAGE_SIZE || !last) return;
     after = [last.id];
   }
 }

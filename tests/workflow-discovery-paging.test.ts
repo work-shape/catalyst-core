@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   WORKFLOW_ASSET_KIND,
@@ -120,4 +120,24 @@ describe("published Workflow discovery beyond the former 500 total", () => {
     });
     expect(scheduled.map((job) => job.subject).sort()).toEqual(names);
   });
+});
+
+it("refuses Workflow discovery whose source repeats its exclusive cursor", async () => {
+  let reads = 0;
+  const list = vi.fn(async () => {
+    if (++reads > 2) throw new Error("Discovery read past a repeated cursor");
+    return Array.from({ length: 200 }, (_, index) => ({
+      id: `repeat-${String(index).padStart(3, "0")}`,
+      name: "Repeated"
+    }));
+  });
+  const t = await workflowFixture({ definitions: { read: async () => undefined, list } });
+  try {
+    await expect(t.operationCalls.registry.list()).rejects.toThrow(
+      "Workflow definition discovery cursor did not advance"
+    );
+    expect(list).toHaveBeenCalledTimes(2);
+  } finally {
+    await t.instance.close();
+  }
 });

@@ -626,11 +626,6 @@ async function migrateOwnedStore(
     }
 }
 
-/**
- * Why the database and the roles of a store may not be dropped: its record names others than
- * the ones its id gives, or the record of another store names them. Nothing where they are
- * its own and no other record's.
- */
 /** The handlers, the schedules and the manual retries of the store's job kinds. */
 export function createDataStoreJobs(runtime: DataStoreRuntime): {
   handlers: RegisteredJobHandler[];
