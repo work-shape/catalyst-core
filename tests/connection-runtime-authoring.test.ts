@@ -110,8 +110,16 @@ describe("a Connection made on the instance", () => {
     expect((await storedState(instance, NAME)).state?.health).toBe("needs_configuration");
     expect((await discoveryJobs()).filter((job) => job.subject === NAME)).toEqual([]);
 
+    // A real test without the required key still has a current test time.
+    expect((await instance.call("connections.test", { params: { name: NAME } })).statusCode).toBe(
+      200
+    );
+    const missingKey = await instance.call("connections.get", { params: { name: NAME } });
+    expect(missingKey.json()).toHaveProperty("lastTestedAt");
     const key = generateTestSecret();
     const entered = await setSecret(instance, key, null);
+    const replaced = await instance.call("connections.get", { params: { name: NAME } });
+    expect(replaced.json()).not.toHaveProperty("lastTestedAt");
     expect(entered.statusCode).toBe(200);
     expect(entered.json()).toEqual({ state: "set", version: 1 });
     expect(entered.body).not.toContain(key);
@@ -218,6 +226,8 @@ describe("a Connection made on the instance", () => {
     await put(instance, definition({ settings: { url: `${URL}/v2` } }), 1);
     const changed = await storedState(instance, NAME);
     expect(changed.state?.health).toBe("unknown");
+    const untested = await instance.call("connections.get", { params: { name: NAME } });
+    expect(untested.json()).not.toHaveProperty("lastTestedAt");
     expect(changed.catalog).toBeUndefined();
     expect((await discoveryJobs()).filter((job) => job.subject === NAME).length).toBeGreaterThan(1);
     // The origin is the one the key was entered for, so the key stays.
@@ -226,6 +236,10 @@ describe("a Connection made on the instance", () => {
     // Without a credential the stored key goes.
     await put(instance, definition({ authScheme: "none", settings: { url: `${URL}/v2` } }), 2);
     expect(await secretsOfConnection()).toEqual([]);
+    const cleared = await instance.call("connections.get", { params: { name: NAME } });
+    expect(cleared.json()).toMatchObject({ health: "unknown", secret: { state: "not_set" } });
+    expect(cleared.json()).not.toHaveProperty("lastTestedAt");
+    expect(cleared.json()).not.toHaveProperty("lastErrorCode");
   });
 
   it("drops the key when the Connection goes to another origin: a writer never sends it elsewhere", async () => {

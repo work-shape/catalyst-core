@@ -62,10 +62,17 @@ export function KnowledgeDocuments({
   canWrite: boolean;
 }) {
   const { t } = useTranslation();
-  const read = source.useDocuments(knowledgeBase);
   // Watched while the section is open, with or without documents: a sync from a source can be
   // queued before any document exists, and waits just the same when no worker takes it.
   const state = source.useState(knowledgeBase, publishedRevision, true);
+  // Right after a publish the store is still being made and has no documents table yet. The
+  // documents are read only once the watched state says the store stands; until then the
+  // section says it is being made, and a state that could not be read says so instead.
+  const preparing =
+    state.status === "ready" &&
+    (state.data.status === "preparing" || state.data.status === "unchecked");
+  const storeReady = state.status === "ready" && !preparing;
+  const read = source.useDocuments(knowledgeBase, storeReady);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<number>();
   const [retrying, setRetrying] = useState<string>();
@@ -144,56 +151,70 @@ export function KnowledgeDocuments({
           {t("knowledge.processingWaiting")}
         </FormNotice>
       ) : null}
-      <ReadState
-        read={read}
-        failedText={t("knowledge.documentsFailed")}
-        refusedText={t("knowledge.documentsRefused")}
-        rows={3}
-      >
-        {({ documents, more }) =>
-          documents.length === 0 ? (
-            <EmptyState layout="inline">
-              {canWrite ? t("knowledge.documentsEmpty") : t("knowledge.documentsEmptyReadOnly")}
-            </EmptyState>
-          ) : (
-            <>
-              <List aria-label={t("knowledge.documentsTitle")}>
-                {documents.map((document) => (
-                  <DocumentRow
-                    key={document.id}
-                    document={document}
-                    retrying={retrying === document.id}
-                    onRetry={
-                      canWrite && document.state === "failed"
-                        ? () => {
-                            retry(document).catch(() => undefined);
-                          }
-                        : undefined
-                    }
-                    onRemove={
-                      // A synced document leaves when its source withdraws it, not by hand.
-                      canWrite && document.sourceId === undefined
-                        ? () => {
-                            setRemoved(undefined);
-                            setRemoveFailure(undefined);
-                            setRemoving(document);
-                          }
-                        : undefined
-                    }
+      {preparing ? (
+        <EmptyState layout="inline" data-knowledge-documents-preparing="">
+          {t("knowledge.documentsPreparing")}
+        </EmptyState>
+      ) : (
+        <ReadState
+          read={
+            storeReady
+              ? read
+              : state.status === "failed"
+                ? { status: "failed", message: undefined, retry: state.retry }
+                : state.status === "refused"
+                  ? state
+                  : { status: "loading" }
+          }
+          failedText={t("knowledge.documentsFailed")}
+          refusedText={t("knowledge.documentsRefused")}
+          rows={3}
+        >
+          {({ documents, more }) =>
+            documents.length === 0 ? (
+              <EmptyState layout="inline">
+                {canWrite ? t("knowledge.documentsEmpty") : t("knowledge.documentsEmptyReadOnly")}
+              </EmptyState>
+            ) : (
+              <>
+                <List aria-label={t("knowledge.documentsTitle")}>
+                  {documents.map((document) => (
+                    <DocumentRow
+                      key={document.id}
+                      document={document}
+                      retrying={retrying === document.id}
+                      onRetry={
+                        canWrite && document.state === "failed"
+                          ? () => {
+                              retry(document).catch(() => undefined);
+                            }
+                          : undefined
+                      }
+                      onRemove={
+                        // A synced document leaves when its source withdraws it, not by hand.
+                        canWrite && document.sourceId === undefined
+                          ? () => {
+                              setRemoved(undefined);
+                              setRemoveFailure(undefined);
+                              setRemoving(document);
+                            }
+                          : undefined
+                      }
+                    />
+                  ))}
+                </List>
+                {more ? (
+                  <LoadMore
+                    loading={more.loading}
+                    onLoad={more.load}
+                    label={t("knowledge.documentsMore")}
                   />
-                ))}
-              </List>
-              {more ? (
-                <LoadMore
-                  loading={more.loading}
-                  onLoad={more.load}
-                  label={t("knowledge.documentsMore")}
-                />
-              ) : null}
-            </>
-          )
-        }
-      </ReadState>
+                ) : null}
+              </>
+            )
+          }
+        </ReadState>
+      )}
       <ConfirmDialog
         open={removing !== undefined}
         title={t("knowledge.removeTitle", { name: removing ? nameOf(removing) : "" })}

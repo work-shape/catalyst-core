@@ -92,7 +92,7 @@ export const build = defineTranslations({
       "An agent in Namespace {namespace} needs a default model the Namespace allows.",
     "build.refusedTool": "The tool {tool} is not allowed in Namespace {namespace}.",
     "build.refusedEgress":
-      "This instance may not reach the connection's address. Only the operator of the instance allows new addresses: ask an administrator to pass the address on.",
+      "The operator's network rule blocks this destination. To have it allowed, send the operator the host of the address.",
     "build.refusedReadOnlyOrigin":
       "The operator of the instance set up this connection, so it cannot be changed here.",
     "build.removePrompt": "Remove prompt {number}",
@@ -235,7 +235,7 @@ export const build = defineTranslations({
       "Ein Agent im Namespace {namespace} braucht ein Standardmodell, das der Namespace erlaubt.",
     "build.refusedTool": "Das Werkzeug {tool} ist im Namespace {namespace} nicht erlaubt.",
     "build.refusedEgress":
-      "Diese Instanz darf die Adresse der Verbindung nicht erreichen. Neue Adressen erlaubt nur der Betreiber der Instanz: Bitte einen Administrator, die Adresse weiterzugeben.",
+      "Eine Netzwerkregel des Betreibers sperrt dieses Ziel. Damit es erlaubt wird, schick dem Betreiber den Host der Adresse.",
     "build.refusedReadOnlyOrigin":
       "Diese Verbindung hat der Betreiber der Instanz eingerichtet, deshalb lässt sie sich hier nicht ändern.",
     "build.removePrompt": "Vorschlag {number} entfernen",

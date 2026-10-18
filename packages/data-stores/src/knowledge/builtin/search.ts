@@ -183,6 +183,13 @@ function searchStatement(
     `q as (
       select pg_catalog.websearch_to_tsquery('german'::regconfig, $1::pg_catalog.text) as de,
         pg_catalog.websearch_to_tsquery('english'::regconfig, $1::pg_catalog.text) as en,
+        pg_catalog.to_tsquery('german'::regconfig, pg_catalog.replace(
+          pg_catalog.plainto_tsquery('german'::regconfig, $1::pg_catalog.text)::pg_catalog.text,
+          ' & ', ' | ')) as de_words,
+        pg_catalog.to_tsquery('english'::regconfig, pg_catalog.replace(
+          pg_catalog.plainto_tsquery('english'::regconfig, $1::pg_catalog.text)::pg_catalog.text,
+          ' & ', ' | ')) as en_words,
+        $1::pg_catalog.text !~* '(^|[[:space:]])(-|OR([[:space:]]|$))|"' as plain,
         pg_catalog.to_tsquery('simple'::regconfig, pg_catalog.replace(
           pg_catalog.plainto_tsquery('simple'::regconfig, $1::pg_catalog.text)::pg_catalog.text,
           ' & ', ' | ')) as words
@@ -204,7 +211,7 @@ function searchStatement(
   }
   if (signals.includes("keyword")) {
     parts.push(
-      `keyword as (
+      `keyword_exact as (
         select c.id, pg_catalog.row_number() over (
           order by greatest(pg_catalog.ts_rank_cd(c.search_de, q.de),
             pg_catalog.ts_rank_cd(c.search_en, q.en)) desc, c.id
@@ -214,6 +221,20 @@ function searchStatement(
         order by rank limit ${depth}
       )`
     );
+    // Keep web-search phrases, exclusions and OR exact. A plain question with no exact
+    // hit falls back to its individual stems, ranked by the same full-text evidence.
+    parts.push(`keyword as (
+      select id, rank from keyword_exact
+      union all
+      select c.id, pg_catalog.row_number() over (
+        order by greatest(pg_catalog.ts_rank_cd(c.search_de, q.de_words),
+          pg_catalog.ts_rank_cd(c.search_en, q.en_words)) desc, c.id
+      ) as rank
+      from catalyst_kb.chunks c, q
+      where q.plain and not exists (select 1 from keyword_exact)
+        and (c.search_de @@ q.de_words or c.search_en @@ q.en_words) and ${LIVE_CHUNK}
+      order by rank limit ${depth}
+    )`);
     lists.push("select id, rank from keyword");
   }
   parts.push(

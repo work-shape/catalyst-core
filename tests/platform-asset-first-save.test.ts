@@ -145,6 +145,41 @@ describe("the agent's first save of a conversation", () => {
     return { app, clientInstanceId, ok, converse, say, call };
   }
 
+  it("keeps invalid Workflow creates as structured unsaved results", async () => {
+    const t = await fixture();
+    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse())).json());
+    const name = "invalid-draft";
+    const refused = writeSchema.parse(
+      await t.call(id, "platform.assets.put", {
+        kind: WORKFLOW_ASSET_KIND,
+        name,
+        config: {
+          name,
+          manifest: { ...manifest(), id: name, steps: [{ id: "bad", type: "missing" }] }
+        }
+      })
+    );
+    expect(refused.saved).toBe(false);
+    expect(refused.issues?.length).toBeGreaterThan(0);
+    const runs = (
+      await t.app.stores.operationRuns.list({ clientInstanceId: t.clientInstanceId })
+    ).filter(
+      (row) =>
+        row.operation === "platform.assets.put" &&
+        row.origin.kind === "agent" &&
+        row.origin.conversationId === id
+    );
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.status).toBe("done");
+    expect(
+      await t.app.stores.configAssets.getConfigAsset({
+        clientInstanceId: t.clientInstanceId,
+        kind: WORKFLOW_ASSET_KIND,
+        name
+      })
+    ).toBeUndefined();
+  });
+
   it("creates a new Workflow of the instance as a draft with its first save and makes it the subject", async () => {
     const t = await fixture();
     const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse())).json());

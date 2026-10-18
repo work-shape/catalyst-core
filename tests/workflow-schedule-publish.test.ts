@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClientInstanceApp } from "@work-shape/catalyst-client-assembly";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { createTestConfig } from "./support/fixtures";
+import { withTestSql } from "./support/test-sql";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { workflowScheduleJobKind } from "@work-shape/catalyst-workflows";
@@ -61,12 +62,12 @@ describe("the schedule of a Workflow that is published while the instance runs",
     open = undefined;
   });
 
-  const ready = (now = () => NOW) =>
+  const ready = (now = () => NOW, timeZone?: string) =>
     readyWorkflows(
       (fixture) => {
         open = fixture;
       },
-      { definitions: "assets", now }
+      { definitions: "assets", now, ...(timeZone === undefined ? {} : { timeZone }) }
     );
 
   /** Writes the definition as the draft and publishes it. Answers the revision. */
@@ -95,6 +96,32 @@ describe("the schedule of a Workflow that is published while the instance runs",
       trigger: run.trigger,
       scheduledFor: run.scheduledFor
     }));
+
+  it("stores the schedule zone and queues its shown Berlin wall clock rather than UTC", async () => {
+    const t = await ready();
+    await publish(t, [{ kind: "schedule", cron: "25 23 * * *", timeZone: "Europe/Berlin" }], null);
+    const stored = await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address });
+    expect(stored?.config).toMatchObject({
+      manifest: { steps: [{ triggers: [{ timeZone: "Europe/Berlin" }] }, {}, {}] }
+    });
+    await withTestSql(async (sql) => {
+      const jobs =
+        await sql`select run_after from platform_jobs where kind = ${workflowScheduleJobKind.kind} and subject = ${WORKFLOW} and status = 'queued'`;
+      expect(jobs.map((job) => job.run_after.toISOString())).toEqual(["2020-03-10T22:25:00.000Z"]);
+    });
+    const planned = await t.workflows.planSchedule(WORKFLOW);
+    expect(planned?.dueAt).toBe("2020-03-10T22:25:00.000Z");
+  });
+
+  it("binds a schedule without a zone to the configured instance zone on save", async () => {
+    const t = await ready(() => NOW, "Europe/Berlin");
+    await publish(t, [{ kind: "schedule", cron: "25 23 * * *" }], null);
+    const stored = await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address });
+    expect(stored?.config).toMatchObject({
+      manifest: { steps: [{ triggers: [{ timeZone: "Europe/Berlin" }] }, {}, {}] }
+    });
+    expect((await t.workflows.planSchedule(WORKFLOW))?.dueAt).toBe("2020-03-10T22:25:00.000Z");
+  });
 
   it("repairs a missing next-due job once on each worker process restart", async () => {
     const t = await ready();

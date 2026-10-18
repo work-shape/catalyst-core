@@ -1,5 +1,6 @@
 import { Database } from "lucide-react";
 import { useState } from "react";
+import { KNOWLEDGE_DOCUMENT_FORMATS } from "@work-shape/catalyst-core";
 import {
   Badge,
   Checkbox,
@@ -14,6 +15,7 @@ import {
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import { useOptionalSettingsPage } from "../../shared/settings-page-context";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import { FieldRefusals } from "./asset-form-fields";
 import { countChangedFields } from "./asset-form-model";
@@ -33,6 +35,7 @@ import {
   type KnowledgeTableForm
 } from "./knowledge-base-model";
 import type { KnowledgeBaseSource } from "./knowledge-base-source";
+import { uploadFormatList, uploadFormats } from "./knowledge-upload-model";
 
 /** The sections of the data Workflows on the page, by what they do to it. */
 const FLOW_SECTIONS = {
@@ -67,7 +70,8 @@ export function KnowledgeBaseEditor({
   initialForm: KnowledgeBaseForm;
   source: KnowledgeBaseSource;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
+  const settings = useOptionalSettingsPage();
   const state = useAssetForm(initialForm);
   const { form, setForm, outcome } = state;
   const [saving, setSaving] = useState(false);
@@ -123,7 +127,18 @@ export function KnowledgeBaseEditor({
     {
       value: "documents",
       label: t("knowledge.holdsDocuments"),
-      description: t("knowledge.holdsDocumentsDescription")
+      // The formats this instance reads: PDF and DOCX need its document processing, the same
+      // module switch the instance reads them by. Without the settings, the text formats.
+      description: t("knowledge.holdsDocumentsDescription", {
+        formats: uploadFormatList(
+          uploadFormats(
+            settings?.config.modules.documents?.enabled === true
+              ? KNOWLEDGE_DOCUMENT_FORMATS
+              : undefined
+          ),
+          locale
+        )
+      })
     },
     {
       value: "tables",

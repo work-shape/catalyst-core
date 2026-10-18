@@ -12,6 +12,11 @@ export interface KnowledgeBaseChoice {
   more?: MoreRead;
   /** The reader typed into the search: the instance is asked for the ones that match. */
   onSearch(text: string): void;
+  /**
+   * The agent belongs to a workspace: its own workspace's Knowledge Bases are offered beside the
+   * instance's. Otherwise only the instance's are.
+   */
+  workspaceOwned: boolean;
 }
 
 /**
@@ -59,13 +64,19 @@ export function AgentKnowledge({
             wrapDescriptions
             className="w-120"
             label={t("knowledge.agentChoose")}
-            note={t("knowledge.agentNote")}
+            // Says what the list holds, so a Knowledge Base of another workspace is not mistaken
+            // for an unpublished one. An unpublished one says so on its own row.
+            note={t(
+              choice.workspaceOwned ? "knowledge.agentNoteWorkspace" : "knowledge.agentNoteInstance"
+            )}
             onSearchChange={choice.onSearch}
             more={choice.more && { loading: choice.more.loading, onLoad: choice.more.load }}
             options={choice.options.map((option) => ({
               value: option.name,
               label: option.title || option.name,
-              description: option.description,
+              description: option.unpublished
+                ? [t("knowledge.agentUnpublished"), option.description].filter(Boolean).join(" · ")
+                : option.description,
               keywords: option.name,
               leading: <Library aria-hidden="true" />
             }))}

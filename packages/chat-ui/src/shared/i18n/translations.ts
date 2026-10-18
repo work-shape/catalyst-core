@@ -33,6 +33,7 @@ import { signIn } from "./sign-in";
 import { skillFiles } from "./skill-files";
 import { subagents } from "./subagents";
 import { tools } from "./tools";
+import { workflowDraft } from "./workflow-draft";
 import { workflowRights } from "./workflow-rights";
 import { workflows } from "./workflows";
 import { workspace } from "./workspace";
@@ -78,6 +79,7 @@ export const translations = combineTranslations(common)
   .and(subagents)
   .and(tools)
   .and(workflowRights)
+  .and(workflowDraft)
   .and(workflows)
   .and(workspace).messages;
 

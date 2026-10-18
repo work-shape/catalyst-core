@@ -298,6 +298,34 @@ describe("the page of a Workflow with a draft", () => {
     );
   });
 
+  // ACCEPT-2a C3: with the schedule removed, the publish says no schedule.
+  it("says how the published revision starts, and no schedule it does not have", () => {
+    const body = (starts?: { byHand: boolean; onSchedule: boolean }) =>
+      render(
+        createElement(DraftChangeDialog, {
+          change: "publish",
+          name: "Month end",
+          revision: 6,
+          publishedRevision: 4,
+          ...(starts ? { starts } : {}),
+          loading: false,
+          error: undefined,
+          onConfirm: noop,
+          onClose: noop
+        })
+      );
+    const byHand = body({ byHand: true, onSchedule: false });
+    expect(byHand).toContain(t("workflows.draft.publishBodyByHand", { number: 6 }));
+    expect(byHand).not.toContain("schedule");
+    expect(body({ byHand: false, onSchedule: true })).toContain(
+      t("workflows.draft.publishBodySchedule", { number: 6 })
+    );
+    expect(body({ byHand: true, onSchedule: true })).toContain(
+      "Revision 6 becomes the version that runs, by hand and on its schedule."
+    );
+    expect(body()).not.toContain("schedule");
+  });
+
   it("names each limit the draft raises in the publish question, and nothing in the discard", () => {
     const raise = "Raises the run time of each run from 12h to 30h.";
     const dialog = (change: "publish" | "discard", question?: string[]) =>

@@ -1,3 +1,4 @@
+import { readKnowledgeCitationSources, type KnowledgeCitationSource } from "./knowledge-citations";
 import { MESSAGE_FINISH_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import {
   APPROVAL_EXECUTIONS,
@@ -62,6 +63,7 @@ export interface AgentRuntimeAssistantFinalMetadata {
   cancellationReason?: string;
   reasoning?: StoredReasoningSummary[];
   sources?: WebSource[];
+  knowledgeSources?: KnowledgeCitationSource[];
   citations?: MessageCitation[];
   modelContext?: StoredModelContextSnapshot;
   providerContinuation?: StoredModelProviderContinuation;
@@ -242,6 +244,7 @@ export function createAssistantFinalMetadata(input: {
   runId: AgentRunId | string;
   reasoning?: readonly StoredReasoningSummary[];
   sources?: readonly WebSource[];
+  knowledgeSources?: readonly KnowledgeCitationSource[];
   citations?: readonly MessageCitation[];
   finishStatus?: (typeof MESSAGE_FINISH_STATUSES)[number];
   cancellationReason?: string;
@@ -255,6 +258,9 @@ export function createAssistantFinalMetadata(input: {
     ...(input.cancellationReason ? { cancellationReason: input.cancellationReason } : {}),
     ...createReasoningMetadata(input.reasoning),
     ...createWebSourceMetadata(input.sources, input.citations),
+    ...(input.knowledgeSources?.length
+      ? { knowledgeSources: readKnowledgeCitationSources(input.knowledgeSources) }
+      : {}),
     ...(input.modelContext ? { modelContext: input.modelContext } : {})
   });
 }
@@ -345,6 +351,9 @@ export function readAgentRuntimeMessageMetadata(
         : {}),
       ...readReasoningMetadata(runtime.reasoning),
       ...readWebSourceMetadata(runtime.sources, runtime.citations),
+      ...(Array.isArray(runtime.knowledgeSources)
+        ? { knowledgeSources: readKnowledgeCitationSources(runtime.knowledgeSources) }
+        : {}),
       ...readModelContextMetadata(runtime.modelContext),
       ...readProviderContinuationMetadata(runtime.providerContinuation)
     };

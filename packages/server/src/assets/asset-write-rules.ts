@@ -415,6 +415,22 @@ export function missingUpsertRightOf(
   return isReleaseSync(access, surface) ? undefined : kind.missingUpsertRight({ access, ...input });
 }
 
+/** Throws an editing-policy refusal before confirmation, or returns a further missing right. */
+export function assertUpsertPolicyAndMissingRight(
+  access: ActorAccess,
+  surface: AssetWriteSurface,
+  kind: WorkflowAssetKind,
+  input: Omit<Parameters<WorkflowAssetKind["missingUpsertRight"]>[0], "access">
+): string | undefined {
+  const action = missingUpsertRightOf(access, surface, kind, input);
+  if (action !== undefined) return action;
+  const parsed = kind.read([input.next]);
+  const write = { ...input, next: parsed.accepted[0] ?? input.next };
+  // Invalid shapes are reported by validation; a valid definition also passes edit policy.
+  if (parsed.refused.length === 0) assertUpsertWithinLimits(access, surface, kind, write);
+  return undefined;
+}
+
 // The first asset of a kind with an instance default becomes it and the last one takes it
 // away. Either changes the default, which no Namespace or asset grant opens.
 export function requireInstanceDefaultChange(

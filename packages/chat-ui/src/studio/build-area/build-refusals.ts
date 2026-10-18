@@ -1,4 +1,5 @@
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import { EGRESS_DENIED } from "@work-shape/catalyst-core";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import { formatFileBytes } from "./skill-form-model";
 import { apiErrorCode, apiErrorMessage } from "../../shared/workspace-utils";
@@ -99,15 +100,19 @@ interface RefusalIssue {
  * instance's sentence names release config keys, which a builder cannot act on.
  */
 const ISSUE_SENTENCES: Readonly<Record<string, TranslationKey>> = {
-  egress_denied: "build.refusedEgress",
+  [EGRESS_DENIED]: "build.refusedEgress",
   read_only_origin: "build.refusedReadOnlyOrigin"
 };
 
-/** An issue's sentence in the reader's language where its code is known, else the instance's. */
+/**
+ * An issue's sentence in the reader's language where its code is known, else the instance's.
+ * A refused egress is told whole in the sentence, with nothing in English under it.
+ */
 export function issueRefusal(issue: RefusalIssue, t: Translate): BuildRefusal {
   const key = issue.code === undefined ? undefined : ISSUE_SENTENCES[issue.code];
-  return key === undefined
-    ? { message: issue.message, asSent: true }
+  if (key === undefined) return { message: issue.message, asSent: true };
+  return issue.code === EGRESS_DENIED
+    ? { message: t(key) }
     : { message: t(key), detail: issue.message };
 }
 

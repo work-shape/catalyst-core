@@ -87,3 +87,8 @@ export {
 } from "./operation-policy-call";
 
 export { APP_PUBLISH_TOOL_NAME, createAppPublishTool } from "./app-publish-tool";
+
+export {
+  KNOWLEDGE_ADD_FILES_TOOL_NAME,
+  createKnowledgeAddFilesTool
+} from "./knowledge-add-files-tool";

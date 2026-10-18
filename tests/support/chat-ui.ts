@@ -115,6 +115,7 @@ export {
 export {
   type AssistantUiApprovalDecision,
   type AssistantUiMessageMetadata,
+  toAiSdkMessageRepository,
   toAttachmentFilePart,
   toUiMessages
 } from "../../packages/chat-ui/src/chat/assistant/assistant-ui-adapter";
@@ -489,3 +490,6 @@ export {
   WorkflowsHostWithRecipients
 } from "../../packages/chat-ui/src/studio/workflows/workflows-host";
 export { attachedFilesTitle } from "../../packages/chat-ui/src/chat/workspace/workspace-conversation-actions";
+export { ThreadMessage } from "../../packages/chat-ui/src/chat/assistant/assistant-message";
+export { AssistantToolRegistry } from "../../packages/chat-ui/src/chat/assistant/assistant-tool-registry";
+export { ToolDecisionsProvider } from "../../packages/chat-ui/src/chat/approvals/tool-decision-context";

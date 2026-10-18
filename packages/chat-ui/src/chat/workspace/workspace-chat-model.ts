@@ -42,6 +42,7 @@ import {
 } from "../../studio/agents/agents-model";
 import { appsRowShown, NO_APP_RIGHTS, resolveAppRights } from "../../studio/apps/app-model";
 import {
+  instanceTimeZoneOf,
   resolveWorkflowRights,
   workflowsAccess,
   workflowsRowShown
@@ -529,6 +530,7 @@ export function useWorkspaceChatModel({
     workspaces: collaborationWorkspacesAvailable,
     context: platformContextQuery.data
   });
+  const instanceTimeZone = instanceTimeZoneOf(platformContextQuery.data);
   const workflowRights = useMemo(
     () =>
       resolveWorkflowRights(
@@ -859,6 +861,7 @@ export function useWorkspaceChatModel({
     workflows: {
       access: workflowsOpen,
       rights: workflowRights,
+      ...(instanceTimeZone === undefined ? {} : { instanceTimeZone }),
       editWithAgent: (workflow, prompt) =>
         startConversationAbout({ kind: WORKFLOW_ASSET_KIND, name: workflow }, prompt),
       // A new Workflow is made among the instance's own, the one owner the instance takes.

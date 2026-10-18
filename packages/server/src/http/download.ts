@@ -4,7 +4,9 @@ import { z } from "zod";
 export interface DownloadAnswer {
   filename: string;
   contentType: string;
-  body: AsyncIterable<string>;
+  body: AsyncIterable<string | Uint8Array>;
+  /** Safe originals may open in a browser tab rather than be saved as an attachment. */
+  inline?: boolean;
 }
 export const downloadAnswerSchema = z.custom<DownloadAnswer>(
   (value) =>

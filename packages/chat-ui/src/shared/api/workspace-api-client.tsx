@@ -83,6 +83,11 @@ export function WorkspaceApiClientProvider({
   );
 }
 
+/** The client of the conversation's workspace, or undefined outside one. */
+export function useOptionalWorkspaceApiClient(): WorkspaceApiClientContextValue | undefined {
+  return useContext(WorkspaceApiClientContext);
+}
+
 export function useWorkspaceApiClient(): WorkspaceApiClientContextValue {
   const value = useContext(WorkspaceApiClientContext);
   if (!value) {

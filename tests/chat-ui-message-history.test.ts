@@ -692,6 +692,100 @@ describe("chat UI message history projection", () => {
     expect(indexedMarkup).toContain("Example Report");
   });
 
+  describe("Knowledge Base citations (ACCEPT-FIX-8, E6)", () => {
+    type UiParts = ReturnType<typeof toUiMessages>[number]["parts"];
+    // The agent cites passages as [K1]; the chat showed them as raw text. A cited ref the run
+    // recorded is now a chip "file name, p. 4" that opens the file at the page.
+    const answer =
+      "Die Hotelnacht kostet höchstens 145 € [K2]. Belege reichst du binnen 30 Tagen ein [K4][K2]. Siehe [K9].";
+    const knowledgeSources = [
+      {
+        ref: "K2",
+        knowledgeBase: "richtlinien",
+        documentId: "kbdoc_hotel",
+        fileId: "file_hotel",
+        fileName: "reiserichtlinie.md",
+        page: 3
+      },
+      {
+        ref: "K4",
+        knowledgeBase: "richtlinien",
+        documentId: "kbdoc_belege",
+        fileId: "file_belege",
+        fileName: "belege.txt"
+      },
+      {
+        ref: "K5",
+        knowledgeBase: "richtlinien",
+        documentId: "kbdoc_unused",
+        fileId: "file_unused",
+        fileName: "nicht-zitiert.md"
+      }
+    ];
+    const message: Message = {
+      id: "msg_kb_answer",
+      conversationId: "conv_test",
+      clientInstanceId: "client_test",
+      role: "assistant",
+      text: answer,
+      createdAt: "2026-10-19T00:00:00.000Z",
+      metadata: createAssistantFinalMetadata({ runId: "run_kb", knowledgeSources })
+    };
+    const expectedText =
+      "Die Hotelnacht kostet höchstens 145 €. Belege reichst du binnen 30 Tagen ein. Siehe [K9].";
+    const chipsOf = (parts: UiParts) => parts.filter((part) => part.type === "source-document");
+    const textOf = (parts: UiParts) =>
+      parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("");
+
+    it("turns each cited and recorded ref into one source chip, and leaves no [K] text of it", () => {
+      for (const projected of [
+        toUiMessages([message]),
+        toUiMessages([message], undefined, {
+          run_kb: {
+            runId: "run_kb",
+            lastSequence: 2,
+            status: "completed",
+            durationMs: 1_000,
+            text: answer,
+            reasoning: [],
+            activeToolCalls: [],
+            parts: [{ type: "text", text: answer }]
+          }
+        })
+      ]) {
+        const parts = projected[0]?.parts ?? [];
+        // A ref the run did not record stays as the agent wrote it.
+        expect(textOf(parts)).toBe(expectedText);
+        expect(chipsOf(parts)).toEqual([
+          {
+            type: "source-document",
+            sourceId: "knowledge:K2",
+            mediaType: "application/octet-stream",
+            title: "reiserichtlinie.md",
+            filename: "reiserichtlinie.md",
+            providerMetadata: {
+              vivdCatalyst: {
+                knowledge: knowledgeSources[0]
+              }
+            }
+          },
+          {
+            type: "source-document",
+            sourceId: "knowledge:K4",
+            mediaType: "application/octet-stream",
+            title: "belege.txt",
+            filename: "belege.txt",
+            providerMetadata: {
+              vivdCatalyst: {
+                knowledge: knowledgeSources[1]
+              }
+            }
+          }
+        ]);
+      }
+    });
+  });
+
   it("falls back to text rendering for unknown message metadata", () => {
     const messages: Message[] = [
       {

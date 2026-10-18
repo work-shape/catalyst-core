@@ -107,6 +107,60 @@ export function toolDecisionInputRows(input: unknown): ToolDecisionInputRow[] {
     });
 }
 
+/** The agent a held save writes, as a person reads it before Allow. */
+export interface AgentSaveSummary {
+  title: string;
+  instructions?: string;
+  skills: string[];
+  tools: string[];
+}
+
+/** The save is held under the API name, or under the tool name a chat agent called it by. */
+const ASSET_PUT_OPERATIONS: ReadonlySet<string> = new Set(["assets.put", "platform.assets.put"]);
+
+/**
+ * What a held `assets.put` of an agent writes, in words: its name, its instructions, its skills
+ * and its tools. The whole definition stays the call's input, under Technical details.
+ */
+export function agentSaveSummary(
+  decision: Pick<ToolDecision, "operationId" | "inputPreview">,
+  locale: string
+): AgentSaveSummary | undefined {
+  const input = decision.inputPreview;
+  if (
+    !ASSET_PUT_OPERATIONS.has(decision.operationId) ||
+    !isRecord(input) ||
+    input.kind !== "agent"
+  ) {
+    return undefined;
+  }
+  const config = isRecord(input.config) ? input.config : {};
+  const texts = (value: unknown) =>
+    Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  const instructions =
+    typeof config.instructions === "string" && config.instructions.trim() !== ""
+      ? config.instructions.trim()
+      : undefined;
+  return {
+    title:
+      localizedText(config.displayName, locale) ??
+      (typeof input.name === "string" ? input.name : ""),
+    ...(instructions === undefined ? {} : { instructions }),
+    skills: texts(config.skillNames),
+    tools: texts(config.toolNames)
+  };
+}
+
+/** A name that is one text or one text per language, in the reader's language where it has one. */
+function localizedText(value: unknown, locale: string): string | undefined {
+  if (typeof value === "string") return value.trim() || undefined;
+  if (!isRecord(value)) return undefined;
+  const texts = [value[locale], ...Object.values(value)].filter(
+    (text): text is string => typeof text === "string" && text.trim() !== ""
+  );
+  return texts[0]?.trim();
+}
+
 /** The reason a person may give with a decline, as the server takes it. */
 export const DECLINE_REASON_MAX_CHARS = 500;
 
