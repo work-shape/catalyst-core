@@ -731,7 +731,11 @@ export async function shareAsksForWhom(
         await expect(card.getByRole("button", { name: ALLOW })).toBeEnabled();
         return confirmation;
       },
-      (locale, theme, width) => picture(page, testInfo, `agent-confirm-${locale}-${theme}-${width}`)
+      async (locale, theme, width) => {
+        await card.scrollIntoViewIfNeeded();
+        await expect(card.getByRole("button", { name: ALLOW })).toBeInViewport();
+        await picture(page, testInfo, `agent-confirm-${locale}-${theme}-${width}`);
+      }
     );
     expect(agentShots).toBe(8);
     // Choosing another audience publishes nothing yet: Allow waits for its sentence, and the

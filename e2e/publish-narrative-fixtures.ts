@@ -324,7 +324,7 @@ export async function publishQuestionsLeadWithTheSentence(
         const row = page.getByTestId("inbox-row").filter({ hasText: appName });
         const answer = page.waitForResponse(
           (response) =>
-            new URL(response.url()).pathname.startsWith("/api/v1/approval-requests/") &&
+            /^\/api\/v1\/approval-requests\/apr_[^/]+$/u.test(new URL(response.url()).pathname) &&
             response.request().method() === "GET" &&
             response.status() === 200
         );
