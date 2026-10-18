@@ -143,6 +143,18 @@ describe("the platform's knowledge of an agent", () => {
     expect(offer.orientation).not.toContain("Wissensdatenbank");
   });
 
+  it("keeps truncated row reads and draft rows honest in the offered guidance", async () => {
+    const offer = await offerFor(PLATFORM_TOOLS);
+    expect(offer.orientation).toContain(
+      "a migration that creates its table with a primary key and no rows"
+    );
+    expect(offer.orientation).toContain(
+      "If query says truncated, say so and page with an ordered query"
+    );
+    expect(offer.orientation).toContain("a truncated answer cannot prove absence");
+    expect(offer.orientation).toContain("it is not a row editor");
+  });
+
   it("is none of the tools, the orientation or the docs for an agent that lists no platform tool, also about a Workflow", async () => {
     for (const subject of [undefined, { kind: "workflow", name: "month-end" }]) {
       const offer = await offerFor(["read_skill", "show_view"], subject);

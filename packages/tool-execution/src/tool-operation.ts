@@ -530,6 +530,7 @@ export function createToolOperationRunner(
           status: "waiting_for_decision",
           operationRunId: result.runId,
           operationId: tool.name,
+          ...(result.targetTitle ? { targetTitle: result.targetTitle } : {}),
           mode: result.status === "pending_confirmation" ? "confirm" : "approval",
           frozenInput: unknownToJsonValue(
             result.status === "pending_confirmation" ? result.preview : outcome.waitingInput
@@ -658,7 +659,7 @@ async function calledTool(
   if (!dataTools || !isDataToolName(toolName)) {
     return { refusal: failed("not_allowed", `Tool '${toolName}' is not registered`) };
   }
-  const listed = (await deps.agentToolNames?.(agentName)) ?? [];
+  const listed = (await deps.agentToolNames?.(agentName, request.conversationId)) ?? [];
   if (!listed.includes(toolName)) {
     const action = `${AGENT_TOOL_ACTION_PREFIX}${toolName}`;
     return {

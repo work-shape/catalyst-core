@@ -20,15 +20,15 @@ export function boundRowWrite(rows: readonly JsonObject[], locale?: string): voi
   if (rows.length > DATA_STORE_INSERT_MAX_ROWS)
     throw rowWriteRefusal(
       "rows_too_many",
-      `One call carries at most ${DATA_STORE_INSERT_MAX_ROWS} rows (DATA_STORE_INSERT_MAX_ROWS); send them in several calls.`,
-      `Ein Aufruf umfasst höchstens ${DATA_STORE_INSERT_MAX_ROWS} Datensätze (DATA_STORE_INSERT_MAX_ROWS). Teile sie auf mehrere Aufrufe auf.`,
+      `One call carries at most ${DATA_STORE_INSERT_MAX_ROWS} rows; send them in several calls.`,
+      `Ein Aufruf umfasst höchstens ${DATA_STORE_INSERT_MAX_ROWS} Datensätze. Teile sie auf mehrere Aufrufe auf.`,
       locale
     );
   if (Buffer.byteLength(JSON.stringify(rows)) > DATA_STORE_INSERT_MAX_BYTES)
     throw rowWriteRefusal(
       "rows_too_large",
-      `One call carries at most ${DATA_STORE_INSERT_MAX_BYTES} bytes (DATA_STORE_INSERT_MAX_BYTES); send them in several calls.`,
-      `Ein Aufruf umfasst höchstens ${DATA_STORE_INSERT_MAX_BYTES} Bytes (DATA_STORE_INSERT_MAX_BYTES). Teile sie auf mehrere Aufrufe auf.`,
+      `One call carries at most 1 MiB (${DATA_STORE_INSERT_MAX_BYTES} bytes); send them in several calls.`,
+      `Ein Aufruf umfasst höchstens 1 MiB (${DATA_STORE_INSERT_MAX_BYTES} Bytes). Teile sie auf mehrere Aufrufe auf.`,
       locale
     );
 }

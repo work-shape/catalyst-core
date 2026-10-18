@@ -14,10 +14,17 @@ import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { operationOriginLabelKeys } from "../../shared/operations-model";
 import { formatApprovalDate } from "./approval-request-model";
 import { ConfirmationLead } from "./confirmation-lead";
+import {
+  dataStoreRowChange,
+  rowChangeInputs,
+  rowChangeSummary,
+  type DataStoreRowChange
+} from "./data-store-row-change";
 import { useApprovalRevisionHost } from "./approval-revision-host";
 import {
   SKILL_ASSET_KIND,
   isInboxConfirmation,
+  operationCallFrozenInput,
   operationCallFullInput,
   operationCallOutcome,
   parseOperationCallPreview,
@@ -108,8 +115,9 @@ function effectKey(asset: OperationCallAsset | undefined): TranslationKey {
  * An operation call that waits for another person's approval. While it waits, the item leads
  * with one sentence that says who wants what, what a decision does, and why one is needed. A
  * saved skill then shows as the skill: all of a new one, before and after of a changed one.
- * Every other call shows its operation and its input, a block per field. What a block or the
- * list leaves out is counted in words. The operation's name, where the call came from, when it
+ * A row write of a Data Store asks what it changes in one question and lists its rows, a block
+ * per key and per values. Every other call shows its operation and its input, a block per
+ * field. What a block or the list leaves out is counted in words. The operation's name, where the call came from, when it
  * expires and the whole input as the request keeps it are in one fold at the end. Once the
  * request is decided, the item says what became of the call. A preview it cannot read shows a
  * sentence instead of half a call.
@@ -122,7 +130,7 @@ export function OperationCallBody({
     "preview" | "status" | "applyResult" | "payload" | "addresseeUserId"
   >;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const call = parseOperationCallPreview(request.preview);
   if (!call) {
     return (
@@ -141,6 +149,15 @@ export function OperationCallBody({
   // The skill's own view needs a text the server could read; without one the input shows.
   const skill = asset?.kind === SKILL_ASSET_KIND && asset.content !== undefined ? asset : undefined;
   const hiddenFields = call.inputFieldCount - call.inputs.length;
+  // A row write is read from the input the request froze, which it keeps only while it waits.
+  const rowChange = pending
+    ? dataStoreRowChange(
+        call.operation,
+        operationCallFrozenInput(request.payload),
+        call.targetTitle
+      )
+    : undefined;
+  const summary = rowChange ? rowChangeSummary(rowChange, t, locale) : undefined;
 
   // A publish that waits shows what it makes live, and the call itself only in the fold.
   const review = pending ? call.review : undefined;
@@ -148,7 +165,7 @@ export function OperationCallBody({
     <TechnicalDetailsContent
       call={call}
       pending={pending}
-      showsOperation={skill !== undefined || review !== undefined}
+      showsOperation={skill !== undefined || review !== undefined || rowChange !== undefined}
       fullInput={operationCallFullInput(request.payload)}
     />
   );
@@ -157,7 +174,7 @@ export function OperationCallBody({
 
   return (
     <div className="grid min-w-0 gap-4" data-testid="operation-call" data-run-id={call.runId}>
-      {confirmation && pending ? <ConfirmationLead call={call} /> : null}
+      {confirmation && pending ? <ConfirmationLead call={call} summary={summary} /> : null}
       {review ? (
         <PublishReviewBody
           actor={actor}
@@ -182,6 +199,11 @@ export function OperationCallBody({
                   { actor }
                 )}
           </p>
+          {summary ? (
+            <p className="text-foreground wrap-anywhere" data-testid="operation-call-summary">
+              {summary}
+            </p>
+          ) : null}
           <p className="text-caption text-muted-foreground">{t(effectKey(asset), { actor })}</p>
           {/* A reason is given only where it names the rule that holds the request. */}
           {asset?.kind === SKILL_ASSET_KIND && call.heldByRule ? (
@@ -212,6 +234,8 @@ export function OperationCallBody({
       ) : null}
       {review ? null : skill ? (
         <SkillAsset asset={skill} />
+      ) : rowChange ? (
+        <RowChangeInputs change={rowChange} />
       ) : (
         <>
           <KeyValueList>
@@ -347,6 +371,25 @@ export function CallInputs({
         </p>
       ) : null}
     </section>
+  );
+}
+
+/** The table of a Data Store write, then every row of it, a block per key and per values. */
+export function RowChangeInputs({ change }: { change: DataStoreRowChange }) {
+  const { t } = useTranslation();
+  const inputs = rowChangeInputs(change, t);
+  return (
+    <div className="grid min-w-0 gap-3" data-testid="row-change-inputs" data-verb={change.verb}>
+      <KeyValueList>
+        <KeyValue label={t("operations.rowTable")} data-field="table">
+          <span className="font-mono text-code wrap-anywhere">{change.table}</span>
+        </KeyValue>
+      </KeyValueList>
+      <CallInputs
+        call={{ inputs, inputFieldCount: inputs.length, inputRemoved: false }}
+        hiddenFields={0}
+      />
+    </div>
   );
 }
 

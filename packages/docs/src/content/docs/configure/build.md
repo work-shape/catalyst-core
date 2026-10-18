@@ -68,17 +68,17 @@ A Connection made in Studio is changed on its page by a person who may change Co
 
 What to do depends on where the Connection comes from. A Connection made in Studio is repaired on its page; one from the release config needs the operator.
 
-| Status | What it means | Made in Studio | From the release config |
-| --- | --- | --- | --- |
-| Ready | The outside system answered the test. | Nothing. | Nothing. |
-| Not tested | Nobody has tested the Connection yet. | Test it. | Test it. |
-| Testing | A test runs. | Wait for it. | Wait for it. |
-| Unauthorized | The outside system refused the credential. | Enter a new key under **Credential**, then test again. | The operator sets a new credential in the instance's environment and restarts the instance. |
-| Network denied | The host is not in [`egress.allow`](/configure/release-config/#egress), or it resolves to an address the instance may not reach. | The operator adds the host to `egress.allow`, or for a public HTTPS host on port 443 sets `egress.allowPublicHttps`, and restarts the instance. | The same. |
-| Unavailable | The outside system did not answer. | Check the address under **Settings** and change it if it is wrong. | Check the address under **Settings**. The operator changes it in the release config. |
-| Not configured | The credential is missing. | Enter the key under **Credential**, then test again. | The operator supplies it in the instance's environment and restarts the instance. |
-| Credential unreadable | A credential is stored and the instance cannot read it. | Enter the key again under **Credential**, then test again. | The operator restores the Secret Store key it was stored with, or supplies the credential again, and restarts the instance. |
-| Failed | The test failed for a reason the instance does not name. | Test again, then ask the operator. | Test again, then ask the operator. |
+| Status                | What it means                                                                                                                    | Made in Studio                                                                                                                                  | From the release config                                                                                                     |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Ready                 | The outside system answered the test.                                                                                            | Nothing.                                                                                                                                        | Nothing.                                                                                                                    |
+| Not tested            | Nobody has tested the Connection yet.                                                                                            | Test it.                                                                                                                                        | Test it.                                                                                                                    |
+| Testing               | A test runs.                                                                                                                     | Wait for it.                                                                                                                                    | Wait for it.                                                                                                                |
+| Unauthorized          | The outside system refused the credential.                                                                                       | Enter a new key under **Credential**, then test again.                                                                                          | The operator sets a new credential in the instance's environment and restarts the instance.                                 |
+| Network denied        | The host is not in [`egress.allow`](/configure/release-config/#egress), or it resolves to an address the instance may not reach. | The operator adds the host to `egress.allow`, or for a public HTTPS host on port 443 sets `egress.allowPublicHttps`, and restarts the instance. | The same.                                                                                                                   |
+| Unavailable           | The outside system did not answer.                                                                                               | Check the address under **Settings** and change it if it is wrong.                                                                              | Check the address under **Settings**. The operator changes it in the release config.                                        |
+| Not configured        | The credential is missing.                                                                                                       | Enter the key under **Credential**, then test again.                                                                                            | The operator supplies it in the instance's environment and restarts the instance.                                           |
+| Credential unreadable | A credential is stored and the instance cannot read it.                                                                          | Enter the key again under **Credential**, then test again.                                                                                      | The operator restores the Secret Store key it was stored with, or supplies the credential again, and restarts the instance. |
+| Failed                | The test failed for a reason the instance does not name.                                                                         | Test again, then ask the operator.                                                                                                              | Test again, then ask the operator.                                                                                          |
 
 ## The list
 
@@ -106,12 +106,24 @@ an HTML preview, generated SQL or a saved migration does not prove a record was 
 changed or found. A draft is not published, a simulated test is not a live write, and a call
 waiting for Allow has saved nothing.
 
-An agent changes or reads a Data Store's rows only with a `data_store.<store>.<verb>` tool
-that its definition lists, and reports a write only from that tool's successful result. Without
-such a tool, for real records build an App or Workflow that writes records, publish it and use it. The Data Store page under **Studio > Data stores**
-(German: **Studio > Datenspeicher**) shows the store and its rows. Migrations define the schema;
-they must not stand in for interactive row inserts or updates. A structured Knowledge Base
-may read described tables with `knowledge.query` where that tool is available.
+A request to keep a table creates a **Data Store draft**: `store.yaml` and a migration
+that creates a table with a primary key and no rows. Until a person publishes it, no row is
+stored. Example rows requested in chat are ordinary data; `seed/` fills only a test copy.
+
+After publication, continue the conversation about that store. An agent with platform tools
+is offered that ready store's `describe`, `query`, `preview_rows`, `insert`, `update` and
+`delete_rows` tools. An agent reads or changes rows only with a `data_store.<store>.<verb>` tool in its list; it may also carry row tools explicitly in its definition. Tools
+grant no rights. Each write asks for confirmation by default and the preview shows the
+frozen keys and values. `insert` is reversible; changes and deletion are irreversible and cannot use a remembered allow decision.
+A declined or pending confirmation changes no row. The agent reports a write only from the
+tool's confirmed count, and reports when a query was `truncated`, paging before concluding
+that a row is absent.
+
+Without the tool, the agent says that no row was stored. Publish the Data Store and continue
+a conversation about it, or publish and use an App or Workflow that writes rows. The Data
+Store page under **Studio > Data stores** (German: **Studio > Datenspeicher**) shows the store
+and its rows. It has no row editor: continue the conversation about the store to write rows. A table managed by `records` accepts corrections through records review.
+A structured Knowledge Base may read described tables with `knowledge.query` where available.
 
 Creating an agent or skill from chat is live at once and requires confirmation of the exact
 call. Existing agents save a shared draft that a person publishes; existing skills are changed

@@ -230,6 +230,101 @@ describe("a confirmation waiting in its person's Inbox", () => {
     );
   });
 
+  it("asks what a Data Store row write changes and lists every row from the frozen input (RECORDS-AGENT)", () => {
+    const rowWrite = (
+      verb: string,
+      input: Record<string, unknown>,
+      state: Partial<ApprovalRequestView> = {},
+      targetTitle = "Urlaubsanträge"
+    ) =>
+      confirmation({
+        summary: `data_store.ds_7f3a.${verb}`,
+        preview: {
+          ...agentCall,
+          operation: `data_store.ds_7f3a.${verb}`,
+          ...(targetTitle ? { targetTitle } : {}),
+          inputs: [{ key: "table", value: "holiday_requests" }]
+        },
+        payload: { input },
+        ...state
+      });
+    const alex = { employee: "Alex", starts_on: "2026-11-02", ends_on: "2026-11-06" };
+    const summaryOf = (markup: string) =>
+      /data-testid="operation-call-summary"[^>]*>([^<]*)</u.exec(markup)?.[1];
+    const tableOf = (markup: string) =>
+      /data-field="table"[\s\S]*?<span class="font-mono[^"]*">([^<]*)</u.exec(markup)?.[1];
+
+    const insert = renderItem(rowWrite("insert", { table: "holiday_requests", rows: [alex] }));
+    // Who asks stays the headline; the question names the store by its title, never its id.
+    expect(insert).toContain("steuer-agent möchte für dich eine ändernde Aktion ausführen.");
+    expect(summaryOf(insert)).toBe("1 Datensatz zu Urlaubsanträge hinzufügen?");
+    expect(tableOf(insert)).toBe("holiday_requests");
+    expect(insert).toContain('data-input-key="Datensatz 1"');
+    expect(insert).toMatch(/employee: Alex[\s\S]*starts_on: 2026-11-02[\s\S]*ends_on: 2026-11-06/u);
+    // The operation, which names the store's id, is only in the folded technical details.
+    expect(insert).not.toContain("ds_7f3a");
+    expect(insert).not.toContain('data-input-key="table"');
+
+    const english = renderItem(
+      rowWrite(
+        "update",
+        {
+          table: "holiday_requests",
+          rows: [
+            { key: { id: 7 }, set: { ends_on: "2026-11-05" } },
+            { key: { id: 8 }, set: { ends_on: "2026-11-07" } }
+          ]
+        },
+        {},
+        "Holiday requests"
+      ),
+      { locale: "en" }
+    );
+    expect(summaryOf(english)).toBe("Change 2 rows in Holiday requests?");
+    expect(english).toMatch(/data-field="table"[\s\S]*Table[\s\S]*holiday_requests/u);
+    expect(english).toMatch(/data-input-key="Row 1, key"[\s\S]*id: 7/u);
+    expect(english).toMatch(/data-input-key="Row 1, new values"[\s\S]*ends_on: 2026-11-05/u);
+    expect(english).toContain('data-input-key="Row 2, key"');
+
+    const removal = rowWrite("delete_rows", { table: "holiday_requests", keys: [{ id: 7 }] });
+    expect(summaryOf(renderItem(removal))).toBe("1 Datensatz aus Urlaubsanträge löschen?");
+    expect(renderItem(removal)).toMatch(/data-input-key="Datensatz 1, Schlüssel"[\s\S]*id: 7/u);
+    // Without the store's title the question names the table, and still not the id.
+    const untitled = renderItem(
+      rowWrite("delete_rows", { table: "holiday_requests", keys: [{ id: 7 }] }, {}, ""),
+      { locale: "en" }
+    );
+    expect(summaryOf(untitled)).toBe("Delete 1 row from holiday_requests?");
+    expect(untitled).not.toContain("ds_7f3a");
+
+    // Every row of the call is listed, up to the operation's own bound, with no count of the rest.
+    const many = renderItem(
+      rowWrite("insert", {
+        table: "holiday_requests",
+        rows: Array.from({ length: 1000 }, (_, index) => ({ ...alex, id: index }))
+      })
+    );
+    expect(summaryOf(many)).toBe("1.000 Datensätze zu Urlaubsanträge hinzufügen?");
+    expect(many).toContain('data-input-key="Datensatz 1000"');
+    expect(many).toMatch(/data-input-key="Datensatz 1000"[\s\S]*id: 999/u);
+    expect(many).not.toContain('data-testid="operation-call-hidden-fields"');
+    // The whole input stays under the technical details, folded.
+    expect(many).toContain('data-testid="operation-call-details"');
+    expect(many).not.toContain('data-testid="operation-call-full-input"');
+
+    // An input of another shape is shown field by field, as every call is, with no question.
+    const odd = renderItem(rowWrite("update", { table: "holiday_requests", rows: [{ id: 7 }] }));
+    expect(odd).not.toContain('data-testid="operation-call-summary"');
+    expect(odd).toContain('data-input-key="table"');
+
+    // Once decided, the item says what became of the call, and asks nothing.
+    const done = renderItem(
+      rowWrite("insert", { table: "holiday_requests", rows: [alex] }, { ...allowed, payload: {} })
+    );
+    expect(done).not.toContain('data-testid="operation-call-summary"');
+    expect(done).toContain("Erlaubt. Der Aufruf lief einmal.");
+  });
+
   it("is listed in To decide as a confirmation asked for the person", () => {
     const markup = render(
       createElement(InboxList, {
