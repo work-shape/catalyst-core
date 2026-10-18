@@ -8,3 +8,4 @@ section: Fixed
 - Notify nodes and details name recipients using labels the reader may see. Builder docks greet and suggest requests for their subject or the new kind being built, instead of the demo agent's welcome.
 - Edit with the agent remains visible beside an open dock and reopens the same conversation safely. The demo's HR prefix is clearly labelled, and personal work does not imply a domain prefix.
 - Technical-account refusals use plain English/German and point to Settings > API access.
+- The published chat-ui build clears stale chunks and removes whitespace from its compiled JavaScript, so the package fits its size budget again; names, exports, declarations and the classes Tailwind finds stay the same.

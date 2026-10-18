@@ -12,7 +12,11 @@ import {
   type WorkflowsHost
 } from "@work-shape/catalyst-chat-ui/workflows";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
-import { readsRecipientPeople, workspaceQueryKeys, WorkflowsHostWithRecipients } from "./support/chat-ui";
+import {
+  readsRecipientPeople,
+  workspaceQueryKeys,
+  WorkflowsHostWithRecipients
+} from "./support/chat-ui";
 
 // ACCEPT-1c C9 (workflow-canvas.md, Notify: "Who receives it"): a Notify step names who it
 // reaches, on its node and in its panel, by the names the reader may read. It used to say
@@ -157,7 +161,6 @@ describe("the instance's people are read for recipient names", () => {
   });
 });
 
-
 describe("recipient names follow current rights even with a warm directory cache", () => {
   it("uses cached directory names only while the reader may read people", () => {
     const queryClient = new QueryClient();
@@ -172,17 +175,31 @@ describe("recipient names follow current rights even with a warm directory cache
     const step = workflow.steps.find((entry) => entry.id === "tell");
     const part = workflowGraph(workflow.steps, en).nodes.find((entry) => entry.id === "tell");
     if (step === undefined || part === undefined) throw new Error("Missing Notify step");
-    const render = (readsPeople: boolean) => renderToStaticMarkup(
-      createElement(QueryClientProvider, { client: queryClient, children:
-        createElement(TranslationProvider, { locale: "en", children:
-          createElement(WorkflowsHostWithRecipients, {
-            value: host, api, viewer: { id: "usr_mara", name: "Mara Lindqvist" },
-            workspaces: [{ id: "ws_finance", name: "Team Finance" }], readsPeople,
-            children: createElement(StepPanel, { step, part, run: undefined, tab: "what", onTabChange: noop, entries: null, onClose: noop })
+    const render = (readsPeople: boolean) =>
+      renderToStaticMarkup(
+        createElement(QueryClientProvider, {
+          client: queryClient,
+          children: createElement(TranslationProvider, {
+            locale: "en",
+            children: createElement(WorkflowsHostWithRecipients, {
+              value: host,
+              api,
+              viewer: { id: "usr_mara", name: "Mara Lindqvist" },
+              workspaces: [{ id: "ws_finance", name: "Team Finance" }],
+              readsPeople,
+              children: createElement(StepPanel, {
+                step,
+                part,
+                run: undefined,
+                tab: "what",
+                onTabChange: noop,
+                entries: null,
+                onClose: noop
+              })
+            })
           })
         })
-      })
-    );
+      );
     expect(render(true)).toContain("Previously readable person");
     const hidden = render(false);
     expect(hidden).not.toContain("Previously readable person");
