@@ -114,7 +114,8 @@ function workflowAssetKind(knowledgeBases: KnowledgeBases): WorkflowAssetKind {
       ];
     },
     holdsInstanceDefault: false,
-    hasWorkspaceAvailability: false,
+    hasWorkspaceAvailability: true,
+    useOpensPublishedRevision: false,
     prepareInteractiveUpsert: ({ next }) => next,
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,

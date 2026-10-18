@@ -467,3 +467,20 @@ function identityOf(user: UserRecord) {
     scopes: ["*"]
   };
 }
+
+it("compares unchanged availability under its lock without invalidating the asset snapshot (AVAIL-1)", async () => {
+  const t = await setup();
+  expect((await t.putAgent(t.admin.id, "assistant")).statusCode).toBe(200);
+  const availability = (
+    await t.stores.configAssets.listAgentAvailability({ clientInstanceId })
+  ).get("assistant");
+  if (!availability) throw new Error("The agent has no availability");
+  const before = await t.stores.configAssets.getConfigAssetState({ clientInstanceId });
+  await t.stores.configAssets.setAgentAvailability({
+    clientInstanceId,
+    agentName: "assistant",
+    expectedAvailability: availability,
+    availability
+  });
+  expect(await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).toEqual(before);
+});

@@ -122,7 +122,7 @@ export interface CallRights {
 }
 
 export async function rightsOf(call: OperationCall, deps: RunOperationDeps): Promise<CallRights> {
-  const own = await deps.authorizer.forActor(call.actor);
+  const own = await deps.authorizer.forActor(call.actor, { workspaceId: call.workspaceId ?? null });
   const principal = call.draft?.boundBy;
   return principal
     ? { own, bound: { principal, access: await deps.authorizer.forActor(principal) } }

@@ -538,7 +538,7 @@ async function hiddenAgentNamesOf(
   written: readonly ReadyItem[]
 ): Promise<{ hiddenAgentNames?: string[] }> {
   const names = written
-    .filter((entry) => entry.item.type === "put" && entry.kind.hasWorkspaceAvailability)
+    .filter((entry) => entry.item.type === "put" && entry.kind.kind === "agent")
     .map((entry) => entry.name);
   if (names.length === 0) return {};
   const availability = await options.configAssets.store.listAgentAvailability({

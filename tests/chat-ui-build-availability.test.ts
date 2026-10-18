@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   AgentEditor,
   agentConfigToForm,
-  type AgentAvailabilityChoice,
+  type AvailabilityChoice,
   type BuildAssetEditorProps
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -48,10 +48,7 @@ function frame(): BuildAssetEditorProps {
   };
 }
 
-function availabilitySection(
-  availability: Partial<AgentAvailabilityChoice>,
-  isDefault = false
-): string {
+function availabilitySection(availability: Partial<AvailabilityChoice>, isDefault = false): string {
   const markup = renderToStaticMarkup(
     createElement(TranslationProvider, {
       locale: "en",

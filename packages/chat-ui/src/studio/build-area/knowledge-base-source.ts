@@ -11,6 +11,8 @@ import { instanceSentence, PendingApprovalError, readRefusalDetails } from "./bu
 import type { DataFlows } from "./data-flows-model";
 import { useOwnedChoices, type OwnedChoicesRead } from "./owned-choices";
 import type { MoreRead, PagedItems } from "./paged-items";
+import { useAvailabilityChoice, type AvailabilityFrame } from "./asset-availability";
+import type { AvailabilityChoice } from "./asset-availability-fields";
 
 /**
  * The state of one published Knowledge Base, as `knowledge_bases.get` answers it, with the data
@@ -199,6 +201,11 @@ export interface KnowledgeBaseSource {
     search: string,
     enabled: boolean
   ): KnowledgeRead<PagedItems<KnowledgeOpenableFile>>;
+  /**
+   * A hook: where agents can use it, for a reader who may change what belongs to the whole
+   * instance. Absent where the page offers no availability.
+   */
+  useAvailability?(frame: AvailabilityFrame): AvailabilityChoice | undefined;
 }
 
 /** The Knowledge Base pages on the instance's own operations. */
@@ -213,6 +220,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
     ...parts
   ];
   return {
+    useAvailability: (frame) => useAvailabilityChoice(frame, "knowledge_base"),
     useState: (knowledgeBase, publishedRevision, watchProcessing = false) =>
       useRead(
         key("state", knowledgeBase, publishedRevision ?? ""),

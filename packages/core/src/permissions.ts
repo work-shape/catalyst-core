@@ -1,5 +1,6 @@
 import type { AppAvailability } from "./app-audience";
 import {
+  WORKSPACE_USE_ASSET_KINDS,
   ACCESS_SOURCES,
   ACTIONS,
   SERVICE_PRINCIPAL_PERMISSIONS as CONTRACT_SERVICE_PRINCIPAL_PERMISSIONS,
@@ -152,6 +153,9 @@ export type AccessDecision =
       reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" | "outside_key_scope";
     };
 
+export { WORKSPACE_USE_ASSET_KINDS };
+export type WorkspaceUseAssetKind = (typeof WORKSPACE_USE_ASSET_KINDS)[number];
+
 export interface PersistedAccess {
   holderActive: boolean;
   grants: PermissionGrant[];
@@ -161,12 +165,16 @@ export interface PersistedAccess {
    * runs beside it. A service principal is a member of none.
    */
   memberWorkspaceIds?: readonly string[];
+  /** Only use is inherited from availability; settings, writes and secrets stay explicit. */
+  availableAssets?: readonly { assetId: string; kind: WorkspaceUseAssetKind }[];
 }
 
 export interface AccessStore {
   loadPersistedAccess(input: {
     clientInstanceId: ClientInstanceId;
     holder: { kind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; id: string };
+    /** Absent: inspect rights across memberships. Null: call outside a workspace. */
+    workspaceId?: string | null;
   }): Promise<PersistedAccess>;
 }
 
@@ -185,7 +193,10 @@ export interface ActorAccess {
 }
 
 export interface Authorizer {
-  forActor(actor: AuthenticatedIdentity): Promise<ActorAccess>;
+  forActor(
+    actor: AuthenticatedIdentity,
+    scope?: { workspaceId: string | null }
+  ): Promise<ActorAccess>;
 }
 
 /** The free-text reference `x` of a tool is checked as the action `ref:x`. */
@@ -315,6 +326,15 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
         source: "membership"
       });
     }
+  }
+  for (const asset of persisted.availableAssets ?? []) {
+    entries.push({
+      action: `${asset.kind}.use`,
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: asset.assetId,
+      source: "membership"
+    });
   }
   const ownRows = persisted.grants.filter(
     (grant) =>
@@ -601,12 +621,13 @@ export function boundedActorAccess(
  */
 export function createAuthorizer(accessStore?: AccessStore): Authorizer {
   return {
-    async forActor(actor) {
+    async forActor(actor, scope) {
       const holder = accessHolderFromIdentity(actor);
       const persisted = accessStore
         ? await accessStore.loadPersistedAccess({
             clientInstanceId: holder.clientInstanceId,
-            holder: { kind: holder.kind, id: holder.id }
+            holder: { kind: holder.kind, id: holder.id },
+            ...(scope ? { workspaceId: scope.workspaceId } : {})
           })
         : { holderActive: true, grants: [] };
       return createActorAccess(
@@ -644,6 +665,13 @@ export interface GrantScopeAsset {
 
 /** The store behind grants and Namespaces: the evaluator's port plus the administration writes. */
 export interface AccessAdministrationStore extends AccessStore, RightsLock {
+  /** Non-admin people who inherit use through availability, with their own rows for the evaluator. */
+  listAvailabilityMembers(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    action: string;
+    page: StorePage;
+  }): Promise<{ userId: UserId; displayLabel: string; grants: PermissionGrant[] }[]>;
   /**
    * Throws CONFLICT `duplicate_grant`, VALIDATION_FAILED `unknown_namespace` for an
    * unregistered prefix, `userInDeletionError` for a user whose deletion was requested, and

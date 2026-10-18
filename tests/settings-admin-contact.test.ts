@@ -62,7 +62,7 @@ describe("Settings admin contact", () => {
         authSource: "contact-test",
         externalUserId: "mara",
         displayLabel: "Mara",
-        roles: ["superadmin"],
+        roles: ["admin"],
         permissionRefs: [],
         permissions: []
       });
