@@ -268,6 +268,64 @@ describe("the tools that find what is on the platform", () => {
     expect(unknown.answer).toEqual(refusal("no-such-kind"));
   }, 120_000);
 
+  it("resolves notification people by literal name or email only within the caller's rights, with bounded matches", async () => {
+    const t = await fixture(true);
+    const owner = await t.conversationOf(OWNER);
+    const member = await t.conversationOf(MEMBER);
+    await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "summary-account",
+      displayLabel: "Summary account"
+    });
+    const person = await t.app.stores.users.createUser({
+      clientInstanceId: t.clientInstanceId,
+      displayLabel: "Ada Summary",
+      email: "ada@example.test"
+    });
+    await t.app.stores.users.createUser({
+      clientInstanceId: t.clientInstanceId,
+      displayLabel: "Ada Disabled",
+      email: "disabled@example.test",
+      status: "disabled"
+    });
+    const read = z.object({
+      caller: z.object({ id: z.string(), displayLabel: z.string() }),
+      people: z.array(
+        z.object({ id: z.string(), displayLabel: z.string(), email: z.string().optional() })
+      ),
+      peopleTruncated: z.boolean(),
+      workflowPrincipals: z.array(z.unknown())
+    });
+    for (const query of ["ADA", "ada@example.test"]) {
+      expect(
+        read.parse((await owner("platform.context", { person: query })).answer).people
+      ).toEqual([{ id: person.id, displayLabel: person.displayLabel, email: person.email }]);
+      expect(
+        read.parse((await member("platform.context", { person: query })).answer).people
+      ).toEqual([]);
+    }
+    const self = read.parse((await member("platform.context", { person: "Member" })).answer);
+    expect(self.people).toEqual([{ id: self.caller.id, displayLabel: "Member" }]);
+    expect(self.workflowPrincipals).toEqual([]);
+    expect(read.parse((await owner("platform.context")).answer).workflowPrincipals).toEqual([
+      { name: "summary-account", displayLabel: "Summary account" }
+    ]);
+    for (const query of ["%", "_", "' OR true --", "not-a-person"])
+      expect(
+        read.parse((await owner("platform.context", { person: query })).answer).people
+      ).toEqual([]);
+    for (let index = 0; index < 22; index++)
+      await t.app.stores.users.createUser({
+        clientInstanceId: t.clientInstanceId,
+        displayLabel: `Team ${index}`
+      });
+    const many = read.parse((await owner("platform.context", { person: "Team" })).answer);
+    expect(many.people).toHaveLength(20);
+    expect(many.peopleTruncated).toBe(true);
+    const invalid = await owner("platform.context", { person: "\u0000" });
+    expect(invalid.answer).not.toHaveProperty("people");
+  }, 120_000);
+
   it("refuses search text the store cannot hold before it reaches the store", () => {
     const unused = () => Promise.reject(new Error("The schema refuses the input first"));
     const tools = createPlatformDiscoveryTools({

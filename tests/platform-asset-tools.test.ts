@@ -41,6 +41,104 @@ describe("a conversation about a Workflow", () => {
   });
   afterAll(() => vi.restoreAllMocks());
 
+  it("builds a new Workflow from chat and completes its first test using a discovered account and caller, with no manual principal", async () => {
+    const t = await createAssetToolsFixture();
+    const principals = await t.app.stores.apiAccess.listServicePrincipals({
+      clientInstanceId: t.clientInstanceId
+    });
+    for (const principal of principals)
+      await t.app.stores.apiAccess.deleteServicePrincipal({
+        clientInstanceId: t.clientInstanceId,
+        servicePrincipalId: principal.id
+      });
+    const account = await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "weekly-documents",
+      displayLabel: "Weekly documents"
+    });
+    const retired = await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "retired-documents",
+      displayLabel: "Retired documents"
+    });
+    await t.app.stores.apiAccess.updateServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      servicePrincipalId: retired.id,
+      status: "disabled"
+    });
+    const existingAsset = await t.app.stores.configAssets.getConfigAsset({
+      clientInstanceId: t.clientInstanceId,
+      ...subject
+    });
+    if (!existingAsset) throw new Error("The fixture Workflow is missing");
+    await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "owned-documents",
+      displayLabel: "Owned documents",
+      owner: { kind: "workflow", assetId: existingAsset.id }
+    });
+    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(undefined))).json());
+    const context = z
+      .object({
+        caller: z.object({ id: z.string() }),
+        workflowPrincipals: z.array(z.object({ name: z.string(), displayLabel: z.string() }))
+      })
+      .parse(await t.call(id, "platform.context"));
+    expect(context.workflowPrincipals).toEqual([
+      { name: account.name, displayLabel: account.displayLabel }
+    ]);
+    const selected = context.workflowPrincipals[0];
+    expect(selected).toBeDefined();
+    const name = "weekly-document-summary";
+    expect(
+      await t.call(id, "platform.assets.put", {
+        kind: "workflow",
+        name,
+        config: {
+          name,
+          manifest: {
+            ...manifest(),
+            id: name,
+            name: "Weekly document summary",
+            runAs: selected?.name,
+            steps: [
+              trigger,
+              {
+                id: "tell",
+                name: "Send me the summary",
+                type: "notify",
+                to: { users: [context.caller.id] },
+                channels: ["inbox", "mail"],
+                title: { value: "Weekly summary" },
+                text: { ref: { step: "start", path: "input.note" } }
+              },
+              result
+            ]
+          }
+        }
+      })
+    ).toMatchObject({ saved: true });
+    const run = runSchema.parse(
+      await t.call(id, "workflows.test", { workflow: name, input: { note: "No new documents" } })
+    );
+    const jobs = getTestJobs(t.app);
+    for (let pass = 0; pass < 8; pass++) await jobs.runDue();
+    expect(await t.call(id, "workflows.get_run", { runId: run.id })).toMatchObject({
+      status: "done",
+      principal: { name: account.name },
+      startedBy: { id: context.caller.id }
+    });
+    expect(await t.call(id, "workflows.list_step_runs", { runId: run.id })).toMatchObject({
+      items: [
+        { stepId: "start", status: "done" },
+        { stepId: "tell", status: "done", target: "dry_run" },
+        { stepId: "result", status: "done" }
+      ]
+    });
+    const inbox = await t.ok(t.app.call("approval_requests.list"));
+    expect(z.object({ items: z.array(z.unknown()) }).parse(inbox.json()).items).toEqual([]);
+  });
+
   it("lets the agent test its subject draft without a prompt and read the run and each step through the real operations", async () => {
     const t = await createAssetToolsFixture();
     const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
