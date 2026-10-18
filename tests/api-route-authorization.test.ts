@@ -47,6 +47,7 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
     value: "profile",
     expectedRowVersion: null
   },
+  "knowledge_bases.extract_fields": { documentId: "missing", schema: { type: "object" } },
   "knowledge_bases.sync": { source: "missing", mode: "full" },
   "knowledge_bases.retry_documents": { source: "missing", all: true },
   "knowledge_bases.remove_documents": { documentIds: ["missing"] },

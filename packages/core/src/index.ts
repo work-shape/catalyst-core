@@ -33,6 +33,8 @@ export * from "./file-search";
 export * from "./guardrails";
 export * from "./infrastructure-checks";
 export * from "./knowledge";
+export * from "./knowledge-fields";
+export * from "./record-evidence";
 export * from "./knowledge-extraction";
 export * from "./knowledge-sources";
 export * from "./modules";

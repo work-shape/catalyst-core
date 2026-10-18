@@ -133,6 +133,7 @@ export interface CapabilityModelCall {
   content: CapabilityModelContentPart[];
   /** Asks for an answer in JSON of this schema. The answer is then JSON; its shape is not checked. */
   output?: { jsonSchema: JsonObject };
+  maxOutputTokens?: number;
   /** The user and the conversation the call is made for, for its usage record. */
   userId?: string;
   conversationId?: ConversationId;
@@ -150,11 +151,13 @@ export interface CapabilityModelCall {
 }
 
 export interface CapabilityModelAnswer {
+  usage?: { inputTokens: number; outputTokens: number };
   text: string;
 }
 
 /** What a capability may know of a model binding before it relies on it. */
 export interface CapabilityModelBinding {
+  price?: { currency: string; inputPerMillionTokens: number; outputPerMillionTokens: number };
   providerId: string;
   model: string;
   /** Where the provider processes a call. Absent for a provider inside the instance. */
@@ -218,6 +221,7 @@ export interface ClientInstanceJobRetry {
 }
 
 export interface ClientInstanceCapabilityContribution {
+  knowledgeFieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor;
   tools?: AnyToolDefinition[];
   attachments?: ClientInstanceAttachmentHandler[];
   managedObjects?: ClientInstanceManagedObjectReaderContribution[];

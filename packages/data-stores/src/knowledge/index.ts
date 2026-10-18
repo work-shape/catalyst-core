@@ -25,6 +25,7 @@ import {
   type KnowledgeFiles,
   type KnowledgeQueryEmbedder,
   type Logger,
+  type LocaleCode,
   type OperationSource,
   type PlatformStores,
   type JobRetry,
@@ -87,7 +88,8 @@ export interface KnowledgeBases {
    */
   operationSource(
     files: KnowledgeFiles | undefined,
-    embedQuery?: KnowledgeQueryEmbedder
+    embedQuery?: KnowledgeQueryEmbedder,
+    fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor
   ): OperationSource;
   /**
    * The jobs of the documents of Knowledge Bases, where the process keeps files: the one that
@@ -113,12 +115,15 @@ export interface KnowledgeBases {
 }
 
 export function createKnowledgeBases(input: {
+  /** Instance content locale until Knowledge Bases support a content-language setting. */
+  defaultLocale: LocaleCode;
   clientInstanceId: ClientInstanceId;
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;
   /** Where the described tables are read and the owned stores made. */
   backend: KnowledgeBackend;
   sources?: KnowledgeSources;
+  assertFieldBudgetPriced?(): void;
   documentSourceOffered?(config: unknown): boolean;
   /** The embedding model release config approves for Knowledge Bases (`knowledge`), if any. */
   embedding: KnowledgeEmbedding;
@@ -131,6 +136,7 @@ export function createKnowledgeBases(input: {
   now?: () => Date;
 }): KnowledgeBases {
   const runtime: KnowledgeRuntime = {
+    defaultLocale: input.defaultLocale,
     clientInstanceId: input.clientInstanceId,
     stores: input.stores,
     backend: input.backend,
@@ -188,6 +194,9 @@ export function createKnowledgeBases(input: {
       })
     }),
     async publish(stores, { access, assetId, revision, config, replaced, confirmProcessing }) {
+      const definition = knowledgeBaseDefinitionSchema.parse(config);
+      if (definition.extraction?.budget.perMonth !== undefined) input.assertFieldBudgetPriced?.();
+
       await confirmKnowledgeProcessing(
         runtime,
         stores,
@@ -200,7 +209,6 @@ export function createKnowledgeBases(input: {
         },
         input.embedding
       );
-      const definition = knowledgeBaseDefinitionSchema.parse(config);
       const target = knowledgeTargetOf(definition, assetId);
       const before = knowledgeBaseDefinitionSchema.safeParse(replaced);
       const previous = before.success ? knowledgeTargetOf(before.data, assetId) : undefined;
@@ -307,11 +315,12 @@ export function createKnowledgeBases(input: {
         if (target.backend === "builtin") await enqueueKnowledgeRemoval(stores, runtime, target);
       }
     },
-    operationSource: (files, embedQuery) =>
+    operationSource: (files, embedQuery, fieldExtractor) =>
       createKnowledgeOperationSource({
         ...runtime,
         ...(files ? { files } : {}),
-        ...(embedQuery ? { embedQuery } : {})
+        ...(embedQuery ? { embedQuery } : {}),
+        ...(fieldExtractor ? { fieldExtractor } : {})
       }),
     fileJobs: (files, auditRecorder, embed) => {
       const cleanup = createKnowledgeFileCleanupJobs(runtime, files);

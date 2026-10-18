@@ -233,6 +233,93 @@ describe("the Documents section", () => {
     expect(row("kopie").textContent).not.toContain("Original liegt in der Quelle");
   });
 
+  it("marks a searchable document whose fields wait for the budget, in both languages", () => {
+    const paused = [
+      document_("rechnung", "indexed", {
+        format: "pdf",
+        fileName: "rechnung.pdf",
+        fieldsPending: true
+      }),
+      document_("angebot", "indexed", { fieldsPending: false }),
+      document_("kaputt", "failed", { fieldsPending: true, failureCode: "knowledge_text_empty" })
+    ];
+    const shown = {
+      source: plantedSource({ useDocuments: () => ready({ documents: paused }) }),
+      knowledgeBase: "objektunterlagen",
+      publishedRevision: 1,
+      canWrite: true
+    };
+
+    show(createElement(KnowledgeDocuments, shown));
+    // Still searchable: the pause is beside the state, not instead of it.
+    expect(row("rechnung").textContent).toContain("Searchable");
+    expect(row("rechnung").textContent).toContain("Fields pending");
+    expect(row("rechnung").textContent).toContain(
+      "PDF · 2 KiB · Fields are filled in once the budget resets or is raised"
+    );
+    expect(row("rechnung").hasAttribute("data-knowledge-fields-pending")).toBe(true);
+    expect(row("angebot").textContent).not.toContain("Fields pending");
+    // A failed document says why it failed; the pause is not its concern.
+    expect(row("kaputt").textContent).not.toContain("Fields pending");
+    expect(row("rechnung").textContent).not.toContain("fieldsPending");
+
+    show(createElement(KnowledgeDocuments, shown), "de");
+    expect(row("rechnung").textContent).toContain("Durchsuchbar");
+    expect(row("rechnung").textContent).toContain("Felder ausstehend");
+    expect(row("rechnung").textContent).toContain(
+      "Felder werden gefüllt, sobald das Budget zurückgesetzt oder erhöht wird"
+    );
+    expect(row("angebot").textContent).not.toContain("Felder ausstehend");
+  });
+
+  it("says why fields wait: the monthly budget, or a document over the token limit", () => {
+    const waiting = [
+      document_("monat", "indexed", {
+        fieldsPending: true,
+        fieldsPendingReason: { reason: "monthly_budget" }
+      }),
+      document_("gross", "indexed", {
+        format: "pdf",
+        fileName: "gross.pdf",
+        fieldsPending: true,
+        fieldsPendingReason: {
+          reason: "token_budget",
+          estimatedTokens: 184_250,
+          reservedOutputTokens: 512,
+          maxTokensPerDocument: 120_000
+        }
+      })
+    ];
+    const shown = {
+      source: plantedSource({ useDocuments: () => ready({ documents: waiting }) }),
+      knowledgeBase: "objektunterlagen",
+      publishedRevision: 1,
+      canWrite: true
+    };
+    const budget = "Fields are filled in once the budget resets or is raised";
+
+    show(createElement(KnowledgeDocuments, shown));
+    expect(row("monat").textContent).toContain(budget);
+    expect(row("monat").textContent).not.toContain("tokens");
+    expect(row("gross").textContent).toContain("Searchable");
+    expect(row("gross").textContent).toContain("Fields pending");
+    expect(row("gross").textContent).toContain(
+      "Fields wait: this document needs an estimated 184,250 input tokens plus 512 reserved output tokens, exceeding the limit of 120,000 tokens per document. Raise the limit to fill them in"
+    );
+    expect(row("gross").textContent).not.toContain(budget);
+    expect(row("gross").textContent).not.toMatch(/token_budget|maxTokensPerDocument|undefined/);
+    // The whole reason wraps instead of being cut off.
+    expect(row("gross").innerHTML).toContain("break-words");
+
+    show(createElement(KnowledgeDocuments, shown), "de");
+    expect(row("monat").textContent).toContain(
+      "Felder werden gefüllt, sobald das Budget zurückgesetzt oder erhöht wird"
+    );
+    expect(row("gross").textContent).toContain(
+      "Felder warten: Dieses Dokument braucht geschätzt 184.250 Eingabe-Tokens plus 512 reservierte Ausgabe-Tokens und überschreitet damit die Grenze von 120.000 Tokens je Dokument. Erhöhe die Grenze, damit sie gefüllt werden"
+    );
+  });
+
   it("names the page limit of a document with too many pages, in both languages", () => {
     const showDocument = (long: KnowledgeDocument, locale?: "de") =>
       show(
