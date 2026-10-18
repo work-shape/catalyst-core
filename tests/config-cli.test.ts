@@ -4431,7 +4431,8 @@ function unlistedInHelp(skill: string, help: string): string[] {
         "requests",
         "login",
         "logout",
-        "setup"
+        "setup",
+        "init"
       ].includes(first)
     ) {
       if (!listed(first)) problems.push(`command '${first}' in: ${command}`);
@@ -4459,15 +4460,24 @@ describe("the Catalyst skill the CLI ships", () => {
     const skill = await renderCatalystSkill();
     expect(skill).toContain("catalyst config pull");
     expect(unlistedInHelp(skill, help)).toEqual([]);
+    const directory = await mkdtemp(join(tmpdir(), "catalyst-init-drift-"));
+    temporaryDirectories.push(directory);
+    expect(
+      await runCli(["init", "--instance", "https://catalyst.test"], {
+        cwd: directory,
+        stdout: () => undefined
+      })
+    ).toBe(0);
+    expect(unlistedInHelp(await readFile(join(directory, "AGENTS.md"), "utf8"), help)).toEqual([]);
 
     // The check sees a command, a verb and an option the CLI does not have.
     expect(
       unlistedInHelp(
-        "Run `catalyst init` and `catalyst agent rename x`, then `catalyst config sync --unknown-skill-flag` and `catalyst agent hits x`.",
+        "Run `catalyst teleport` and `catalyst agent rename x`, then `catalyst config sync --unknown-skill-flag` and `catalyst agent hits x`.",
         help
       )
     ).toEqual([
-      "command 'init' in: catalyst init",
+      "command 'teleport' in: catalyst teleport",
       "'agent rename' in: catalyst agent rename x",
       "command 'config sync' in: catalyst config sync --unknown-skill-flag",
       "'agent hits' in: catalyst agent hits x",
