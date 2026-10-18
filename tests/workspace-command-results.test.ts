@@ -1,35 +1,69 @@
-import { asWorkspaceCommandId } from "@work-shape/catalyst-core";
-import { describe, expect, it } from "vitest";
+import { asWorkspaceCommandId, type WorkspaceCommandId } from "@work-shape/catalyst-core";
+import { describe, expect, it, vi } from "vitest";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
+
+import { deferred, waitUntil } from "./support/assertions";
+import {
+  settleOnFakeClock,
+  advanceFakeClockUntilSettled,
+  useFakeClockBesidePostgres
+} from "./support/fake-clock";
 
 type Harness = Awaited<ReturnType<typeof createWorkspaceHarness>>;
 
 describe("workspace.exec results when the wait for a command gives up", () => {
-  it("reports the tool execution deadline as timed_out and cancels the command", async () => {
+  it("reports the operation deadline and cancels the command after recording its timeout", async () => {
+    const queued = deferred<WorkspaceCommandId>();
     const harness = await createWorkspaceHarness({
       execResultWaitMs: null,
-      execResultPollIntervalMs: 5
-    });
-
-    const result = await harness.runTool(
-      "workspace.exec",
-      { command: "sleep 60" },
-      { ...harness.context, deadline: new Date(Date.now() + 50) }
-    );
-
-    const commandId = commandIdOf(result);
-    expect(result).toEqual({
-      status: "timed_out",
-      error: {
-        code: "timed_out",
-        message: "Workspace command exceeded the tool execution deadline",
-        details: { commandId, status: "cancelled" }
+      execResultPollIntervalMs: 5,
+      serviceStore(store) {
+        const get = store.executionWorkspaces.getWorkspaceCommand.bind(store.executionWorkspaces);
+        return {
+          ...store,
+          executionWorkspaces: {
+            ...store.executionWorkspaces,
+            async getWorkspaceCommand(input: Parameters<typeof get>[0]) {
+              const command = await get(input);
+              if (command?.status === "queued") queued.resolve(command.id);
+              return command;
+            }
+          }
+        };
       }
     });
-    await expect(storedCommand(harness, commandId)).resolves.toMatchObject({
-      status: "cancelled",
-      cancellationReason: "Workspace command exceeded the tool execution deadline"
-    });
+    useFakeClockBesidePostgres();
+    const first = harness.runTool(
+      "workspace.exec",
+      { command: "sleep 60" },
+      {
+        ...harness.context,
+        deadline: new Date(Date.now() + 60_000)
+      }
+    );
+    try {
+      const commandId = await settleOnFakeClock(queued.promise);
+      await vi.advanceTimersByTimeAsync(60_123);
+      expect(await settleOnFakeClock(first)).toMatchObject({
+        status: "failed",
+        error: { code: "handler_failed", message: expect.stringContaining("runtime.deadline") }
+      });
+      // The late command result cannot replace the Operation Run's timeout. Its abort
+      // handler still cancels the queued command after the caller has received that timeout.
+      await advanceFakeClockUntilSettled(
+        waitUntil(
+          async () => (await storedCommand(harness, commandId))?.status === "cancelled",
+          "the timed-out operation's queued command was cancelled"
+        ),
+        5
+      );
+      expect(await settleOnFakeClock(storedCommand(harness, commandId))).toMatchObject({
+        status: "cancelled"
+      });
+    } finally {
+      await settleOnFakeClock(first);
+      vi.useRealTimers();
+    }
   });
 
   it("reports the wait limit as a failure with the wait it was given and cancels the command", async () => {

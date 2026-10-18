@@ -604,6 +604,10 @@ describe("workspace tools", () => {
       execResultPollIntervalMs: 5
     });
 
+    const cancelling = vi.spyOn(
+      harness.store.executionWorkspaces,
+      "requestWorkspaceCommandCancellation"
+    );
     const resultPromise = harness.runTool(
       "workspace.exec",
       { command: "sleep 60" },
@@ -618,23 +622,31 @@ describe("workspace tools", () => {
     const result = await resultPromise;
 
     expect(result).toMatchObject({
-      status: "cancelled",
+      status: "failed",
       error: {
-        code: "cancelled",
-        details: {
-          status: "cancelled"
-        }
+        code: "handler_failed",
+        message: expect.stringContaining("check before calling again")
       }
     });
-    if (result.status !== "cancelled") {
-      throw new Error("Expected queued workspace command cancellation");
-    }
-    const commandId = jsonObject(result.error.details).commandId;
-    expect(typeof commandId).toBe("string");
+    // The operation answers first; the command's abort handler cancels its row afterwards.
+    await waitUntil(async () => {
+      const commandId = cancelling.mock.calls[0]?.[0].commandId;
+      if (!commandId) return false;
+      return (
+        (
+          await harness.store.executionWorkspaces.getWorkspaceCommand({
+            clientInstanceId: harness.clientInstanceId,
+            commandId
+          })
+        )?.status === "cancelled"
+      );
+    }, "the interrupted operation's command was cancelled");
+    const commandId = cancelling.mock.calls[0]?.[0].commandId;
+    if (!commandId) throw new Error("Expected queued workspace command cancellation");
     await expect(
       harness.store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: harness.clientInstanceId,
-        commandId: asWorkspaceCommandId(text(commandId))
+        commandId: commandId
       })
     ).resolves.toMatchObject({
       status: "cancelled",
