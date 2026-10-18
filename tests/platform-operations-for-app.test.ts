@@ -7,10 +7,11 @@ import {
   asConversationId,
   asToolCallId,
   type ToolExecutionContext,
+  type OperationDefinition,
   type UserRecord
 } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
-import { setupAppActions, type AppActionsInstance } from "./support/app-actions";
+import { appSource, setupAppActions, type AppActionsInstance } from "./support/app-actions";
 import { operationOf } from "./support/connection-operations";
 import { testServerOptions } from "./support/test-instance";
 
@@ -86,5 +87,53 @@ describe("the operations the agent may name", () => {
 
   it("are none of a Connection the person may not use", async () => {
     expect(await names(t.kai, "app")).toEqual([]);
+  });
+
+  it("resolves incomplete resources for both the list and a Page action's right", async () => {
+    const operation: OperationDefinition = {
+      name: "connection.identity.echo",
+      effect: "reading",
+      action: "connection.use",
+      scope: null,
+      auth: "user",
+      inputSchema: z.unknown(),
+      outputSchema: z.unknown(),
+      resource: () => ({ kind: "connection", id: "crm", name: "crm" }),
+      timeoutMs: 1000,
+      execute: () => Promise.resolve({})
+    };
+    t.operationCalls.registry.addSource({
+      resolve: (name) => Promise.resolve(name === operation.name ? operation : undefined),
+      list: () => Promise.resolve({ operations: [operation], truncated: [] })
+    });
+    const grant = await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.kai.id,
+      action: "connection.use",
+      effect: "allow",
+      scopeKind: "instance",
+      grantedBy: t.admin.id
+    });
+    const frame = await t.openPage(
+      t.kai.id,
+      appSource("identity").map((file) =>
+        "text" in file
+          ? {
+              ...file,
+              text: file.text
+                .replaceAll('"crm"', '"identity"')
+                .replaceAll("connection: crm", "connection: identity")
+            }
+          : file
+      )
+    );
+    expect(await names(t.kai, "app")).toContain(`${operation.name} reading`);
+    expect(await t.can(t.kai.id, frame)).toMatchObject({ load: "allow" });
+    const deny = await t.grant(t.kai.id, "connection.use", { assetId: t.crm }, "deny");
+    expect(await names(t.kai, "app")).not.toContain(`${operation.name} reading`);
+    expect(await t.can(t.kai.id, frame)).toMatchObject({ load: "deny" });
+    await t.stores.access.deleteGrant({ clientInstanceId, grantId: deny });
+    await t.stores.access.deleteGrant({ clientInstanceId, grantId: grant.id });
   });
 });

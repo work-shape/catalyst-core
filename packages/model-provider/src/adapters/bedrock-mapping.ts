@@ -132,7 +132,7 @@ export function toBedrockRequest(
     thinkingTurns,
     body: {
       anthropic_version: BEDROCK_ANTHROPIC_VERSION,
-      max_tokens: BEDROCK_MAX_OUTPUT_TOKENS,
+      max_tokens: request.maxOutputTokens ?? BEDROCK_MAX_OUTPUT_TOKENS,
       ...(system.length > 0 ? { system } : {}),
       messages,
       ...(thinking ? { thinking } : {}),

@@ -50,6 +50,8 @@ export interface ResolvedInstance extends ManifestInstance {
 }
 
 export interface AssetBaseline {
+  /** Absent in older copies, whose omitted fields and hashes cannot safely be reused. */
+  canonicalFormVersion?: number;
   /**
    * The id of the asset the revision counts. A revision number alone does not say which
    * asset it belongs to: in a database that was replaced or restored, another asset of the
@@ -261,6 +263,10 @@ export async function readStateFile(path: string): Promise<CatalystState> {
           asset.revision < 1 ||
           typeof asset.hash !== "string" ||
           !/^[a-f0-9]{64}$/u.test(asset.hash) ||
+          (asset.canonicalFormVersion !== undefined &&
+            (typeof asset.canonicalFormVersion !== "number" ||
+              !Number.isInteger(asset.canonicalFormVersion) ||
+              asset.canonicalFormVersion < 1)) ||
           (asset.id !== undefined && typeof asset.id !== "string") ||
           !(
             asset.draftRevision === undefined ||
@@ -274,6 +280,9 @@ export async function readStateFile(path: string): Promise<CatalystState> {
           throw new Error(`${path} has an invalid asset baseline for '${key}'`);
         }
         baseline.assets[key] = {
+          ...(asset.canonicalFormVersion === undefined
+            ? {}
+            : { canonicalFormVersion: asset.canonicalFormVersion }),
           ...(asset.id === undefined ? {} : { id: asset.id }),
           revision: asset.revision,
           hash: asset.hash,

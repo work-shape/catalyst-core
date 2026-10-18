@@ -128,6 +128,7 @@ export class AppActionList {
   constructor(options: ResolvedChatServerOptions) {
     this.options = options;
     this.environment = {
+      resolveResource: options.operationCalls.deps.resolveResource,
       registry: options.operationCalls.registry,
       modules: options.modules,
       policy: options.operationCalls.deps.policy

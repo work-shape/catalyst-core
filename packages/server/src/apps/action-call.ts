@@ -143,6 +143,7 @@ export class AppActionCalls {
     // registry as it is. A frame calls no Connection operation directly: it reaches a
     // Connection only through a named `connection` action of its manifest.
     this.environment = {
+      resolveResource: options.operationCalls.deps.resolveResource,
       registry: options.operationCalls.registry,
       modules: options.modules,
       policy: options.operationCalls.deps.policy

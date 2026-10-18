@@ -30,6 +30,7 @@ const stores = await createPostgresStores({
   logger
 });
 const dataStores = createDataStores({
+  defaultLocale: "en",
   clientInstanceId,
   stores,
   databaseUrl: process.env.SRC1A_DATABASE_URL,

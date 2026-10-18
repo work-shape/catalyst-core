@@ -600,7 +600,7 @@
       "target": "lint",
       "rule": "catalyst/duplicate-literal-list",
       "scope": "packages/tool-execution",
-      "count": 9,
+      "count": 7,
       "owner": "D5-after-freeze"
     },
     {

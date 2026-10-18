@@ -81,12 +81,19 @@ export function toVertexRequest(request: ModelAdapterRequest): VertexGenerateCon
           ]
         }
       : {}),
-    ...(request.output
+    ...(request.output || request.maxOutputTokens !== undefined
       ? {
           generationConfig: {
-            temperature: STRUCTURED_OUTPUT_TEMPERATURE,
-            responseMimeType: "application/json",
-            responseSchema: toVertexSchema(request.output.jsonSchema)
+            ...(request.maxOutputTokens === undefined
+              ? {}
+              : { maxOutputTokens: request.maxOutputTokens }),
+            ...(request.output
+              ? {
+                  temperature: STRUCTURED_OUTPUT_TEMPERATURE,
+                  responseMimeType: "application/json",
+                  responseSchema: toVertexSchema(request.output.jsonSchema)
+                }
+              : {})
           }
         }
       : {})

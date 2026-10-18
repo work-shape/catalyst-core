@@ -91,11 +91,11 @@ The platform keeps what it records in a store's database in the schema `catalyst
 
 `load` takes the rows of a dataset of a Workflow Run into one table in one transaction as the app role. A reader of the table sees the rows as they were until the load is kept and all of it from then on, also where the load replaces rows; a load that fails or is refused keeps none of its rows.
 
-- **Bound of one call:** at most 100,000 rows (`DATA_STORE_LOAD_MAX_ROWS`) and 64 MiB of rows as JSON (`DATA_STORE_LOAD_MAX_BYTES`). What the reference of the dataset says is refused before a row is read; what the dataset holds is counted as it is read, and a load that passes the bound is rolled back (`load_too_large`). A larger dataset is loaded in several calls. One load may take five minutes; each of its statements, of at most 1,000 rows, ends at the statement timeout of the app role.
+- **Bound of one call:** at most 100,000 rows (`DATA_STORE_LOAD_MAX_ROWS`) and 64 MiB of rows as JSON (`DATA_STORE_LOAD_MAX_BYTES`). What the reference of the dataset says is refused before a row is read; what the dataset holds is counted as it is read, and a load that passes the bound is rolled back (`load_too_large`). A larger dataset is loaded in several calls. One load, including lock waits, is bounded by `limits.timeoutMs` (`dataStores.load.timeoutMs`, default 600 s); its statements of at most 1,000 rows use that timeout instead of the app role’s ordinary statement timeout.
 - **Columns:** `columns` names the column for each field of a row; other fields are left out, and a field a row lacks is empty in that row. Without it every row names the same fields, each the name of a column (`rows_differ`). An unknown table or column is refused by name (`table_unknown`, `column_unknown`, `column_twice`).
 - **Key:** `key` names the columns that tell two rows apart. It needs a unique constraint over exactly those columns that holds for all rows and is not deferrable (`key_without_constraint`), and every row gives every column of it (`key_not_loaded`, `nullable_key` unless the constraint is `NULLS NOT DISTINCT`). A dataset holds each key once, in whichever part of it the second row comes (`duplicate_key`): the database itself compares the keys.
-- **`onConflict`:** `fail` adds no row where a unique constraint refuses one. `skip` leaves out a row whose key is stored. `update` writes the columns the load sets over the row whose key is stored and leaves its other columns.
-- **`replace.by`:** deletes the stored rows whose values of these columns occur in the dataset, then adds the dataset, in that one transaction. With `by: [month]` a monthly run replaces its month and leaves every other month. Two loads that replace the same value at once do not mix: a load takes an advisory lock of the store's database on the table and each value of `by` until it is kept or rolled back, so the later one waits, deletes what the earlier stored and reports it in `deleted`. A load that waits longer than the statement timeout of the app role fails whole and can be sent again.
+- **`onConflict`:** `fail` adds no row where a unique constraint refuses one. `skip` leaves out a row whose key is stored. `update` writes the columns the load sets over the row whose key is stored and leaves its other columns. Loads that encounter a row deadlock with a concurrent write roll back and answer `load_concurrent_rows`: safe to retry, including through the existing Workflow step retry.
+- **`replace.by`:** deletes the stored rows whose values of these columns occur in the dataset, then adds the dataset, in that one transaction. With `by: [month]` a monthly run replaces its month and leaves every other month. Two loads that replace the same value at once do not mix: a load holds an advisory lock in the store's database for each value of `by` until it is kept or rolled back, so the later one waits, deletes what the earlier stored and reports it in `deleted`. Unscoped replacements of the same table take turns before taking any group locks; scoped replacements of disjoint values run concurrently and those of the same value wait on their group. Waiting counts against `limits.timeoutMs` (`dataStores.load.timeoutMs`, default 600 s). A table-lock wait that reaches that limit refuses the whole load as `load_replace_timeout`, names the limit, and can safely be retried.
 - **Empty reruns:** name an explicit group with `replace: { by: [client_id, month, rules_revision], values: { client_id: "1001", month: "2026-09", rules_revision: "r2" } }`. `values` gives exactly the `by` columns as non-null scalars. An empty dataset clears only that group; other clients, months and revisions stay. Every incoming row, after column mappings and conversion to the table's types, must match the group (`replace_scope_mismatch`); a mismatch rolls back the whole load. Without `values`, only groups present in the dataset are replaced, so an empty dataset deletes nothing. Explicit and dataset-derived loads of the same group share their lock and once-per-step transaction.
 - **Size and roles:** as for an insert. The size of the store's database is read on the platform's own connection before the first row, after every statement and once more after everything the store left to the end of the transaction has happened; a load that takes the store past its limit is rolled back (`data_store_size_limit`) and what it wrote is given back with a `VACUUM`, as after any load that failed. The roles are held before the call as before every call.
 - **Once per step run:** the call path answers a repeated call of one idempotency key with the first answer, and a Workflow step sends the id of its step run as that key.
@@ -193,3 +193,44 @@ not offered as agent tools. Direct chat, App and CLI calls fail before store wor
 `workflow_dataset_owner_required`: "`records.propose` runs only as a step of a Workflow Run."
 The refusal follows the caller's EN/DE locale. The store's existing Filled by section
 receives the published Workflow and the readable Knowledge Bases its operation steps name.
+
+### Extraction by schema (PROC-2)
+
+`knowledge.<id>.extract_fields({ documentId, schema })` reads an active indexed document
+under `knowledge_base.read`. Use it in a data Workflow before `records.propose`; it returns
+`path`, the document's own `date` (or null), its classified `type`, and `fields` keyed by
+name with `{ value, page, quote }`. `droppedFields` counts unsupported schema fields.
+`failedFields` counts evidence failures, which stay in the returned fields so
+`records.propose` can recheck and retain them for review as “Nicht belegt”, without
+projecting their values. Quotes and page text are normalized for Unicode NFC, whitespace,
+soft hyphens and words split across lines. Numeric evidence uses the call's document locale
+(`de` by default); the other separator convention is accepted only when unambiguous.
+String evidence matches whole words; German dates accept single-digit days and months.
+Evidence is checked again by records at its write boundary. A matching quote is a necessary condition, not proof of correctness.
+
+The document-processing capability supplies its explicitly approved extraction binding.
+That binding must support structured output and document input and process in `eu` (or
+inside the instance). Its customer rate card supplies the currency. Page text is untrusted
+data inside fixed instructions; calls carry a JSON-schema answer format, abort and deadline.
+No prompt, page text, field value or quote is kept in logs, errors, audit or Operation Runs.
+Only the owning Knowledge Base's retained text and the caller's returned result contain them.
+
+`extraction.budget.perMonth` optionally limits this Knowledge Base's field extraction in
+the instance usage currency. Publishing a monthly budget requires the extraction binding
+to have a customer rate-card row; an unpriced binding does not prevent startup. `maxTokensPerDocument` defaults to 8000 and covers conservative
+input tokens plus the maximum output. Input tokens are estimated as ceil(UTF-8 bytes / 4) over the serialized input and schema unless the binding supplies a tokenizer. A document is never silently truncated. Admission
+reserves the maximum call cost in one monthly row before contacting the model; settlement
+returns unused money, including when a provider returns invalid output or reports zero cost.
+A content change before the provider call releases the full reservation. Only a call whose
+cost is unknown (including a timeout or process crash) conservatively keeps its reservation. This can pause earlier than the provider's final invoice. A new
+UTC month has its own counter. Raising and publishing the budget permits the next Workflow
+call to continue; the Workflow controls retries and scheduling. A refusal marks the document
+“Fields pending” / “Felder ausstehend”; it remains indexed and searchable. No per-document
+or per-customer total count limit is added.
+
+Owned-store migration 10 adds the monthly counter and the document's pending marker;
+9 is reserved by SRC-3b. There is no core database migration. Old application versions may
+run on the additive tables; keep the new migration recorded on rollback. Admission costs one
+monthly-row lock plus an indexed document update; no list or sum grows with the corpus.
+
+Field evidence in extraction and records proposals uses the instance `localization.defaultLocale`, never the caller’s interface language. Knowledge Base content/indexing languages are not supported in this release.

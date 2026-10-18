@@ -102,6 +102,7 @@ describe.each(hostileDocuments)("the hostile document '$name'", (document: Hosti
     const instance = await createTestInstance();
     const key = randomBytes(32).toString("base64");
     const dataStores = createDataStores({
+      defaultLocale: "en",
       clientInstanceId: asClientInstanceId("hostile-input"),
       stores: instance.stores,
       databaseUrl: "postgres://unused.invalid/none",

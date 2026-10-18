@@ -3,7 +3,11 @@ import { dirname, resolve } from "node:path";
 import { ConfigApiError } from "./api";
 import { createUnifiedDiff } from "./diff";
 import { serializeGuardrailFiles } from "./guardrail-files";
-import { serializeAgentYaml, serializeSkillPackageForDisplay } from "./serialization";
+import {
+  CANONICAL_FORM_VERSION,
+  serializeAgentYaml,
+  serializeSkillPackageForDisplay
+} from "./serialization";
 import {
   MANIFEST_FILENAME,
   STATE_FILENAME,
@@ -118,6 +122,7 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
     if (
       base &&
       mine &&
+      base.canonicalFormVersion === CANONICAL_FORM_VERSION &&
       // The same asset, not only the same number: after a database was replaced another
       // asset of the name can be at the revision the last pull recorded.
       base.id === remote.id &&
