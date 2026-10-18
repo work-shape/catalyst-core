@@ -4,6 +4,7 @@ import {
   MODEL_CALL_RESERVED_OUTPUT_TOKENS,
   ModelNotPricedError,
   ModelUsageLimitReachedError,
+  KNOWLEDGE_INGESTION_PURPOSES,
   type AdmittedModelCall,
   type ClientInstanceId,
   type ModelAttribution,
@@ -155,12 +156,12 @@ const USAGE_ABANDONED_AFTER_MS = 6 * 60 * 60 * 1000;
 const USAGE_RECOVERY_BATCH = 200;
 /**
  * How many times a person's safeguards the calls no person made share, such as the workflow
- * runs of a service principal. At the shipped daily default this is 2 billion tokens: a
- * sequential loop using 2 million tokens a minute stops after 1,000 minutes (16 h 40 min).
- * Custom limits change that bound. A call refused by it ends its run with
- * `MODEL_USAGE_LIMIT_REACHED`.
+ * runs of a service principal. At the shipped daily default this is 1.4 billion tokens:
+ * 700 minutes at 2 million counted tokens a minute. Even when a loop crosses a UTC day reset,
+ * two daily windows take at most 1,400 minutes (23 h 20 min). Custom limits change that bound.
+ * A call refused by it ends its run with `MODEL_USAGE_LIMIT_REACHED`.
  */
-const UNATTENDED_SAFEGUARD_FACTOR = 10;
+const UNATTENDED_SAFEGUARD_FACTOR = 7;
 
 /** What a call that reported nothing is settled with. */
 const NOTHING_REPORTED: ModelCallUsage = {
@@ -413,10 +414,11 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     const costMicros = this.freeProviderIds.has(call.providerId)
       ? 0
       : this.highestCost(call, inputTokens, outputTokens);
+    const purpose = call.attribution.kind === "system" ? call.attribution.purpose : undefined;
     if (
       costMicros === undefined &&
       (this.budget.dailySpendLimit || this.budget.monthlySpendLimit) &&
-      !(call.attribution.kind === "system" && call.attribution.purpose === "knowledge_embedding")
+      !KNOWLEDGE_INGESTION_PURPOSES.some((ingestion) => ingestion === purpose)
     ) {
       throw new ModelNotPricedError();
     }

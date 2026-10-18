@@ -455,6 +455,33 @@ describe("usage spend budget progress", () => {
     expect(recent).toContain(">EU</span>");
     expect(recent).toContain(">800 from cache</span>");
   });
+
+  // Fails without the change: a knowledge base field extraction call showed the agent name.
+  it("names a knowledge base field extraction call by its purpose, in English and German", () => {
+    const usage = createUsageSummary();
+    usage.recentEvents = [
+      {
+        ...createEvent("usage_fields", "settled"),
+        agentName: "stored-agent",
+        purpose: "knowledge_field_extraction"
+      }
+    ];
+
+    const english = renderToStaticMarkup(createElement(UsageView, { usage }));
+    const german = renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale: "de",
+        children: createElement(UsageView, { usage })
+      })
+    );
+
+    expect(english).toContain("Knowledge base field extraction");
+    expect(german).toContain("Feldextraktion einer Wissensbasis");
+    for (const markup of [english, german]) {
+      expect(markup).not.toContain("stored-agent");
+      expect(markup).not.toContain("knowledge_field_extraction");
+    }
+  });
 });
 
 function createEvent(

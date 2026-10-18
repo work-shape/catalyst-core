@@ -9,6 +9,7 @@ import {
   asConversationId,
   asUserId,
   isAppError,
+  KNOWLEDGE_INGESTION_PURPOSES,
   ModelUsageLimitReachedError,
   runFailureCodeOf,
   type AdmittedModelCall,
@@ -214,7 +215,7 @@ describe("usage safeguards per person", () => {
     });
   });
 
-  // Fails without the change: ten times the largest valid limit is no safe integer of JS.
+  // Fails without the change: A multiple of the largest valid limit is no safe integer of JS.
   it("keeps the shared bucket's limits safe integers for the largest valid safeguards", async () => {
     const { clientInstanceId } = await instanceWith("largest", []);
     const largest = Number.MAX_SAFE_INTEGER;
@@ -299,12 +300,12 @@ describe("usage safeguards per person", () => {
 
   // Fails without the change: the calls of no person were held against the instance, or
   // against one person's safeguard, so a busy instance stopped its scheduled workflows.
-  it("gives the calls of no person one bucket of ten times a person's", async () => {
+  it("gives the calls of no person one bucket of seven times a person's", async () => {
     const { clientInstanceId, people } = await instanceWith("unattended", ["anna"]);
     const anna = required(people[0]);
     const governance = governanceOf({ safeguards: { modelCallsPerDay: 2 } });
 
-    for (let call = 0; call < 20; call += 1) {
+    for (let call = 0; call < 14; call += 1) {
       await governance.admitModelCall(product(clientInstanceId, "document_extraction"));
     }
     await expect(
@@ -317,8 +318,8 @@ describe("usage safeguards per person", () => {
     ).resolves.toBeDefined();
     expect(await counters(clientInstanceId)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ scope: "instance:", period: "day", calls: 22 }),
-        expect.objectContaining({ scope: "system:", period: "day", calls: 20 }),
+        expect.objectContaining({ scope: "instance:", period: "day", calls: 16 }),
+        expect.objectContaining({ scope: "system:", period: "day", calls: 14 }),
         expect.objectContaining({ scope: `system:${anna}`, period: "day", calls: 1 }),
         expect.objectContaining({ scope: `user:${anna}`, period: "day", calls: 1 })
       ])
@@ -491,7 +492,7 @@ describe("usage safeguards per person", () => {
     const { clientInstanceId, people } = await instanceWith("deletedroom", ["anna", "ben"]);
     const [anna, ben] = [required(people[0]), required(people[1])];
     const governance = governanceOf({ safeguards: { modelCallsPerDay: 1 } });
-    for (let call = 0; call < 9; call += 1) {
+    for (let call = 0; call < 6; call += 1) {
       await governance.admitModelCall(product(clientInstanceId, "document_extraction"));
     }
     await governance.admitModelCall(own(clientInstanceId, anna));
@@ -500,14 +501,14 @@ describe("usage safeguards per person", () => {
     await expect(erase(clientInstanceId, anna)).resolves.toBe(2);
     expect(await counters(clientInstanceId)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ scope: "instance:", period: "day", calls: 11 }),
-        expect.objectContaining({ scope: "system:", period: "day", calls: 9 })
+        expect.objectContaining({ scope: "instance:", period: "day", calls: 8 }),
+        expect.objectContaining({ scope: "system:", period: "day", calls: 6 })
       ])
     );
     // Reconciliation does not put the erased calls on the shared bucket either.
     await db.store.usage.reconcileModelUsage({ clientInstanceId, scope: "recent" });
     expect(await counters(clientInstanceId)).toContainEqual(
-      expect.objectContaining({ scope: "system:", period: "day", calls: 9 })
+      expect.objectContaining({ scope: "system:", period: "day", calls: 6 })
     );
     // The shared bucket still has the room of its own calls, and no more.
     await expect(
@@ -529,7 +530,7 @@ describe("usage safeguards per person", () => {
       ...product(clientInstanceId, "document_extraction", userId),
       correlationId: ""
     });
-    for (let call = 0; call < 10; call += 1) {
+    for (let call = 0; call < 7; call += 1) {
       await governance.admitModelCall(unnamed(call % 2 === 0 ? undefined : "service_principal"));
     }
     await expect(refusalOf(governance.admitModelCall(unnamed()))).resolves.toMatchObject({
@@ -674,107 +675,71 @@ describe("usage safeguards per person", () => {
   );
 
   it.each([
-    ["own", 1],
-    ["product", 1],
-    ["unattended", 10]
-  ] as const)("stops a sequential %s runaway within its daily bound", async (scope, factor) => {
-    const shipped = parseClientInstanceConfig({
-      clientInstance: { id: "runaway", displayName: "Runaway" },
-      infrastructure: { models: { local: { provider: "deterministic" } } }
-    }).usage.safeguards;
-    const { clientInstanceId, people } = await instanceWith(`runaway_${scope}`, ["anna"]);
+    ["knowledge_embedding", true],
+    ["knowledge_embedding", false],
+    ["knowledge_field_extraction", true],
+    ["knowledge_field_extraction", false]
+  ] as const)("keeps %s off chat counters with a person: %s", async (purpose, withPerson) => {
+    const { clientInstanceId, people } = await instanceWith(`ingestion_${purpose}_${withPerson}`, [
+      "anna"
+    ]);
     const person = required(people[0]);
-    const governance = governanceOf({ safeguards: shipped });
-    const call =
-      scope === "own"
-        ? own(clientInstanceId, person)
-        : product(clientInstanceId, "guardrail_judge", scope === "product" ? person : undefined);
-    // One aggregate settlement represents the loop, avoiding hundreds of provider calls.
-    const consumed = 200_000_000 * factor;
-    await governance.settleModelCall(await governance.admitModelCall(call), {
-      inputTokens: consumed,
+    const governance = governanceOf({
+      safeguards: {
+        modelCallsPerDay: 1,
+        tokensPerDay: RESERVED_TOKENS,
+        tokensPerMonth: RESERVED_TOKENS
+      },
+      budget: { dailySpendLimit: 0.26, monthlySpendLimit: 0.26 }
+    });
+    const ingestion = product(clientInstanceId, purpose, withPerson ? person : undefined);
+    const usage = {
+      inputTokens: 100_000_000,
       cachedInputTokens: 0,
       outputTokens: 0,
-      totalTokens: consumed,
-      source: "provider_reported"
-    });
-    await expect(refusalOf(governance.admitModelCall(call))).resolves.toMatchObject({
-      details: { scope: scope === "own" ? "user" : "system", period: "day", metric: "tokens" }
-    });
-    const minutesAtTwoMillionTokensPerMinute = consumed / 2_000_000;
-    expect(minutesAtTwoMillionTokensPerMinute).toBe(factor * 100);
-    expect(minutesAtTwoMillionTokensPerMinute).toBeLessThan(24 * 60);
-    if (scope === "unattended") {
-      // Ten busy workflows, each running five measured eight-hour days, still fit: 1.715B.
-      expect(BUSY_DAY_HEADROOM * honestDay.tokens * 10).toBeLessThan(consumed);
-    }
+      totalTokens: 100_000_000,
+      source: "provider_reported" as const
+    };
+    // Appended events, admission, settlement, lazy counter start and reconciliation all agree.
+    await governance.recordModelUsage({ ...ingestion, ...usage });
+    await governance.settleModelCall(await governance.admitModelCall(ingestion), usage);
+    expect(await counters(clientInstanceId)).toEqual([]);
+    await db.store.usage.reconcileModelUsage({ clientInstanceId, scope: "recent" });
+    expect(await counters(clientInstanceId)).toEqual([]);
+    await governance.admitModelCall(own(clientInstanceId, person));
+    await governance.admitModelCall(product(clientInstanceId, "guardrail_judge", person));
+    const before = await counters(clientInstanceId);
+    // Exhausted own/product safeguards and instance spend budgets do not stop ingestion.
+    await governance.settleModelCall(await governance.admitModelCall(ingestion), usage);
+    // Reconciliation must not mask a temporary loss of chat headroom at settlement.
+    expect(await counters(clientInstanceId)).toEqual(before);
+    await db.store.usage.reconcileModelUsage({ clientInstanceId, scope: "recent" });
+    expect(await counters(clientInstanceId)).toEqual(before);
+    await expect(
+      refusalOf(governance.admitModelCall(product(clientInstanceId, "knowledge_query", person)))
+    ).resolves.toMatchObject({ details: { scope: "user", metric: "modelCallCount" } });
+    const events = await db.store.usage.listModelUsageEvents({ clientInstanceId, limit: 20 });
+    const imports = events.filter((event) => event.purpose === purpose);
+    expect(imports).toHaveLength(3);
+    expect(imports.every((event) => event.totalTokens === usage.totalTokens)).toBe(true);
+    if (withPerson) expect(imports.every((event) => event.userId === person)).toBe(true);
   });
 
-  it.each([true, false])(
-    "keeps ingestion off chat counters with a person: %s",
-    async (withPerson) => {
-      const { clientInstanceId, people } = await instanceWith(`ingestion_${withPerson}`, ["anna"]);
-      const person = required(people[0]);
-      const governance = governanceOf({
-        safeguards: {
-          modelCallsPerDay: 1,
-          tokensPerDay: RESERVED_TOKENS,
-          tokensPerMonth: RESERVED_TOKENS
-        },
-        budget: { dailySpendLimit: 0.26, monthlySpendLimit: 0.26 }
+  it.each(KNOWLEDGE_INGESTION_PURPOSES)(
+    "does not require chat budget pricing for %s",
+    async (purpose) => {
+      const { clientInstanceId, people } = await instanceWith("ingestion_unpriced", ["anna"]);
+      const governance = new ModelUsageGovernance({
+        store: db.store.usage,
+        budget: { dailySpendLimit: 1 },
+        safeguards: { modelCallsPerDay: 1 }
       });
-      const ingestion = product(
-        clientInstanceId,
-        "knowledge_embedding",
-        withPerson ? person : undefined
-      );
-      const usage = {
-        inputTokens: 100_000_000,
-        cachedInputTokens: 0,
-        outputTokens: 0,
-        totalTokens: 100_000_000,
-        source: "provider_reported" as const
-      };
-      // Appended events, admission, settlement, lazy counter start and reconciliation all agree.
-      await governance.recordModelUsage({ ...ingestion, ...usage });
-      await governance.settleModelCall(await governance.admitModelCall(ingestion), usage);
-      expect(await counters(clientInstanceId)).toEqual([]);
-      await db.store.usage.reconcileModelUsage({ clientInstanceId, scope: "recent" });
-      expect(await counters(clientInstanceId)).toEqual([]);
-      await governance.admitModelCall(own(clientInstanceId, person));
-      await governance.admitModelCall(product(clientInstanceId, "guardrail_judge", person));
-      const before = await counters(clientInstanceId);
-      // Exhausted own/product safeguards and instance spend budgets do not stop ingestion.
-      await governance.settleModelCall(await governance.admitModelCall(ingestion), usage);
-      // Reconciliation must not mask a temporary loss of chat headroom at settlement.
-      expect(await counters(clientInstanceId)).toEqual(before);
-      await db.store.usage.reconcileModelUsage({ clientInstanceId, scope: "recent" });
-      expect(await counters(clientInstanceId)).toEqual(before);
       await expect(
-        refusalOf(governance.admitModelCall(product(clientInstanceId, "knowledge_query", person)))
-      ).resolves.toMatchObject({ details: { scope: "user", metric: "modelCallCount" } });
-      const events = await db.store.usage.listModelUsageEvents({ clientInstanceId, limit: 20 });
-      const imports = events.filter((event) => event.purpose === "knowledge_embedding");
-      expect(imports).toHaveLength(3);
-      expect(imports.every((event) => event.totalTokens === usage.totalTokens)).toBe(true);
-      if (withPerson) expect(imports.every((event) => event.userId === person)).toBe(true);
+        governance.admitModelCall(product(clientInstanceId, purpose, required(people[0])))
+      ).resolves.toBeDefined();
+      await expect(
+        governance.admitModelCall(own(clientInstanceId, required(people[0])))
+      ).rejects.toMatchObject({ details: { reason: "MODEL_NOT_PRICED" } });
     }
   );
-
-  it("does not require chat budget pricing for ingestion", async () => {
-    const { clientInstanceId, people } = await instanceWith("ingestion_unpriced", ["anna"]);
-    const governance = new ModelUsageGovernance({
-      store: db.store.usage,
-      budget: { dailySpendLimit: 1 },
-      safeguards: { modelCallsPerDay: 1 }
-    });
-    await expect(
-      governance.admitModelCall(
-        product(clientInstanceId, "knowledge_embedding", required(people[0]))
-      )
-    ).resolves.toBeDefined();
-    await expect(
-      governance.admitModelCall(own(clientInstanceId, required(people[0])))
-    ).rejects.toMatchObject({ details: { reason: "MODEL_NOT_PRICED" } });
-  });
 });

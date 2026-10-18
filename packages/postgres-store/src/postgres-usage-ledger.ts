@@ -10,6 +10,7 @@ import {
   type ModelUsageTotals,
   type RecentModelUsage,
   AppError,
+  KNOWLEDGE_INGESTION_PURPOSES,
   createPlatformId
 } from "@work-shape/catalyst-core";
 import { type PostgresConnection } from "./postgres-database";
@@ -266,7 +267,9 @@ async function countAndInsert(
   );
   const ended = input.status !== "pending";
   // KB-ISO: ingestion is recorded and rolled up, but reserves no chat counters.
-  const expectedCounters = event.purpose === "knowledge_embedding" ? 0 : 4;
+  const expectedCounters = KNOWLEDGE_INGESTION_PURPOSES.some((purpose) => purpose === event.purpose)
+    ? 0
+    : 4;
   const rows = await db.execute<AdmissionRow>(drizzleSql`
     with ${attribution(event)},
     ${written(event, input.id)},

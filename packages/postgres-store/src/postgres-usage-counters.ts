@@ -1,9 +1,10 @@
 import { sql as drizzleSql, type SQL } from "drizzle-orm";
-import type {
-  ModelSystemPurpose,
-  ModelUsageCounterLimits,
-  ModelUsageLimits,
-  ModelUsageRefusal
+import {
+  KNOWLEDGE_INGESTION_PURPOSES,
+  type ModelSystemPurpose,
+  type ModelUsageCounterLimits,
+  type ModelUsageLimits,
+  type ModelUsageRefusal
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { modelUsageCounters } from "./schema";
@@ -48,6 +49,14 @@ export const scopeKindOf = (row: SQL): SQL => drizzleSql`case
 end`;
 export const scopeIdOf = (row: SQL): SQL => drizzleSql`coalesce(${row}.user_id, '')`;
 
+/** Ingestion is recorded separately from chat counters, including while history is rebuilt. */
+const countsAsChat = (purpose: SQL): SQL => drizzleSql`(
+  ${purpose} is null or ${purpose} not in (${drizzleSql.join(
+    KNOWLEDGE_INGESTION_PURPOSES.map((value) => drizzleSql`${value}`),
+    drizzleSql`, `
+  )})
+)`;
+
 /**
  * The counters of the instance and of one scope for a day and a month. `c` names the counter
  * table.
@@ -59,7 +68,7 @@ export const countersOf = (
   month: SQL
 ): SQL => drizzleSql`
   c.client_instance_id = ${clientInstanceId}
-  and ${scope.purpose} is distinct from 'knowledge_embedding'
+  and ${countsAsChat(scope.purpose)}
   and ((c.scope_kind = 'instance' and c.scope_id = '')
     or (c.scope_kind = ${scope.kind} and c.scope_id = ${scope.id}))
   and ((c.period_kind = 'day' and c.period_start = ${day})
@@ -193,7 +202,7 @@ export async function startCounters(
       on ${e}.client_instance_id = ${clientInstanceId}
       and ${e}.created_at >= period.first_day::timestamp at time zone 'UTC'
       and ${e}.created_at < period.next_day::timestamp at time zone 'UTC'
-      and ${e}.purpose is distinct from 'knowledge_embedding'
+      and ${countsAsChat(drizzleSql`${e}.purpose`)}
       and ${events}
     where ${missing(kind, "")}
     group by period.kind, period.first_day`;
@@ -254,7 +263,7 @@ export async function reconcileCounters(
       cross join lateral (values ('month', ${THIS_MONTH}), ('day', ${TODAY}))
         period(kind, first_day)
       where ${e}.client_instance_id = ${clientInstanceId}
-        and ${e}.purpose is distinct from 'knowledge_embedding'
+        and ${countsAsChat(drizzleSql`${e}.purpose`)}
         and ${e}.created_at >= ${THIS_MONTH}::timestamp at time zone 'UTC'
         and (period.kind = 'month' or ${dayOf(drizzleSql`${e}.created_at`)} = ${TODAY})
         -- An erased event has no scope of its own.

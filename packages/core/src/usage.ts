@@ -127,7 +127,17 @@ export type ModelEmbeddingPurpose = (typeof MODEL_EMBEDDING_PURPOSES)[number];
 
 /** What a model call that no agent run made was for. */
 export type ModelSystemPurpose =
-  "conversation_title" | "guardrail_judge" | "document_extraction" | ModelEmbeddingPurpose;
+  | "conversation_title"
+  | "guardrail_judge"
+  | "document_extraction"
+  | "knowledge_field_extraction"
+  | ModelEmbeddingPurpose;
+
+/** Knowledge Base ingestion records usage but consumes no chat safeguard or spend budget. */
+export const KNOWLEDGE_INGESTION_PURPOSES = [
+  "knowledge_embedding",
+  "knowledge_field_extraction"
+] as const satisfies readonly ModelSystemPurpose[];
 
 /** A model call an agent run made. */
 export interface AgentRunModelAttribution {
