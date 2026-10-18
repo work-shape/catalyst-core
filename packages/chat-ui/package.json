@@ -139,7 +139,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.tsx src/shell.tsx src/admin.tsx src/widget.tsx --format esm --dts --minify-whitespace --external react --external react-dom",
+    "build": "tsup src/index.tsx src/shell.tsx src/admin.tsx src/widget.tsx --format esm --dts --clean --minify-whitespace --external react --external react-dom",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

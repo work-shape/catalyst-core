@@ -145,6 +145,9 @@ export interface UserStore {
     clientInstanceId: ClientInstanceId;
     page?: StorePage;
     excludeSuperadmins?: boolean;
+    /** Literal, case-insensitive part of the name or email; applied before paging. */
+    text?: string;
+    activeOnly?: boolean;
   }): Promise<UserRecord[]>;
   /** Most recently signed-in active instance admin; excludes accounts being deleted and seeds. */
   getInstanceAdminName(input: { clientInstanceId: ClientInstanceId }): Promise<string | undefined>;

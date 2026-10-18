@@ -105,9 +105,9 @@ const STEP_REFERENCE: {
     }
   },
   notify: {
-    does: "Leaves a notice in each active recipient's Inbox. With mail, queues a counts-only digest and a link; no title, text, client name or finding leaves by mail. A test notifies only its tester.",
+    does: "Leaves a notice in each active recipient's Inbox. With mail, queues a counts-only digest and a link; no title, text, client name or finding leaves by mail. A test simulates this changing step: its result shows wouldHaveDone with the intended recipients and frozen content; it sends no Inbox item or mail.",
     fields: {
-      to: "Instance user ids under users and Shared Workspace ids under workspaces (their active members). No free e-mail address.",
+      to: "Instance user ids under users and Shared Workspace ids under workspaces (their active members). For 'me', use platform.context caller.id. For a name or email, call platform.context with person and use the returned people match; ask which person if ambiguous, never ask the person to type an id. No free e-mail address.",
       channels: "[inbox], or [inbox, mail]. Every notice has an Inbox item.",
       title: "A mapping { value: text } or { ref: { step, path } }; Inbox only, one line.",
       text: "A mapping { value: text } or { ref: { step, path } }; Inbox only, one paragraph.",
@@ -129,7 +129,7 @@ const EXAMPLES: { title: string; yaml: string }[] = [
     yaml: `id: top-customers
 name: Top customers
 description: Reads the customers with the highest revenue from the sample system.
-runAs: workflow-runner
+runAs: choose-from-platform-context
 inputs:
   type: object
   properties:
@@ -167,7 +167,7 @@ steps:
     title: "A loop that makes one changing call per item and returns its counts",
     yaml: `id: notify-clients
 name: Notify clients
-runAs: workflow-runner
+runAs: choose-from-platform-context
 inputs:
   type: object
   properties:
@@ -218,7 +218,7 @@ steps:
     title: "A schedule and a literal value in a mapping",
     yaml: `id: nightly-check
 name: Nightly check
-runAs: workflow-runner
+runAs: choose-from-platform-context
 inputs:
   type: object
 outputs:
@@ -427,7 +427,7 @@ ${RULES_REVISION_STEPS.replace(/^/gmu, "  ")}
   the config. Never change it.
 - \`name\`: what a person calls the Workflow. \`description\`: one or two plain sentences, optional.
 - \`runAs\`: the name of the service principal every step acts as. Its rights decide what a step
-  may call. Do not change it unless the person asks: a publish checks whether its publisher
+  may call. For a new Workflow, call platform.context and choose a name from workflowPrincipals, never an invented name or the placeholder in these examples. If none is offered, explain that an administrator sets up an account under Settings > API access. Do not change it unless the person asks: a publish checks whether its publisher
   may let a Workflow act as that principal.
 - \`kind\`: \`process\` unless set. Use \`data\` for a Workflow that fills or processes a Knowledge Base or Data Store. Publishing Knowledge Base \`ingest\`, \`withdraw\`, \`put_processed\` or Data Store \`records.propose\` from a process Workflow is refused with \`process_workflow_write_operation\`. A copied data template keeps \`kind: data\`.
 - \`labels\`: optional mapping of names to text or numbers, as literals such as

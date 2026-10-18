@@ -678,7 +678,9 @@ describe("a Workflow the instance accepts no start of", () => {
     );
     expect(markup).toContain(t("workflows.notRunnable.refused"));
     expect(markup).not.toContain(t("workflows.notRunnable.title"));
-    expect(markup).toContain(t("workflows.notRunnable.accountUnavailable"));
+    expect(markup).toContain(
+      t("workflows.notRunnable.accountUnavailable", { place: "Settings › API access" })
+    );
     expect(markup).not.toContain("The instance has no active principal");
   });
 

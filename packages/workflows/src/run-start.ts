@@ -93,10 +93,18 @@ export function createStartCheck(options: StartCheckOptions) {
     }
     const principal = await workflowRunPrincipal(stores.apiAccess, clientInstanceId, manifest);
     if (!principal) {
+      const account = await stores.apiAccess.findServicePrincipalByName({
+        clientInstanceId,
+        name: manifest.runAs
+      });
       throw new AppError(
         "CONFLICT",
-        `The instance has no active service principal named '${manifest.runAs}', which the Workflow '${manifest.id}' runs as`,
-        { reason: "principal_inactive" }
+        `This Workflow runs as the technical account '${account?.displayLabel ?? manifest.runAs}', which is missing or disabled. Choose an active account in the Workflow definition. An administrator manages accounts under Settings > API access.`,
+        {
+          reason: "principal_inactive",
+          runAs: manifest.runAs,
+          ...(account ? { principalDisplayLabel: account.displayLabel } : {})
+        }
       );
     }
     return { published, trigger, input: runInput.data, principal };

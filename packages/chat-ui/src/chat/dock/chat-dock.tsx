@@ -182,7 +182,8 @@ export function DockPage({
       className={cn(
         // What the page pins, such as an asset's head on the sticky layer, stays inside the
         // page: the dock that lies over it covers it whole.
-        "relative isolate h-full min-h-0 min-w-0 flex-1",
+        // Its width is a container, so a head beside the dock can show its actions as icons.
+        "@container/dock-page relative isolate h-full min-h-0 min-w-0 flex-1",
         arrival === "in" && "[--duration-loading-delay:0ms] motion-safe:animate-dock-page-in"
       )}
     >

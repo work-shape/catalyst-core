@@ -36,3 +36,50 @@ export function openConversationAbout(
     dock.openPage(page, conversation.id);
   }
 }
+
+/** What a conversation is about and the workspace it belongs to, as its thread says. */
+export interface ThreadAbout {
+  subject: { kind: string; name: string } | undefined;
+  collaborationWorkspaceId: string;
+}
+
+/**
+ * The conversation in the dock that "Edit with the agent" opens again rather than making a
+ * new one: the dock already holds a conversation about the same asset in the same workspace.
+ * An asset of the same kind and name in another workspace is another asset. Where a prompt
+ * comes along, it stands in that composer only when the composer is empty or holds the same
+ * text, so nothing the person typed is replaced; otherwise a new conversation takes the prompt.
+ */
+export function dockConversationToReuse({
+  dockConversationId,
+  dock,
+  subject,
+  workspaceId,
+  prompt,
+  draftText
+}: {
+  dockConversationId: string | undefined;
+  /** What the dock's conversation is about and where, once its thread has loaded. */
+  dock: ThreadAbout | undefined;
+  subject: { kind: string; name: string };
+  /** The workspace the asset is opened in. */
+  workspaceId: string;
+  prompt: string | undefined;
+  /** What the dock's composer holds. */
+  draftText: string;
+}): string | undefined {
+  if (
+    dockConversationId === undefined ||
+    dock === undefined ||
+    dock.subject === undefined ||
+    dock.collaborationWorkspaceId !== workspaceId ||
+    dock.subject.kind !== subject.kind ||
+    dock.subject.name !== subject.name
+  ) {
+    return undefined;
+  }
+  if (prompt !== undefined && draftText.trim() !== "" && draftText !== prompt) {
+    return undefined;
+  }
+  return dockConversationId;
+}

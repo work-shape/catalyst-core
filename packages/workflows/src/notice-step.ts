@@ -31,6 +31,7 @@ export async function settleNoticeStep(input: {
         ...ref,
         status: "done",
         finishedAt,
+        call: { effect: "changing", target: "live" },
         output: { ...result }
       });
     });
