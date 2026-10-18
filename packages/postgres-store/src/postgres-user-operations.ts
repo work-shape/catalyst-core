@@ -711,6 +711,19 @@ export function createPostgresUsersStore(db: PostgresConnection): UserStore {
     async getUser(input: Parameters<UserStore["getUser"]>[0]): Promise<UserRecord | undefined> {
       return getUserRecord(db, input.clientInstanceId, input.userId);
     },
+    async countActiveUsers({ clientInstanceId }) {
+      const [row] = await db
+        .select({ count: drizzleSql<number>`count(*)::integer` })
+        .from(productUsers)
+        .where(
+          and(
+            eq(productUsers.clientInstanceId, clientInstanceId),
+            eq(productUsers.status, "active"),
+            isNull(productUsers.deletionRequestedAt)
+          )
+        );
+      return row?.count ?? 0;
+    },
     async listUsers(input: Parameters<UserStore["listUsers"]>[0]): Promise<UserRecord[]> {
       return listUsers(db, input);
     },

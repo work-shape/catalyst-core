@@ -1,3 +1,5 @@
+import { requireAppAudience } from "../apps/app-audience";
+import type { AppAudience } from "@work-shape/catalyst-core";
 import { upsertAsset, type AssetUpsert } from "./asset-upsert";
 import { AgentDraftWorkflow } from "./agent-drafts";
 import {
@@ -82,6 +84,7 @@ import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import { assertReferencesWithinOwners } from "./asset-owner-references";
 import { liveRevision } from "./asset-live-revision";
+import { appPublishReview } from "../apps/app-publish-reach";
 import { publishApproval, publishFromAPerson } from "../approvals/publish-approval";
 import type { AssetWorkflowOptions } from "../types";
 
@@ -153,9 +156,10 @@ export class AssetWorkflow {
    */
   async authorizePublish(
     caller: { actor: AuthenticatedIdentity; access: ActorAccess; origin: OperationOrigin },
-    address: AssetAddress & { revision: number }
+    address: AssetAddress & { revision: number; audience?: AppAudience }
   ): Promise<OperationAuthorization> {
     const { access, origin } = caller;
+    if (address.kind === "app") requireAppAudience(access, address.audience);
     if (address.kind === "agent")
       return this.agentDrafts.authorizePublish(
         { ...caller, audit: this.options.auditRecorder, correlationId: "" },
@@ -179,9 +183,24 @@ export class AssetWorkflow {
    * and the caller's own click where they hold it. None for a kind whose publish is not held.
    */
   async publishApproval(
-    input: AssetAddress & { revision: number }
+    input: AssetAddress & { revision: number; audience?: AppAudience }
   ): Promise<OperationApproval | undefined> {
-    return publishApproval(await this.target(input), input.revision);
+    const target = await this.target(input);
+    const asset = target.asset;
+    const revision =
+      target.kind.kind === "app"
+        ? await this.options.configAssets.store.getConfigAssetRevision({
+            clientInstanceId: this.options.clientInstanceId,
+            kind: input.kind,
+            name: input.name,
+            revision: input.revision
+          })
+        : undefined;
+    const widens =
+      asset && revision?.config
+        ? appPublishReview(asset, target.kind, revision.config, input.audience).publishWidens
+        : undefined;
+    return publishApproval(target, input.revision, input.audience, undefined, widens);
   }
 
   async authorizeDelete(

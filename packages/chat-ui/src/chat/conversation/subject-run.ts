@@ -223,3 +223,33 @@ export function savedDraftCalls(parts: readonly SubjectRunPart[]): string[] {
       : []
   );
 }
+
+/** An App the agent's `app.save` made, as its line in the conversation names it (SHARE-1). */
+export interface AppSaved {
+  /** The App's id. */
+  name: string;
+  /** The name people read. */
+  title: string;
+  /** The save made the App. A later one wrote its next draft revision. */
+  created: boolean;
+}
+
+/**
+ * The App a call of `app.save` wrote: the first save, which made it, or a later one, which wrote
+ * its next draft revision. Either leaves the line that its builder can use it now, with
+ * "Share". A refused save and a call that has not answered are nothing here.
+ */
+export function appSavedByCall(call: {
+  toolName: string;
+  result?: unknown;
+  isError?: boolean;
+}): AppSaved | undefined {
+  if (call.isError === true || call.toolName !== APP_SAVE_TOOL_NAME) return undefined;
+  const answer = toolAnswer(call.result);
+  if (answer?.saved !== true || typeof answer.name !== "string") {
+    return undefined;
+  }
+  const title =
+    typeof answer.title === "string" && answer.title !== "" ? answer.title : answer.name;
+  return { name: answer.name, title, created: answer.created !== false };
+}

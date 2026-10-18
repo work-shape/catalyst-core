@@ -152,3 +152,6 @@ export interface SkillResourceConfig {
   mediaType: SkillResourceMediaType;
   content: string;
 }
+
+/** Ordered from the narrowest App audience to the widest. */
+export const APP_AUDIENCES = ["self", "workspace", "instance"] as const;

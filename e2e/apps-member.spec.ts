@@ -14,6 +14,7 @@ import { requestWithOrigin } from "./request-with-origin";
 import { shootLocales, shootThemes } from "./surface-shots";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
+import { chooseWorkspaceAudience } from "./app-audience";
 
 /** The address of the draft of the App at `appPath`, outside the App's own addresses. */
 const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/");
@@ -150,6 +151,8 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   await expect(edit.locator("header").first()).not.toContainText(WORKSPACE);
   await edit.getByRole("button", { name: "Publish", exact: true }).click();
   const publishDialog = page.getByRole("dialog", { name: `Publish “${appName}”?` });
+  // The member uses the App below: it is published for the workspace (SHARE-1).
+  await chooseWorkspaceAudience(publishDialog);
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishDialog).toBeHidden();
 

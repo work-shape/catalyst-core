@@ -193,7 +193,7 @@ describe("publishing needs an instance admin's approval", () => {
           (
             await t.expectOk(t.admin.id, "assets.get", {
               params: { kind: "app", name: "narrated" },
-              query: { workspaceId: t.workspaceId, revision: "1" }
+              query: { workspaceId: t.workspaceId, revision: "1", audience: "workspace" }
             })
           ).json()
         ).publishNarrative

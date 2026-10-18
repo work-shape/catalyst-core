@@ -1,4 +1,9 @@
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   APP_ASSET_KIND,
@@ -14,7 +19,11 @@ import {
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
-import { usePublishNarrative, type PublishNarrativeRead } from "../../shared/publish-narrative";
+import {
+  narrativeReadOf,
+  parsePublishNarrative,
+  type PublishNarrativeRead
+} from "../../shared/publish-narrative";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import {
   appDataLines,
@@ -23,7 +32,7 @@ import {
   type AppPublishData
 } from "../build-area/data-store-provenance-model";
 import { keepPageAddress, retryUnlessGone, type PageAddressState } from "../pages/page-address";
-import { appPreviewProblem, type AppPreviewProblem } from "./app-model";
+import { appPreviewProblem, appReadsStoredData, type AppPreviewProblem } from "./app-model";
 
 /** The session the Apps are read with: the one the workspace shell holds. */
 const APP_AUTH_SCOPE = "standalone";
@@ -209,12 +218,18 @@ export function appPublishDataRead(
  * older revision each name what that revision reads, never what is live now. One request per
  * App and revision while the question is open.
  */
-export function useAppPublishData(app: string, revision: number): AppPublishDataRead {
+export function useAppPublishData(
+  app: string,
+  revision: number,
+  /** False where the revision reads no stored data: nothing is asked. */
+  enabled = true
+): AppPublishDataRead {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const { locale, t } = useTranslation();
   const query = useQuery({
     queryKey: appPublishDataKey(apiBaseUrl, app, revision),
     queryFn: ({ signal }) => client.data_stores.app_sources({ query: { app, revision }, signal }),
+    enabled,
     retry: retryUnlessGone
   });
   return appPublishDataRead(
@@ -229,25 +244,109 @@ export function useAppPublishData(app: string, revision: number): AppPublishData
   );
 }
 
+/** Who a publish of an App makes it live for: its builder, its workspace or the whole instance. */
+export type AppAudience = NonNullable<Asset["appAudience"]>["selected"];
+
+/** What the instance offers the "For whom?" question, for the audience the read asked about. */
+export interface AppAudienceOffer {
+  selected: AppAudience;
+  choices: readonly AppAudience[];
+  /** The people the selected audience names, in the reader's language. */
+  label: string;
+  /** How many people the selected audience names, where the instance counts them. */
+  people?: number;
+  /** Who the live revision is for, where one is live, and the people it names. */
+  live?: { audience: AppAudience; label: string | undefined };
+  /** The name of the workspace that owns the App. */
+  workspaceName?: string;
+}
+
+/** The read behind an App's publish question: the sentence and the audience offer, in one answer. */
+export interface AppPublishQuestionRead {
+  narrative: PublishNarrativeRead;
+  /** Absent while the first answer loads, and from an instance that offers no choice. */
+  audience: AppAudienceOffer | undefined;
+  /**
+   * The revision has a reading `sql` action, so the question names who sees which stored data.
+   * Absent until the first answer arrived.
+   */
+  readsStoredData?: boolean;
+}
+
+/** The offer an answer holds, read whole or not at all. */
+function appAudienceOffer(value: Asset["appAudience"]): AppAudienceOffer | undefined {
+  if (value === undefined || !value.choices.includes(value.selected)) return undefined;
+  return {
+    selected: value.selected,
+    choices: value.choices,
+    label: value.label,
+    ...(value.people === undefined ? {} : { people: value.people }),
+    ...(value.live === undefined ? {} : { live: { audience: value.live, label: value.liveLabel } }),
+    ...(value.workspaceName === undefined ? {} : { workspaceName: value.workspaceName })
+  };
+}
+
 /**
- * The instance's sentence on what publishing one revision of an App makes live (PUBQ-1),
- * read for that revision's number while the question is open.
+ * The instance's sentence on what publishing one revision of an App makes live (PUBQ-1), for
+ * the audience asked about (SHARE-1), and the choices of "For whom?". Without `audience` the
+ * instance answers for the audience it proposes. While the answer for a new choice loads, the
+ * choices of the last answer stay, and the sentence is loading: it never names another audience.
  */
 export function useAppPublishNarrative(
   workspaceId: string,
   app: string,
-  revision: number
-): PublishNarrativeRead {
+  revision: number,
+  audience: AppAudience | undefined
+): AppPublishQuestionRead {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
-  return usePublishNarrative([apiBaseUrl, APP_ASSET_KIND, workspaceId, app, revision], (signal) =>
-    client.assets
-      .get({
+  const { locale } = useTranslation();
+  const query = useQuery({
+    queryKey: [
+      "publish-narrative",
+      locale,
+      apiBaseUrl,
+      APP_ASSET_KIND,
+      workspaceId,
+      app,
+      revision,
+      audience ?? "proposed"
+    ],
+    queryFn: async ({ signal }) => {
+      const asset = await client.assets.get({
         params: { kind: APP_ASSET_KIND, name: app },
-        query: { workspaceId, revision: String(revision) },
+        query: {
+          workspaceId,
+          revision: String(revision),
+          ...(audience === undefined ? {} : { audience })
+        },
         signal
-      })
-      .then((asset) => asset.publishNarrative)
-  );
+      });
+      return {
+        narrative: parsePublishNarrative(asset.publishNarrative),
+        audience: appAudienceOffer(asset.appAudience),
+        readsStoredData: appReadsStoredData(asset.config)
+      };
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+    retry: false
+  });
+  const retry = () => void query.refetch().catch(() => undefined);
+  const offer = query.data?.audience;
+  // The config is the revision's whatever the audience, so the last answer's flag holds.
+  const reads = query.data === undefined ? {} : { readsStoredData: query.data.readsStoredData };
+  if (query.isError) {
+    return { narrative: { status: "failed", reason: "read", retry }, audience: offer, ...reads };
+  }
+  if (query.data === undefined || query.isPlaceholderData) {
+    return { narrative: { status: "loading" }, audience: offer, ...reads };
+  }
+  const narrative = narrativeReadOf(query.data.narrative);
+  return {
+    narrative: narrative.status === "failed" ? { ...narrative, retry } : narrative,
+    audience: offer,
+    ...reads
+  };
 }
 
 /** The key the answer for one revision is held under, below the key of every App read. */
@@ -381,8 +480,11 @@ export interface AppWrites {
     pageId: string;
     app: string;
   }): Promise<AppLinkCandidate | undefined>;
-  /** Makes the revision with this number the published one. */
-  publish(app: string, revision: number): Promise<unknown>;
+  /**
+   * Makes the revision with this number the published one, for the audience chosen in the
+   * question (SHARE-1). Without one the instance keeps the App's audience.
+   */
+  publish(app: string, revision: number, audience?: AppAudience): Promise<unknown>;
   /** Puts the draft back on the published revision. */
   discardDraft(app: string, expectedRevision: number): Promise<unknown>;
   remove(app: string, expectedRevision: number): Promise<unknown>;
@@ -432,9 +534,12 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
           })
         ).finally(changed);
       },
-      publish: (app, revision) =>
+      publish: (app, revision, audience) =>
         made(
-          client.assets.publish({ params: params(app), body: { revision, workspaceId } })
+          client.assets.publish({
+            params: params(app),
+            body: { revision, workspaceId, ...(audience === undefined ? {} : { audience }) }
+          })
         ).finally(changed),
       discardDraft: (app, expectedRevision) =>
         made(

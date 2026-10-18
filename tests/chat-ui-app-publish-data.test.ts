@@ -54,6 +54,8 @@ describe("the lines on stored data of a revision to publish", () => {
     expect(appPublishData(sources, 4, translate("en").t, "en")).toEqual({
       // The workspace counts people; the holders by a grant are a number of holders.
       audience: "Everyone in Kai Spezis (14 people) · 2 more with access",
+      // They hold it by a grant, whoever the App is published for (SHARE-1).
+      holders: "2 with access",
       stores: [
         {
           name: "kunden",

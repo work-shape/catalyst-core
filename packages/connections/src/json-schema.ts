@@ -42,9 +42,9 @@ export const JSON_SCHEMA_MAX_NODES = 20_000;
 /** How many issues one validation reports. A refused value names its first faults only. */
 export const JSON_SCHEMA_MAX_ISSUES = 20;
 
-/** Where a value does not fit, and why. It never repeats a value of what was checked. */
+/** Where a value does not fit, and why. Paths may contain data keys; do not persist them. */
 export interface JsonSchemaIssue {
-  /** The place in the checked value, as the segments of a JSON pointer. */
+  /** The place in the checked value as JSON pointer segments, including value-derived keys. */
   path: string[];
   message: string;
 }

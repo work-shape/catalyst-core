@@ -1,11 +1,25 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WORKFLOW_RUN_JOB_KINDS, connectionCallError } from "@work-shape/catalyst-core";
+import { child, parent, start as startParent } from "./support/workflow-children";
+import { readyChildWorkflows } from "./support/workflow-children-instance";
 import { clientInstanceId } from "./support/access-instance";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestJobs } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
-import { runSchema, type workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
-import { readyWorkflows, start, stepRunsOf } from "./support/workflow-runs";
+import {
+  publishedDefinitions,
+  runSchema,
+  type workflowFixture,
+  type WorkflowFixture
+} from "./support/workflow-instance";
+import {
+  notifyClients,
+  readyWorkflows,
+  start,
+  stepRunsOf,
+  writesOf,
+  NOTE
+} from "./support/workflow-runs";
 
 // Run data is bounded: a number of days after a run ended, the job `workflow_run.prune_data`
 // removes the inputs and outputs of its step runs and the run's own input and result. The run
@@ -96,6 +110,77 @@ describe("the values of a Workflow Run", () => {
 
     // A second run of the job finds nothing.
     expect(await t.workflows.pruneRunData()).toEqual({ runs: 0, stepRuns: 0, batches: 0 });
+  });
+
+  it("keeps a done run's key and label filter after pruning so a backfill sends nothing twice", async () => {
+    const time = clock();
+    const definitions = publishedDefinitions();
+    definitions.publish({ ...notifyClients(), labels: { month: { value: "2026-09" } } });
+    const t = await ready({ definitions: definitions.source, now: time.now });
+    const begin = async () =>
+      runSchema.parse(
+        (
+          await t.expectOk(t.root.id, "workflows.start", {
+            params: { workflow: "notify-clients" },
+            payload: { input: { note: NOTE }, key: "2026-09/1" }
+          })
+        ).json()
+      );
+    const run = await t.finish((await begin()).id);
+    const sent = writesOf(t).length;
+    expect(sent).toBe(3);
+    time.pass(DAYS + 1);
+    expect((await t.workflows.pruneRunData()).runs).toBe(1);
+    const again = await begin();
+    expect(again).toMatchObject({ id: run.id, status: "done" });
+    await t.worker().runDue();
+    expect(writesOf(t)).toHaveLength(sent);
+    const page = await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: run.id } });
+    expect(page.json()).toMatchObject({ runKey: "2026-09/1", labels: { month: "2026-09" } });
+    // Labels have no public list filter yet. Exercise the persisted label predicate itself.
+    await withTestSql(async (sql) => {
+      const rows = await sql<{ id: string }[]>`select id from workflow_runs
+        where client_instance_id = ${clientInstanceId} and workflow = 'notify-clients'
+        and labels @> '{"month":"2026-09"}'::jsonb`;
+      expect(rows).toEqual([{ id: run.id }]);
+    });
+  });
+
+  it("reads reached loop steps and counts after pruning without reconstructing steps that never ran", async () => {
+    const time = clock();
+    const definitions = publishedDefinitions();
+    definitions.publish(
+      notifyClients({}, [
+        {
+          id: "after_send",
+          name: "After send",
+          type: "operation",
+          operation: "connection.crm.write",
+          input: { note: { value: "after" } }
+        }
+      ])
+    );
+    const t = await ready({ definitions: definitions.source, now: time.now });
+    t.setBehaviour((operation) =>
+      operation === "echo"
+        ? Promise.resolve({ clients: [{ id: "1" }] })
+        : Promise.reject(connectionCallError("upstream_conflict"))
+    );
+    const run = await t.finish((await start(t)).id);
+    expect(run.status).toBe("failed");
+    const before = (await stepRunsOf(t, run.id)).find((step) => step.stepId === "each_client");
+    expect(before?.bodyCounts?.after_send).toEqual({ total: 1, done: 0, failed: 0, running: 0 });
+    time.pass(DAYS + 1);
+    expect((await t.workflows.pruneRunData()).runs).toBe(1);
+    expect(
+      await t.stores.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id })
+    ).toBeUndefined();
+    const after = (await stepRunsOf(t, run.id)).find((step) => step.stepId === "each_client");
+    expect(after?.loop).toEqual(before?.loop);
+    expect(after?.bodyCounts?.send).toEqual(before?.bodyCounts?.send);
+    expect(after?.bodyCounts?.after_send).toBeUndefined();
+    expect(after?.concurrency).toBeUndefined();
+    expect((await readRun(t, run.id)).dataPrunedAt).toBeDefined();
   });
 
   it("stay while the run ended less long ago than the limit", async () => {
@@ -249,5 +334,224 @@ describe("the job that removes the values of Workflow Runs", () => {
     } finally {
       await on.close();
     }
+  });
+});
+
+// Independent of the owner's assignments: assert only counts so a failure cannot print a
+// retained payload. The owner must cover every schema column before the store is exposed.
+async function expectNoValues(ids: string[]) {
+  await withTestSql(async (sql) => {
+    const [runs] = await sql<{ remaining: number; repaired: number }[]>`
+      select count(*) filter (where definition is not null or input <> '{}'::jsonb
+        or output is not null or checkpoint is not null or item_label is not null)::int as remaining,
+        count(*) filter (where data_prune_version = 1 and data_pruned_at is not null)::int as repaired
+      from workflow_runs where id in ${sql(ids)}`;
+    const [steps] = await sql<{ remaining: number }[]>`
+      select count(*)::int as remaining from workflow_step_runs
+      where run_id in ${sql(ids)} and (output is not null or staged is not null
+        or code_outcome is not null or log is not null or iteration_label is not null
+        or exists (select 1 from jsonb_object_keys(input) field where field not in ('last', 'total')))`;
+    expect(runs).toEqual({ remaining: 0, repaired: ids.length });
+    expect(steps).toEqual({ remaining: 0 });
+  });
+}
+
+async function auditCounts(ids: string[]) {
+  return withTestSql(
+    (sql) => sql<{ type: string; count: number }[]>`
+    select type, count(*)::int as count from audit_events
+    where subject in ${sql(ids)} or metadata->>'runId' in ${sql(ids)}
+    group by type order by type`
+  );
+}
+
+// Model values left by older workers, including code attempts with no ordinary output.
+async function addLegacyValues(id: string) {
+  await withTestSql(async (sql) => {
+    await sql`update workflow_runs set
+      checkpoint = '{"stepId":"each_client","offset":1,"items":["retention-canary"],"completed":{"secret":"retention-canary"}}',
+      run_key = 'retention-canary-' || id, labels = '{"customer":"retention-canary"}', item_label = 'retention-canary'
+      where id = ${id}`;
+    await sql`update workflow_step_runs set output = null, attempt = 3,
+      staged = '{"input":{"secret":"retention-canary"},"source":"retention-canary"}',
+      code_outcome = '{"output":{"secret":"retention-canary"}}',
+      log = '{"stdout":"retention-canary","stderr":"retention-canary","truncated":false}',
+      iteration_label = 'retention-canary',
+      input = coalesce(input, '{}'::jsonb) || '{"dataset":{"$dataset":"retention-canary"},"future":"retention-canary"}'::jsonb
+      where run_id = ${id}`;
+  });
+}
+
+describe("one retention owner for every Workflow Run value", () => {
+  it("requires every run and step schema column to be classified before pruning", async () => {
+    // workflowRetention asserts the exhaustive catalog against getTableColumns, including
+    // retained columns. An added value column or a dropped owner entry fails this test.
+    const t = await ready({});
+    expect(await t.workflows.pruneRunData()).toEqual({ runs: 0, stepRuns: 0, batches: 0 });
+  });
+
+  it.each(["done", "failed", "cancelled"] as const)(
+    "clears all attempts, logs and staged values on a %s run, keeping governance",
+    async (status) => {
+      const time = clock();
+      const t = await ready({ now: time.now, pruneBatch: { runs: 1, stepRuns: 2 } });
+      if (status === "failed")
+        t.setBehaviour(() => Promise.reject(connectionCallError("output_invalid")));
+      const started = await start(t);
+      if (status === "cancelled")
+        await t.expectOk(t.root.id, "workflows.cancel_run", { params: { runId: started.id } });
+      const run =
+        status === "cancelled" ? await readRun(t, started.id) : await t.finish(started.id);
+      expect(run.status).toBe(status);
+      await addLegacyValues(run.id);
+      const before = await stepRunsOf(t, run.id);
+      const storedRun = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
+      if (!storedRun) throw new Error("Missing stored run");
+      // The marker must never hide an unpruned step, even if a caller skips the step pass.
+      expect(
+        await t.stores.workflowRuns.markRunDataPruned({
+          clientInstanceId,
+          id: storedRun.id,
+          prunedAt: time.now().toISOString()
+        })
+      ).toBe(false);
+      const auditBefore = await auditCounts([run.id]);
+      expect(auditBefore.length).toBeGreaterThan(0);
+      time.pass(DAYS + 1);
+      const totals = await t.workflows.pruneRunData();
+      expect(totals).toEqual({
+        runs: 1,
+        stepRuns: before.length,
+        batches: Math.ceil(before.length / 2)
+      });
+      await expectNoValues([run.id]);
+      expect(await auditCounts([run.id])).toEqual(auditBefore);
+      expect(await readRun(t, run.id)).toMatchObject({
+        status,
+        ...(run.error ? { error: run.error } : {}),
+        stepRunCount: run.stepRunCount
+      });
+      expect(
+        (await stepRunsOf(t, run.id)).map(({ id, status, attempt }) => ({ id, status, attempt }))
+      ).toEqual(before.map(({ id, status, attempt }) => ({ id, status, attempt })));
+      expect(await t.workflows.pruneRunData()).toEqual({ runs: 0, stepRuns: 0, batches: 0 });
+    }
+  );
+
+  it("repairs already marked rows in bounded batches, resumes after interruption, and is safe twice", async () => {
+    const time = clock();
+    const t = await ready({ now: time.now, pruneBatch: { runs: 1, stepRuns: 2 } });
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) ids.push((await t.finish((await start(t)).id)).id);
+    const markedAt = time.now().toISOString();
+    for (const id of ids) await addLegacyValues(id);
+    await withTestSql(
+      (sql) => sql`update workflow_runs set data_pruned_at = ${markedAt}, data_prune_version = 0
+      where id in ${sql(ids)}`
+    );
+    // Repair does not wait for today's retention cutoff: these rows already expired.
+    const due = await t.stores.workflowRuns.listRunsWithDataEndedBefore({
+      clientInstanceId,
+      endedBefore: new Date(0).toISOString(),
+      limit: 1
+    });
+    expect(due).toHaveLength(1);
+    const id = due[0];
+    if (!id) throw new Error("Missing repair candidate");
+    expect(await t.stores.workflowRuns.pruneStepRunData({ clientInstanceId, id, limit: 2 })).toBe(
+      2
+    );
+    // Stop after that first batch; the next sweep must pick up the remaining values.
+    expect(await t.workflows.pruneRunData()).toEqual({ runs: 3, stepRuns: 19, batches: 11 });
+    await expectNoValues(ids);
+    await withTestSql(async (sql) => {
+      const [row] = await sql<
+        { changed: number }[]
+      >`select count(*)::int as changed from workflow_runs
+        where id in ${sql(ids)} and data_pruned_at <> ${markedAt}::timestamptz`;
+      expect(row).toEqual({ changed: 0 });
+    });
+    expect(await t.workflows.pruneRunData()).toEqual({ runs: 0, stepRuns: 0, batches: 0 });
+  });
+
+  it("clears every continued history's checkpoint and values while preserving its links and counts", async () => {
+    const time = clock();
+    const definitions = publishedDefinitions();
+    definitions.publish({
+      ...notifyClients({ continueAsNew: { position: "offset", after: 2 } }),
+      inputs: {
+        type: "object",
+        properties: { note: { type: "string" }, offset: { type: "integer" } },
+        required: ["note"]
+      },
+      labels: { customer: { value: "retention-canary" } }
+    });
+    const t = await ready({ definitions: definitions.source, now: time.now });
+    await start(t);
+    const worker = t.worker();
+    const list = () =>
+      t.stores.workflowRuns.listRuns({
+        clientInstanceId,
+        workflow: "notify-clients",
+        page: { limit: 100 }
+      });
+    for (let pass = 0; pass < 30; pass++) {
+      await worker.runDue();
+      if ((await list()).some((run) => run.status === "done")) break;
+    }
+    const before = await list();
+    expect(before.map((run) => run.status).sort()).toEqual(["continued", "done"]);
+    const ids = before.map((run) => run.id);
+    time.pass(DAYS + 1);
+    expect((await t.workflows.pruneRunData()).runs).toBe(2);
+    await expectNoValues(ids);
+    const governance = (runs: typeof before) =>
+      runs.map(({ id, status, continuation, stepRunCount, failedItemCount }) => ({
+        id,
+        status,
+        continuation,
+        stepRunCount,
+        failedItemCount
+      }));
+    expect(governance(await list())).toEqual(governance(before));
+  });
+
+  it("clears child payloads independently and keeps only their governance links", async () => {
+    const time = clock();
+    const definitions = publishedDefinitions();
+    definitions.publish(child());
+    definitions.publish(parent());
+    const t = await readyChildWorkflows(
+      (fixture) => {
+        open = fixture;
+      },
+      definitions,
+      { now: time.now }
+    );
+    const root = await t.finish((await startParent(t)).id);
+    expect(root.status).toBe("done");
+    const stored = await t.stores.workflowRuns.readRun({ clientInstanceId, id: root.id });
+    if (!stored) throw new Error("Missing parent");
+    const before = await t.stores.workflowRuns.listChildRuns({ clientInstanceId, id: stored.id });
+    expect(before).toHaveLength(1);
+    expect(before[0]).toMatchObject({ parentRunId: root.id, status: "done" });
+    const ids = [root.id, ...before.map((run) => run.id)];
+    for (const id of ids) await addLegacyValues(id);
+    time.pass(DAYS + 1);
+    expect((await t.workflows.pruneRunData()).runs).toBe(2);
+    await expectNoValues(ids);
+    const governance = (runs: typeof before) =>
+      runs.map(({ id, parentRunId, parentStepRunId, rootRunId, status, depth, stepRunCount }) => ({
+        id,
+        parentRunId,
+        parentStepRunId,
+        rootRunId,
+        status,
+        depth,
+        stepRunCount
+      }));
+    expect(
+      governance(await t.stores.workflowRuns.listChildRuns({ clientInstanceId, id: stored.id }))
+    ).toEqual(governance(before));
   });
 });

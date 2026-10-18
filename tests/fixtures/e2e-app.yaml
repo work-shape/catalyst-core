@@ -330,6 +330,26 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The two people of the SHARE-1 scenario in the serial Inbox spec: the admin answers
+      # "For whom?" with every choice and reads the held publish; the member may publish in the
+      # scenario's workspace only, so is offered no whole instance and their publish is held.
+      - email: e2e-share@example.test
+        displayLabel: E2E Zz Share
+        passwordEnvName: E2E_SHARE_PASSWORD
+        developmentPassword: e2e-share-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
+      - email: e2e-share-member@example.test
+        displayLabel: E2E Zz Share Member
+        passwordEnvName: E2E_SHARE_MEMBER_PASSWORD
+        developmentPassword: e2e-share-member-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
       # The two people of the follow-up queue spec, used by no other spec: one queues messages
       # in a shared conversation, the other watches them arrive. The labels sort after every
       # other for the reason given above.

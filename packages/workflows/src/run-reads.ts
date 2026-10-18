@@ -77,6 +77,8 @@ export function createRunReads(options: {
       });
       // What a loop ran with is bounded by the slots of the Workflow, and those of a process.
       const slots = Math.min(stepSlots, run.limits.concurrency?.slots ?? stepSlots);
+      // Pruned snapshots cannot reconstruct unreached body steps or concurrency. Return
+      // the reached steps and their stored counts; never fall back to a newer definition.
       return definition ? withEveryBodyStep(stepRuns, definition, slots) : stepRuns;
     },
 

@@ -175,3 +175,19 @@ describe("a value nested too deeply for a recursive schema", () => {
     expect(compiled.validate([7]).length).toBeGreaterThan(0);
   });
 });
+
+// Issue paths identify the checked value and can therefore be data. The message is safe
+// for durable errors, provided callers format the path by position rather than copying it.
+const dataKeySchemas: JsonObject[] = [
+  { type: "object", additionalProperties: { type: "integer" } },
+  { type: "object", additionalProperties: false },
+  { type: "object", propertyNames: { pattern: "^[a-z]+$" } }
+];
+it.each(dataKeySchemas)("keeps checked keys out of the schema issue message for %j", (schema) => {
+  const checked = compileJsonSchema(schema);
+  if (!checked.ok) throw new Error("Probe schema did not compile");
+  const sensitive = "Sensitive Person";
+  const issues = checked.validate({ [sensitive]: "invalid" });
+  expect(issues.length).toBeGreaterThan(0);
+  expect(JSON.stringify(issues.map((issue) => issue.message)).includes(sensitive)).toBe(false);
+});

@@ -1,10 +1,11 @@
+import { getConfigAssetState } from "./postgres-config-asset-state";
+import { appAvailabilityColumn } from "./app-availability";
 import { removeAgentProposal } from "./postgres-agent-proposal-operations";
 import { chunksOf, type WrittenAsset } from "./config-asset-batch";
 import { writeAgentDraft, consumeAgentDraft, carryAgentSkillChange } from "./agent-draft-mutations";
 import { prefixPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
 import { and, asc, desc, eq, getTableColumns, inArray, like, max, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 import {
   AppError,
   INSTANCE_ASSET_SCOPE,
@@ -34,8 +35,8 @@ import { type PostgresConnection, type PostgresTransaction } from "./postgres-da
 import {
   mapAssetScope,
   mapConfigAsset,
-  mapConfigAssetRevision,
   mapConfigAssetState,
+  mapConfigAssetRevision,
   type ConfigAssetRow
 } from "./rows";
 import {
@@ -47,6 +48,8 @@ import {
   permissionGrants
 } from "./schema";
 import {
+  publishedColumns,
+  publishedRevisions,
   getConfigAssetRevision as getPostgresConfigAssetRevision,
   getConfigAssetRevisionById as getPostgresConfigAssetRevisionById
 } from "./postgres-config-asset-revisions";
@@ -57,27 +60,6 @@ import {
   removeConfigAsset as removePostgresConfigAsset
 } from "./postgres-config-asset-pointers";
 import { sweepAssetRepoSaves } from "./jobs/asset-repo-sweep";
-
-/** The revision the published pointer of an asset names, joined beside the active one. */
-export const publishedRevisions = alias(configAssetRevisions, "published_revisions");
-export const publishedColumns = {
-  id: publishedRevisions.id,
-  revision: publishedRevisions.revision,
-  fileSetId: publishedRevisions.fileSetId,
-  config: publishedRevisions.config
-};
-
-async function getConfigAssetState(
-  db: PostgresConnection,
-  input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
-): Promise<ConfigAssetState> {
-  const [row] = await db
-    .select()
-    .from(configAssetState)
-    .where(eq(configAssetState.clientInstanceId, input.clientInstanceId))
-    .limit(1);
-  return mapConfigAssetState(row);
-}
 
 /** A revision whose config, for a skill, is left without its resources in the database. */
 const revisionWithoutSkillResources = {
@@ -123,7 +105,12 @@ async function listPublishedConfigAssets(
     return [];
   }
   const rows = await db
-    .select({ asset: configAssets, revision: configAssetRevisions, published: publishedColumns })
+    .select({
+      asset: configAssets,
+      revision: configAssetRevisions,
+      published: publishedColumns,
+      appAvailability: appAvailabilityColumn
+    })
     .from(configAssets)
     .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
     .innerJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
@@ -139,7 +126,9 @@ async function listPublishedConfigAssets(
     // Byte order through the operators of the prefix index, as a page of a list is read.
     .orderBy(sql`${configAssets.name} using ~<~`)
     .limit(input.limit);
-  return rows.map((row) => mapConfigAsset(row.asset, row.revision, row.published));
+  return rows.map((row) =>
+    mapConfigAsset(row.asset, row.revision, row.published, row.appAvailability)
+  );
 }
 
 async function getConfigAsset(
@@ -147,7 +136,12 @@ async function getConfigAsset(
   input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]
 ): Promise<ConfigAssetRecord | undefined> {
   const read = db
-    .select({ asset: configAssets, revision: configAssetRevisions, published: publishedColumns })
+    .select({
+      asset: configAssets,
+      revision: configAssetRevisions,
+      published: publishedColumns,
+      appAvailability: appAvailabilityColumn
+    })
     .from(configAssets)
     .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
     .leftJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
@@ -161,7 +155,9 @@ async function getConfigAsset(
     .limit(1);
   // Every write of an asset updates its row, so a shared lock on that row makes it wait.
   const [row] = await (input.lock === "share" ? read.for("share", { of: configAssets }) : read);
-  return row ? mapConfigAsset(row.asset, row.revision, row.published) : undefined;
+  return row
+    ? mapConfigAsset(row.asset, row.revision, row.published, row.appAvailability)
+    : undefined;
 }
 
 async function listConfigAssetRevisions(
@@ -563,7 +559,12 @@ async function selectAssetRowsByKey(
     return [];
   }
   return db
-    .select({ asset: configAssets, revision: configAssetRevisions, published: publishedColumns })
+    .select({
+      asset: configAssets,
+      revision: configAssetRevisions,
+      published: publishedColumns,
+      appAvailability: appAvailabilityColumn
+    })
     .from(configAssets)
     .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
     .leftJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
@@ -584,7 +585,9 @@ async function listConfigAssetsByKey(
   input: Parameters<ConfigAssetStore["listConfigAssetsByKey"]>[0]
 ): Promise<ConfigAssetRecord[]> {
   const rows = await selectAssetRowsByKey(db, input.clientInstanceId, input.keys);
-  return rows.map((row) => mapConfigAsset(row.asset, row.revision, row.published));
+  return rows.map((row) =>
+    mapConfigAsset(row.asset, row.revision, row.published, row.appAvailability)
+  );
 }
 
 /** The highest revision number of each asset, in one read. */

@@ -421,6 +421,8 @@ describe("named CLI operation faces", () => {
           "app",
           "publish",
           "offers",
+          "--audience",
+          "workspace",
           "--workspace",
           "workspace-1",
           "--json",

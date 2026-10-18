@@ -143,7 +143,8 @@ type OperationBindingOf<Op extends Operation, Sent> = Omit<
     resource?(input: OperationInput<Op>): OperationResource | undefined;
     beforeEvents?(
       input: OperationInput<Op>,
-      origin: OperationOrigin
+      origin: OperationOrigin,
+      actor?: AuthenticatedIdentity
     ): readonly OperationBeforeEvent[] | Promise<readonly OperationBeforeEvent[]>;
     inputWithoutSecrets?(input: OperationInput<Op>): OperationInput<Op> | undefined;
     policyTargets?(

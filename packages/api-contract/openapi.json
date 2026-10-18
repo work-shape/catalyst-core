@@ -2677,6 +2677,14 @@
             }
           },
           {
+            "name": "audience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AppAudience"
+            }
+          },
+          {
             "name": "revision",
             "in": "query",
             "required": false,
@@ -20015,6 +20023,9 @@
                       "decline"
                     ]
                   },
+                  "audience": {
+                    "$ref": "#/components/schemas/AppAudience"
+                  },
                   "reason": {
                     "type": "string",
                     "minLength": 1,
@@ -27606,6 +27617,14 @@
           "truncated"
         ]
       },
+      "AppAudience": {
+        "type": "string",
+        "enum": [
+          "self",
+          "workspace",
+          "instance"
+        ]
+      },
       "AppErrorCode": {
         "type": "string",
         "enum": [
@@ -28466,6 +28485,42 @@
           },
           "publishNarrative": {
             "$ref": "#/components/schemas/PublishNarrative"
+          },
+          "appAudience": {
+            "type": "object",
+            "properties": {
+              "selected": {
+                "$ref": "#/components/schemas/AppAudience"
+              },
+              "live": {
+                "$ref": "#/components/schemas/AppAudience"
+              },
+              "liveLabel": {
+                "type": "string"
+              },
+              "people": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "choices": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AppAudience"
+                }
+              },
+              "label": {
+                "type": "string"
+              },
+              "workspaceName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "selected",
+              "choices",
+              "label"
+            ]
           },
           "contentRevision": {
             "type": "integer",
@@ -34642,6 +34697,9 @@
       "PublishAssetRequest": {
         "type": "object",
         "properties": {
+          "audience": {
+            "$ref": "#/components/schemas/AppAudience"
+          },
           "confirmProcessing": {
             "type": "string",
             "pattern": "^[a-f0-9]{64}$"

@@ -1,3 +1,4 @@
+import type { AppAvailability, AppAudience } from "./app-audience";
 import {
   AGENT_AVAILABILITY_MODES,
   ASSET_REPO_BUNDLE_KINDS,
@@ -106,6 +107,7 @@ export interface ConfigAssetSource {
 }
 
 export interface ConfigAssetRecord {
+  appAvailability?: AppAvailability;
   id: string;
   clientInstanceId: ClientInstanceId;
   kind: ConfigAssetKind;
@@ -394,6 +396,7 @@ export interface LockedConfigAssetSet {
 
 /** What a list needs to decide whether its caller may read an asset, without its content. */
 export interface ConfigAssetKey {
+  appAvailability?: AppAvailability;
   id: string;
   kind: ConfigAssetKind;
   name: string;
@@ -599,9 +602,20 @@ export interface ConfigAssetStore {
      * and in the same transaction, a revision without a built file set this asset owns.
      */
     requireFiles?: true;
+    /** The audience changes atomically with the live pointer. Apps only. */
+    audience?: AppAudience;
+    /** With self: the selecting person's personal workspace. */
+    audienceWorkspaceId?: CollaborationWorkspaceId;
+    /** The live state whose reach was reviewed; rechecked under the asset row lock. */
+    appPublishReview?: {
+      liveRevisionId: string | null;
+      liveAudience: AppAvailability;
+      contentWidens: boolean;
+    };
   }): Promise<{
     assetId: string;
     revision: number;
+    publishWidens?: boolean;
     /** The number the pointer named before, absent on the first publish. */
     replacedRevision?: number;
     fileSetId?: FileSetId;

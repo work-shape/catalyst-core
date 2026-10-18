@@ -119,7 +119,7 @@ export const configAssetRevisions = pgTable(
   ]
 );
 
-/** One row per active agent asset. An agent without a row is hidden everywhere. */
+/** Availability of agents and Apps. A selected App chooses its owner workspace or one personal workspace; a missing agent row hides it. */
 export const configAssetAvailability = pgTable(
   "config_asset_availability",
   {

@@ -4,6 +4,7 @@ import type { PlatformInstructions } from "@work-shape/catalyst-server";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
   APP_SAVE_TOOL_NAME,
+  APP_PUBLISH_TOOL_NAME,
   PLATFORM_ASSET_TOOLS,
   PLATFORM_ASSET_TOOL_NAMES,
   PLATFORM_DISCOVERY_TOOLS,
@@ -32,7 +33,7 @@ export const PLATFORM_ORIENTATION = `You run on a platform where people build an
 What you show beside the chat is no asset: write its files and show an HTML file or an App's folder with ${WORKSPACE_OPEN_TOOL_NAME}. A quick view with data you write in needs nothing more; data that is kept, records people change or something to use again is an App: when the user says "save this as an app", call ${APP_SAVE_TOOL_NAME} on what you opened and never build it again. Saving asks the user nothing and gives them the App at once; sharing it with others is their step. Before you write an App's actions, read references/apps/build.md of '${PLATFORM_DOCS_SKILL_NAME}'. Something that should run again without the user is a Workflow.
 Not every instance has every kind: ${context.name} says which kinds and modules exist here and what the user may do.
 Finding: call ${listAssets.name} before you say something does not exist. It answers names, titles and descriptions, never contents. What the user may not see is not listed: then say you know nothing of that name. ${listFiles.name} finds previews and files of other conversations of this workspace.
-Changing: you change drafts only. A draft runs nowhere until a person publishes it. You never publish, never start a run that changes data and never grant a right. Call ${open.name} before you change an asset or when the user asks to see it; ${get.name} only reads. Check with ${validate.name} and save the draft with ${put.name}; only the asset opened last is saved. To build a new Workflow, Data Store, agent or skill, call ${put.name} with its kind and name and no expected revision, in a conversation where nothing is open yet: that first save creates it and opens it. A Workflow or Data Store starts as a draft; a Data Store is saved as files, its store.yaml and its first migration. An agent you create is offered nowhere until a person places it. An agent you cannot save: say what you would change, and the user changes it in Studio. In a conversation shared with a workspace no asset opens: ask the user to start one of their own.
+Changing: you change drafts only. A draft runs nowhere until a person publishes it. You never publish on your own, never start a run that changes data and never grant a right. When asked to share an App, ${APP_PUBLISH_TOOL_NAME} asks the person to choose who may use it and confirm; it publishes nothing before their click. Call ${open.name} before you change an asset or when the user asks to see it; ${get.name} only reads. Check with ${validate.name} and save the draft with ${put.name}; only the asset opened last is saved. To build a new Workflow, Data Store, agent or skill, call ${put.name} with its kind and name and no expected revision, in a conversation where nothing is open yet: that first save creates it and opens it. A Workflow or Data Store starts as a draft; a Data Store is saved as files, its store.yaml and its first migration. An agent you create is offered nowhere until a person places it. An agent you cannot save: say what you would change, and the user changes it in Studio. In a conversation shared with a workspace no asset opens: ask the user to start one of their own.
 For how the product works in detail, read the skill '${PLATFORM_DOCS_SKILL_NAME}'.`;
 
 /**
@@ -51,6 +52,7 @@ export const PLATFORM_TOOL_NAMES: readonly string[] = [
  */
 export const PLATFORM_MODULE_TOOL_NAMES: readonly string[] = [
   CONNECTION_DRAFT_TOOL_NAME,
+  APP_PUBLISH_TOOL_NAME,
   ...WORKFLOW_TEST_TOOL_NAMES
 ];
 

@@ -316,7 +316,9 @@ interface OperationDefinitionBase<Input, Output> {
    */
   beforeEvents?(
     input: Input,
-    origin: OperationOrigin
+    origin: OperationOrigin,
+    /** The authenticated actor, for reach that depends on who is publishing. */
+    actor?: AuthenticatedIdentity
   ): readonly OperationBeforeEvent[] | Promise<readonly OperationBeforeEvent[]>;
   /**
    * The input fields the `heldInput` of its before-events may set for a call held for an

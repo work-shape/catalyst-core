@@ -1,3 +1,4 @@
+import type { AppAvailability } from "./app-audience";
 import { AppError } from "./errors";
 import {
   createPlatformId,
@@ -141,6 +142,7 @@ export interface FileSet extends FileSetSummary {
 
 /** The asset a served file set belongs to, with what decides who is served it. */
 export interface ServedFileSetAsset {
+  appAvailability?: AppAvailability;
   id: string;
   kind: string;
   name: string;
