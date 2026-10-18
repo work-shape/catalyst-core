@@ -1,3 +1,4 @@
+import { RELEASED_KIT_VERSIONS } from "@work-shape/catalyst-app-build";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { seedShippedSkills } from "@work-shape/catalyst-server";
@@ -485,4 +486,12 @@ it("teaches the App sandbox before sending an agent to the detailed guide", () =
   );
   expect(guide?.content).toContain("SecurityError");
   expect(guide?.content).toContain("event.preventDefault()");
+  if (typeof guide?.content !== "string") throw new Error("The App guide must be text");
+  // Every new-App manifest and font URL must name the kit the instance builds by default.
+  const versions = [
+    ...guide.content.matchAll(/^kit:\s*(\S+)/gmu),
+    ...guide.content.matchAll(/\/app-runtime\/kit\/([^/]+)\/fonts/gu)
+  ];
+  expect(versions.length).toBeGreaterThan(0);
+  for (const match of versions) expect(match[1]).toBe(RELEASED_KIT_VERSIONS.at(-1));
 });

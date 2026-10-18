@@ -71,9 +71,9 @@ A React App imports only its own files, `react`, `react-dom`, `@tanstack/react-r
 
 Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load.
 
-Kit 1.5.0 supplies Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.5.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.5.0/fonts/README.md`.
+Kit 1.6.0 supplies Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.6.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.6.0/fonts/README.md`.
 
-A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.5.0/fonts/fonts.css");` and `body { font-family: Lora; }`.
+A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.6.0/fonts/fonts.css");` and `body { font-family: Lora; }`.
 
 ## The manifest
 
@@ -211,7 +211,7 @@ A dashboard for one client of an accounting data source: it reads bookings from 
 ```yaml title="app.yaml"
 id: accounting-dashboard
 name: Accounting dashboard
-kit: 1.5.0
+kit: 1.6.0
 connections:
   - accounting_source
 dataStores:
@@ -359,7 +359,7 @@ The same call from a plain HTML App, with one action on the Connection.
 ```yaml title="app.yaml"
 id: accounting-bookings
 name: Accounting bookings
-kit: 1.5.0
+kit: 1.6.0
 entry: index.html
 connections:
   - accounting_source
