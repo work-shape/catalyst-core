@@ -122,13 +122,20 @@ Result downloads use `GET /api/v1/workflow-runs/<run>/datasets/<dataset>?format=
 `column` and either `fromPath` (one `{column}` capture) or `fromField`, evidence
 `precedence` (strongest first), `review.always`, and `retainWithoutSource` (false
 by default). Publish table/key migrations and records rules together. Each migration
-checks the latest published rules inside its own transaction after its SQL and
-deferred triggers have run. The key must have a valid, immediate, non-partial unique
+preserves the records keys that held before the batch and any already-valid keys
+of rules published during it. The last migration checks every latest published rule.
+These checks run inside the migration's transaction after its SQL and deferred
+triggers have run. The key must have a valid, immediate, non-partial unique
 index over that column alone. Included columns do not count as key columns. A
 migration that breaks a rule rolls back, including its ledger entry, and fails with
 `record_key_invalid`, naming `records.<table>.key.<column>`. Correct the pending
 migration and republish. A publish without pending migrations checks the catalog
 immediately and refuses an invalid rule.
+
+Replace a records key's unique index or constraint inside **one migration**. Dropping
+it in `0002` and adding its replacement in `0003` is refused at `0002`, even if the
+final schema would be valid. Drop the old constraint and add the new unique key for
+the same column in one SQL file so uniqueness holds when that migration commits.
 
 Publish and migration share the store's row lock through the schema transaction's
 commit and level update. Rules added while DDL is queued are checked against the

@@ -172,6 +172,50 @@ describe("records keys across publishes over HTTP", () => {
     expect(state.body).toContain("records.findings.key.id");
   });
 
+  it("refuses a key swap split across 0002 and 0003 but accepts it inside one migration", async () => {
+    const world = await start(true);
+    await revision(world, 1, true);
+    expect((await settle(world, 1)).failure).toBeUndefined();
+    const replacementKey = "alter table findings add constraint findings_id_key unique (id);";
+    await revision(world, 2, true, [
+      schema,
+      dropKey,
+      { path: "migrations/0003_add_key.sql", text: replacementKey }
+    ]);
+    await rolledBack(world);
+    expect((await recordOf(world)).failure).toMatchObject({
+      code: "record_key_invalid",
+      message: expect.stringContaining(
+        "'migrations/0002_drop_key.sql' violates 'records.findings.key.id'"
+      )
+    });
+
+    // Neither pending file committed: replace them with one atomic key swap.
+    await revision(world, 3, true, [schema, { ...dropKey, text: dropKey.text + replacementKey }]);
+    const completed = await settle(world, 2);
+    expect(completed.failure).toBeUndefined();
+    expect(completed).toMatchObject({
+      targetRevision: 3,
+      migrations: [{ number: 1 }, { number: 2 }]
+    });
+    const described = await world.api.call("data_stores.describe", {
+      params: { store: "findings" }
+    });
+    expect(described.statusCode, described.body).toBe(200);
+    expect(described.json()).toMatchObject({
+      schemaLevel: 2,
+      tables: expect.arrayContaining([
+        expect.objectContaining({
+          name: "findings",
+          columns: [expect.objectContaining({ name: "id", primaryKey: false })]
+        }),
+        expect.objectContaining({ name: "should_roll_back" })
+      ])
+    });
+    // A publish without DDL checks that the replacement really is a unique key.
+    await revision(world, 4, true, [schema, { ...dropKey, text: dropKey.text + replacementKey }]);
+  });
+
   it("allows a table and its records key to be created in separate migrations of one publish", async () => {
     const world = await start(true);
     await revision(world, 1, true, [
@@ -203,19 +247,29 @@ describe("records keys across publishes over HTTP", () => {
     await rolledBack(world, false);
   });
 
-  it("checks rules published while an earlier migration is queued against its resulting schema", async () => {
+  it("protects rules published while an earlier batch is queued before a non-final key drop", async () => {
     const world = await start(true);
     await revision(world, 1, false);
     await settle(world, 1);
-    await revision(world, 2, false, [schema, dropKey]);
+    const migrations = [
+      schema,
+      dropKey,
+      { path: "migrations/0003_later.sql", text: "create table should_not_run (id text);" }
+    ];
+    await revision(world, 2, false, migrations);
     // No jobs have run: ready describes the old schema, while revision 2's DDL is queued.
     expect(await recordOf(world)).toMatchObject({ status: "ready", level: 1, targetRevision: 2 });
-    await revision(world, 3, true, [schema, dropKey]);
+    await revision(world, 3, true, migrations);
     expect(await recordOf(world)).toMatchObject({ targetRevision: 3 });
     await rolledBack(world);
+    const described = await world.api.call("data_stores.describe", {
+      params: { store: "findings" }
+    });
+    expect(described.statusCode, described.body).toBe(200);
+    expect(described.body).not.toContain("should_not_run");
   });
 
-  it("keeps the latest publish and rolls back 0003 when rules arrive during a running batch", async () => {
+  it("protects rules published during a running batch before a non-final key drop", async () => {
     const world = await start(true);
     await revision(world, 1, false);
     const record = await settle(world, 1);
@@ -236,7 +290,8 @@ describe("records keys across publishes over HTTP", () => {
           path: "migrations/0002_slow.sql",
           text: `select pg_advisory_xact_lock(${hold}); create table slow_done (id text);`
         },
-        { ...dropKey, path: "migrations/0003_drop_key.sql" }
+        { ...dropKey, path: "migrations/0003_drop_key.sql" },
+        { path: "migrations/0004_later.sql", text: "create table should_not_run (id text);" }
       ];
       await revision(world, 2, false, migrations);
       running = getTestJobs(world.api).runDue();
@@ -280,7 +335,9 @@ describe("records keys across publishes over HTTP", () => {
           migrations: [{ number: 1 }, { number: 2 }],
           failure: {
             code: "record_key_invalid",
-            message: expect.stringContaining("0003_drop_key.sql")
+            message: expect.stringContaining(
+              "'migrations/0003_drop_key.sql' violates 'records.findings.key.id'"
+            )
           }
         });
       });
@@ -299,6 +356,7 @@ describe("records keys across publishes over HTTP", () => {
         ])
       });
       expect(described.body).not.toContain("should_roll_back");
+      expect(described.body).not.toContain("should_not_run");
     } finally {
       await holder`select pg_advisory_unlock_all()`;
       holder.release();

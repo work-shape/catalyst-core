@@ -1242,6 +1242,22 @@ dataStores:
 
 `queryTimeoutMs` is the deadline for the full cursor of a Workflow query with a dataset destination; ordinary queries keep their inline row, byte and statement bounds. `load.rows`, `load.bytes` and `load.timeoutMs` bound one atomic dataset load. These are operator ceilings: raise them when the instance can handle larger work. A load beyond its row or byte ceiling answers `load_too_large`; produce smaller datasets upstream for separate calls or raise the ceiling. The store's own size limit still applies. Defaults are shown above.
 
+### Records keys in store.yaml
+
+A `records` rule in `store.yaml` names a table and a key column. That column needs
+a valid, non-partial, non-deferrable unique key by itself. Publish the rule with
+the migrations that create its table and key. Every migration preserves records
+keys that already hold; the last migration also checks all newly declared keys.
+Rules published while earlier migrations are queued or running receive the same
+protection once their keys hold.
+
+A key swap must happen inside **one migration**: drop the old unique index or
+constraint and create its replacement for the same column in that SQL file.
+Dropping the key in `0002` and adding a new one in `0003` is refused at `0002`
+with `record_key_invalid`, naming the migration and `records.<table>.key.<column>`.
+That migration rolls back and later files do not run. Correct the pending SQL
+and republish. A publish with no pending migrations checks the keys immediately.
+
 ### Build rules for data scope
 
 Keep the client (Mandant) on every per-client row and in every reader:
