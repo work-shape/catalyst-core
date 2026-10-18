@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
+  OperationExecutionStop,
   createAuthorizer,
   createOperationRegistry,
   asAgentRunId,
@@ -71,6 +72,8 @@ it.each([true, false])(
       expect(errorOf(response)).toMatchObject(stored?.error ?? {});
       expect(response.headers["operation-run-id"]).toBe(stored?.id);
       expect(runtime?.signal?.aborted).toBe(true);
+      expect(runtime?.signal?.reason).toBeInstanceOf(OperationExecutionStop);
+      expect(runtime?.signal?.reason).toMatchObject({ kind: "timeout" });
       expect(runtime?.deadline?.getTime()).toBeLessThanOrEqual(dispatchedAt + timeoutMs);
 
       const replay = await settleOnFakeClock(call());

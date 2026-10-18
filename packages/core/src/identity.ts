@@ -149,6 +149,7 @@ export interface RuntimeCallContext {
   delegatedActor?: DelegatedActor;
   scopes?: AuthScope[];
   deadline?: Date;
+  /** Executor stops carry an `OperationExecutionStop` reason, distinguishing timeout from caller abort. */
   signal?: AbortSignal;
   /**
    * Present while a claimed Agent Run job makes the call. A tool hands it to the store writes

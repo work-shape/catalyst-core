@@ -3,6 +3,7 @@ import { auditForRun, retainedOutput } from "./operation-run-recording";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
+  OperationExecutionStop,
   JobDeferredError,
   INTERRUPTED_RUN_ERROR,
   OPERATION_DENIAL_REASONS,
@@ -635,6 +636,9 @@ export async function executeAdmitted(
     if (context.overtaken) throw error;
     if (error instanceof OperationNotBegunError) throw error;
     if (error instanceof OperationCallStoppedError) {
+      const stop = new OperationExecutionStop(error.kind, error.reason);
+      let ending: OperationEnding;
+      let stoppedResult: Promise<ToolExecutionResult | undefined> | undefined;
       try {
         if (error.kind === "aborted") {
           // A lost paging lease leaves its checkpoint open for the next worker.
@@ -650,11 +654,16 @@ export async function executeAdmitted(
             run: interrupted
           };
         }
-        return await failRun(context, error.reason, !started);
+        ending = await failRun(context, error.reason, !started);
       } finally {
         // Persist the terminal outcome before an abort handler can finish its work.
-        executing?.abort(error.reason);
+        stoppedResult = executing?.abort(stop);
       }
+      if (context.overtaken) return ending;
+      // Only a tool that explicitly participates in stopping can delay this answer for its
+      // cancellation write. An uncooperative implementation is never awaited again.
+      const toolResult = await stoppedResult?.catch(() => undefined);
+      return toolResult?.status === "timed_out" ? { ...ending, toolResult } : ending;
     }
     // A deferred page keeps the one reading Operation Run open for the next leased attempt.
     if (

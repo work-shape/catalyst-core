@@ -2,12 +2,8 @@ import { asWorkspaceCommandId, type WorkspaceCommandId } from "@work-shape/catal
 import { describe, expect, it, vi } from "vitest";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
-import { deferred, waitUntil } from "./support/assertions";
-import {
-  settleOnFakeClock,
-  advanceFakeClockUntilSettled,
-  useFakeClockBesidePostgres
-} from "./support/fake-clock";
+import { deferred } from "./support/assertions";
+import { settleOnFakeClock, useFakeClockBesidePostgres } from "./support/fake-clock";
 
 type Harness = Awaited<ReturnType<typeof createWorkspaceHarness>>;
 
@@ -44,22 +40,26 @@ describe("workspace.exec results when the wait for a command gives up", () => {
     try {
       const commandId = await settleOnFakeClock(queued.promise);
       await vi.advanceTimersByTimeAsync(60_123);
-      expect(await settleOnFakeClock(first)).toMatchObject({
-        status: "failed",
-        error: { code: "handler_failed", message: expect.stringContaining("runtime.deadline") }
+      expect(await settleOnFakeClock(first)).toEqual({
+        status: "timed_out",
+        error: {
+          code: "timed_out",
+          message: "Workspace command exceeded the tool execution deadline",
+          details: { commandId, status: "cancelled" }
+        }
       });
-      // The late command result cannot replace the Operation Run's timeout. Its abort
-      // handler still cancels the queued command after the caller has received that timeout.
-      await advanceFakeClockUntilSettled(
-        waitUntil(
-          async () => (await storedCommand(harness, commandId))?.status === "cancelled",
-          "the timed-out operation's queued command was cancelled"
-        ),
-        5
-      );
       expect(await settleOnFakeClock(storedCommand(harness, commandId))).toMatchObject({
-        status: "cancelled"
+        status: "cancelled",
+        cancellationReason: "Workspace command exceeded the tool execution deadline"
       });
+      expect(
+        await settleOnFakeClock(
+          harness.execution.runs.list({
+            clientInstanceId: harness.clientInstanceId,
+            filters: { operation: "workspace.exec" }
+          })
+        )
+      ).toMatchObject([{ status: "failed", error: { code: "TIMEOUT" } }]);
     } finally {
       await settleOnFakeClock(first);
       vi.useRealTimers();

@@ -9,6 +9,7 @@ import {
   type WorkspaceExpectedOutput,
   type WorkspaceHandle,
   getRuntimeSubjectUserId,
+  registerOperationStopResult,
   isAppError
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
@@ -86,13 +87,17 @@ export async function execWorkspaceCommand(
   if (resolvedBySource && resolvedBySource.id !== queued.value.command.id) {
     return failed("handler_failed", "Workspace command result source returned the wrong command");
   }
-  const resultCommand = commandResultToToolResult(
-    queued.value.command,
-    await deps.commands.await(resolvedBySource ? { command: resolvedBySource } : queued.value, {
+  const waiting = deps.commands
+    .await(resolvedBySource ? { command: resolvedBySource } : queued.value, {
       signal: context.signal,
       deadline: context.deadline
     })
+    .then((result) => commandResultToToolResult(queued.value.command, result));
+  registerOperationStopResult(
+    context.signal,
+    waiting.then((result) => (result.status === "failed" ? result.result : undefined))
   );
+  const resultCommand = await waiting;
   if (resultCommand.status === "failed") {
     return resultCommand.result;
   }

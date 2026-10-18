@@ -1,5 +1,8 @@
 import {
   AppError,
+  type OperationExecutionStop,
+  isOperationTimeout,
+  operationStopResult,
   type OperationDefinition,
   type OperationExecutionContext,
   type OperationRunDecisionReason
@@ -61,6 +64,7 @@ export function startOperationCall(
     );
   // Check at dispatch, after admission's awaits. An expired call must never reach execute.
   if (signal?.aborted) {
+    if (isOperationTimeout(signal)) throw timeout();
     throw new AppError(
       "CONFLICT",
       german
@@ -78,7 +82,7 @@ export function startOperationCall(
         new OperationCallStoppedError(cause, cause === "aborted" ? signal?.reason : timeout())
       );
   });
-  const onAbort = () => cut("aborted");
+  const onAbort = () => cut(isOperationTimeout(signal) ? "timeout" : "aborted");
   signal?.addEventListener("abort", onAbort, { once: true });
   // A paged read spans many calls and deferred leases; its paging owner bounds the total
   // duration and each page. A worker stop must still leave its checkpoint resumable.
@@ -105,7 +109,10 @@ export function startOperationCall(
   return {
     answer: raced,
     wait: <Result>(work: Promise<Result>) => Promise.race([work, stopped]),
-    abort: (reason: unknown) => stop.abort(reason),
+    abort: (reason: OperationExecutionStop) => {
+      stop.abort(reason);
+      return operationStopResult(stop.signal);
+    },
     close: () => {
       clearTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
