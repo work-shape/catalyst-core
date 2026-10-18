@@ -110,8 +110,10 @@ export const connectionBindings = pgTable(
     accountId: text("account_id"),
     accountLabel: text("account_label"),
     grantedScopes: text("granted_scopes").array().notNull(),
-    secretHandle: text("secret_handle").notNull(),
-    secretVersion: integer("secret_version").notNull(),
+    secretHandle: text("secret_handle"),
+    secretVersion: integer("secret_version"),
+    contextHeader: text("context_header"),
+    contextValue: text("context_value"),
     accessExpiresAt: timestamp("access_expires_at", { withTimezone: true }),
     lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true }),
     connectedAt: timestamp("connected_at", { withTimezone: true }).notNull(),
@@ -135,7 +137,11 @@ export const connectionBindings = pgTable(
       "connection_bindings_state_check",
       sql`${table.state} in ('connected', 'needs_reconnect', 'revoked')`
     ),
-    check("connection_bindings_scheme_check", sql`${table.scheme} in ('oauth')`),
+    check(
+      "connection_bindings_scheme_check",
+      sql`(${table.scheme} = 'oauth' and ${table.secretHandle} is not null and ${table.secretVersion} is not null and ${table.contextHeader} is null and ${table.contextValue} is null)
+        or (${table.scheme} = 'person_context' and ${table.secretHandle} is null and ${table.secretVersion} is null and ${table.contextHeader} is not null and (${table.contextValue} is not null or ${table.state} = 'revoked') and ${table.subject} ~ '^person_context:(user|service_principal):.+$')`
+    ),
     check("connection_bindings_row_version_check", sql`${table.rowVersion} >= 1`),
     check(
       "connection_bindings_lease_check",

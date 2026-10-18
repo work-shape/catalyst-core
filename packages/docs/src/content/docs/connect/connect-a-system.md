@@ -47,12 +47,12 @@ If the server adds tools later, click **Read tools again** ("Tools neu lesen").
 
 Click **Test connection** ("Verbindung testen"). The **Status** shows **Ready** ("Bereit") when the server answered with the key you gave. Any other status says on the page what to do. The most common:
 
-| Status | What to do |
-| --- | --- |
-| **Unauthorized** ("Nicht autorisiert") | The server refused the key. Enter a new key under **Credential**, then test again. |
-| **Not configured** ("Nicht konfiguriert") | No key yet. Enter it under **Credential**, then test again. |
-| **Unavailable** ("Nicht erreichbar") | The server did not answer. Check the address under **Settings** ("Einstellungen"). |
-| **Network denied** ("Netzwerk gesperrt") | The instance may not reach this host. Ask the operator to allow it. |
+| Status                                    | What to do                                                                         |
+| ----------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Unauthorized** ("Nicht autorisiert")    | The server refused the key. Enter a new key under **Credential**, then test again. |
+| **Not configured** ("Nicht konfiguriert") | No key yet. Enter it under **Credential**, then test again.                        |
+| **Unavailable** ("Nicht erreichbar")      | The server did not answer. Check the address under **Settings** ("Einstellungen"). |
+| **Network denied** ("Netzwerk gesperrt")  | The instance may not reach this host. Ask the operator to allow it.                |
 
 [The page of a Connection](/configure/build/#the-page-of-a-connection) lists every status.
 
@@ -78,3 +78,13 @@ An agent acts with the rights of the person it works for. So the person who chat
 - One key serves everyone who may use the Connection. The outside system sees every call as that one account, and the instance records who asked for it.
 - A Connection set up by the operator in the release config opens read-only. Changes to it go through the operator.
 - A Connection cannot be deleted while an agent still has one of its tools or an App uses it. Take the tools off the agents and the Connection out of the Apps first.
+
+## Person context on a shared REST key
+
+An HTTP API Connection can set `settings.personContextHeader` to the header its outside system uses to select a person's data. This is off by default. The name must not carry credentials or collide with a fixed, authentication or transport header.
+
+On the Connection page, an administrator maps each person and each service principal to its outside value. A call sends the acting identity's mapping, including when a chat agent works for a person. A Workflow sends its own service principal's value; a child Workflow sends its own principal's value. The publisher and the person starting a run contribute no mapping. A Workflow with an unmapped principal cannot be published. Every call checks again, so removing a mapping stops subsequent calls. A missing mapping is refused as `person_context_unmapped` before any request reaches the outside system; the header is never omitted.
+
+Mappings are bound to the Connection's origin and header. Changing either requires mapping again. Only `connection.write` holders may read or change them; `connection.use` remains required for calls. Mapping values are runtime data in `connection_bindings`, with no token or secret handle, and are not exported as config. They remain until the Connection is deleted; removing one revokes it and clears its value while preserving its version. The audit event `connection.person_context_set` names the identity and Connection and whether it was mapped, never the value. Operation Runs keep no mapping value. Mapping values leave only for the configured outside origin, whose retention and region follow the customer's provider agreement. Returned data follows the existing retention and model-region rules for Connection results.
+
+This selects data at the source. It does not retract copied data or replace App data-isolation guards. Enable it for a real provider only after confirming that the shared key may send that header and that the source enforces the intended rights.

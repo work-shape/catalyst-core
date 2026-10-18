@@ -140,6 +140,7 @@ export const CONNECTION_CALL_REASONS = {
   connection_unavailable: "CONFLICT",
   connection_disabled: "CONFLICT",
   connection_not_configured: "CONFLICT",
+  person_context_unmapped: "FORBIDDEN",
   secret_unreadable: "CONFLICT",
   /** The Connection signs in at the outside system, and no sign-in is connected for it. */
   connection_not_connected: "CONFLICT",
@@ -206,6 +207,7 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   connection_unavailable: "the Connection cannot be used now",
   connection_disabled: "the Connection is disabled",
   connection_not_configured: "the Connection has no usable credential or settings",
+  person_context_unmapped: "the acting identity has no person context on this Connection",
   secret_unreadable: "the stored secret of the Connection cannot be read",
   connection_not_connected: "nobody has signed in to the outside system for the Connection",
   connection_needs_reconnect: "the outside system refused the Connection's sign-in",
@@ -298,6 +300,8 @@ const CONNECTION_CALL_SENTENCES: Record<
     `${c} cannot be used right now. Trying again later may work. If it keeps failing, an administrator can check it under ${WHERE}.`,
   connection_not_configured: (c) =>
     `${c} is not set up completely, so it cannot be used. Trying again will not help. An administrator can see what is missing under ${WHERE}.`,
+  person_context_unmapped: (c) =>
+    `${c} cannot be used because the account making this call has no person context. Trying again will not help until an administrator maps it under ${WHERE}.`,
   secret_unreadable: (c) =>
     `${c} cannot be used because its stored credential cannot be read. Trying again will not help. An administrator can see what to do under ${WHERE}.`,
   connection_not_connected: (c) =>

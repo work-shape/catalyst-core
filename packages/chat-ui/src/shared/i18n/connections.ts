@@ -193,6 +193,40 @@ export const connections = defineTranslations({
       "You can read this connection. Testing it needs the right to change connections on the instance.",
     "connections.testRefused": "You may not test this connection. You can read it.",
     "connections.toolsHeld": "Tools of connections this agent holds",
+    "connections.personContextTitle": "Person context",
+    "connections.personContextDescription":
+      "The value each call sends for the person or service principal it runs for.",
+    "connections.personContextHeader": "Header",
+    "connections.personContextExplain":
+      "Nobody is mapped automatically. Map each person and each service principal on its own. A call for someone without a mapping is refused.",
+    "connections.personContextKind": "Mapping for",
+    "connections.personContextKindUser": "Person",
+    "connections.personContextSubjectId": "ID",
+    "connections.personContextSubjectIdHint":
+      "The ID the instance gives the person or service principal.",
+    "connections.personContextShow": "Show mapping",
+    "connections.personContextChoosePerson": "Choose a person",
+    "connections.personContextChoosePrincipal": "Choose a service principal",
+    "connections.personContextNoPeople": "This instance has no people yet.",
+    "connections.personContextNoPrincipals": "This instance has no service principals yet.",
+    "connections.personContextListFailed": "The list could not be loaded.",
+    "connections.personContextPeopleHidden":
+      "Choosing a person by name needs the right to manage users. Someone with that right can map people here.",
+    "connections.personContextPrincipalsHidden":
+      "Choosing a service principal by name needs the right to manage service principals. Someone with that right can map them here.",
+    "connections.personContextEnterId": "Enter a technical ID instead",
+    "connections.personContextReadFailed": "The mapping could not be read.",
+    "connections.personContextMapped": "Mapped",
+    "connections.personContextUnmapped": "Not mapped",
+    "connections.personContextUnmappedText":
+      "Calls on this connection for them are refused until you save a value.",
+    "connections.personContextValue": "Value sent in {header}",
+    "connections.personContextValueHint": "Only people who may change this connection see it.",
+    "connections.personContextSave": "Save mapping",
+    "connections.personContextRemove": "Remove mapping",
+    "connections.personContextConflict":
+      "Someone changed this mapping in the meantime. The current state is shown; check it and save again.",
+    "connections.personContextWriteFailed": "The mapping was not saved.",
     "connections.toolsLoading": "The connections are being checked.",
     "connections.toolsOpenConnection": "Open connection",
     "connections.toolsSelected": "{selected} of {count} selected",
@@ -401,6 +435,40 @@ export const connections = defineTranslations({
       "Du kannst diese Verbindung lesen. Zum Testen brauchst du das Recht, Verbindungen der Instanz zu ändern.",
     "connections.testRefused": "Du darfst diese Verbindung nicht testen. Lesen kannst du sie.",
     "connections.toolsHeld": "Werkzeuge von Verbindungen, die dieser Agent führt",
+    "connections.personContextTitle": "Personenkontext",
+    "connections.personContextDescription":
+      "Der Wert, den jeder Aufruf für die Person oder das technische Konto mitschickt, für die er läuft.",
+    "connections.personContextHeader": "Header",
+    "connections.personContextExplain":
+      "Niemand wird automatisch zugeordnet. Ordne jede Person und jedes technische Konto einzeln zu. Ein Aufruf für jemanden ohne Zuordnung wird abgelehnt.",
+    "connections.personContextKind": "Zuordnung für",
+    "connections.personContextKindUser": "Person",
+    "connections.personContextSubjectId": "ID",
+    "connections.personContextSubjectIdHint":
+      "Die ID, die die Instanz der Person oder dem technischen Konto gibt.",
+    "connections.personContextShow": "Zuordnung anzeigen",
+    "connections.personContextChoosePerson": "Person auswählen",
+    "connections.personContextChoosePrincipal": "Technisches Konto auswählen",
+    "connections.personContextNoPeople": "Diese Instanz hat noch keine Personen.",
+    "connections.personContextNoPrincipals": "Diese Instanz hat noch keine technischen Konten.",
+    "connections.personContextListFailed": "Die Liste ließ sich nicht laden.",
+    "connections.personContextPeopleHidden":
+      "Um eine Person nach Namen auszuwählen, brauchst du das Recht, Benutzer zu verwalten. Wer es hat, kann Personen hier zuordnen.",
+    "connections.personContextPrincipalsHidden":
+      "Um ein technisches Konto nach Namen auszuwählen, brauchst du das Recht, technische Konten zu verwalten. Wer es hat, kann sie hier zuordnen.",
+    "connections.personContextEnterId": "Stattdessen eine technische ID eingeben",
+    "connections.personContextReadFailed": "Die Zuordnung ließ sich nicht lesen.",
+    "connections.personContextMapped": "Zugeordnet",
+    "connections.personContextUnmapped": "Nicht zugeordnet",
+    "connections.personContextUnmappedText":
+      "Aufrufe dieser Verbindung für sie werden abgelehnt, bis du einen Wert speicherst.",
+    "connections.personContextValue": "Wert in {header}",
+    "connections.personContextValueHint": "Nur wer diese Verbindung ändern darf, sieht ihn.",
+    "connections.personContextSave": "Zuordnung speichern",
+    "connections.personContextRemove": "Zuordnung entfernen",
+    "connections.personContextConflict":
+      "Jemand hat diese Zuordnung inzwischen geändert. Der aktuelle Stand wird angezeigt; prüfe ihn und speichere erneut.",
+    "connections.personContextWriteFailed": "Die Zuordnung wurde nicht gespeichert.",
     "connections.toolsLoading": "Die Verbindungen werden geprüft.",
     "connections.toolsOpenConnection": "Verbindung öffnen",
     "connections.toolsSelected": "{selected} von {count} ausgewählt",

@@ -176,6 +176,8 @@ export interface OpenConnectorContextInput {
    * refreshed before a token is handed out again. Only for auth scheme `oauth`.
    */
   refused?: string;
+  /** Read afresh for this attempt, never cached on the shared Connection. */
+  resolvePersonContext?: (header: string, origin: string) => Promise<string>;
 }
 
 /**
@@ -223,7 +225,18 @@ export async function openConnectorContext(
     credential = credentialOf(type, config.authScheme, settings.data, secret);
   }
 
+  const header = type.personContextHeaderName?.(settings.data);
+  const personContext =
+    header === undefined
+      ? undefined
+      : {
+          header,
+          value: await (input.resolvePersonContext?.(header, egressOriginOf(target)) ??
+            Promise.reject(connectionCallError("person_context_unmapped")))
+        };
+  if (signal.aborted) throw connectionCallError("upstream_timeout");
   return {
+    ...(personContext === undefined ? {} : { personContext }),
     connection: {
       id: connection.id,
       name: config.name,

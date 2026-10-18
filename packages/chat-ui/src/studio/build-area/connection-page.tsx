@@ -37,8 +37,13 @@ import {
   ConnectionSettingsEditor,
   DiscoveredTools
 } from "./connection-editing";
-import { waitsForDiscovery, type DiscoveryWait } from "./connection-form-model";
+import {
+  personContextHeaderOf,
+  waitsForDiscovery,
+  type DiscoveryWait
+} from "./connection-form-model";
 import { ConnectionOperations, EditableOperations } from "./connection-operations";
+import { PersonContextSection } from "./connection-person-context";
 import { RestToolsSection } from "./connection-rest-tools";
 import { ConnectionSignInSection, SignInStateBadge } from "./connection-sign-in-section";
 import { needsSignIn, withOAuthSettings } from "./connection-sign-in-model";
@@ -252,6 +257,9 @@ export function ConnectionPage({
   const runtime = config.origin !== "release";
   const title = textOf(config, "displayName") ?? asset.name;
   const enabled = config.enabled !== false;
+  const personContextHeader = personContextHeaderOf(config);
+  // The mappings are admin data: only a reader who may change the Connection reads them.
+  const personContext = source.mayTest(asset) ? source.personContext : undefined;
   const sections: {
     id: string;
     label: string;
@@ -344,6 +352,22 @@ export function ConnectionPage({
         <ConnectionSettings config={config} />
       )
     },
+    ...(personContextHeader && personContext
+      ? [
+          {
+            id: "person-context",
+            label: t("connections.personContextTitle"),
+            description: t("connections.personContextDescription"),
+            body: (
+              <PersonContextSection
+                name={asset.name}
+                header={personContextHeader}
+                mappings={personContext}
+              />
+            )
+          }
+        ]
+      : []),
     ...(read.status === "failed"
       ? []
       : [
@@ -637,7 +661,17 @@ function ConnectionSettings({ config }: { config: Record<string, unknown> }) {
         </KeyValue>
       ) : null}
       {settingsOf(config).map(([key, value]) => (
-        <KeyValue key={key} label={<code className="font-mono">{key}</code>}>
+        <KeyValue
+          key={key}
+          label={
+            // This key is too long for the label column; its human label wraps.
+            key === "personContextHeader" ? (
+              t("connectionCreate.personContextHeader")
+            ) : (
+              <code className="font-mono">{key}</code>
+            )
+          }
+        >
           <code className="font-mono text-code">
             {typeof value === "string" ? value : JSON.stringify(value)}
           </code>

@@ -1,5 +1,6 @@
 import {
   CONNECTION_BINDING_STATES,
+  GRANT_HOLDER_KINDS,
   CONNECTION_EXPOSURES,
   CONNECTION_HEALTH_STATES,
   CONNECTION_NAME_MAX_LENGTH,
@@ -201,6 +202,16 @@ const connectionSecretWriteSchema = z.object({
 
 const connectionDiscoveryRequestSchema = z.object({ status: z.literal("queued") });
 
+const personContextSubjectSchema = z.object({
+  subjectKind: z.enum(GRANT_HOLDER_KINDS).extract(["user", "service_principal"]),
+  subjectId: z.string().min(1).max(256)
+});
+export const connectionPersonContextSchema = personContextSubjectSchema.extend({
+  value: z.string().optional(),
+  rowVersion: z.number().int().positive().nullable()
+});
+export type ConnectionPersonContext = z.infer<typeof connectionPersonContextSchema>;
+
 export type ConnectionDetail = z.infer<typeof connectionDetailSchema>;
 export type ConnectionSecretState = z.infer<typeof connectionSecretStateSchema>;
 export type ConnectionDiscoveredTool = z.infer<typeof connectionDiscoveredToolSchema>;
@@ -216,6 +227,49 @@ export const connectionNameParamsSchema = z.object({ name: connectionNameSchema 
 // Connection's own (`connection.read`, `connection.write`) and is decided on the Connection
 // the call names, where a grant in a Namespace or on the asset can answer it.
 export const connectionOperations = {
+  "connections.person_context": defineRegisteredOperation({
+    id: "connections.person_context",
+    method: "GET",
+    path: "/api/v1/connections/:name/person-context",
+    summary:
+      "Read one person's or service principal's context mapping; requires Connection write access",
+    tag: "Connections",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "reading",
+    query: personContextSubjectSchema,
+    response: json(connectionPersonContextSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "read"
+  }),
+  "connections.set_person_context": defineRegisteredOperation({
+    id: "connections.set_person_context",
+    method: "PUT",
+    path: "/api/v1/connections/:name/person-context",
+    summary:
+      "Map a person or service principal to the outside context value, or clear their mapping",
+    tag: "Connections",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    // Context values are admin data, excluded from Operation Run inputs and outputs.
+    secret: true,
+    body: personContextSubjectSchema.extend({
+      value: z
+        .string()
+        .min(1)
+        .max(1024)
+        .regex(/^[\x20-\x7e]+$/u)
+        .refine((value) => value.trim().length > 0, "must contain non-space text")
+        .nullable(),
+      expectedRowVersion: z.number().int().positive().nullable()
+    }),
+    response: json(connectionPersonContextSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
   "connections.get": defineRegisteredOperation({
     id: "connections.get",
     method: "GET",

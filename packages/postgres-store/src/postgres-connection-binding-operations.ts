@@ -1,4 +1,16 @@
-import { and, asc, eq, getTableColumns, isNull, lt, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  getTableColumns,
+  isNotNull,
+  ne,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql
+} from "drizzle-orm";
 import type {
   ConnectionBindingKey,
   ConnectionBindingRecord,
@@ -20,6 +32,9 @@ const later = (ms: number) =>
   sql`clock_timestamp() + make_interval(secs => ${ms}::double precision / 1000)`;
 
 function mapBinding(row: BindingRow): ConnectionBindingRecord {
+  if (row.scheme !== "oauth" || row.secretHandle === null || row.secretVersion === null) {
+    throw new Error("Expected an OAuth binding");
+  }
   return {
     clientInstanceId: row.clientInstanceId,
     connectionAssetId: row.connectionAssetId,
@@ -85,9 +100,92 @@ const bindingOf = (key: ConnectionBindingKey) =>
 export function createPostgresConnectionBindingOperations(
   db: PostgresConnection
 ): ConnectionBindingsStore {
+  const oauthBindingOf = (key: ConnectionBindingKey) =>
+    and(bindingOf(key), eq(connectionBindings.scheme, "oauth"));
   return {
+    async revokeConnectionPersonContexts(input) {
+      await db
+        .update(connectionBindings)
+        .set({
+          contextValue: null,
+          state: "revoked",
+          stateChangedAt: statementTime,
+          rowVersion: sql`${connectionBindings.rowVersion} + 1`
+        })
+        .where(
+          and(
+            eq(connectionBindings.clientInstanceId, input.clientInstanceId),
+            eq(connectionBindings.connectionAssetId, input.connectionAssetId),
+            eq(connectionBindings.scheme, "person_context"),
+            isNotNull(connectionBindings.contextValue),
+            input.origin === undefined || input.header === undefined
+              ? undefined
+              : or(
+                  ne(connectionBindings.origin, input.origin),
+                  ne(connectionBindings.contextHeader, input.header)
+                )
+          )
+        );
+    },
+    async getConnectionPersonContext(key) {
+      const [row] = await db
+        .select()
+        .from(connectionBindings)
+        .where(and(bindingOf(key), eq(connectionBindings.scheme, "person_context")))
+        .limit(1);
+      if (!row || row.contextHeader === null) return undefined;
+      return {
+        ...key,
+        origin: row.origin,
+        header: row.contextHeader,
+        value: row.contextValue,
+        rowVersion: row.rowVersion
+      };
+    },
+    async setConnectionPersonContext(input) {
+      const { expectedRowVersion, value } = input;
+      const where = and(
+        bindingOf(input),
+        eq(connectionBindings.scheme, "person_context"),
+        eq(connectionBindings.rowVersion, expectedRowVersion ?? 0)
+      );
+      const values = {
+        scheme: "person_context" as const,
+        state: value === null ? ("revoked" as const) : ("connected" as const),
+        contextHeader: input.header,
+        contextValue: value,
+        origin: input.origin,
+        grantedScopes: [],
+        secretHandle: null,
+        secretVersion: null,
+        connectedAt: statementTime,
+        connectedBy: input.changedBy,
+        stateChangedAt: statementTime,
+        stateChangedBy: input.changedBy
+      };
+      if (expectedRowVersion === null) {
+        const rows = await db
+          .insert(connectionBindings)
+          .values({
+            clientInstanceId: input.clientInstanceId,
+            connectionAssetId: input.connectionAssetId,
+            subject: input.subject,
+            ...values,
+            rowVersion: 1
+          })
+          .onConflictDoNothing()
+          .returning({ subject: connectionBindings.subject });
+        return rows.length === 1;
+      }
+      const rows = await db
+        .update(connectionBindings)
+        .set({ ...values, rowVersion: sql`${connectionBindings.rowVersion} + 1` })
+        .where(where)
+        .returning({ subject: connectionBindings.subject });
+      return rows.length === 1;
+    },
     async getConnectionBinding(key) {
-      const [row] = await db.select().from(connectionBindings).where(bindingOf(key)).limit(1);
+      const [row] = await db.select().from(connectionBindings).where(oauthBindingOf(key)).limit(1);
       return row ? mapBinding(row) : undefined;
     },
     async connectConnectionBinding({ expectedRowVersion, ...signIn }) {
@@ -128,7 +226,7 @@ export function createPostgresConnectionBindingOperations(
       const [row] = await db
         .update(connectionBindings)
         .set({ ...values, rowVersion: sql`${connectionBindings.rowVersion} + 1` })
-        .where(and(bindingOf(signIn), eq(connectionBindings.rowVersion, expectedRowVersion)))
+        .where(and(oauthBindingOf(signIn), eq(connectionBindings.rowVersion, expectedRowVersion)))
         .returning();
       return row ? mapBinding(row) : undefined;
     },
@@ -142,7 +240,7 @@ export function createPostgresConnectionBindingOperations(
           stateChangedAt: statementTime,
           rowVersion: sql`${connectionBindings.rowVersion} + 1`
         })
-        .where(and(bindingOf(key), eq(connectionBindings.rowVersion, expectedRowVersion)))
+        .where(and(oauthBindingOf(key), eq(connectionBindings.rowVersion, expectedRowVersion)))
         .returning();
       return row ? mapBinding(row) : undefined;
     },
@@ -154,7 +252,7 @@ export function createPostgresConnectionBindingOperations(
         .set({ leaseOwner: owner, leaseExpiresAt: later(leaseMs) })
         .where(
           and(
-            bindingOf(key),
+            oauthBindingOf(key),
             or(
               isNull(connectionBindings.leaseOwner),
               lte(connectionBindings.leaseExpiresAt, statementTime),
@@ -169,7 +267,7 @@ export function createPostgresConnectionBindingOperations(
       const released = await db
         .update(connectionBindings)
         .set({ leaseOwner: null, leaseExpiresAt: null })
-        .where(and(bindingOf(key), eq(connectionBindings.leaseOwner, owner)))
+        .where(and(oauthBindingOf(key), eq(connectionBindings.leaseOwner, owner)))
         .returning({ subject: connectionBindings.subject });
       return released.length > 0;
     },
@@ -192,7 +290,7 @@ export function createPostgresConnectionBindingOperations(
         })
         .where(
           and(
-            bindingOf(key),
+            oauthBindingOf(key),
             eq(connectionBindings.state, "connected"),
             eq(connectionBindings.rowVersion, expectedRowVersion),
             eq(connectionBindings.leaseOwner, owner)
@@ -208,7 +306,7 @@ export function createPostgresConnectionBindingOperations(
         .set({ lastUsedOn: sql`current_date` })
         .where(
           and(
-            bindingOf(key),
+            oauthBindingOf(key),
             or(
               isNull(connectionBindings.lastUsedOn),
               lt(connectionBindings.lastUsedOn, sql`current_date`)

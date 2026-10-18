@@ -89,6 +89,25 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     });
   }
 
+  route.operation(apiOperations["connections.person_context"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    resource: connectionResource,
+    module: CONNECTIONS_MODULE,
+    execute: (input) => required().getPersonContext(input.name, input)
+  });
+  route.operation(apiOperations["connections.set_person_context"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    resource: connectionResource,
+    module: CONNECTIONS_MODULE,
+    changeClass: "reversible",
+    inputWithoutSecrets: (input) => ({ ...input, value: null }),
+    execute: (input, context) =>
+      required().setPersonContext(input.name, input, {
+        actor: auditActorFromIdentity(context.actor),
+        correlationId: context.correlationId
+      })
+  });
+
   route.operation(apiOperations["connections.get"], {
     authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.read, input.name),
     resource: connectionResource,
@@ -103,7 +122,7 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     // A test changes nothing outside. It writes the health, which the next test overwrites.
     changeClass: "reversible",
     module: CONNECTIONS_MODULE,
-    execute: (input, context) => required().test(input.name, context.runtime.signal)
+    execute: (input, context) => required().test(input.name, context.runtime.signal, context.actor)
   });
 
   route.operation(apiOperations["connections.set_secret"], {

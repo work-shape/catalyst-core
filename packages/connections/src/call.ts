@@ -1,3 +1,4 @@
+import { resolveConnectionPersonContext } from "./person-context";
 import { retryAfterSecondsOf } from "./retry-after";
 import {
   AppError,
@@ -645,7 +646,7 @@ function idempotencyKeyOf(
  * run to read and no recorder.
  */
 export type ConnectionCallContext = Pick<OperationExecutionContext, "runtime" | "idempotencyKey"> &
-  Partial<Pick<OperationExecutionContext, "runId" | "audit">>;
+  Partial<Pick<OperationExecutionContext, "runId" | "audit" | "actor">>;
 
 /** The auth scheme of a Connection that signs in at its outside system. */
 const AUTH_SCHEME_OAUTH = "oauth";
@@ -797,6 +798,8 @@ async function call(
         egress: deps.egress,
         credentials: deps.credentials ?? NO_CREDENTIALS,
         signal: deadline.signal,
+        resolvePersonContext: (header, origin) =>
+          resolveConnectionPersonContext(deps, connection.assetId, header, origin, context.actor),
         ...key,
         ...(refused === undefined ? {} : { refused })
       });

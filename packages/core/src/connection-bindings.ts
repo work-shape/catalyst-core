@@ -1,6 +1,7 @@
 import {
   CONNECTION_PROVIDER_REVOCATIONS,
   type ConnectionBindingState,
+  type GrantHolderKind,
   type ConnectionProviderRevocation
 } from "@work-shape/catalyst-asset-schemas";
 import type { ClientInstanceId } from "./ids";
@@ -39,7 +40,7 @@ export const CONNECTION_BINDING_REFUSALS = [
 export type ConnectionBindingRefusal = (typeof CONNECTION_BINDING_REFUSALS)[number];
 
 /** How the binding was obtained. `static` is reserved for DT-3 and CS-9a. */
-export type ConnectionBindingScheme = "oauth";
+export type ConnectionBindingScheme = "oauth" | "person_context";
 
 /**
  * The subject of the secret that holds a binding's token set: `oauth:<binding subject>`, so
@@ -62,7 +63,7 @@ export interface ConnectionBindingRecord extends ConnectionBindingKey {
   /** The person a personal binding belongs to. Absent on a shared binding. */
   userId?: string;
   state: ConnectionBindingState;
-  scheme: ConnectionBindingScheme;
+  scheme: "oauth";
   /** The outside account as the provider reports it. Never written into a log or an event. */
   accountId?: string;
   accountLabel?: string;
@@ -94,7 +95,7 @@ export interface ConnectionBindingRecord extends ConnectionBindingKey {
 /** A completed sign-in, as it becomes a connected binding. */
 export interface ConnectionBindingSignIn extends ConnectionBindingKey {
   userId?: string;
-  scheme: ConnectionBindingScheme;
+  scheme: "oauth";
   accountId?: string;
   accountLabel?: string;
   grantedScopes: readonly string[];
@@ -143,7 +144,40 @@ export type ConsumedConnectionSetupSession =
   | { outcome: "unknown" };
 
 /** The rows of bindings and setup sessions. Times are the database's. */
+export interface ConnectionPersonContextSubject {
+  subjectKind: Extract<GrantHolderKind, "user" | "service_principal">;
+  subjectId: string;
+}
+
+/** Runtime mapping, bound to the Connection origin and header; holds no token. */
+export interface ConnectionPersonContextRecord extends ConnectionBindingKey {
+  header: string;
+  origin: string;
+  value: string | null;
+  rowVersion: number;
+}
+
 export interface ConnectionBindingsStore {
+  /** Clears values made for an origin/header the Connection no longer uses. Keeps CAS versions. */
+  revokeConnectionPersonContexts(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+    origin?: string;
+    header?: string;
+  }): Promise<void>;
+  getConnectionPersonContext(
+    key: ConnectionBindingKey
+  ): Promise<ConnectionPersonContextRecord | undefined>;
+  /** Compare-and-swap; a null value revokes the mapping, preserving its version. Never creates a secret. */
+  setConnectionPersonContext(
+    input: ConnectionBindingKey & {
+      header: string;
+      origin: string;
+      value: string | null;
+      expectedRowVersion: number | null;
+      changedBy: string;
+    }
+  ): Promise<boolean>;
   getConnectionBinding(key: ConnectionBindingKey): Promise<ConnectionBindingRecord | undefined>;
   /**
    * Writes a completed sign-in as a connected binding. `expectedRowVersion` is the version the

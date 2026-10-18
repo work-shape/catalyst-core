@@ -7,7 +7,11 @@ import {
   BuildFrame,
   BuildNavigationProvider,
   ConnectionEditor,
+  connectionConfigToForm,
+  countConnectionFormChanges,
+  personContextHeaderOf,
   resolveBuildRights,
+  withConnectionForm,
   type BuildAsset,
   type BuildAssetKind,
   type BuildAssetRead,
@@ -52,6 +56,10 @@ interface PageInput {
   /** Who was given the Connection. Without it the reader is not shown rights. */
   holders?: ConnectionHoldersRead;
   locale?: LocaleCode;
+  /** Whether the page is handed the person context mappings. Yes unless it says no. */
+  personContext?: boolean;
+  /** Who the person context chooser lists. Two people unless it says otherwise. */
+  subjects?: ReturnType<NonNullable<ConnectionSource["personContext"]>["useSubjects"]>;
 }
 
 /** The page at the Connection's address, inside the frame, with fixed answers. */
@@ -70,7 +78,23 @@ function renderPage(input: PageInput = {}): string {
     principalHref: (principalId) => `/settings/instance/api-access?principal=${principalId}`,
     oauthStart: async () => {
       throw new Error("This test signs nothing in.");
-    }
+    },
+    ...(input.personContext === false
+      ? {}
+      : {
+          personContext: {
+            useSubjects: () =>
+              input.subjects ?? {
+                status: "ready",
+                subjects: [
+                  { id: "user_1", label: "Ada Lovelace", description: "ada@example.test" },
+                  { id: "user_2", label: "Grace Hopper", description: "grace@example.test" }
+                ]
+              },
+            useMapping: () => ({ status: "loading" }),
+            setMapping: async () => undefined
+          }
+        })
   };
   const context = platformContext();
   const source: BuildSource = {
@@ -874,5 +898,104 @@ describe("Connection page", () => {
     );
     expect(renderPage()).not.toContain("data-connection-outside");
     expect(renderPage()).not.toContain("data-connection-exposure");
+  });
+
+  describe("person context", () => {
+    const mapped = (settings: Record<string, unknown>, origin = "runtime") =>
+      connectionAsset("records", {
+        origin,
+        connectorType: "http_api",
+        authScheme: "none",
+        settings: { baseUrl: "https://records.example.test/api", ...settings }
+      });
+
+    it("offers a writer the mappings of a REST API that sends a person context header", () => {
+      const markup = renderPage({ asset: mapped({ personContextHeader: "X-Person-Ref" }) });
+      expect(markup).toContain('id="person-context"');
+      expect(markup).toContain("data-connection-person-context");
+      expect(markup).toContain("X-Person-Ref");
+      // The setting reads by its human label, not the raw key that overflows the label column.
+      expect(markup).toContain("Person context header");
+      expect(markup).not.toContain('<code class="font-mono">personContextHeader</code>');
+      expect(markup).toContain("A call for someone without a mapping is refused.");
+      expect(markup).toContain('data-connection-field="personContextSubject"');
+      expect(markup).toContain("Choose a person");
+      // A person is chosen by name: no technical ID field is offered beside the list.
+      expect(markup).not.toContain('data-connection-field="personContextSubjectId"');
+      expect(markup).toContain("Service principal");
+      // Nothing is read before an admin names a subject.
+      expect(markup).not.toContain("data-person-context-mapping");
+      const german = renderPage({
+        asset: mapped({ personContextHeader: "X-Person-Ref" }),
+        locale: "de"
+      });
+      expect(german).toContain("Personenkontext");
+      expect(german).toContain("Niemand wird automatisch zugeordnet.");
+    });
+
+    it("says why a reader who may not list people gets no list, and keeps the ID behind a disclosure", () => {
+      const asset = mapped({ personContextHeader: "X-Person-Ref" });
+      const hidden = renderPage({ asset, subjects: { status: "hidden" } });
+      expect(hidden).toContain('data-person-context-list="hidden"');
+      expect(hidden).toContain("Choosing a person by name needs the right to manage users.");
+      expect(hidden).toContain("Enter a technical ID instead");
+      // The disclosure starts closed: nobody is asked to copy an ID by default.
+      expect(hidden).not.toContain('data-connection-field="personContextSubjectId"');
+      expect(hidden).not.toContain('data-connection-field="personContextSubject"');
+      expect(renderPage({ asset, subjects: { status: "hidden" }, locale: "de" })).toContain(
+        "Stattdessen eine technische ID eingeben"
+      );
+    });
+
+    it("shows the list loading, failing with a retry, and empty", () => {
+      const asset = mapped({ personContextHeader: "X-Person-Ref" });
+      const loading = renderPage({ asset, subjects: { status: "loading" } });
+      expect(loading).not.toContain('data-connection-field="personContextSubject"');
+      expect(loading).toContain('id="person-context"');
+      const failed = renderPage({ asset, subjects: { status: "failed", retry: noop } });
+      expect(failed).toContain("The list could not be loaded.");
+      expect(failed).toContain("Try again");
+      const empty = renderPage({ asset, subjects: { status: "ready", subjects: [] } });
+      expect(empty).toContain('data-person-context-list="empty"');
+      expect(empty).toContain("This instance has no people yet.");
+    });
+
+    it("offers the mappings on a release Connection too, since they are instance data", () => {
+      expect(
+        renderPage({ asset: mapped({ personContextHeader: "X-Person-Ref" }, "release") })
+      ).toContain('id="person-context"');
+    });
+
+    it("has no mappings without the header, for a reader who may not change it, or without the source", () => {
+      expect(renderPage({ asset: mapped({}) })).not.toContain('id="person-context"');
+      const asset = mapped({ personContextHeader: "X-Person-Ref" });
+      expect(renderPage({ asset, mayTest: false })).not.toContain('id="person-context"');
+      expect(renderPage({ asset, personContext: false })).not.toContain('id="person-context"');
+      // An MCP Connection sends no person context, whatever its settings say.
+      const mcp = connectionAsset("records", {
+        settings: { url: "https://records.example.test/mcp", personContextHeader: "X-Person-Ref" }
+      });
+      expect(renderPage({ asset: mcp })).not.toContain('id="person-context"');
+    });
+
+    it("keeps the header through an edit of the settings and counts its change", () => {
+      const config = mapped({ personContextHeader: "X-Person-Ref", testPath: "/health" }).config;
+      expect(personContextHeaderOf(config)).toBe("X-Person-Ref");
+      const form = connectionConfigToForm(config);
+      expect(form.personContextHeader).toBe("X-Person-Ref");
+      const kept = withConnectionForm(config, { ...form, url: "https://records.example.test/v2" });
+      expect(kept.settings).toEqual({
+        baseUrl: "https://records.example.test/v2",
+        testPath: "/health",
+        personContextHeader: "X-Person-Ref"
+      });
+      const cleared = withConnectionForm(config, { ...form, personContextHeader: "  " });
+      expect(cleared.settings).toEqual({
+        baseUrl: "https://records.example.test/api",
+        testPath: "/health"
+      });
+      expect(personContextHeaderOf(cleared)).toBeUndefined();
+      expect(countConnectionFormChanges({ ...form, personContextHeader: "X-Other" }, form)).toBe(1);
+    });
   });
 });

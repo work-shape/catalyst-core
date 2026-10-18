@@ -333,6 +333,25 @@ export const EVENTS = {
       }
     }
   },
+  "connection.person_context_set": {
+    name: "connection.person_context_set",
+    subject: "connection",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["connectionName", "subjectKind", "subjectId", "mapped"],
+      properties: {
+        connectionName: { type: "string" },
+        subjectKind: { type: "string", enum: ["user", "service_principal"] },
+        subjectId: { type: "string" },
+        mapped: { type: "boolean" },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
   "connection.discovered": {
     ...LEGACY_AUDIT,
     name: "connection.discovered",

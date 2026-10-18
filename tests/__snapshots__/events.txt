@@ -49,6 +49,7 @@
 {"name":"connection.discovery_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"connection.oauth_client_registered","legacy":false,"audited":true,"phases":["after"]}
 {"name":"connection.oauth_refused","legacy":false,"audited":true,"phases":["after"]}
+{"name":"connection.person_context_set","legacy":false,"audited":true,"phases":["after"]}
 {"name":"conversation.cleanup_completed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"conversation.cleanup_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"conversation.created","legacy":true,"audited":true,"phases":["after"]}

@@ -1,3 +1,4 @@
+import { checkWorkflowPersonContexts } from "./workflow-person-context";
 import { checkPublishedChildren } from "./workflow-child-assets";
 import {
   createWorkflowLiveCheck,
@@ -228,6 +229,11 @@ export function createWorkflowAssetKind(
         options.registry?.()
       );
       await checkChildCycles(
+        result.manifest,
+        createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
+      );
+      await checkWorkflowPersonContexts(
+        { clientInstanceId, stores },
         result.manifest,
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
       );

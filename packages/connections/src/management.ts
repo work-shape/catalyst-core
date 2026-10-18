@@ -24,6 +24,11 @@ import {
   type OperationPaging,
   type SecretState
 } from "@work-shape/catalyst-core";
+import {
+  createConnectionPersonContextManagement,
+  resolveConnectionPersonContext
+} from "./person-context";
+import type { AuthenticatedIdentity } from "@work-shape/catalyst-core";
 import { connectionCallLimits } from "./call";
 import { connectionOperationStatus, type ConnectionOperationState } from "./catalog";
 import {
@@ -146,13 +151,19 @@ export interface AgentToolListing {
   toolNames: readonly string[];
 }
 
-export interface ConnectionManagement {
+export interface ConnectionManagement extends ReturnType<
+  typeof createConnectionPersonContextManagement
+> {
   /** What a right on the Connection is decided on. Nothing where no such Connection exists. */
   resource(name: string): Promise<OperationResource | undefined>;
   /** `agents` are the agents the caller may read: `usedBy` names no other. */
   get(name: string, agents: readonly AgentToolListing[]): Promise<ConnectionView>;
   /** The type's bounded test. Writes the health and answers no data of the outside system. */
-  test(name: string, signal?: AbortSignal): Promise<ConnectionTestView>;
+  test(
+    name: string,
+    signal?: AbortSignal,
+    actor?: AuthenticatedIdentity
+  ): Promise<ConnectionTestView>;
   /** The tools an agent can carry, of the Connections `readable` admits. */
   listTools(readable: (resource: AccessResource) => boolean): Promise<ConnectionToolsView>;
   /**
@@ -362,6 +373,7 @@ export function createConnectionManagement(
   }
 
   return {
+    ...createConnectionPersonContextManagement(deps),
     async resource(name) {
       const connection = await readConnection(deps, name);
       return connection ? resourceOf(connection) : undefined;
@@ -400,7 +412,7 @@ export function createConnectionManagement(
       };
     },
 
-    async test(name, outer) {
+    async test(name, outer, actor) {
       const connection = await readConnection(deps, name);
       if (!connection) throw notFound(name);
       const { type } = connection;
@@ -422,6 +434,8 @@ export function createConnectionManagement(
           },
           egress: deps.egress,
           credentials: deps.credentials ?? NO_CREDENTIALS,
+          resolvePersonContext: (header, origin) =>
+            resolveConnectionPersonContext(deps, connection.assetId, header, origin, actor),
           signal: controller.signal
         });
         const testing = type.test(context);
@@ -440,6 +454,8 @@ export function createConnectionManagement(
       } catch (error) {
         // Only the reason is read. The text of the error is the type's or the outside system's.
         reason = connectionCallReasonOf(error);
+        // A missing actor mapping says nothing about the shared Connection's health.
+        if (reason === "person_context_unmapped") throw connectionCallError(reason);
         status = testStatusOf(reason);
       } finally {
         clearTimeout(timer);

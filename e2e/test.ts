@@ -36,6 +36,9 @@ const requestAnswered = (status: number) =>
 /** Appended to the report of a resize observer loop while a turn is anchored to the top. */
 const BESIDE_TOP_ANCHORED_TURN = " (beside a turn anchored to the top)";
 
+const PERSON_CONTEXT_TEST =
+  "person context mappings are chosen by name, saved, refused when stale and removed";
+
 const allowedPageErrors: readonly AllowedPageError[] = [
   {
     name: "outside-app-font-refused",
@@ -543,6 +546,33 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     matches: requestAnswered(429),
     path: /^\/api\/v1\/conversations\/[^/]+\/thread$/u,
     tests: ["a thread answered once with 429 is tried again and shows in the dock"]
+  },
+  {
+    name: "person-context-save-that-is-stale",
+    reason:
+      "Chromium's own log line: the test saves a mapping from an outdated version, the " +
+      "instance answers 409 and the test asserts that the page refuses the stale save.",
+    matches: requestAnswered(409),
+    path: /^\/api\/v1\/connections\/e2e-person-context-[0-9a-f]{8}\/person-context$/u,
+    tests: [PERSON_CONTEXT_TEST]
+  },
+  {
+    name: "person-context-read-that-fails",
+    reason:
+      "Chromium's own log line: the test answers the read of a Connection's person context " +
+      "mappings with 500 and asserts that the page says so.",
+    matches: requestAnswered(500),
+    path: /^\/api\/v1\/connections\/e2e-person-context-[0-9a-f]{8}\/person-context$/u,
+    tests: [PERSON_CONTEXT_TEST]
+  },
+  {
+    name: "person-context-user-list-that-fails-or-is-refused",
+    reason:
+      "Chromium's own log line: the test replaces the list of the instance's users with a 500 " +
+      "failure and a 403 refusal and asserts the page's failure and no-permission states.",
+    matches: new RegExp(`${requestAnswered(500).source}|${requestAnswered(403).source}`, "u"),
+    path: /^\/api\/v1\/instance\/users$/u,
+    tests: [PERSON_CONTEXT_TEST]
   },
   {
     // C-95: resize observer loop of the top-anchored thread.

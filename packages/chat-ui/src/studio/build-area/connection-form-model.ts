@@ -34,6 +34,11 @@ export interface ConnectionFormState {
   headers: ConnectionHeaderRow[];
   /** For `http_api`: the path the test asks, or empty for the base address. */
   testPath: string;
+  /**
+   * For `http_api`: the header that carries the value mapped to the person or service principal
+   * a call runs for, or empty for none. A call for someone without a mapping is refused.
+   */
+  personContextHeader: string;
 }
 
 /** One operation a write accepts, as the definition holds it. */
@@ -73,7 +78,8 @@ export function connectionConfigToForm(config: Record<string, unknown>): Connect
       name,
       value: textOf(value)
     })),
-    testPath: textOf(settings.testPath)
+    testPath: textOf(settings.testPath),
+    personContextHeader: textOf(settings.personContextHeader)
   };
 }
 
@@ -87,7 +93,8 @@ export function emptyConnectionForm(
     authScheme: "bearer",
     headerName: "",
     headers: [],
-    testPath: ""
+    testPath: "",
+    personContextHeader: ""
   };
 }
 
@@ -135,12 +142,14 @@ export function withConnectionForm(
   }
   const headers = headersOf(form.headers);
   const testPath = form.testPath.trim();
+  const personContextHeader = form.personContextHeader.trim();
   return {
     ...config,
     settings: {
       baseUrl: form.url.trim(),
       ...(Object.keys(headers).length === 0 ? {} : { headers }),
       ...(testPath === "" ? {} : { testPath }),
+      ...(personContextHeader === "" ? {} : { personContextHeader }),
       ...credentialHeader
     },
     authScheme: form.authScheme
@@ -279,6 +288,16 @@ export function withoutOperation(
   };
 }
 
+/**
+ * The header a REST API Connection sends the mapped person context in, or nothing where it sends
+ * none. Only then does its page offer the mappings.
+ */
+export function personContextHeaderOf(config: Record<string, unknown>): string | undefined {
+  if (config.connectorType !== "http_api") return undefined;
+  const header = textOf(recordOf(config.settings).personContextHeader).trim();
+  return header === "" ? undefined : header;
+}
+
 /** How many fields of the form differ from what was loaded. */
 export function countConnectionFormChanges(
   form: ConnectionFormState,
@@ -292,7 +311,8 @@ export function countConnectionFormChanges(
     Number(
       JSON.stringify(headersOf(form.headers)) !== JSON.stringify(headersOf(baseline.headers))
     ) +
-    Number(form.testPath.trim() !== baseline.testPath.trim())
+    Number(form.testPath.trim() !== baseline.testPath.trim()) +
+    Number(form.personContextHeader.trim() !== baseline.personContextHeader.trim())
   );
 }
 

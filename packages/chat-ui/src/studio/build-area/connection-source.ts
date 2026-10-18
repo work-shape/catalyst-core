@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ConnectionDetail,
   ConnectionOAuthStart,
+  ConnectionPersonContext,
   ConnectionTestResult
 } from "@work-shape/catalyst-api-client";
 import { loadFailure } from "../../admin/access/access-model";
@@ -55,6 +56,44 @@ export type ConnectionTestRun =
   | { status: "held" }
   | { status: "failed"; message: string | undefined };
 
+/** Whom a person context mapping is for: a person or a service principal, by id. */
+export interface PersonContextSubject {
+  kind: ConnectionPersonContext["subjectKind"];
+  id: string;
+}
+
+/** One person context mapping, as the page asked for it. */
+export type PersonContextRead =
+  | { status: "loading" }
+  /** The read failed. The sentence is the instance's own, where it sent one. */
+  | { status: "failed"; message: string | undefined; retry(): void }
+  /** Without `value` nobody mapped the subject: calls for them are refused. */
+  | { status: "ready"; value: string | undefined; rowVersion: number | null };
+
+/** A person or service principal the page offers for a mapping, by name. */
+interface PersonContextSubjectOption {
+  id: string;
+  label: string;
+  /** One line under the name: a person's email, a principal's description. */
+  description?: string;
+}
+
+/** The people or service principals a mapping can be chosen for. */
+type PersonContextSubjectsRead =
+  /** The reader may not list them: the page says so and offers the id behind a disclosure. */
+  | { status: "hidden" }
+  | { status: "loading" }
+  | { status: "failed"; retry(): void }
+  | { status: "ready"; subjects: PersonContextSubjectOption[] };
+
+/** The instance refused a mapping write: somebody changed the mapping since the page read it. */
+export class PersonContextConflictError extends Error {
+  constructor() {
+    super("The person context mapping changed since it was read");
+    this.name = "PersonContextConflictError";
+  }
+}
+
 /** How often the page asks again for the tools of a discovery it waits for. */
 const DISCOVERY_POLL_MS = 2_000;
 
@@ -103,6 +142,27 @@ export interface ConnectionSource {
   useHolders(assetId: string): ConnectionHoldersRead;
   /** Where a service principal is read. */
   principalHref(principalId: string): string;
+  /**
+   * The person context mappings of a Connection that sends one, for a reader who may change the
+   * Connection. Absent where the page offers no mappings.
+   */
+  personContext?: {
+    /** A hook: every person or every service principal the reader may list, by name. */
+    useSubjects(kind: PersonContextSubject["kind"]): PersonContextSubjectsRead;
+    /** A hook: the mapping of one subject, read when the subject is chosen and after each write. */
+    useMapping(name: string, subject: PersonContextSubject): PersonContextRead;
+    /**
+     * Maps the subject to `value`, or removes the mapping with `null`, against the row version
+     * the page read. Throws `PersonContextConflictError` when the mapping changed meanwhile. The
+     * page reads the mapping again afterwards.
+     */
+    setMapping(
+      name: string,
+      subject: PersonContextSubject,
+      value: string | null,
+      expectedRowVersion: number | null
+    ): Promise<void>;
+  };
 }
 
 /**
@@ -119,6 +179,14 @@ export function useConnectionSource(): ConnectionSource {
   const context = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
   const seesPrincipals = seesHolders && canManageServicePrincipals(context.data);
   const detailKey = (name: string) => ["connection-detail", apiBaseUrl, authScope, name];
+  const personContextKey = (name: string, subject: PersonContextSubject) => [
+    "connection-person-context",
+    apiBaseUrl,
+    authScope,
+    name,
+    subject.kind,
+    subject.id
+  ];
   return {
     // The right is held on every Connection of the instance or in the Connection's Namespace.
     mayTest: ({ namespace }) =>
@@ -219,6 +287,79 @@ export function useConnectionSource(): ConnectionSource {
         return outcome.output;
       } finally {
         await queryClient.invalidateQueries({ queryKey: detailKey(name) });
+      }
+    },
+    personContext: {
+      useSubjects(kind) {
+        // Both lists read every page: an instance has as many people as it has.
+        const users = useWorkspaceUsersQuery({ ...api, enabled: seesHolders && kind === "user" });
+        const principals = useServicePrincipalsQuery({
+          ...api,
+          enabled: seesPrincipals && kind === "service_principal"
+        });
+        const query = kind === "user" ? users : principals;
+        const failure = loadFailure(query.error);
+        if (!(kind === "user" ? seesHolders : seesPrincipals) || failure === "forbidden") {
+          return { status: "hidden" };
+        }
+        if (kind === "user" && users.data) {
+          return {
+            status: "ready",
+            subjects: users.data.map((user) => ({
+              id: user.id,
+              label: user.displayLabel,
+              description: user.email
+            }))
+          };
+        }
+        if (kind === "service_principal" && principals.data) {
+          return {
+            status: "ready",
+            subjects: principals.data.map(({ principal }) => ({
+              id: principal.id,
+              label: principal.displayLabel,
+              ...(principal.description ? { description: principal.description } : {})
+            }))
+          };
+        }
+        return failure === "failed" && !query.isFetching
+          ? { status: "failed", retry: () => void query.refetch().catch(() => undefined) }
+          : { status: "loading" };
+      },
+      useMapping(name, subject) {
+        const query = useQuery({
+          queryKey: personContextKey(name, subject),
+          queryFn: ({ signal }) =>
+            calls.person_context({
+              params: { name },
+              query: { subjectKind: subject.kind, subjectId: subject.id },
+              signal
+            }),
+          retry: false
+        });
+        if (query.data) {
+          return { status: "ready", value: query.data.value, rowVersion: query.data.rowVersion };
+        }
+        if (query.error && !query.isFetching) {
+          return {
+            status: "failed",
+            message: instanceSentence(query.error),
+            retry: () => void query.refetch().catch(() => undefined)
+          };
+        }
+        return { status: "loading" };
+      },
+      async setMapping(name, subject, value, expectedRowVersion) {
+        try {
+          await calls.set_person_context({
+            params: { name },
+            body: { subjectKind: subject.kind, subjectId: subject.id, value, expectedRowVersion }
+          });
+        } catch (error) {
+          throw apiErrorCode(error) === "CONFLICT" ? new PersonContextConflictError() : error;
+        } finally {
+          await queryClient.invalidateQueries({ queryKey: personContextKey(name, subject) });
+        }
       }
     },
     ...(startDockedChat ? { draftInChat: startDockedChat } : {}),

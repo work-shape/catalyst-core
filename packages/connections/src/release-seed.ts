@@ -329,6 +329,10 @@ export async function seedReleaseConnections(
         // The entry is gone from release config: the Connection goes, with its sign-in, secret
         // and state.
         await endSignIn(stores, asset, "deleted");
+        await stores.connections.revokeConnectionPersonContexts({
+          clientInstanceId,
+          connectionAssetId: asset.id
+        });
         await stores.connections.deleteSecrets({ clientInstanceId, connectionAssetId: asset.id });
         await stores.connections.deleteConnectionState({
           clientInstanceId,
@@ -366,6 +370,13 @@ export async function seedReleaseConnections(
         const seeded = storedConnection(asset);
         const type = seeded && connectorTypes.get(seeded.connectorType);
         const origin = seeded && type ? connectionOriginOf(type, seeded) : undefined;
+        const header = seeded && type ? type.personContextHeaderName?.(seeded.settings) : undefined;
+        await stores.connections.revokeConnectionPersonContexts({
+          clientInstanceId,
+          connectionAssetId: asset.id,
+          ...(origin === undefined ? {} : { origin }),
+          ...(header === undefined ? {} : { header })
+        });
         // A sign-in made for another address, or kept by a Connection that no longer signs in,
         // ends: release config that moves the Connection away and back restores none.
         const signIn = await stores.connections.getConnectionBinding({

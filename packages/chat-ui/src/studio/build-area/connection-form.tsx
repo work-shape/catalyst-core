@@ -57,6 +57,10 @@ export function ConnectionServerFields({
             value={form.testPath}
             onChange={(testPath) => onChange({ ...form, testPath })}
           />
+          <ConnectionPersonContextHeaderField
+            value={form.personContextHeader}
+            onChange={(personContextHeader) => onChange({ ...form, personContextHeader })}
+          />
         </>
       ) : null}
     </>
@@ -158,6 +162,36 @@ export function ConnectionTestPathField({
         value={value}
         disabled={disabled}
         data-connection-field="testPath"
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </Field>
+  );
+}
+
+/** The header a REST API sends the value mapped to the person or service principal in. */
+export function ConnectionPersonContextHeaderField({
+  value,
+  onChange,
+  disabled = false
+}: {
+  value: string;
+  onChange(value: string): void;
+  disabled?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Field
+      label={t("connectionCreate.personContextHeader")}
+      hint={t("connectionCreate.personContextHeaderHint")}
+      optional
+    >
+      <Input
+        className="font-mono"
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        disabled={disabled}
+        data-connection-field="personContextHeader"
         onChange={(event) => onChange(event.target.value)}
       />
     </Field>

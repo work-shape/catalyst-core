@@ -574,6 +574,7 @@ export interface ConnectorContext {
    * for it. A type that sets `carriesIdempotencyKey` sends it with the call, to the origin the
    * Connection was configured for and to no other.
    */
+  personContext?: { header: string; value: string };
   idempotencyKey?: { header: string; value: string };
   /** Ends when the call is cancelled or its deadline passes. */
   signal: AbortSignal;
@@ -611,6 +612,8 @@ export interface ConnectorSignIn {
 }
 
 interface ConnectorTypeBase {
+  /** The configured person-context header. Its value is derived from the acting identity. */
+  personContextHeaderName?(settings: JsonObject): string | undefined;
   /** The id a Connection names as its `connectorType`. */
   type: string;
   description: string;

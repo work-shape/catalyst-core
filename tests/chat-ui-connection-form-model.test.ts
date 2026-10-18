@@ -57,7 +57,8 @@ describe("the form of a Connection", () => {
       authScheme: "header",
       headerName: "X-Key",
       headers: [],
-      testPath: ""
+      testPath: "",
+      personContextHeader: ""
     });
     const config = newConnectionConfig({ name: "crm", title: "CRM", copyOf: copied }, form);
     expect(config).toMatchObject({ description: "The CRM.", operations: copied.operations });
@@ -98,7 +99,8 @@ describe("the form of a Connection", () => {
       authScheme: "header",
       headerName: "X-Api-Key",
       headers: [{ name: "x-client-instance-id", value: "7c1e" }],
-      testPath: "/health"
+      testPath: "/health",
+      personContextHeader: ""
     });
     // Without a key nothing is sent, and the settings name no header and no test path.
     expect(

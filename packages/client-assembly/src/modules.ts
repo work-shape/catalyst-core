@@ -111,6 +111,8 @@ const connectionsModule = defineModule({
     "connections.oauth_start",
     "connections.oauth_complete",
     "connections.disconnect",
+    "connections.person_context",
+    "connections.set_person_context",
     "connections.list_tools"
   ],
   kinds: ["connection"],

@@ -357,6 +357,13 @@ jobs:
             test-results/browser-durations.json
             .tmp/e2e/shard-${{ matrix.shard }}.txt
           retention-days: 14
+      - name: Keep Connection person-context evidence
+        if: ${{ !cancelled() && hashFiles('test-results/**/person-context-*.png') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: connection-person-context-${{ matrix.shard }}
+          path: test-results/**/person-context-*.png
+          retention-days: 7
       - name: Keep App font specimens
         if: ${{ !cancelled() && hashFiles('test-results/**/font-specimens-*-light.png') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

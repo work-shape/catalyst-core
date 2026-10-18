@@ -147,7 +147,8 @@ const settingsSchema = z
       .optional(),
     testPath: testPathSchema.optional(),
     /** The header the key goes into under the auth scheme `header`. */
-    headerName: headerNameSchema.optional()
+    headerName: headerNameSchema.optional(),
+    personContextHeader: headerNameSchema.optional()
   })
   .strict()
   .superRefine((settings, context) => {
@@ -170,6 +171,20 @@ const settingsSchema = z
     }
     if (fixed.length !== new Set(fixed.map((name) => name.toLowerCase())).size) {
       context.addIssue({ code: "custom", path: ["headers"], message: "A header is named once" });
+    }
+    const personHeader = settings.personContextHeader?.toLowerCase();
+    if (
+      personHeader !== undefined &&
+      (isCredentialHeaderName(personHeader) ||
+        TRANSPORT_HEADER_NAMES.has(personHeader) ||
+        fixed.some((name) => name.toLowerCase() === personHeader) ||
+        settings.headerName?.toLowerCase() === personHeader)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["personContextHeader"],
+        message: "must not be a credential, transport or fixed header"
+      });
     }
     const credentialHeader = settings.headerName?.toLowerCase();
     if (credentialHeader !== undefined) {
@@ -252,6 +267,22 @@ async function get(
       throw connectionCallError("connection_not_configured");
     }
     headers[lower] = value;
+  }
+  if (settings.personContextHeader !== undefined) {
+    const person = context.personContext;
+    const header = settings.personContextHeader.toLowerCase();
+    // Defence at dispatch too: no caller can make a scoped request without its mapping.
+    if (
+      person === undefined ||
+      person.header !== header ||
+      person.value.trim().length === 0 ||
+      person.value.length > FIXED_HEADER_VALUE_MAX_CHARS ||
+      !HEADER_VALUE_PATTERN.test(person.value)
+    ) {
+      throw connectionCallError("person_context_unmapped");
+    }
+    if (header in headers) throw connectionCallError("connection_not_configured");
+    headers[header] = person.value;
   }
   headers.accept = "application/json";
   headers.host = hostHeaderOf(grant);
@@ -418,6 +449,7 @@ export function createHttpApiConnectorType(): ConnectorTypeDefinition {
     secretFields: ["key"],
     target: (settings) => egressTargetOfUrl(settingsOf(settings).baseUrl),
     credentialHeaderName: (settings) => settingsOf(settings).headerName,
+    personContextHeaderName: (settings) => settingsOf(settings).personContextHeader?.toLowerCase(),
     limits: {
       callTimeoutMs: HTTP_API_CALL_TIMEOUT_MS,
       resultMaxBytes: HTTP_API_RESULT_MAX_BYTES,

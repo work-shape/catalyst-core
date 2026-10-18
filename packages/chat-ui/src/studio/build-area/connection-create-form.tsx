@@ -12,7 +12,11 @@ import { useTranslation } from "../../shared/i18n";
 import { assetIdFromTitle } from "./build-model";
 import type { BuildNamespace } from "../../shared/build-rights";
 import type { ConnectStep, ConnectStepState } from "./connection-connect";
-import { ConnectionHeaderRows, ConnectionTestPathField } from "./connection-form";
+import {
+  ConnectionHeaderRows,
+  ConnectionPersonContextHeaderField,
+  ConnectionTestPathField
+} from "./connection-form";
 import type { ConnectionFormState } from "./connection-form-model";
 
 // The second step of the New connection dialog: the name, the address and the key, with the
@@ -156,6 +160,11 @@ export function ConnectionCreateForm({
                   onChange={(testPath) => form({ testPath })}
                 />
                 {errors.testPath ? <FormNotice tone="error">{errors.testPath}</FormNotice> : null}
+                <ConnectionPersonContextHeaderField
+                  value={fields.form.personContextHeader}
+                  disabled={busy}
+                  onChange={(personContextHeader) => form({ personContextHeader })}
+                />
               </>
             ) : null}
           </>

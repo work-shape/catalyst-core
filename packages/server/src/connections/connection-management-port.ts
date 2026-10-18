@@ -1,5 +1,6 @@
 import type {
   ConnectionDetail,
+  ConnectionPersonContext,
   ConnectionOAuthStart,
   ConnectionSecretState,
   ConnectionTestResult,
@@ -7,6 +8,8 @@ import type {
 } from "@work-shape/catalyst-api-contract";
 import type {
   AccessResource,
+  AuthenticatedIdentity,
+  ConnectionPersonContextSubject,
   AuditActor,
   AuditRecorder,
   ConnectionProviderRevocation,
@@ -64,6 +67,18 @@ interface ConnectionDiscoveryAttempt {
  * `connections` is on. It answers no secret, no handle and no data of an outside system.
  */
 export interface ConnectionManagementPort {
+  getPersonContext(
+    name: string,
+    subject: ConnectionPersonContextSubject
+  ): Promise<ConnectionPersonContext>;
+  setPersonContext(
+    name: string,
+    input: ConnectionPersonContextSubject & {
+      value: string | null;
+      expectedRowVersion: number | null;
+    },
+    audit: { actor: AuditActor; correlationId: string }
+  ): Promise<ConnectionPersonContext>;
   /** What a right on the Connection is decided on. Nothing where no such Connection exists. */
   resource(name: string): Promise<OperationResource | undefined>;
   /** `agents` are the agents the caller may read: the answer names no other. */
@@ -72,7 +87,11 @@ export interface ConnectionManagementPort {
     agents: readonly { name: string; title: string; toolNames: readonly string[] }[]
   ): Promise<ConnectionDetail>;
   /** The type's bounded test, through the one connector context. Writes the health. */
-  test(name: string, signal?: AbortSignal): Promise<ConnectionTestResult>;
+  test(
+    name: string,
+    signal?: AbortSignal,
+    actor?: AuthenticatedIdentity
+  ): Promise<ConnectionTestResult>;
   /** The tools an agent can carry, of the Connections `readable` admits. */
   listTools(readable: (resource: AccessResource) => boolean): Promise<ConnectionTools>;
   /**

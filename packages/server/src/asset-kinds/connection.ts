@@ -333,6 +333,20 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     async withinWrite(input) {
       const { clientInstanceId, assetId, previous, config, stores } = input;
       if (assetId === undefined || previous === undefined) return undefined;
+      const next = connectionConfigSchema.safeParse(config);
+      const nextType = next.success
+        ? options.connectorTypes.get(next.data.connectorType)
+        : undefined;
+      const target = next.success ? targetOf(options, next.data) : undefined;
+      const header = next.success
+        ? nextType?.personContextHeaderName?.(next.data.settings)
+        : undefined;
+      await stores.connections.revokeConnectionPersonContexts({
+        clientInstanceId,
+        connectionAssetId: assetId,
+        ...(target === undefined ? {} : { origin: egressOriginOf(target) }),
+        ...(header === undefined ? {} : { header })
+      });
       const reason = signInEndOf(options, previous, config);
       if (reason === undefined) return undefined;
       const ending = options.signInEnding;

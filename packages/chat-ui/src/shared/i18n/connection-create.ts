@@ -39,6 +39,9 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.headerRemove": "Remove header {name}",
     "connectionCreate.testPath": "Test path",
     "connectionCreate.testPathHint": "Without it the instance asks the base address.",
+    "connectionCreate.personContextHeader": "Person context header",
+    "connectionCreate.personContextHeaderHint":
+      "Calls send the value mapped to the person or service principal in this header. Calls for anyone without a mapping are refused.",
     "connectionCreate.cancel": "Cancel",
     "connectionCreate.connect": "Connect",
     "connectionCreate.connecting": "Connecting",
@@ -159,6 +162,9 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.headerRemove": "Header {name} entfernen",
     "connectionCreate.testPath": "Testpfad",
     "connectionCreate.testPathHint": "Ohne ihn fragt die Instanz die Basisadresse an.",
+    "connectionCreate.personContextHeader": "Header für den Personenkontext",
+    "connectionCreate.personContextHeaderHint":
+      "Aufrufe schicken in diesem Header den Wert mit, der der Person oder dem technischen Konto zugeordnet ist. Aufrufe für jemanden ohne Zuordnung werden abgelehnt.",
     "connectionCreate.cancel": "Abbrechen",
     "connectionCreate.connect": "Verbinden",
     "connectionCreate.connecting": "Verbinde",
