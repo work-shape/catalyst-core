@@ -6,16 +6,16 @@ import { knowledgeBaseDefinitionSchema } from "../definition";
 import { sourceBoundaryKey, withinSource } from "../source-boundary";
 
 /** A boundary publish commits in the platform database, while tombstones are batched in
- * the owned database. Until that job catches up, gate the bounded search result against
+ * the owned database. Until that job catches up, gate search and record proposals against
  * the current published definition. A failed publish never changes visibility. */
-export async function visibleSourceHits(
+export async function visibleSourceDocumentIds(
   runtime: DataStoreRuntime,
   knowledgeBaseId: string,
   name: string,
-  answer: KnowledgeSearchAnswer,
+  documentIds: readonly string[],
   read: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>
-): Promise<KnowledgeSearchAnswer> {
-  if (!answer.hits.length) return answer;
+): Promise<Set<string>> {
+  if (!documentIds.length) return new Set();
   const rows = await read(async (sql) =>
     z
       .array(
@@ -31,20 +31,18 @@ export async function visibleSourceHits(
       .parse(
         await sql.run(
           "select d.id,i.source_id,i.parents,i.name,i.path,seen.definition_key from catalyst_kb.documents d left join catalyst_kb.source_items i on i.id=d.source_item_id left join catalyst_kb.sync_runs seen on seen.id=i.seen_run_id where d.id=any($1::text[]) and d.withdrawn_at is null",
-          [answer.hits.map((hit) => hit.documentId)]
+          [[...documentIds]]
         )
       )
   );
   const liveIds = new Set(rows.map((row) => row.id));
-  const liveAnswer = { ...answer, hits: answer.hits.filter((hit) => liveIds.has(hit.documentId)) };
-  if (!rows.some((row) => row.source_id !== null)) return liveAnswer;
+  if (!rows.some((row) => row.source_id !== null)) return liveIds;
   const asset = await runtime.stores.configAssets.getConfigAsset({
     clientInstanceId: runtime.clientInstanceId,
     kind: "knowledge_base",
     name
   });
-  if (!asset || asset.id !== knowledgeBaseId || asset.status !== "active")
-    return { ...answer, hits: [] };
+  if (!asset || asset.id !== knowledgeBaseId || asset.status !== "active") return new Set();
   const definition = knowledgeBaseDefinitionSchema.parse(asset.publishedConfig);
   const hidden = new Set(
     rows
@@ -66,5 +64,23 @@ export async function visibleSourceHits(
       })
       .map((row) => row.id)
   );
-  return { ...answer, hits: liveAnswer.hits.filter((hit) => !hidden.has(hit.documentId)) };
+  return new Set([...liveIds].filter((id) => !hidden.has(id)));
+}
+
+/** Search and proposal admission use the same decision, including pending source cleanup. */
+export async function visibleSourceHits(
+  runtime: DataStoreRuntime,
+  knowledgeBaseId: string,
+  name: string,
+  answer: KnowledgeSearchAnswer,
+  read: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>
+): Promise<KnowledgeSearchAnswer> {
+  const visible = await visibleSourceDocumentIds(
+    runtime,
+    knowledgeBaseId,
+    name,
+    answer.hits.map((hit) => hit.documentId),
+    read
+  );
+  return { ...answer, hits: answer.hits.filter((hit) => visible.has(hit.documentId)) };
 }

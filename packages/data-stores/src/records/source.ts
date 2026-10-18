@@ -1,3 +1,4 @@
+import { visibleSourceDocumentIds } from "../knowledge/builtin/source-visibility";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import { z } from "zod";
 import {
@@ -9,6 +10,9 @@ import {
 import type { DataStoreRuntime } from "../runtime";
 import { knowledgeBaseDefinitionSchema } from "../knowledge/definition";
 import { assetResource } from "../store-audience";
+
+// A source-visibility read must finish before the proposal deadline, or the caller retries.
+const RECORD_SOURCE_VISIBILITY_TIMEOUT_MS = 15_000;
 
 const sourceRow = z.object({
   content_sha256: z.string(),
@@ -40,6 +44,24 @@ export async function proposalSource(
   )
     return undefined;
   context.access.require(KNOWLEDGE_BASE_ACTIONS.use, assetResource(asset));
+  const visible = await visibleSourceDocumentIds(
+    runtime,
+    asset.id,
+    asset.name,
+    [item.documentId],
+    (work) =>
+      transaction?.database === record.location.database
+        ? work(transaction.sql)
+        : runtime.server.executor.change(
+            {
+              ...runtime.server.asPlatform(record.location.database),
+              timeoutMs: RECORD_SOURCE_VISIBILITY_TIMEOUT_MS,
+              ...(context.runtime.signal ? { signal: context.runtime.signal } : {})
+            },
+            work
+          )
+  );
+  if (!visible.has(item.documentId)) return undefined;
   const query = {
     ...runtime.server.asPlatform(record.location.database),
     ...(context.runtime.signal ? { signal: context.runtime.signal } : {}),

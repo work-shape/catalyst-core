@@ -139,7 +139,10 @@ export const recordsPropose: StoreVerb = {
         failures.push({
           item,
           code: "record_document_unavailable",
-          message: "The source document is not available"
+          message:
+            (context.runtime.locale ?? runtime.defaultLocale) === "de"
+              ? "Das Quelldokument ist entfernt, nicht verfügbar oder außerhalb der veröffentlichten Quellgrenze."
+              : "The source document is withdrawn, unavailable, or outside the published source boundary."
         });
         continue;
       }
