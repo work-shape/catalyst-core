@@ -158,30 +158,6 @@ export function findAssetSetIssues(
   for (const { reading } of readings) {
     issues.push(...reading.validate(context(stored)).map(plainIssue));
   }
-  // Kind-specific diagnostics take precedence (for example the agent's missing-skill text).
-  if (issues.length === 0) {
-    for (const { kind, reading } of readings) {
-      for (const definition of reading.accepted) {
-        const name = readDefinitionName(definition);
-        if (name === undefined || !context(stored).changes(kind.kind, name)) continue;
-        const before = stored === undefined ? undefined : findDefinition(stored, kind.kind, name);
-        const retained = new Set(
-          (before === undefined ? [] : (kind.references?.(before) ?? [])).map(
-            (ref) => `${ref.kind}:${ref.name}`
-          )
-        );
-        for (const ref of kind.references?.(definition) ?? []) {
-          if (acceptedByName(ref.kind).has(ref.name) || retained.has(`${ref.kind}:${ref.name}`))
-            continue;
-          issues.push({
-            message: `Config ${kind.kind} '${name}' references unknown ${ref.kind} '${ref.name}'`,
-            assetKind: kind.kind,
-            assetName: name
-          });
-        }
-      }
-    }
-  }
   return {
     issues,
     accepted,

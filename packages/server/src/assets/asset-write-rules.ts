@@ -53,6 +53,7 @@ import {
   assetSetOf,
   definitionsOf,
   findAssetSetIssues,
+  findDefinition,
   type AssetSet,
   type AssetSetIssue
 } from "./asset-set";
@@ -197,6 +198,37 @@ export function findIssuesOfChange(
     before.set(key(issue), count - 1);
     return count <= 0;
   });
+  // A kind may allow an unfinished draft to name a target that does not exist yet. Keep
+  // that policy, but never let the same draft select an existing asset its chooser hides.
+  if (ofChange.length === 0) {
+    const selected = change(view.readable);
+    for (const kind of kinds) {
+      for (const definition of definitionsOf(selected, kind.kind)) {
+        const name = readDefinitionName(definition);
+        if (name === undefined || !changed.has(assetKey(kind.kind, name))) continue;
+        const before = findDefinition(stored, kind.kind, name);
+        const retained = new Set(
+          (before === undefined ? [] : (kind.references?.(before) ?? [])).map((ref) =>
+            assetKey(ref.kind, ref.name)
+          )
+        );
+        for (const ref of kind.references?.(definition) ?? []) {
+          if (
+            retained.has(assetKey(ref.kind, ref.name)) ||
+            findDefinition(stored, ref.kind, ref.name) === undefined ||
+            findDefinition(selected, ref.kind, ref.name) !== undefined
+          )
+            continue;
+          ofChange.push({
+            message: `Config ${kind.kind} '${name}' references unknown ${ref.kind} '${ref.name}'`,
+            assetKind: kind.kind,
+            assetName: name
+          });
+        }
+      }
+    }
+    if (ofChange.length > 0) return ofChange;
+  }
   // What the change is refused for with nothing but readable assets around it is the
   // caller's to hear. Every other issue is there because of an asset the caller may not read.
   const amongReadable = keysOf(

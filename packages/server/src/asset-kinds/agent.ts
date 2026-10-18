@@ -105,26 +105,26 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
     inRelease: true,
     holdsInstanceDefault: true,
     hasWorkspaceAvailability: true,
-    references: (agent) => [
-      ...[
-        { field: "skillNames", kind: "skill" },
-        { field: "knowledgeBases", kind: KNOWLEDGE_BASE_ASSET_KIND },
-        { field: "subagentNames", kind: "agent" }
-      ].flatMap(({ field, kind }) => {
-        const names = readDefinitionField(agent, field);
-        return Array.isArray(names)
-          ? names.flatMap((name) => (typeof name === "string" ? [{ kind, name }] : []))
-          : [];
-      }),
-      ...(() => {
-        const tools = readDefinitionField(agent, "toolNames");
-        return Array.isArray(tools)
+    references: (agent) => {
+      const tools = readDefinitionField(agent, "toolNames");
+      return [
+        ...[
+          { field: "skillNames", kind: "skill" },
+          { field: "knowledgeBases", kind: KNOWLEDGE_BASE_ASSET_KIND },
+          { field: "subagentNames", kind: "agent" }
+        ].flatMap(({ field, kind }) => {
+          const names = readDefinitionField(agent, field);
+          return Array.isArray(names)
+            ? names.flatMap((name) => (typeof name === "string" ? [{ kind, name }] : []))
+            : [];
+        }),
+        ...(Array.isArray(tools)
           ? tools.flatMap((name) =>
               typeof name === "string" ? (assetOfOperation(name) ?? []) : []
             )
-          : [];
-      })()
-    ],
+          : [])
+      ];
+    },
 
     // Switching to a binding without fast-mode support clears the flag instead of failing the save.
     prepareInteractiveUpsert({ current, next }) {
