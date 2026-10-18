@@ -19,7 +19,8 @@ import {
   type DocumentSourceCapability,
   type KnowledgeFiles,
   type Logger,
-  type LocaleCode
+  type LocaleCode,
+  type OperationBatchFailure
 } from "@work-shape/catalyst-core";
 import { eventually, required } from "./assertions";
 import { clientInstanceId, useDataStoreInstance } from "./data-store-instance";
@@ -131,7 +132,7 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(11);
+      expect(row?.level).toBe(12);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());
@@ -214,6 +215,7 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
       processingPrices: [{ bindingId: "embedding", currency: "USD", perMillionTokens: 1 }],
       models: [{ bindingId: "embedding", model: "test", dimensions: 8 }]
     };
+    const recordFailures: OperationBatchFailure[][] = [];
     const dataStores = createDataStores({
       defaultLocale,
       embedding,
@@ -226,11 +228,14 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
       }),
       limits: { sizeLimitBytes: 1024 ** 3, poolMaxConnections: 3 },
       recordFailures: {
-        write: async (items) => ({
-          $dataset: "proc2-failures",
-          rowCount: items.length,
-          bytes: JSON.stringify(items).length
-        })
+        write: async (items) => {
+          recordFailures.push([...items]);
+          return {
+            $dataset: "proc2-failures",
+            rowCount: items.length,
+            bytes: JSON.stringify(items).length
+          };
+        }
       },
       logger
     });
@@ -388,6 +393,7 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
     }
     return {
       publishSources,
+      recordFailures,
       ...fixture,
       dataStores,
       openSource,

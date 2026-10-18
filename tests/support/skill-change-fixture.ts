@@ -118,6 +118,7 @@ export async function fixture(guardrails?: Record<string, unknown>) {
   });
   const handler = createSkillChangeApprovalHandler({
     config,
+    stores: store,
     clientInstanceId,
     configAssets: {
       store: store.configAssets,

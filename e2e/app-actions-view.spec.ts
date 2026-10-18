@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { z } from "zod";
 import { ALLOWED_URL, plantConnection, removeConnection } from "./connection-fixtures";
-import { requestWithOrigin } from "./request-with-origin";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
@@ -30,6 +30,18 @@ const member = {
 };
 
 const idSchema = z.object({ id: z.string() });
+const agentConfigSchema = z.object({ config: z.record(z.string(), z.unknown()) });
+
+/** Where Studio reads the owner it works in, as `instance` or a workspace's id. */
+const BUILD_SCOPE_KEY = "vivd-catalyst:build-scope";
+
+/** Sets the owner Studio works in for the next load. */
+async function setBuildScope(page: Page, scope: string): Promise<void> {
+  await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [
+    BUILD_SCOPE_KEY,
+    scope
+  ] as const);
+}
 
 /** The source of an App with a reading action, a changing one and nothing to look at. */
 function appSource(app: { id: string; connection: string }): { path: string; text: string }[] {
@@ -180,6 +192,8 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
   await signIn(memberPage, member);
 
   await plantConnection(connection);
+  /** The agent of the workspace this test makes, which it deletes again. */
+  let workspaceAgent: { url: string; workspaceId: string } | undefined;
   try {
     const created = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces`, {
       data: { name: `Stock desk ${attempt}` }
@@ -544,9 +558,29 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     await expect(details.locator('[data-app-action="load-rows"]')).toContainText("Runs");
     await expect(details.locator('[data-app-action="book-row"]')).toContainText("Changing");
     await shoot(page, "details-actions", openDetails);
+    // An agent names Apps of its own owner and of the instance (REF-OWNER): the workspace's
+    // App is offered to an agent of the same workspace, made as a copy of the instance's
+    // assistant, and not to the instance's assistant.
+    const agentName = `stock_desk_agent_${randomUUID().slice(0, 8)}`;
+    const assistant = await page.request.get(
+      `${apiOrigin}/api/v1/assets/agent/application_assistant`
+    );
+    expect(assistant.ok(), await assistant.text()).toBe(true);
+    const assistantConfig = agentConfigSchema.parse(await assistant.json()).config;
+    const agentUrl = `${apiOrigin}/api/v1/assets/agent/${agentName}`;
+    const agentWritten = await requestWithOrigin(page, "put", agentUrl, {
+      data: {
+        workspaceId,
+        expectedRevision: null,
+        config: { ...assistantConfig, name: agentName, displayName: "Stock desk assistant" }
+      }
+    });
+    expect(agentWritten.ok(), await agentWritten.text()).toBe(true);
+    workspaceAgent = { url: agentUrl, workspaceId };
     const appTools = page.locator(`#tools [data-app-tools="${appId}"]`);
     const openAgentTools = async () => {
-      await page.goto("/build/agents/application_assistant");
+      await setBuildScope(page, workspaceId);
+      await page.goto(`/build/agents/${agentName}`);
       await expect(appTools).toBeVisible();
     };
     await openAgentTools();
@@ -558,6 +592,18 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
       await openAgentTools();
       await appTools.scrollIntoViewIfNeeded();
     });
+    // The instance's assistant: the instance answers the workspace's App, and the page leaves
+    // it out.
+    await setBuildScope(page, "instance");
+    const instanceAppActions = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/v1/app-actions"
+    );
+    await page.goto("/build/agents/application_assistant");
+    const instanceAnswer = await instanceAppActions;
+    expect(instanceAnswer.ok()).toBe(true);
+    expect(JSON.stringify(await instanceAnswer.json())).toContain(`"name":"${appId}"`);
+    await expect(page.locator("#tools")).toBeVisible();
+    await expect(appTools).toHaveCount(0);
 
     // A member who may not write the App is shown no draft, so no test, and may not list the
     // actions without the right to read the App.
@@ -583,6 +629,18 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     await page.getByRole("dialog").getByRole("button", { name: "Close" }).first().click();
     await closed(page, page.getByRole("dialog"));
   } finally {
+    // A failed delete leaves the agent with its workspace and hides no failure of the test.
+    if (workspaceAgent !== undefined) {
+      const stored = `${workspaceAgent.url}?workspaceId=${workspaceAgent.workspaceId}`;
+      if ((await page.request.get(stored)).ok()) {
+        await requestWithOrigin(page, "post", `${workspaceAgent.url}/delete`, {
+          data: {
+            workspaceId: workspaceAgent.workspaceId,
+            expectedRevision: await assetRevision(page, stored)
+          }
+        });
+      }
+    }
     await memberContext.close();
     await removeConnection(connection.id);
   }

@@ -78,7 +78,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
     retry: false
   });
   const connectionTools = useConnectionToolChoice();
-  const appTools = useAppToolsRead();
+  const appTools = useAppToolsRead(owner);
   const [skillSearch, setSkillSearch] = useState("");
   // An agent names skills of its own owner and of the instance: a workspace's agent is offered
   // that workspace's skills first, then the instance's own.

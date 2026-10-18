@@ -1,3 +1,4 @@
+import { assertReferencesWithinOwners } from "./asset-owner-references";
 import {
   AppError,
   type ConfigAssetMutation,
@@ -111,6 +112,21 @@ export async function upsertAsset(
       `Validated config ${kind.kind} '${name}' was not found`
     );
   }
+  await assertReferencesWithinOwners(
+    kinds,
+    [
+      {
+        type: "upsert",
+        kind: kind.kind,
+        name,
+        scope: target.scope,
+        config: next
+      }
+    ],
+    stored.assets,
+    call.runtime?.locale ?? options.config.localization.defaultLocale,
+    options
+  );
   const { namespaces, warnings: toolWarnings } = await assertChangedAgentsAllowed(
     options,
     call.access,

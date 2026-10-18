@@ -3,12 +3,14 @@ import { z } from "zod";
 import { buildPage } from "@work-shape/catalyst-app-build/build";
 import { createPageBundleJobs } from "@work-shape/catalyst-server";
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
-import { asClientInstanceId } from "@work-shape/catalyst-core";
+import { asClientInstanceId, asCollaborationWorkspaceId } from "@work-shape/catalyst-core";
 import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
+import { drainRunEvents } from "./support/chat-server-run-harness";
+import { agent } from "./support/access-instance";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import { createTestConfig } from "./support/fixtures";
 import { json, startRestTestServer, type RestTestServer } from "./support/rest-test-server";
 import { generateSecretStoreKey } from "./support/test-connector";
@@ -45,7 +47,7 @@ async function world() {
   );
   cleanups.push(() => outside.close());
   const config = createTestConfig({
-    toolNames: [appTool, directTool],
+    toolNames: [directTool],
     // An App is built in the sandbox of an Execution Workspace on an assembled instance.
     executionWorkspaces: { enabled: true },
     workspaceObjectRoot,
@@ -162,9 +164,11 @@ describe("an agent that carries a published App action as its tool", () => {
         payload: { subjectKind: "user", subjectId: me, value: "team-a", expectedRowVersion: null }
       })
     );
-    const workspaceId = idSchema.parse(
-      (await ok(app.call("workspaces.create", { payload: { name: "Sales" } }))).json()
-    ).id;
+    const workspaceId = asCollaborationWorkspaceId(
+      idSchema.parse(
+        (await ok(app.call("workspaces.create", { payload: { name: "Sales" } }))).json()
+      ).id
+    );
     await ok(
       app.call("assets.put", {
         params: { kind: "app", name: "orders" },
@@ -207,14 +211,46 @@ describe("an agent that carries a published App action as its tool", () => {
       })
     );
 
+    // The App and the agent consuming it have the same owner; the instance default stays separate.
+    await applyAtCurrentRevisions(app.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "sales-agent",
+          scope: { kind: "workspace", workspaceId },
+          config: agent("sales-agent", {
+            toolNames: [appTool, directTool]
+          })
+        }
+      ]
+    });
+
     const say = async (text: string) => {
       const created = await ok(
         app.call("conversations.create", {
-          payload: { title: "Orders", collaborationWorkspaceId: workspaceId }
+          payload: {
+            title: "Orders",
+            collaborationWorkspaceId: workspaceId
+          }
         })
       );
       const conversationId = idSchema.parse(created.json()).id;
-      const started = await injectStartConversationRun(app, conversationId, text);
+      const started = z.object({ run: idSchema }).parse(
+        (
+          await ok(
+            app.call("conversations.runs.start", {
+              params: { conversationId },
+              payload: {
+                idempotencyKey: conversationId,
+                agentName: "sales-agent",
+                message: { text }
+              }
+            })
+          )
+        ).json()
+      );
       await drainRunEvents(app, conversationId, started.run.id);
       const messages = messagesSchema.parse(
         (await ok(app.call("conversations.messages.list", { params: { conversationId } }))).json()

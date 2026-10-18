@@ -76,6 +76,9 @@ async function readWorkflowScheduleState(
   db: PostgresConnection,
   input: Input<"readScheduleState">
 ): Promise<{ fired: boolean; open: boolean }> {
+  // Held until the caller commits the run insertion: different due times share admission.
+  const key = `workflow-schedule:${input.clientInstanceId}:${input.workflow}`;
+  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
   const [row] = await db
     .select({
       fired: sql<boolean>`coalesce(bool_or(${workflowRuns.scheduledFor} = ${input.scheduledFor}::timestamptz), false)`,

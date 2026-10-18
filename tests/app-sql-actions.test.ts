@@ -557,20 +557,26 @@ describe("a statement of an App on a Data Store", () => {
       "findings-elsewhere",
       findingsApp({ id: "findings-elsewhere", marker: "elsewhere", store: "elsewhere" })
     );
-    expectStatus(written, 200);
-    const { revision } = z.object({ revision: z.number() }).parse(written.json());
-
-    const refused = await t.publish(t.admin.id, "findings-elsewhere", revision);
-    expect(refused.statusCode).toBe(404);
-    expect(t.refusal(refused)).toMatchObject({
-      code: "NOT_FOUND",
-      details: { reason: "data_store_unavailable", dataStore: "elsewhere" }
+    expectStatus(written, 422);
+    expect(t.refusal(written)).toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: {
+        reason: "invalid_scope",
+        reference: {
+          kind: "data_store",
+          name: "elsewhere",
+          owner: { kind: "workspace", workspaceId: elsewhere }
+        }
+      }
     });
-    // The draft does not read it either.
-    const frame = await t.openApp(t.admin.id, "draft", "findings-elsewhere");
-    const call = await t.callAction(t.admin.id, frame, "list_findings", { limit: 1, offset: 0 });
-    expect(call.statusCode).toBe(404);
-    expect(t.refusal(call).details).toMatchObject({ reason: "data_store_unavailable" });
+    // The refused draft is never stored or made available to a frame.
+    expect(
+      await t.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "app",
+        name: "findings-elsewhere"
+      })
+    ).toBeUndefined();
   });
 
   it("reads no store from a Page of a conversation: nobody was given the use of a Page, so nothing stands for the right on the store", async () => {
