@@ -53,7 +53,7 @@ import {
   isReleaseSync,
   loadReferableAssets,
   loadStoredAssets,
-  missingUpsertRightOf,
+  assertUpsertPolicyAndMissingRight,
   type StoredAssets,
   requireInstanceDefaultChange,
   requireAssetKindModuleOn,
@@ -268,7 +268,7 @@ export class AssetWorkflow {
     const { kind, name } = target;
     if (right === "write" && config !== undefined && kind.representation !== "files") {
       const current = target.asset?.status === "active" ? target.asset.config : undefined;
-      const action = missingUpsertRightOf(access, "put", kind, {
+      const action = assertUpsertPolicyAndMissingRight(access, "put", kind, {
         name,
         current,
         next: kind.prepareInteractiveUpsert({ current, next: config }),

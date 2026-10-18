@@ -15,6 +15,7 @@ import {
   WORKSPACE_OPEN_TOOL_NAME,
   createAppSaveTool,
   createConnectionDraftTool,
+  CONNECTION_DRAFT_TOOL_NAME,
   createPlatformAssetBinding,
   createPlatformAssetTools,
   createPlatformDiscoveryTools,
@@ -94,6 +95,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         toolNames: [
           ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
           ...(holds ? WORKFLOW_TEST_TOOL_NAMES : []),
+          ...(holds || subject?.kind === "connection" ? [CONNECTION_DRAFT_TOOL_NAME] : []),
           ...appToolNames(input.hasTool),
           ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
         ].filter((toolName) => input.hasTool(toolName)),

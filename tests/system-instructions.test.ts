@@ -5,6 +5,13 @@ import {
 } from "../packages/agent-runtime/src/system-instructions";
 
 describe("system instructions", () => {
+  it("directs an agent without connection drafting to Studio without asking for credentials", () => {
+    const content = createSystemInstructions("Help.", "de");
+    expect(content).toContain("without platform.connections.draft_tools");
+    expect(content).toContain("Studio › Verbindungen");
+    expect(content).toContain("Do not substitute HTTP or YAML dumps");
+    expect(content).toContain("Never ask for keys or passwords in chat");
+  });
   it("opens with the platform rules, before the client agent instructions", () => {
     const content = createSystemInstructions("Use customer workflow rules.", "de", {
       currentDate: new Date("2026-06-19T12:00:00.000Z")
