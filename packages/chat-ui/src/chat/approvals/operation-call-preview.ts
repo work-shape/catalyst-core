@@ -135,6 +135,11 @@ export interface PublishReview {
    * the people it names in the reader's language. Absent for other kinds and older requests.
    */
   audience?: { selected: PublishAudience; label: string };
+  /**
+   * Whether this publish lets people use the App who cannot now, frozen when the request was
+   * filed (SHARE-1). Absent for other kinds and older requests.
+   */
+  widens?: boolean;
 }
 
 /** The audiences an App's publish can choose, as the contract names them. */
@@ -297,6 +302,7 @@ function parseReview(value: unknown): PublishReview | undefined {
   const stale = staleReasons.find((reason) => reason === value.stale);
   const narrative = narrativeReadOf(parsePublishNarrative(value.publishNarrative));
   const audience = parseAudience(value.audience);
+  const widens = typeof value.publish_widens === "boolean" ? value.publish_widens : undefined;
   return {
     kind,
     name,
@@ -324,7 +330,8 @@ function parseReview(value: unknown): PublishReview | undefined {
     ...(runAs ? { runAs } : {}),
     ...(stale ? { stale } : {}),
     ...(narrative.status === "ready" || narrative.status === "failed" ? { narrative } : {}),
-    ...(audience ? { audience } : {})
+    ...(audience ? { audience } : {}),
+    ...(widens === undefined ? {} : { widens })
   };
 }
 

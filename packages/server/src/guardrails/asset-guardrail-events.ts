@@ -1,5 +1,5 @@
+import { appPublishReview } from "../apps/app-publish-reach";
 import {
-  appAudienceWidens,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
@@ -176,25 +176,15 @@ export async function publishEvents(
         })
       : undefined;
   const kind = input.kind === "app" ? options.configAssets.kinds.get(input.kind) : undefined;
-  const reach = revision && kind?.publishReach?.(revision.config, asset?.publishedConfig);
-  const before =
-    asset?.publishedConfig && kind?.publishReach?.(asset.publishedConfig, asset.publishedConfig);
   const widening =
-    asset && reach
-      ? !asset.publishedRevisionId ||
-        reach.calls.some((call) => call.effect === "changing") ||
-        reach.hostsAdded.length > 0 ||
-        reach.connections.some((name) => !before?.connections.includes(name)) ||
-        appAudienceWidens(
-          input.audience ?? asset.appAvailability?.audience ?? "workspace",
-          asset.appAvailability?.audience ?? "workspace",
-          input.audience === "self"
-            ? actor && !isAuthenticatedServicePrincipal(actor)
-              ? getSubjectUserId(actor)
-              : undefined
-            : asset.appAvailability?.userId,
-          asset.appAvailability?.userId
-        )
+    asset && revision && kind?.publishReach
+      ? appPublishReview(
+          asset,
+          kind,
+          revision.config,
+          input.audience,
+          actor && !isAuthenticatedServicePrincipal(actor) ? getSubjectUserId(actor) : undefined
+        ).publishWidens
       : undefined;
   if (!revision) {
     // Nothing of the caller's to make live: the publish itself refuses it.

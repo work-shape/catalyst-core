@@ -55,6 +55,8 @@ const publishSubjectSchema = z.object({
   audience: appAudienceSchema.optional(),
   liveAudience: appAudienceSchema.optional(),
   liveAudienceUserId: z.string().optional(),
+  audiencePersonName: z.string().optional(),
+  publish_widens: z.boolean().optional(),
   kind: z.string().min(1),
   name: z.string().min(1),
   /** The name people read, when the request was filed. */
@@ -77,7 +79,9 @@ type PublishSubject = z.infer<typeof publishSubjectSchema>;
 export function publishApproval(
   target: AssetTarget,
   revision: number,
-  audience?: AppAudience
+  audience?: AppAudience,
+  audiencePersonName?: string,
+  publishWidens?: boolean
 ): OperationApproval | undefined {
   const approval = PUBLISH_APPROVALS[target.kind.kind];
   const { asset } = target;
@@ -85,8 +89,14 @@ export function publishApproval(
   const subject: PublishSubject = {
     kind: target.kind.kind,
     ...(target.kind.kind === "app"
-      ? { audience: audience ?? asset.appAvailability?.audience ?? "workspace" }
+      ? {
+          audience:
+            audience ??
+            (asset.publishedRevisionId ? (asset.appAvailability?.audience ?? "workspace") : "self")
+        }
       : {}),
+    ...(audiencePersonName ? { audiencePersonName } : {}),
+    ...(publishWidens === undefined ? {} : { publish_widens: publishWidens }),
     name: target.name,
     title: titleOf(target.kind, asset) ?? target.name,
     assetId: asset.id,
@@ -113,15 +123,21 @@ export function publishApproval(
  * The refusal of a publish that is no person's click, for a kind whose publish an approver's
  * click makes live: a revision of it goes live only on the interface's Publish, the answer to
  * the CLI's question, or the person's Allow of an unattended CLI publish in their Inbox (see
- * `publishPolicyFloor`). An agent's or an MCP client's publish is refused until it can wait
- * the same way. Nothing for a person's own call.
+ * `publishPolicyFloor`). An agent's App publish pauses for that person's audience choice and
+ * confirmation. Other agent publishes and MCP publishes are refused. Nothing for a person's own call.
  */
 export function publishFromAPerson(
   target: AssetTarget,
   origin: OperationOrigin
 ): OperationAuthorization | undefined {
   const { publish, approve } = target.kind.actions;
-  if (approve === undefined || origin.kind === "user" || origin.kind === "cli") return undefined;
+  if (
+    approve === undefined ||
+    origin.kind === "user" ||
+    origin.kind === "cli" ||
+    (target.kind.kind === "app" && origin.kind === "agent")
+  )
+    return undefined;
   return {
     allowed: false,
     ...(publish === undefined ? {} : { action: publish }),
@@ -262,24 +278,26 @@ async function publishReview(
       : undefined;
   const narrative =
     next && viewer && options.narrator && asset?.id === subject.assetId
-      ? await options.narrator.narrate({
-          kind: subject.kind,
-          name: subject.name,
-          scope: asset.scope,
-          revision: subject.revision,
-          config: next.config,
-          locale: viewer.locale ?? options.defaultLocale ?? "en",
-          access: viewer.access,
-          ...(subject.audience
-            ? {
-                audienceLabel: audienceLabel(
-                  subject.audience,
-                  viewer.locale ?? options.defaultLocale ?? "en",
-                  workspaceName
-                )
-              }
-            : {})
-        })
+      ? await options.narrator
+          .narrate({
+            kind: subject.kind,
+            name: subject.name,
+            scope: asset.scope,
+            revision: subject.revision,
+            config: next.config,
+            locale: viewer.locale ?? options.defaultLocale ?? "en",
+            access: viewer.access,
+            ...(subject.audience
+              ? {
+                  audienceLabel: audienceLabel(
+                    subject.audience,
+                    viewer.locale ?? options.defaultLocale ?? "en",
+                    workspaceName,
+                    subject.audiencePersonName
+                  )
+                }
+              : {})
+          })
           .catch(() => unavailablePublishNarrative(viewer.locale ?? options.defaultLocale ?? "en"))
       : undefined;
   const calls = reach
@@ -295,6 +313,7 @@ async function publishReview(
     kind: subject.kind,
     name: subject.name,
     title: subject.title,
+    ...(subject.publish_widens === undefined ? {} : { publish_widens: subject.publish_widens }),
     ...(subject.audience
       ? {
           audience: {
@@ -302,7 +321,8 @@ async function publishReview(
             label: audienceLabel(
               subject.audience,
               viewer?.locale ?? options.defaultLocale ?? "en",
-              workspaceName
+              workspaceName,
+              subject.audiencePersonName
             )
           }
         }
@@ -390,11 +410,18 @@ const configFilesSchema = z.object({
   files: z.array(z.object({ path: z.string(), content: z.string() }))
 });
 
-function audienceLabel(audience: AppAudience, locale: LocaleCode, workspaceName?: string): string {
+function audienceLabel(
+  audience: AppAudience,
+  locale: LocaleCode,
+  workspaceName?: string,
+  personName?: string
+): string {
+  if (audience === "self" && personName)
+    return locale === "de" ? `Nur für ${personName}` : `Only ${personName}`;
   if (audience === "workspace" && workspaceName)
     return locale === "de" ? `Alle in ${workspaceName}` : `Everyone in ${workspaceName}`;
   const labels = {
-    self: { en: "Only the builder", de: "Nur für den Ersteller" },
+    self: { en: "Private", de: "Privat" },
     workspace: { en: "Everyone in the owning workspace", de: "Alle im besitzenden Arbeitsbereich" },
     instance: { en: "Everyone in the instance", de: "Alle in der Instanz" }
   };

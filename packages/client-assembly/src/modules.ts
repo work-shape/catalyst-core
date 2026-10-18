@@ -12,6 +12,7 @@ import {
 } from "@work-shape/catalyst-config-schema";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
+  APP_PUBLISH_TOOL_NAME,
   PLATFORM_ASSET_TOOLS
 } from "@work-shape/catalyst-tool-execution";
 import type { ClientInstanceCapability } from "./capabilities";
@@ -90,7 +91,7 @@ const appsModule = defineModule({
     "apps.sessions.get_workflow_run"
   ],
   kinds: ["app"],
-  tools: ["workspace.open", "app.save"],
+  tools: ["workspace.open", "app.save", APP_PUBLISH_TOOL_NAME],
   jobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"],
   commandWorkerJobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"]
 });

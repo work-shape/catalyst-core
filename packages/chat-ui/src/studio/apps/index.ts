@@ -20,6 +20,8 @@ export {
 } from "./app-data";
 export { AppEditFrame, appDraftIsAhead, PublishDialog, SharePublishDialog } from "./app-edit";
 export { AppSavedLine } from "./app-saved-line";
+export { AppAudienceChange, appPublishMaySend } from "./app-publish-question";
+export { appPublishCall } from "./app-publish-confirmation";
 export { AppDeleteDialog, AppDetailsDialog, appLink } from "./app-header";
 export {
   appManifestSummary,

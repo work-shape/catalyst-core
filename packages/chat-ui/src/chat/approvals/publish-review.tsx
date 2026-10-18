@@ -141,6 +141,15 @@ export function PublishReviewBody({
           </KeyValue>
         </KeyValueList>
       ) : null}
+      {review.widens === undefined ? null : (
+        <p
+          className="text-body text-muted-foreground"
+          data-testid="publish-review-widens"
+          data-widens={review.widens ? "true" : "false"}
+        >
+          {t(review.widens ? "operations.publishWidens" : "operations.publishNarrows")}
+        </p>
+      )}
       {/* The same sentence the Publish dialog leads with, then the lists behind "Details". */}
       {review.narrative ? <PublishNarrativeReadLead read={review.narrative} /> : null}
       {review.narrative ? (

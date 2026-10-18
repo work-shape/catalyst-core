@@ -1,4 +1,5 @@
-import { requireAppAudience, appAudiencePerson } from "../apps/app-audience";
+import { appPublishReview } from "../apps/app-publish-reach";
+import { prepareAppPublication } from "../apps/app-audience";
 import type { AppAudience } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import { clearLiveOnceSwitches } from "./asset-after-write";
@@ -441,22 +442,10 @@ export class AssetDraftWorkflow {
     call.access.require(right, target.resource);
     await this.host.authorizeEditing(call, "put");
     const asset = requireActive(target);
-    const audience =
+    const { audience, personalWorkspace } =
       kind.kind === "app"
-        ? (input.audience ?? asset.appAvailability?.audience ?? "workspace")
-        : undefined;
-    if (audience) {
-      requireAppAudience(call.access, audience);
-    }
-    const audienceUserId = audience
-      ? appAudiencePerson(call.actor, asset, input.audience, audience)
-      : undefined;
-    const personalWorkspace = audienceUserId
-      ? await this.options.stores.workspaces.ensurePersonalWorkspace({
-          clientInstanceId: this.options.clientInstanceId,
-          userId: audienceUserId
-        })
-      : undefined;
+        ? await prepareAppPublication(this.options, call, asset, input.audience)
+        : { audience: undefined, personalWorkspace: undefined };
     const revision = await liveRevision(this.options, call, target, input.revision);
     const { config } = revision;
     // The set as it would be were this revision the asset's content, checked as a write of it.
@@ -467,6 +456,7 @@ export class AssetDraftWorkflow {
       withDefinition(stored.set, kind.kind, name, config),
       without
     );
+    const publishReview = audience ? appPublishReview(asset, kind, config, audience) : undefined;
     const move = (store: Pick<ConfigAssetStore, "publishConfigAssetRevision">) =>
       store.publishConfigAssetRevision({
         clientInstanceId: this.options.clientInstanceId,
@@ -476,7 +466,7 @@ export class AssetDraftWorkflow {
         assetId: asset.id,
         revision: input.revision,
         revisionId: revision.id,
-        ...(audience ? { audience } : {}),
+        ...(audience && publishReview ? { audience, appPublishReview: publishReview } : {}),
         ...(personalWorkspace ? { audienceWorkspaceId: personalWorkspace.id } : {}),
         // A kind that reads its files itself has no built files to serve.
         ...(kind.representation === "files" && !kind.manifestOfFiles
@@ -507,6 +497,7 @@ export class AssetDraftWorkflow {
       kind: kind.kind,
       name,
       revision: published.revision,
+      ...(published.publishWidens === undefined ? {} : { publish_widens: published.publishWidens }),
       ...(audience ? { audience } : {}),
       ...(published.replacedRevision === undefined
         ? {}

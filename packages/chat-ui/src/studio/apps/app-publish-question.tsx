@@ -61,6 +61,62 @@ export function AppAudienceQuestion({
   );
 }
 
+/**
+ * Whether the dialog may send the publish: the revision differs from what is live, or only the
+ * audience changes (SHARE-1). Publishing the live revision for its own audience changes nothing.
+ */
+export function appPublishMaySend(
+  ask: { revision: number; live?: number | undefined },
+  offer: AppAudienceOffer | undefined,
+  selected: AppAudience | undefined
+): boolean {
+  if (ask.live === undefined || ask.revision !== ask.live) return true;
+  return appAudienceDiffers(offer, selected);
+}
+
+/**
+ * Whether the choice shown makes the App live for other people than now: another audience, or
+ * "Only me" where the live revision is only another person's.
+ */
+function appAudienceDiffers(
+  offer: AppAudienceOffer | undefined,
+  selected: AppAudience | undefined
+): boolean {
+  const live = offer?.live;
+  if (!offer || !live || selected === undefined) return false;
+  if (live.audience !== selected) return true;
+  return offer.selected === selected && live.label !== undefined && live.label !== offer.label;
+}
+
+/**
+ * The line that says who the live revision is for and who it will be for, where the choice
+ * shown changes it: "Shared now: Everyone in the instance. After publishing: Everyone in Sales."
+ * It waits for the people of the choice shown, so it never names those of another choice.
+ */
+export function AppAudienceChange({
+  offer,
+  selected
+}: {
+  offer: AppAudienceOffer | undefined;
+  selected: AppAudience | undefined;
+}) {
+  const { t } = useTranslation();
+  const live = offer?.live;
+  if (
+    !offer ||
+    !live?.label ||
+    offer.selected !== selected ||
+    !appAudienceDiffers(offer, selected)
+  ) {
+    return null;
+  }
+  return (
+    <p className="text-body text-muted-foreground" data-testid="app-publish-audience-change">
+      {t("apps.publishAudienceChange", { live: live.label, next: offer.label })}
+    </p>
+  );
+}
+
 /** The sentence under "Details" on who gets the revision, by the chosen audience. */
 export function appPublishBody(
   audience: AppAudience | undefined,
@@ -122,7 +178,12 @@ export function useAppPublishSend(workspaceId: string, app: string): AppPublishS
 export interface SharePublishQuestion {
   name: string;
   workspace: AppsWorkspace;
-  ask: { revision: number; summary: AppManifestSummary; readsStoredData: boolean };
+  ask: {
+    revision: number;
+    live: number | undefined;
+    summary: AppManifestSummary;
+    readsStoredData: boolean;
+  };
 }
 
 /**
@@ -153,6 +214,7 @@ export function useSharePublishQuestion(
     workspace,
     ask: {
       revision: draft,
+      live: asset.publishedRevision,
       summary: appManifestSummary(asset.config),
       readsStoredData: appReadsStoredData(asset.config)
     }

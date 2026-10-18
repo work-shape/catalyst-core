@@ -359,7 +359,7 @@ test("a tile of a published App reads rows through a named action with the viewe
     });
     expect(written.ok(), await written.text()).toBe(true);
     const published = await requestWithOrigin(page, "post", `${appUrl}/publish`, {
-      data: { workspaceId, revision: 1 }
+      data: { workspaceId, revision: 1, audience: "workspace" }
     });
     expect(published.ok(), await published.text()).toBe(true);
     const appPath = `/w/${workspaceId}/apps/${appId}`;

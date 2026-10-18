@@ -161,6 +161,11 @@ export const apps = defineTranslations({
     "apps.publishAudience": "For whom?",
     "apps.publishAudienceInstance": "Whole instance",
     "apps.publishAudienceSelf": "Only me",
+    "apps.publishAudienceChange": "Shared now: {live}. After publishing: {next}.",
+    "apps.publishAudiencePeople": "{label} ({count} people)",
+    "apps.publishAudiencePeopleOne": "{label} ({count} person)",
+    "apps.publishDataAdmins": "Instance admins also have access.",
+    "apps.publishDataHolders": "Also by a right on the app: {holders}",
     "apps.publishBodyInstance":
       "Everyone on this instance gets revision {number} when they open the app.",
     "apps.publishBodySelf": "Only you get revision {number} when you open the app.",
@@ -395,6 +400,11 @@ export const apps = defineTranslations({
     "apps.publishAudience": "Für wen?",
     "apps.publishAudienceInstance": "Ganze Instanz",
     "apps.publishAudienceSelf": "Nur für mich",
+    "apps.publishAudienceChange": "Jetzt geteilt: {live}. Nach dem Veröffentlichen: {next}.",
+    "apps.publishAudiencePeople": "{label} ({count} Personen)",
+    "apps.publishAudiencePeopleOne": "{label} ({count} Person)",
+    "apps.publishDataAdmins": "Instanz-Admins haben ebenfalls Zugriff.",
+    "apps.publishDataHolders": "Außerdem mit einem Recht auf die App: {holders}",
     "apps.publishBodyInstance":
       "Alle auf dieser Instanz bekommen Revision {number}, wenn sie die App öffnen.",
     "apps.publishBodySelf": "Nur du bekommst Revision {number}, wenn du die App öffnest.",

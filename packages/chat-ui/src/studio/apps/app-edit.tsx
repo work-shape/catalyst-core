@@ -35,6 +35,8 @@ import {
   useAppPublishData,
   useAppPublishNarrative,
   useAppWrites,
+  type AppAudience,
+  type AppAudienceOffer,
   type AppPublishDataRead
 } from "./app-data";
 import { AppDraftFiles } from "./app-draft-files";
@@ -54,6 +56,14 @@ import {
 import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { AppPreview, AppPreviewNotice } from "./app-preview";
 import { AppPublishDataView, AppStoredDataFact } from "./app-publish-data";
+import {
+  AppAudienceChange,
+  AppAudienceQuestion,
+  appPublishBody,
+  appPublishMaySend,
+  useAppPublishSend,
+  useSharePublishQuestion
+} from "./app-publish-question";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { RevisionsDrawer } from "./revisions-drawer";
 
@@ -86,15 +96,18 @@ function storeDetailsOpen(open: boolean): void {
 /** The revision a publish names, with what its manifest reaches. */
 interface PublishAsk {
   revision: number;
+  /** The live revision, where one is: publishing it again may change only its audience. */
+  live?: number | undefined;
   summary: AppManifestSummary;
   /** Its manifest has a reading `sql` action: the question names who sees which stored data. */
   readsStoredData: boolean;
 }
 
 /** What the config of the revision a publish names asks the question to say. */
-function askToPublish(revision: number, config: unknown): PublishAsk {
+function askToPublish(revision: number, live: number | undefined, config: unknown): PublishAsk {
   return {
     revision,
+    live,
     summary: appManifestSummary(config),
     readsStoredData: appReadsStoredData(config)
   };
@@ -226,7 +239,7 @@ export function AppEdit({ app }: { app: string }) {
           asset && draft !== undefined
             ? () => {
                 setError(undefined);
-                setPublishAsk(askToPublish(draft, asset.config));
+                setPublishAsk(askToPublish(draft, published, asset.config));
               }
             : undefined
         }
@@ -366,7 +379,7 @@ export function AppEdit({ app }: { app: string }) {
             rights.publish
               ? (revision: ConfigAssetRevision) => {
                   setError(undefined);
-                  setPublishAsk(askToPublish(revision.revision, revision.config));
+                  setPublishAsk(askToPublish(revision.revision, published, revision.config));
                 }
               : undefined
           }
@@ -507,8 +520,10 @@ export function AppEditFrame({
             tabs={tabs}
             primaryAction={
               known ? (
+                // A live App may be published again for another audience (SHARE-1): the
+                // dialog then waits for a choice that differs from the live one.
                 <Button
-                  disabled={!rights.publish || !ahead}
+                  disabled={!rights.publish || (!ahead && publishedRevision === undefined)}
                   aria-describedby={missingRight ? missingRightId : undefined}
                   onClick={onPublish}
                 >
@@ -575,15 +590,6 @@ export function AppEditFrame({
     </Tabs>
   );
 }
-
-// SHARE-1 adds "For whom?" to this section; its new parts live beside it.
-import type { AppAudience, AppAudienceOffer } from "./app-data";
-import {
-  AppAudienceQuestion,
-  appPublishBody,
-  useAppPublishSend,
-  useSharePublishQuestion
-} from "./app-publish-question";
 
 /** A dialog asked without the instance's sentence, as in a sample. */
 const NO_NARRATIVE: PublishNarrativeRead = { status: "none" };
@@ -711,6 +717,8 @@ export function PublishDialog({
     (storedData !== undefined && storedData.status !== "ready") ||
     narrativeHolds(narrative) ||
     (offer !== undefined && audienceLabel === undefined);
+  // The live revision for its own audience again changes nothing: Publish waits for a change.
+  const changes = appPublishMaySend(ask, offer, selected);
   const body = appPublishBody(offer ? selected : undefined, ask.revision, workspace.name, t);
   const lists = (
     <KeyValueList>
@@ -724,6 +732,7 @@ export function PublishDialog({
         <AppPublishDataView
           read={storedData}
           audienceLabel={audienceLabel}
+          audiencePeople={selected === "self" ? undefined : offer?.people}
           audiencePending={offer !== undefined && audienceLabel === undefined}
         />
       ) : null}
@@ -746,7 +755,7 @@ export function PublishDialog({
             <Button variant="outline" disabled={loading} onClick={onClose}>
               {t("cancel")}
             </Button>
-            <Button loading={loading} disabled={waitsForData} onClick={onConfirm}>
+            <Button loading={loading} disabled={waitsForData || !changes} onClick={onConfirm}>
               {t("apps.publish")}
             </Button>
           </>
@@ -763,6 +772,7 @@ export function PublishDialog({
             onChange={(next) => audience?.onChange(next)}
           />
         ) : null}
+        <AppAudienceChange offer={offer} selected={selected} />
         <div className="grid gap-3">
           <PublishNarrativeReadLead read={narrative} />
           {narrative.status === "none" && offer === undefined ? (

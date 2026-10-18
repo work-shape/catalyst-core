@@ -1,4 +1,4 @@
-import { asCollaborationWorkspaceId } from "@work-shape/catalyst-core";
+import { appAudienceWidens, asCollaborationWorkspaceId } from "@work-shape/catalyst-core";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   AppError,
@@ -7,10 +7,12 @@ import {
   type ConfigAssetStore,
   type FileSetId
 } from "@work-shape/catalyst-core";
+import { appAvailabilityColumn } from "./app-availability";
 import { sweepAssetRepoBundlesOf } from "./postgres-asset-repo-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import type { ConfigAssetRow } from "./rows";
 import {
+  collaborationWorkspaces,
   configAssetRevisions,
   configAssets,
   configAssetAvailability,
@@ -91,6 +93,44 @@ export async function publishConfigAssetRevision(
 ): ReturnType<ConfigAssetStore["publishConfigAssetRevision"]> {
   return db.transaction(async (tx) => {
     const asset = await lockAuthorizedAsset(tx, input);
+    let publishWidens: boolean | undefined;
+    if (input.appPublishReview && input.audience) {
+      const [live] = await tx
+        .select({ availability: appAvailabilityColumn })
+        .from(configAssets)
+        .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+        .where(eq(configAssets.id, asset.id))
+        .limit(1);
+      const availability = live?.availability ?? { audience: "workspace" as const };
+      const reviewed = input.appPublishReview;
+      if (
+        asset.publishedRevisionId !== reviewed.liveRevisionId ||
+        availability.audience !== reviewed.liveAudience.audience ||
+        availability.userId !== reviewed.liveAudience.userId
+      ) {
+        throw new AppError(
+          "CONFLICT",
+          "The App's live audience changed. Review and publish again.",
+          { reason: "live_moved" }
+        );
+      }
+      const [person] = input.audienceWorkspaceId
+        ? await tx
+            .select({ userId: collaborationWorkspaces.personalUserId })
+            .from(collaborationWorkspaces)
+            .where(eq(collaborationWorkspaces.id, input.audienceWorkspaceId))
+            .limit(1)
+        : [];
+      publishWidens =
+        !asset.publishedRevisionId ||
+        reviewed.contentWidens ||
+        appAudienceWidens(
+          input.audience,
+          availability.audience,
+          person?.userId ?? undefined,
+          availability.userId
+        );
+    }
     const [target] = await tx
       .select({
         id: configAssetRevisions.id,
@@ -183,6 +223,7 @@ export async function publishConfigAssetRevision(
     return {
       assetId: asset.id,
       revision: input.revision,
+      ...(publishWidens === undefined ? {} : { publishWidens }),
       ...(replaced ? { replacedRevision: replaced.revision } : {}),
       ...(target.fileSetId ? { fileSetId: target.fileSetId } : {})
     };

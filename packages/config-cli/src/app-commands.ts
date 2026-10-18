@@ -338,7 +338,12 @@ async function publish(
   if (values.revision !== undefined && number !== revisionNumber(values.revision)) {
     throw new Error(`The instance answered revision ${number} for --revision ${values.revision}.`);
   }
-  if (candidate.publishedRevision === number && offered?.selected === audience) {
+  if (
+    candidate.publishedRevision === number &&
+    (offered?.live ?? (offered?.selected === undefined ? "workspace" : offered.selected)) ===
+      audience &&
+    (audience !== "self" || offered?.liveLabel === offered?.label)
+  ) {
     writeOut(
       options,
       values.json
@@ -357,7 +362,14 @@ async function publish(
   }
   const live = candidate.publishedRevision === undefined ? undefined : await get("published");
   const review = publishReview(candidate, live);
-  const storedData = await appPublishData(target.api, app, candidate, candidate.appAudience?.label);
+  const storedData = await appPublishData(
+    target.api,
+    app,
+    candidate,
+    candidate.appAudience
+      ? `${candidate.appAudience.label}${candidate.appAudience.people === undefined ? "" : ` (${candidate.appAudience.people} people)`}`
+      : undefined
+  );
   const question = [formatReview(app, review), storedData].filter(Boolean).join("\n");
   const say = (text: string) => (values.json ? writeErr(options, text) : writeOut(options, text));
   const narrative = values.yes ? undefined : candidate.publishNarrative;

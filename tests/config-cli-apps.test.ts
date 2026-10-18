@@ -474,12 +474,12 @@ describe("SHARE-1 CLI audience", () => {
       const result = await cliAs(t.instance, t.admin.id, cwd, async (question) => {
         questions.push(question);
         return question.startsWith("For whom?") ? "self" : "y";
-      })("app", "publish", "offers", "--audience", "workspace", "--workspace", t.workspaceId);
+      })("app", "publish", "offers", "--workspace", t.workspaceId);
       expect(result, result.err).toMatchObject({ code: 0 });
       expect(questions[0]).toContain("For whom?");
       expect(questions[0]).toContain("Sales");
       expect(questions[1]).toContain("Publish revision");
-      expect(result.out).toContain("only the builder");
+      expect(result.out).toContain("only me");
       expect(
         (
           await t.stores.configAssets.getConfigAsset({
@@ -499,6 +499,25 @@ describe("SHARE-1 CLI audience", () => {
       );
       expect(unattended.code).toBe(2);
       expect(unattended.err).toContain("--audience self|workspace|instance");
+      // The same live revision with another audience is a publish, never "already published".
+      const shared = await cliAs(t.instance, t.admin.id, cwd, async () => "y")(
+        "app",
+        "publish",
+        "offers",
+        "--audience",
+        "workspace",
+        "--workspace",
+        t.workspaceId
+      );
+      expect(shared, shared.err).toMatchObject({ code: 0 });
+      expect(shared.out).not.toContain("published one already");
+      expect(
+        await t.stores.configAssets.getConfigAsset({
+          clientInstanceId: t.admin.clientInstanceId,
+          kind: "app",
+          name: "offers"
+        })
+      ).toMatchObject({ publishedRevision: 1, appAvailability: { audience: "workspace" } });
     } finally {
       await t.close();
     }

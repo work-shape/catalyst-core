@@ -526,7 +526,7 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     // Tools section offers the action an agent can carry: the reading one, since the
     // Connection opens `book` to Apps alone.
     const published = await requestWithOrigin(page, "post", `${appUrl(appId)}/publish`, {
-      data: { workspaceId, revision: 1 }
+      data: { workspaceId, revision: 1, audience: "workspace" }
     });
     expect(published.ok(), await published.text()).toBe(true);
     const details = page.getByRole("dialog").locator("[data-app-details-actions]");

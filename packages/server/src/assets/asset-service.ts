@@ -84,6 +84,7 @@ import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import { assertReferencesWithinOwners } from "./asset-owner-references";
 import { liveRevision } from "./asset-live-revision";
+import { appPublishReview } from "../apps/app-publish-reach";
 import { publishApproval, publishFromAPerson } from "../approvals/publish-approval";
 import type { AssetWorkflowOptions } from "../types";
 
@@ -184,7 +185,22 @@ export class AssetWorkflow {
   async publishApproval(
     input: AssetAddress & { revision: number; audience?: AppAudience }
   ): Promise<OperationApproval | undefined> {
-    return publishApproval(await this.target(input), input.revision, input.audience);
+    const target = await this.target(input);
+    const asset = target.asset;
+    const revision =
+      target.kind.kind === "app"
+        ? await this.options.configAssets.store.getConfigAssetRevision({
+            clientInstanceId: this.options.clientInstanceId,
+            kind: input.kind,
+            name: input.name,
+            revision: input.revision
+          })
+        : undefined;
+    const widens =
+      asset && revision?.config
+        ? appPublishReview(asset, target.kind, revision.config, input.audience).publishWidens
+        : undefined;
+    return publishApproval(target, input.revision, input.audience, undefined, widens);
   }
 
   async authorizeDelete(

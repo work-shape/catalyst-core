@@ -114,6 +114,9 @@ export const operations = defineTranslations({
     "operations.publishStaleLive":
       "Another version was published since the request was made. This request can no longer be approved.",
     "operations.publishAudience": "For whom",
+    "operations.publishNarrows": "Its reach does not widen: nobody new can use the app.",
+    "operations.publishWidens":
+      "Its reach widens: people who cannot use the app now can use it after this.",
     "operations.publishVersion": "Version",
     "operations.publishFirst": "Version {number}, the first one published",
     "operations.publishReplaces": "Version {number}, in place of version {live}",
@@ -328,6 +331,10 @@ export const operations = defineTranslations({
     "operations.publishStaleLive":
       "Seit der Anfrage wurde eine andere Version veröffentlicht. Diese Anfrage kann nicht mehr freigegeben werden.",
     "operations.publishAudience": "Für wen",
+    "operations.publishNarrows":
+      "Die Reichweite wird nicht größer: Niemand Neues kann die App nutzen.",
+    "operations.publishWidens":
+      "Die Reichweite wird größer: Personen, die die App jetzt nicht nutzen können, können sie danach nutzen.",
     "operations.publishVersion": "Version",
     "operations.publishFirst": "Version {number}, die erste veröffentlichte",
     "operations.publishReplaces": "Version {number}, statt Version {live}",

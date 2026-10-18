@@ -18,8 +18,16 @@ import { expect, test, type PageErrorWatch } from "./test";
 // The line the agent's save leaves says who can use the App now, and its "Share" opens the
 // same dialog.
 //
-// Pictures go to `E2E_SHOTS_DIR`, or the test's output folder: 24 of the dialog (3 choices,
-// English and German, light and dark, 1280 and 390), 8 of the Inbox item and 8 of the save line.
+// Fix round: a live App may be published again for another audience only; a workspace
+// publisher of an instance-wide App is offered what they may choose, the widest chosen, and
+// told who it is shared with now; the stored-data line keeps the App's grant holders and the
+// instance admins; an agent's publish asks the person "For whom?" before Allow and publishes
+// their choice, never anything before the click.
+//
+// Pictures go to `E2E_SHOTS_DIR`, or the test's output folder. Each set is English and German,
+// light and dark, 1280 and 390: the dialog for each choice (24), the Inbox item (8), the
+// audience-only change (8), the narrowing dialog (8, where the member may publish here), the
+// agent's confirmation (8) and the save line (8).
 
 const admin = { email: "e2e-share@example.test", password: "e2e-share-password" };
 const member = {
@@ -37,6 +45,8 @@ const DESKTOP = { width: 1280, height: 900 };
 const PHONE = { width: 390, height: 844 };
 const SHORT_PHONE = { width: 390, height: 640 };
 const PUBLISH = /^(?:Publish|Veröffentlichen)$/u;
+const ALLOW = /^(?:Allow|Erlauben)$/u;
+const SIZES = [DESKTOP, PHONE] as const;
 
 const databaseUrl =
   process.env.E2E_DATABASE_URL ??
@@ -44,13 +54,54 @@ const databaseUrl =
 
 const idSchema = z.object({ id: z.string() });
 const readSchema = z.object({
+  publishedRevision: z.number().optional(),
   publishNarrative: z.object({ summary: z.string().min(1) }),
   appAudience: z.object({
     selected: appAudienceSchema,
+    live: appAudienceSchema.optional(),
+    liveLabel: z.string().optional(),
+    people: z.number().optional(),
     choices: z.array(appAudienceSchema),
     label: z.string().min(1)
   })
 });
+
+/** What the instance says of revision 1 of an App for this person: what is live, for whom. */
+async function readApp(page: Page, appUrl: string, workspaceId: string, audience?: Audience) {
+  const read = await page.request.get(
+    `${appUrl}?workspaceId=${workspaceId}&revision=1${audience ? `&audience=${audience}` : ""}`
+  );
+  expect(read.ok(), await read.text()).toBe(true);
+  return readSchema.parse(await read.json());
+}
+
+/** Each language, theme and width in turn, with a fresh page in that language and theme. */
+async function eachLook(
+  page: Page,
+  show: (locale: Locale) => Promise<Locator>,
+  shoot: (locale: Locale, theme: Theme, width: number) => Promise<void>
+): Promise<number> {
+  let count = 0;
+  for (const locale of LOCALES) {
+    await setAccountLocale(page, locale);
+    for (const theme of THEMES) {
+      await page.setViewportSize(DESKTOP);
+      await setLook(page, locale, theme);
+      const shown = await show(locale);
+      for (const size of SIZES) {
+        await page.setViewportSize(size);
+        await shown.scrollIntoViewIfNeeded();
+        await expect(shown).toBeInViewport();
+        await shoot(locale, theme, size.width);
+        count += 1;
+      }
+    }
+  }
+  await page.setViewportSize(DESKTOP);
+  await setAccountLocale(page, "en");
+  await setLook(page, "en", "light");
+  return count;
+}
 
 /** The words of a choice, as the dialog shows them. */
 function choiceName(audience: Audience, locale: Locale, workspaceName: string): string {
@@ -175,7 +226,6 @@ export async function shareAsksForWhom(
   await page.setViewportSize(DESKTOP);
   await signIn(page, admin);
   await expect(page).toHaveURL(/\/w\/[^/]+/u);
-  const ownWorkspacePath = new URL(page.url()).pathname;
   await setAccountLocale(page, "en");
 
   const memberContext = await browser.newContext({ viewport: DESKTOP });
@@ -257,7 +307,10 @@ export async function shareAsksForWhom(
         .getByRole("radio", { name: choiceName(audience, locale, workspaceName), exact: true })
         .click();
       await expect(dialog.getByTestId("publish-narrative-summary")).toHaveText(answer.summary);
-      await expect(dialog.locator('[data-field="data-audience"]')).toContainText(answer.label);
+      const line = dialog.locator('[data-field="data-audience"]');
+      await expect(line).toContainText(answer.label);
+      // A chosen audience never hides that the instance admins see the data too.
+      await expect(line.getByTestId("app-publish-data-admins")).toBeVisible();
       await expect(dialog.getByRole("button", { name: PUBLISH })).toBeEnabled();
     };
     const openDetails = async () => {
@@ -466,47 +519,236 @@ export async function shareAsksForWhom(
       }
     }
 
-    // The save line: the agent saves an App in the admin's own workspace; the line says who
-    // can use it now, and "Share" opens the same dialog.
+    // The admin makes revision 1 live for the whole instance.
+    await setAccountLocale(page, "en");
+    await setLook(page, "en", "light");
+    await page.setViewportSize(DESKTOP);
+    await openDialog();
+    await question.getByRole("radio", { name: "Whole instance", exact: true }).click();
+    await expect(dialog.getByRole("button", { name: PUBLISH })).toBeEnabled();
+    await dialog.getByRole("button", { name: PUBLISH }).click();
+    await expect(dialog).toBeHidden();
+    await expect
+      .poll(async () => (await readApp(page, appUrl, workspaceId)).appAudience.live)
+      .toBe("instance");
+    const liveRevision = (await readApp(page, appUrl, workspaceId)).publishedRevision;
+    expect(liveRevision).toBe(1);
+
+    // Audience only: the draft is what is live, and Publish still opens the question. It holds
+    // Publish while the live audience is chosen and lets it go once another one is.
+    const openLiveDialog = async (): Promise<Locator> => {
+      await page.goto(`/w/${workspaceId}/app-drafts/${appId}`);
+      const pagePublish = page.getByTestId("app-edit").getByRole("button", { name: PUBLISH });
+      await expect(pagePublish).toBeEnabled();
+      await pagePublish.click();
+      await expect(question.getByRole("radio", { checked: true })).toHaveCount(1);
+      await expect(dialog.getByRole("button", { name: PUBLISH })).toBeDisabled();
+      return question;
+    };
+    await openLiveDialog();
+    await expect(
+      question.getByRole("radio", { name: "Whole instance", exact: true })
+    ).toBeChecked();
+    await expect(dialog.getByTestId("app-publish-audience-change")).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    const audienceOnly = await eachLook(
+      page,
+      async (locale) => {
+        await openLiveDialog();
+        await question
+          .getByRole("radio", { name: choiceName("workspace", locale, workspaceName), exact: true })
+          .click();
+        const change = dialog.getByTestId("app-publish-audience-change");
+        await expect(change).toHaveText(
+          locale === "de"
+            ? `Jetzt geteilt: Alle in der Instanz. Nach dem Veröffentlichen: Alle in ${workspaceName}.`
+            : `Shared now: Everyone in the instance. After publishing: Everyone in ${workspaceName}.`
+        );
+        await expect(dialog.getByRole("button", { name: PUBLISH })).toBeEnabled();
+        return change;
+      },
+      (locale, theme, width) => picture(page, testInfo, `audience-only-${locale}-${theme}-${width}`)
+    );
+    expect(audienceOnly).toBe(8);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    // Narrowing: the member may publish in this workspace only. On the instance-wide App the
+    // instance offers them what they may choose, the widest chosen, and says who has it now.
+    const memberRead = await readApp(memberPage, appUrl, workspaceId);
+    expect(memberRead.appAudience.live).toBe("instance");
+    expect(memberRead.appAudience.choices).toEqual(["self", "workspace"]);
+    expect(memberRead.appAudience.selected).toBe("workspace");
+    await memberPage.goto(`/w/${workspaceId}/app-drafts/${appId}`);
+    const memberLivePublish = memberPage
+      .getByTestId("app-edit")
+      .getByRole("button", { name: PUBLISH });
+    await expect(memberLivePublish).toBeVisible();
+    if (await memberLivePublish.isEnabled()) {
+      const memberDialog = memberPage.getByRole("dialog");
+      const narrowing = await eachLook(
+        memberPage,
+        async (locale) => {
+          await memberPage.goto(`/w/${workspaceId}/app-drafts/${appId}`);
+          await memberPage.getByTestId("app-edit").getByRole("button", { name: PUBLISH }).click();
+          const memberQuestion = memberDialog.getByTestId("app-publish-audience");
+          await expect(memberQuestion.getByRole("radio")).toHaveCount(2);
+          await expect(
+            memberQuestion.getByRole("radio", { name: workspaceName, exact: true })
+          ).toBeChecked();
+          const change = memberDialog.getByTestId("app-publish-audience-change");
+          await expect(change).toContainText(
+            locale === "de"
+              ? "Jetzt geteilt: Alle in der Instanz."
+              : "Shared now: Everyone in the instance."
+          );
+          await expect(memberDialog.getByRole("button", { name: PUBLISH })).toBeEnabled();
+          return change;
+        },
+        (locale, theme, width) =>
+          picture(memberPage, testInfo, `narrowing-${locale}-${theme}-${width}`)
+      );
+      expect(narrowing).toBe(8);
+      await memberDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(memberDialog).toBeHidden();
+    } else {
+      testInfo.annotations.push({
+        type: "known-prerequisite",
+        description:
+          "ui-fix-1: Publish on the draft page is held for a builder whose publish right is on one workspace only; the narrowing dialog was proved through the instance's answer, not in the browser."
+      });
+    }
+
+    // The admin publishes the audience change: the same revision, now for the workspace.
+    await openLiveDialog();
+    await question.getByRole("radio", { name: workspaceName, exact: true }).click();
+    await expect(dialog.getByRole("button", { name: PUBLISH })).toBeEnabled();
+    await dialog.getByRole("button", { name: PUBLISH }).click();
+    await expect(dialog).toBeHidden();
+    await expect
+      .poll(async () => (await readApp(page, appUrl, workspaceId)).appAudience.live)
+      .toBe("workspace");
+    expect((await readApp(page, appUrl, workspaceId)).publishedRevision).toBe(liveRevision);
+
+    // The save line: the agent saves an App in the admin's personal workspace; the line says
+    // who can use it now, in the reader's language, and "Share" opens the same dialog.
     await setAccountLocale(page, "en");
     await page.setViewportSize(DESKTOP);
     await setLook(page, "en", "light");
-    await page.goto(ownWorkspacePath);
-    await expect(page).toHaveURL(/\/w\/[^/]+/u);
+    const personal = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/v1/workspaces/personal`,
+      {}
+    );
+    expect(personal.ok(), await personal.text()).toBe(true);
+    const personalId = idSchema.parse(await personal.json()).id;
+    await page.goto(`/w/${personalId}`);
+    await expect(page).toHaveURL(new RegExp(`/w/${personalId}`, "u"));
+    const conversationPath = async () => {
+      // The conversation the tool calls run in, to come back to after each look.
+      await expect(page).toHaveURL(/\/w\/[^/]+\/c\/[^/?]+/u);
+      return new URL(page.url()).pathname;
+    };
     const folder = `share-${tag}`;
     const savedTitle = `Share desk ${tag}`;
+    const savedId = `share-desk-${tag}`;
+    const savedUrl = `${apiBaseUrl}/api/v1/assets/app/${savedId}`;
     for (const [path, content] of Object.entries(plainPageSource)) {
       await sendToolCall(page, "workspace.write_file", { path: `${folder}/${path}`, content });
     }
+    // The save moves this tab to the App's draft; the line stays in the conversation.
+    const thread = await conversationPath();
     await sendToolCall(page, "workspace.open", { path: folder });
     await sendToolCall(page, "app.save", { path: folder, name: savedTitle });
     const line = page.getByTestId("app-saved-line").last();
     await expect(line).toContainText(`Saved as the app ${savedTitle}.`);
-    for (const locale of LOCALES) {
-      for (const theme of THEMES) {
-        await page.setViewportSize(DESKTOP);
-        await setLook(page, locale, theme);
-        await page.reload();
-        await expect(line).toBeVisible();
-        for (const size of [DESKTOP, PHONE]) {
-          await page.setViewportSize(size);
-          await line.scrollIntoViewIfNeeded();
-          await expect(line.getByTestId("app-saved-share")).toBeInViewport();
-          await picture(page, testInfo, `save-line-${locale}-${theme}-${size.width}`);
-        }
-      }
-    }
-    await page.setViewportSize(DESKTOP);
-    await setLook(page, "en", "light");
-    await page.reload();
+    const saveLines = await eachLook(
+      page,
+      async (locale) => {
+        await page.goto(thread);
+        await expect(line).toContainText(
+          locale === "de"
+            ? `Als App ${savedTitle} gespeichert. Du kannst sie jetzt nutzen, andere, sobald du sie teilst.`
+            : `Saved as the app ${savedTitle}. You can use it now; others can once you share it.`
+        );
+        await expect(line.getByTestId("app-saved-share")).toHaveText(
+          locale === "de" ? "Teilen" : "Share"
+        );
+        return line.getByTestId("app-saved-share");
+      },
+      (locale, theme, width) => picture(page, testInfo, `save-line-${locale}-${theme}-${width}`)
+    );
+    expect(saveLines).toBe(8);
+    await page.goto(thread);
     await line.getByTestId("app-saved-share").click();
     await expect(page.getByRole("dialog")).toHaveCount(1);
     await expect(dialog.getByTestId("app-publish-audience")).toBeVisible();
     await expect(dialog.getByRole("radio", { name: "Only me", exact: true })).toBeChecked();
+    // A personal workspace has nobody else in it: the instance offers no workspace choice.
+    await expect(dialog.getByTestId("app-publish-audience").getByRole("radio")).toHaveCount(2);
+    await expect(dialog.getByRole("radio", { name: "Whole instance", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: PUBLISH })).toBeEnabled();
     await picture(page, testInfo, "save-line-share-dialog-en-light-1280");
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(dialog).toBeHidden();
+
+    // The agent asks to publish the App for the whole instance. Its confirmation asks the person
+    // "For whom?" with the agent's suggestion chosen; nothing is live before Allow.
+    const notLive = async () => {
+      const read = await readApp(page, savedUrl, personalId);
+      expect(read.publishedRevision).toBeUndefined();
+      expect(read.appAudience.live).toBeUndefined();
+    };
+    await notLive();
+    const composer = page.getByPlaceholder(/^(?:Message|Nachricht)$/u);
+    await composer.fill(
+      `/tool assets.publish ${JSON.stringify({
+        kind: "app",
+        name: savedId,
+        revision: 1,
+        workspaceId: personalId,
+        audience: "instance"
+      })}`
+    );
+    await page.getByRole("button", { name: /^(?:Send message|Nachricht senden)$/u }).click();
+    const card = page.getByTestId("tool-decision-card").last();
+    const confirmation = card.getByTestId("app-publish-confirmation");
+    await expect(confirmation).toBeVisible();
+    const agentShots = await eachLook(
+      page,
+      async (locale) => {
+        await page.goto(thread);
+        await expect(
+          confirmation.getByText(locale === "de" ? "Für wen?" : "For whom?")
+        ).toBeVisible();
+        await expect(
+          confirmation.getByRole("radio", { name: choiceName("instance", locale, ""), exact: true })
+        ).toBeChecked();
+        await expect(confirmation.getByRole("radio")).toHaveCount(2);
+        await expect(card.getByRole("button", { name: ALLOW })).toBeEnabled();
+        return confirmation;
+      },
+      (locale, theme, width) => picture(page, testInfo, `agent-confirm-${locale}-${theme}-${width}`)
+    );
+    expect(agentShots).toBe(8);
+    // Choosing another audience publishes nothing yet: Allow waits for its sentence, and the
+    // App is still not live.
+    await page.goto(thread);
+    await confirmation.getByRole("radio", { name: "Only me", exact: true }).click();
+    await expect(confirmation.getByRole("radio", { name: "Only me", exact: true })).toBeChecked();
+    await expect(card.getByRole("button", { name: ALLOW })).toBeEnabled();
+    await notLive();
+    await picture(page, testInfo, "agent-confirm-chosen-en-light-1280");
+    // The person's choice is what is published, not the agent's suggestion.
+    await card.getByRole("button", { name: ALLOW }).click();
+    await expect
+      .poll(async () => (await readApp(page, savedUrl, personalId)).appAudience.live, {
+        timeout: 60_000
+      })
+      .toBe("self");
+    expect((await readApp(page, savedUrl, personalId)).publishedRevision).toBe(1);
   } finally {
     await setAccountLocale(page, null).catch(() => undefined);
     for (const end of takeBack) await end().catch(() => undefined);

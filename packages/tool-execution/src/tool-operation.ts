@@ -46,6 +46,7 @@ import { runOperation } from "./run-operation";
 import { toolFailureLogRecord } from "./tool-failure-log";
 import type { ToolRegistry } from "./tool-registry";
 import { failed } from "./tool-results";
+import { APP_PUBLISH_TOOL_NAME } from "./app-publish-tool";
 import { WORKFLOW_TEST_TOOL_NAMES } from "./workflow-test-tools";
 
 /**
@@ -188,7 +189,12 @@ export function registerToolOperations(
     // These describe existing API operations. Registering a tool operation here would
     // replace their person-rights and subject checks, or collide when routes register.
     // `run_agent` is the call of `agents.run`, which the server registers.
-    if (WORKFLOW_TEST_TOOL_NAMES.includes(tool.name) || tool.name === RUN_AGENT_TOOL_NAME) continue;
+    if (
+      WORKFLOW_TEST_TOOL_NAMES.includes(tool.name) ||
+      tool.name === RUN_AGENT_TOOL_NAME ||
+      tool.name === APP_PUBLISH_TOOL_NAME
+    )
+      continue;
     registry.register(toolOperation(tool, options));
   }
 }

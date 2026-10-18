@@ -30,7 +30,7 @@ import {
   type RunOperationDeps
 } from "./operation-execution";
 import { approvedByCaller, resolveGuardedPolicy } from "./operation-policy-call";
-import { hashInput } from "./input-hash";
+import { hashInput } from "@work-shape/catalyst-core";
 
 /** The frozen call of a run that waits for an approval, as its approval request keeps it. */
 export interface WaitingOperationCall {
@@ -127,7 +127,23 @@ export async function executeConfirmedOperation(
   if ("end" in admitted) {
     return admitted.end;
   }
-  return executeWithinTime(admitted.context, decision, options.signal);
+  const { context, policy } = admitted;
+  if (
+    context.call.origin.kind === "agent" &&
+    context.definition.name === "assets.publish" &&
+    policy.next === "await_approval"
+  ) {
+    const approval = await context.definition.approval?.(context.call.input);
+    const access = await deps.authorizer.forActor(context.call.actor);
+    if (!approval || !access.authorize(approval.action).allowed)
+      return holdForApproval(context, policy, waiting.heldInput, approval);
+    return executeWithinTime(
+      context,
+      { ...decision, mode: "approved", reason: "approved_by_caller" },
+      options.signal
+    );
+  }
+  return executeWithinTime(context, decision, options.signal);
 }
 
 /**

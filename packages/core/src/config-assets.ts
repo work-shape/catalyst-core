@@ -604,9 +604,16 @@ export interface ConfigAssetStore {
     audience?: AppAudience;
     /** With self: the selecting person's personal workspace. */
     audienceWorkspaceId?: CollaborationWorkspaceId;
+    /** The live state whose reach was reviewed; rechecked under the asset row lock. */
+    appPublishReview?: {
+      liveRevisionId: string | null;
+      liveAudience: AppAvailability;
+      contentWidens: boolean;
+    };
   }): Promise<{
     assetId: string;
     revision: number;
+    publishWidens?: boolean;
     /** The number the pointer named before, absent on the first publish. */
     replacedRevision?: number;
     fileSetId?: FileSetId;

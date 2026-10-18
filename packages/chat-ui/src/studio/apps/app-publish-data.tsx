@@ -16,7 +16,7 @@ export function AppPublishData({
 }: {
   app: string;
   revision: number;
-  /** Who the question's chosen audience names (SHARE-1), in place of who may use the App now. */
+  /** Who the request's chosen audience names (SHARE-1), in place of who may use the App now. */
   audienceLabel?: string | undefined;
 }) {
   return (
@@ -32,6 +32,7 @@ export function AppPublishData({
 export function AppPublishDataView({
   read,
   audienceLabel,
+  audiencePeople,
   audiencePending = false
 }: {
   read: AppPublishDataRead;
@@ -40,13 +41,15 @@ export function AppPublishDataView({
    * the App now: the lines say who would see the data after this publish.
    */
   audienceLabel?: string | undefined;
+  /** How many people the chosen audience names, where the instance counted them. */
+  audiencePeople?: number | undefined;
   /**
    * The answer for a newly chosen audience is on its way: who sees the data waits for it, and
    * the people of the choice before are never shown under the new one. The stores stay.
    */
   audiencePending?: boolean;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   if (read.status === "loading") {
     return (
       <KeyValue label={t("apps.publishDataAudience")} data-field="data-audience">
@@ -76,8 +79,34 @@ export function AppPublishDataView({
       <KeyValue label={t("apps.publishDataAudience")} data-field="data-audience">
         {audiencePending ? (
           <SkeletonList rows={1} className="w-full" data-testid="app-publish-audience-pending" />
+        ) : audienceLabel === undefined ? (
+          data.audience
         ) : (
-          (audienceLabel ?? data.audience)
+          // The chosen audience, then whoever sees the data whatever it is: the App's own
+          // grant holders and the instance admins. A choice never hides either.
+          <div className="grid min-w-0 gap-0.5" data-testid="app-publish-data-audience">
+            <span data-testid="app-publish-data-chosen">
+              {audiencePeople === undefined
+                ? audienceLabel
+                : t(
+                    audiencePeople === 1
+                      ? "apps.publishAudiencePeopleOne"
+                      : "apps.publishAudiencePeople",
+                    {
+                      label: audienceLabel,
+                      count: new Intl.NumberFormat(locale).format(audiencePeople)
+                    }
+                  )}
+            </span>
+            {data.holders ? (
+              <span className={caption} data-testid="app-publish-data-holders">
+                {t("apps.publishDataHolders", { holders: data.holders })}
+              </span>
+            ) : null}
+            <span className={caption} data-testid="app-publish-data-admins">
+              {t("apps.publishDataAdmins")}
+            </span>
+          </div>
         )}
       </KeyValue>
       <KeyValue label={t("apps.publishDataStores")} data-field="data-stored">

@@ -3382,7 +3382,16 @@ describe("catalyst asset commands against an instance", () => {
       expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
 
       // An App is published on a person's answer to the question, and on nothing else.
-      const unasked = await run("app", "publish", "offers", "--revision", "1", ...workspace);
+      const unasked = await run(
+        "app",
+        "publish",
+        "offers",
+        "--audience",
+        "workspace",
+        "--revision",
+        "1",
+        ...workspace
+      );
       expect(unasked.code).toBe(1);
       expect(unasked.err).toContain("add --yes to confirm it in your Inbox");
       const scripted = await cliAs(t.instance, t.admin.id, cwd, ["y"], true).run(
@@ -3481,6 +3490,8 @@ describe("catalyst asset commands against an instance", () => {
           "app",
           "publish",
           "cli-key-publish",
+          "--audience",
+          "workspace",
           "--revision",
           "1",
           "--workspace",

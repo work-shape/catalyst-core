@@ -224,20 +224,28 @@ export class AssetReadWorkflow {
         : undefined;
     const appAudience =
       target.kind.kind === "app" && locale
-        ? await appAudienceReview(this.options, asset, call.access, locale, address.audience)
+        ? await appAudienceReview(
+            this.options,
+            asset,
+            call.access,
+            locale,
+            address.audience,
+            call.actor
+          )
         : undefined;
     // The sentence the publish question leads with, for the revision this read returns (PUBQ-1).
     const publishNarrative = locale
-      ? await this.options.operationCalls?.publishNarrator?.narrate({
-          kind: target.kind.kind,
-          name: asset.name,
-          scope: asset.scope,
-          revision: content.contentRevision ?? asset.revision,
-          config: content.config,
-          locale,
-          access: call.access,
-          ...(appAudience ? { audienceLabel: appAudience.label } : {})
-        })
+      ? await this.options.operationCalls?.publishNarrator
+          ?.narrate({
+            kind: target.kind.kind,
+            name: asset.name,
+            scope: asset.scope,
+            revision: content.contentRevision ?? asset.revision,
+            config: content.config,
+            locale,
+            access: call.access,
+            ...(appAudience ? { audienceLabel: appAudience.label } : {})
+          })
           .catch(() => unavailablePublishNarrative(locale))
       : undefined;
     const agentStatus =

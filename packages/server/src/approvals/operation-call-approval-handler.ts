@@ -689,7 +689,23 @@ export function createOperationApprovalFiler(
         input,
         ...(heldInput ? { heldInput } : {}),
         ...(confirmation ? { mode: "confirmation" as const } : {}),
-        ...(approval?.subject ? { subject: approval.subject } : {}),
+        ...(approval?.subject
+          ? {
+              subject: {
+                ...approval.subject,
+                ...(approval.kind === "app_publish"
+                  ? {
+                      audiencePersonName: actor.displayLabel,
+                      publish_widens:
+                        approval.subject.publish_widens === true ||
+                        (approval.subject.audience === "self" &&
+                          approval.subject.liveAudience === "self" &&
+                          approval.subject.liveAudienceUserId !== (actor.subjectUserId ?? actor.id))
+                    }
+                  : {})
+              }
+            }
+          : {}),
         ...(confirmation && approval?.subject ? { subjectKind: approval.kind } : {}),
         actor: {
           id: actor.id,

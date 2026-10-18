@@ -45,13 +45,11 @@ function formatStoredData(data: AppSources, audienceLabel?: string): string {
     ...(!audienceLabel && audience.workspace
       ? [`  Everyone in ${audience.workspace.title} (${audience.workspace.members} people).`]
       : []),
-    ...(audienceLabel ? [] : audience.holders).map(
-      (holder) => `  Additional ${holder.kind}: ${holder.title}.`
-    ),
-    ...(!audienceLabel && audience.hiddenHolders > 0
+    ...audience.holders.map((holder) => `  Additional ${holder.kind}: ${holder.title}.`),
+    ...(audience.hiddenHolders > 0
       ? [`  ${audience.hiddenHolders} additional grant holders (not a count of people).`]
       : []),
-    ...(audienceLabel ? [] : ["  Instance admins also have access."]),
+    "  Instance admins also have access.",
     "Stored data its reading actions select:",
     ...data.stores.flatMap((store) => [
       `  ${store.title}: ${(store.actions ?? []).join(", ")}.`,

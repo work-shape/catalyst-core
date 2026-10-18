@@ -196,6 +196,9 @@ export const assetSchema = z.object({
   appAudience: z
     .object({
       selected: appAudienceSchema,
+      live: appAudienceSchema.optional(),
+      liveLabel: z.string().optional(),
+      people: z.number().int().nonnegative().optional(),
       choices: z.array(appAudienceSchema),
       label: z.string(),
       workspaceName: z.string().optional()

@@ -246,6 +246,12 @@ export interface AppAudienceOffer {
   choices: readonly AppAudience[];
   /** The people the selected audience names, in the reader's language. */
   label: string;
+  /** How many people the selected audience names, where the instance counts them. */
+  people?: number;
+  /** Who the live revision is for, where one is live, and the people it names. */
+  live?: { audience: AppAudience; label: string | undefined };
+  /** The name of the workspace that owns the App. */
+  workspaceName?: string;
 }
 
 /** The read behind an App's publish question: the sentence and the audience offer, in one answer. */
@@ -258,7 +264,14 @@ export interface AppPublishQuestionRead {
 /** The offer an answer holds, read whole or not at all. */
 function appAudienceOffer(value: Asset["appAudience"]): AppAudienceOffer | undefined {
   if (value === undefined || !value.choices.includes(value.selected)) return undefined;
-  return { selected: value.selected, choices: value.choices, label: value.label };
+  return {
+    selected: value.selected,
+    choices: value.choices,
+    label: value.label,
+    ...(value.people === undefined ? {} : { people: value.people }),
+    ...(value.live === undefined ? {} : { live: { audience: value.live, label: value.liveLabel } }),
+    ...(value.workspaceName === undefined ? {} : { workspaceName: value.workspaceName })
+  };
 }
 
 /**
