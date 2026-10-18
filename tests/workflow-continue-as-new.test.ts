@@ -1,5 +1,5 @@
 import type { JsonValue } from "@work-shape/catalyst-core";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
@@ -221,7 +221,16 @@ describe("continue-as-new", () => {
   });
 
   it("check 112: continues a 50,000-row dataset at 20,000 step runs into three histories, with exactly one step per row plus fixed steps", async () => {
-    const { t } = await ready(definition());
+    const objects = new MemoryObjectStorage();
+    const reads = vi.spyOn(objects, "get");
+    const definitions = publishedDefinitions();
+    definitions.publish(definition());
+    const t = await readyWorkflows(
+      (fixture) => {
+        open = fixture;
+      },
+      { definitions: definitions.source, datasetObjects: objects }
+    );
     let calls = 0;
     t.setBehaviour((operation, input) =>
       Promise.resolve<JsonValue>(
@@ -265,5 +274,6 @@ describe("continue-as-new", () => {
       expect(Date.parse(next.createdAt) - Date.parse(prior.finishedAt)).toBeLessThan(60_000);
     }
     expect(calls).toBe(50_000);
+    expect(reads.mock.calls.length).toBeLessThanOrEqual(3);
   }, 300_000);
 });

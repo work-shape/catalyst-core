@@ -520,10 +520,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
         }
         case "loop": {
           if (step.collect !== undefined) throw notSupportedFailure("'collect' on a loop");
-          const checkpoint = await stores.workflowRuns.readCheckpoint({
-            clientInstanceId,
-            id: run.id
-          });
+          const checkpoint = await checkpointFrame(stores, run, stepRun);
           const items =
             checkpoint?.stepId === step.id
               ? checkpoint.items
