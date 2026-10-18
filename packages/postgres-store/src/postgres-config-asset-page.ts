@@ -2,7 +2,7 @@ import { appAvailabilityColumn } from "./app-availability";
 import { and, eq, ilike, inArray, like, or, sql, type SQLWrapper } from "drizzle-orm";
 import type { ConfigAssetRecord, ConfigAssetStore } from "@work-shape/catalyst-core";
 import { containsPattern, prefixPattern } from "./like-pattern";
-import { publishedColumns, publishedRevisions } from "./postgres-config-asset-operations";
+import { publishedColumns, publishedRevisions } from "./postgres-config-asset-revisions";
 import type { PostgresConnection } from "./postgres-database";
 import { mapAssetScope, mapConfigAsset } from "./rows";
 import { configAssetRevisions, configAssets } from "./schema";
@@ -32,7 +32,12 @@ export async function listConfigAssetPage(
             eq(configAssets.scopeId, input.scope.workspaceId)
           )
         )
-      : eq(configAssets.scopeKind, "instance")
+      : or(
+          input.kind === "app"
+            ? sql`${appAvailabilityColumn}->>'audience' = 'instance'`
+            : undefined,
+          eq(configAssets.scopeKind, "instance")
+        )
   ];
   if (input.namePrefix !== undefined) {
     // A constant pattern, so the planner reads it as a range of the prefix index.

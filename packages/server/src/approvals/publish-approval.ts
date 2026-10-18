@@ -54,6 +54,7 @@ export const PUBLISH_APPROVAL_KINDS: readonly string[] = Object.values(PUBLISH_A
 const publishSubjectSchema = z.object({
   audience: appAudienceSchema.optional(),
   liveAudience: appAudienceSchema.optional(),
+  liveAudienceUserId: z.string().optional(),
   kind: z.string().min(1),
   name: z.string().min(1),
   /** The name people read, when the request was filed. */
@@ -93,7 +94,12 @@ export function publishApproval(
     draftRevision: asset.revision,
     liveRevision: asset.publishedRevision ?? null,
     ...(target.kind.kind === "app"
-      ? { liveAudience: asset.appAvailability?.audience ?? "workspace" }
+      ? {
+          liveAudience: asset.appAvailability?.audience ?? "workspace",
+          ...(asset.appAvailability?.userId
+            ? { liveAudienceUserId: asset.appAvailability.userId }
+            : {})
+        }
       : {})
   };
   return {
@@ -162,7 +168,8 @@ async function publishMoved(
   if (
     (asset.publishedRevision ?? null) !== subject.liveRevision ||
     (subject.liveAudience !== undefined &&
-      (asset.appAvailability?.audience ?? "workspace") !== subject.liveAudience)
+      ((asset.appAvailability?.audience ?? "workspace") !== subject.liveAudience ||
+        asset.appAvailability?.userId !== subject.liveAudienceUserId))
   )
     return "live_moved";
   return undefined;

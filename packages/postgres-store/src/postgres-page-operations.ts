@@ -16,7 +16,7 @@ import {
   type PagesStore,
   type ServedFileSet
 } from "@work-shape/catalyst-core";
-import { publishedRevisions } from "./postgres-config-asset-operations";
+import { publishedRevisions } from "./postgres-config-asset-revisions";
 import { type PostgresConnection } from "./postgres-database";
 import { configAssetRevisions, configAssets } from "./schema/configAssets";
 import { conversations } from "./schema/conversations";

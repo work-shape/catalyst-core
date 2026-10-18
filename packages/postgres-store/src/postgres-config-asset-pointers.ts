@@ -134,6 +134,8 @@ export async function publishConfigAssetRevision(
       );
     }
     if (input.audience !== undefined) {
+      if (input.audience === "self" && !input.audienceWorkspaceId)
+        throw new AppError("VALIDATION_FAILED", "Only me needs a personal workspace");
       if (input.kind !== "app")
         throw new AppError("VALIDATION_FAILED", "Only Apps have a publish audience");
       await tx
@@ -156,11 +158,16 @@ export async function publishConfigAssetRevision(
       await tx
         .delete(configAssetWorkspaceAvailability)
         .where(eq(configAssetWorkspaceAvailability.assetId, asset.id));
-      if (input.audience === "workspace" && asset.scopeId)
-        await tx.insert(configAssetWorkspaceAvailability).values({
-          assetId: asset.id,
-          collaborationWorkspaceId: asCollaborationWorkspaceId(asset.scopeId)
-        });
+      const selectedWorkspace =
+        input.audience === "self"
+          ? input.audienceWorkspaceId
+          : input.audience === "workspace" && asset.scopeId
+            ? asCollaborationWorkspaceId(asset.scopeId)
+            : undefined;
+      if (selectedWorkspace)
+        await tx
+          .insert(configAssetWorkspaceAvailability)
+          .values({ assetId: asset.id, collaborationWorkspaceId: selectedWorkspace });
     }
     const [replaced] = asset.publishedRevisionId
       ? await tx

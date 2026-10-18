@@ -1,5 +1,10 @@
 import {
   AppError,
+  getSubjectUserId,
+  isAuthenticatedServicePrincipal,
+  asUserId,
+  type AuthenticatedIdentity,
+  type UserId,
   asCollaborationWorkspaceId,
   type ActorAccess,
   type AppAudience,
@@ -54,12 +59,18 @@ export async function appAudienceReview(
   return { selected, choices, label, ...(workspace ? { workspaceName: workspace.name } : {}) };
 }
 
-/** Refuse private publication without a person attributed as its builder. */
-export function requireAppBuilder(asset: ConfigAssetRecord, audience: AppAudience): void {
-  if (audience === "self" && !asset.appAvailability?.userId) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "This App has no person attributed as its builder. Choose the workspace audience."
-    );
-  }
+/** Only me selects the person publishing. A legacy request without a choice keeps the live
+ * recipient instead, so omission never silently hands somebody else the private App. */
+export function appAudiencePerson(
+  actor: AuthenticatedIdentity,
+  asset: ConfigAssetRecord,
+  chosen: AppAudience | undefined,
+  audience: AppAudience
+): UserId | undefined {
+  if (audience !== "self") return undefined;
+  if (chosen === undefined && asset.appAvailability?.userId)
+    return asUserId(asset.appAvailability.userId);
+  if (isAuthenticatedServicePrincipal(actor))
+    throw new AppError("FORBIDDEN", "Only me needs a person publishing the App");
+  return asUserId(getSubjectUserId(actor));
 }

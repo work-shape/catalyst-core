@@ -48,12 +48,11 @@ export async function listAgentAvailability(
     .where(
       and(
         eq(configAssetAvailability.clientInstanceId, input.clientInstanceId),
-        input.agentName === undefined
-          ? undefined
-          : inArray(
-              configAssetWorkspaceAvailability.assetId,
-              rows.map((row) => row.assetId)
-            )
+        // The availability table also holds Apps. Read only the agents selected above.
+        inArray(
+          configAssetWorkspaceAvailability.assetId,
+          rows.map((row) => row.assetId)
+        )
       )
     )
     .orderBy(asc(configAssetWorkspaceAvailability.collaborationWorkspaceId));

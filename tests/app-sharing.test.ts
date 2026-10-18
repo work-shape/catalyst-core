@@ -48,10 +48,13 @@ describe("SHARE-1 audience on App availability", () => {
     });
 
   it("check 56: only the builder uses the live private App; another workspace member does not find it in Apps", async () => {
-    expectStatus(await t.putApp(t.kai.id, "private", appFiles("private", { id: "private" })), 200);
+    expectStatus(
+      await t.putApp(t.admin.id, "private", appFiles("private", { id: "private" })),
+      200
+    );
     expectStatus(await publish(t.admin.id, "private", "self"), 200);
     expectStatus(
-      await t.call(t.kai.id, "apps.preview", {
+      await t.call(t.admin.id, "apps.preview", {
         params: { app: "private" },
         payload: { mode: "published" }
       }),
@@ -86,7 +89,36 @@ describe("SHARE-1 audience on App availability", () => {
           name: "private"
         })
       )?.appAvailability
-    ).toEqual({ audience: "self", userId: t.kai.id });
+    ).toEqual({ audience: "self", userId: t.admin.id });
+  });
+
+  it("check 56: Only me stays distinct from Workspace when the App's owner is a personal workspace", async () => {
+    const personal = await t.stores.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: t.admin.id
+    });
+    expectStatus(
+      await t.call(t.admin.id, "assets.put", {
+        params: { kind: "app", name: "personal-owner" },
+        payload: { workspaceId: personal.id, files: appFiles("personal-owner", { id: "personal" }) }
+      }),
+      200
+    );
+    for (const audience of ["self", "workspace", "self"] as const) {
+      expectStatus(
+        await t.call(t.admin.id, "assets.publish", {
+          params: { kind: "app", name: "personal-owner" },
+          payload: { workspaceId: personal.id, revision: 1, audience }
+        }),
+        200
+      );
+      const read = await t.call(t.admin.id, "assets.get", {
+        params: { kind: "app", name: "personal-owner" },
+        query: { workspaceId: personal.id }
+      });
+      expectStatus(read, 200);
+      expect(audienceRead.parse(read.json()).appAudience.selected).toBe(audience);
+    }
   });
 
   it("check 56: instance audience is absent without the instance publish right and a forged request is refused", async () => {
@@ -118,7 +150,16 @@ describe("SHARE-1 audience on App availability", () => {
 
   it("check 80 / check 76: the same revision with a wider audience is held and its Inbox review freezes that audience", async () => {
     expectStatus(await t.putApp(t.kai.id, "widen", appFiles("widen", { id: "widen" })), 200);
-    expectStatus(await publish(t.admin.id, "widen", "self"), 200);
+    const first = await publish(t.kai.id, "widen", "self");
+    expectStatus(first, 202);
+    expectStatus(
+      await t.call(t.admin.id, "approval_requests.decide", {
+        params: { requestId: held.parse(first.json()).approvalRequestId },
+        payload: { decision: "approve" }
+      }),
+      200
+    );
+    await getTestJobs(t.instance).runDue();
     expectStatus(await publish(t.kai.id, "widen", "self"), 200);
     const wider = await publish(t.kai.id, "widen", "workspace");
     expectStatus(wider, 202);
@@ -144,11 +185,47 @@ describe("SHARE-1 audience on App availability", () => {
     ).toBe("workspace");
     expect(
       audienceRead.parse((await get(t.kai.id, "widen", "self")).json()).publishNarrative?.summary
-    ).toContain("Only the builder");
+    ).toContain("only the builder");
     expect(
       audienceRead.parse((await get(t.kai.id, "widen", "workspace")).json()).publishNarrative
         ?.summary
-    ).toContain("Everyone in");
+    ).toContain("everyone in");
+  });
+
+  it("check 80: Only me selects the person publishing, and changing that private recipient widens reach", async () => {
+    expectStatus(
+      await t.putApp(t.admin.id, "recipient", appFiles("recipient", { id: "recipient" })),
+      200
+    );
+    expectStatus(await publish(t.admin.id, "recipient", "self"), 200);
+    const change = await publish(t.kai.id, "recipient", "self");
+    expectStatus(change, 202);
+    const stored = () =>
+      t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "app", name: "recipient" });
+    expect((await stored())?.appAvailability?.userId).toBe(t.admin.id);
+    expectStatus(
+      await t.call(t.admin.id, "approval_requests.decide", {
+        params: { requestId: held.parse(change.json()).approvalRequestId },
+        payload: { decision: "approve" }
+      }),
+      200
+    );
+    await getTestJobs(t.instance).runDue();
+    expect((await stored())?.appAvailability).toEqual({ audience: "self", userId: t.kai.id });
+    expectStatus(
+      await t.call(t.kai.id, "apps.preview", {
+        params: { app: "recipient" },
+        payload: { mode: "published" }
+      }),
+      200
+    );
+    expectStatus(
+      await t.call(t.admin.id, "apps.preview", {
+        params: { app: "recipient" },
+        payload: { mode: "published" }
+      }),
+      403
+    );
   });
 
   it("check 56: instance availability reaches a person outside the owner workspace without moving the App's owner", async () => {
@@ -158,6 +235,11 @@ describe("SHARE-1 audience on App availability", () => {
     );
     expectStatus(await publish(t.admin.id, "instance", "instance"), 200);
     const elsewhere = await t.sharedWorkspace("Other workspace");
+    const instanceList = await t.call(t.lena.id, "assets.list", { params: { kind: "app" } });
+    expectStatus(instanceList, 200);
+    expect(listRead.parse(instanceList.json()).items.map((item) => item.name)).toContain(
+      "instance"
+    );
     const listed = await t.call(t.lena.id, "assets.list", {
       params: { kind: "app" },
       query: { workspaceId: elsewhere }
@@ -194,6 +276,8 @@ describe("SHARE-1 audience on App availability", () => {
     expect(appAudienceWidens("instance", "workspace")).toBe(true);
     expect(appAudienceWidens("instance", "self")).toBe(true);
     expect(appAudienceWidens("self", "workspace")).toBe(false);
+    expect(appAudienceWidens("self", "self", "a", "b")).toBe(true);
+    expect(appAudienceWidens("self", "self", "a", "a")).toBe(false);
     const holder = {
       kind: "user" as const,
       id: "other",

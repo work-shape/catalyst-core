@@ -602,6 +602,8 @@ export interface ConfigAssetStore {
     requireFiles?: true;
     /** The audience changes atomically with the live pointer. Apps only. */
     audience?: AppAudience;
+    /** With self: the selecting person's personal workspace. */
+    audienceWorkspaceId?: CollaborationWorkspaceId;
   }): Promise<{
     assetId: string;
     revision: number;

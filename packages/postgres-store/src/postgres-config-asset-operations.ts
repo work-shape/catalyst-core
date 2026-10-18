@@ -6,7 +6,6 @@ import { writeAgentDraft, consumeAgentDraft, carryAgentSkillChange } from "./age
 import { prefixPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
 import { and, asc, desc, eq, getTableColumns, inArray, like, max, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 import {
   AppError,
   INSTANCE_ASSET_SCOPE,
@@ -49,6 +48,8 @@ import {
   permissionGrants
 } from "./schema";
 import {
+  publishedColumns,
+  publishedRevisions,
   getConfigAssetRevision as getPostgresConfigAssetRevision,
   getConfigAssetRevisionById as getPostgresConfigAssetRevisionById
 } from "./postgres-config-asset-revisions";
@@ -59,15 +60,6 @@ import {
   removeConfigAsset as removePostgresConfigAsset
 } from "./postgres-config-asset-pointers";
 import { sweepAssetRepoSaves } from "./jobs/asset-repo-sweep";
-
-/** The revision the published pointer of an asset names, joined beside the active one. */
-export const publishedRevisions = alias(configAssetRevisions, "published_revisions");
-export const publishedColumns = {
-  id: publishedRevisions.id,
-  revision: publishedRevisions.revision,
-  fileSetId: publishedRevisions.fileSetId,
-  config: publishedRevisions.config
-};
 
 /** A revision whose config, for a skill, is left without its resources in the database. */
 const revisionWithoutSkillResources = {

@@ -1,8 +1,18 @@
+import { alias } from "drizzle-orm/pg-core";
 import { and, eq, type SQL } from "drizzle-orm";
 import type { ConfigAssetRevisionRecord, ConfigAssetStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { mapConfigAssetRevision } from "./rows";
 import { configAssetRevisions, configAssets } from "./schema";
+
+/** The revision the published pointer of an asset names, joined beside the active one. */
+export const publishedRevisions = alias(configAssetRevisions, "published_revisions");
+export const publishedColumns = {
+  id: publishedRevisions.id,
+  revision: publishedRevisions.revision,
+  fileSetId: publishedRevisions.fileSetId,
+  config: publishedRevisions.config
+};
 
 // The reads of one revision of an asset: by its number, as the asset operations name it, and
 // by its id, as a reader names it that kept the id of the revision it started on.

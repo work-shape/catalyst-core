@@ -1,4 +1,4 @@
-import { requireAppAudience, requireAppBuilder } from "../apps/app-audience";
+import { requireAppAudience, appAudiencePerson } from "../apps/app-audience";
 import type { AppAudience } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import { clearLiveOnceSwitches } from "./asset-after-write";
@@ -447,8 +447,16 @@ export class AssetDraftWorkflow {
         : undefined;
     if (audience) {
       requireAppAudience(call.access, audience);
-      requireAppBuilder(asset, audience);
     }
+    const audienceUserId = audience
+      ? appAudiencePerson(call.actor, asset, input.audience, audience)
+      : undefined;
+    const personalWorkspace = audienceUserId
+      ? await this.options.stores.workspaces.ensurePersonalWorkspace({
+          clientInstanceId: this.options.clientInstanceId,
+          userId: audienceUserId
+        })
+      : undefined;
     const revision = await liveRevision(this.options, call, target, input.revision);
     const { config } = revision;
     // The set as it would be were this revision the asset's content, checked as a write of it.
@@ -469,6 +477,7 @@ export class AssetDraftWorkflow {
         revision: input.revision,
         revisionId: revision.id,
         ...(audience ? { audience } : {}),
+        ...(personalWorkspace ? { audienceWorkspaceId: personalWorkspace.id } : {}),
         // A kind that reads its files itself has no built files to serve.
         ...(kind.representation === "files" && !kind.manifestOfFiles
           ? { requireFiles: true as const }
@@ -481,7 +490,6 @@ export class AssetDraftWorkflow {
           await onPublish({
             actor: call.actor,
             revisionId: revision.id,
-            ...(audience ? { audience } : {}),
             clientInstanceId: this.options.clientInstanceId,
             access: call.access,
             assetId: moved.assetId,

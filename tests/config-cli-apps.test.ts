@@ -479,7 +479,7 @@ describe("SHARE-1 CLI audience", () => {
       expect(questions[0]).toContain("For whom?");
       expect(questions[0]).toContain("Sales");
       expect(questions[1]).toContain("Publish revision");
-      expect(result.out).toContain("Only the builder");
+      expect(result.out).toContain("only the builder");
       expect(
         (
           await t.stores.configAssets.getConfigAsset({

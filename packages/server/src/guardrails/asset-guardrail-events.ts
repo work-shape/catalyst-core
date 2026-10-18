@@ -1,4 +1,10 @@
-import { appAudienceWidens, type AppAudience } from "@work-shape/catalyst-core";
+import {
+  appAudienceWidens,
+  getSubjectUserId,
+  isAuthenticatedServicePrincipal,
+  type AuthenticatedIdentity,
+  type AppAudience
+} from "@work-shape/catalyst-core";
 import {
   DATA_STORE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
@@ -138,7 +144,8 @@ const PUBLISH_EVENTS: Readonly<Record<string, OperationBeforeEvent["name"]>> = {
  */
 export async function publishEvents(
   options: RevisionOptions,
-  input: RevisionAddress
+  input: RevisionAddress,
+  actor?: AuthenticatedIdentity
 ): Promise<OperationBeforeEvent[]> {
   if (input.kind === "agent") {
     const asset = await options.configAssets.store.getConfigAsset({
@@ -180,7 +187,13 @@ export async function publishEvents(
         reach.connections.some((name) => !before?.connections.includes(name)) ||
         appAudienceWidens(
           input.audience ?? asset.appAvailability?.audience ?? "workspace",
-          asset.appAvailability?.audience ?? "workspace"
+          asset.appAvailability?.audience ?? "workspace",
+          input.audience === "self"
+            ? actor && !isAuthenticatedServicePrincipal(actor)
+              ? getSubjectUserId(actor)
+              : undefined
+            : asset.appAvailability?.userId,
+          asset.appAvailability?.userId
         )
       : undefined;
   if (!revision) {
