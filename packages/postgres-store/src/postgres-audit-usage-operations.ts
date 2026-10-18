@@ -12,6 +12,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { and, desc, eq, gte, lt, sql as drizzleSql } from "drizzle-orm";
 import { type PostgresConnection } from "./postgres-database";
+import { removePersonCounters } from "./postgres-usage-counters";
 import { mapAuditEvent, mapModelUsageEvent } from "./rows";
 import {
   agentRuns,
@@ -137,21 +138,32 @@ export async function clearUserFromModelUsageEvents(
   db: PostgresConnection,
   input: Parameters<ModelUsageEventStore["clearUserFromModelUsageEvents"]>[0]
 ): Promise<number> {
-  const cleared = await db.execute(drizzleSql`
-    update ${modelUsageEvents} set
-      user_id = null,
-      conversation_id = null,
-      agent_run_id = null,
-      operation_run_id = null,
-      correlation_id = ''
-    where ${modelUsageEvents.id} in (
-      select ${modelUsageEvents.id} from ${modelUsageEvents}
+  // Events first, then counters, the order settlement locks them in. The person's counters go
+  // (`removePersonCounters`); what the events held stays on the instance's alone. The empty
+  // correlation id marks an event as erased: it never counts on a scope again.
+  const rows = await db.execute<{ cleared: number }>(drizzleSql`
+    with batch as (
+      select id from ${modelUsageEvents}
       where ${modelUsageEvents.userId} = ${input.userId}
         and ${modelUsageEvents.clientInstanceId} = ${input.clientInstanceId}
       limit ${input.limit}
-    )
+      for update
+    ),
+    cleared as (
+      update ${modelUsageEvents} e set
+        user_id = null,
+        conversation_id = null,
+        agent_run_id = null,
+        operation_run_id = null,
+        correlation_id = ''
+      from batch
+      where e.id = batch.id
+      returning e.*
+    ),
+    ${removePersonCounters(input.clientInstanceId, input.userId)}
+    select count(*)::int as cleared from cleared
   `);
-  return cleared.count;
+  return rows[0]?.cleared ?? 0;
 }
 
 export async function clearWorkspaceFromModelUsageEvents(

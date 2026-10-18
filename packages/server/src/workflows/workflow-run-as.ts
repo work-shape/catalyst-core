@@ -84,7 +84,7 @@ export async function workflowRunAsPrincipal(
   if (!principal) {
     throw new AppError(
       "VALIDATION_FAILED",
-      `The Workflow '${input.workflow}' acts as the service principal '${input.runAs}', and this instance has no service principal of that name`,
+      `This Workflow runs as the technical account '${input.runAs}', which does not exist. Choose an active account in the Workflow definition. An administrator manages accounts under Settings > API access.`,
       { reason: "run_as_unknown", runAs: input.runAs }
     );
   }
@@ -92,8 +92,12 @@ export async function workflowRunAsPrincipal(
   if (principal.status !== "active") {
     throw new AppError(
       "VALIDATION_FAILED",
-      `The Workflow '${input.workflow}' acts as the service principal '${input.runAs}', which is disabled`,
-      { reason: "run_as_disabled", runAs: input.runAs }
+      `This Workflow runs as the technical account '${principal.displayLabel}', which is disabled. Choose an active account in the Workflow definition. An administrator manages accounts under Settings > API access.`,
+      {
+        reason: "run_as_disabled",
+        runAs: input.runAs,
+        principalDisplayLabel: principal.displayLabel
+      }
     );
   }
   return principal;

@@ -331,8 +331,18 @@ test("the first save of a Data Store in a personal chat opens its draft in Studi
   await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
   await page.reload();
 
-  // Publish is the person's click: the store then has a database and a state.
+  // Publish is the person's click, and it asks first: a migration is not taken back.
   await page.locator("[data-data-store-publish]").click();
+  const question = page.locator("dialog[open]");
+  await expect(question.locator("[data-data-store-publish-confirm]")).toContainText(
+    "cannot be taken back"
+  );
+  await question.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(draft).toBeVisible();
+  await page.locator("[data-data-store-publish]").click();
+  await page.locator("dialog[open]").getByRole("button", { name: "Publish" }).click();
+  // The store then has a database and a state.
   await expect(page.locator("[data-data-store-draft]")).toHaveCount(0);
   await expect(page.locator("[data-data-store-state]")).toBeVisible();
 

@@ -57,11 +57,13 @@ export const workflowRights = defineTranslations({
       "A child workflow this workflow starts is not published yet. Publish it first.",
     "workflowRights.refusedCycle": "Publishing this workflow would make it start itself.",
     "workflowRights.refusedAccountMissing":
-      "This workflow names a technical account that does not exist on this instance.",
+      "This workflow names no technical account to run as. Name one in the workflow. An administrator manages the accounts under {place}.",
     "workflowRights.refusedAccountUnknown":
-      "The technical account “{name}” does not exist on this instance.",
+      "This workflow runs as the technical account “{name}”, which does not exist. Choose an active account in the workflow. An administrator manages the accounts under {place}.",
     "workflowRights.refusedAccountDisabled":
-      "The technical account “{name}” is disabled. Activate it before you publish.",
+      "This workflow runs as the technical account “{name}”, which is switched off. An administrator switches it on under {place}, or you choose another account in the workflow.",
+    "workflowRights.refusedAccountInactive":
+      "This workflow runs as a technical account that is missing or switched off. An administrator manages the accounts under {place}.",
     "workflowRights.refusedPersonOnly": "Only a person can publish a workflow.",
     "workflowRights.refusedLends":
       "The workflow runs with the rights of its technical account, so you need each of them yourself to publish it. You lack: {right}."
@@ -122,11 +124,13 @@ export const workflowRights = defineTranslations({
     "workflowRights.refusedCycle":
       "Würde dieser Workflow veröffentlicht, würde er sich selbst starten.",
     "workflowRights.refusedAccountMissing":
-      "Dieser Workflow nennt ein Technisches Konto, das es auf dieser Instanz nicht gibt.",
+      "Dieser Workflow nennt kein Technisches Konto, als das er läuft. Nenne eines im Workflow. Die Konten verwaltet ein Administrator unter {place}.",
     "workflowRights.refusedAccountUnknown":
-      "Das Technische Konto „{name}“ gibt es auf dieser Instanz nicht.",
+      "Dieser Workflow läuft als Technisches Konto „{name}“, das es nicht gibt. Wähle im Workflow ein aktives Konto. Die Konten verwaltet ein Administrator unter {place}.",
     "workflowRights.refusedAccountDisabled":
-      "Das Technische Konto „{name}“ ist deaktiviert. Aktiviere es, bevor du veröffentlichst.",
+      "Dieser Workflow läuft als Technisches Konto „{name}“, das ausgeschaltet ist. Ein Administrator schaltet es unter {place} ein, oder du wählst im Workflow ein anderes Konto.",
+    "workflowRights.refusedAccountInactive":
+      "Dieser Workflow läuft als Technisches Konto, das fehlt oder ausgeschaltet ist. Die Konten verwaltet ein Administrator unter {place}.",
     "workflowRights.refusedPersonOnly": "Nur eine Person kann einen Workflow veröffentlichen.",
     "workflowRights.refusedLends":
       "Der Workflow läuft mit den Rechten seines Technischen Kontos. Um ihn zu veröffentlichen, brauchst du jedes davon selbst. Dir fehlt: {right}."

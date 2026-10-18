@@ -7,6 +7,7 @@ import {
 import { ApiError, type DraftAttachment } from "@work-shape/catalyst-api-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  attachedFilesTitle,
   draftAttachmentPolling,
   uploadErrorMessage,
   uploadFileWithRetry,
@@ -125,6 +126,17 @@ describe("abandoned draft conversation", () => {
     messageCount: 0,
     running: false
   };
+
+  it("names a conversation of attached files in the person's language until the title job does", () => {
+    // ACCEPT-1c C8: a German conversation started with files was called "2 attached files".
+    const two = [file(), file()];
+    expect(attachedFilesTitle(two, "de")).toBe("2 angehängte Dateien");
+    expect(attachedFilesTitle(two, "en")).toBe("2 attached files");
+    expect(attachedFilesTitle([file()], "de")).toBe("Perso.pdf");
+    const unnamed = new File(["content"], "", { type: "application/pdf" });
+    expect(attachedFilesTitle([unnamed], "de")).toBe("Angehängte Datei");
+    expect(attachedFilesTitle([unnamed], "en")).toBe("Attached file");
+  });
 
   it("returns to the start page only when the open conversation holds nothing", () => {
     expect(isAbandonedDraftConversation(emptied)).toBe(true);

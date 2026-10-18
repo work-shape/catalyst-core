@@ -96,6 +96,33 @@ describe("chat UI conversation controller", () => {
       }
     });
 
+    it("words a reached usage limit by its code in the person's language, never the server's English", () => {
+      // The refusal is an application error, whose message would otherwise reach the person.
+      const error = {
+        code: "MODEL_USAGE_LIMIT_REACHED",
+        message: "Daily model token safeguard has been reached",
+        category: "app_error"
+      } as const;
+      const live = applyRunObservationToControllerState(
+        createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),
+        createObservation({ sequence: 2, type: "run_failed", payload: { error } })
+      ).state;
+      const reloaded = createControllerStateFromSnapshot(
+        createSnapshot({ lastSequence: 2, text: "", runStatus: "failed", error })
+      );
+      for (const state of [live, reloaded]) {
+        const member = notices(state);
+        expect(member.de).toContain("Eine Nutzungsgrenze hat diese Antwort gestoppt");
+        expect(member.de).toContain("Bitte einen Administrator dieser Instanz");
+        expect(member.en).toContain("A usage limit stopped this reply");
+        // A limit can be the person's own: the notice names no scope and promises no reset.
+        expect(member.en).not.toMatch(/limit of this instance|resets/u);
+        expect(member.en).not.toContain("safeguard");
+        const admin = terminalRunNotice(state.error, de, { seesRateCard: true });
+        expect(admin).toContain("Einstellungen › Nutzung");
+      }
+    });
+
     it("reads a cancellation as stopped, live and after a reload", () => {
       const live = applyRunObservationToControllerState(
         createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),

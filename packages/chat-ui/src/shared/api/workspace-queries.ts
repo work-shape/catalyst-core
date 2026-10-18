@@ -564,6 +564,16 @@ export interface WorkspaceCacheActions {
   /** Reads the rail's first page again: one request, whatever the rail has loaded. */
   refreshRailConversations(): void;
   removeThreadSnapshot(conversationId: string): void;
+  /**
+   * What a conversation is about and the workspace it belongs to, as far as its thread was read
+   * in this session: a conversation the dock closed keeps its read for a while. Nothing is
+   * asked of the instance.
+   */
+  knownThreadAbout(
+    conversationId: string
+  ):
+    | { subject: { kind: string; name: string } | undefined; collaborationWorkspaceId: string }
+    | undefined;
   invalidateConversationStarted(conversationId: string): void;
   invalidateConversationResources(conversationId: string): void;
   invalidateTerminalRunObservation(observation: RunObservation): void;
@@ -612,6 +622,21 @@ export function useWorkspaceCacheActions(
       queryClient.removeQueries({
         queryKey: workspaceQueryKeys.thread(apiBaseUrl, authScope, conversationId)
       });
+    },
+    [apiBaseUrl, authScope, queryClient]
+  );
+
+  const knownThreadAbout = useCallback(
+    (conversationId: string) => {
+      const conversation = queryClient.getQueryData<ConversationThreadSnapshot>(
+        workspaceQueryKeys.thread(apiBaseUrl, authScope, conversationId)
+      )?.conversation;
+      return conversation === undefined
+        ? undefined
+        : {
+            subject: conversation.subject,
+            collaborationWorkspaceId: conversation.collaborationWorkspaceId
+          };
     },
     [apiBaseUrl, authScope, queryClient]
   );
@@ -767,6 +792,7 @@ export function useWorkspaceCacheActions(
       invalidateConversations,
       refreshRailConversations: refreshRail,
       removeThreadSnapshot,
+      knownThreadAbout,
       invalidateConversationStarted,
       invalidateConversationResources,
       invalidateTerminalRunObservation,
@@ -781,6 +807,7 @@ export function useWorkspaceCacheActions(
       invalidateConversationResources,
       invalidateConversations,
       invalidateCurrentUser,
+      knownThreadAbout,
       refreshRail,
       removeThreadSnapshot,
       invalidateStreamError,

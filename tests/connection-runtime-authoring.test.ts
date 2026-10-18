@@ -314,7 +314,9 @@ describe("a Connection made on the instance", () => {
       null
     );
     expect(refused.statusCode).toBe(422);
-    expect(JSON.stringify(refused.json())).toContain("egress_denied");
+    expect(errorSchema.parse(refused.json()).error.details).toMatchObject({
+      issues: [expect.objectContaining({ code: "egress_denied", path: ["settings"] })]
+    });
     expect(
       await instance.stores.configAssets.getConfigAsset({
         clientInstanceId,

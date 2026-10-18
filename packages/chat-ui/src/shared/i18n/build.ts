@@ -89,6 +89,10 @@ export const build = defineTranslations({
     "build.refusedModelRequired":
       "An agent in Namespace {namespace} needs a default model the Namespace allows.",
     "build.refusedTool": "The tool {tool} is not allowed in Namespace {namespace}.",
+    "build.refusedEgress":
+      "This instance may not reach the connection's address. Only the operator of the instance allows new addresses: ask an administrator to pass the address on.",
+    "build.refusedReadOnlyOrigin":
+      "The operator of the instance set up this connection, so it cannot be changed here.",
     "build.removePrompt": "Remove prompt {number}",
     "build.restoreDescription":
       "The asset gets a new revision with that content. Changes on this page that are not saved are lost.",
@@ -226,6 +230,10 @@ export const build = defineTranslations({
     "build.refusedModelRequired":
       "Ein Agent im Namespace {namespace} braucht ein Standardmodell, das der Namespace erlaubt.",
     "build.refusedTool": "Das Werkzeug {tool} ist im Namespace {namespace} nicht erlaubt.",
+    "build.refusedEgress":
+      "Diese Instanz darf die Adresse der Verbindung nicht erreichen. Neue Adressen erlaubt nur der Betreiber der Instanz: Bitte einen Administrator, die Adresse weiterzugeben.",
+    "build.refusedReadOnlyOrigin":
+      "Diese Verbindung hat der Betreiber der Instanz eingerichtet, deshalb lässt sie sich hier nicht ändern.",
     "build.removePrompt": "Vorschlag {number} entfernen",
     "build.restoreDescription":
       "Das Asset erhält eine neue Version mit diesem Inhalt. Nicht gespeicherte Änderungen auf dieser Seite gehen verloren.",

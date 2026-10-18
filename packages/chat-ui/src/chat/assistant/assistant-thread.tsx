@@ -27,7 +27,7 @@ import type { SendBlock } from "./send-block";
 import { useMoveWithPanels } from "../surface/panel-move";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 import { ToolSubjectsProvider } from "./tool-subjects";
-import { subjectStarters } from "../dock/subject-starters";
+import { startGreeting, startStarters, type ConversationStart } from "../dock/subject-starters";
 
 /** How long the composer takes to settle at the bottom after the first message. */
 const COMPOSER_SETTLE_MS = 220;
@@ -56,7 +56,7 @@ export function AssistantThread({
   notice,
   newConversationPrivate,
   subjectLine,
-  subjectKind,
+  start,
   retainedUntil,
   draftAttachments,
   localUploadingAttachments,
@@ -106,8 +106,11 @@ export function AssistantThread({
   newConversationPrivate?: boolean;
   /** What the open conversation is about, where it is about an asset. */
   subjectLine?: ReactNode;
-  /** The kind of the asset the open conversation is about: its starters replace the agent's. */
-  subjectKind?: string;
+  /**
+   * What the empty conversation is for: an asset, or a new one of a kind beside the dock. Its
+   * greeting and starters replace the agent's own.
+   */
+  start?: ConversationStart;
   /** The open conversation's retention date. */
   retainedUntil?: string;
   draftAttachments: DraftAttachment[];
@@ -214,6 +217,7 @@ export function AssistantThread({
                 // An opened conversation that is still empty has the agent in the header.
                 showAgent={!messagesEnabled}
                 fallbackWelcomeMessage={config?.ui.welcomeMessage ?? t("genericWelcome")}
+                start={start}
                 onSelectAgent={onSelectAgent}
               />
             ) : null}
@@ -330,7 +334,7 @@ export function AssistantThread({
               <ThreadStartBlock
                 initialPrompts={initialPrompts}
                 starters={agent?.starters ?? []}
-                subjectKind={subjectKind}
+                start={start}
                 onStarterChosen={() => {
                   // The request stands in the composer now: the person goes on writing there.
                   window.requestAnimationFrame(() => {
@@ -445,6 +449,7 @@ export function ThreadWelcomeHeading({
   agents,
   showAgent,
   fallbackWelcomeMessage,
+  start,
   onSelectAgent
 }: {
   agent: SafeConfig["agents"][number] | undefined;
@@ -452,9 +457,12 @@ export function ThreadWelcomeHeading({
   agents: SafeConfig["agents"];
   showAgent: boolean;
   fallbackWelcomeMessage: string | undefined;
+  /** An empty conversation about an asset, or about a new one, is greeted for that. */
+  start?: ConversationStart;
   onSelectAgent: (agentName: string) => void;
 }) {
   const { t } = useTranslation();
+  const greeting = start === undefined ? undefined : startGreeting(start);
   return (
     <div className="flex flex-[2] basis-0 flex-col items-center justify-end gap-3 pb-4 text-center">
       {showAgent && agents.length > 0 ? (
@@ -470,9 +478,11 @@ export function ThreadWelcomeHeading({
       ) : null}
       <div className="grid gap-1">
         <h2 className="text-title-lg">
-          {agent?.welcomeMessage ?? fallbackWelcomeMessage ?? t("genericWelcome")}
+          {greeting === undefined
+            ? (agent?.welcomeMessage ?? fallbackWelcomeMessage ?? t("genericWelcome"))
+            : t(greeting.key, greeting.values)}
         </h2>
-        {agent?.welcomeSubtitle ? (
+        {greeting === undefined && agent?.welcomeSubtitle ? (
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
             {agent.welcomeSubtitle}
           </p>
@@ -484,38 +494,40 @@ export function ThreadWelcomeHeading({
 
 /**
  * What the start page offers under the composer: the starters, then the agent's own prompts,
- * all in one list of the same cards. A conversation about an App or a Workflow offers what a
- * person changes on it instead.
+ * all in one list of the same cards. A conversation about an asset, or about a new one, offers
+ * what a person asks of that instead, and never the agent's own prompts.
  */
 export function ThreadStartBlock({
   initialPrompts,
   starters,
-  subjectKind,
+  start,
   onStarterChosen
 }: {
   initialPrompts: Array<{ title: string; prompt: string }>;
   starters: NonNullable<SafeConfig["agents"][number]["starters"]>;
-  /** The kind of the asset the conversation is about. */
-  subjectKind?: string;
+  /** What the conversation is for: an asset, or a new one of a kind. */
+  start?: ConversationStart;
   onStarterChosen(): void;
 }) {
   const { t } = useTranslation();
-  const kindStarters = subjectStarters(subjectKind);
-  if (kindStarters !== undefined) {
+  if (start !== undefined) {
+    const kindStarters = startStarters(start);
     return (
       <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
-        <StarterList label={t("chatStarters")}>
-          {kindStarters.map(({ icon: Icon, title, hint, prompt }) => (
-            <ThreadPrimitive.Suggestion key={title} prompt={t(prompt)} asChild>
-              <Starter
-                icon={<Icon aria-hidden="true" className="size-5 text-muted-foreground" />}
-                title={t(title)}
-                hint={t(hint)}
-                onClick={onStarterChosen}
-              />
-            </ThreadPrimitive.Suggestion>
-          ))}
-        </StarterList>
+        {kindStarters.length === 0 ? null : (
+          <StarterList label={t("chatStarters")}>
+            {kindStarters.map(({ icon: Icon, title, hint, prompt }) => (
+              <ThreadPrimitive.Suggestion key={title} prompt={t(prompt)} asChild>
+                <Starter
+                  icon={<Icon aria-hidden="true" className="size-5 text-muted-foreground" />}
+                  title={t(title)}
+                  hint={t(hint)}
+                  onClick={onStarterChosen}
+                />
+              </ThreadPrimitive.Suggestion>
+            ))}
+          </StarterList>
+        )}
       </div>
     );
   }

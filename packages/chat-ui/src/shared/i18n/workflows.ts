@@ -3,9 +3,10 @@ import { defineTranslations } from "./translation-area";
 /** Workflows: their list, what one does, its runs, and one run with its steps. */
 export const workflows = defineTranslations({
   en: {
-    "workflows.notRunnable.accountDisabled": "The technical account “{name}” is disabled.",
+    "workflows.notRunnable.accountDisabled":
+      "This workflow runs as the technical account “{name}”, which is switched off. An administrator switches it on under {place}.",
     "workflows.notRunnable.accountUnavailable":
-      "The technical account for this workflow is unavailable.",
+      "This workflow runs as a technical account that is missing or switched off. An administrator manages the accounts under {place}.",
     "workflows.liveOnce.again": "Run live once again",
     "workflows.liveOnce.used": "Ran live in your test run of {time}.",
     "workflows.simulated.wouldAskConfirmation":
@@ -45,7 +46,7 @@ export const workflows = defineTranslations({
     "workflows.liveOnce.stale":
       "The draft has changed since. Open the workflow again to set the step live.",
     "workflows.advice.accountInactive":
-      "An administrator has to restore the account or name another one in the workflow.",
+      "An administrator restores the account or switches it on under {place}, or you choose another active account in the workflow.",
     "workflows.advice.crashed":
       "Run it again. If it breaks off again, pass the technical details to an administrator.",
     "workflows.advice.dataMismatch":
@@ -177,9 +178,10 @@ export const workflows = defineTranslations({
     "workflows.panel.byHand": "by hand",
     "workflows.panel.bySchedule": "on its schedule",
     "workflows.panel.forEach": "For each",
-    "workflows.panel.goesTo": "Goes to",
-    "workflows.panel.inbox": "Inbox",
-    "workflows.panel.mail": "Mail",
+    "workflows.panel.recipients": "Recipients",
+    "workflows.panel.delivered": "Delivered",
+    "workflows.panel.viaInbox": "In the Inbox",
+    "workflows.panel.viaMail": "In the Inbox and by email",
     "workflows.panel.notReached": "Not reached yet.",
     "workflows.panel.nothingMore": "The workflow says nothing more about this step.",
     "workflows.panel.openRun": "Open its run",
@@ -248,6 +250,14 @@ export const workflows = defineTranslations({
     "workflows.run.cancelledLine": "Cancelled at {time}. What was written before stays.",
     "workflows.run.continued": "Continued",
     "workflows.run.count": "{done} of {total}",
+    "workflows.recipients.otherPeople": "{count} other people",
+    "workflows.recipients.otherPeopleOne": "{count} other person",
+    "workflows.recipients.otherWorkspaces": "{count} other workspaces",
+    "workflows.recipients.otherWorkspacesOne": "{count} other workspace",
+    "workflows.recipients.people": "{count} people",
+    "workflows.recipients.peopleOne": "{count} person",
+    "workflows.recipients.workspaces": "{count} workspaces",
+    "workflows.recipients.workspacesOne": "{count} workspace",
     "workflows.run.countDone": "{count} done",
     "workflows.run.countFailed": "{count} failed",
     "workflows.run.countLeft": "{count} to go",
@@ -380,9 +390,10 @@ export const workflows = defineTranslations({
     "workflows.unavailable": "This workflow is not available to you."
   },
   de: {
-    "workflows.notRunnable.accountDisabled": "Das technische Konto „{name}“ ist deaktiviert.",
+    "workflows.notRunnable.accountDisabled":
+      "Dieser Workflow läuft als Technisches Konto „{name}“, das ausgeschaltet ist. Ein Administrator schaltet es unter {place} ein.",
     "workflows.notRunnable.accountUnavailable":
-      "Das technische Konto für diesen Workflow ist nicht verfügbar.",
+      "Dieser Workflow läuft als Technisches Konto, das fehlt oder ausgeschaltet ist. Die Konten verwaltet ein Administrator unter {place}.",
     "workflows.liveOnce.again": "Noch einmal live ausführen",
     "workflows.liveOnce.used": "Lief live in deinem Testlauf vom {time}.",
     "workflows.simulated.wouldAskConfirmation":
@@ -423,7 +434,7 @@ export const workflows = defineTranslations({
     "workflows.liveOnce.stale":
       "Der Entwurf hat sich inzwischen geändert. Öffne den Workflow neu, um den Schritt live auszuführen.",
     "workflows.advice.accountInactive":
-      "Ein Administrator muss das Konto wiederherstellen oder im Workflow ein anderes nennen.",
+      "Ein Administrator stellt das Konto unter {place} wieder her oder schaltet es ein, oder du wählst im Workflow ein anderes aktives Konto.",
     "workflows.advice.crashed":
       "Starte ihn erneut. Bricht er wieder ab, gib die technischen Details an einen Administrator weiter.",
     "workflows.advice.dataMismatch":
@@ -557,9 +568,10 @@ export const workflows = defineTranslations({
     "workflows.panel.byHand": "von Hand",
     "workflows.panel.bySchedule": "nach Zeitplan",
     "workflows.panel.forEach": "Für jeden",
-    "workflows.panel.goesTo": "Geht an",
-    "workflows.panel.inbox": "Inbox",
-    "workflows.panel.mail": "E-Mail",
+    "workflows.panel.recipients": "Empfänger",
+    "workflows.panel.delivered": "Zustellung",
+    "workflows.panel.viaInbox": "Im Eingang",
+    "workflows.panel.viaMail": "Im Eingang und per E-Mail",
     "workflows.panel.notReached": "Noch nicht erreicht.",
     "workflows.panel.nothingMore": "Der Workflow sagt nichts weiter über diesen Schritt.",
     "workflows.panel.openRun": "Seinen Lauf öffnen",
@@ -635,6 +647,14 @@ export const workflows = defineTranslations({
     "workflows.run.cancelledLine": "Um {time} abgebrochen. Was vorher geschrieben wurde, bleibt.",
     "workflows.run.continued": "Fortgesetzt",
     "workflows.run.count": "{done} von {total}",
+    "workflows.recipients.otherPeople": "{count} weitere Personen",
+    "workflows.recipients.otherPeopleOne": "{count} weitere Person",
+    "workflows.recipients.otherWorkspaces": "{count} weitere Arbeitsbereiche",
+    "workflows.recipients.otherWorkspacesOne": "{count} weiterer Arbeitsbereich",
+    "workflows.recipients.people": "{count} Personen",
+    "workflows.recipients.peopleOne": "{count} Person",
+    "workflows.recipients.workspaces": "{count} Arbeitsbereiche",
+    "workflows.recipients.workspacesOne": "{count} Arbeitsbereich",
     "workflows.run.countDone": "{count} fertig",
     "workflows.run.countFailed": "{count} fehlgeschlagen",
     "workflows.run.countLeft": "{count} offen",

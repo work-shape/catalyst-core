@@ -278,6 +278,23 @@ describe("usage spend budget progress", () => {
     expect(markup).not.toContain("Billable");
   });
 
+  it("says the safeguards are each person's, not a ceiling the instance shares", () => {
+    // ACCEPT-FIX-4: the safeguards count per person; the card read as one shared ceiling.
+    const usage = createUsageSummary();
+    usage.safeguards.modelCallsPerDay = 25_000;
+    const markup = renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale: "de",
+        children: createElement(UsageView, { usage })
+      })
+    );
+    expect(markup).toContain("Obergrenzen pro Person");
+    expect(markup).toContain("Modellaufrufe pro Person und Tag");
+    expect(renderToStaticMarkup(createElement(UsageView, { usage }))).toContain(
+      "Each person&#x27;s ceiling against a runaway loop, not a budget."
+    );
+  });
+
   it("labels amounts as billable and renders incomplete cost explicitly", () => {
     const usage = createUsageSummary();
     usage.today.cost = {
