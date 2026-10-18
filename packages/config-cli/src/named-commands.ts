@@ -89,6 +89,11 @@ export function isNamedCommand(argv: readonly string[]): boolean {
   return Object.hasOwn(commands, `${argv[0]} ${argv[1]}`);
 }
 
+/** `keys` and `instance`: the words that only lead named operations, for their help. */
+export function isNamedNoun(noun: string | undefined): boolean {
+  return Object.keys(commands).some((command) => command.split(" ")[0] === noun);
+}
+
 class UsageError extends Error {}
 
 export async function runNamedCommand(

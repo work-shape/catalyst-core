@@ -14,6 +14,7 @@ import {
   isAuthenticatedServicePrincipal,
   liveRevisionId,
   type ActorAccess,
+  type AuthenticatedIdentity,
   type AgentAvailability,
   type AssetScope,
   type ConfigAssetRecord,
@@ -175,10 +176,22 @@ export class AssetReadWorkflow {
   /** The right a read of the revision the call names asks. */
   async authorizeGet(
     access: ActorAccess,
-    input: AssetAddress & { revision?: string; files?: boolean }
+    input: AssetAddress & { revision?: string; files?: boolean },
+    actor?: AuthenticatedIdentity
   ): Promise<OperationAuthorization> {
     const target = await this.readTarget(input);
-    return decide(access, this.readAction(access, target, input).action, target.resource);
+    const decision = decide(access, this.readAction(access, target, input).action, target.resource);
+    // A key that cannot read a skill learns neither its existence nor its name in an error.
+    if (
+      target.kind.kind === "skill" &&
+      !decision.allowed &&
+      actor !== undefined &&
+      !isAuthenticatedServicePrincipal(actor) &&
+      actor.keyScopes !== undefined
+    ) {
+      throw new AppError("NOT_FOUND", "Skill not found");
+    }
+    return decision;
   }
 
   async get(

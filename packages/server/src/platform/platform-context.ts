@@ -1,4 +1,6 @@
 import {
+  apiOperations,
+  type Operation,
   PUBLISHED_CLI_VERSION,
   RELEASE_VERSION,
   type PlatformContext
@@ -24,6 +26,7 @@ import {
   type AuthenticatedIdentity,
   type OperationScope
 } from "@work-shape/catalyst-core";
+import { operationScope } from "../http/operation-scope";
 import type { ChatServerOptions } from "../types";
 import { listedWorkflowActions, workflowOf } from "../workflows/workflow-listing";
 import { accessResource, readsAssetDraft } from "../assets/asset-access";
@@ -140,8 +143,8 @@ function principalActionsOf(
 }
 
 /**
- * The rights of the use level a personal key of this caller can carry: each of a kind whose
- * module is on that the caller holds anywhere, as the issuance of a key asks it.
+ * Issuance choices for a personal key: the use rights of enabled kinds the caller holds
+ * anywhere. These describe what a key can be given, not this credential's current rights.
  */
 function heldUseActions(options: ContextOptions, caller: Caller): string[] {
   const held = heldKeyActions(options, caller, (action) =>
@@ -151,7 +154,7 @@ function heldUseActions(options: ContextOptions, caller: Caller): string[] {
 }
 
 /**
- * The reading, writing and publishing rights a personal key of this caller can carry, held
+ * Issuance choices, not this credential's rights: reading, writing and publishing rights held
  * anywhere, as `heldUseActions`. Deleting is left out: the key `catalyst setup` asks for
  * starts with these, and a deletion is ticked by hand.
  */
@@ -269,7 +272,18 @@ export async function readPlatformContext(
     })),
     actions: usableActions(options, caller),
     assetActions: readActionsOnSingleAssets(options, caller),
-    instanceActions: INSTANCE_ACTIONS.filter((action) => caller.access.authorize(action).allowed),
+    instanceActions: INSTANCE_ACTIONS.filter(
+      (action) =>
+        caller.access.authorize(action).allowed &&
+        Object.values<Operation>(apiOperations).some((operation) => {
+          const scope = operationScope(caller.actor, operation);
+          return (
+            operation.requires?.some((required) => required === action) &&
+            (operation.auth === "principal" || !isAuthenticatedServicePrincipal(caller.actor)) &&
+            (scope === null || scope === undefined || hasAuthScope(caller.actor, scope))
+          );
+        })
+    ),
     useActions: heldUseActions(options, caller),
     authoringActions: heldAuthoringActions(options, caller),
     namespaces: namespaces.flatMap((namespace) => {

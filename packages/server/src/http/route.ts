@@ -1,4 +1,5 @@
 import type { RouteResultOr, OperationResponseResult } from "./route-response";
+import { operationScope } from "./operation-scope";
 import { checkResponse } from "./check-response";
 import { answerRedirect } from "./redirect-answer";
 import { paginate, pageScope, storePage } from "./paging";
@@ -559,16 +560,8 @@ async function requireOperationScope(
   identity: AuthenticatedIdentity,
   operation: Operation
 ): Promise<void> {
-  const scope = operation.scope;
+  const scope = operationScope(identity, operation);
   if (!scope) return;
-  if (
-    !isAuthenticatedServicePrincipal(identity) &&
-    identity.keyScopes !== undefined &&
-    operation.personalKeyScope
-  ) {
-    requireAuthScope(identity, operation.personalKeyScope);
-    return;
-  }
   const further = FURTHER_SCOPE_OF_OPERATION[operation.id];
   if (hasAuthScope(identity, scope) || !further || !hasAuthScope(identity, further.scope)) {
     requireAuthScope(identity, scope);

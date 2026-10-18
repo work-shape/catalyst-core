@@ -10,8 +10,8 @@ description: Work with a Workshape Catalyst instance through the catalyst comman
 ## Start here
 
 1. `catalyst context --json`: the instance, its release, your rights, your Namespaces and the kinds of assets it has.
-2. `catalyst kinds --json`: each kind with its command word, lifecycle and rights.
-3. `catalyst --help`: the commands and options of the CLI that is installed.
+2. `catalyst kinds --json`: each kind with its command word, lifecycle and rights; `catalyst --help`: the commands and options of the CLI that is installed.
+3. `catalyst docs`: the index of this release's product docs; `catalyst docs <page>`: one page.
 
 Trust these answers over this skill. In a working copy, a command without `--instance` works on the instance its `catalyst.yaml` names as default, and is refused where it names none. Outside a working copy, it works on the one instance saved. When more than one is saved, or the working copy names no default, pass `--instance <name-or-url>` on every command.
 
