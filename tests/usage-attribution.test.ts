@@ -504,10 +504,11 @@ describe("usage attribution", () => {
       { user_id: null, collaboration_workspace_id: null, total_tokens: 120 },
       { user_id: null, collaboration_workspace_id: null, total_tokens: 120 }
     ]);
-    // The deletion of an account has been through its events and does not come back.
+    // The deletion of an account has been through its events and does not come back. The
+    // event is its own correlation: an empty one marks an event the deletion erased.
     await expect(leadsBack(t.clientInstanceId)).resolves.toEqual([
-      { conversation_id: null, agent_run_id: null, operation_run_id: null, correlation_id: "" },
-      { conversation_id: null, agent_run_id: null, operation_run_id: null, correlation_id: "" }
+      { conversation_id: null, agent_run_id: null, operation_run_id: null, correlation_id: OWN },
+      { conversation_id: null, agent_run_id: null, operation_run_id: null, correlation_id: OWN }
     ]);
   });
 
@@ -556,7 +557,7 @@ describe("usage attribution", () => {
       { user_id: staying.id, collaboration_workspace_id: null, total_tokens: 120 }
     ]);
     await expect(leadsBack(t.clientInstanceId)).resolves.toEqual([
-      { conversation_id: null, agent_run_id: null, operation_run_id: null, correlation_id: "" },
+      { conversation_id: null, agent_run_id: null, operation_run_id: null, correlation_id: OWN },
       {
         conversation_id: `conv_of_${staying.id}`,
         agent_run_id: `run_of_${staying.id}`,
@@ -565,6 +566,9 @@ describe("usage attribution", () => {
       }
     ]);
   });
+
+  /** The correlation id of an event written without its person's: the event's own id. */
+  const OWN = "own id";
 
   async function leadsBack(clientInstanceId: ClientInstanceId) {
     const rows = await db.sql<
@@ -575,7 +579,8 @@ describe("usage attribution", () => {
         correlation_id: string;
       }>
     >`
-      select conversation_id, agent_run_id, operation_run_id, correlation_id
+      select conversation_id, agent_run_id, operation_run_id,
+        case when correlation_id = id then ${OWN} else correlation_id end as correlation_id
       from model_usage_events
       where client_instance_id = ${clientInstanceId} order by created_at, id`;
     return rows.map((row) => ({ ...row }));

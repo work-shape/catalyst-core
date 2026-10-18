@@ -208,10 +208,8 @@ usage:
   budget:
     dailySpendLimit: 50
     monthlySpendLimit: 400
-  safeguards:
-    modelCallsPerDay: 1000
-    tokensPerDay: 2500000
-    tokensPerMonth: 50000000
+  # No `safeguards`: the demo takes the platform's defaults, which hold per person and stop a
+  # loop that runs away. The spend budget above is what limits cost.
   costs:
     customer:
       id: demo-customer

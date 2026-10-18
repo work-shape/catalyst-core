@@ -32,12 +32,32 @@ export class AppError extends Error {
 }
 
 /**
- * A model call that a usage limit of the instance refused before it was sent. A caller that
- * answers for the refusal can say that the limit is the cause.
+ * The code a run fails with when a usage limit refused its model call: a safeguard of a person
+ * or of the calls the product makes, or a spend budget of the instance. A client reads it to
+ * say what happened in the reader's language.
+ */
+export const MODEL_USAGE_LIMIT_REACHED_CODE = "MODEL_USAGE_LIMIT_REACHED";
+
+/** The limit that refused a call: its period, what it counts, and whose counter it is. */
+export interface ModelUsageRefusal {
+  period: "day" | "month";
+  metric: "modelCallCount" | "tokens" | "costMicros";
+  /**
+   * `user`: the person's own calls. `system`: the calls the product makes for a person, or
+   * those no person made. `instance`: the spend budget everyone shares.
+   */
+  scope: "instance" | "user" | "system";
+}
+
+/**
+ * A model call that a usage limit refused before it was sent. Its details name the limit, so
+ * a caller words the refusal without reading the message.
  */
 export class ModelUsageLimitReachedError extends AppError {
-  constructor(message: string) {
-    super("FORBIDDEN", message);
+  declare readonly details: ModelUsageRefusal & { reason: typeof MODEL_USAGE_LIMIT_REACHED_CODE };
+
+  constructor(message: string, refusal: ModelUsageRefusal) {
+    super("FORBIDDEN", message, { reason: MODEL_USAGE_LIMIT_REACHED_CODE, ...refusal });
   }
 }
 
@@ -70,7 +90,9 @@ export class ModelNotPricedError extends AppError {
  * refusal a client words itself.
  */
 export function runFailureCodeOf(error: AppError): string {
-  return error instanceof ModelNotPricedError ? MODEL_NOT_PRICED_CODE : error.code;
+  if (error instanceof ModelNotPricedError) return MODEL_NOT_PRICED_CODE;
+  if (error instanceof ModelUsageLimitReachedError) return MODEL_USAGE_LIMIT_REACHED_CODE;
+  return error.code;
 }
 
 export function isAppError(error: unknown): error is AppError {
