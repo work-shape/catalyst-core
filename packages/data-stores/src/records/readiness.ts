@@ -23,8 +23,8 @@ export async function requireRecordsUpgrade(
     throw new AppError(
       "CONFLICT",
       locale === "de"
-        ? `Der Data Store '${store.name}' benötigt sein Upgrade für records.propose. Aktualisieren oder veröffentlichen Sie den Store erneut.`
-        : `Data Store '${store.name}' needs its upgrade for records.propose. Upgrade or publish the store again.`,
+        ? `Der Data Store '${store.name}' benötigt sein Upgrade für records.propose. Veröffentliche den Store erneut; ein von Catalyst betriebener Store schließt sein Upgrade selbst ab.`
+        : `Data Store '${store.name}' needs its upgrade for records.propose. Publish the store again; a store Catalyst runs finishes its upgrade on its own.`,
       { reason: "record_store_upgrade_required", store: store.name }
     );
 }
