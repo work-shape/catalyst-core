@@ -502,20 +502,21 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
     }),
     defineTool({
       name: put.name,
-      title: { en: "Save asset draft", de: "Entwurf eines Assets speichern" },
+      title: { en: "Save asset", de: "Asset speichern" },
       summary: {
-        en: "Saves a draft of the opened asset; nothing changes until a person publishes it.",
-        de: "Speichert einen Entwurf des geöffneten Assets; nichts ändert sich, bis eine Person ihn veröffentlicht."
+        en: "Saves a draft, or creates an agent or skill after confirmation.",
+        de: "Speichert einen Entwurf oder legt nach Bestätigung einen Agenten oder Skill an."
       },
       group: "platform",
       icon: "guide",
       effect: put.effect,
       description: [
-        "Save a definition as the draft of the asset this conversation is about, the one you opened. The person sees the change beside the chat as soon as it is saved.",
+        "Save the definition of the asset you opened, or create a new asset. Existing agent changes save the shared draft; Apps, Workflows and Data Stores save drafts. The person sees the saved change beside the chat.",
         "Choosing a View, an App or a Workflow: references/apps/app-or-workflow.md in 'platform-docs'.",
         "A draft save changes nothing that runs: it publishes nothing and starts nothing, and the published revision stays what it is until a person publishes the draft. That is why it runs on your call without a confirmation, unless an administrator set it stricter. You never publish: Publish is the person's click on the asset's page.",
         "Send the whole config and, as 'expectedRevision', the revision you read. A kind written as files, such as a Data Store, is sent as 'files' instead: every file of the asset, its manifest among them, as a read of it lists them. Answers the new draft revision; or the issues the definition is refused for, with nothing saved; or REVISION_CONFLICT where somebody saved since you read: read again, apply your change to what is there now and save with the new revision.",
         "For an existing agent, every Build conversation and author shares one pending draft. The live agent stays unchanged until a person publishes the draft. Send the live 'revision' as 'expectedRevision' and the 'draftRevision' as 'expectedDraftRevision', null when no draft is pending. A draft conflict identifies its current revision, last author and change time: read again and apply your change to the shared draft before saving.",
+        "Creating an agent or skill is live at once and waits for the person's confirmation of the exact call. Before Allow nothing is written. Report the workspaceId from the successful result as the actual owner; a name prefix never selects an owner or workspace. A new agent stays unavailable: direct the person to Studio > Agents > the agent > Available in > Selected workspaces, select the requested workspace and Save changes (German: Studio > Agenten > Verfügbar in > Ausgewählte Arbeitsbereiche > Änderungen speichern). Never report that it is available before this step.",
         "A skill that exists is refused: a save of it would be live at once. Say what you would change, and the person changes it on the skill's page.",
         `To make a new asset, leave 'expectedRevision' out and name its 'kind' and 'name'. That save creates a Workflow or a Data Store as a draft (a Data Store with its first migration among its files), or an agent or a skill. In a conversation that is about no asset yet it becomes the asset the conversation is about and the person is taken to its page. An agent made so is offered to nobody until a person makes it available on its page. Read ${PLATFORM_ASSET_TOOLS.get.name} of a similar asset first where you do not know the shape of the kind's config.`,
         "You may also create one while the conversation is about another asset, such as the Workflow or the Data Store an App needs: say first what you create and why, in a sentence such as \"Dafür legen wir zuerst den Workflow an.\" Such a draft stays beside the asset the conversation is about: the answer has 'besideSubject', the conversation stays about that asset and the person stays on the page they are on, offered a link to the new draft. Build what an App needs first and the App last.",
@@ -565,8 +566,8 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
           )
       }),
       outputSchema: putOutputSchema,
-      // Runs on the agent's own call: a draft save changes nothing that runs. Without a mode
-      // the instance default for changes would apply, and an agent cannot wait for a person.
+      // Draft saves need no confirmation by default. The call's policy floor below holds
+      // live first saves for confirmation and keeps stricter administrative settings.
       permission: { mode: "allow" },
       // A setting on the operation this projects holds for the save of the agent too.
       policyFloor: ({ conversationId }, input) => calls.putPolicyFloor(conversationId, input),

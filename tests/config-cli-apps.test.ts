@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import type { Asset } from "@work-shape/catalyst-api-contract";
@@ -138,6 +138,9 @@ describe("catalyst app commands", () => {
         "node_modules/left/index.js": "out",
         ".cache/build.json": "{}"
       });
+
+      // Installed dependencies may contain links; App push still leaves that folder out.
+      await symlink("left/index.js", join(cwd, "offers/node_modules/linked"));
 
       const created = await run("app", "push", "offers", "--workspace", t.workspaceId);
       expect(created, created.err).toMatchObject({ code: 0 });

@@ -10,6 +10,7 @@ import { operationHelpText, runOperationCommand } from "./operation-commands";
 import { isNamedCommand, isNamedNoun, namedHelpText, runNamedCommand } from "./named-commands";
 import type { CommandInput } from "./input";
 import type { AssetKindName } from "./command-support";
+import { runInit } from "./init";
 import { loginCommand, logoutCommand } from "./login";
 import { isLocalAgentTool, SETUP_USAGE, setupCommand } from "./setup";
 
@@ -55,6 +56,10 @@ const helpText = `Usage: catalyst config <command> [options]
        catalyst setup <claude-code|codex|other> --instance <url> [--force]
 
 Sync local config assets with a live Catalyst instance.
+
+Working copy:
+  init --instance <alias-or-url> [--dir <root>]
+             Bind a new folder and write agent guidance in AGENTS.md and CLAUDE.md
 
 Login:
   login      Show a connect code, wait until you confirm it on the instance at
@@ -138,6 +143,13 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
     stdout(`${RELEASE_VERSION}\n`);
     return 0;
   }
+  if (argv[0] === "init")
+    return runInit(argv.slice(1), {
+      ...runtime,
+      cwd: runtime.cwd ?? process.cwd(),
+      stdout,
+      stderr
+    });
   if (argv[0] === "login" || argv[0] === "logout" || argv[0] === "setup") {
     return runLoginCommand(argv[0], argv.slice(1), runtime, stdout, stderr);
   }

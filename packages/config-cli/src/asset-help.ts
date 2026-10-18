@@ -13,6 +13,8 @@ Instance:
   requests [--withdraw <id>] List your requests, or withdraw one of them
 
 Assets, for every kind the instance registers (agent, skill, app, workflow, data-store, ...):
+  catalyst skill pull <name> <folder>
+      Write every file of one skill locally; refresh only a clean earlier pull
 ${verbs.map((verb) => `  catalyst <kind> ${verb.usage}\n      ${verb.summary}`).join("\n")}
 
 An App as a folder (its draft is built on push; publish shows what goes live and asks):
