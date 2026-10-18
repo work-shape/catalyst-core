@@ -323,7 +323,7 @@ export function assertSpendBudgetPricingCoverage(
     ...Object.values(config.guardrails).flatMap(({ check }) =>
       check.kind === "model_judge" ? [check.modelBindingId] : []
     ),
-    // Ingestion and search call them without an agent; the budget bounds them all the same.
+    // Search calls them without an agent and counts as chat; ingestion is outside chat budgets.
     ...config.modelBindings
       .filter((binding) => binding.kind === "embedding")
       .map((binding) => binding.id)

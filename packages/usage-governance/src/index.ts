@@ -155,8 +155,9 @@ const USAGE_ABANDONED_AFTER_MS = 6 * 60 * 60 * 1000;
 const USAGE_RECOVERY_BATCH = 200;
 /**
  * How many times a person's safeguards the calls no person made share, such as the workflow
- * runs of a service principal. Unattended work of a whole instance fits under it, and a loop
- * that runs away still stops within the day. A call refused by it ends its run with
+ * runs of a service principal. At the shipped daily default this is 2 billion tokens: a
+ * sequential loop using 2 million tokens a minute stops after 1,000 minutes (16 h 40 min).
+ * Custom limits change that bound. A call refused by it ends its run with
  * `MODEL_USAGE_LIMIT_REACHED`.
  */
 const UNATTENDED_SAFEGUARD_FACTOR = 10;
@@ -194,7 +195,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
    * and the month when every limit still holds afterwards, and writes the usage event as
    * `pending`. Of any number of processes that ask at once, exactly as many are admitted as
    * the limits have room for. The event counts as one call from here on, whatever becomes of
-   * the call.
+   * the call. Knowledge Base ingestion writes its event without using these chat counters.
    */
   async admitModelCall(call: ModelCallAdmission): Promise<AdmittedModelCall> {
     const reserved = this.reservationOf(call);
@@ -414,7 +415,8 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       : this.highestCost(call, inputTokens, outputTokens);
     if (
       costMicros === undefined &&
-      (this.budget.dailySpendLimit || this.budget.monthlySpendLimit)
+      (this.budget.dailySpendLimit || this.budget.monthlySpendLimit) &&
+      !(call.attribution.kind === "system" && call.attribution.purpose === "knowledge_embedding")
     ) {
       throw new ModelNotPricedError();
     }
@@ -499,7 +501,17 @@ function refusalError(refusal: ModelUsageRefusal): ModelUsageLimitReachedError {
       : refusal.metric === "tokens"
         ? "model token safeguard"
         : "model spend budget";
-  return new ModelUsageLimitReachedError(`${period} ${limit} has been reached`, refusal);
+  const scope =
+    refusal.scope === "user"
+      ? "your own calls"
+      : refusal.scope === "system"
+        ? "product calls"
+        : "the instance";
+  const reset = refusal.period === "day" ? "at midnight UTC" : "at the start of next month UTC";
+  return new ModelUsageLimitReachedError(
+    `${period} ${limit} has been reached for ${scope}. Resets ${reset}.`,
+    refusal
+  );
 }
 
 /**

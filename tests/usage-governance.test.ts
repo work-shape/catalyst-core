@@ -277,7 +277,7 @@ describe("model usage governance", () => {
     await expect(governance.admitModelCall(admission(clientInstanceId))).resolves.toBeDefined();
     await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "Daily model spend budget has been reached"
+      message: "Daily model spend budget has been reached for the instance. Resets at midnight UTC."
     });
   });
 
@@ -370,7 +370,7 @@ describe("model usage governance", () => {
     expect(summary).not.toHaveProperty("costSafetyMultiplier");
     await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "Daily model spend budget has been reached"
+      message: "Daily model spend budget has been reached for the instance. Resets at midnight UTC."
     });
   });
 
@@ -393,7 +393,8 @@ describe("model usage governance", () => {
     );
     const refusal = {
       code: "FORBIDDEN",
-      message: "Daily model call safeguard has been reached"
+      message:
+        "Daily model call safeguard has been reached for your own calls. Resets at midnight UTC."
     };
 
     const settled = await governance.admitModelCall(admission(clientInstanceId));

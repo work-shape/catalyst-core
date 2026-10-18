@@ -4,6 +4,7 @@ export * from "./agent-try-conversations";
 export * from "./agent-run-projection";
 export * from "./artifact-preview-lifecycle";
 export * from "./asset-address";
+export * from "./attached-file-titles";
 export * from "./errors";
 export * from "./ids";
 export * from "./follow-ups";

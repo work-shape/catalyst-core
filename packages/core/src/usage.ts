@@ -246,7 +246,8 @@ export interface ModelUsagePeriodLimits {
 }
 
 /**
- * What a call is held against. Every call counts on the instance. A call a person made counts
+ * What a chat call is held against. Knowledge Base ingestion is outside these limits.
+ * Every chat call counts on the instance. A call a person made counts
  * on that person (`user`); a call the product made for a person, such as a title or a guardrail
  * check, counts on that person's `system` bucket; a call no person made counts on the shared
  * `system` bucket. The query of a Knowledge Base search is the person's own, as chat is.
@@ -366,7 +367,7 @@ export interface ModelUsageEventStore {
   /**
    * Writes the event of a call nobody admitted, such as usage a tool reports, and adds it to
    * the counters of its day and month and to the sums of its day. Without `counted` the
-   * counters take its tokens and its settled cost.
+   * counters take its tokens and its settled cost. Ingestion updates sums but no chat counters.
    */
   appendModelUsageEvent(
     input: ModelUsageEventRecordInput,
@@ -378,7 +379,8 @@ export interface ModelUsageEventStore {
    * limit still holds afterwards, and writes the event as `pending` with it. Otherwise it
    * changes nothing and names the limit. The day and the month are those of the database
    * clock. It reads no usage event, except once per period and scope to start a counter that
-   * does not exist yet from the events the period already has.
+   * does not exist yet from the events the period already has. Knowledge Base ingestion writes
+   * its event without checking or reserving chat counters.
    */
   admitModelUsageEvent(input: {
     event: ModelUsageEventRecordInput;

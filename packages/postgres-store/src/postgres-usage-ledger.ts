@@ -256,11 +256,17 @@ async function countAndInsert(
   const { event, counted } = input;
   const counters = countersOf(
     event.clientInstanceId,
-    { kind: drizzleSql`scope.kind`, id: drizzleSql`scope.id` },
+    {
+      kind: drizzleSql`scope.kind`,
+      id: drizzleSql`scope.id`,
+      purpose: drizzleSql`${event.purpose ?? null}::text`
+    },
     TODAY,
     THIS_MONTH
   );
   const ended = input.status !== "pending";
+  // KB-ISO: ingestion is recorded and rolled up, but reserves no chat counters.
+  const expectedCounters = event.purpose === "knowledge_embedding" ? 0 : 4;
   const rows = await db.execute<AdmissionRow>(drizzleSql`
     with ${attribution(event)},
     ${written(event, input.id)},
@@ -278,7 +284,8 @@ async function countAndInsert(
     ),
     verdict as (
       -- The day and the month, of the instance and of the scope.
-      select count(*) = 4 as present, count(*) = 4 and coalesce(bool_and(within), false) as admitted
+      select count(*) = ${expectedCounters} as present,
+        count(*) = ${expectedCounters} and coalesce(bool_and(within), true) as admitted
       from locked
     ),
     counted as (
@@ -397,7 +404,7 @@ async function settleModelUsageEvent(
   // counters are gone.
   const counters = countersOf(
     input.clientInstanceId,
-    { kind: scopeKindOf(old), id: scopeIdOf(old) },
+    { kind: scopeKindOf(old), id: scopeIdOf(old), purpose: drizzleSql`old.purpose` },
     dayOf(drizzleSql`old.created_at`),
     monthOf(drizzleSql`old.created_at`)
   );

@@ -16,6 +16,9 @@ import {
   DECIDED_APPROVAL_REQUEST_STATUSES,
   ENDED_APPROVAL_EXECUTIONS,
   MESSAGE_FINISH_STATUSES,
+  MODEL_USAGE_LIMIT_PERIODS,
+  MODEL_USAGE_LIMIT_METRICS,
+  MODEL_USAGE_LIMIT_SCOPES,
   STRUCTURED_DATA_REVIEW_REASONS,
   TOOL_CALL_STATES,
   WEB_SOURCE_PROVIDERS
@@ -407,7 +410,20 @@ export const agentRunErrorSchema = z.object({
   message: z.string(),
   category: z.enum(AGENT_RUN_FAILURE_CATEGORIES),
   /** The tool a run waited on when it was ended for standing still: its name only. */
-  tool: z.string().optional()
+  tool: z.string().optional(),
+  /**
+   * The usage limit that refused the run's model call: its window, what it counts and whose
+   * counter it is. A value this contract does not know is left out, so the reader says that
+   * a limit was reached without naming it.
+   */
+  usageLimit: z
+    .object({
+      period: z.enum(MODEL_USAGE_LIMIT_PERIODS),
+      metric: z.enum(MODEL_USAGE_LIMIT_METRICS),
+      scope: z.enum(MODEL_USAGE_LIMIT_SCOPES)
+    })
+    .optional()
+    .catch(undefined)
 });
 
 export const agentRuntimeEventSchema = z.discriminatedUnion("type", [

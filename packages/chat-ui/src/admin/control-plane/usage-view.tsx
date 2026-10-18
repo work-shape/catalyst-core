@@ -1,5 +1,6 @@
 import { CalendarDays, DollarSign, Search, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import type { ModelUsageRefusal } from "@work-shape/catalyst-core";
 import type {
   ModelUsageDailyBucket,
   ModelUsageMonthlyBucket,
@@ -268,7 +269,7 @@ export function UsageView({
 
 type DailyUsageMetric = "cost" | "tokens";
 type UsageWindow = UsageSummary["today"];
-type BudgetPeriod = "day" | "month";
+type BudgetPeriod = ModelUsageRefusal["period"];
 
 /** The messages of a spend budget, by the period it covers. */
 const BUDGET_TEXT_KEYS: Record<

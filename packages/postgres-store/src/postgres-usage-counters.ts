@@ -9,7 +9,8 @@ import type { PostgresConnection } from "./postgres-database";
 import { modelUsageCounters } from "./schema";
 
 /**
- * The counters a usage event is held on. Every event counts on the instance (`instance`, '').
+ * The counters a chat usage event is held on. Knowledge Base ingestion counts on none
+ * (KB-ISO, limits spec section 3.1). Every chat event counts on the instance (`instance`, '').
  * An event of a person counts on that person: their own calls on (`user`, their id), the calls
  * the product made for them on (`system`, their id). An event of no person counts on the shared
  * (`system`, ''): a call of a service principal or of a person whose account is being deleted.
@@ -53,11 +54,12 @@ export const scopeIdOf = (row: SQL): SQL => drizzleSql`coalesce(${row}.user_id, 
  */
 export const countersOf = (
   clientInstanceId: string,
-  scope: { kind: SQL; id: SQL },
+  scope: { kind: SQL; id: SQL; purpose: SQL },
   day: SQL,
   month: SQL
 ): SQL => drizzleSql`
   c.client_instance_id = ${clientInstanceId}
+  and ${scope.purpose} is distinct from 'knowledge_embedding'
   and ((c.scope_kind = 'instance' and c.scope_id = '')
     or (c.scope_kind = ${scope.kind} and c.scope_id = ${scope.id}))
   and ((c.period_kind = 'day' and c.period_start = ${day})
@@ -191,6 +193,7 @@ export async function startCounters(
       on ${e}.client_instance_id = ${clientInstanceId}
       and ${e}.created_at >= period.first_day::timestamp at time zone 'UTC'
       and ${e}.created_at < period.next_day::timestamp at time zone 'UTC'
+      and ${e}.purpose is distinct from 'knowledge_embedding'
       and ${events}
     where ${missing(kind, "")}
     group by period.kind, period.first_day`;
@@ -251,6 +254,7 @@ export async function reconcileCounters(
       cross join lateral (values ('month', ${THIS_MONTH}), ('day', ${TODAY}))
         period(kind, first_day)
       where ${e}.client_instance_id = ${clientInstanceId}
+        and ${e}.purpose is distinct from 'knowledge_embedding'
         and ${e}.created_at >= ${THIS_MONTH}::timestamp at time zone 'UTC'
         and (period.kind = 'month' or ${dayOf(drizzleSql`${e}.created_at`)} = ${TODAY})
         -- An erased event has no scope of its own.
