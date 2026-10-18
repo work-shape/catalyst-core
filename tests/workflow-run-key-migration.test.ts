@@ -85,6 +85,7 @@ describe("Workflow run key migrations (EW-13k)", () => {
     createdDatabases.push(url);
     const before = migrationsUntil({ name: "workflow_continue_as_new", including: false });
     const expanded = migrationsUntil({ name: "workflow_continuation_validate", including: true });
+    // This proof owns the continuation indexes, not migrations added by later features.
     const indexed = migrationsUntil({ name: "workflow_continuation_indexes", including: true });
     const sql = postgres(url, { max: 1, onnotice() {} });
     const writerSql = postgres(url, { max: 1, onnotice() {} });
