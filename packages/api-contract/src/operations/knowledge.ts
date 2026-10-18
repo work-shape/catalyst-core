@@ -216,7 +216,7 @@ export const knowledgeOperations = {
     tag: "Knowledge Bases",
     auth: "user",
     scope: "data_store_rows:read",
-    requires: [],
+    requires: ["knowledge_base.use"],
     effect: "reading",
     response: blob(),
     errors: ["NOT_FOUND"],

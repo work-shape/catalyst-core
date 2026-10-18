@@ -305,8 +305,6 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
         routes: [
           knowledgeRoutes,
           knowledgeDocumentRoutes({
-            clientInstanceId: parts.clientInstanceId,
-            stores: parts.stores,
             knowledgeBases,
             files: runtime.files
           })

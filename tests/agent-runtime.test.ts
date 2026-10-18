@@ -1,3 +1,4 @@
+import { messageSchema } from "@work-shape/catalyst-api-contract";
 import {
   createRecordingGovernance,
   withoutStreaming,
@@ -172,6 +173,10 @@ describe("local agent runtime", () => {
     const answer = messages.findLast((message) => message.role === "assistant");
     const metadata = readAssistantFinalMetadata(answer?.metadata);
     expect(metadata?.knowledgeSources).toEqual([source]);
+    // The API client parses this schema before the renderer sees the answer. Unknown final
+    // metadata fields are stripped, so a metadata-only test would miss the broken render path.
+    const received = messageSchema.parse(answer);
+    expect(readAssistantFinalMetadata(received.metadata)?.knowledgeSources).toEqual([source]);
     expect(JSON.stringify(metadata)).not.toContain("private passage text");
     expect(JSON.stringify(metadata)).not.toContain("uncited passage");
   });

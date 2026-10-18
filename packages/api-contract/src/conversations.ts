@@ -89,6 +89,16 @@ export const webSourceSchema = z.object({
   resultPosition: z.number().optional()
 });
 
+const knowledgeCitationSourceSchema = z.object({
+  ref: z.string().regex(/^K[1-9][0-9]*$/),
+  knowledgeBase: z.string().min(1),
+  documentId: z.string().min(1),
+  fileId: z.string().min(1),
+  fileName: z.string().min(1),
+  page: z.number().int().positive().optional(),
+  originLink: z.string().optional()
+});
+
 export const messageCitationSchema = z.object({
   sourceId: z.string(),
   label: z.string().optional(),
@@ -124,6 +134,7 @@ export const assistantFinalMessageMetadataSchema = z.object({
   cancellationReason: z.string().optional(),
   reasoning: z.array(storedReasoningSummarySchema).optional(),
   sources: z.array(webSourceSchema).optional(),
+  knowledgeSources: z.array(knowledgeCitationSourceSchema).optional(),
   citations: z.array(messageCitationSchema).optional(),
   modelContext: storedModelContextSnapshotSchema.optional()
 });
