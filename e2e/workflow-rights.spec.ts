@@ -327,6 +327,20 @@ test("a write on one Workflow offers that one's draft, and no runs, start or sib
     await expect(
       memberPage.getByRole("button", { name: "Edit with the agent", exact: true })
     ).toBeVisible();
+    const opened = memberPage.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.origin === new URL(apiBaseUrl).origin &&
+        url.pathname === "/api/v1/conversations" &&
+        response.request().method() === "POST"
+      );
+    });
+    await memberPage.getByRole("button", { name: "Edit with the agent", exact: true }).click();
+    const conversation = await opened;
+    expect(conversation.ok()).toBe(true);
+    expect(await conversation.json()).toMatchObject({
+      subject: { kind: "workflow", name: granted.id }
+    });
     // The page leads to no runs the member may not read, and holds no Delete.
     await expect(memberPage.getByRole("link", { name: "Runs", exact: true })).toHaveCount(0);
     await expect(memberPage.getByRole("button", { name: /Delete/u })).toHaveCount(0);
@@ -334,7 +348,11 @@ test("a write on one Workflow offers that one's draft, and no runs, start or sib
     // The runs' own address says they are not the member's, and asks the instance for none.
     const refused: string[] = [];
     memberPage.on("request", (request) => {
-      if (new URL(request.url()).pathname.endsWith(`/workflows/${granted.id}/runs`))
+      const url = new URL(request.url());
+      if (
+        url.origin === new URL(apiBaseUrl).origin &&
+        url.pathname === `/api/v1/workflows/${granted.id}/runs`
+      )
         refused.push(request.url());
     });
     await memberPage.goto(`/w/${personalId}/workflows/${granted.id}/runs`);
