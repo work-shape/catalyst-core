@@ -23,16 +23,35 @@ import { CONDITION_WAIT_MS } from "./support/assertions";
 
 // UI-FIX-1: what the Apps area offers follows the rights the instance names. An App belongs to
 // a workspace, so Build, New and Save as app follow what the reader holds in the open
-// workspace, never in another one. Edit, Publish and Delete of one App follow what the
-// instance says the reader may do to that App when it is read.
+// workspace, never in another one. Reading, Edit, Edit with the agent, Publish and Delete of
+// one App follow what the instance says the reader may do to that App, with its row of the
+// list and with its record. An instance that says nothing leaves the workspace's rights.
 
 const { t } = createTranslationContext("en");
 const OPEN = "cw_open";
 const OTHER = "cw_other";
 const ALL_APP_RIGHTS = ["app.read", "app.write", "app.publish", "app.delete"];
 
+type AppVerb = "read" | "write" | "delete" | "publish";
+
+/** The row of the App as `assets.list` answers it, with what the reader may do to it, if said. */
+function appRow(allowed?: readonly AppVerb[]) {
+  return {
+    id: "asset_1",
+    kind: "app",
+    name: "fees",
+    title: "Fees",
+    scope: { kind: "workspace", workspaceId: OPEN },
+    revision: 3,
+    draftRevision: 3,
+    publishedRevision: 2,
+    ...(allowed === undefined ? {} : { allowed: [...allowed] }),
+    updatedAt: "2026-10-17T09:00:00.000Z"
+  };
+}
+
 /** The record of the App as `assets.get` answers it, with what the reader may do to it. */
-function appRecord(allowed: readonly ("write" | "delete" | "publish")[]) {
+function appRecord(allowed: readonly AppVerb[]) {
   return {
     id: "asset_1",
     kind: "app",
@@ -54,6 +73,19 @@ afterEach(async () => {
   }
 });
 
+/** What the instance holds and answers, as far as a test names it. */
+interface Instance {
+  /** What the reader may do to the App, as its record says. */
+  allowed?: readonly AppVerb[];
+  /** Settles when the instance answers the App's record. */
+  recordAnswered?: Promise<void>;
+  /** The record's reading fails, while this says so. */
+  recordFails?: () => boolean;
+  /** The rows of the Apps list. */
+  rows?: readonly ReturnType<typeof appRow>[];
+  editWithAgent?: AppsHost["editWithAgent"];
+}
+
 /**
  * Mounts a part of the Apps area as the shell does: with the rights it resolves from the
  * platform context for the open workspace, against an instance that holds one App.
@@ -61,21 +93,22 @@ afterEach(async () => {
 async function mount(
   node: ReactNode,
   context: PlatformContext,
-  allowed: readonly ("write" | "delete" | "publish")[] = [],
-  /** Settles when the instance answers the App's record. */
-  recordAnswered: Promise<void> = Promise.resolve()
+  instance: Instance = {}
 ): Promise<HTMLElement> {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init);
     const path = new URL(request.url).pathname;
     if (path === apiOperations["assets.list"].path.replace(":kind", "app"))
-      return Response.json({ items: [] });
+      return Response.json({ items: instance.rows ?? [] });
     if (
       path === apiOperations["assets.get"].path.replace(":kind", "app").replace(":name", "fees")
     ) {
-      await recordAnswered;
-      return Response.json(appRecord(allowed));
+      await instance.recordAnswered;
+      if (instance.recordFails?.() === true) {
+        return Response.json({ error: { code: "INTERNAL", message: "down" } }, { status: 500 });
+      }
+      return Response.json(appRecord(instance.allowed ?? []));
     }
     return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
   });
@@ -88,7 +121,8 @@ async function mount(
     rights: resolveAppRights(context, OPEN),
     workspace: { id: OPEN, name: "Office" },
     showRoute: () => undefined,
-    startChat: () => undefined
+    startChat: () => undefined,
+    ...(instance.editWithAgent === undefined ? {} : { editWithAgent: instance.editWithAgent })
   };
   await act(async () => {
     root.render(
@@ -124,6 +158,52 @@ function buttonNamed(container: ParentNode, label: string): HTMLButtonElement | 
   return [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
     button.textContent?.includes(label)
   );
+}
+
+/** The button or link whose whole text is `label`: "Edit" is not "Edit with the agent". */
+function controlNamed(container: ParentNode, label: string): HTMLElement | undefined {
+  return [...container.querySelectorAll<HTMLElement>("a, button")].find(
+    (control) => control.textContent?.trim() === label
+  );
+}
+
+/** Opens the menu behind the button labelled `label` and answers its items. */
+async function openMenu(container: ParentNode, label: string): Promise<HTMLElement[]> {
+  const trigger = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+  expect(trigger).not.toBeNull();
+  await act(async () => {
+    trigger?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  let items: HTMLElement[] = [];
+  await vi.waitFor(
+    () => {
+      // The menu stands outside the container, under the id its button names.
+      const menu = document.getElementById(trigger?.getAttribute("aria-controls") ?? "");
+      items = [...(menu?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+      expect(items.length).toBeGreaterThan(0);
+    },
+    { timeout: CONDITION_WAIT_MS }
+  );
+  return items;
+}
+
+async function menuItems(container: ParentNode, label: string): Promise<string[]> {
+  return (await openMenu(container, label)).map((item) => item.textContent?.trim() ?? "");
+}
+
+/**
+ * Presses "Edit with the agent" in the head of an App: in its row, or in its "…" menu where
+ * the row has no room for it.
+ */
+async function editWithTheAgent(container: HTMLElement): Promise<void> {
+  const label = t("apps.editWithAgent");
+  const control =
+    controlNamed(container, label) ??
+    (await openMenu(container, uiLabelsEn.moreActions)).find(
+      (item) => item.textContent?.trim() === label
+    );
+  expect(control).toBeDefined();
+  await act(async () => control?.click());
 }
 
 async function shows(container: HTMLElement, text: string): Promise<void> {
@@ -185,24 +265,25 @@ describe("making an App in the open workspace", () => {
 describe("one App", () => {
   it("offers Edit and Publish to a reader granted them on that App alone", async () => {
     const context = contextWith({ [OPEN]: ["app.read"] });
-    const view = await mount(createElement(AppView, { app: "fees" }), context, [
-      "write",
-      "publish"
-    ]);
+    const editWithAgent = vi.fn<NonNullable<AppsHost["editWithAgent"]>>(() => Promise.resolve());
+    const instance = { allowed: ["read", "write", "publish"] as const, editWithAgent };
+    const view = await mount(createElement(AppView, { app: "fees" }), context, instance);
     await shows(view, "Fees");
-    await vi.waitFor(() => expect(buttonNamed(view, t("apps.edit"))).toBeDefined(), {
+    await vi.waitFor(() => expect(controlNamed(view, t("apps.edit"))).toBeDefined(), {
       timeout: CONDITION_WAIT_MS
     });
+    await editWithTheAgent(view);
+    expect(editWithAgent).toHaveBeenLastCalledWith("fees");
 
-    const draft = await mount(createElement(AppEdit, { app: "fees" }), context, [
-      "write",
-      "publish"
-    ]);
+    const draft = await mount(createElement(AppEdit, { app: "fees" }), context, instance);
     await vi.waitFor(() => expect(buttonNamed(draft, t("apps.publish"))?.disabled).toBe(false), {
       timeout: CONDITION_WAIT_MS
     });
     // The head of a writer's draft, which a reader who may not write it is not shown.
     expect(draft.textContent).toContain(t("apps.draftRevision", { number: 3 }));
+    editWithAgent.mockClear();
+    await editWithTheAgent(draft);
+    expect(editWithAgent).toHaveBeenLastCalledWith("fees");
   });
 
   it("says nothing of the draft to such a reader before the instance answers", async () => {
@@ -211,12 +292,10 @@ describe("one App", () => {
     const answered = new Promise<void>((resolve) => {
       answer = resolve;
     });
-    const draft = await mount(
-      createElement(AppEdit, { app: "fees" }),
-      context,
-      ["write", "publish"],
-      answered
-    );
+    const draft = await mount(createElement(AppEdit, { app: "fees" }), context, {
+      allowed: ["read", "write", "publish"],
+      recordAnswered: answered
+    });
     expect(draft.textContent).not.toContain(t("apps.draftUnavailable"));
     await act(async () => answer());
     await vi.waitFor(() => expect(buttonNamed(draft, t("apps.publish"))?.disabled).toBe(false), {
@@ -226,7 +305,9 @@ describe("one App", () => {
 
   it("holds Publish where the App allows its writer no publish, whatever the workspace grants", async () => {
     const context = contextWith({ [OPEN]: ALL_APP_RIGHTS });
-    const draft = await mount(createElement(AppEdit, { app: "fees" }), context, ["write"]);
+    const draft = await mount(createElement(AppEdit, { app: "fees" }), context, {
+      allowed: ["read", "write"]
+    });
     await vi.waitFor(() => expect(buttonNamed(draft, t("apps.publish"))?.disabled).toBe(true), {
       timeout: CONDITION_WAIT_MS
     });
@@ -234,13 +315,107 @@ describe("one App", () => {
 
   it("offers a reader who may change nothing of the App neither Edit nor its draft", async () => {
     const context = contextWith({ [OPEN]: ALL_APP_RIGHTS });
-    const view = await mount(createElement(AppView, { app: "fees" }), context, []);
+    const view = await mount(createElement(AppView, { app: "fees" }), context, {
+      allowed: ["read"]
+    });
     await shows(view, "Fees");
     expect(buttonNamed(view, t("apps.edit"))).toBeUndefined();
 
-    const draft = await mount(createElement(AppEdit, { app: "fees" }), context, []);
+    const draft = await mount(createElement(AppEdit, { app: "fees" }), context, {
+      allowed: ["read"]
+    });
     await shows(draft, t("apps.draftUnavailable"));
     expect(buttonNamed(draft, t("apps.publish"))).toBeUndefined();
     expect(draft.textContent).not.toContain(t("apps.draftRevision", { number: 3 }));
+  });
+
+  it("offers its details to a reader the App lets read, and not where the App denies it", async () => {
+    const more = uiLabelsEn.moreActions;
+    const granted = await mount(
+      createElement(AppView, { app: "fees" }),
+      contextWith({ [OPEN]: [] }),
+      {
+        allowed: ["read"]
+      }
+    );
+    await shows(granted, "Fees");
+    await vi.waitFor(
+      () => expect(granted.querySelector(`button[aria-label="${more}"]`)).not.toBeNull(),
+      {
+        timeout: CONDITION_WAIT_MS
+      }
+    );
+    expect(await menuItems(granted, more)).toContain(t("apps.details"));
+
+    const denied = await mount(
+      createElement(AppView, { app: "fees" }),
+      contextWith({ [OPEN]: ["app.read"] }),
+      { allowed: [] }
+    );
+    await shows(denied, "Fees");
+    // Copying the link is all it is offered, as a button of its own.
+    await vi.waitFor(() => expect(controlNamed(denied, t("apps.copyLink"))).toBeDefined(), {
+      timeout: CONDITION_WAIT_MS
+    });
+    expect(denied.querySelector(`button[aria-label="${more}"]`)).toBeNull();
+  });
+
+  it("says a failed reading of its draft failed, with Try again, and not that it is not there", async () => {
+    let fails = true;
+    const draft = await mount(
+      createElement(AppEdit, { app: "fees" }),
+      contextWith({ [OPEN]: ["app.read"] }),
+      {
+        allowed: ["read", "write", "publish"],
+        recordFails: () => fails
+      }
+    );
+    await shows(draft, t("apps.failed"));
+    expect(draft.textContent).not.toContain(t("apps.draftUnavailable"));
+
+    fails = false;
+    await act(async () => controlNamed(draft, t("tryAgain"))?.click());
+    await vi.waitFor(() => expect(buttonNamed(draft, t("apps.publish"))?.disabled).toBe(false), {
+      timeout: CONDITION_WAIT_MS
+    });
+    expect(draft.textContent).not.toContain(t("apps.failed"));
+  });
+});
+
+describe("the Apps list", () => {
+  it("offers Edit on a row whose App grants the reader write, without a write in the workspace", async () => {
+    const context = contextWith({ [OPEN]: ["app.read"] });
+    const granted = await mount(createElement(AppsPage), context, {
+      rows: [appRow(["read", "write"])]
+    });
+    await shows(granted, "Fees");
+    expect(controlNamed(granted, t("apps.edit"))).toBeDefined();
+    expect(granted.textContent).toContain(t("apps.unpublishedChanges"));
+
+    // An instance that says nothing of the row leaves the workspace's rights.
+    const unsaid = await mount(createElement(AppsPage), context, { rows: [appRow()] });
+    await shows(unsaid, "Fees");
+    expect(controlNamed(unsaid, t("apps.edit"))).toBeUndefined();
+  });
+
+  it("offers no Delete on a row whose App denies it, whatever the workspace grants", async () => {
+    const context = contextWith({ [OPEN]: ALL_APP_RIGHTS });
+    const actionsOf = t("apps.actionsOf", { name: "Fees" });
+    const denied = await mount(createElement(AppsPage), context, {
+      rows: [appRow(["read", "write", "publish"])]
+    });
+    await shows(denied, "Fees");
+    const items = await menuItems(denied, actionsOf);
+    expect(items).toContain(t("apps.details"));
+    expect(items).not.toContain(t("apps.delete"));
+  });
+
+  it("offers Delete on a row the instance says nothing of, where the workspace grants it", async () => {
+    const context = contextWith({ [OPEN]: ALL_APP_RIGHTS });
+    const unsaid = await mount(createElement(AppsPage), context, { rows: [appRow()] });
+    await shows(unsaid, "Fees");
+    expect(await menuItems(unsaid, t("apps.actionsOf", { name: "Fees" }))).toContain(
+      t("apps.delete")
+    );
   });
 });

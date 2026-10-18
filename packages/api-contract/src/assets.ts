@@ -115,6 +115,9 @@ const pointerShape = {
   publishedRevision: revisionNumberSchema.optional()
 };
 
+/** What the instance allows the caller to do to one asset. */
+export const assetVerbSchema = z.enum(["read", "write", "delete", "publish"]);
+
 /** One asset as a list shows it: what every kind can say about itself, without its content. */
 export const assetSummarySchema = z.object({
   /** What an asset-scoped grant names as its `scopeId`. */
@@ -139,6 +142,8 @@ export const assetSummarySchema = z.object({
    * skill names an icon.
    */
   attributes: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
+  /** Per-asset rights from the same resolver as the asset read; absent on older instances. */
+  allowed: z.array(assetVerbSchema).optional(),
   updatedAt: timestampSchema
 });
 
@@ -156,9 +161,6 @@ export const assetFileSchema = z.object({
   text: z.string().optional(),
   base64: z.string().optional()
 });
-
-/** What a caller may do to an asset beyond reading it. */
-export const assetVerbSchema = z.enum(["write", "delete", "publish"]);
 
 export const assetSchema = z.object({
   id: z.string(),

@@ -18,13 +18,16 @@ import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspa
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { CONDITION_WAIT_MS } from "./support/assertions";
 
-// UI-FIX-1: the page of a run says when the steps of the run could not be read, with the
-// sentence and Try again it has for a run that could not be read, and Try again reads the run
-// and its steps again, also where a later reading of steps it held failed. While the steps are
-// on their way, and once they arrived, it says nothing of the kind.
+// UI-FIX-1: the page of a run says when the steps of the run could not be read, with Try
+// again, under the head of the run it holds. Try again reads the run and its steps again, also
+// where a later reading of steps it held failed. While the steps are on their way, and once
+// they arrived, it says nothing of the kind. Where the run's own reading fails too, the page
+// says only that it lost the instance, as before.
 
 const { t } = createTranslationContext("en");
-const STEPS_FAILED = t("workflows.run.failedToLoad");
+const STEPS_FAILED = t("workflows.run.stepsFailedToLoad");
+/** The start of the line a run says while the instance does not answer about it. */
+const SILENT = t("workflows.run.stale", { seconds: "{s}" }).split("{s}")[0] ?? "";
 
 type StepRunResource = Parameters<typeof toWorkflowStepRun>[0];
 
@@ -78,10 +81,18 @@ afterEach(async () => {
   }
 });
 
-/** The page of a run whose steps the instance answers as `listSteps` does, call after call. */
-async function mountRunPage(listSteps: () => Promise<readonly StepRunResource[]>, run = doneRun) {
+type RunView = typeof doneRun;
+
+/**
+ * The page of a run whose steps and run the instance answers as `listSteps` and `readRun` do,
+ * call after call.
+ */
+async function mountRunPage(
+  listSteps: () => Promise<readonly StepRunResource[]>,
+  readRun: () => Promise<RunView> = () => Promise.resolve(doneRun)
+) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const getRun = vi.fn(() => Promise.resolve(run));
+  const getRun = vi.fn(readRun);
   const listFrameStepRuns = vi.fn(async () => ({
     stepRuns: (await listSteps()).map(toWorkflowStepRun),
     entryLoops: [],
@@ -180,6 +191,8 @@ describe("the steps of a run on its page", () => {
     expect(tryAgain(page.container)).toBeDefined();
     // The sentence is the interface's own: nothing the refusal said reaches the page.
     expect(page.container.textContent).not.toContain("unreadable");
+    // It is the steps that failed, not the run.
+    expect(page.container.textContent).not.toContain(t("workflows.run.failedToLoad"));
   });
 
   it("reads the run and its steps again on Try again, and shows the steps that arrive", async () => {
@@ -225,7 +238,10 @@ describe("the steps of a run on its page", () => {
 
   it("says a later reading of the steps of a going run failed, until Try again reads them", async () => {
     let answer: () => Promise<readonly StepRunResource[]> = () => Promise.resolve([doneClients]);
-    const page = await mountRunPage(() => answer(), runningRun);
+    const page = await mountRunPage(
+      () => answer(),
+      () => Promise.resolve(runningRun)
+    );
     await until(() => expect(page.listFrameStepRuns).toHaveBeenCalled());
     await until(() => expect(page.container.textContent).toContain(t("workflows.run.running")));
     expect(page.container.textContent).not.toContain(STEPS_FAILED);
@@ -234,10 +250,47 @@ describe("the steps of a run on its page", () => {
     answer = unreadable;
     await until(() => expect(page.container.textContent).toContain(STEPS_FAILED));
     expect(tryAgain(page.container)).toBeDefined();
+    // The head of the run it holds stays, and the run is not said to be lost.
+    expect(page.container.textContent).toContain(t("workflows.run.running"));
+    expect(page.container.textContent).toContain(definition.name);
+    expect(page.container.textContent).not.toContain(SILENT);
 
     answer = () => Promise.resolve([doneClients]);
     await act(async () => tryAgain(page.container)?.click());
     await until(() => expect(page.container.textContent).not.toContain(STEPS_FAILED));
+    expect(page.container.textContent).toContain(t("workflows.run.running"));
+  });
+
+  it("says only that the instance is silent where the run it holds and its steps both fail", async () => {
+    let runAnswer: () => Promise<RunView> = () => Promise.resolve(runningRun);
+    let stepsAnswer: () => Promise<readonly StepRunResource[]> = () =>
+      Promise.resolve([doneClients]);
+    const page = await mountRunPage(
+      () => stepsAnswer(),
+      () => runAnswer()
+    );
+    await until(() => expect(page.listFrameStepRuns).toHaveBeenCalled());
+    await until(() => expect(page.container.textContent).toContain(t("workflows.run.running")));
+
+    // Both readings every two seconds fail, and so do their tries.
+    runAnswer = unreadable;
+    stepsAnswer = unreadable;
+    await until(() => expect(page.container.textContent).toContain(SILENT));
+    // The steps' failure stays unsaid, with no Try again: the page tries again by itself.
+    await until(() => expect(page.container.textContent).not.toContain(STEPS_FAILED));
+    expect(tryAgain(page.container)).toBeUndefined();
+    // The head of the run it holds stays.
+    expect(page.container.textContent).toContain(t("workflows.run.running"));
+    expect(page.container.textContent).toContain(definition.name);
+
+    // Once the instance answers again, the page says nothing of either.
+    runAnswer = () => Promise.resolve(runningRun);
+    stepsAnswer = () => Promise.resolve([doneClients]);
+    // The two readings recover on their own clocks, so the page is read until both have.
+    await until(() => {
+      expect(page.container.textContent).not.toContain(SILENT);
+      expect(page.container.textContent).not.toContain(STEPS_FAILED);
+    });
     expect(page.container.textContent).toContain(t("workflows.run.running"));
   });
 });

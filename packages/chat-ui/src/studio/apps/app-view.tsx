@@ -172,7 +172,7 @@ export function AppViewFrame({
   dataSources?: readonly string[] | undefined;
 }) {
   const { t } = useTranslation();
-  const editWithAgent = useAppEditWithAgent(app);
+  const editWithAgent = useAppEditWithAgent(app, rights);
   const hasSources = dataSources !== undefined && dataSources.length > 0;
   // What stays in the head beside where the data comes from: Edit is the builder's next step,
   // and Edit with the agent folds first. Copying the link is all a reader without the read

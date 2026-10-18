@@ -107,7 +107,8 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   page,
   browser,
   baseURL,
-  pageErrors
+  pageErrors,
+  accessState: _accessState
 }, testInfo) => {
   // An App's id is taken once for the whole instance, so a repeated or retried run on the same
   // instance names its App after the attempt.
@@ -320,6 +321,107 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     ).toBeVisible();
     await expect(memberView.getByRole("heading", { name: appName })).toBeVisible();
   });
+  // A write on this App alone opens its editor, even without workspace build rights.
+  // The workspace delete grant is explicitly denied on this App, so no Delete is offered.
+  const person = apiOperations["me.get"].response.schema.parse(
+    await (await memberPage.request.get(`${apiOrigin}/api/v1/me`)).json()
+  );
+  const asset = apiOperations["assets.get"].response.schema.parse(
+    await (
+      await page.request.get(`${apiOrigin}/api/v1/assets/app/${appId}?workspaceId=${workspaceId}`)
+    ).json()
+  );
+  const grants: string[] = [];
+  try {
+    for (const [action, effect, scopeKind, scopeId] of [
+      ["app.write", "allow", "asset", asset.id],
+      ["app.delete", "allow", "workspace", workspaceId],
+      ["app.delete", "deny", "asset", asset.id]
+    ] as const) {
+      const granted = await requestWithOrigin(
+        page,
+        "post",
+        `${apiOrigin}/api/v1/instance/access/grants`,
+        {
+          data: { holderKind: "user", holderId: person.id, action, effect, scopeKind, scopeId }
+        }
+      );
+      expect(granted.ok(), await granted.text()).toBe(true);
+      grants.push(idSchema.parse(await granted.json()).id);
+    }
+    await memberPage.goto(appsPath);
+    await expect(memberCard.getByRole("link", { name: "Edit", exact: true })).toBeVisible();
+    await memberCard.getByRole("button", { name: `Actions for ${appName}` }).click();
+    await expect(memberPage.getByRole("menuitem", { name: "Delete", exact: true })).toHaveCount(0);
+    await memberPage.keyboard.press("Escape");
+    await expect(memberPage.getByRole("menu")).toBeHidden();
+    await shoot(
+      memberPage,
+      "apps-list-asset-write-delete-denied",
+      [
+        ["light", "en", 1440],
+        ["dark", "en", 1440],
+        ["light", "de", 1440],
+        ["dark", "de", 1440],
+        ["light", "en", 390],
+        ["dark", "en", 390],
+        ["light", "de", 390],
+        ["dark", "de", 390]
+      ],
+      async () => {
+        await expect(
+          memberCard.getByRole("link", { name: /^(?:Edit|Bearbeiten)$/u })
+        ).toBeVisible();
+        await memberCard.getByRole("button").click();
+        await expect(memberPage.getByRole("menu")).toBeVisible();
+        await expect(
+          memberPage.getByRole("menuitem", { name: /^(?:Delete|Löschen)$/u })
+        ).toHaveCount(0);
+      }
+    );
+    if (shotsDir) {
+      await memberPage.keyboard.press("Escape");
+      await expect(memberPage.getByRole("menu")).toBeHidden();
+    }
+    await memberCard.getByRole("link", { name: "Edit", exact: true }).click();
+    const memberEdit = memberPage.getByTestId("app-edit");
+    await expect(memberEdit).toContainText("Draft · revision 2");
+    // The conversation subject keeps the server's separate read requirement. The editor
+    // above needs write alone; grant read on this App too before starting its conversation.
+    const readable = await requestWithOrigin(
+      page,
+      "post",
+      `${apiOrigin}/api/v1/instance/access/grants`,
+      {
+        data: {
+          holderKind: "user",
+          holderId: person.id,
+          action: "app.read",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: asset.id
+        }
+      }
+    );
+    expect(readable.ok(), await readable.text()).toBe(true);
+    grants.push(idSchema.parse(await readable.json()).id);
+    await memberPage.reload();
+    await expect(memberEdit).toContainText("Draft · revision 2");
+    await memberEdit.getByRole("button", { name: "Edit with the agent", exact: true }).click();
+    await expect(memberPage).toHaveURL(
+      (url) => url.pathname === draftPathOf(appPath) && url.searchParams.has("chat")
+    );
+    await expect(memberPage.getByTestId("dock-head")).toHaveAttribute("data-subject-kind", "app");
+  } finally {
+    for (const grantId of grants.reverse()) {
+      const revoked = await requestWithOrigin(
+        page,
+        "delete",
+        `${apiOrigin}/api/v1/instance/access/grants/${grantId}`
+      );
+      expect(revoked.ok()).toBe(true);
+    }
+  }
   await memberContext.close();
   await page.reload();
   const draftReady = async () => {

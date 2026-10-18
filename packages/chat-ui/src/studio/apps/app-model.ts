@@ -1,7 +1,6 @@
 import {
   APP_ASSET_KIND,
   ApiError,
-  type Asset,
   type AssetSummary,
   type CollaborationWorkspaceAgents,
   type PlatformContext
@@ -63,18 +62,21 @@ export function resolveAppRights(
 }
 
 /**
- * The reader's rights on one App: what the instance says with the App's record the reader may
- * do to it, decided with every grant and deny there is, those on the App itself included.
- * Until the record arrives, and from an instance that says nothing, the workspace's rights
- * stand.
+ * The reader's rights on one App: what the instance says with the App's record or its row of
+ * the list the reader may do to it, decided with every grant and deny there is, those on the
+ * App itself included. Until the App arrives, and from an instance that says nothing, the
+ * workspace's rights stand.
  */
-export function appRightsOn(rights: AppRights, app: Pick<Asset, "allowed"> | undefined): AppRights {
+export function appRightsOn(
+  rights: AppRights,
+  app: Pick<AssetSummary, "allowed"> | undefined
+): AppRights {
   const allowed = app?.allowed;
   if (allowed === undefined) {
     return rights;
   }
   return {
-    read: rights.read,
+    read: allowed.includes("read"),
     write: allowed.includes("write"),
     publish: allowed.includes("publish"),
     delete: allowed.includes("delete")

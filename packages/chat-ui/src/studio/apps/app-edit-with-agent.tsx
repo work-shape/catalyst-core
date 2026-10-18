@@ -4,15 +4,20 @@ import { ApiError } from "@work-shape/catalyst-api-client";
 import { Button, Dialog, type PageHeaderAction } from "@work-shape/catalyst-ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { useTranslation } from "../../shared/i18n";
+import type { AppRights } from "./app-model";
 import { useAppsHost } from "./apps-host";
 
 /**
- * "Edit with the agent" in the head of an App, for a reader who may write it: it makes a
- * conversation about the App and opens it in the dock beside the App's draft, which stays the
- * page. A refusal is said in a dialog, which the page draws outside its head: the action may
- * stand in the head's "…" menu, which is gone by the time the answer comes.
+ * "Edit with the agent" in the head of an App, for a reader who may write it by the `rights`
+ * on that App (`appRightsOn`), not the workspace's: it makes a conversation about the App and
+ * opens it in the dock beside the App's draft, which stays the page. A refusal is said in a
+ * dialog, which the page draws outside its head: the action may stand in the head's "…" menu,
+ * which is gone by the time the answer comes.
  */
-export function useAppEditWithAgent(app: string | undefined): {
+export function useAppEditWithAgent(
+  app: string | undefined,
+  rights: Pick<AppRights, "write">
+): {
   action: PageHeaderAction | undefined;
   dialog: ReactNode;
 } {
@@ -21,12 +26,7 @@ export function useAppEditWithAgent(app: string | undefined): {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const editWithAgent = host?.editWithAgent;
-  if (
-    app === undefined ||
-    host === undefined ||
-    editWithAgent === undefined ||
-    !host.rights.write
-  ) {
+  if (app === undefined || host === undefined || editWithAgent === undefined || !rights.write) {
     return { action: undefined, dialog: null };
   }
   return {

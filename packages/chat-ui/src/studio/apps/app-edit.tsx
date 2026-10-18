@@ -23,6 +23,7 @@ import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../../shared/routes";
+import { LoadError } from "../workflows/workflows-frame";
 import { AppDraftActions } from "./actions-view";
 import { useApp, useAppPublishData, useAppWrites, type AppPublishDataRead } from "./app-data";
 import { AppDraftFiles } from "./app-draft-files";
@@ -139,6 +140,22 @@ export function AppEdit({ app }: { app: string }) {
     return (
       <AppEditFrame name={name} workspace={workspace} rights={rights} onBack={backToList}>
         {null}
+      </AppEditFrame>
+    );
+  }
+  // A read that failed says nothing of what the reader may do: it is asked again.
+  if (!rights.write && record.failed) {
+    return (
+      <AppEditFrame name={name} workspace={workspace} rights={rights} onBack={backToList}>
+        <div className="p-(--layout-gutter)">
+          <LoadError
+            onRetry={() => {
+              record.reload().catch(() => undefined);
+            }}
+          >
+            {t("apps.failed")}
+          </LoadError>
+        </div>
       </AppEditFrame>
     );
   }
@@ -441,7 +458,7 @@ export function AppEditFrame({
   const known = rights.write && draftRevision !== undefined;
   const ahead = appDraftIsAhead(draftRevision, publishedRevision);
   const missingRight = known && !rights.publish;
-  const editWithAgent = useAppEditWithAgent(app);
+  const editWithAgent = useAppEditWithAgent(app, rights);
   const shownView = view ?? "preview";
   // Preview, Files and Actions are views of the one App: tabs under its head. Files and Actions
   // fold under "Technical details" until a developer role is named (UX audit ruling 3).

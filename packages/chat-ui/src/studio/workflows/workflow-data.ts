@@ -225,6 +225,11 @@ export interface WorkflowRunRead {
   /** When the instance last answered about the run, while the readings since have failed. */
   silentSince: number | undefined;
   /**
+   * The run was read and the latest reading of its steps failed. While the run's own reading
+   * fails too, the page says only that it lost the instance.
+   */
+  stepsFailed: boolean;
+  /**
    * The step runs outside every entry of a loop: what the canvas draws. Absent until they
    * arrived.
    */
@@ -269,15 +274,10 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
   });
   return {
     run,
-    // The run's own problem comes first. A failed reading of the steps is said until a reading
-    // succeeds, also where earlier steps are held.
-    problem:
-      query.isError && run === undefined
-        ? readProblem(query.error)
-        : steps.isError
-          ? readProblem(steps.error)
-          : undefined,
+    problem: query.isError && run === undefined ? readProblem(query.error) : undefined,
     silentSince: query.isError && run !== undefined ? query.dataUpdatedAt : undefined,
+    // Said until a reading of the steps succeeds, also where earlier steps are held.
+    stepsFailed: steps.isError && !query.isError,
     stepRuns: steps.data?.stepRuns,
     entryLoops: steps.data?.entryLoops,
     stepRunsCut: steps.data?.complete === false,
