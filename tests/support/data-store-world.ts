@@ -16,7 +16,8 @@ import {
   type DataStoreRecord,
   type JsonObject,
   type Logger,
-  type OperationExecutionContext
+  type OperationExecutionContext,
+  type PlatformStores
 } from "@work-shape/catalyst-core";
 import { createDataStores, type DataStores } from "@work-shape/catalyst-data-stores";
 import { accessOf } from "./access";
@@ -152,22 +153,26 @@ export function useDataStoreWorld(prefix: string) {
       child: () => logger
     };
     const key = randomBytes(32).toString("base64");
-    const dataStores = createDataStores({
-      clientInstanceId,
-      stores: db.store,
-      databaseUrl,
-      keyring: await loadSecretKeyring({
-        keys: [{ id: "k1", ref: "DATA_STORE_TEST_KEY" }],
-        secrets: { resolve: () => Promise.resolve(key) }
-      }),
-      limits: { sizeLimitBytes: 5 * 1024 ** 3, poolMaxConnections: 5, ...limits },
-      ...(datasets ? { datasets } : {}),
-      ...(recordFailures ? { recordFailures } : {}),
-      logger
+    const keyring = await loadSecretKeyring({
+      keys: [{ id: "k1", ref: "DATA_STORE_TEST_KEY" }],
+      secrets: { resolve: () => Promise.resolve(key) }
     });
-    opened.push(dataStores);
-    const worker = jobs.worker(db.store, clientInstanceId, [...dataStores.jobHandlers]);
-    return { clientInstanceId, dataStores, worker, logger, logged };
+    const start = (stores: PlatformStores) => {
+      const dataStores = createDataStores({
+        clientInstanceId,
+        stores,
+        databaseUrl,
+        keyring,
+        limits: { sizeLimitBytes: 5 * 1024 ** 3, poolMaxConnections: 5, ...limits },
+        ...(datasets ? { datasets } : {}),
+        ...(recordFailures ? { recordFailures } : {}),
+        logger
+      });
+      opened.push(dataStores);
+      const worker = jobs.worker(stores, clientInstanceId, [...dataStores.jobHandlers]);
+      return { clientInstanceId, dataStores, worker, logger, logged };
+    };
+    return { ...start(db.store), restart: start };
   }
 
   type World = Awaited<ReturnType<typeof setup>>;
