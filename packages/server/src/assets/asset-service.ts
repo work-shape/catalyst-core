@@ -526,8 +526,9 @@ export class AssetWorkflow {
 
   /**
    * Says what a put of this definition would be refused for, and writes nothing. It checks
-   * what the write checks of the content: schema, name, references, the instance's own rules
-   * and the lists of the Namespace. The caller's right to write is not part of the answer.
+   * what the write checks of the content: schema, name, references, the instance's own rules,
+   * the lists of the Namespace and the kind's check against what is stored, such as a
+   * Workflow's child and dataset contracts. The caller's right to write is not part of the answer.
    * A reference to an asset the caller may not read is answered as one to nothing.
    */
   async validate(
@@ -577,7 +578,16 @@ export class AssetWorkflow {
               names: kind.kind === "agent" && name !== undefined ? [name] : [],
               scope:
                 target.scope.kind === "workspace" ? { workspaceId: target.scope.workspaceId } : {}
-            }
+            },
+            // A put asks this of the validated definition before it stores it; so does a check.
+            () =>
+              kind.assertScopedWrite?.({
+                clientInstanceId: this.options.clientInstanceId,
+                scope: target.scope,
+                name: name ?? "",
+                definition: findDefinition(found.accepted, kind.kind, name ?? "") ?? prepared,
+                stores: this.options.stores
+              }) ?? Promise.resolve()
           );
     return {
       valid: checked.issues.length === 0,

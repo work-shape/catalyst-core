@@ -286,8 +286,20 @@ describe("child Workflow contracts and publish checks", () => {
         params: { kind: "workflow", name: manifest.id },
         payload: { expectedRevision: null, config: { name: manifest.id, manifest } }
       });
+    const check = async (manifest: WorkflowManifest) =>
+      (
+        await t.expectOk(t.root.id, "assets.validate", {
+          params: { kind: "workflow" },
+          payload: { config: { name: manifest.id, manifest } }
+        })
+      ).json();
     expect((await save(parent())).json()).toMatchObject({
       error: { details: { reason: "child_unpublished" } }
+    });
+    // A check answers what the put refuses, and writes nothing.
+    expect(await check(parent())).toEqual({
+      valid: false,
+      issues: [{ message: "The child Workflow 'child' has no published revision" }]
     });
     await put(t, child());
     expect((await publish(t, "child")).statusCode).toBe(200);
@@ -298,6 +310,8 @@ describe("child Workflow contracts and publish checks", () => {
     expect((await save(bad)).json()).toMatchObject({
       error: { details: { reason: "child_input_invalid" } }
     });
+    expect(await check(bad)).toMatchObject({ valid: false, issues: [{}] });
+    expect(await check(parent())).toEqual({ valid: true, issues: [] });
     call.input = {};
     expect((await save(bad)).json()).toMatchObject({
       error: { details: { reason: "child_input_invalid" } }

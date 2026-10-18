@@ -772,7 +772,8 @@ export function storedWritableIssues(
 /**
  * What a write of a definition would be refused for by the instance's own rules, asked once
  * the definitions themselves hold. `withinOwners` is the writer's rule on what the definition
- * names across owners.
+ * names across owners; `scopedWrite` is the kind's check of the write against the stores, as
+ * a put asks it: a Workflow's child and dataset contracts.
  */
 export async function writeIssuesOf(
   options: AssetWorkflowOptions,
@@ -780,12 +781,14 @@ export async function writeIssuesOf(
   stored: AssetSet,
   found: ReturnType<typeof findAssetSetIssues>,
   withinOwners: () => void,
-  toolTargets: AgentToolValidationTargets
+  toolTargets: AgentToolValidationTargets,
+  scopedWrite?: () => Promise<void>
 ): Promise<{ issues: AssetSetIssue[]; warnings: AgentToolWarning[] }> {
   try {
     const issues = found.validateWrite(stored);
     if (issues.length > 0) return { issues, warnings: [] };
     withinOwners();
+    await scopedWrite?.();
     const { refusals, warnings } = await findChangedAgentRefusals(
       options,
       access,
