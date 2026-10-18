@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { createPlatformAssetTools } from "@work-shape/catalyst-tool-execution";
+import { createPlatformAssetCalls } from "@work-shape/catalyst-server";
+import { testServerOptions } from "./support/test-instance";
 import { z } from "zod";
 import {
+  asAgentRunId,
+  asToolCallId,
+  asConversationId,
   WORKFLOW_ASSET_KIND,
   WORKFLOW_RUN_JOB_KINDS,
   type JsonObject
@@ -96,6 +102,52 @@ describe("published Workflow discovery beyond the former 500 total", () => {
       .map((entry) => entry.name)
       .filter((name) => name.startsWith("workflow.paging-"));
     expect(starts.sort()).toEqual(names.map((name) => `workflow.${name}.start`));
+    const options = testServerOptions(t.instance);
+    if (!options) throw new Error("The instance has no server options");
+    const tool = createPlatformAssetTools(createPlatformAssetCalls(options)).find(
+      ({ name }) => name === "platform.assets.operations"
+    );
+    if (!tool) throw new Error("Callable-operation tool is missing");
+    const conversation = z
+      .object({ id: z.string() })
+      .parse(
+        (
+          await t.expectOk(t.root.id, "conversations.create", {
+            payload: { title: "Build a Workflow" }
+          })
+        ).json()
+      );
+    const callContext = {
+      clientInstanceId,
+      correlationId: "workflow-discovery-paging",
+      user: { ...t.root, externalUserId: t.root.id, clientInstanceId, authSource: "test" },
+      toolRequest: {
+        toolName: tool.name,
+        toolCallId: asToolCallId("call_discovery"),
+        agentRunId: asAgentRunId("run_discovery"),
+        agentName: "assistant",
+        input: {},
+        conversationId: asConversationId(conversation.id)
+      }
+    };
+    const found: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const input = tool.inputSchema.parse({ prefix: "workflow.paging-", cursor });
+      const result = await tool.execute(input, callContext);
+      if (result.status !== "success") throw new Error("Workflow discovery failed");
+      const page = z
+        .object({
+          operations: z.array(z.object({ name: z.string() })),
+          nextCursor: z.string().optional()
+        })
+        .parse(result.output);
+      expect(page.operations.length).toBeLessThanOrEqual(200);
+      found.push(...page.operations.map((entry) => entry.name));
+      cursor = page.nextCursor;
+      expect(found.length).toBeLessThanOrEqual(501);
+    } while (cursor);
+    expect(found).toEqual(names.map((name) => `workflow.${name}.start`));
   });
 
   it("repairs schedules for all 501 through durable successors after the first page", async () => {
