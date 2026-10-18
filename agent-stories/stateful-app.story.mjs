@@ -19,11 +19,7 @@ test(id, async ({ story, browser }) => {
   await expect(dialog).toBeHidden();
   const path = `/w/${story.workspace.id}/apps/${app.name}`;
   await page.goto(path);
-  const rows = (p) =>
-    frame(p)
-      .getByRole("table")
-      .getByRole("row")
-      .filter({ has: frame(p).getByRole("cell") });
+  const rows = (p) => frame(p).getByRole("table").locator("tbody").getByRole("row");
   await expect(frame(page).getByLabel("Leave date", { exact: true })).toBeVisible();
   await frame(page).getByRole("button", { name: "Submit", exact: true }).click();
   story.observations.invalidRows = await rows(page).count();
@@ -54,6 +50,10 @@ test(id, async ({ story, browser }) => {
   const other = await session(browser, story.watch, story.people[1]);
   await other.page.goto(path);
   await expect(frame(other.page).getByLabel("Leave date", { exact: true })).toBeVisible();
+  await expect(frame(other.page).getByText("No requests yet", { exact: true })).toBeVisible();
+  const otherState =
+    await sql`select values from app_user_storage where app_id=${app.id} and user_id=${other.me.id}`;
+  expect(JSON.stringify(otherState)).not.toContain("2026-11-01");
   story.observations.otherRows = await rows(other.page).count();
   story.observations.errors = story.errors.length;
   await saveObservation(story);

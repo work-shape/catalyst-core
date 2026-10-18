@@ -6,7 +6,7 @@ export const CASES = [
     deadlineMs: 12 * 60_000,
     prerequisite: "normal demo, apps, workspace-command-worker and Docker sandbox",
     prompt:
-      "Build and save a leave-request App with a required date labelled Leave date and a Submit button. Remember my submitted requests when I return; each person must see only their own requests. Show submitted requests as a table with one row per request. Do not publish it; I will share it with my workspace."
+      "Build and save a leave-request App with a required date labelled Leave date and a Submit button. Remember my submitted requests when I return; each person must see only their own requests. Show submitted requests as a table with one row per request and say No requests yet when empty. Do not publish it; I will share it with my workspace."
   },
   {
     id: "workflow-safe-test",
