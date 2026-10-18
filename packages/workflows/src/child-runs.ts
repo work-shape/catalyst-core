@@ -9,6 +9,7 @@ import {
   workflowStartOperationName,
   type ClientInstanceId,
   type JsonObject,
+  type OperationResolutionStores,
   type OperationSource,
   type PlatformStores,
   type WorkflowRun,
@@ -78,12 +79,12 @@ export function createWorkflowStartSource(options: {
   ): Promise<WorkflowRun | undefined>;
 }): OperationSource {
   const { clientInstanceId, stores, definitions } = options;
-  async function resolve(name: string) {
+  async function resolve(name: string, readers?: OperationResolutionStores) {
     const match = /^workflow\.([a-z][a-z0-9_-]{0,62})\.start$/u.exec(name);
     const workflow = match?.[1];
     if (!workflow) return undefined;
-    const published = await definitions.read(workflow);
-    const asset = await stores.configAssets.getConfigAsset({
+    const published = await definitions.read(workflow, readers?.configAssets);
+    const asset = await (readers?.configAssets ?? stores.configAssets).getConfigAsset({
       clientInstanceId,
       kind: "workflow",
       name: workflow

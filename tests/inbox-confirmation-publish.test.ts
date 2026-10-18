@@ -1,6 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_ASSET_KIND, type CentralPolicySetting } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  WORKFLOW_ASSET_KIND,
+  type CentralPolicySetting
+} from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { guardedEvents } from "./support/guardrails";
@@ -223,6 +227,65 @@ describe("an unattended CLI publish waits in its person's Inbox (OP-4b)", () => 
       inputHash: frozen?.inputHash,
       decision: { mode: "approved", by: t.admin.id }
     });
+  });
+
+  it("retries a failed confirmation outcome write without expiring the newer approval", async () => {
+    await created("retry-menu");
+    const waiting = await waits(t.kai.id, "retry-menu");
+    expectStatus(await decide(t.kai.id, waiting.requestId, "approve"), 200);
+    const approvals = t.stores.approvals;
+    const transition = approvals.transitionApprovedApprovalRequest.bind(approvals);
+    let failed = false;
+    const recording = vi
+      .spyOn(approvals, "transitionApprovedApprovalRequest")
+      .mockImplementation((input) => {
+        if (input.requestId === waiting.requestId && !failed) {
+          failed = true;
+          return Promise.reject(
+            new AppError("INTERNAL", "The confirmation outcome could not be recorded")
+          );
+        }
+        return transition(input);
+      });
+    try {
+      await getTestJobs(t.instance).runDue();
+    } finally {
+      recording.mockRestore();
+    }
+    expect(failed).toBe(true);
+    const held = heldSchema.parse(await run(waiting.runId));
+    expect(held.approvalRequestId).not.toBe(waiting.requestId);
+    expect(await request(t.kai.id, waiting.requestId)).toMatchObject({
+      applyResult: { execution: "queued" }
+    });
+
+    // Make only this failed job due, without waiting for its backoff on the clock.
+    await withTestSql(
+      (sql) => sql`
+      update platform_jobs set run_after = now() - interval '1 second'
+      where client_instance_id = ${clientInstanceId}
+        and kind = 'operation_call.execute'
+        and payload->>'requestId' = ${waiting.requestId}
+        and status = 'queued'
+    `
+    );
+    await getTestJobs(t.instance).runDue();
+
+    expect(await request(t.kai.id, waiting.requestId)).toMatchObject({
+      status: "approved",
+      payload: { inputRemoved: true },
+      applyResult: { execution: "held", approvalRequestId: held.approvalRequestId }
+    });
+    expect(await request(t.admin.id, held.approvalRequestId)).toMatchObject({ status: "pending" });
+    expect((await stored("retry-menu"))?.publishedRevision).toBeUndefined();
+    expect(await run(waiting.runId)).toMatchObject({
+      status: "pending_approval",
+      approvalRequestId: held.approvalRequestId
+    });
+    expectStatus(await decide(t.admin.id, held.approvalRequestId, "approve"), 200);
+    await getTestJobs(t.instance).runDue();
+    expect(await stored("retry-menu")).toMatchObject({ publishedRevision: 1 });
+    expect(await run(waiting.runId)).toMatchObject({ status: "done" });
   });
 
   it("runs the frozen call or nothing: a draft that moved after --yes publishes nothing on Allow", async () => {

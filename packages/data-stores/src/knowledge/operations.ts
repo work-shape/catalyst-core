@@ -23,6 +23,7 @@ import {
   type JsonObject,
   type OperationDefinition,
   type OperationResource,
+  type OperationResolutionStores,
   type OperationSource
 } from "@work-shape/catalyst-core";
 import {
@@ -138,9 +139,10 @@ function publishedKnowledgeBase(asset: ConfigAssetRecord): PublishedKnowledgeBas
 
 async function readKnowledgeBase(
   runtime: KnowledgeRuntime,
-  name: string
+  name: string,
+  stores: Pick<OperationResolutionStores, "configAssets"> = runtime.stores
 ): Promise<PublishedKnowledgeBase | undefined> {
-  const asset = await runtime.stores.configAssets.getConfigAsset({
+  const asset = await stores.configAssets.getConfigAsset({
     clientInstanceId: runtime.clientInstanceId,
     kind: KNOWLEDGE_BASE_ASSET_KIND,
     name
@@ -475,11 +477,11 @@ export function knowledgeOperationName(
  */
 export function createKnowledgeOperationSource(runtime: KnowledgeRuntime): OperationSource {
   return {
-    async resolve(name) {
+    async resolve(name, stores) {
       const split = splitOperationName(name);
       const build = split && Object.entries(OPERATIONS).find(([part]) => part === split.part)?.[1];
       if (!split || !build) return undefined;
-      const knowledgeBase = await readKnowledgeBase(runtime, split.knowledgeBase);
+      const knowledgeBase = await readKnowledgeBase(runtime, split.knowledgeBase, stores);
       return knowledgeBase && build(runtime, knowledgeBase);
     },
     async list(scope) {

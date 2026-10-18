@@ -1,0 +1,212 @@
+import { inspect } from "node:util";
+import { describe, expect, it } from "vitest";
+import {
+  createOperationRegistry,
+  NoopAuditRecorder,
+  type AuthenticatedUser,
+  type JsonObject
+} from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
+import { manifest, useDataStoreWorld } from "./support/data-store-world";
+import { accessOf } from "./support/access";
+
+const MARKER = "private-row-value-in-trigger-diagnostics";
+
+const cases: { kind: string; code: string; name: string | undefined; row: JsonObject }[] = [
+  { kind: "unique", code: "23505", name: "unique_address", row: { adresse: "held" } },
+  { kind: "unique-index", code: "23505", name: "unique_year_index", row: { year: 2000 } },
+  { kind: "check", code: "23514", name: "bounded_price", row: { price: -1 } },
+  { kind: "not-null", code: "23502", name: "NOT NULL (year)", row: { year: null } },
+  { kind: "foreign-key", code: "23503", name: "known_year", row: { year: 1999 } },
+  { kind: "exclusion", code: "23P01", name: "distinct_period", row: { period: "[1,3)" } },
+  { kind: "raised-check", code: "23514", name: undefined, row: { adresse: MARKER } },
+  { kind: "raised-unique", code: "23505", name: undefined, row: { adresse: MARKER } },
+  { kind: "ddl-index", code: "23505", name: undefined, row: { adresse: MARKER } },
+  { kind: "ddl-index-other-table", code: "23505", name: undefined, row: { adresse: MARKER } },
+  { kind: "ddl-table", code: "23514", name: undefined, row: { adresse: MARKER } },
+  { kind: "ddl-column", code: "23502", name: undefined, row: { adresse: MARKER } }
+];
+
+const ddlTriggers: Readonly<Record<string, string>> = {
+  "ddl-index": `execute format('create unique index %I on public.scratch(id)', NEW.adresse);
+    insert into public.scratch values (1);`,
+  // After rollback the index name exists on other, not on the table that failed.
+  "ddl-index-other-table": `drop index public.other_index;
+    create unique index other_index on public.scratch(id);
+    insert into public.scratch values (1);`,
+  // The constraint already exists on objekt: its name alone is insufficient.
+  "ddl-table": `execute format('create table public.%I (id integer constraint bounded_price check (id > 0))', NEW.adresse);
+    execute format('insert into public.%I values (-1)', NEW.adresse);`,
+  "ddl-column": `execute format('alter table public.scratch add column %I integer not null default 1', NEW.adresse);
+    execute format('insert into public.scratch (id, %I) values (2, null)', NEW.adresse);`
+};
+
+const fixedReasons: Readonly<Record<string, string>> = {
+  "23502": "leaves a column empty that must hold a value",
+  "23505": "would store a value twice that must be unique",
+  "23514": "breaks a check of its table"
+};
+
+describe("constraint diagnostics through a Data Store operation", () => {
+  const { db, published, connect } = useDataStoreWorld("constraint_errors");
+
+  it.each(cases)(
+    "$kind retains only real object names in the answer and Operation Run",
+    async ({ kind, code, name, row }) => {
+      const raised = kind.startsWith("raised-");
+      const ddl = ddlTriggers[kind];
+      const rows = [{ id: 2, adresse: "new", year: 2000, price: 1, period: "[4,5)", ...row }];
+      const w = await published(
+        kind,
+        [
+          manifest(),
+          {
+            path: "migrations/0001_objects.sql",
+            text: `create table years (year integer primary key);
+              insert into years values (2000);
+              create table objekt (
+                id integer primary key,
+                adresse text constraint unique_address unique,
+                year integer not null constraint known_year references years(year),
+                price integer constraint bounded_price check (price > 0),
+                period int4range,
+                constraint distinct_period exclude using gist (period with &&)
+              );
+              ${kind === "unique-index" ? "create unique index unique_year_index on objekt(year);" : ""}
+              insert into objekt values (1, 'held', 2000, 1, '[1,2)');
+              create table scratch (id integer);
+              insert into scratch values (1);
+              ${
+                kind === "ddl-index-other-table"
+                  ? "create table other (id integer); create unique index other_index on other(id);"
+                  : ""
+              }
+              ${
+                raised
+                  ? `create function refuse_row() returns trigger language plpgsql as $$
+                      begin
+                        raise exception using errcode = '${code}', message = NEW.adresse,
+                          constraint = NEW.adresse, table = NEW.adresse, column = NEW.adresse;
+                      end $$;
+                      create trigger refuse_row before insert on objekt
+                        for each row execute function refuse_row();`
+                  : ""
+              }
+              ${
+                ddl
+                  ? `create function refuse_row() returns trigger language plpgsql
+                      security definer set search_path = pg_catalog, public as $$
+                      begin
+                        ${ddl}
+                        return NEW;
+                      end $$;
+                      create trigger refuse_row before insert on objekt
+                        for each row execute function refuse_row();`
+                  : ""
+              }`
+          }
+        ],
+        {
+          async *read() {
+            yield rows;
+          }
+        }
+      );
+      const target = connect(w.record.location.database);
+      if (kind === "unique-index") {
+        expect(
+          await target`select conname from pg_catalog.pg_constraint
+            where conrelid = 'public.objekt'::regclass and conname = 'unique_year_index'`
+        ).toEqual([]);
+      }
+      if (ddl) {
+        expect(
+          await target`select p.prosecdef, r.rolname as owner
+            from pg_catalog.pg_proc p
+            join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+            join pg_catalog.pg_roles r on r.oid = p.proowner
+            where n.nspname = 'public' and p.proname = 'refuse_row'`
+        ).toEqual([{ prosecdef: true, owner: w.record.roles.migration }]);
+      }
+      const before = await target`select * from objekt order by id`;
+      const registry = createOperationRegistry();
+      registry.addSource(w.dataStores.operationSource);
+      const actor: AuthenticatedUser = {
+        id: "constraint-admin",
+        externalUserId: "constraint-admin",
+        displayLabel: "Constraint admin",
+        roles: ["admin"],
+        permissionRefs: [],
+        authSource: "test",
+        clientInstanceId: w.clientInstanceId
+      };
+      for (const locale of ["en", "de"] as const) {
+        const outcome = await runOperation(
+          {
+            operation: "data_store.findings.load",
+            effect: "changing",
+            input: {
+              table: "objekt",
+              dataset: { $dataset: "rows", rowCount: 1, bytes: JSON.stringify(rows).length }
+            },
+            actor,
+            origin: { kind: "workflow", workflowRunId: "constraints", stepRunId: locale },
+            idempotencyKey: locale,
+            correlationId: "constraint-errors"
+          },
+          {
+            clientInstanceId: w.clientInstanceId,
+            registry,
+            runs: db.store.operationRuns,
+            authorizer: { forActor: async () => accessOf(actor) },
+            events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },
+            audit: new NoopAuditRecorder(),
+            policy: {
+              instanceDefaults: { reading: "allow", changing: "allow" },
+              centralSettings: () => []
+            },
+            logger: w.logger
+          },
+          { locale }
+        );
+        expect(outcome.result).toMatchObject({
+          status: "failed",
+          error: { code: "VALIDATION_FAILED", details: { sqlState: code } }
+        });
+        if (outcome.result.status !== "failed") throw new Error("Expected constraint refusal");
+        const stored = await db.store.operationRuns.get({
+          clientInstanceId: w.clientInstanceId,
+          id: outcome.run.id
+        });
+        expect(stored).toMatchObject({
+          status: "failed",
+          error: { code: outcome.result.error.code, message: outcome.result.error.message }
+        });
+        if (name) {
+          expect(outcome.result.error.message).toContain(name);
+          expect(outcome.result.error.message).toContain("objekt");
+          expect(outcome.result.error.message).toContain(
+            locale === "de" ? "verletzt die Einschränkung" : "violates constraint"
+          );
+        } else {
+          expect(outcome.result.error.message).toBe(
+            `The load ${fixedReasons[code]} (SQLSTATE ${code}).`
+          );
+        }
+        expect(
+          inspect({ result: outcome.result, run: stored, logs: w.logged }, { depth: null })
+        ).not.toContain(MARKER);
+        expect(await target`select * from objekt order by id`).toEqual(before);
+        expect(await target`select count(*)::int as n from catalyst.loads`).toEqual([{ n: 0 }]);
+        if (ddl) {
+          expect(await target`select * from scratch`).toEqual([{ id: 1 }]);
+          expect(
+            await target`select c.relname from pg_catalog.pg_class c
+              join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+              where n.nspname = 'public' and c.relname = ${MARKER}`
+          ).toEqual([]);
+        }
+      }
+    }
+  );
+});

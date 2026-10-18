@@ -1,8 +1,10 @@
 import type { z } from "zod";
+import type { ConfigAssetStore } from "./config-assets";
+import type { ConnectionsStore } from "./connections";
 import type { OperationDenial } from "./operation-denial";
 import type { AuditRecorder } from "./audit";
 import { PAGE_ACTION_OPERATION_PREFIX } from "./app-actions";
-import { DATA_STORE_OPERATION_PREFIX } from "./data-stores";
+import { DATA_STORE_OPERATION_PREFIX, type DataStoreRecordsStore } from "./data-stores";
 import { KNOWLEDGE_OPERATION_PREFIX } from "./knowledge";
 import { dataToolPrefixOf } from "./data-tool-names";
 import { AppError } from "./errors";
@@ -371,16 +373,33 @@ export interface OperationListScope {
 }
 
 /**
+ * Readers for resolving an operation inside a transaction. Resolution must not borrow a
+ * second platform connection while that transaction holds one. These readers affect only
+ * definition lookup; executing the returned operation keeps its ordinary runtime stores.
+ */
+export interface OperationResolutionStores {
+  configAssets: Pick<ConfigAssetStore, "getConfigAsset">;
+  connections: Pick<ConnectionsStore, "getConnectionState">;
+  dataStores: Pick<DataStoreRecordsStore, "getDataStore">;
+}
+
+/**
  * Contributes operations that exist as data: a connection its operations, an app its named
  * actions, a workflow its start.
  */
 export interface OperationSource {
-  resolve(name: string): Promise<OperationDefinition | undefined>;
+  resolve(
+    name: string,
+    stores?: OperationResolutionStores
+  ): Promise<OperationDefinition | undefined>;
   /**
    * Of the named operations, those the source has, with one read per thing they belong to
    * and never one per name. A source without it is asked for each name.
    */
-  resolveMany?(names: readonly string[]): Promise<OperationDefinition[]>;
+  resolveMany?(
+    names: readonly string[],
+    stores?: OperationResolutionStores
+  ): Promise<OperationDefinition[]>;
   list(scope: OperationListScope): Promise<OperationListing>;
 }
 
@@ -408,12 +427,18 @@ export interface OperationRegistry {
   /** Registers an operation of the release. A name is registered once. */
   register<Input, Output>(definition: OperationDefinition<Input, Output>): void;
   addSource(source: OperationSource): void;
-  resolve(name: string): Promise<OperationDefinition | undefined>;
+  resolve(
+    name: string,
+    stores?: OperationResolutionStores
+  ): Promise<OperationDefinition | undefined>;
   /**
    * Several operations by name, as `resolve` would answer each. A name nothing has is left
    * out. A source that can reads what several names share once.
    */
-  resolveMany(names: readonly string[]): Promise<Map<string, OperationDefinition>>;
+  resolveMany(
+    names: readonly string[],
+    stores?: OperationResolutionStores
+  ): Promise<Map<string, OperationDefinition>>;
   list(scope?: OperationListScope): Promise<OperationListing>;
 }
 
@@ -474,16 +499,16 @@ export function createOperationRegistry(): OperationRegistry {
     addSource(source) {
       sources.push(source);
     },
-    async resolve(name) {
+    async resolve(name, stores) {
       const definition = registered.get(name);
       if (definition) return definition;
       for (const source of sources) {
-        const contributed = await source.resolve(name);
+        const contributed = await source.resolve(name, stores);
         if (contributed) return contributed;
       }
       return undefined;
     },
-    async resolveMany(names) {
+    async resolveMany(names, stores) {
       const found = new Map<string, OperationDefinition>();
       let open = [...new Set(names)];
       for (const name of open) {
@@ -495,8 +520,8 @@ export function createOperationRegistry(): OperationRegistry {
         if (open.length === 0) break;
         const asked = open;
         const contributed = source.resolveMany
-          ? await source.resolveMany(asked)
-          : (await Promise.all(asked.map((name) => source.resolve(name)))).flatMap(
+          ? await source.resolveMany(asked, stores)
+          : (await Promise.all(asked.map((name) => source.resolve(name, stores)))).flatMap(
               (definition) => definition ?? []
             );
         for (const definition of contributed) {

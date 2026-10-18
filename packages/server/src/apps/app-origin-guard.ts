@@ -114,12 +114,12 @@ export function guardAppOrigin(
       : definition;
   return {
     ...registry,
-    async resolve(name) {
-      const definition = await registry.resolve(name);
+    async resolve(name, stores) {
+      const definition = await registry.resolve(name, stores);
       return definition && guarded(definition);
     },
-    async resolveMany(names) {
-      const found = await registry.resolveMany(names);
+    async resolveMany(names, stores) {
+      const found = await registry.resolveMany(names, stores);
       return new Map([...found].map(([name, definition]) => [name, guarded(definition)]));
     },
     async list(scope) {

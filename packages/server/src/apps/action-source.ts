@@ -453,15 +453,28 @@ function publishedApp(asset: ConfigAssetRecord | undefined): PublishedApp | unde
 export function createAppActionOperationSource(deps: AppActionSourceDeps): OperationSource {
   const { clientInstanceId, store } = deps;
   return {
-    async resolve(name) {
+    async resolve(name, stores) {
       const parsed = parseAppActionOperationName(name);
       if (!parsed || !deps.modules.isEnabled(APPS_MODULE)) return undefined;
       const app = publishedApp(
-        await store.getConfigAsset({ clientInstanceId, kind: APP_ASSET_KIND, name: parsed.app })
+        await (stores?.configAssets ?? store).getConfigAsset({
+          clientInstanceId,
+          kind: APP_ASSET_KIND,
+          name: parsed.app
+        })
       );
       const action = app?.actions.find((candidate) => candidate.name === parsed.action);
       if (!app || !action) return undefined;
-      return (await appActionDefinition(deps, app.host, action)).definition;
+      const environment = stores
+        ? {
+            ...deps,
+            registry: {
+              resolve: (name: string) => deps.registry.resolve(name, stores),
+              resolveMany: (names: readonly string[]) => deps.registry.resolveMany(names, stores)
+            }
+          }
+        : deps;
+      return (await appActionDefinition(environment, app.host, action)).definition;
     },
     async list() {
       if (!deps.modules.isEnabled(APPS_MODULE)) return { operations: [], truncated: [] };

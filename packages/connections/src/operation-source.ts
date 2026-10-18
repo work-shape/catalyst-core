@@ -229,22 +229,22 @@ export function createConnectionOperationSource(
 ): OperationSource {
   const slots = sharedSlots ?? new ConnectionCallSlots();
   return {
-    async resolve(name) {
+    async resolve(name, stores = deps.stores) {
       const parsed = parseConnectionOperationName(name);
       if (!parsed) return undefined;
-      const connection = await readConnection(deps, parsed.connection);
+      const connection = await readConnection({ ...deps, stores }, parsed.connection);
       const operation = connection?.config.operations.find(
         (candidate) => candidate.name === parsed.operation
       );
       if (!connection || !operation) return undefined;
       return definitionOf(deps, slots, connection, operation);
     },
-    async resolveMany(names) {
+    async resolveMany(names, stores = deps.stores) {
       const wanted = names.flatMap((name) => parseConnectionOperationName(name) ?? []);
       // One read of each Connection the names belong to, whatever the number of names.
       const connections = await Promise.all(
         [...new Set(wanted.map((entry) => entry.connection))].map((name) =>
-          readConnection(deps, name)
+          readConnection({ ...deps, stores }, name)
         )
       );
       const byName = new Map(
