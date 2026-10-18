@@ -515,13 +515,20 @@ describe("time a run spends waiting", () => {
   });
 
   it("retains the moved deadline while the old deadline job is still running", async () => {
-    const definition = parseOk(waiting("import", "manual"));
-    definition.steps.splice(2, 0, {
-      id: "busy",
-      name: "Busy",
-      type: "operation",
-      operation: "connection.crm.echo",
-      input: { text: { value: "busy" } }
+    const source = waiting("import", "manual");
+    const definition = parseOk({
+      ...source,
+      steps: [
+        ...source.steps.slice(0, 2),
+        {
+          id: "busy",
+          name: "Busy",
+          type: "operation",
+          operation: "connection.crm.echo",
+          input: { text: { value: "busy" } }
+        },
+        ...source.steps.slice(2)
+      ]
     });
     const { t, started } = await readyWaiting([definition]);
     const busy = deferred<void>();
