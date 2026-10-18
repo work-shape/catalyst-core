@@ -41,7 +41,7 @@ describe("a conversation about a Workflow", () => {
   });
   afterAll(() => vi.restoreAllMocks());
 
-  it("builds a new Workflow from chat and completes its first test using a discovered account and caller, with no manual principal", async () => {
+  it("builds a new Workflow from chat and completes its first test using a discovered account and caller, without account-management rights or a manual principal", async () => {
     const t = await createAssetToolsFixture();
     const principals = await t.app.stores.apiAccess.listServicePrincipals({
       clientInstanceId: t.clientInstanceId
@@ -77,13 +77,38 @@ describe("a conversation about a Workflow", () => {
       displayLabel: "Owned documents",
       owner: { kind: "workflow", assetId: existingAsset.id }
     });
-    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(undefined))).json());
+    const { id, createdByUserId } = z
+      .object({ id: z.string(), createdByUserId: z.string() })
+      .parse((await t.ok(t.converse(undefined, OTHER))).json());
+    const call = async (tool: string, input: unknown = {}) => {
+      const { answer } = await t.say(id, `/tool ${tool} ${JSON.stringify(input)}`, OTHER);
+      const parsed: unknown = JSON.parse(answer ?? "null");
+      return parsed;
+    };
+    expect(await call("platform.context")).toMatchObject({ workflowPrincipals: [] });
+    for (const action of ["workflow.write", "workflow.read"])
+      await t.ok(
+        t.app.call("permissions.grant", {
+          payload: {
+            holderKind: "user",
+            holderId: createdByUserId,
+            action,
+            effect: "allow",
+            scopeKind: "instance"
+          }
+        })
+      );
+    const rights = z
+      .object({ instanceActions: z.array(z.string()) })
+      .parse((await t.ok(t.app.call("platform.context.get", {}, OTHER))).json());
+    expect(rights.instanceActions).not.toContain("service_principals.manage");
+    expect(rights.instanceActions).not.toContain("api_access.manage");
     const context = z
       .object({
         caller: z.object({ id: z.string() }),
         workflowPrincipals: z.array(z.object({ name: z.string(), displayLabel: z.string() }))
       })
-      .parse(await t.call(id, "platform.context"));
+      .parse(await call("platform.context"));
     expect(context.workflowPrincipals).toEqual([
       { name: account.name, displayLabel: account.displayLabel }
     ]);
@@ -91,7 +116,7 @@ describe("a conversation about a Workflow", () => {
     expect(selected).toBeDefined();
     const name = "weekly-document-summary";
     expect(
-      await t.call(id, "platform.assets.put", {
+      await call("platform.assets.put", {
         kind: "workflow",
         name,
         config: {
@@ -119,24 +144,29 @@ describe("a conversation about a Workflow", () => {
       })
     ).toMatchObject({ saved: true });
     const run = runSchema.parse(
-      await t.call(id, "workflows.test", { workflow: name, input: { note: "No new documents" } })
+      await call("workflows.test", { workflow: name, input: { note: "No new documents" } })
     );
     const jobs = getTestJobs(t.app);
     for (let pass = 0; pass < 8; pass++) await jobs.runDue();
-    expect(await t.call(id, "workflows.get_run", { runId: run.id })).toMatchObject({
+    expect(await call("workflows.get_run", { runId: run.id })).toMatchObject({
       status: "done",
       principal: { name: account.name },
       startedBy: { id: context.caller.id }
     });
-    expect(await t.call(id, "workflows.list_step_runs", { runId: run.id })).toMatchObject({
+    expect(await call("workflows.list_step_runs", { runId: run.id })).toMatchObject({
       items: [
         { stepId: "start", status: "done" },
         { stepId: "tell", status: "done", target: "dry_run" },
         { stepId: "result", status: "done" }
       ]
     });
-    const inbox = await t.ok(t.app.call("approval_requests.list"));
-    expect(z.object({ items: z.array(z.unknown()) }).parse(inbox.json()).items).toEqual([]);
+    expect(
+      await t.app.stores.approvals.countApprovalRequests({
+        clientInstanceId: t.clientInstanceId,
+        kinds: ["notice"],
+        requestedById: context.caller.id
+      })
+    ).toBe(0);
   });
 
   it("lets the agent test its subject draft without a prompt and read the run and each step through the real operations", async () => {
