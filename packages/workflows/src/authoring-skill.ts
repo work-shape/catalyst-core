@@ -57,7 +57,7 @@ const STEP_REFERENCE: {
     does: "Calls one operation by its name, as the service principal the Workflow runs as. Its output is what the operation answered.",
     fields: {
       operation:
-        "The full name of the operation, such as `connection.<connection>.<operation>`. Ask the tool that lists the callable operations for the names and their input schemas; do not guess one.",
+        "The full name of the operation, such as `connection.<connection>.<operation>`. Ask `platform.assets.operations` for the names and input schemas; filter by exact `name` or a `prefix` such as `connection.crm.` or `data_store.orders.`. Each page has at most 200 operations: pass `nextCursor` as `cursor` with the same filters until it is absent before concluding an operation does not exist. Do not guess a name. To run another Workflow and wait for its result, use a `workflow` step, not `workflow.<name>.start` here.",
       input:
         "The mapping onto the operation's input: one entry per field of its input schema. See 'Mappings and references'.",
       dataset:

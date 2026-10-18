@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { runInNewContext } from "node:vm";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { APP_USER_STORAGE_MAX_BYTES, asUserId } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus } from "./support/app-instance";
@@ -87,6 +88,209 @@ describe("private App storage", () => {
       `/app-content/${published.proof.fileSetId}/${published.proof.token}/`
     );
     expect(reloaded.body).toContain("private-draft-marker");
+  });
+
+  it("merges batches per key, removes keys, clears before setting, and redacts private batch data", async () => {
+    const frame = await t.openApp(t.kai.id, "published");
+    expectStatus(await write(t.kai.id, frame, { type: "clear" }), 200);
+    expectStatus(
+      await write(t.kai.id, frame, { type: "set", key: "untouched", value: "other-tab" }),
+      200
+    );
+    const responses = await Promise.all([
+      write(t.kai.id, frame, {
+        type: "batch",
+        clear: false,
+        values: { secret: "private-batch-value" }
+      }),
+      write(t.kai.id, frame, { type: "batch", clear: false, values: { another: "last" } })
+    ]);
+    for (const response of responses) expectStatus(response, 200);
+    expect(await t.stores.pages.getAppUserStorage(await key(t.kai.id))).toEqual({
+      untouched: "other-tab",
+      secret: "private-batch-value",
+      another: "last"
+    });
+    const ids = responses.map((response) => response.headers["operation-run-id"]);
+    const runs = (await t.stores.operationRuns.list({ clientInstanceId })).filter((run) =>
+      ids.includes(run.id)
+    );
+    expect(runs).toHaveLength(2);
+    expect(new Set(runs.map((run) => run.inputHash)).size).toBe(1);
+    expect(JSON.stringify(runs)).not.toContain("private-batch-value");
+    expectStatus(
+      await write(t.kai.id, frame, { type: "batch", clear: false, values: { secret: null } }),
+      200
+    );
+    expect(await t.stores.pages.getAppUserStorage(await key(t.kai.id))).toEqual({
+      untouched: "other-tab",
+      another: "last"
+    });
+    expectStatus(
+      await write(t.kai.id, frame, { type: "batch", clear: true, values: { final: "only" } }),
+      200
+    );
+    expect(await t.stores.pages.getAppUserStorage(await key(t.kai.id))).toEqual({ final: "only" });
+    expectStatus(
+      await write(t.kai.id, frame, { type: "batch", clear: false, values: { wrong: {} } }),
+      422
+    );
+    expectStatus(
+      await write(t.kai.id, frame, {
+        type: "batch",
+        clear: false,
+        values: { huge: "x".repeat(APP_USER_STORAGE_MAX_BYTES) }
+      }),
+      422
+    );
+    expect(await t.stores.pages.getAppUserStorage(await key(t.kai.id))).toEqual({ final: "only" });
+  });
+
+  it("coalesces 100 rapid writes and resolves kit saves only after the batch is confirmed", async () => {
+    const frame = await t.openApp(t.kai.id, "published");
+    const shell = await callTestPath(
+      t.instance,
+      "GET",
+      `/app-content/${frame.proof.fileSetId}/${frame.proof.token}/`
+    );
+    const html = shell.body.replaceAll("&quot;", '"').replaceAll("&amp;", "&");
+    const bootstrap = /\(function installAppStorage[\s\S]*?\}\)\(\{[^\n]*?\}\);/u.exec(html)?.[0];
+    if (!bootstrap) throw new Error("The App shell must install storage before its scripts");
+    const messages: { requestId: string; mutation: unknown }[] = [];
+    const host = { postMessage: (message: (typeof messages)[number]) => messages.push(message) };
+    const events = new Map<string, (event: unknown) => void>();
+    const document = {
+      visibilityState: "visible",
+      addEventListener: (type: string, handler: () => void) => events.set(type, handler)
+    };
+    const window: {
+      parent: { parent: typeof host };
+      addEventListener: (type: string, handler: (event: unknown) => void) => void;
+      dispatchEvent: (event: unknown) => void;
+      localStorage?: Storage;
+      catalystAppStorage?: { set: (key: string, value: unknown) => Promise<void> };
+    } = {
+      parent: { parent: host },
+      addEventListener: (type, handler) => events.set(type, handler),
+      dispatchEvent: vi.fn()
+    };
+    vi.useFakeTimers();
+    try {
+      runInNewContext(bootstrap, {
+        window,
+        document,
+        TextEncoder,
+        DOMException,
+        setTimeout,
+        clearTimeout
+      });
+      const storage = window.localStorage;
+      const kit = window.catalystAppStorage;
+      if (!storage || !kit) throw new Error("Both storage APIs must be installed");
+      storage.clear();
+      storage.setItem("removed", "before");
+      storage.removeItem("removed");
+      for (let index = 0; index < 100; index++) storage.setItem(`key-${index % 2}`, String(index));
+      let saved = false;
+      const pending = kit.set("json", { last: true }).then(() => {
+        saved = true;
+      });
+      expect(storage.getItem("key-1")).toBe("99");
+      expect(messages).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(240);
+      expect(messages).toHaveLength(0);
+      expect(saved).toBe(false);
+      await vi.advanceTimersByTimeAsync(20);
+      expect(messages).toHaveLength(1);
+      const message = messages[0];
+      expect(message?.mutation).toEqual({
+        type: "batch",
+        clear: true,
+        values: { removed: null, "key-0": "98", "key-1": "99", json: '{"last":true}' }
+      });
+      expect(saved).toBe(false);
+      events.get("message")?.({
+        source: {},
+        data: {
+          catalystBridge: 1,
+          type: "storage_result",
+          session: frame.proof.token,
+          requestId: message?.requestId,
+          ok: true
+        }
+      });
+      expect(saved).toBe(false);
+      // Use the session carried by the generated bootstrap, not the content token.
+      const session = /"session":"([^"]+)"/u.exec(bootstrap)?.[1];
+      events.get("message")?.({
+        source: host,
+        data: {
+          catalystBridge: 1,
+          type: "storage_result",
+          session,
+          requestId: message?.requestId,
+          ok: true
+        }
+      });
+      await pending;
+      expect(saved).toBe(true);
+      storage.setItem("after", "clear-me");
+      storage.clear();
+      storage.setItem("last", "kept");
+      events.get("pagehide")?.({});
+      expect(messages.at(-1)?.mutation).toEqual({
+        type: "batch",
+        clear: true,
+        values: { last: "kept" }
+      });
+      storage.removeItem("last");
+      document.visibilityState = "visible";
+      events.get("visibilitychange")?.({});
+      expect(messages).toHaveLength(2);
+      document.visibilityState = "hidden";
+      events.get("visibilitychange")?.({});
+      expect(messages).toHaveLength(3);
+      expect(messages.at(-1)?.mutation).toEqual({
+        type: "batch",
+        clear: false,
+        values: { last: null }
+      });
+      for (const sent of messages.slice(1))
+        events.get("message")?.({
+          source: host,
+          data: {
+            catalystBridge: 1,
+            type: "storage_result",
+            session,
+            requestId: sent.requestId,
+            ok: true
+          }
+        });
+      await vi.advanceTimersByTimeAsync(500);
+      expect(messages).toHaveLength(3);
+      const refused = kit.set("failed", "private");
+      const rejection = expect(refused).rejects.toThrow("The interface did not save App storage");
+      events.get("pagehide")?.({});
+      events.get("message")?.({
+        source: host,
+        data: {
+          catalystBridge: 1,
+          type: "storage_result",
+          session,
+          requestId: messages.at(-1)?.requestId,
+          ok: false
+        }
+      });
+      await rejection;
+      const timedOut = expect(kit.set("lost-host", "private")).rejects.toThrow(
+        "The interface did not save App storage"
+      );
+      events.get("pagehide")?.({});
+      await vi.advanceTimersByTimeAsync(30_100);
+      await timedOut;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("refuses another person's proof, an invalid proof, a Page, and malformed mutations", async () => {

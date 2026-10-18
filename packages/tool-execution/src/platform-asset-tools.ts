@@ -161,6 +161,13 @@ type PlatformAssetWrite =
  */
 export type PlatformOperationsAudience = (typeof OPERATIONS_AUDIENCES)[number];
 
+/** Filters and the continuation of one callable-operation page. */
+export interface PlatformOperationsQuery {
+  cursor?: string;
+  name?: string;
+  prefix?: string;
+}
+
 /** One operation a step or an action may call, as far as the person the agent acts for may see it. */
 export interface PlatformCallableOperation {
   name: string;
@@ -221,8 +228,9 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls, AppSaveCalls
   ): Promise<readonly OperationBeforeEvent[]>;
   listOperations(
     context: ToolExecutionContext,
-    audience: PlatformOperationsAudience
-  ): Promise<{ operations: PlatformCallableOperation[]; truncated: boolean }>;
+    audience: PlatformOperationsAudience,
+    input?: PlatformOperationsQuery
+  ): Promise<{ operations: PlatformCallableOperation[]; nextCursor?: string; truncated: boolean }>;
 }
 
 /**
@@ -260,7 +268,8 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       putPolicyFloor: (conversationId, input) => required().putPolicyFloor(conversationId, input),
       putBeforeEvents: (conversationId, config) =>
         required().putBeforeEvents(conversationId, config),
-      listOperations: (context, audience) => required().listOperations(context, audience),
+      listOperations: (context, audience, input) =>
+        required().listOperations(context, audience, input),
       readContext: (context, input) => required().readContext(context, input),
       listAssets: (context, input) => required().listAssets(context, input),
       listFiles: (context, input) => required().listFiles(context, input),
@@ -333,6 +342,7 @@ const operationsOutputSchema = z.object({
       outputSchema: jsonObjectSchema.optional()
     })
   ),
+  nextCursor: z.string().optional(),
   truncated: z.boolean()
 });
 
@@ -605,8 +615,8 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       name: operations.name,
       title: { en: "List callable operations", de: "Aufrufbare Operationen auflisten" },
       summary: {
-        en: "Lists the operations a Workflow step or an App action may call.",
-        de: "Listet die Operationen auf, die ein Workflow-Schritt oder eine App-Aktion aufrufen darf."
+        en: "Lists a page of operations a Workflow step or an App action may call; filter by name or prefix.",
+        de: "Listet eine Seite aufrufbarer Operationen für Workflow-Schritte oder App-Aktionen; nach Name oder Präfix filtern."
       },
       group: "platform",
       icon: "guide",
@@ -614,7 +624,7 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       description: [
         "List the operations a step of a Workflow may call, as far as the person you act for may see them: the name a step writes under 'operation', whether the operation reads or changes, and its input and output as JSON Schema where it has one.",
         "With 'for: app' it lists instead the operations of Connections that an App's connection action may call, each named 'connection.<connection>.<operation>': the action file writes the two parts as 'connection' and 'operation', and the effect as it is listed.",
-        "The list is of the instance, not of one asset. 'truncated' says that there are more operations than the list holds."
+        "Each page holds at most 200 operations. Pass 'nextCursor' back as 'cursor', keeping 'for', 'name' and 'prefix' unchanged, until 'nextCursor' is absent. Filter by exact 'name' or by 'prefix', such as 'connection.crm.' or 'data_store.orders.', to find one Connection's or store's operations directly. Do this before concluding an operation does not exist. 'truncated' without 'nextCursor' means a source left operations out; it does not prove absence."
       ].join(" "),
       inputSchema: z.object({
         for: z
@@ -622,11 +632,18 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
           .optional()
           .describe(
             "Who calls the operations: 'workflow' for a step of a Workflow (the default), 'app' for an App's connection action."
-          )
+          ),
+        cursor: z.string().min(1).optional().describe("The previous page's nextCursor."),
+        name: z.string().min(1).optional().describe("An exact full operation name."),
+        prefix: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Only operation names starting with this prefix.")
       }),
       outputSchema: operationsOutputSchema,
       async execute(input, context) {
-        const listed = await calls.listOperations(context, input.for ?? "workflow");
+        const listed = await calls.listOperations(context, input.for ?? "workflow", input);
         return toolSuccess(listed, {
           auditSummary: {
             action: operations.name,

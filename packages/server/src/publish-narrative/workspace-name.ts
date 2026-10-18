@@ -1,4 +1,8 @@
-import type { CollaborationWorkspace, LocaleCode } from "@work-shape/catalyst-core";
+import {
+  personalWorkspaceOwnerName,
+  type CollaborationWorkspace,
+  type LocaleCode
+} from "@work-shape/catalyst-core";
 
 // What a workspace is called where the server writes it into a sentence for one reader: the
 // name the interface shows (chat-ui `collaborationWorkspaceDisplayName`). A Personal Workspace
@@ -9,24 +13,14 @@ import type { CollaborationWorkspace, LocaleCode } from "@work-shape/catalyst-co
 export type NamedWorkspace = Pick<CollaborationWorkspace, "name"> &
   Partial<Pick<CollaborationWorkspace, "kind" | "personalUserId">>;
 
-/** German sets only an apostrophe after a name that ends in an s sound: "Felix' Arbeitsbereich". */
-const ENDS_IN_S_SOUND = /[sßxz]$/iu;
-
-/** The first name in a display label. A label that is an e-mail address gives none. */
-function firstName(ownerLabel: string | undefined): string | undefined {
-  const label = ownerLabel?.trim() ?? "";
-  if (label === "" || label.includes("@")) return undefined;
-  return label.split(/\s+/u)[0];
-}
-
 /** "Mara's workspace", or "Personal workspace" where no name of the owner is known. */
 function personalWorkspaceName(ownerLabel: string | undefined, locale: LocaleCode): string {
-  const name = firstName(ownerLabel);
+  const owner = personalWorkspaceOwnerName(ownerLabel);
   if (locale === "de") {
-    if (name === undefined) return "Persönlicher Arbeitsbereich";
-    return ENDS_IN_S_SOUND.test(name) ? `${name}' Arbeitsbereich` : `${name}s Arbeitsbereich`;
+    if (owner === undefined) return "Persönlicher Arbeitsbereich";
+    return owner.sibilant ? `${owner.name}' Arbeitsbereich` : `${owner.name}s Arbeitsbereich`;
   }
-  return name === undefined ? "Personal workspace" : `${name}'s workspace`;
+  return owner === undefined ? "Personal workspace" : `${owner.name}'s workspace`;
 }
 
 /**

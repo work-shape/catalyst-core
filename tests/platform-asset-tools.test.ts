@@ -619,9 +619,9 @@ describe("a conversation about a Workflow", () => {
       const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
       const read = readSchema.parse(await t.call(id, "platform.assets.get"));
       expect(read.config.name).toBe(WORKFLOW);
-      // The operations a step may call, as far as the owner sees them: this instance has none.
-      expect(await t.call(id, "platform.assets.operations")).toEqual({
-        operations: [],
+      // The published Workflow is discoverable through the agent's operation tool.
+      expect(await t.call(id, "platform.assets.operations")).toMatchObject({
+        operations: [{ name: `workflow.${WORKFLOW}.start`, effect: "changing" }],
         truncated: false
       });
       // A config that names another asset is no save of this one, and none of the other.
