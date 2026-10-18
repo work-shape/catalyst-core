@@ -30,7 +30,7 @@ export async function visibleSourceHits(
       )
       .parse(
         await sql.run(
-          "select d.id,i.source_id,seen.definition_key,i.parents,i.name,i.path from catalyst_kb.documents d left join catalyst_kb.source_items i on i.id=d.source_item_id left join catalyst_kb.sync_runs seen on seen.id=i.seen_run_id where d.id=any($1::text[]) and d.withdrawn_at is null",
+          "select d.id,i.source_id,i.parents,i.name,i.path,seen.definition_key from catalyst_kb.documents d left join catalyst_kb.source_items i on i.id=d.source_item_id left join catalyst_kb.sync_runs seen on seen.id=i.seen_run_id where d.id=any($1::text[]) and d.withdrawn_at is null",
           [answer.hits.map((hit) => hit.documentId)]
         )
       )
