@@ -23,7 +23,7 @@ import {
   type StorePage
 } from "@work-shape/catalyst-core";
 import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
-import { accessResource, decide, listedTo, type AssetCall } from "./asset-access";
+import { accessResource, decide, listedTo, readsAppDraft, type AssetCall } from "./asset-access";
 import { isReleaseSync } from "./asset-write-rules";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { AddresseeNames, WorkflowAssetKind } from "../asset-kinds/shared";
@@ -109,7 +109,8 @@ export class AssetReadWorkflow {
                   summarizeAsset(
                     kind,
                     asset.name,
-                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id))
+                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id)) ||
+                      kind.lifecycle === "active"
                       ? revisions.active
                       : revisions.published
                   ).title
@@ -374,7 +375,12 @@ export class AssetReadWorkflow {
     return {
       id: record.id,
       kind: record.kind,
-      ...summarizeAsset(kind, record.name, record.publishedConfig, locale),
+      ...summarizeAsset(
+        kind,
+        record.name,
+        kind.lifecycle === "active" ? record.config : record.publishedConfig,
+        locale
+      ),
       scope: record.scope,
       ...(namespace ? { namespace } : {}),
       revision: record.publishedRevision ?? record.revision,
@@ -637,20 +643,6 @@ function summarizeAsset(
     }
     throw error;
   }
-}
-
-/** App draft writers and publishers read the same draft in the list as in assets.get. */
-function readsAppDraft(
-  kind: WorkflowAssetKind,
-  access: ActorAccess,
-  resource: AssetTarget["resource"]
-): boolean {
-  return (
-    kind.kind === "app" &&
-    (access.authorize(kind.actions.write, resource).allowed ||
-      (kind.actions.publish !== undefined &&
-        access.authorize(kind.actions.publish, resource).allowed))
-  );
 }
 
 /** List and detail answers use the write paths' in-memory authorization decision. */

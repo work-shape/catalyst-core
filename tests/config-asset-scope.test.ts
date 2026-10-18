@@ -73,6 +73,7 @@ describe("scope on a config asset", () => {
       applyValidatedConfigAssetMutations(
         {
           config,
+          stores: t.stores,
           clientInstanceId,
           configAssets: {
             store: t.stores.configAssets,
@@ -122,7 +123,9 @@ describe("scope on a config asset", () => {
     // The instance's agent and another workspace's agent may not name the workspace's skill.
     const invalidScope = {
       code: "VALIDATION_FAILED",
-      message: `Config agent 'outside' references skill 'team-notes' owned by workspace '${workspaceId}'. An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets.`,
+      message: expect.stringContaining(
+        "references Skill 'team-notes' owned by workspace 'Scope test'"
+      ),
       details: { reason: "invalid_scope" }
     };
     await expect(

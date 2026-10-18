@@ -115,6 +115,8 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * Kinds with no references return an empty list.
    */
   references?(definition: unknown): readonly { kind: string; name: string }[];
+  /** Workspace targets an instance-owned source may name; every Workflow call checks its principal. */
+  readonly crossOwnerReferences?: readonly string[];
   /** Adjusts what an interactive save sends before it is validated. */
   prepareInteractiveUpsert(input: {
     current: unknown;

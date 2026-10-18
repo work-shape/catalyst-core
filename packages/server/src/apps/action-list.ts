@@ -152,7 +152,7 @@ export class AppActionList {
   /**
    * The actions of the App the call names: of its draft for whoever writes the App, of the
    * published revision for every other reader. Without a name, the actions of the published
-   * revision of every App the caller reads, at most `APP_ACTIONS_LIST_MAX_APPS` Apps.
+   * revision of every App the caller reads or uses, at most `APP_ACTIONS_LIST_MAX_APPS` Apps.
    */
   async list(
     caller: { actor: AuthenticatedIdentity; access: ActorAccess },
@@ -182,7 +182,7 @@ export class AppActionList {
       truncated = assets.length > APP_ACTIONS_LIST_MAX_APPS;
       revisions = assets
         .slice(0, APP_ACTIONS_LIST_MAX_APPS)
-        .filter((asset) => reads(asset, APP_ACTIONS.read))
+        .filter((asset) => reads(asset, APP_ACTIONS.read) || reads(asset, APP_ACTIONS.use))
         .flatMap((asset) => listedRevision(asset, "published") ?? []);
     }
     const actions = revisions.flatMap((revision) => revision.actions);
@@ -215,6 +215,7 @@ export class AppActionList {
       apps.push({
         name: asset.name,
         title: revision.title,
+        scope: asset.scope,
         view: revision.view,
         revision: revision.revision,
         actions: await Promise.all(

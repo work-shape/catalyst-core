@@ -557,7 +557,8 @@ export class AssetWorkflow {
           stored.set,
           view,
           drafted,
-          new Set([assetKey(kind.kind, name ?? "")])
+          new Set([assetKey(kind.kind, name ?? "")]),
+          call.runtime?.locale ?? this.options.config.localization.defaultLocale
         );
     // What is stored and read-only is refused before the definition is read, as a put is.
     const readOnly = storedWritableIssues(kind, current);
@@ -569,14 +570,15 @@ export class AssetWorkflow {
             call.access,
             view.set,
             found,
-            () => {
+            async () => {
               const { scope } = target;
               const write = { type: "upsert", kind: kind.kind, name: name ?? "", scope } as const;
-              assertReferencesWithinOwners(
+              await assertReferencesWithinOwners(
                 kinds,
                 [{ ...write, config: prepared }],
                 stored.assets,
-                call.runtime?.locale ?? this.options.config.localization.defaultLocale
+                call.runtime?.locale ?? this.options.config.localization.defaultLocale,
+                this.options
               );
             },
             {
@@ -663,7 +665,8 @@ export class AssetWorkflow {
       stored.set,
       view,
       written,
-      new Set([assetKey(kind.kind, name)])
+      new Set([assetKey(kind.kind, name)]),
+      call.runtime?.locale ?? this.options.config.localization.defaultLocale
     );
     if (issues.length > 0) {
       throw new AppError("VALIDATION_FAILED", INVALID_ASSET_SET_MESSAGE, { issues });

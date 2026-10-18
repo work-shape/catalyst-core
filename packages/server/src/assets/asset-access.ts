@@ -153,8 +153,23 @@ export function listedTo(
   const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
   return (
     access.authorize(kind.actions.read, resource).allowed ||
+    readsAppDraft(kind, access, resource) ||
     ((kind.lifecycle === "active" || asset.published === true) &&
       kind.actions.use !== undefined &&
       access.authorize(kind.actions.use, resource).allowed)
+  );
+}
+
+/** App draft writers and publishers read the same draft in the list as in assets.get. */
+export function readsAppDraft(
+  kind: WorkflowAssetKind,
+  access: ActorAccess,
+  resource: AccessResource
+): boolean {
+  return (
+    kind.kind === "app" &&
+    (access.authorize(kind.actions.write, resource).allowed ||
+      (kind.actions.publish !== undefined &&
+        access.authorize(kind.actions.publish, resource).allowed))
   );
 }

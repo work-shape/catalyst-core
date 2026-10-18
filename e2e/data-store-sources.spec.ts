@@ -264,8 +264,9 @@ test("a store's page names the Workflow that fills it with its Connection and ac
   try {
     await plantConnection(connection);
 
-    // The instance-owned Workflow and the workspace's App may both reference this store.
+    // The store, with one table, published in the workspace.
     await publishAsset(page, "data_store", store, {
+      workspaceId,
       files: [
         { path: "store.yaml", text: `id: ${store}\nname: Kunden ${tag}\n` },
         {
@@ -357,11 +358,11 @@ test("a store's page names the Workflow that fills it with its Connection and ac
 
     // The store's page: Nachtimport fills it from Exampledata as its account; the workspace reads
     // it through the App, and only the admins read the store itself.
-    // Studio works at instance scope, matching the store's owner.
+    // Studio works in the store's workspace, so the page finds the store where it asks first.
     await page.goto("/");
     await page.evaluate(
       (scope) => window.localStorage.setItem("vivd-catalyst:build-scope", scope),
-      "instance"
+      workspaceId
     );
     const storePage = `/build/data-stores/${store}`;
     await page.goto(storePage);

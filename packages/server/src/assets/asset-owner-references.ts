@@ -1,10 +1,14 @@
 import {
   AppError,
+  asCollaborationWorkspaceId,
   INSTANCE_ASSET_SCOPE,
   type AssetScope,
+  type ClientInstanceId,
+  type PlatformStores,
   type LocaleCode,
   type ConfigAssetRecord
 } from "@work-shape/catalyst-core";
+import { assetKindLabel } from "./asset-reference-labels";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
 
 /** A write as far as this rule reads it: a store mutation, or a definition a validate asks of. */
@@ -21,16 +25,18 @@ interface Owned {
 }
 
 /**
- * Only saved sources are checked. Existing invalid references keep running and do not block
- * edits to their targets or unrelated assets; the next save or publish of the source refuses
- * them. Ownership is immutable, so changing a target cannot create an invalid owner pair.
+ * Check every owner pair whose source or target the write touches. Unrelated legacy pairs
+ * keep running, but creating a previously missing target must not make one invalid.
+ * Workflows may reach workspace Apps, Data Stores and Knowledge Bases: their principal's
+ * grants are checked at run time. Guardrail filters are absent from the reference inventory.
  */
-export function assertReferencesWithinOwners(
+export async function assertReferencesWithinOwners(
   kinds: readonly WorkflowAssetKind[],
   mutations: readonly OwnedWrite[],
   assets: readonly ConfigAssetRecord[],
-  locale: LocaleCode = "en"
-): void {
+  locale: LocaleCode,
+  options: { clientInstanceId: ClientInstanceId; stores: Pick<PlatformStores, "workspaces"> }
+): Promise<void> {
   const key = (kind: string, name: string) => `${kind}:${name}`;
   const owned = new Map<string, Owned>(
     assets.map((asset) => [
@@ -55,22 +61,34 @@ export function assertReferencesWithinOwners(
     }
   }
   if (touched.size === 0) return;
-  const referencesOf = new Map(
-    kinds.flatMap((kind) => (kind.references ? [[kind.kind, kind.references] as const] : []))
-  );
+  const kindsByName = new Map(kinds.map((kind) => [kind.kind, kind]));
   for (const [at, asset] of owned) {
-    const references = referencesOf.get(asset.kind);
-    if (!references || !touched.has(at)) continue;
+    const kind = kindsByName.get(asset.kind);
+    const references = kind?.references;
+    if (!references) continue;
     for (const reference of references(asset.definition)) {
       const named = owned.get(key(reference.kind, reference.name));
-      if (!named) continue;
+      if (!named || (!touched.has(at) && !touched.has(key(named.kind, named.name)))) continue;
+      if (asset.scope.kind === "instance" && kind?.crossOwnerReferences?.includes(named.kind))
+        continue;
       if (named.scope.kind === "workspace" && !sameWorkspace(asset.scope, named.scope)) {
-        const owner = named.scope.workspaceId;
+        const ownerName = async (scope: AssetScope) => {
+          if (scope.kind === "instance") return locale === "de" ? "der Instanz" : "the instance";
+          const workspace = await options.stores.workspaces.getWorkspace(
+            options.clientInstanceId,
+            asCollaborationWorkspaceId(scope.workspaceId)
+          );
+          return locale === "de"
+            ? `dem Arbeitsbereich '${workspace?.name ?? "unbekannt"}'`
+            : `workspace '${workspace?.name ?? "unknown"}'`;
+        };
+        const sourceOwner = await ownerName(asset.scope);
+        const targetOwner = await ownerName(named.scope);
         throw new AppError(
           "VALIDATION_FAILED",
           locale === "de"
-            ? `Config ${asset.kind} '${asset.name}' verweist auf ${named.kind} '${named.name}' im Arbeitsbereich '${owner}'. Ein Asset darf nur Assets desselben Arbeitsbereichs oder der Instanz referenzieren; ein Asset der Instanz darf keine Arbeitsbereichs-Assets referenzieren.`
-            : `Config ${asset.kind} '${asset.name}' references ${named.kind} '${named.name}' owned by workspace '${owner}'. An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets.`,
+            ? `${assetKindLabel(asset.kind, locale)} '${asset.name}' gehört zu ${sourceOwner} und verweist auf ${assetKindLabel(named.kind, locale)} '${named.name}' in ${targetOwner}. Ein Asset darf nur Assets desselben Arbeitsbereichs oder der Instanz referenzieren; ein Asset der Instanz darf keine Arbeitsbereichs-Assets referenzieren.`
+            : `${assetKindLabel(asset.kind, locale)} '${asset.name}' owned by ${sourceOwner} references ${assetKindLabel(named.kind, locale)} '${named.name}' owned by ${targetOwner}. An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets.`,
           {
             reason: "invalid_scope",
             reference: { kind: named.kind, name: named.name, owner: named.scope },

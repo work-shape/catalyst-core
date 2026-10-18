@@ -662,14 +662,14 @@ export async function writeIssuesOf(
   access: ActorAccess,
   stored: AssetSet,
   found: ReturnType<typeof findAssetSetIssues>,
-  withinOwners: () => void,
+  withinOwners: () => Promise<void>,
   toolTargets: AgentToolValidationTargets,
   scopedWrite?: () => Promise<void>
 ): Promise<{ issues: AssetSetIssue[]; warnings: AgentToolWarning[] }> {
   try {
     const issues = found.validateWrite(stored);
     if (issues.length > 0) return { issues, warnings: [] };
-    withinOwners();
+    await withinOwners();
     await scopedWrite?.();
     const { refusals, warnings } = await findChangedAgentRefusals(
       options,

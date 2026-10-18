@@ -11,7 +11,8 @@ import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 
 // The named actions of published Apps an agent can be given, as the agent page offers them.
-// The instance answers them for the Apps the reader may read (`apps.actions.list`). An action
+// The instance answers them for the Apps the reader may read or use (`apps.actions.list`); the page
+// offers those of the agent's owner and of the instance. An action
 // is offered where an agent can carry it now: its App is published and the operation it stands
 // for is exposed to agents. A name the agent holds and the answer lacks is kept and shown as
 // unavailable. The page never drops a name the reader did not remove.
@@ -95,18 +96,37 @@ export function appToolsView(read: AppToolsRead, selected: readonly string[]): A
 }
 
 /**
- * The actions of the published Apps on the instance: one read when the agent page opens. The
- * instance answers every App the reader may read in one answer.
+ * The Apps an agent of `owner` may name: an agent of the instance those of the instance, an
+ * agent of a workspace those of its workspace and of the instance.
  */
-export function useAppToolsRead(): AppToolsRead {
+export function appsOfOwner(
+  apps: AppActions["apps"],
+  owner: string | undefined
+): AppActions["apps"] {
+  return apps.filter(
+    (app) =>
+      app.scope.kind === "instance" || (owner !== undefined && app.scope.workspaceId === owner)
+  );
+}
+
+/**
+ * The actions of the published Apps an agent of `owner` may name: one read when the agent page
+ * opens. The instance answers every App the reader may read or use in one answer; the page keeps
+ * those of the agent's owner and of the instance.
+ */
+export function useAppToolsRead(owner: string | undefined): AppToolsRead {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const query = useQuery({
-    queryKey: ["app-tools", apiBaseUrl, authScope],
+    queryKey: ["app-tools", apiBaseUrl, authScope, owner ?? ""],
     queryFn: ({ signal }) => client.apps.actions.list({ signal }),
     retry: false
   });
   return query.data
-    ? { status: "ready", apps: query.data.apps, truncated: query.data.truncated }
+    ? {
+        status: "ready",
+        apps: appsOfOwner(query.data.apps, owner),
+        truncated: query.data.truncated
+      }
     : query.isPending
       ? { status: "loading" }
       : { status: "unknown" };
@@ -114,7 +134,7 @@ export function useAppToolsRead(): AppToolsRead {
 
 /**
  * The actions of Apps in an agent's Tools section: one folding group per published App the
- * reader may read, a check box per action an agent can carry, and after them the names the
+ * reader may read or use, a check box per action an agent can carry, and after them the names the
  * agent holds that nothing offers. Those stay until the reader removes them. A group of the
  * same rank as the Connections beside it.
  */

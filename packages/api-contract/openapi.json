@@ -439,7 +439,7 @@
     "/api/v1/app-actions": {
       "get": {
         "operationId": "apps.actions.list",
-        "summary": "List the named actions of one App or of every published App the caller reads, with what a call of each would come to for the caller",
+        "summary": "List the named actions of one App or of every published App the caller reads or uses, with what a call of each would come to for the caller",
         "tags": [
           "Apps"
         ],
@@ -27329,6 +27329,9 @@
                 "title": {
                   "type": "string"
                 },
+                "scope": {
+                  "$ref": "#/components/schemas/AssetScope"
+                },
                 "view": {
                   "$ref": "#/components/schemas/AppMode"
                 },
@@ -27347,6 +27350,7 @@
               "required": [
                 "name",
                 "title",
+                "scope",
                 "view",
                 "revision",
                 "actions"

@@ -189,15 +189,8 @@ export function createGuardrailAssetKind(): WorkflowAssetKind {
         }
       })
     }),
-    references: (config) => {
-      const filter = filterOf(config);
-      const operation =
-        filter?.operation === undefined ? undefined : assetOfOperation(filter.operation);
-      return [
-        ...(filter?.agent === undefined ? [] : [{ kind: AGENT_ASSET_KIND, name: filter.agent }]),
-        ...(operation === undefined ? [] : [operation])
-      ];
-    },
+    // A filter governs an event; it consumes no asset. Reach is checked separately below.
+    references: () => [],
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,

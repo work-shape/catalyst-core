@@ -3,6 +3,9 @@ import {
   createConnectionAssetKind,
   createGuardrailAssetKind
 } from "@work-shape/catalyst-server";
+import { appActionsSchema } from "@work-shape/catalyst-api-contract";
+import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
+import { setupAppActions } from "./support/app-actions";
 import { fixtureConnectorTypes } from "./support/connections";
 import { dataFlowManifest } from "./support/workflow-data-flows";
 import { readFile } from "node:fs/promises";
@@ -39,11 +42,17 @@ const auth = {
   users: [
     { id: "admin", roles: ["user", "admin", "superadmin"] },
     { id: "writer", roles: ["user"] }
-  ].map((u) => ({ ...u, externalUserId: u.id, displayLabel: u.id, permissionRefs: [] }))
+  ].map((u) => ({
+    ...u,
+    externalUserId: u.id,
+    displayLabel: u.id,
+    permissionRefs: [],
+    permissions: u.id === "writer" ? ["config_assets.read", "config_assets.write"] : []
+  }))
 };
 
 async function seed(
-  world: DataStoreInstance,
+  world: Pick<DataStoreInstance, "stores">,
   kind: string,
   config: JsonObject,
   scope: AssetScope = { kind: "instance" },
@@ -143,7 +152,13 @@ describe("asset reference owners through the assembled API", () => {
               owner: { kind: "workspace", workspaceId: workspace.id }
             }
           });
-          expect(error.message).toContain(workspace.id);
+          expect(error.message).toContain(workspace.name);
+          expect(error.message).not.toContain(workspace.id);
+          expect(error.message).toContain(
+            owner ? other.name : locale === "de" ? "der Instanz" : "the instance"
+          );
+          if (locale === "de" && kind === "agent")
+            expect(error.message).toContain("Wissensdatenbank");
           expect(error.message).toContain(
             locale === "de" ? "desselben Arbeitsbereichs" : "own workspace or the instance"
           );
@@ -188,7 +203,7 @@ describe("asset reference owners through the assembled API", () => {
       expect(
         await world.stores.configAssets.getConfigAsset({ clientInstanceId, kind, name: "legacy" })
       ).toMatchObject({ config, revision: legacy.revision });
-      // Saving a target or an unrelated asset must not revalidate a legacy source.
+      // Unrelated assets stay editable; touching either end checks the owner pair.
       expect((await put(world, "knowledge_base", kb("unrelated"))).statusCode).toBe(200);
       const target = required(
         await world.stores.configAssets.getConfigAsset({
@@ -205,7 +220,7 @@ describe("asset reference owners through the assembled API", () => {
           expectedRevision: target.revision
         }
       });
-      expect(updated.statusCode, updated.body).toBe(200);
+      expect(updated.statusCode, updated.body).toBe(kind === "agent" ? 422 : 200);
     });
   }
 
@@ -229,7 +244,7 @@ describe("asset reference owners through the assembled API", () => {
   });
 
   it("offers exactly the Knowledge Bases accepted by save, including published use-only access", async () => {
-    const { world, workspace } = await setup();
+    const { world, workspace, other, scope } = await setup();
     const writer = await world.stores.users.resolveUserIdentity({
       clientInstanceId,
       authSource: "development",
@@ -237,7 +252,7 @@ describe("asset reference owners through the assembled API", () => {
       displayLabel: "writer",
       roles: ["user"],
       permissionRefs: [],
-      permissions: [],
+      permissions: ["config_assets.read", "config_assets.write"],
       correlationId: "test"
     });
     async function grant(action: string, scopeKind: string, scopeId: string, effect = "allow") {
@@ -253,41 +268,60 @@ describe("asset reference owners through the assembled API", () => {
       });
       expect(response.statusCode, response.body).toBe(200);
     }
-    for (const action of ["agent.read", "agent.write"])
-      await grant(action, "workspace", workspace.id);
     await grant("knowledge_base.write", "instance", clientInstanceId);
     const choices = [
       { name: "use-only", action: "knowledge_base.use", published: true },
       { name: "read-only", action: "knowledge_base.read", published: false },
       { name: "unpublished", action: "knowledge_base.use", published: false },
-      { name: "hidden", action: undefined, published: true }
+      { name: "hidden", action: undefined, published: true },
+      { name: "own-use", action: "knowledge_base.use", published: true, scope },
+      { name: "own-read", action: "knowledge_base.read", published: false, scope },
+      { name: "own-hidden", action: undefined, published: true, scope },
+      {
+        name: "other-read",
+        action: "knowledge_base.read",
+        published: true,
+        scope: { kind: "workspace", workspaceId: other.id } satisfies AssetScope
+      }
     ];
     for (const choice of choices) {
       const asset = await seed(
         world,
         "knowledge_base",
         kb(choice.name),
-        undefined,
+        choice.scope,
         choice.published
       );
       if (choice.action) await grant(choice.action, "asset", asset.id);
     }
-    const listed = await world.api.call("assets.list", {
-      params: { kind: "knowledge_base" },
-      headers: writerHeaders
-    });
-    expect(listed.statusCode, listed.body).toBe(200);
-    const offered = names.parse(listed.json()).items.map((item) => item.name);
-    expect(offered.sort()).toEqual(["read-only", "use-only"]);
-    for (const choice of choices) {
-      const response = await put(
-        world,
-        "agent",
-        agent(`uses-${choice.name}`, { knowledgeBases: [choice.name] }),
-        workspace.id,
-        writerHeaders
+    for (const owner of [undefined, workspace.id]) {
+      const offered: string[] = [];
+      for (const workspaceId of owner === undefined ? [undefined] : [owner, undefined]) {
+        const listed = await world.api.call("assets.list", {
+          params: { kind: "knowledge_base" },
+          query: workspaceId === undefined ? {} : { workspaceId },
+          headers: writerHeaders
+        });
+        expect(listed.statusCode, listed.body).toBe(200);
+        offered.push(...names.parse(listed.json()).items.map((item) => item.name));
+      }
+      expect(offered.sort()).toEqual(
+        owner === undefined
+          ? ["read-only", "use-only"]
+          : ["own-read", "own-use", "read-only", "use-only"]
       );
-      expect(response.statusCode === 200, response.body).toBe(offered.includes(choice.name));
+      for (const choice of choices) {
+        const response = await put(
+          world,
+          "agent",
+          agent(`uses-${owner ? "ws" : "instance"}-${choice.name}`, {
+            knowledgeBases: [choice.name]
+          }),
+          owner,
+          writerHeaders
+        );
+        expect(response.statusCode === 200, response.body).toBe(offered.includes(choice.name));
+      }
     }
     const badStore = await seed(world, "data_store", store("hidden-store"));
     const denied = await put(
@@ -300,6 +334,138 @@ describe("asset reference owners through the assembled API", () => {
     expect(denied.statusCode, denied.body).toBe(422);
   });
 
+  it("offers exactly the App actions accepted by instance and workspace agents, with owner and read rights together", async () => {
+    const t = await setupAppActions();
+    try {
+      const own: AssetScope = { kind: "workspace", workspaceId: t.workspaceId };
+      const other = await t.stores.workspaces.createWorkspace({
+        clientInstanceId,
+        name: "Other App team",
+        kind: "shared",
+        creatorUserId: t.admin.id
+      });
+      const orders = required(
+        await t.stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "app",
+          name: "orders"
+        })
+      );
+      const choices = [
+        { name: "own-app", scope: own, read: true, published: true },
+        {
+          name: "other-app",
+          scope: { kind: "workspace", workspaceId: other.id } satisfies AssetScope,
+          read: true,
+          published: true
+        },
+        { name: "hidden-app", scope: own, read: false, published: true },
+        { name: "draft-app", scope: own, read: false, published: false }
+      ];
+      for (const choice of choices) {
+        const asset = await seed(
+          t,
+          "app",
+          { ...required(orders.config), name: choice.name },
+          choice.scope,
+          choice.published
+        );
+        if (choice.read) await t.grant(t.lena.id, "app.read", { assetId: asset.id });
+      }
+      const listed = await t.expectOk(t.lena.id, "apps.actions.list");
+      const catalog = appActionsSchema.parse(listed.json()).apps;
+      for (const owner of [undefined, t.workspaceId]) {
+        const offered = catalog
+          .filter((app) => app.scope.kind === "instance" || app.scope.workspaceId === owner)
+          .filter((app) => app.actions.some((action) => action.name === "load" && action.agentTool))
+          .map((app) => app.name);
+        expect(offered.sort()).toEqual(owner === undefined ? [] : ["own-app"]);
+        for (const choice of choices) {
+          const name = `parity-${owner ? "ws" : "instance"}-${choice.name}`;
+          const source = await seed(t, "agent", agent(name), owner === undefined ? undefined : own);
+          for (const action of ["agent.read", "agent.write"])
+            await t.grant(t.lena.id, action, { assetId: source.id });
+          const response = await t.call(t.lena.id, "assets.put", {
+            params: { kind: "agent", name },
+            payload: {
+              config: agent(name, { toolNames: [`app.${choice.name}.load`] }),
+              expectedRevision: source.revision,
+              ...(owner ? { workspaceId: owner } : {})
+            }
+          });
+          expect(response.statusCode === 200, response.body).toBe(offered.includes(choice.name));
+        }
+      }
+      // Membership supplies app.use, which save accepts even without app.read.
+      const memberCatalog = appActionsSchema.parse(
+        (await t.expectOk(t.kai.id, "apps.actions.list")).json()
+      );
+      expect(
+        memberCatalog.apps
+          .find((app) => app.name === "orders")
+          ?.actions.some((action) => action.toolName === "app.orders.load" && action.agentTool)
+      ).toBe(true);
+      const memberSource = await seed(t, "agent", agent("member-choices"), own);
+      for (const action of ["agent.read", "agent.write"])
+        await t.grant(t.kai.id, action, { assetId: memberSource.id });
+      const saved = await t.call(t.kai.id, "assets.put", {
+        params: { kind: "agent", name: memberSource.name },
+        payload: {
+          workspaceId: t.workspaceId,
+          expectedRevision: memberSource.revision,
+          config: agent(memberSource.name, { toolNames: ["app.orders.load"] })
+        }
+      });
+      expect(saved.statusCode, saved.body).toBe(200);
+    } finally {
+      await t.closeAll();
+    }
+  });
+
+  it("localizes Workflow references to unread Knowledge Bases in EN and DE without revealing their owner", async () => {
+    const { world, scope } = await setup();
+    await seed(world, "knowledge_base", kb("hidden-kb"), scope, true);
+    const writer = await world.stores.users.resolveUserIdentity({
+      clientInstanceId,
+      authSource: "development",
+      externalUserId: "writer",
+      displayLabel: "writer",
+      roles: ["user"],
+      permissions: ["config_assets.read", "config_assets.write"],
+      permissionRefs: [],
+      correlationId: "test"
+    });
+    for (const action of ["workflow.read", "workflow.write"]) {
+      const granted = await world.api.call("permissions.grant", {
+        payload: {
+          holderKind: "user",
+          holderId: writer.id,
+          action,
+          effect: "allow",
+          scopeKind: "instance"
+        }
+      });
+      expect(granted.statusCode, granted.body).toBe(200);
+    }
+    for (const locale of ["en", "de"]) {
+      const name = `unknown-${locale}`;
+      const response = await put(
+        world,
+        "workflow",
+        { name, manifest: dataFlowManifest(name, ["knowledge.hidden-kb.search"]) },
+        undefined,
+        { ...writerHeaders, "accept-language": locale }
+      );
+      expect(response.statusCode, response.body).toBe(422);
+      expect(response.body).toContain(
+        locale === "de"
+          ? "verweist auf unbekanntes Asset: Wissensdatenbank"
+          : "references unknown Knowledge Base"
+      );
+      expect(response.body).not.toContain("Reference team");
+    }
+  });
+
   it("declares the complete reference inventory of every kind, including nested calls", async () => {
     const { world } = await setup();
     const kinds = world.execution.configAssets.kinds;
@@ -309,7 +475,13 @@ describe("asset reference owners through the assembled API", () => {
           skillNames: ["skill"],
           knowledgeBases: ["kb"],
           subagentNames: ["child"],
-          toolNames: ["connection.source.query", "data_store.store.query"]
+          toolNames: [
+            "connection.source.query",
+            "data_store.store.query",
+            "knowledge.kb.search",
+            "workflow.flow.start",
+            "app.orders.load"
+          ]
         })
       )
     ).toEqual([
@@ -317,7 +489,10 @@ describe("asset reference owners through the assembled API", () => {
       { kind: "knowledge_base", name: "kb" },
       { kind: "agent", name: "child" },
       { kind: "connection", name: "source" },
-      { kind: "data_store", name: "store" }
+      { kind: "data_store", name: "store" },
+      { kind: "knowledge_base", name: "kb" },
+      { kind: "workflow", name: "flow" },
+      { kind: "app", name: "orders" }
     ]);
     expect(
       kinds
@@ -340,11 +515,46 @@ describe("asset reference owners through the assembled API", () => {
     ]);
     expect(
       createAppAssetKind().references?.({
-        manifest: { connections: ["source"], dataStores: [{ name: "store" }] }
+        manifest: {
+          connections: ["source"],
+          dataStores: [{ name: "store" }],
+          actions: [
+            {
+              name: "call",
+              file: "actions/call.action.yaml",
+              kind: "connection",
+              effect: "reading",
+              connection: "action-source",
+              operation: "query",
+              input: { schema: { type: "object", properties: {} }, mapping: {} }
+            },
+            {
+              name: "read",
+              file: "actions/read.action.yaml",
+              kind: "sql",
+              effect: "reading",
+              dataStore: "action-store",
+              parameters: [],
+              statement: "select 1",
+              input: { schema: { type: "object", properties: {} } }
+            },
+            {
+              name: "start",
+              file: "actions/start.action.yaml",
+              kind: "workflow",
+              effect: "changing",
+              workflow: "child",
+              input: { schema: { type: "object", properties: {} }, mapping: {} }
+            }
+          ]
+        }
       })
     ).toEqual([
       { kind: "connection", name: "source" },
-      { kind: "data_store", name: "store" }
+      { kind: "data_store", name: "store" },
+      { kind: "connection", name: "action-source" },
+      { kind: "data_store", name: "action-store" },
+      { kind: "workflow", name: "child" }
     ]);
     expect(
       createGuardrailAssetKind().references?.({
@@ -355,10 +565,7 @@ describe("asset reference owners through the assembled API", () => {
         check: { kind: "pattern", pattern: "x", reason: "x" },
         outcome: "block"
       })
-    ).toEqual([
-      { kind: "agent", name: "child" },
-      { kind: "data_store", name: "store" }
-    ]);
+    ).toEqual([]);
     const connection = createConnectionAssetKind({
       connectorTypes: fixtureConnectorTypes,
       egress: { admits: () => true }
@@ -370,10 +577,179 @@ describe("asset reference owners through the assembled API", () => {
     for (const kind of kinds.kinds) expect(() => kind.references?.(null), kind.kind).not.toThrow();
   });
 
+  it("inventories Workflow tools, notice links, nested Workflow calls and onFailure independently", async () => {
+    const { world, workspace } = await setup();
+    const manifest = dataFlowManifest("inventory", []);
+    manifest.kind = "process";
+    manifest.tools = [
+      "app.tool-app.load",
+      "connection.tool-source.echo",
+      "data_store.tool-store.query",
+      "knowledge.tool-kb.search",
+      "workflow.tool-flow.start"
+    ];
+    manifest.onFailure = "workflow.recovery";
+    manifest.steps = [
+      { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+      {
+        id: "branch",
+        name: "Branch",
+        type: "loop",
+        items: { step: "start", path: "input.items" },
+        steps: [{ id: "child", name: "Child", type: "workflow", workflow: "nested", input: {} }]
+      },
+      {
+        id: "tell",
+        name: "Tell",
+        type: "notify",
+        to: { users: ["admin"] },
+        channels: ["inbox"],
+        title: { value: "Ready" },
+        text: { value: "Ready" },
+        link: { kind: "app", app: "notice-app", workspaceId: workspace.id }
+      },
+      { id: "result", name: "Result", type: "output", input: {} }
+    ];
+    // Failure Workflows are declared but not executable yet. Inventory must still see them.
+    expect(parseWorkflowManifest(manifest)).toMatchObject({
+      ok: false,
+      issues: [expect.objectContaining({ path: "onFailure" })]
+    });
+    expect(
+      world.execution.configAssets.kinds.require("workflow").references?.({ manifest })
+    ).toEqual([
+      { kind: "workflow", name: "nested" },
+      { kind: "app", name: "notice-app" },
+      { kind: "app", name: "tool-app" },
+      { kind: "connection", name: "tool-source" },
+      { kind: "data_store", name: "tool-store" },
+      { kind: "knowledge_base", name: "tool-kb" },
+      { kind: "workflow", name: "tool-flow" },
+      { kind: "workflow", name: "recovery" }
+    ]);
+  });
+
+  it("saves instance Workflows reaching workspace stores, KBs, App actions and notice links", async () => {
+    const { world, workspace, scope } = await setup();
+    await seed(
+      world,
+      "app",
+      {
+        name: "ws-app",
+        title: "Workspace App",
+        manifest: {
+          actions: [
+            {
+              name: "load",
+              file: "actions/load.action.yaml",
+              kind: "connection",
+              effect: "reading",
+              connection: "source",
+              operation: "echo",
+              input: { schema: { type: "object", properties: {} }, mapping: {} }
+            }
+          ]
+        }
+      },
+      scope,
+      true
+    );
+    const manifest = dataFlowManifest("workspace-flow", [
+      "data_store.ws-a-store.query",
+      "knowledge.ws-a-kb.search",
+      "app.ws-app.load"
+    ]);
+    manifest.kind = "process";
+    manifest.tools = ["app.ws-app.load"];
+    manifest.steps = [
+      ...(Array.isArray(manifest.steps) ? manifest.steps.slice(0, -1) : []),
+      {
+        id: "tell",
+        name: "Tell",
+        type: "notify",
+        to: { users: ["admin"] },
+        channels: ["inbox"],
+        title: { value: "Ready" },
+        text: { value: "Ready" },
+        link: { kind: "app", app: "ws-app", workspaceId: workspace.id }
+      },
+      { id: "result", name: "Result", type: "output", input: {} }
+    ];
+    const saved = await put(world, "workflow", { name: "workspace-flow", manifest });
+    expect(saved.statusCode, saved.body).toBe(200);
+    // The exception belongs to Workflows alone, including when only the target changes.
+    const refused = await put(
+      world,
+      "agent",
+      agent("instance-app-agent", { toolNames: ["app.ws-app.load"] })
+    );
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(refused.body).toContain("invalid_scope");
+  });
+
+  it("saves instance guardrails filtering workspace agents, Data Stores and Knowledge Bases", async () => {
+    const { world, scope } = await setup();
+    await seed(world, "agent", agent("ws-agent"), scope);
+    const filters: JsonObject[] = [
+      { agent: "ws-agent" },
+      { operation: "data_store.ws-a-store.query" },
+      { operation: "knowledge.ws-a-kb.search" }
+    ];
+    for (const [index, filter] of filters.entries()) {
+      const saved = await put(world, "guardrail", {
+        name: `instance-filter-${index}`,
+        displayName: "Govern workspace events",
+        on: "operation.before_call",
+        filter,
+        check: { kind: "pattern", pattern: "x", reason: "x" },
+        outcome: "block"
+      });
+      expect(saved.statusCode, saved.body).toBe(200);
+    }
+  });
+
+  it("refuses creating a workspace target named by an existing instance source", async () => {
+    const { world, workspace } = await setup();
+    // Legacy drafts can name a target before it exists. Creating it must check both owners.
+    await seed(world, "agent", agent("waiting", { knowledgeBases: ["future-kb"] }));
+    const saved = await put(world, "knowledge_base", kb("future-kb"), workspace.id);
+    expect(saved.statusCode, saved.body).toBe(422);
+    expect(saved.body).toContain("invalid_scope");
+    expect(
+      await world.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "knowledge_base",
+        name: "future-kb"
+      })
+    ).toBeUndefined();
+  });
+
   it("counts legacy owner violations read-only, across stored agent drafts and published revisions", async () => {
     const { world } = await setup();
     await seed(world, "agent", agent("bad-agent", { knowledgeBases: ["ws-a-kb", "ws-a-kb"] }));
     await seed(world, "knowledge_base", kb("bad-kb", "ws-a-store"), undefined, true);
+    // The preflight uses the same two exceptions as writes, across live and draft revisions.
+    await seed(
+      world,
+      "workflow",
+      {
+        name: "allowed-flow",
+        manifest: dataFlowManifest("allowed-flow", [
+          "data_store.ws-a-store.query",
+          "knowledge.ws-a-kb.search"
+        ])
+      },
+      undefined,
+      true
+    );
+    await seed(world, "guardrail", {
+      name: "allowed-filter",
+      displayName: "Allowed filter",
+      on: "operation.before_call",
+      filter: { operation: "data_store.ws-a-store.query" },
+      check: { kind: "pattern", pattern: "x", reason: "x" },
+      outcome: "block"
+    });
     const live = required(
       await world.stores.configAssets.getConfigAsset({
         clientInstanceId,

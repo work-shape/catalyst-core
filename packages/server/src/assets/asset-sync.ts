@@ -294,7 +294,14 @@ async function checkBatch(
       defaultChange
         ? withDefaultAgentName(withItems(set), defaultChange.agentName)
         : withItems(set);
-    const tellable = findIssuesOfChange(kinds.kinds, stored.set, view, left, written);
+    const tellable = findIssuesOfChange(
+      kinds.kinds,
+      stored.set,
+      view,
+      left,
+      written,
+      call.runtime?.locale ?? options.config.localization.defaultLocale
+    );
     stopIfRefused(placeIssues(tellable, ready()));
   }
 

@@ -15,7 +15,7 @@ import type { AssetWorkflowOptions } from "../types";
  * the approval applies it.
  */
 export async function liveRevision(
-  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">,
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets" | "stores" | "config">,
   call: Pick<AssetCall, "actor" | "access" | "runtime">,
   target: AssetTarget,
   number: number
@@ -37,7 +37,7 @@ export async function liveRevision(
   const assets = await options.configAssets.store.listActiveConfigAssets({
     clientInstanceId: options.clientInstanceId
   });
-  assertReferencesWithinOwners(
+  await assertReferencesWithinOwners(
     options.configAssets.kinds.kinds,
     [
       {
@@ -49,7 +49,8 @@ export async function liveRevision(
       }
     ],
     assets,
-    call.runtime?.locale
+    call.runtime?.locale ?? options.config.localization.defaultLocale,
+    options
   );
   await kind.authorizeLive?.({
     actor: call.actor,

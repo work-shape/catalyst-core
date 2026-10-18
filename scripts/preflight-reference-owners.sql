@@ -57,16 +57,14 @@ WITH RECURSIVE revisions AS (
   UNION ALL
   SELECT id, revision_id, 'workflow', substr(config #>> '{manifest,onFailure}', 10)
   FROM revisions WHERE kind = 'workflow' AND config #>> '{manifest,onFailure}' LIKE 'workflow.%'
-  UNION ALL
-  SELECT id, revision_id, 'agent', config #>> '{filter,agent}' FROM revisions WHERE kind = 'guardrail'
+
 ), operations AS (
   SELECT id, revision_id, step ->> 'operation' AS operation FROM steps WHERE step ->> 'type' = 'operation'
   UNION ALL
   SELECT id, revision_id, t FROM revisions CROSS JOIN LATERAL jsonb_array_elements_text(config #> '{manifest,tools}') t WHERE kind = 'workflow'
   UNION ALL
   SELECT id, revision_id, t FROM revisions CROSS JOIN LATERAL jsonb_array_elements_text(config -> 'toolNames') t WHERE kind = 'agent'
-  UNION ALL
-  SELECT id, revision_id, config #>> '{filter,operation}' FROM revisions WHERE kind = 'guardrail'
+
 ), refs AS (
   SELECT id, revision_id, kind, name FROM named WHERE name IS NOT NULL
   UNION
@@ -84,6 +82,7 @@ WITH RECURSIVE revisions AS (
   JOIN config_assets t ON t.client_instance_id = s.client_instance_id
     AND t.kind = r.kind AND t.name = r.name AND t.status = 'active'
   WHERE t.scope_kind = 'workspace'
+    AND NOT (s.kind = 'workflow' AND t.kind IN ('app', 'data_store', 'knowledge_base'))
     AND (s.scope_kind <> 'workspace' OR s.scope_id IS DISTINCT FROM t.scope_id)
 )
 SELECT instances.client_instance_id, count(refused.source_name) AS refused_references,

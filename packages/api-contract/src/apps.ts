@@ -6,6 +6,7 @@ import {
 import { z } from "zod";
 import { appActionPermissionSchema } from "./app-bridge";
 import { operationTargetSchema } from "./operation-runs";
+import { assetScopeSchema } from "./assets";
 import { pagePreviewSchema } from "./pages";
 
 /** The kind id of an App in the asset registry. */
@@ -306,6 +307,7 @@ export const appActionsSchema = z.object({
     z.object({
       name: z.string(),
       title: z.string(),
+      scope: assetScopeSchema,
       /** Which revision the actions are read from, and its number. */
       view: appModeSchema,
       revision: z.number().int().positive(),

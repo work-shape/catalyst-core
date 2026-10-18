@@ -218,8 +218,21 @@ export function createWorkflowAssetKind(
           : { description: workflow.manifest.description })
       })
     }),
+    crossOwnerReferences: ["app", "data_store", "knowledge_base"],
     references: (config) => {
-      const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
+      // onFailure is a declared reference even before the engine executes failure Workflows.
+      // Inventory the rest through the bounded engine parser without that unsupported field.
+      const raw = z
+        .object({ onFailure: z.string().optional() })
+        .loose()
+        .safeParse(manifestOfConfigSchema.safeParse(config).data?.manifest);
+      if (
+        !raw.success ||
+        Buffer.byteLength(JSON.stringify(raw.data), "utf8") > WORKFLOW_MANIFEST_MAX_BYTES
+      )
+        return [];
+      const { onFailure, ...manifest } = raw.data;
+      const parsed = parseStoredManifest(manifest);
       if (!parsed.ok) return [];
       const references: { kind: string; name: string }[] = [];
       const operation = (name: string) => {
@@ -239,7 +252,7 @@ export function createWorkflowAssetKind(
           references.push({ kind: "app", name: step.link.app });
       }
       for (const tool of parsed.manifest.tools ?? []) operation(tool);
-      const failure = parsed.manifest.onFailure;
+      const failure = onFailure;
       if (failure?.startsWith("workflow."))
         references.push({ kind: WORKFLOW_ASSET_KIND, name: failure.slice("workflow.".length) });
       return references;

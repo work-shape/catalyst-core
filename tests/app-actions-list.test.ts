@@ -133,7 +133,7 @@ describe("apps.actions.list", () => {
     }
   });
 
-  it("answers without a named App the published revision of every App the caller reads, and says which actions an agent can carry", async () => {
+  it("answers the unnamed chooser the published actions of Apps the caller reads or uses", async () => {
     const answer = await list(t.admin.id);
 
     const orders = answer.apps.find((app) => app.name === "orders");
@@ -147,8 +147,11 @@ describe("apps.actions.list", () => {
       save: false
     });
 
-    // Nothing of an App is told to somebody who may not read it.
-    expect((await list(t.kai.id)).apps.map((app) => app.name)).not.toContain("orders");
+    // A member may choose published actions through use; named details still require read.
+    const chosen = await list(t.kai.id);
+    expect(chosen.apps.map((app) => app.name)).toContain("orders");
+    expect(chosen.apps[0]).not.toHaveProperty("config");
+    expect(chosen.apps[0]).not.toHaveProperty("manifest");
   });
 
   it("says why a call cannot reach its operation: the Connection is off, or no longer accepts the operation", async () => {

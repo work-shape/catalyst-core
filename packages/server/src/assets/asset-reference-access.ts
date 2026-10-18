@@ -1,11 +1,13 @@
 import type {
   ActorAccess,
+  LocaleCode,
   ConfigAssetKind,
   ConfigAssetRecord,
   ConfigAssetState
 } from "@work-shape/catalyst-core";
 import { readDefinitionName, type WorkflowAssetKind } from "../asset-kinds/shared";
 import type { AssetWorkflowOptions } from "../types";
+import { assetKindLabel } from "./asset-reference-labels";
 import { listedTo } from "./asset-access";
 import {
   assetSetOf,
@@ -23,7 +25,10 @@ export interface StoredAssets {
 }
 
 /** What a refused change is told of an asset its caller may not read: that there is one. */
-const UNREAD_ASSET_ISSUE = "The change would break an asset the caller may not read";
+const unreadAssetIssue = (locale: LocaleCode) =>
+  locale === "de"
+    ? "Die Änderung würde ein Asset beschädigen, das der Aufrufer nicht lesen darf"
+    : "The change would break an asset the caller may not read";
 
 /** The stored assets as one caller's change is checked against them. */
 interface ReferableAssets {
@@ -95,7 +100,8 @@ export function findIssuesOfChange(
   view: ReferableAssets,
   change: (set: AssetSet) => AssetSet,
   /** The keys of the definitions the change writes. */
-  changed: ReadonlySet<string>
+  changed: ReadonlySet<string>,
+  locale: LocaleCode = "en"
 ): AssetSetIssue[] {
   const key = (issue: AssetSetIssue) => JSON.stringify([issue.message, issue.path?.map(String)]);
   const keysOf = (issues: readonly AssetSetIssue[]) => new Set(issues.map(key));
@@ -143,7 +149,10 @@ export function findIssuesOfChange(
             continue;
           reported.add(referenceKey);
           ofChange.push({
-            message: `Config ${kind.kind} '${name}' references unknown ${ref.kind} '${ref.name}'`,
+            message:
+              locale === "de"
+                ? `${assetKindLabel(kind.kind, locale)} '${name}' verweist auf unbekanntes Asset: ${assetKindLabel(ref.kind, locale)} '${ref.name}'`
+                : `${assetKindLabel(kind.kind, locale)} '${name}' references unknown ${assetKindLabel(ref.kind, locale)} '${ref.name}'`,
             assetKind: kind.kind,
             assetName: name
           });
@@ -164,7 +173,7 @@ export function findIssuesOfChange(
     findAssetSetIssues(kinds, change(stored), stored).issues.some(
       (issue) => !toldKeys.has(key(issue))
     );
-  return untold ? [...told, { message: UNREAD_ASSET_ISSUE }] : told;
+  return untold ? [...told, { message: unreadAssetIssue(locale) }] : told;
 }
 
 export function assetKey(kind: ConfigAssetKind, name: string): string {
