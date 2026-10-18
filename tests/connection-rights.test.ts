@@ -308,7 +308,7 @@ describe("a right on a Connection", () => {
     expect(await assetActionsOf(t.kai.id, "chat:read")).toEqual([]);
   });
 
-  it("to use is no right to read: the holder is shown nothing of the Connection", async () => {
+  it("use permits selecting a Connection, while its configuration and history still require read", async () => {
     const t = await setupConnectionInstance();
     const a = await t.seed("alpha");
     await t.grant(t.lena.id, "connection.use", { assetId: a });
@@ -326,7 +326,10 @@ describe("a right on a Connection", () => {
       t.forbidden("connection.read", "no_grant")
     );
     const listed = await t.expectOk(t.lena.id, "assets.list", { params: { kind: "connection" } });
-    expect(assetPageSchema.parse(listed.json()).items).toEqual([]);
+    const items = assetPageSchema.parse(listed.json()).items;
+    expect(items.map((item) => item.name)).toEqual(["alpha"]);
+    expect(listed.json()).not.toHaveProperty("items.0.config");
+    expect(listed.json()).not.toHaveProperty("items.0.operations");
   });
 
   it("is taken from an administrator by a deny on the Connection", async () => {

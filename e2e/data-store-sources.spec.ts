@@ -357,11 +357,11 @@ test("a store's page names the Workflow that fills it with its Connection and ac
 
     // The store's page: Nachtimport fills it from Exampledata as its account; the workspace reads
     // it through the App, and only the admins read the store itself.
-    // Studio works in the store's workspace, so the page finds the store where it asks first.
+    // Studio works at instance scope, matching the store's owner.
     await page.goto("/");
     await page.evaluate(
       (scope) => window.localStorage.setItem("vivd-catalyst:build-scope", scope),
-      workspaceId
+      "instance"
     );
     const storePage = `/build/data-stores/${store}`;
     await page.goto(storePage);
