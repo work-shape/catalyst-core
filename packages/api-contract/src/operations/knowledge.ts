@@ -22,7 +22,7 @@ import {
   KNOWLEDGE_SEARCH_SIGNALS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
-import { defineRegisteredOperation, json } from "./define-operation";
+import { defineRegisteredOperation, json, blob } from "./define-operation";
 
 // The routes to one Knowledge Base, each with its id in the path. A route is no operation of
 // its own: its call runs as the Knowledge Base's operation `knowledge.<id>.<part>`, the one an
@@ -207,6 +207,21 @@ const BASE = {
 
 // None names its right in `requires`: the right is the Knowledge Base operation's.
 export const knowledgeOperations = {
+  "knowledge_bases.open_document": defineRegisteredOperation({
+    id: "knowledge_bases.open_document",
+    method: "GET",
+    path: "/api/v1/knowledge-bases/:knowledgeBase/documents/:documentId/content",
+    summary:
+      "Open an original source document with knowledge_base.use; removed documents are unavailable",
+    tag: "Knowledge Bases",
+    auth: "user",
+    scope: "data_store_rows:read",
+    requires: [],
+    effect: "reading",
+    response: blob(),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
   "knowledge_bases.sync": defineRegisteredOperation({
     ...BASE,
     id: "knowledge_bases.sync",

@@ -309,8 +309,13 @@ export function useDataStoreInstance(): {
         }),
         env,
         tools: [],
-        ...(typeof knowledge === "object" && knowledge.documents
-          ? { capabilities: [documentsModuleCapability] }
+        ...(typeof knowledge === "object" && (knowledge.attachments || knowledge.documents)
+          ? {
+              capabilities: [
+                ...(knowledge.attachments ? [knowledge.attachments] : []),
+                ...(knowledge.documents ? [documentsModuleCapability] : [])
+              ]
+            }
           : {})
       }
     });

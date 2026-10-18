@@ -16895,6 +16895,86 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/knowledge-bases/{knowledgeBase}/documents/{documentId}/content": {
+      "get": {
+        "operationId": "knowledge_bases.open_document",
+        "summary": "Open an original source document with knowledge_base.use; removed documents are unavailable",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "data_store_rows:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The content itself",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/knowledge-bases/{knowledgeBase}/extract-fields": {
       "post": {
         "operationId": "knowledge_bases.extract_fields",
