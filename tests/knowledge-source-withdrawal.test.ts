@@ -607,7 +607,7 @@ describe("source changes and withdrawal (SRC-3a, KB 78)", () => {
     await world.platform`update platform_jobs set run_after=now()+interval '1 day' where kind='knowledge_base.reconcile_sources' and status='queued'`;
     await world.worker.runDue();
     expect(await world.sql`select state from catalyst_kb.sync_runs where id=${run}`).toEqual([
-      { state: "failed" }
+      { state: "superseded" }
     ]);
     expect(await world.sql`select withdrawn_at from catalyst_kb.documents`).toEqual([
       { withdrawn_at: null }
