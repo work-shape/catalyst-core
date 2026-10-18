@@ -7,7 +7,7 @@ import { RELEASE_VERSION } from "@work-shape/catalyst-api-contract";
 import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
 import { operationHelpText, runOperationCommand } from "./operation-commands";
-import { isNamedCommand, namedHelpText, runNamedCommand } from "./named-commands";
+import { isNamedCommand, isNamedNoun, namedHelpText, runNamedCommand } from "./named-commands";
 import type { CommandInput } from "./input";
 import type { AssetKindName } from "./command-support";
 import { loginCommand, logoutCommand } from "./login";
@@ -148,6 +148,14 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
       stdout,
       stderr
     });
+  if (
+    isNamedNoun(argv[0]) &&
+    !isNamedCommand(argv) &&
+    (argv.length === 1 || argv.includes("--help"))
+  ) {
+    stdout(namedHelpText);
+    return 0;
+  }
   if (isNamedCommand(argv)) {
     return runNamedCommand(argv, {
       ...runtime,

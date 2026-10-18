@@ -126,6 +126,13 @@ describe("the local agent's first minute (ADISC-1)", () => {
       expect(unknown.code).toBe(2);
       expect(unknown.err).toContain("Unknown command 'nosuchthing'");
       expect(unknown.err).toContain("Instance:");
+      // The setup skill teaches `keys list` and `instance workspaces`; their help must answer.
+      for (const noun of ["keys", "instance"]) {
+        const help = await c.run(noun, "--help");
+        expect(help.code).toBe(0);
+        expect(help.out).toContain(`${noun} `);
+      }
+      expect((await c.run("data_store", "--help")).code).toBe(0);
     } finally {
       await c.close();
     }
