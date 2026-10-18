@@ -15,6 +15,7 @@ import {
   EmptyState,
   FilterBar,
   LoadError,
+  LoadMore,
   Page,
   PageHeader,
   SkeletonList
@@ -131,6 +132,8 @@ export function WorkflowsPageView({
   const dataCount = rows?.filter((workflow) => workflow.kind === "data").length ?? 0;
   const offerKinds = dataCount > 0 || kind === "data";
   const shown = rows?.filter((workflow) => workflow.kind === kind);
+  // A page may come back empty with more to read: the list is empty only once read to its end.
+  const listedNone = rows?.length === 0 && !list.hasMore;
   const newButton = onNew ? (
     <Button onClick={() => onNew(t("workflows.newPrompt"))}>
       <Plus aria-hidden="true" />
@@ -145,7 +148,7 @@ export function WorkflowsPageView({
           description={t("workflows.description")}
           // The empty list offers the agent itself, so the head drops New once the list has
           // answered with none. While it loads, New stands: making one never waits for the list.
-          primaryAction={rows?.length === 0 ? undefined : newButton}
+          primaryAction={listedNone ? undefined : newButton}
         />
         {list.failed ? (
           <div className="mb-4">
@@ -156,7 +159,7 @@ export function WorkflowsPageView({
           list.failed ? null : (
             <SkeletonList rows={4} />
           )
-        ) : rows.length === 0 ? (
+        ) : listedNone ? (
           <BuildWithAgentEmptyState
             icon={<Workflow aria-hidden="true" />}
             readerText="workflows.emptyReadOnly"
@@ -203,14 +206,12 @@ export function WorkflowsPageView({
               </ul>
             )}
             {list.hasMore ? (
-              <Button
-                variant="outline"
-                className="justify-self-start"
+              <LoadMore
                 loading={list.loadingMore}
-                onClick={list.loadMore}
-              >
-                {t("workflows.showMore")}
-              </Button>
+                onLoad={list.loadMore}
+                label={t("workflows.showMore")}
+                data-workflows-more=""
+              />
             ) : null}
           </div>
         )}

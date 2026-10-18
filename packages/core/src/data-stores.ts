@@ -280,17 +280,23 @@ export function dataStoreOperationName(store: string, verb: DataStoreOperationVe
 
 /**
  * The job kinds of the store. `provision` creates the database and the roles of a new store,
- * `migrate` applies the pending migrations of a publish, `measure_size` records the size of
- * every store once a day, `upgrade_owned` queues the migration of every store a Knowledge Base
- * owns whose tables are behind the release, at each start, and `drop` removes the database,
- * the roles and the record of a store whose Knowledge Base was deleted. Spec: One data store
+ * `migrate` applies the pending migrations of a publish, `measure_size_tick` starts the daily
+ * measurement; `upgrade_owned_tick` starts an upgrade scan at each start.
+ * Retryable `_page` jobs persist the scan cursor. Legacy empty ticks remain served for
+ * rolling-release drain; new schedules use distinct tick names so old workers cannot take
+ * new startup work. `drop` removes the database, roles and record of a store whose
+ * Knowledge Base was deleted. Spec: One data store
  * primitive; Knowledge Base on top.
  */
 export const DATA_STORE_JOB_KINDS = {
   provision: "data_store.provision",
   migrate: "data_store.migrate",
   measureSize: "data_store.measure_size",
+  measureSizeTick: "data_store.measure_size_tick",
   upgradeOwned: "data_store.upgrade_owned",
+  upgradeOwnedTick: "data_store.upgrade_owned_tick",
+  measureSizePage: "data_store.measure_size_page",
+  upgradeOwnedPage: "data_store.upgrade_owned_page",
   drop: "data_store.drop"
 } as const;
 
@@ -313,10 +319,11 @@ export interface DataStoreRecordsStore {
     clientInstanceId: ClientInstanceId;
     name: string;
   }): Promise<DataStoreRecord | undefined>;
-  /** The records of the instance in the order of their names, at most `limit`. */
+  /** The records ordered by name and id, after the exclusive cursor, at most `limit`. */
   listDataStores(input: {
     clientInstanceId: ClientInstanceId;
     limit: number;
+    after?: { name: string; id: string };
   }): Promise<DataStoreRecord[]>;
   /**
    * The records that name the database or one of the roles, whatever their status. A drop

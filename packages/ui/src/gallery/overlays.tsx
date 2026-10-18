@@ -484,14 +484,19 @@ const ASKED_AGENTS_PAGE_SIZE = 5;
 
 /**
  * Too many agents to hand over at once: the picker reports what is typed, and the caller
- * passes the matching ones. Here the source is a list; in an application it is a request.
+ * passes the matching ones a page at a time, with a last row that asks for the next page.
+ * Here the source is a list; in an application it is a request.
  */
 function AskedAgentsPicker({ text }: { text: GalleryText }) {
   const [search, setSearch] = useState("");
+  const [pages, setPages] = useState(1);
   const [agents, setAgents] = useState<readonly string[]>([]);
-  const options: PickerOption[] = text.manyAgents
-    .filter((label) => label.toLowerCase().includes(search.trim().toLowerCase()))
-    .slice(0, ASKED_AGENTS_PAGE_SIZE)
+  const matching = text.manyAgents.filter((label) =>
+    label.toLowerCase().includes(search.trim().toLowerCase())
+  );
+  const shown = pages * ASKED_AGENTS_PAGE_SIZE;
+  const options: PickerOption[] = matching
+    .slice(0, shown)
     .map((label) => ({ value: label, label }));
   return (
     <Picker
@@ -500,7 +505,15 @@ function AskedAgentsPicker({ text }: { text: GalleryText }) {
       label={text.pickerAsked}
       options={options}
       value={agents}
-      onSearchChange={setSearch}
+      onSearchChange={(next) => {
+        setSearch(next);
+        setPages(1);
+      }}
+      more={
+        matching.length > shown
+          ? { loading: false, onLoad: () => setPages((count) => count + 1) }
+          : undefined
+      }
       onValueChange={setAgents}
     >
       <Button variant="outline">

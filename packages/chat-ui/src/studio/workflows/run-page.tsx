@@ -431,7 +431,6 @@ export function WorkflowRunPageView({
                 run.revisionId !== workflow.revisionId
               }
               stopping={stopping}
-              stepRunsCut={read.stepRunsCut}
               failedEntries={failedEntries}
               onShowFailed={(stepId) => setFocus({ stepId })}
             />
@@ -469,7 +468,6 @@ function RunNotices({
   showFailure,
   earlierRevision,
   stopping,
-  stepRunsCut,
   failedEntries,
   onShowFailed
 }: {
@@ -479,8 +477,6 @@ function RunNotices({
   earlierRevision: boolean;
   /** Someone asked to cancel the run, and it has not ended yet. */
   stopping: boolean;
-  /** The run has more step runs than the page reads. */
-  stepRunsCut: boolean;
   /** Entries of the run's loops that failed while the run ended `done`. */
   failedEntries: FailedEntries | undefined;
   /** Opens the failed entries of the loop with the given step id. */
@@ -509,7 +505,6 @@ function RunNotices({
     line === undefined &&
     testLine === undefined &&
     !earlierRevision &&
-    !stepRunsCut &&
     failedEntries === undefined &&
     !(showFailure && run.failure)
   ) {
@@ -538,11 +533,6 @@ function RunNotices({
       {earlierRevision ? (
         <Banner tone="info" layout="line" data-run-revision="">
           {t("workflows.run.earlierRevision")}
-        </Banner>
-      ) : null}
-      {stepRunsCut ? (
-        <Banner tone="info" layout="line" data-run-cut="">
-          {t("workflows.run.stepRunsCut")}
         </Banner>
       ) : null}
       {showFailure && run.failure ? <FailureBanner failure={run.failure} /> : null}

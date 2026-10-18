@@ -71,7 +71,7 @@ export const apps = defineTranslations({
     "apps.actionsIntro":
       "What this app can read or change in other systems. A draft changes nothing: an action that changes something is simulated and says what it would have done. “Run live once” carries out your next call of it.",
     "apps.toolsCut":
-      "Not every app is listed: this instance has more published apps than one list holds. Actions of the apps left out cannot be chosen here.",
+      "More published apps follow. Their actions can be chosen once they are loaded.",
     "apps.toolsHeld": "Actions of apps this agent holds",
     "apps.toolsHeldUnlisted": "Not in this list. The agent keeps these actions.",
     "apps.toolsHint":
@@ -307,7 +307,7 @@ export const apps = defineTranslations({
     "apps.actionsIntro":
       "Was diese App in anderen Systemen lesen oder ändern kann. Ein Entwurf ändert nichts: Eine Aktion, die etwas ändert, wird simuliert und sagt, was sie getan hätte. „Einmal live ausführen“ führt deinen nächsten Aufruf aus.",
     "apps.toolsCut":
-      "Nicht jede App ist aufgeführt: Diese Instanz hat mehr veröffentlichte Apps, als eine Liste fasst. Aktionen der ausgelassenen Apps lassen sich hier nicht auswählen.",
+      "Es folgen weitere veröffentlichte Apps. Ihre Aktionen lassen sich wählen, sobald sie geladen sind.",
     "apps.toolsHeld": "Aktionen von Apps, die dieser Agent führt",
     "apps.toolsHeldUnlisted": "Nicht in dieser Liste. Der Agent behält diese Aktionen.",
     "apps.toolsHint":

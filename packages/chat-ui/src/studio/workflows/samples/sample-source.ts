@@ -92,7 +92,7 @@ export function createSampleSource(
       Promise.resolve({
         stepRuns: find(runId).frame.map(toWorkflowStepRun),
         entryLoops: [],
-        complete: true
+        nextCursor: undefined
       }),
     listEntryStepRuns: async (runId, query) => {
       const page = sampleEntryStepRuns(find(runId), query.containerStepRunId, query);

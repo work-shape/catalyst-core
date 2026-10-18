@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { DataStoreRecord, JobControl, PlatformStores } from "@work-shape/catalyst-core";
+import { DATA_STORE_MAINTENANCE_PAGE_SIZE } from "./maintenance";
+import { measureSizePageJob, type MaintenancePayload } from "./store-job-kinds";
 import { pruneCallRecords } from "./calls";
 import { readStoreConditions } from "./provisioning";
 import type { DataStoreRuntime } from "./runtime";
@@ -7,12 +9,6 @@ import type { DataStoreServer } from "./server";
 
 /** The share of its size limit from which a store is reported in the log as nearly full. */
 export const DATA_STORE_SIZE_WARNING_RATIO = 0.8;
-
-/**
- * How many stores one measurement reads. An instance with more measures the first ones by
- * name and says so in the log.
- */
-const DATA_STORE_MEASURE_MAX_STORES = 2_000;
 
 const sizeRow = z.object({ bytes: z.string().regex(/^\d+$/u) });
 
@@ -100,20 +96,17 @@ export async function recordStoreSize(
  */
 export async function measureDataStores(
   runtime: DataStoreRuntime,
-  control: JobControl
+  control: JobControl,
+  payload: MaintenancePayload = {}
 ): Promise<void> {
   const { clientInstanceId, logger } = runtime;
   const records = await runtime.stores.dataStores.listDataStores({
     clientInstanceId,
-    limit: DATA_STORE_MEASURE_MAX_STORES + 1
+    limit: DATA_STORE_MAINTENANCE_PAGE_SIZE + 1,
+    ...(payload.after ? { after: payload.after } : {})
   });
-  if (records.length > DATA_STORE_MEASURE_MAX_STORES) {
-    logger.warn(
-      { limit: DATA_STORE_MEASURE_MAX_STORES, limitName: "DATA_STORE_MEASURE_MAX_STORES" },
-      "More Data Stores exist than one measurement reads"
-    );
-  }
-  for (const record of records.slice(0, DATA_STORE_MEASURE_MAX_STORES)) {
+  const page = records.slice(0, DATA_STORE_MAINTENANCE_PAGE_SIZE);
+  for (const record of page) {
     if (record.status === "provisioning") continue;
     control.signal.throwIfAborted();
     // What the server leaves open is said as it is today, also where it was closed since.
@@ -156,5 +149,18 @@ export async function measureDataStores(
         "A Data Store is at 80 percent of its size limit or above"
       );
     }
+  }
+  const last = page.at(-1);
+  if (last && records.length > page.length) {
+    await control.transaction(async (stores) => {
+      await stores.jobs.enqueue(
+        measureSizePageJob,
+        { after: { name: last.name, id: last.id } },
+        {
+          clientInstanceId,
+          dedupeKey: `page:${last.id}`
+        }
+      );
+    });
   }
 }

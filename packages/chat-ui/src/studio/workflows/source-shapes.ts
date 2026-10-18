@@ -21,7 +21,7 @@ interface SourcePage<Row> {
   nextCursor: string | undefined;
 }
 
-/** The step runs a run's drawing is made of. */
+/** One page of the step runs a run's drawing is made of. */
 interface WorkflowFrameStepRuns {
   stepRuns: readonly WorkflowStepRunView[];
   /**
@@ -29,8 +29,8 @@ interface WorkflowFrameStepRuns {
    * counts say what failed inside a run that ended `done`.
    */
   entryLoops: readonly WorkflowStepRunView[];
-  /** Every step run outside a loop's items is among them. False where the read was cut. */
-  complete: boolean;
+  /** Where the next page starts, while the run has step runs after these. */
+  nextCursor: string | undefined;
 }
 
 export type WorkflowStepRunStatusFilter = WorkflowStepRunView["status"];
@@ -49,11 +49,15 @@ export interface WorkflowRunsSource {
   ): Promise<SourcePage<WorkflowRunView>>;
   getRun(runId: string, signal: AbortSignal): Promise<WorkflowRunView>;
   /**
-   * The step runs of a run that belong to no item of a loop: at most one per step of the
-   * definition, however many items a loop has. The canvas reads the tree of the run from them,
-   * and a loop's progress from the counts its step run carries.
+   * The step runs of a run that belong to no item of a loop, one page from `cursor` on: at most
+   * one per step of the definition, however many items a loop has. The canvas reads the tree of
+   * the run from them, and a loop's progress from the counts its step run carries.
    */
-  listFrameStepRuns(runId: string, signal: AbortSignal): Promise<WorkflowFrameStepRuns>;
+  listFrameStepRuns(
+    runId: string,
+    cursor: string | undefined,
+    signal: AbortSignal
+  ): Promise<WorkflowFrameStepRuns>;
   /** The step runs of the items of one loop, by the loop's step run and by state. */
   listEntryStepRuns(
     runId: string,

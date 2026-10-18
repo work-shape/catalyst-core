@@ -9,6 +9,8 @@ import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { instanceSentence, PendingApprovalError, readRefusalDetails } from "./build-refusals";
 import type { DataFlows } from "./data-flows-model";
+import { useOwnedChoices, type OwnedChoicesRead } from "./owned-choices";
+import type { MoreRead, PagedItems } from "./paged-items";
 
 /**
  * The state of one published Knowledge Base, as `knowledge_bases.get` answers it, with the data
@@ -44,7 +46,7 @@ export interface KnowledgeOpenableFile {
 interface KnowledgeDocumentPages {
   documents: readonly KnowledgeDocument[];
   /** Present while more documents follow. */
-  more?: { loading: boolean; load(): void };
+  more?: MoreRead;
 }
 
 /**
@@ -74,12 +76,12 @@ export function knowledgeStateStillChanging(
 const DOCUMENTS_PAGE_SIZE = 50;
 /** How often the documents are read again while one of them is still being indexed. */
 const DOCUMENTS_POLL_MS = 3_000;
-/** How many files one search of the Add dialog asks the instance for. */
+/** How many files one page of the Add dialog asks the instance for. */
 const OPENABLE_FILES_PAGE_SIZE = 50;
 
-/** How many Data Stores one search of the chooser asks the instance for. */
+/** How many Data Stores of each owner one page of the chooser asks the instance for. */
 const DATA_STORE_CHOICE_PAGE_SIZE = 50;
-/** How many Knowledge Bases one search of an agent's chooser asks the instance for. */
+/** How many Knowledge Bases of each owner one page of an agent's chooser asks the instance for. */
 const KNOWLEDGE_BASE_CHOICE_PAGE_SIZE = 50;
 
 /** One answer of the instance, as the page asked for it. */
@@ -132,24 +134,24 @@ export interface KnowledgeBaseSource {
   search(knowledgeBase: string, query: string): Promise<KnowledgeCall<KnowledgeSearchAnswer>>;
   /**
    * A hook: the Data Stores the reader may read whose name or id holds `search`: those of the
-   * workspace `owner` names first, then the instance's own.
+   * workspace `owner` names first, then the instance's own, a page of each at a time.
    */
   useDataStores(
     search: string,
     owner: string | undefined
-  ): KnowledgeRead<readonly KnowledgeChoice[]>;
+  ): KnowledgeRead<PagedItems<KnowledgeChoice>>;
   /** A hook: the tables of one Data Store. Without a store it reads nothing and stays loading. */
   useStoreTables(store: string | undefined): KnowledgeRead<readonly string[]>;
   /**
    * A hook: the Knowledge Bases the reader may see whose name or id holds `search`: those of
-   * the workspace `owner` names first, then the instance's own. It reads nothing while
-   * `enabled` is false, as where the instance has no Knowledge Bases.
+   * the workspace `owner` names first, then the instance's own, a page of each at a time. It
+   * reads nothing while `enabled` is false, as where the instance has no Knowledge Bases.
    */
   useKnowledgeBases(
     search: string,
     enabled: boolean,
     owner: string | undefined
-  ): KnowledgeRead<readonly KnowledgeChoice[]>;
+  ): KnowledgeRead<PagedItems<KnowledgeChoice>>;
   /**
    * A hook: the documents of a published Knowledge Base that keeps documents. While one of them
    * is still being indexed, they are read again every few seconds.
@@ -169,12 +171,12 @@ export interface KnowledgeBaseSource {
   ): Promise<KnowledgeCall<{ count: number }>>;
   /**
    * A hook: the uploaded files of the conversations in the reader's workspace whose name or
-   * conversation holds `search`. It reads nothing while `enabled` is false.
+   * conversation holds `search`, a page at a time. It reads nothing while `enabled` is false.
    */
   useOpenableFiles(
     search: string,
     enabled: boolean
-  ): KnowledgeRead<readonly KnowledgeOpenableFile[]>;
+  ): KnowledgeRead<PagedItems<KnowledgeOpenableFile>>;
 }
 
 /** The Knowledge Base pages on the instance's own operations. */
@@ -219,13 +221,14 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
     search: (knowledgeBase, query) =>
       called(() => client.knowledge_bases.search({ params: { knowledgeBase }, body: { query } })),
     useDataStores: (search, owner) =>
-      useChoices(client, key("choice", "data_store", owner ?? "", search), {
-        kind: "data_store",
-        owner,
-        search,
-        limit: DATA_STORE_CHOICE_PAGE_SIZE,
-        enabled: true
-      }),
+      knowledgeReadOf(
+        useOwnedChoices(
+          client,
+          key("choice", "data_store", owner ?? "", search),
+          { kind: "data_store", owner, search, limit: DATA_STORE_CHOICE_PAGE_SIZE },
+          toKnowledgeChoice
+        )
+      ),
     useStoreTables: (store) =>
       useRead(
         key("tables", store ?? ""),
@@ -236,13 +239,15 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         { enabled: store !== undefined }
       ),
     useKnowledgeBases: (search, enabled, owner) =>
-      useChoices(client, key("choice", "knowledge_base", owner ?? "", search), {
-        kind: "knowledge_base",
-        owner,
-        search,
-        limit: KNOWLEDGE_BASE_CHOICE_PAGE_SIZE,
-        enabled
-      }),
+      knowledgeReadOf(
+        useOwnedChoices(
+          client,
+          key("choice", "knowledge_base", owner ?? "", search),
+          { kind: "knowledge_base", owner, search, limit: KNOWLEDGE_BASE_CHOICE_PAGE_SIZE },
+          toKnowledgeChoice,
+          enabled
+        )
+      ),
     useDocuments: (knowledgeBase) =>
       useDocuments(client, knowledgeBase, key("documents", knowledgeBase)),
     retry: (knowledgeBase, documentIds) =>
@@ -277,31 +282,15 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
       }),
     useOpenableFiles: (search, enabled) => {
       const workspaceId = activeWorkspace?.id;
-      const read = useRead(
+      const read = useOpenableFiles(
+        client,
         key("openable-files", workspaceId ?? "", search),
-        async (signal) =>
-          (
-            await client.workspaces.files.list({
-              params: { collaborationWorkspaceId: workspaceId ?? "" },
-              query: {
-                kind: "upload",
-                limit: OPENABLE_FILES_PAGE_SIZE,
-                ...(search ? { text: search } : {})
-              },
-              signal
-            })
-          ).items.map((file) => ({
-            conversationId: file.conversation.id,
-            fileId: file.id,
-            name: file.name,
-            ...(file.mimeType ? { mimeType: file.mimeType } : {}),
-            bytes: file.bytes,
-            conversationTitle: file.conversation.title
-          })),
-        { keepPrevious: true, enabled: enabled && workspaceId !== undefined }
+        workspaceId,
+        search,
+        enabled
       );
       // Outside a workspace there is no conversation whose files the reader could add.
-      return workspaceId === undefined ? { status: "ready", data: [] } : read;
+      return workspaceId === undefined ? { status: "ready", data: { items: [] } } : read;
     }
   };
 }
@@ -332,21 +321,122 @@ function useDocuments(
         ? DOCUMENTS_POLL_MS
         : false
   });
-  if (query.data !== undefined) {
-    return {
-      status: "ready",
-      data: {
-        documents: query.data.pages.flatMap((page) => page.documents),
-        ...(query.hasNextPage
-          ? {
-              more: {
-                loading: query.isFetchingNextPage,
-                load: () => void query.fetchNextPage().catch(() => undefined)
-              }
-            }
-          : {})
-      }
-    };
+  return readStateOf(
+    query.data === undefined
+      ? undefined
+      : {
+          documents: query.data.pages.flatMap((page) => page.documents),
+          ...(query.hasNextPage ? { more: moreOf(query) } : {})
+        },
+    query
+  );
+}
+
+/**
+ * The uploaded files of the conversations in one workspace whose name or conversation holds the
+ * search, page after page as the reader asks for more.
+ */
+function useOpenableFiles(
+  client: ApiClient,
+  queryKey: (string | number)[],
+  workspaceId: string | undefined,
+  search: string,
+  enabled: boolean
+): KnowledgeRead<PagedItems<KnowledgeOpenableFile>> {
+  const query = useInfiniteQuery({
+    queryKey,
+    queryFn: ({ pageParam, signal }) =>
+      readOpenableFiles(client, workspaceId ?? "", search, pageParam, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor,
+    retry: false,
+    enabled: enabled && workspaceId !== undefined,
+    placeholderData: keepPreviousData
+  });
+  return readStateOf(
+    query.data === undefined
+      ? undefined
+      : {
+          items: query.data.pages.flatMap((page) => page.items),
+          ...(query.hasNextPage ? { more: moreOf(query) } : {})
+        },
+    query
+  );
+}
+
+/** One page of the files the Add dialog offers, from `cursor` on. */
+async function readOpenableFiles(
+  client: Pick<ApiClient, "workspaces">,
+  workspaceId: string,
+  search: string,
+  cursor: string | undefined,
+  signal: AbortSignal
+): Promise<{ items: KnowledgeOpenableFile[]; nextCursor: string | undefined }> {
+  const page = await client.workspaces.files.list({
+    params: { collaborationWorkspaceId: workspaceId },
+    query: {
+      kind: "upload",
+      limit: OPENABLE_FILES_PAGE_SIZE,
+      ...(search ? { text: search } : {}),
+      ...(cursor === undefined ? {} : { cursor })
+    },
+    signal
+  });
+  return {
+    items: page.items.map((file) => ({
+      conversationId: file.conversation.id,
+      fileId: file.id,
+      name: file.name,
+      ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+      bytes: file.bytes,
+      conversationTitle: file.conversation.title
+    })),
+    nextCursor: page.nextCursor
+  };
+}
+
+function toKnowledgeChoice(asset: {
+  name: string;
+  title: string;
+  description?: string;
+}): KnowledgeChoice {
+  return {
+    name: asset.name,
+    title: asset.title,
+    ...(asset.description ? { description: asset.description } : {})
+  };
+}
+
+/** A chooser's read in the page's states. */
+function knowledgeReadOf<Item>(read: OwnedChoicesRead<Item>): KnowledgeRead<PagedItems<Item>> {
+  return readStateOf(read.choices, {
+    error: read.error,
+    isFetching: read.fetching,
+    refetch: async () => read.retry()
+  });
+}
+
+/** The next page of a read that pages, as the page asks for it. */
+function moreOf(query: {
+  isFetchingNextPage: boolean;
+  fetchNextPage(): Promise<unknown>;
+}): MoreRead {
+  return {
+    loading: query.isFetchingNextPage,
+    load: () => void query.fetchNextPage().catch(() => undefined)
+  };
+}
+
+/**
+ * What was read, or why nothing is: what was read stays while it is read again, so the page
+ * does not blink.
+ */
+function readStateOf<Answer>(
+  data: Answer | undefined,
+  query: { error: unknown; isFetching: boolean; refetch(): Promise<unknown> }
+): KnowledgeRead<Answer> {
+  if (data !== undefined) {
+    return { status: "ready", data };
   }
   if (query.error && !query.isFetching) {
     if (apiErrorCode(query.error) === "FORBIDDEN") {
@@ -359,45 +449,6 @@ function useDocuments(
     };
   }
   return { status: "loading" };
-}
-
-/**
- * The assets of one kind whose name or id holds the search, one page of each owner an asset
- * may name: the workspace that owns it, then the instance, as an agent's skills are offered.
- */
-function useChoices(
-  client: ApiClient,
-  queryKey: (string | number)[],
-  {
-    kind,
-    owner,
-    search,
-    limit,
-    enabled
-  }: { kind: string; owner: string | undefined; search: string; limit: number; enabled: boolean }
-): KnowledgeRead<readonly KnowledgeChoice[]> {
-  return useRead(
-    queryKey,
-    async (signal) => {
-      const query = { limit, ...(search ? { text: search } : {}) };
-      const [own, instance] = await Promise.all([
-        owner === undefined
-          ? undefined
-          : client.assets.list({
-              params: { kind },
-              query: { ...query, workspaceId: owner },
-              signal
-            }),
-        client.assets.list({ params: { kind }, query, signal })
-      ]);
-      return [...(own?.items ?? []), ...instance.items].map((asset) => ({
-        name: asset.name,
-        title: asset.title,
-        ...(asset.description ? { description: asset.description } : {})
-      }));
-    },
-    { keepPrevious: true, enabled }
-  );
 }
 
 async function called<Answer>(call: () => Promise<Answer>): Promise<KnowledgeCall<Answer>> {
@@ -419,7 +470,6 @@ function useRead<Answer>(
   read: (signal: AbortSignal) => Promise<Answer>,
   options: {
     enabled?: boolean;
-    keepPrevious?: boolean;
     /** Reads again every `DOCUMENTS_POLL_MS` while what was read says so. */
     pollWhile?: (answer: Answer) => boolean;
   } = {}
@@ -431,22 +481,7 @@ function useRead<Answer>(
     retry: false,
     enabled: options.enabled ?? true,
     refetchInterval: ({ state }) =>
-      pollWhile && state.data !== undefined && pollWhile(state.data) ? DOCUMENTS_POLL_MS : false,
-    ...(options.keepPrevious ? { placeholderData: keepPreviousData } : {})
+      pollWhile && state.data !== undefined && pollWhile(state.data) ? DOCUMENTS_POLL_MS : false
   });
-  // What was read stays while it is read again: the page does not blink.
-  if (query.data !== undefined) {
-    return { status: "ready", data: query.data };
-  }
-  if (query.error && !query.isFetching) {
-    if (apiErrorCode(query.error) === "FORBIDDEN") {
-      return { status: "refused" };
-    }
-    return {
-      status: "failed",
-      message: instanceSentence(query.error),
-      retry: () => void query.refetch().catch(() => undefined)
-    };
-  }
-  return { status: "loading" };
+  return readStateOf(query.data, query);
 }

@@ -106,7 +106,7 @@ function sourceOf(
       listFrameStepRuns: async () => ({
         stepRuns: (await stepRuns).map(toWorkflowStepRun),
         entryLoops: [],
-        complete: true
+        nextCursor: undefined
       }),
       listEntryStepRuns: unused,
       start: unused,

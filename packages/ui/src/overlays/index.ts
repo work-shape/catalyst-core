@@ -38,6 +38,7 @@ export {
   PickerButton,
   type PickerButtonProps,
   type PickerCreateRow,
+  type PickerMoreRow,
   type PickerMultipleProps,
   type PickerOption,
   type PickerOptionGroup,

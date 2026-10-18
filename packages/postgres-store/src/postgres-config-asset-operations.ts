@@ -119,7 +119,8 @@ async function listPublishedConfigAssets(
         eq(configAssets.clientInstanceId, input.clientInstanceId),
         eq(configAssets.kind, input.kind),
         eq(configAssets.status, "active"),
-        input.names === undefined ? undefined : inArray(configAssets.name, [...input.names])
+        input.names === undefined ? undefined : inArray(configAssets.name, [...input.names]),
+        input.afterName === undefined ? undefined : sql`${configAssets.name} ~>~ ${input.afterName}`
       )
     )
     // Byte order through the operators of the prefix index, as a page of a list is read.

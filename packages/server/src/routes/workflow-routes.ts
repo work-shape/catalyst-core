@@ -15,6 +15,7 @@ import {
   type WorkflowRunView,
   type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
+import { paginate, pageScope, readablePage, storePage } from "../http/paging";
 import { decide } from "../assets/asset-access";
 import type { ModuleRoutes, RouteRegistration } from "../http/route";
 import { listedWorkflowActions, workflowOf } from "../workflows/workflow-listing";
@@ -124,12 +125,25 @@ function registerWorkflowRoutes(
     // of the asset shows it. A Workflow that cannot be started is listed all the same. Each
     // names what this caller may do with it, so a page offers a start only where one is let
     // through: the right on this Workflow and a credential whose scope reaches the call.
-    execute: async (_input, { access, actor }) => ({
-      items: (await required().listWorkflows()).flatMap(({ assetId, ...workflow }) => {
-        const actions = listedWorkflowActions(access, actor, workflowOf(workflow.id, assetId));
-        return actions.length > 0 ? [{ ...workflow, actions }] : [];
-      })
-    })
+    execute: async (input, { access, actor }) => {
+      const scope = pageScope("workflows.list", {}, input);
+      const rows = await readablePage(
+        storePage(input, ["id"], scope),
+        (page) => required().listWorkflows(page),
+        (workflow) =>
+          listedWorkflowActions(access, actor, workflowOf(workflow.id, workflow.assetId)).length >
+          0,
+        (workflow) => [workflow.id]
+      );
+      const page = paginate(rows, input, ["id"], false, scope);
+      return {
+        ...page,
+        items: page.items.flatMap(({ assetId, ...workflow }) => {
+          const actions = listedWorkflowActions(access, actor, workflowOf(workflow.id, assetId));
+          return actions.length > 0 ? [{ ...workflow, actions }] : [];
+        })
+      };
+    }
   });
 
   route.operation(apiOperations["workflows.start"], {

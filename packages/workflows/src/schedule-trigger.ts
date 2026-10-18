@@ -10,6 +10,7 @@ import {
   type WorkflowManifest
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import { createScheduleRepair } from "./schedule-repair";
 import { isTimeZone, lastDueWithin, nextDueAfter, parseCron, type CronExpression } from "./cron";
 import type { WorkflowDefinitionRevision, WorkflowDefinitionSource } from "./definition-source";
 import {
@@ -149,10 +150,10 @@ interface ScheduleTriggerOptions {
 
 interface ScheduleTrigger {
   handler: RegisteredJobHandler;
+  repairHandler: RegisteredJobHandler;
   /**
-   * Makes sure every published Workflow with a schedule has the job of its next due time. It
-   * queues nothing for a Workflow that has one, so it is safe to call again: when a process
-   * starts, and when a definition is published. Answers what it found due next.
+   * Repairs one page at startup and persists successors on the shared executor.
+   * Existing schedule jobs are deduplicated; answers the first page's due times.
    */
   plan(): Promise<{ workflow: string; dueAt: string }[]>;
   /**
@@ -271,16 +272,6 @@ export function createScheduleTrigger(options: ScheduleTriggerOptions): Schedule
     return { workflow, dueAt: next.toISOString() };
   }
 
-  return {
-    handler,
-    planOne,
-    async plan() {
-      const planned: { workflow: string; dueAt: string }[] = [];
-      for (const { id } of await definitions.list()) {
-        const next = await planOne(id);
-        if (next) planned.push(next);
-      }
-      return planned;
-    }
-  };
+  const repair = createScheduleRepair({ clientInstanceId, stores, definitions, planOne });
+  return { handler, repairHandler: repair.handler, planOne, plan: repair.plan };
 }

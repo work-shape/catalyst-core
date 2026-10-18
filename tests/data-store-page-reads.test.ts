@@ -381,7 +381,7 @@ describe("the reads of a Data Store's page", () => {
     });
     await connect(world.record.location.database)`analyze`;
     const measure = required(
-      world.dataStores.jobHandlers.find(({ kind }) => kind.kind === "data_store.measure_size")
+      world.dataStores.jobHandlers.find(({ kind }) => kind.kind === "data_store.measure_size_page")
     );
     await db.store.jobs.enqueue(measure.kind, {}, { clientInstanceId: world.clientInstanceId });
     await eventually(async () => {

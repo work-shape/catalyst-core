@@ -20,9 +20,10 @@ import { AGENT_ASSET_KIND } from "../../shared/build-rights";
 import { AGENTS_BUILD_PATH } from "../../shared/build-route";
 import { useConnectionToolChoice } from "./connection-tools";
 import { useKnowledgeBaseSource } from "./knowledge-base-source";
+import { useOwnedChoices } from "./owned-choices";
 import { skillFacts } from "./skill-facts";
 
-/** How many skills the chooser of an agent asks the instance for with one search. */
+/** How many skills of each owner one page of an agent's chooser asks the instance for. */
 const SKILL_CHOICE_PAGE_SIZE = 50;
 
 export const agentKind: BuildAssetKind = {
@@ -82,33 +83,18 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   const [skillSearch, setSkillSearch] = useState("");
   // An agent names skills of its own owner and of the instance: a workspace's agent is offered
   // that workspace's skills first, then the instance's own.
-  const skillsQuery = useQuery({
-    queryKey: [
+  const skills = useOwnedChoices(
+    client,
+    [
       ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
       "choice",
       "skill",
       owner ?? "",
       skillSearch
     ],
-    queryFn: async ({ signal }) => {
-      const query = {
-        limit: SKILL_CHOICE_PAGE_SIZE,
-        ...(skillSearch ? { text: skillSearch } : {})
-      };
-      const [own, instance] = await Promise.all([
-        owner === undefined
-          ? undefined
-          : client.assets.list({
-              params: { kind: "skill" },
-              query: { ...query, workspaceId: owner },
-              signal
-            }),
-        client.assets.list({ params: { kind: "skill" }, query, signal })
-      ]);
-      return { items: [...(own?.items ?? []), ...instance.items] };
-    },
-    placeholderData: (previous) => previous
-  });
+    { kind: "skill", owner, search: skillSearch, limit: SKILL_CHOICE_PAGE_SIZE },
+    (skill) => ({ name: skill.name, title: skill.title, ...skillFacts(skill) })
+  ).choices;
   // The Knowledge Bases are offered where the instance has the kind: its module is on.
   const context = usePlatformContextQuery({ ...api, enabled: true }).data;
   const knowledgeOn = context?.kinds.some((kind) => kind.kind === "knowledge_base") ?? false;
@@ -161,17 +147,17 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
       editableAgentFields={management.editableAgentFields}
       canManageAgentModels={canManageAgentModels(user)}
       skillChoice={{
-        options: (skillsQuery.data?.items ?? []).map((skill) => ({
-          name: skill.name,
-          title: skill.title,
-          ...skillFacts(skill)
-        })),
+        options: skills?.items ?? [],
+        ...(skills?.more === undefined ? {} : { more: skills.more }),
         onSearch: (text) => setSkillSearch(text.trim())
       }}
       knowledgeChoice={
         knowledgeOn
           ? {
-              options: knowledgeRead.status === "ready" ? knowledgeRead.data : [],
+              options: knowledgeRead.status === "ready" ? knowledgeRead.data.items : [],
+              ...(knowledgeRead.status === "ready" && knowledgeRead.data.more !== undefined
+                ? { more: knowledgeRead.data.more }
+                : {}),
               onSearch: (text) => setKnowledgeSearch(text.trim())
             }
           : undefined

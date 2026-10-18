@@ -74,7 +74,7 @@ export interface WorkflowRunsPort {
    * Every Workflow with a published revision, each with its latest run where it has one and
    * with what a start by hand of it would be refused for now.
    */
-  listWorkflows(): Promise<WorkflowListEntry[]>;
+  listWorkflows(page?: StorePage): Promise<WorkflowListEntry[]>;
   /**
    * The id of the asset that holds the Workflow, where one does. A right is decided on it, so
    * a grant on that one asset opens the calls on its Workflow and on its runs.

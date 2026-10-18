@@ -27,6 +27,7 @@ import {
   type ConfigAssetRecord,
   type ConfigAssetStore,
   type JsonObject,
+  type StorePage,
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import {
@@ -74,11 +75,8 @@ const filesOfConfigSchema = z.object({
 });
 const runAsOfConfigSchema = z.object({ manifest: z.object({ runAs: z.unknown() }) });
 
-/**
- * How many published Workflows one list of the instance reads. The list has no pages, so this
- * is the bound of its one read.
- */
-export const WORKFLOW_LIST_MAX = 500;
+/** The default size of one published Workflow page; the exclusive name cursor reaches more. */
+const WORKFLOW_LIST_PAGE_SIZE = 200;
 
 /** How much of a Workflow's name and of its description one entry of the list carries. */
 export const WORKFLOW_LIST_NAME_MAX = 200;
@@ -521,8 +519,8 @@ export function createWorkflowAssetDefinitions(options: {
   clientInstanceId: ClientInstanceId;
   configAssets: Pick<ConfigAssetStore, "getConfigAsset" | "listPublishedConfigAssets">;
 }): WorkflowDefinitionSource & {
-  /** Every published Workflow in one read, those this engine refuses among them. */
-  published(): Promise<PublishedWorkflow[]>;
+  /** One page of published Workflows, including those this engine refuses. */
+  published(page?: StorePage): Promise<PublishedWorkflow[]>;
   /** The retained asset id, including drafts and deleted assets: what rights are decided on. */
   assetIdOf(id: string): Promise<string | undefined>;
   /**
@@ -533,12 +531,13 @@ export function createWorkflowAssetDefinitions(options: {
   draft(id: string): Promise<WorkflowDefinitionRevision | undefined>;
 } {
   const { clientInstanceId, configAssets } = options;
-  const published = async () =>
+  const published = async (page: StorePage = { limit: WORKFLOW_LIST_PAGE_SIZE }) =>
     (
       await configAssets.listPublishedConfigAssets({
         clientInstanceId,
         kind: WORKFLOW_ASSET_KIND,
-        limit: WORKFLOW_LIST_MAX
+        limit: page.limit,
+        ...(typeof page.after?.[0] === "string" ? { afterName: page.after[0] } : {})
       })
     ).flatMap((asset) => publishedWorkflowOf(asset) ?? []);
   const assetOf = (id: string, reader: Pick<ConfigAssetStore, "getConfigAsset"> = configAssets) =>
@@ -591,8 +590,8 @@ export function createWorkflowAssetDefinitions(options: {
       if (!workflow.definition.ok) throw workflowDefinitionRefusal(id, workflow.definition.issues);
       return { revisionId: workflow.revisionId, manifest: workflow.definition.manifest };
     },
-    async list() {
-      return (await published()).map(({ id, name, description, definition }) => ({
+    async list(page) {
+      return (await published(page)).map(({ id, name, description, definition }) => ({
         kind: definition.ok ? (definition.manifest.kind ?? "process") : "process",
         id,
         name,
@@ -604,10 +603,11 @@ export function createWorkflowAssetDefinitions(options: {
 
 /** The published revisions of a source that is asked one Workflow at a time, such as a folder. */
 export async function publishedWorkflowsOf(
-  source: WorkflowDefinitionSource
+  source: WorkflowDefinitionSource,
+  page?: StorePage
 ): Promise<PublishedWorkflow[]> {
   const published: PublishedWorkflow[] = [];
-  for (const summary of await source.list()) {
+  for (const summary of await source.list(page)) {
     const revision = await source.read(summary.id);
     if (!revision) continue;
     published.push({
