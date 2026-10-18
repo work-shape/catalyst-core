@@ -239,11 +239,11 @@ audit and step persistence, and completion; fixture setup and upstream network l
 outside the measurement. Other test files share the runner. These figures describe the
 engine workload exercised, with 100,000 rows as the largest measured input.
 
-| Input rows | Rows per batch | Iterations | Step runs | Elapsed |
-| ---------- | -------------- | ---------- | --------- | ------- |
-| 1,200 | 500 | 3 | 7 | 0.323 s |
-| 600 client rows | 1 | 600 | 604 | 16.069 s |
-| 100,000 | 500 | 200 | 204 | 18.226 s |
+| Input rows      | Rows per batch | Iterations | Step runs | Elapsed  |
+| --------------- | -------------- | ---------- | --------- | -------- |
+| 1,200           | 500            | 3          | 7         | 0.323 s  |
+| 600 client rows | 1              | 600        | 604       | 16.069 s |
+| 100,000         | 500            | 200        | 204       | 18.226 s |
 
 The acceptance test verifies every row exactly once and one parent dataset for all views.
 It also writes one failures dataset per batch call, including empty failure results; those
@@ -263,3 +263,16 @@ step slots. Raising a customer limit is unnecessary for either workload.
 Evidence: `tests/workflow-batch.test.ts` (WF 114) and the
 [hosted measurement run](https://github.com/work-shape/catalyst-core/actions/runs/39090640234).
 The same test emits timings on subsequent hosted runs; timings vary with runner contention.
+
+## Knowledge Base processing review measurement
+
+Measured on 2026-10-18 on a Blacksmith 8-vCPU Ubuntu runner, using the pinned Postgres 17 image. Each synthetic content has one live document and one chunk; one content changes processing. Values are the median of three complete processing-review calls after fixture loading and `ANALYZE`, including classification, token estimation and confirmation construction. They are latency observations, not a production capacity promise.
+
+| Contents / chunks     | Before   | After    |
+| --------------------- | -------- | -------- |
+| 100,000 / 100,000     | 923 ms   | 689 ms   |
+| 1,000,000 / 1,000,000 | 5,627 ms | 5,256 ms |
+
+The review still classifies live content metadata. Token estimation now visits only affected contents' active chunking revisions through `chunks_content_sha256_chunking_revision_position_key`, rather than aggregating every chunk. `EXPLAIN (ANALYZE, BUFFERS)` at both sizes showed one chunk index scan, one loop and one returned chunk. More chunks on unaffected contents no longer increase token-aggregation work; metadata classification still grows with the live content count. No content-count cap or timeout increase was added; the owned-store statement deadline remains 30 seconds (`KNOWLEDGE_DOCUMENTS_TIMEOUT_MS`).
+
+The [hosted timing and mutation probe](https://github.com/work-shape/catalyst-core/actions/runs/39095494167) contains all samples and query plans. Its temporary workflow and benchmark fixture are outside the product PR.

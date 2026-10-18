@@ -72,9 +72,6 @@ export async function knowledgeProcessingReview(
   if (!before.success || "backend" in next) return undefined;
   const previousRules = processingRules(before.data.documentTypes);
   const nextRules = processingRules(next.documentTypes);
-  // An ordinary GET must never inspect the owned store. Publish deliberately still checks
-  // persisted fingerprints, including a processor version changed by a release.
-  if (draftOnly && JSON.stringify(previousRules) === JSON.stringify(nextRules)) return undefined;
   const record = await runtime.stores.dataStores.getDataStore({
     clientInstanceId: runtime.clientInstanceId,
     id: assetId
@@ -82,6 +79,16 @@ export async function knowledgeProcessingReview(
   if (record?.status !== "ready") return undefined;
   const store = runtime.backend.documentStore(knowledgeTargetOf(next, assetId));
   if (!store) return undefined;
+  // Unchanged rules need only a release-version check, without classifying documents or
+  // reading chunks. Publish always reviews the affected set again inside its transaction.
+  if (
+    draftOnly &&
+    JSON.stringify(previousRules) === JSON.stringify(nextRules) &&
+    !(await store.hasOutdatedProcessor([
+      ...new Set(nextRules.map((rule) => rule.processorRevision))
+    ]))
+  )
+    return undefined;
   const hash = createHash("sha256").update(
     JSON.stringify([assetId, next.methods, next.documentTypes, embedding.processingPrices])
   );

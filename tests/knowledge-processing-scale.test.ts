@@ -161,7 +161,10 @@ describe("Knowledge Base processing review at scale", () => {
       })
     );
     expect(large.statements.length).toBe(small.statements.length);
-    expect(large.statements.filter((s) => s.includes("catalyst_kb."))).toEqual([]);
+    const owned = large.statements.filter((s) => s.includes("catalyst_kb."));
+    expect(owned).toHaveLength(1);
+    expect(owned[0]).toContain("as outdated");
+    expect(owned[0]).not.toContain("catalyst_kb.chunks");
     const asset = required(
       await world.instance.stores.configAssets.getConfigAsset({ clientInstanceId, ...params })
     );

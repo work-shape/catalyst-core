@@ -21,6 +21,71 @@ function publisherAccess() {
 
 describe("confirmed, selective processing at publish (KB 80)", () => {
   const { setup } = useKnowledgeSync();
+  it.each(["legacy missing key", "matching key"])(
+    "reviews a released processor revision on GET and refuses unrelated publish: %s",
+    async (storedKey) => {
+      const world = await setup();
+      world.world.put({
+        folderId: "folder",
+        name: "report.md",
+        mime: "text/markdown",
+        bytes: new TextEncoder().encode("Revision-only change")
+      });
+      await world.drain(await world.sync());
+      if (storedKey === "legacy missing key")
+        await world.sql`update catalyst_kb.contents set processing_key=null,processor_revision='text@0'`;
+      else await world.sql`update catalyst_kb.contents set processor_revision='text@0'`;
+      const asset = required(
+        await world.instance.stores.configAssets.getConfigAsset({ clientInstanceId, ...params })
+      );
+      const put = await world.instance.api.call("assets.put", {
+        params,
+        payload: {
+          config: { ...asset.publishedConfig, title: "Unrelated title" },
+          expectedRevision: asset.revision
+        }
+      });
+      expect(put.statusCode, put.body).toBe(200);
+      const revision = z.object({ revision: z.number() }).parse(put.json()).revision;
+      const publish = await world.instance.api.call("assets.publish", {
+        params,
+        payload: { revision }
+      });
+      expect(publish.statusCode, publish.body).toBe(422);
+      expect(publish.body).toContain("knowledge_processing_confirmation_required");
+      const get = await world.instance.api.call("assets.get", { params });
+      expect(get.statusCode, get.body).toBe(200);
+      expect(get.body).toContain("Reprocess 1 affected contents");
+    }
+  );
+  it("estimates only active passages of affected contents", async () => {
+    const world = await setup();
+    for (const name of ["target.md", "other.md"])
+      world.world.put({
+        folderId: "folder",
+        name,
+        mime: "text/markdown",
+        bytes: new TextEncoder().encode(name)
+      });
+    await world.drain(await world.sync());
+    await world.sql`update catalyst_kb.chunks ch set token_count=1000000
+      from catalyst_kb.documents d where d.content_sha256=ch.content_sha256 and d.file_name='target.md'`;
+    await world.sql`insert into catalyst_kb.chunks (id,content_sha256,chunking_revision,position,text,token_count)
+      select 'retired-chunk',content_sha256,999,0,'Retired',50000000
+      from catalyst_kb.documents where file_name='target.md'`;
+    await world.sql`update catalyst_kb.contents c set processor_revision='text@0'
+      from catalyst_kb.documents d where d.content_sha256=c.sha256 and d.file_name='target.md'`;
+    const asset = required(
+      await world.instance.stores.configAssets.getConfigAsset({ clientInstanceId, ...params })
+    );
+    const lines = await world.knowledge.publishQuestion({
+      assetId: asset.id,
+      scope: asset.scope,
+      config: asset.publishedConfig
+    });
+    expect(lines.join("\n")).toContain("Reprocess 1 affected contents");
+    expect(lines.join("\n")).toContain("0.500000–2.000000 USD");
+  });
   it("can confirm a failed upload with no passage or source-size estimate", async () => {
     const world = await setup();
     world.world.put({

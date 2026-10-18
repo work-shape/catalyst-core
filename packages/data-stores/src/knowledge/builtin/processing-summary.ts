@@ -38,22 +38,45 @@ export async function processingSummary(
       from metadata m
       cross join lateral (${classification("$1")}) p
       cross join lateral (${classification("$2")}) n
-    ), tokens as (
-      select content_sha256, sum(token_count) as n from catalyst_kb.chunks group by content_sha256
+    ), affected as materialized (
+      select * from classified c
+      where coalesce(c.processing_key,c.previous_key) is distinct from c.next_key
+        or coalesce(c.processor_revision,'text@1') is distinct from c.next_revision
     )
     select next_key as "processingKey", next_revision as "processorRevision",
       count(*)::float8 as count,
       sum(coalesce(nullif(t.n,0),ceil(c.size/3.0),0))::float8 as tokens,
       md5(string_agg(c.sha256,'' order by c.sha256)) as fingerprint,
       count(*) filter (where coalesce(t.n,0)=0 and c.size is null)::float8 as unestimated
-    from classified c left join tokens t on t.content_sha256=c.sha256
-    where coalesce(c.processing_key,c.previous_key) is distinct from c.next_key
-      or coalesce(c.processor_revision,'text@1') is distinct from c.next_revision
+    from affected c
+    left join lateral (
+      select sum(token_count) as n from catalyst_kb.chunks
+      where content_sha256=c.sha256 and chunking_revision=c.chunking_revision
+    ) t on true
     group by next_key,next_revision
     order by next_key,next_revision`,
       [JSON.stringify(input.previous), JSON.stringify(input.next)]
     )
   );
+}
+
+/** Detect released versions without classification or chunk reads on ordinary asset GET. */
+export async function hasOutdatedProcessor(
+  sql: PostgresChangeStatements,
+  revisions: readonly string[]
+) {
+  const rows = z.array(z.object({ outdated: z.boolean() })).parse(
+    await sql.run(
+      `select exists (
+      select 1 from catalyst_kb.contents c
+      where not (coalesce(c.processor_revision,'text@1') = any($1::text[]))
+        and exists (select 1 from catalyst_kb.documents d
+          where d.content_sha256=c.sha256 and d.withdrawn_at is null)
+    ) as outdated`,
+      [revisions]
+    )
+  );
+  return rows[0]?.outdated ?? false;
 }
 
 function classification(parameter: string) {

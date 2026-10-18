@@ -1,4 +1,4 @@
-import { processingSummary } from "./processing-summary";
+import { hasOutdatedProcessor, processingSummary } from "./processing-summary";
 import { processingContents } from "./processing-store";
 import { visibleSourceHits } from "./source-search-visibility";
 import { z } from "zod";
@@ -221,6 +221,14 @@ export function createBuiltinDocumentStore(
             [input.contentSha256, input.processingKey]
           );
         }
+      );
+    },
+    hasOutdatedProcessor(revisions, signal) {
+      return inStore(
+        "Checking document processor versions",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        (sql) => hasOutdatedProcessor(sql, revisions)
       );
     },
     processingSummary(input, signal) {

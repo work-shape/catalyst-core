@@ -804,6 +804,8 @@ export interface KnowledgeDocumentStore {
     input: { contentSha256: string; processingKey: string },
     signal?: AbortSignal
   ): Promise<void>;
+  /** Cheap release-version check; no classification or chunk reads. */
+  hasOutdatedProcessor(revisions: readonly string[], signal?: AbortSignal): Promise<boolean>;
   /** One set-based review, grouped by effective type/fingerprint; no per-content reads. */
   processingSummary(
     input: {
