@@ -56,6 +56,8 @@ export const workflowRuns = pgTable(
     empty: boolean("empty").notNull().default(false),
     definition: jsonb("definition").$type<WorkflowManifest>().notNull(),
     input: jsonb("input").$type<JsonObject>().notNull(),
+    checkpoint:
+      jsonb("checkpoint").$type<import("@work-shape/catalyst-core").NewWorkflowRun["checkpoint"]>(),
     // The run's result, wrapped so that a result of `null` is kept.
     output: jsonb("output").$type<{ value: JsonValue }>(),
     // A code of the engine and a sentence that may be shown. Never a value of the run.
@@ -98,12 +100,21 @@ export const workflowRuns = pgTable(
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
     // The run key a start gave the run (EW-13k). Text of a person or a step, never in an audit.
     runKey: text("run_key"),
+    labels: jsonb("labels").$type<Record<string, string>>(),
+    continuation: jsonb("continuation").$type<{
+      rootRunId: WorkflowRunId;
+      previousRunId?: WorkflowRunId;
+      successorRunId?: WorkflowRunId;
+      number: number;
+    }>(),
     // When the run's values and those of its step runs were removed. Null while it has them.
     dataPrunedAt: timestamp("data_pruned_at", { withTimezone: true })
   },
   (table) => [
     uniqueIndex("workflow_runs_operation_idx").on(table.clientInstanceId, table.operationRunId),
-    uniqueIndex("workflow_runs_parent_step_idx").on(table.clientInstanceId, table.parentStepRunId),
+    uniqueIndex("workflow_runs_active_parent_step_idx")
+      .on(table.clientInstanceId, table.parentStepRunId)
+      .where(sql`${table.status} <> 'continued'`),
     // API projections visit only failure-bearing runs in the requested trees.
     index("workflow_runs_failures_idx")
       .on(table.clientInstanceId, table.rootRunId)
@@ -117,7 +128,7 @@ export const workflowRuns = pgTable(
     check("workflow_runs_mode_check", sql`${table.mode} in ('live', 'test')`),
     check(
       "workflow_runs_status_check",
-      sql`${table.status} in ('queued', 'running', 'waiting', 'done', 'failed', 'cancelled', 'limit_reached')`
+      sql`${table.status} in ('queued', 'running', 'waiting', 'done', 'failed', 'cancelled', 'limit_reached', 'continued')`
     ),
     // A constraint and not an index, so that the table has it before a row refers to it.
     unique("workflow_runs_client_id_key").on(table.clientInstanceId, table.id),
@@ -137,10 +148,10 @@ export const workflowRuns = pgTable(
     // A run key exists once per Workflow and mode among the runs that are open or `done`: a
     // start that meets it starts nothing and is answered that run. A run that ended `failed`,
     // `cancelled` or `limit_reached` leaves the index and so gives its key up.
-    uniqueIndex("workflow_runs_run_key_idx")
+    uniqueIndex("workflow_runs_active_run_key_idx")
       .on(table.clientInstanceId, table.workflow, table.mode, table.runKey)
       .where(
-        sql`${table.runKey} is not null and ${table.status} not in ('failed', 'cancelled', 'limit_reached')`
+        sql`${table.runKey} is not null and ${table.status} not in ('failed', 'cancelled', 'limit_reached', 'continued')`
       ),
     // The ended runs that still have their values, oldest first: what the prune job asks for.
     index("workflow_runs_data_prune_idx")
@@ -177,6 +188,9 @@ export const workflowStepRuns = pgTable(
       dataset?: WorkflowDatasetReference;
       total?: number;
       last?: string;
+      first?: string;
+      started?: number;
+      ended?: number;
     }>(),
     // The step's output, wrapped so that an output of `null` is kept.
     output: jsonb("output").$type<{ value: JsonValue }>(),

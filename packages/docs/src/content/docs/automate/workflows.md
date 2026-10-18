@@ -54,11 +54,11 @@ Click **Start now** ("Jetzt starten") on a published Workflow, fill in what it a
 
 An administrator gives these rights under **Settings > Instance > Access** ("Einstellungen › Instanz › Zugriff"), for one Workflow:
 
-| Right | What the Access page says |
-| --- | --- |
-| View workflows | See the Workflow, its steps and its runs. |
-| Use workflows | Start the Workflow. It then runs with the Workflow's own rights, not with this person's. |
-| Edit workflows | Change the draft of the Workflow. A draft does not run until it is published. |
+| Right             | What the Access page says                                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| View workflows    | See the Workflow, its steps and its runs.                                                                            |
+| Use workflows     | Start the Workflow. It then runs with the Workflow's own rights, not with this person's.                             |
+| Edit workflows    | Change the draft of the Workflow. A draft does not run until it is published.                                        |
 | Publish workflows | Make a draft the version that runs. Publishing also needs every right of the service principal the Workflow runs as. |
 
 Administrators hold every right. A test run needs the right to edit the Workflow.
@@ -77,3 +77,42 @@ what to do when an iteration itself fails. A batch loop requires a dataset, rath
 inline list. It shares the parent's objects, permissions and expiry; it does not copy rows.
 A view adds `offset` to the dataset reference and reports its own `rowCount`. Its `bytes` is
 the parent's upper bound; consumers enforce byte limits against the rows actually read.
+
+## Continue a long run
+
+A long loop can continue in a fresh run when it reaches its step or duration budget.
+Set `continueAsNew: { position: offset }` on the loop and declare `offset` as an optional
+integer in the Workflow's inputs. The next run receives the next row offset. You can
+request a smaller history with `after`, for example `{ position: offset, after: 1000 }`.
+
+For a paged source, add `cursor: id` to pass the last completed row’s `id` as the
+position input instead. A nonempty page continues and an empty page finishes the
+loop. Map that position input into the source operation’s paging parameter.
+
+The runs list groups these histories into one expandable run. Each part has its own
+status and a numbered key. Work and usage count once across the parts. Labels and the
+failure policy stay with the original run. A change published between parts applies
+to the next part, and the list marks the version change. If the new version refuses
+the carried input, that part fails and names the field that needs attention.
+
+Until resume positions and finished-step outputs are carried between histories, publishing
+and draft test runs refuse these shapes, naming the step and rule in English and German:
+
+- A write, send, notify, child Workflow start, or loop containing one before a
+  `continueAsNew` loop at the same or any enclosing level. Reads, triggers and code
+  steps may precede it; those steps run again in every history.
+- A loop after a `continueAsNew` loop at the same or any enclosing level.
+- A loop with `concurrency` above 1 enclosing a `continueAsNew` loop, at any depth.
+  The refusal names both loops: a checkpoint cannot record unfinished sibling items.
+  Concurrency on the continuing loop itself remains allowed.
+- A `limits.stepRuns` budget smaller than the steps before the loop, the loop containers,
+  one item and the tail together. The refusal states the minimum count and the limit.
+
+A `continueAsNew` loop can be the last loop, with non-loop steps after it. These are
+publish-time restrictions pending EW-CAN-RESUME, which will resume at step boundaries
+without repeating finished work.
+
+Loop outputs `total`, `done` and `failed` cover the whole continuation chain (one Lauf),
+including items finished in earlier histories. Later steps reading `each_x.done` or
+`each_x.failed`, and a parent reading its child's output, receive these cumulative totals.
+The checkpoint carries only fixed-size counts per loop level; it does not keep item results.

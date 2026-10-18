@@ -152,3 +152,5 @@ export {
   type NeededRightOperation,
   type WorkflowNeededRightsContext
 } from "./needed-rights";
+
+export { workflowContinuationIssues } from "./continuation-rules";

@@ -79,6 +79,8 @@ const STEP_REFERENCE: {
   loop: {
     does: `Runs its \`steps\` in order once for each item of a list or dataset of at most ${WORKFLOW_LOOP_MAX_ITEMS} items, or the Workflow's \`limits.loopItems\`. Its output is the counts { total, done, failed } and never the results of its items: what an item produces is kept by a step inside the loop, such as a changing operation.`,
     fields: {
+      continueAsNew:
+        "{ position: <input field>, after?: <items per history>, cursor?: <item field path> }: continue on the published revision at a complete item boundary, carrying the next offset as that input field. Without after, continue at the run budget or deadline. Declare the position field in inputs; successors validate it again. With cursor, carry that field of the last completed item instead of an offset; a nonempty page continues after its loop and an empty page ends normally. Labels and onFailure stay those of the first run.",
       items:
         "A reference to the list or dataset: { step, path }, without `ref:` around it. The list is a field of the output of an earlier step.",
       steps:
@@ -428,6 +430,9 @@ ${RULES_REVISION_STEPS.replace(/^/gmu, "  ")}
   may call. Do not change it unless the person asks: a publish checks whether its publisher
   may let a Workflow act as that principal.
 - \`kind\`: \`process\` unless set. Use \`data\` for a Workflow that fills or processes a Knowledge Base or Data Store. Publishing Knowledge Base \`ingest\`, \`withdraw\`, \`put_processed\` or Data Store \`records.propose\` from a process Workflow is refused with \`process_workflow_write_operation\`. A copied data template keeps \`kind: data\`.
+- \`labels\`: optional mapping of names to text or numbers, as literals such as
+  \`client: { value: acme }\` or references such as \`client: { ref: { step: start, path: input.client } }\`.
+  A reference must name the trigger. Labels are evaluated once at the start and kept by every successor.
 - \`onFailure\`: optional. \`notify\`, the default, is the only value this engine runs: the failed
   descendants of one root produce one notice to the publisher of the root's revision when the
   root ends. \`onFailure: workflow.<id>\` is reserved for EW-13 and refused.
@@ -535,7 +540,7 @@ A definition that holds one of these is refused when it is saved, with the code
 - the step types ${workflowStepTypesNotRun()
     .map((type) => `\`${type}\``)
     .join(", ")};
-- \`labels\` on the manifest, and \`onFailure: workflow.<id>\` (EW-13);
+- \`onFailure: workflow.<id>\` on the manifest;
 - \`collect\` on a loop (EW-13);
 - datasets in agent inputs (EW-14b).
 

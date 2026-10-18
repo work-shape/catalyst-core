@@ -1,3 +1,4 @@
+import { createDatasetPartCache } from "./dataset-part-cache";
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import { createGunzip, gzipSync } from "node:zlib";
@@ -72,6 +73,7 @@ function rowPosition(row: JsonValue, path: readonly string[]): string {
 /** The only transport of dataset rows. Buffers at most a part and one row, never a dataset. */
 export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
   const { clientInstanceId, stores, objects, limits } = options;
+  const cachedPart = createDatasetPartCache(objects, DATASET_PART_BYTES, limits.rowBytes);
   async function write(input: {
     run: WorkflowRun;
     stepRun: WorkflowStepRun;
@@ -288,6 +290,19 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
         const current = await metadata(row.id);
         if (current.state !== "complete") throw datasetExpired();
         try {
+          const cached = await cachedPart(part, input.runId, input.signal, datasetExpired);
+          if (cached) {
+            for (let position = skip; position < cached.length && left > 0; position++) {
+              input.signal?.throwIfAborted();
+              const value: unknown = JSON.parse(cached[position] ?? "");
+              const parsed = jsonObjectSchema.safeParse(value);
+              if (!parsed.success) throw datasetExpired();
+              left -= 1;
+              yield parsed.data;
+            }
+            skip = 0;
+            continue;
+          }
           const object = await objects.get(part.key);
           const source = Readable.from(object.body);
           const stream = source.pipe(createGunzip());

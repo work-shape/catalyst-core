@@ -168,7 +168,7 @@ export interface WorkflowStartIssue {
 
 export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number];
 
-type WorkflowStepRunStatus = Exclude<WorkflowRunStatus, "limit_reached">;
+type WorkflowStepRunStatus = Exclude<WorkflowRunStatus, "limit_reached" | "continued">;
 
 /**
  * Why a run or a step did not end as done, as far as the instance names it by a code. `other`
@@ -274,8 +274,20 @@ export interface WorkflowRunView {
    * A run that ended `done` with some reads as a warning.
    */
   failedItemCount: number;
-  /** The run key its start gave it, such as `2026-09/1402`. */
+  /**
+   * The run key its start gave it, such as `2026-09/1402`. Every part of a run that continued
+   * as new holds the same key; `continuation` numbers the parts.
+   */
   runKey?: string;
+  /**
+   * Where the run is one part of a run that continued as new: the id of the first part, the
+   * part before this one, and its number from 1. The first part gains it once it continues.
+   */
+  continuation?: { rootRunId: string; previousRunId?: string; number: number };
+  /** What the run is labelled with, by name. The parts of a continued run keep the first's. */
+  labels?: Readonly<Record<string, string>>;
+  /** How many step runs the run made, where the instance counts them. */
+  stepRuns?: number;
   /**
    * The run ended `done` without a write step handling an item: a data run that found nothing
    * to do. The instance marks the run itself, so a later change of the Workflow's kind leaves

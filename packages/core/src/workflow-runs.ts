@@ -40,12 +40,13 @@ export { WORKFLOW_ENDED_STATUSES } from "@work-shape/catalyst-asset-schemas";
 
 /**
  * The ends of a run that give its run key up: a start with the key after one of them is a new
- * run. A run that is open or `done` holds its key (`workflow_runs_run_key_idx`).
+ * run. A run that is open or `done` holds its key (`workflow_runs_active_run_key_idx`).
  */
 export const WORKFLOW_KEY_RELEASING_STATUSES = [
   "failed",
   "cancelled",
-  "limit_reached"
+  "limit_reached",
+  "continued"
 ] as const satisfies readonly WorkflowRunStatus[];
 
 export function isWorkflowRunEnded(status: WorkflowRunStatus): boolean {
@@ -71,7 +72,7 @@ export interface WorkflowRunError {
  * `cancelledBy` is there where a person did, and `cancelledAt` whoever did.
  */
 export interface WorkflowRun
-  extends WorkflowRunRecordView, WorkflowRunLineage, Pick<WorkflowRunIdentity, "runKey"> {
+  extends WorkflowRunRecordView, WorkflowRunLineage, WorkflowRunIdentity {
   id: WorkflowRunId;
   clientInstanceId: ClientInstanceId;
   /** The id of the Workflow. */
@@ -156,6 +157,8 @@ export type NewWorkflowRun = Pick<
   | "scheduledFor"
   | "operationRunId"
   | "runKey"
+  | "labels"
+  | "continuation"
   | "deadlineAt"
   | "limits"
   | "correlationId"
@@ -169,6 +172,23 @@ export type NewWorkflowRun = Pick<
     definition: WorkflowManifest;
     /** The run's input, checked against the definition's `inputs`. */
     input: JsonObject;
+    /** Engine-owned checkpoint; values are read separately and never in run/list responses. */
+    checkpoint?: {
+      stepId: string;
+      offset: number;
+      /** Remaining items; omitted for cursor continuations that read the next page. */
+      items?: JsonValue[] | WorkflowDatasetReference;
+      /** Totals of finished items in earlier histories, excluding the saved frontier. */
+      counts?: { total: number; done: number; failed: number };
+      completed?: Record<string, JsonValue>;
+      ancestors?: {
+        stepId: string;
+        offset: number;
+        items?: JsonValue[] | WorkflowDatasetReference;
+        counts?: { total: number; done: number; failed: number };
+        completed?: Record<string, JsonValue>;
+      }[];
+    };
   };
 
 /** A value cut to `WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS` characters of its JSON. */
@@ -433,6 +453,8 @@ export interface WorkflowRunsStore {
   }): Promise<Map<string, WorkflowLastRun>>;
   /** The run's input, as the trigger step hands it on. */
   readRunInput(ref: WorkflowRunRef): Promise<JsonObject | undefined>;
+  /** The bounded loop position carried from the previous history. */
+  readCheckpoint(ref: WorkflowRunRef): Promise<NewWorkflowRun["checkpoint"]>;
   /** The definition a run was started on. `id` is whatever a caller named. */
   readRunDefinition(input: {
     clientInstanceId: ClientInstanceId;
@@ -440,6 +462,10 @@ export interface WorkflowRunsStore {
   }): Promise<WorkflowManifest | undefined>;
   /** Moves a `queued` run to `running`. A run in another status is left as it is. */
   markRunRunning(ref: WorkflowRunRef & { startedAt: ISODateString }): Promise<void>;
+  /** Marks the initial history as part 1 under its lock, before its successor is created. */
+  markContinuation(ref: WorkflowRunRef): Promise<void>;
+  /** Transfer non-owning waits to the successor without waking them at an intermediate end. */
+  handoffContinuation(ref: WorkflowRunRef & { successorId: WorkflowRunId }): Promise<void>;
   /** Ends a run that has not ended. Answers whether this call ended it. */
   endRun(
     ref: WorkflowRunRef & {
@@ -472,6 +498,7 @@ export interface WorkflowRunsStore {
       total?: number;
       /** The id of the loop's last step. An item is done when the step run of that step is. */
       lastStepId?: string;
+      firstStepId?: string;
     }
   ): Promise<void>;
   /**
@@ -546,6 +573,7 @@ export interface WorkflowRunsStore {
    * How many items of a loop step run have been started: one more than the highest item that
    * has a step run. Items start in the order of the list, so every item below it has started.
    */
+  readLoopProgress(ref: WorkflowStepRunRef): Promise<{ started: number; running: number }>;
   countLoopItemsStarted(ref: WorkflowStepRunRef): Promise<number>;
   /** One item of the list of a loop step run, without reading the list. */
   readLoopItem(

@@ -89,7 +89,20 @@ export function createStepClaim(options: {
       const moment = now();
       const finishedAt = moment.toISOString();
       const ended = isWorkflowRunEnded(run.status);
-      if (ended || moment.getTime() >= Date.parse(run.deadlineAt)) {
+      const definition =
+        !ended && stepRun.containerStepRunId !== undefined
+          ? await tx.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id })
+          : undefined;
+      const index = definition ? indexWorkflowSteps(definition) : undefined;
+      let container = stepRun.containerStepRunId;
+      let drains = false;
+      while (container && !drains) {
+        const parent = await tx.workflowRuns.getStepRun({ clientInstanceId, id: container });
+        const loop = parent ? index?.get(parent.stepId)?.step : undefined;
+        drains = loop?.type === "loop" && loop.continueAsNew !== undefined;
+        container = parent?.containerStepRunId;
+      }
+      if (ended || (!drains && moment.getTime() >= Date.parse(run.deadlineAt))) {
         // The step does not run: its run was cancelled or ended, or is past its time. An
         // attempt nobody ended may have made its call before its worker was gone, and then
         // the step run says what the call did and not that nothing happened.

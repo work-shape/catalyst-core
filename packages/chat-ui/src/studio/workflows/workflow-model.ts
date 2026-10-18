@@ -205,7 +205,9 @@ const RUN_STATES: Readonly<Record<WorkflowRunStatus, RunStatePresentation>> = {
   done: { label: "workflows.run.done", tone: "success", spins: false },
   failed: { label: "workflows.run.failed", tone: "danger", spins: false },
   cancelled: { label: "workflows.run.cancelled", tone: "neutral", spins: false },
-  limit_reached: { label: "workflows.run.limitReached", tone: "danger", spins: false }
+  limit_reached: { label: "workflows.run.limitReached", tone: "danger", spins: false },
+  // A part that handed on to the next one: it ended well, and the Lauf goes on.
+  continued: { label: "workflows.run.continued", tone: "success", spins: false }
 };
 
 /**
@@ -276,7 +278,7 @@ function stepById(
 }
 
 /**
- * Whether a run that ended `done` left failed items in its own loops, or runs with failures
+ * Whether a run that ended `done` left failed items in this or preceding parts, or runs with failures
  * below it, at any depth. A list reads this: it holds no step runs.
  */
 export function doneWithFailedRuns(
