@@ -147,7 +147,12 @@ const HELD_AFTER_CONFIRMATION_EXPIRES_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 export async function executeInboxConfirmedOperation(
   waiting: WaitingOperationCall,
   deps: RunOperationDeps,
-  options: { signal?: AbortSignal; runtime?: Pick<OperationCallRuntime, "locale" | "runFence"> }
+  options: {
+    /** The confirmation being executed; the run may already name a newer approval. */
+    requestId: string;
+    signal?: AbortSignal;
+    runtime?: Pick<OperationCallRuntime, "locale" | "runFence">;
+  }
 ): Promise<ApprovedOperationEnd> {
   options.signal?.throwIfAborted();
   const run = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: waiting.runId });
@@ -157,7 +162,7 @@ export async function executeInboxConfirmedOperation(
     decision?.mode !== "confirmed" ||
     run.origin.kind === "agent"
   ) {
-    return readDecidedOperationEnd(waiting.runId, run?.approvalRequestId, deps);
+    return readDecidedOperationEnd(waiting.runId, options.requestId, deps);
   }
   const asClicked: WaitingOperationCall = {
     ...waiting,
