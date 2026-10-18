@@ -234,7 +234,6 @@ describe("the definitions a folder holds", () => {
         { steps: [trigger, loop("each", inner, { collect: ref("inner").ref }), output()] },
         "steps[1].collect"
       ],
-      [{ steps: [trigger, output()], labels: { month: { value: "2026-10" } } }, "labels"],
       [{ steps: [trigger, output()], onFailure: "workflow.recover" }, "onFailure"]
     ];
     for (const [fields, path] of cases) {

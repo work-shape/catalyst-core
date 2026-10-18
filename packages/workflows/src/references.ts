@@ -21,7 +21,7 @@ import { WorkflowStepFailure } from "./step-failure";
 // its output. A mapping holds literals and references and no expression.
 
 /** The field a dotted path names. A segment is a key of an object or an index of a list. */
-function fieldAt(value: JsonValue, path: string): { found: boolean; value: JsonValue } {
+export function fieldAt(value: JsonValue, path: string): { found: boolean; value: JsonValue } {
   let current = value;
   for (const segment of path === "" ? [] : path.split(".")) {
     if (Array.isArray(current)) {

@@ -1,3 +1,5 @@
+import { checkpointFrame } from "./continuation-checkpoint";
+import { loopContinuation, loopItemReservation } from "./loop-reservation";
 import { loopFailureRowSchema } from "./dataset-values";
 import { WorkflowStepFailure } from "./step-failure";
 import type {
@@ -23,7 +25,8 @@ export function createLoopProgress(options: {
     tx: PlatformStores,
     run: WorkflowRun,
     step: WorkflowStep,
-    place: StepPlace
+    place: StepPlace,
+    index: WorkflowStepIndex
   ): Promise<boolean>;
   advance(
     tx: PlatformStores,
@@ -37,6 +40,13 @@ export function createLoopProgress(options: {
     loop: WorkflowStepRun,
     error: import("@work-shape/catalyst-core").WorkflowRunError
   ): Promise<void>;
+  continueRun(
+    tx: PlatformStores,
+    run: WorkflowRun,
+    loopRun: WorkflowStepRun,
+    loop: Extract<WorkflowStep, { type: "loop" }>,
+    completed: number
+  ): Promise<boolean>;
   completeDatasets(tx: PlatformStores, run: WorkflowRun, stepRun: WorkflowStepRun): Promise<void>;
 }) {
   const { clientInstanceId, now, datasets, beginStep, advance, completeDatasets } = options;
@@ -97,21 +107,60 @@ export function createLoopProgress(options: {
     // A definition nothing checked may name more than a loop may run at once.
     const width = loop?.type === "loop" ? loopConcurrencyOf(loop) : 1;
     const total = (await tx.workflowRuns.countLoopItems(loopRef)) ?? 0;
-    let started = await tx.workflowRuns.countLoopItemsStarted(loopRef);
-    let going = (await tx.workflowRuns.readLoopCounts(loopRef))?.running ?? 0;
-    while (first && started < total && going < width) {
+    const progress = await tx.workflowRuns.readLoopProgress(loopRef);
+    let started = progress.started;
+    let going = progress.running;
+    // Reserve whole admitted items and their shared tail before admitting another. Items
+    // drain before the checkpoint, so no call is skipped or repeated at a concurrency boundary.
+    const configuration = loop?.type === "loop" ? loopContinuation(index, loop.id) : undefined;
+    const reservation =
+      loop?.type === "loop" && configuration
+        ? await loopItemReservation(tx, run, index, loopRun, loop.steps)
+        : { item: 0, tail: 0 };
+    const mustContinue = () =>
+      loop?.type === "loop" &&
+      configuration &&
+      started < total &&
+      (Date.parse(run.deadlineAt) <= now().getTime() ||
+        started >= (loop.continueAsNew?.after ?? Infinity) ||
+        (run.stepRunCount + (going + 1) * reservation.item + reservation.tail >
+          run.limits.stepRuns &&
+          // An item larger than a fresh history runs alone and may checkpoint inside it.
+          !(started === 0 && going === 0 && run.stepRunCount < run.limits.stepRuns)));
+    while (first && started < total && going < width && !mustContinue()) {
       const place = await itemPlace(tx, index, loopRun, first, started);
       // The run ended at its limit of step runs: no further item starts.
-      if (!(await beginStep(tx, run, first, place))) return;
+      if (!(await beginStep(tx, run, first, place, index))) return;
       started += 1;
       going += 1;
     }
     if (going > 0) return;
+    if (mustContinue() && loop?.type === "loop" && configuration) {
+      if (
+        await options.continueRun(
+          tx,
+          run,
+          loopRun,
+          { ...loop, continueAsNew: configuration },
+          started
+        )
+      )
+        return;
+      await options.failLoop(tx, run, loopRun, {
+        code: "continuation_no_progress",
+        message: "The run budget cannot complete one loop item"
+      });
+      return;
+    }
+    if (total > 0 && loop?.type === "loop" && loop.continueAsNew?.cursor !== undefined) {
+      if (await options.continueRun(tx, run, loopRun, loop, started)) return;
+    }
     const counts = await tx.workflowRuns.readLoopCounts(loopRef);
+    const carried = (await checkpointFrame(tx, run, loopRun))?.counts;
     const output: WorkflowLoopOutput = {
-      total: counts?.total ?? 0,
-      done: counts?.done ?? 0,
-      failed: counts?.failed ?? 0
+      total: (carried?.total ?? 0) + (counts?.total ?? 0),
+      done: (carried?.done ?? 0) + (counts?.done ?? 0),
+      failed: (carried?.failed ?? 0) + (counts?.failed ?? 0)
     };
     let failures: import("@work-shape/catalyst-core").WorkflowDatasetReference | undefined;
     if (datasets && loop?.type === "loop" && loop.onItemFailure === "continue") {

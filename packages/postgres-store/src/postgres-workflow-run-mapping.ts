@@ -20,6 +20,7 @@ const {
   input: _runInput,
   output: _runOutput,
   definition: _runDefinition,
+  checkpoint: _checkpoint,
   ...runColumns
 } = getTableColumns(workflowRuns);
 const {
@@ -55,7 +56,7 @@ function mapPreview(text: string | null): { outputPreview?: WorkflowOutputPrevie
   };
 }
 
-function mapRun(row: Omit<RunRow, "input" | "output" | "definition">): WorkflowRun {
+function mapRun(row: Omit<RunRow, "input" | "output" | "definition" | "checkpoint">): WorkflowRun {
   return {
     id: row.id,
     clientInstanceId: row.clientInstanceId,
@@ -66,6 +67,8 @@ function mapRun(row: Omit<RunRow, "input" | "output" | "definition">): WorkflowR
     status: row.status,
     empty: row.empty,
     ...(row.failedItemCount === null ? {} : { failedItemCount: row.failedItemCount }),
+    ...(row.labels === null ? {} : { labels: row.labels }),
+    ...(row.continuation === null ? {} : { continuation: row.continuation }),
     principal: { id: row.principalId, name: row.principalName, displayLabel: row.principalLabel },
     startedBy: row.startedBy,
     rootRunId: row.rootRunId ?? row.id,
