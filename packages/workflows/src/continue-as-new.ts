@@ -1,3 +1,4 @@
+import { valuePosition } from "./json";
 import { isDeepStrictEqual } from "node:util";
 import { indexWorkflowSteps } from "./definition";
 import { fieldAt } from "./references";
@@ -162,11 +163,11 @@ export function createContinuation(options: {
     } catch (caught) {
       if (!isAppError(caught)) throw caught;
       const issues = inputIssues.safeParse(caught.details);
-      const field = issues.success ? issues.data.issues[0]?.path.join("/") : undefined;
+      const path = issues.success ? issues.data.issues[0]?.path.map(String) : undefined;
       error = {
         code: "continuation_invalid",
-        message: field
-          ? `The successor input does not fit at '/${field}'`
+        message: path
+          ? `The successor input does not fit${valuePosition(input, path)}`
           : "The successor could not start on the published revision"
       };
     }

@@ -12,8 +12,8 @@ import {
 
 // Run data is bounded. A run and its step runs stay as long as the instance keeps its audit
 // events: status, times, counts and error codes. The values they carry do not: the inputs and
-// outputs of the steps, and the run's own input and result, are removed a number of days
-// after the run ended. A run that has not ended keeps everything, however old it is: the step
+// outputs, staged code, logs, item labels, and the run's snapshot and checkpoint expire
+// a number of days after the run ended. A run that has not ended keeps everything, however old it is: the step
 // that carries it on reads the values of the steps before it.
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
@@ -64,6 +64,7 @@ export interface WorkflowDataPruning {
   schedule: JobSchedule;
   /**
    * Removes the values of every run that ended more than `stepDataDays` ago, in batches.
+   * Also repairs rows marked by an older retention owner through the same bounded path.
    * Answers how many runs and step runs it took them from and how many statements changed
    * step runs. A second call finds nothing.
    */
