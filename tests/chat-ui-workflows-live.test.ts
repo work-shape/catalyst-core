@@ -468,6 +468,7 @@ describe("what a run says about how it ended", () => {
           run: toWorkflowRun(resource),
           problem: undefined,
           silentSince: undefined,
+          stepsFailed: false,
           stepRuns: stepRuns.map(toWorkflowStepRun),
           stepRunsCut,
           retry: noop

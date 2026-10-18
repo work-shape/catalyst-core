@@ -737,7 +737,7 @@ function LoadedAssetPage({
 }
 
 /** What the instance names a caller may do to an asset beyond reading it. */
-type AssetChange = NonNullable<BuildAsset["allowed"]>[number];
+type AssetChange = Exclude<NonNullable<BuildAsset["allowed"]>[number], "read">;
 
 /**
  * What the reader may do to the asset on the page. The instance says it with the read, decided

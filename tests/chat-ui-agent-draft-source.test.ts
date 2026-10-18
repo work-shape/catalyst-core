@@ -134,6 +134,7 @@ async function mountDraft(input: { reload?: () => Promise<unknown> } = {}) {
     seen,
     shows,
     sent,
+    queryClient,
     /** Somebody saves a newer draft, which the page has not read yet. */
     instanceHolds(revision: number) {
       instance.revision = revision;
@@ -254,6 +255,62 @@ describe("the draft on the page", () => {
         author: { userId: settingsUser().id, name: settingsUser().displayLabel }
       });
       expect(page.seen.state?.latest?.config).toEqual({ name: "assistant", instructions: "Mine." });
+    } finally {
+      await page.unmount();
+    }
+  });
+});
+
+// UI-FIX-1: a made Publish changes the live agent, which the Agents page, the agent picker and
+// the configuration also show; they are asked for again, as after a save in Build. A Publish
+// that waits for an approval has changed nothing yet.
+describe("what a Publish makes the rest of the interface read again", () => {
+  const offered = ["collaboration-workspace-agents", URL_OF_INSTANCE, "draft-test", "cw_1"];
+  const configuration = ["config", URL_OF_INSTANCE, "draft-test"];
+  const waiting = {
+    id: "opr_1",
+    operation: "assets.publish",
+    effect: "changing",
+    target: "live",
+    status: "pending_approval",
+    actor: { kind: "user", id: "author", label: "Ana Writer" },
+    origin: { kind: "user" },
+    inputHash: "sha256:abc",
+    attempt: 1,
+    correlationId: "corr_1",
+    createdAt: "2026-10-17T01:00:00.000Z",
+    href: "runs/opr_1"
+  };
+
+  async function publishAnswered(response: Response) {
+    const page = await mountDraft();
+    page.queryClient.setQueryData(offered, { agents: [] });
+    page.queryClient.setQueryData(configuration, {});
+    await page.answer(response, page.publish());
+    return page;
+  }
+
+  it("asks again for the agents people are offered and the configuration once it is made", async () => {
+    const page = await publishAnswered(Response.json({ draftRevision: 1, publishedRevision: 1 }));
+    try {
+      await vi.waitFor(
+        () => {
+          expect(page.queryClient.getQueryState(offered)?.isInvalidated).toBe(true);
+          expect(page.queryClient.getQueryState(configuration)?.isInvalidated).toBe(true);
+        },
+        { timeout: CONDITION_WAIT_MS }
+      );
+    } finally {
+      await page.unmount();
+    }
+  });
+
+  it("asks for nothing again while it waits for an approval", async () => {
+    const page = await publishAnswered(Response.json(waiting, { status: 202 }));
+    try {
+      expect(page.seen.state?.answerFor(1)).toEqual({ kind: "waits" });
+      expect(page.queryClient.getQueryState(offered)?.isInvalidated).toBe(false);
+      expect(page.queryClient.getQueryState(configuration)?.isInvalidated).toBe(false);
     } finally {
       await page.unmount();
     }

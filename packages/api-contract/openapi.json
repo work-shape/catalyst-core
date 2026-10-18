@@ -28498,6 +28498,12 @@
               ]
             }
           },
+          "allowed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetVerb"
+            }
+          },
           "updatedAt": {
             "$ref": "#/components/schemas/Timestamp"
           }
@@ -28696,6 +28702,7 @@
       "AssetVerb": {
         "type": "string",
         "enum": [
+          "read",
           "write",
           "delete",
           "publish"

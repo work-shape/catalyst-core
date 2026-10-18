@@ -20,6 +20,7 @@ import {
   appBuilder,
   appDescription,
   appDraftShown,
+  appRightsOn,
   appTitle,
   type AppRights
 } from "./app-model";
@@ -37,8 +38,9 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const { t } = useTranslation();
   const host = useAppsHost();
   const workspace = host?.workspace;
-  const rights = host?.rights;
   const record = useApp(workspace?.id ?? "", app, workspace !== undefined);
+  // What the reader may do to this App, as the instance says with its record.
+  const rights = host && appRightsOn(host.rights, record.app);
   const [shown, setShown] = useState<AppPreviewResponse>();
   const [detailsOpen, setDetailsOpen] = useState(false);
   // The list is read by whoever reads the App's record. Everybody else is shown the names of
@@ -170,7 +172,7 @@ export function AppViewFrame({
   dataSources?: readonly string[] | undefined;
 }) {
   const { t } = useTranslation();
-  const editWithAgent = useAppEditWithAgent(app);
+  const editWithAgent = useAppEditWithAgent(app, rights);
   const hasSources = dataSources !== undefined && dataSources.length > 0;
   // What stays in the head beside where the data comes from: Edit is the builder's next step,
   // and Edit with the agent folds first. Copying the link is all a reader without the read

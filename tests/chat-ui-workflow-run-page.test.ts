@@ -90,6 +90,7 @@ function read(resource: RunResource, stepRuns: readonly StepRunResource[]): Work
     run: toWorkflowRun(resource),
     problem: undefined,
     silentSince: undefined,
+    stepsFailed: false,
     stepRuns: stepRuns.map(toWorkflowStepRun),
     stepRunsCut: false,
     retry: noop

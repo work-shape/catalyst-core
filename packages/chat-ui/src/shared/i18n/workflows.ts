@@ -295,6 +295,7 @@ export const workflows = defineTranslations({
     "workflows.run.startedBySchedule": "started by the schedule",
     "workflows.run.stepRunsCut":
       "This run has more steps than the page reads. Steps late in the run may show no state.",
+    "workflows.run.stepsFailedToLoad": "The steps could not be loaded.",
     "workflows.run.stopping": "Stopping",
     "workflows.run.stoppingLine":
       "Cancelling. The call that is going now is not broken off: the run stops when it has ended.",
@@ -670,6 +671,7 @@ export const workflows = defineTranslations({
     "workflows.run.startedBySchedule": "vom Zeitplan gestartet",
     "workflows.run.stepRunsCut":
       "Dieser Lauf hat mehr Schritte, als die Seite liest. Späte Schritte zeigen womöglich keinen Stand.",
+    "workflows.run.stepsFailedToLoad": "Die Schritte konnten nicht geladen werden.",
     "workflows.run.stopping": "Wird abgebrochen",
     "workflows.run.stoppingLine":
       "Wird abgebrochen. Der Aufruf, der gerade läuft, wird nicht unterbrochen: Der Lauf stoppt, wenn er beendet ist.",
