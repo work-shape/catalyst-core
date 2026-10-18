@@ -59,3 +59,8 @@ input value in its error or audit event. Publishing new instructions does not ch
 the history already executing. This is the continuation contract for Workflow-fed
 Knowledge Bases (KBW-1); consumers pass positions through declared inputs and use the
 sequence identity instead of parsing a key or copying another run's history.
+
+Loop outputs `total`, `done` and `failed` cover the whole continuation chain (one Lauf),
+including items finished in earlier histories. Later steps reading `each_x.done` or
+`each_x.failed`, and a parent reading its child's output, receive these cumulative totals.
+The checkpoint carries only fixed-size counts per loop level; it does not keep item results.

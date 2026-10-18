@@ -146,16 +146,17 @@ export function workflowLimitIssues(
   for (const [id, entry] of index) {
     if (entry.step.type !== "loop") continue;
     let current: typeof entry | undefined = entry;
-    let continues = false;
-    while (current && !continues) {
-      continues = current.step.type === "loop" && current.step.continueAsNew !== undefined;
+    let continuingId: string | undefined;
+    while (current && !continuingId) {
+      if (current.step.type === "loop" && current.step.continueAsNew)
+        continuingId = current.step.id;
       current = current.sequence.loop ? index.get(current.sequence.loop) : undefined;
     }
     const needed = workflowLoopMinimumSteps(index, id);
-    if (continues && needed > budget)
+    if (continuingId && needed > budget)
       issues.push({
-        path: `steps.${id}.continueAsNew`,
-        message: `The loop '${id}' needs at least ${needed} step runs for steps before the loop, one item and the tail, above limits.stepRuns of ${budget}. / Schleife '${id}' benötigt mindestens ${needed} Schritte für die Schritte vor der Schleife, ein Element und die nachfolgenden Schritte; limits.stepRuns erlaubt ${budget}.`
+        path: `steps.${continuingId}.continueAsNew`,
+        message: `The loop '${continuingId}' needs at least ${needed} step runs for steps before the loop, one item and the tail, above limits.stepRuns of ${budget}. / Schleife '${continuingId}' benötigt mindestens ${needed} Schrittläufe für die Schritte vor der Schleife, ein Element und die nachfolgenden Schritte; limits.stepRuns erlaubt ${budget}.`
       });
   }
   return issues;

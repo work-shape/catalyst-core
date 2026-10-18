@@ -31,6 +31,8 @@ export async function workflowContinuationIssues(
   const index = indexWorkflowSteps(manifest);
   const issues: WorkflowDefinitionIssue[] = [];
   const changing = async (step: WorkflowStep): Promise<boolean> => {
+    // Agent steps are currently refused by the runtime. Count them as changing here
+    // as soon as they can run: their tools may write or send during prefix replay.
     if (step.type === "workflow" || step.type === "notify") return true;
     if (step.type === "operation")
       return (await registry?.resolve(step.operation))?.effect !== "reading";

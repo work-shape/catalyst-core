@@ -108,3 +108,8 @@ and draft test runs refuse these shapes, naming the step and rule in English and
 A `continueAsNew` loop can be the last loop, with non-loop steps after it. These are
 publish-time restrictions pending EW-CAN-RESUME, which will resume at step boundaries
 without repeating finished work.
+
+Loop outputs `total`, `done` and `failed` cover the whole continuation chain (one Lauf),
+including items finished in earlier histories. Later steps reading `each_x.done` or
+`each_x.failed`, and a parent reading its child's output, receive these cumulative totals.
+The checkpoint carries only fixed-size counts per loop level; it does not keep item results.

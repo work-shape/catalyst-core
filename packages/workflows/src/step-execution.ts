@@ -521,10 +521,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "loop": {
           if (step.collect !== undefined) throw notSupportedFailure("'collect' on a loop");
           const checkpoint = await checkpointFrame(stores, run, stepRun);
-          const items =
-            checkpoint?.stepId === step.id
-              ? checkpoint.items
-              : await resolveReference(scope, step.items);
+          const items = checkpoint?.items ?? (await resolveReference(scope, step.items));
           // Allocate the checkpoint before the settling transaction. If writing its parts
           // is interrupted later, cleanup still owns the prefix even if that end rolls back.
           if (step.onItemFailure === "continue" && options.datasets) {

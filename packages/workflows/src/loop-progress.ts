@@ -1,3 +1,4 @@
+import { checkpointFrame } from "./continuation-checkpoint";
 import { loopItemReservation } from "./loop-reservation";
 import { loopFailureRowSchema } from "./dataset-values";
 import { WorkflowStepFailure } from "./step-failure";
@@ -144,10 +145,11 @@ export function createLoopProgress(options: {
       if (await options.continueRun(tx, run, loopRun, loop, started)) return;
     }
     const counts = await tx.workflowRuns.readLoopCounts(loopRef);
+    const carried = (await checkpointFrame(tx, run, loopRun))?.counts;
     const output: WorkflowLoopOutput = {
-      total: counts?.total ?? 0,
-      done: counts?.done ?? 0,
-      failed: counts?.failed ?? 0
+      total: (carried?.total ?? 0) + (counts?.total ?? 0),
+      done: (carried?.done ?? 0) + (counts?.done ?? 0),
+      failed: (carried?.failed ?? 0) + (counts?.failed ?? 0)
     };
     let failures: import("@work-shape/catalyst-core").WorkflowDatasetReference | undefined;
     if (datasets && loop?.type === "loop" && loop.onItemFailure === "continue") {

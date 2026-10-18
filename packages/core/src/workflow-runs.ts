@@ -176,12 +176,16 @@ export type NewWorkflowRun = Pick<
     checkpoint?: {
       stepId: string;
       offset: number;
-      items: JsonValue[] | WorkflowDatasetReference;
+      /** Remaining items; omitted for cursor continuations that read the next page. */
+      items?: JsonValue[] | WorkflowDatasetReference;
+      /** Totals of finished items in earlier histories, excluding the saved frontier. */
+      counts?: { total: number; done: number; failed: number };
       completed?: Record<string, JsonValue>;
       ancestors?: {
         stepId: string;
         offset: number;
-        items: JsonValue[] | WorkflowDatasetReference;
+        items?: JsonValue[] | WorkflowDatasetReference;
+        counts?: { total: number; done: number; failed: number };
         completed?: Record<string, JsonValue>;
       }[];
     };

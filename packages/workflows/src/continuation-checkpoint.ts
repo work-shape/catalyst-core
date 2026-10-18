@@ -89,7 +89,11 @@ export async function continuationCheckpoint(
         if (output) outputs[step.id] = output.value;
       }
     }
+    const counts = await tx.workflowRuns.readLoopCounts({ clientInstanceId, id: loopRun.id });
+    const done = (previous?.counts?.done ?? 0) + (counts?.done ?? 0);
+    const failed = (previous?.counts?.failed ?? 0) + (counts?.failed ?? 0);
     return {
+      counts: { total: done + failed, done, failed },
       stepId: loopRun.stepId,
       offset: (previous?.offset ?? 0) + rows,
       items,

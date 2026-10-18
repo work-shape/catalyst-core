@@ -473,6 +473,11 @@ describe("continue-as-new", () => {
       expect(chain.every((run) => run.status === "continued" || run.status === "done")).toBe(true);
       expect(writesOf(t)).toHaveLength(12);
       expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(12);
+      const final = chain.find((run) => run.status === "done");
+      if (!final) throw new Error("Missing final nested history");
+      expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: final.id })).toEqual(
+        { value: { sent: 3, failed: 0 } }
+      );
     }
   );
 

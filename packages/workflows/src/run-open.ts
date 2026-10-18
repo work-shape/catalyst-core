@@ -159,7 +159,9 @@ export function createRunOpening(options: {
       const row = await tx.workflowRunDatasets.get({ clientInstanceId, id: ref.$dataset });
       if (!row || row.state !== "complete")
         throw new AppError("NOT_FOUND", "The dataset has expired", { reason: "dataset_expired" });
-      const sourceRunId = run.parentRunId ?? datasetAccess?.sourceRunId;
+      // A successor inherits only what its predecessor could read, including datasets
+      // explicitly handed down by its parent. Parent access alone is not chain access.
+      const sourceRunId = datasetAccess?.sourceRunId ?? run.parentRunId;
       if (sourceRunId) {
         if (
           !(await tx.workflowRunDatasets.canRead({

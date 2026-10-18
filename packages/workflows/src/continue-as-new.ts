@@ -200,16 +200,34 @@ export function createContinuation(options: {
     };
     let successor: WorkflowRun | undefined;
     if (prepared) {
-      successor = await options.open(
-        tx,
-        { ...prepared, ...(completePage ? {} : { checkpoint }) },
-        origin,
-        run.mode,
-        {
-          sourceRunId: run.id
-        }
-      );
-    } else {
+      const start = prepared;
+      try {
+        // Opening may refuse dataset access after creating the row. Roll back that attempt
+        // before recording a failed successor; never retry the already completed item write.
+        successor = await tx.transaction((opening) =>
+          options.open(
+            opening,
+            {
+              ...start,
+              checkpoint: completePage
+                ? { stepId: checkpoint.stepId, offset: 0, counts: checkpoint.counts }
+                : checkpoint
+            },
+            origin,
+            run.mode,
+            { sourceRunId: run.id }
+          )
+        );
+      } catch (caught) {
+        if (!isAppError(caught)) throw caught;
+        prepared = undefined;
+        error = {
+          code: "continuation_invalid",
+          message: "The successor could not open with the carried dataset access"
+        };
+      }
+    }
+    if (!prepared) {
       const failed = await tx.workflowRuns.createRun({
         id: createPlatformId<"WorkflowRunId">("wfr"),
         clientInstanceId,

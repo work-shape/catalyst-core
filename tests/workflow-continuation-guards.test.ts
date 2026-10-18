@@ -134,7 +134,7 @@ const refused = [
     make: () => ({ ...manifest(), limits: { stepRuns } }),
     step: "each_client",
     rule: `needs at least 5 step runs`,
-    de: "benötigt mindestens 5 Schritte"
+    de: "benötigt mindestens 5 Schrittläufe"
   }))
 ];
 
@@ -268,4 +268,31 @@ it("treats an unresolved operation before continuation as unsafe rather than gue
   expect(issues.find((issue) => issue.path === "steps.before")?.message).toContain(
     "Step 'before' cannot precede"
   );
+});
+
+it("names the carrying loop and its path when an inner loop exceeds the budget floor", async () => {
+  const definition = manifest();
+  definition.limits = { stepRuns: 5 };
+  definition.steps.splice(2, 1, loop("each_client", [loop("inner", [write])], true));
+  const t = await readyWorkflows(
+    (fixture) => {
+      open = fixture;
+    },
+    { definitions: "assets" }
+  );
+  const params = { kind: "workflow", name: definition.id };
+  const saved = await t.expectOk(t.admin.id, "assets.put", {
+    params,
+    payload: { config: { name: definition.id, manifest: definition }, expectedRevision: null }
+  });
+  const response = await t.call(t.root.id, "assets.publish", {
+    params,
+    payload: { revision: saved.json().revision }
+  });
+  expect(response.statusCode).toBe(422);
+  expect(response.json().error.details.issues).toEqual(
+    expect.arrayContaining([expect.objectContaining({ path: "steps.each_client.continueAsNew" })])
+  );
+  expect(response.json().error.message).toContain("The loop 'each_client' needs at least 6");
+  expect(response.json().error.message).not.toContain("The loop 'inner'");
 });
