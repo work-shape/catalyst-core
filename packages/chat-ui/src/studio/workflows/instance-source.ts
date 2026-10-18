@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { principalGrantRequest } from "../../admin/access/principal-grants-model";
@@ -5,7 +6,6 @@ import { PendingApprovalError } from "../build-area/build-refusals";
 import {
   listedOf,
   toAssetWorkflowListItem,
-  toDraftWorkflowListItem,
   toWorkflow,
   toWorkflowListItem,
   toWorkflowRun,
@@ -28,8 +28,8 @@ const FRAME_PAGE_SIZE = 200;
 const WORKFLOW_SUMMARY_PAGE_SIZE = 200;
 
 /**
- * How many reads one page of the screen's list makes at most while they find nothing to show.
- * What is left is handed on as the page's cursor.
+ * Bounds the source reads for one screen page, including empty pages. Unread positions
+ * travel in the next cursor, so a sparse list stays reachable without one long request.
  */
 const LIST_READS_PER_PAGE = 5;
 
@@ -99,53 +99,58 @@ function done<Output>(
   throw new PendingApprovalError();
 }
 
-/**
- * Where the next page of the list starts. The list is the published Workflows, as the engine
- * pages them, and then the drafts, as the asset list pages them. A cursor of the screen names
- * the part and the cursor of that part's own list.
- */
-type ListPosition = { part: "published" | "drafts"; cursor: string | undefined };
-
-const PUBLISHED_PREFIX = "published:";
-const DRAFTS_PREFIX = "drafts:";
-
-function listPositionOf(cursor: string | undefined): ListPosition {
-  if (cursor?.startsWith(DRAFTS_PREFIX)) {
-    return { part: "drafts", cursor: cursor.slice(DRAFTS_PREFIX.length) || undefined };
-  }
-  return {
-    part: "published",
-    cursor: cursor?.startsWith(PUBLISHED_PREFIX)
-      ? cursor.slice(PUBLISHED_PREFIX.length) || undefined
-      : undefined
-  };
+/** The two lists are in byte order of name. A cursor retains each unread position. */
+const listPartSchema = z.object({
+  cursor: z.string().optional(),
+  after: z.string().optional(),
+  done: z.boolean()
+});
+const listPositionSchema = z.object({ published: listPartSchema, assets: listPartSchema });
+type ListPart = z.infer<typeof listPartSchema>;
+interface ListPage<Row> {
+  items: readonly Row[];
+  nextCursor?: string | undefined;
 }
 
-/** One read of one part of the list, with the screen's cursor of what follows it. */
-async function readListPart(
-  client: WorkflowsClient,
-  position: ListPosition,
-  limit: number,
-  signal: AbortSignal
-): Promise<{ items: WorkflowListItem[]; nextCursor: string | undefined }> {
-  const paging = { limit, ...(position.cursor === undefined ? {} : { cursor: position.cursor }) };
-  if (position.part === "published") {
-    const page = await client.workflows.list({ query: paging, signal });
-    return {
-      items: page.items.map((item) => toWorkflowListItem(item)),
-      nextCursor: page.nextCursor === undefined ? DRAFTS_PREFIX : PUBLISHED_PREFIX + page.nextCursor
-    };
-  }
-  const page = await client.assets.list({
-    params: { kind: WORKFLOW_ASSET_KIND },
-    query: paging,
-    signal
-  });
+/**
+ * Keeps one source page in memory during a read. A partially consumed page is read again
+ * from its cursor next time, skipping names already consumed. Keeping the exclusive name
+ * rather than an offset also tolerates an earlier row being deleted between reads.
+ */
+function listReader<Row>(
+  position: ListPart,
+  read: (cursor: string | undefined) => Promise<ListPage<Row>>,
+  keyOf: (row: Row) => string,
+  takeRead: () => boolean
+) {
+  let page: ListPage<Row> | undefined;
   return {
-    items: page.items
-      .filter((asset) => asset.publishedRevision === undefined)
-      .map(toDraftWorkflowListItem),
-    nextCursor: page.nextCursor === undefined ? undefined : DRAFTS_PREFIX + page.nextCursor
+    async peek(): Promise<{ ready: false } | { ready: true; row: Row | undefined }> {
+      while (!position.done) {
+        if (page === undefined) {
+          if (!takeRead()) return { ready: false };
+          page = await read(position.cursor);
+        }
+        const row = page.items.find(
+          (item) => position.after === undefined || keyOf(item) > position.after
+        );
+        if (row !== undefined) return { ready: true, row };
+        position.cursor = page.nextCursor;
+        position.after = undefined;
+        position.done = page.nextCursor === undefined;
+        page = undefined;
+      }
+      return { ready: true, row: undefined };
+    },
+    take(row: Row) {
+      position.after = keyOf(row);
+      if (page !== undefined && position.after === keyOf(page.items.at(-1) ?? row)) {
+        position.cursor = page.nextCursor;
+        position.after = undefined;
+        position.done = page.nextCursor === undefined;
+        page = undefined;
+      }
+    }
   };
 }
 
@@ -165,29 +170,61 @@ async function findSummary(client: WorkflowsClient, workflow: string, signal: Ab
 }
 
 /**
- * The source of an instance. The list is the engine's: the published Workflows the reader may
- * read, each with its latest run. A definition is read as an asset, the shape a Workflow is
- * stored in.
+ * The source of an instance. The list joins engine start/run summaries with asset rights,
+ * including Workflows held by write or publish alone. A definition is read as an asset.
  */
 export function createInstanceSource(client: WorkflowsClient, key: string): WorkflowsSource {
   return {
     key,
-    // The engine lists what is published; a Workflow never published is listed from its
-    // asset, as a draft, after the published ones. The screen shows a draft only to who may
-    // write Workflows.
+    // Join the engine's start/run summaries with per-asset rights, including published
+    // Workflows held by write or publish alone. Each source advances independently.
     listWorkflows: async (_workspaceId, query, signal) => {
-      // A part may answer a page with nothing to show: the engine lists no published
-      // Workflow, or a page of assets holds only published ones. The next read follows at
-      // once, so the screen meets an empty page only after LIST_READS_PER_PAGE such reads.
+      const position =
+        query.cursor === undefined
+          ? { published: { done: false }, assets: { done: false } }
+          : listPositionSchema.parse(JSON.parse(query.cursor));
+      let reads = 0;
+      const takeRead = () => reads++ < LIST_READS_PER_PAGE;
+      const published = listReader(
+        position.published,
+        (cursor) => client.workflows.list({ query: { limit: query.limit, cursor }, signal }),
+        (row) => row.id,
+        takeRead
+      );
+      const assets = listReader(
+        position.assets,
+        (cursor) =>
+          client.assets.list({
+            params: { kind: WORKFLOW_ASSET_KIND },
+            query: { limit: query.limit, cursor },
+            signal
+          }),
+        (row) => row.name,
+        takeRead
+      );
       const items: WorkflowListItem[] = [];
-      let cursor = query.cursor;
-      for (let read = 0; read < LIST_READS_PER_PAGE; read += 1) {
-        const page = await readListPart(client, listPositionOf(cursor), query.limit, signal);
-        items.push(...page.items);
-        cursor = page.nextCursor;
-        if (items.length > 0 || cursor === undefined) break;
+      while (items.length < query.limit) {
+        const [engine, asset] = await Promise.all([published.peek(), assets.peek()]);
+        if (!engine.ready || !asset.ready) break;
+        if (engine.row === undefined && asset.row === undefined) break;
+        if (
+          engine.row !== undefined &&
+          (asset.row === undefined || engine.row.id <= asset.row.name)
+        ) {
+          const same = engine.row.id === asset.row?.name;
+          items.push(toWorkflowListItem(engine.row, same ? asset.row : undefined));
+          published.take(engine.row);
+          if (same && asset.row !== undefined) assets.take(asset.row);
+        } else if (asset.row !== undefined) {
+          items.push(toAssetWorkflowListItem(asset.row));
+          assets.take(asset.row);
+        }
       }
-      return { items, nextCursor: cursor };
+      return {
+        items,
+        nextCursor:
+          position.published.done && position.assets.done ? undefined : JSON.stringify(position)
+      };
     },
     // The definition is the Workflow's asset, and so is whether a revision is published;
     // whether the instance starts it, and the id of its published revision, are on its entry
