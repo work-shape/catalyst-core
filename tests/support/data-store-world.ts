@@ -254,13 +254,15 @@ export function useDataStoreWorld(prefix: string) {
     verb: DataStoreOperationVerb,
     input: unknown,
     /** The key the call path hands a changing call that carried one. */
-    idempotencyKey?: string
+    idempotencyKey?: string,
+    locale?: "en" | "de"
   ) {
     const operation = required(
       await world.dataStores.operationSource.resolve(dataStoreOperationName("findings", verb))
     );
     return operation.execute(operation.inputSchema.parse(input), {
       ...callContext,
+      runtime: { ...callContext.runtime, ...(locale ? { locale } : {}) },
       ...(verb === "records.propose"
         ? {
             origin: {

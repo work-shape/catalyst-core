@@ -1,4 +1,7 @@
-import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
+import {
+  PostgresExecutorError,
+  type PostgresChangeStatements
+} from "@work-shape/catalyst-postgres-connector";
 import {
   AppError,
   auditActorFromIdentity,
@@ -173,6 +176,7 @@ export const load: StoreVerb = {
     // here and raised once the change has rolled back.
     let refusal: AppError | undefined;
     let wrote = false;
+    let waitingForReplacementTable = false;
     let replayed: DataStoreLoadResult | undefined;
 
     /** Checks and writes the rows of one statement, the first of which is row `first` of the dataset. */
@@ -242,13 +246,16 @@ export const load: StoreVerb = {
             await sql.run("select set_config('statement_timeout', $1, true)", [
               String(limits.timeoutMs)
             ]);
-            if (input.replace) {
+            if (input.replace && !scopedReplace) {
               // Group locks survive every streamed chunk. Serialize replacements of this
               // table before any group lock, since later chunks can visit groups in any order.
+              // A scoped replacement takes only one group lock before touching any row.
+              waitingForReplacementTable = true;
               await sql.run(
                 "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('catalyst replace table ' || $1::pg_catalog.text, 0))::pg_catalog.text as held",
                 [tableName]
               );
+              waitingForReplacementTable = false;
             }
             if (scopedReplace) {
               const group = JSON.stringify([scope]);
@@ -333,7 +340,31 @@ export const load: StoreVerb = {
       if (replayed) throw new AnsweredBefore(replayed);
       // Rows that were written and not kept still fill the files of the store.
       if (wrote) await reclaim(runtime, record);
-      throw refusal ?? error;
+      if (refusal) throw refusal;
+      if (error instanceof PostgresExecutorError) {
+        const de = context?.runtime.locale === "de";
+        // The flag surrounds only this advisory-lock statement. A timeout elsewhere in
+        // the load (including a group or row wait) must keep its own classification.
+        if (waitingForReplacementTable && error.kind === "timeout") {
+          throw new AppError(
+            "CONFLICT",
+            de
+              ? `Ein anderer Ersetzungslauf für die Tabelle '${tableName}' lief noch. Das Warten hat das Limit limits.timeoutMs (${limits.timeoutMs} ms, dataStores.load.timeoutMs) erreicht. Sicher erneut versuchen.`
+              : `Another replacement of table '${tableName}' was running. Waiting reached limits.timeoutMs (${limits.timeoutMs} ms, dataStores.load.timeoutMs). Safe to retry.`,
+            { reason: "load_replace_timeout", timeoutMs: limits.timeoutMs }
+          );
+        }
+        if (error.sqlState === "40P01") {
+          throw new AppError(
+            "CONFLICT",
+            de
+              ? "Der Ladevorgang geriet mit einem gleichzeitigen Ladevorgang derselben Zeilen in Konflikt. Es wurde nichts geladen; ein erneuter Versuch ist sicher."
+              : "The load ran into a concurrent load of the same rows. Nothing was loaded; safe to retry.",
+            { reason: "load_concurrent_rows", sqlState: "40P01" }
+          );
+        }
+      }
+      throw error;
     }
   }
 };

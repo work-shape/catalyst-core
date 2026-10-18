@@ -31,7 +31,7 @@ export function replacementStatements(
           `${left}.${quoteIdentifier(column)} is not distinct from ${right}.${quoteIdentifier(column)}`
       )
       .join(" and ");
-  // A replacement holds each group until commit. The load takes its table lock first:
+  // A replacement holds each group until commit. An unscoped load takes its table lock first:
   // sorting here orders only this chunk, while later chunks may visit groups in any order.
   return {
     lock: `
