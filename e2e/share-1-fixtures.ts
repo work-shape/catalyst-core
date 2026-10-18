@@ -732,8 +732,17 @@ export async function shareAsksForWhom(
         return confirmation;
       },
       async (locale, theme, width) => {
-        await card.scrollIntoViewIfNeeded();
-        await expect(card.getByRole("button", { name: ALLOW })).toBeInViewport();
+        // The composer overlays the thread: scrolling the whole card only checks the page
+        // viewport. Wheel the thread until Allow is above the composer too.
+        await card.hover();
+        await page.mouse.wheel(0, 600);
+        await expect
+          .poll(async () => {
+            const allow = await card.getByRole("button", { name: ALLOW }).boundingBox();
+            const composerBox = await composer.boundingBox();
+            return Boolean(allow && composerBox && allow.y + allow.height < composerBox.y - 12);
+          })
+          .toBe(true);
         await picture(page, testInfo, `agent-confirm-${locale}-${theme}-${width}`);
       }
     );
