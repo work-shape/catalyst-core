@@ -254,15 +254,20 @@ export function testDataStoreRowWrites(): void {
       const { instance, sql, call, snapshot } = await setup();
       try {
         // A trigger makes repeating an UPDATE observable, even when it sets the same values.
-        await sql`create table writes (count integer not null)`;
-        await sql`insert into writes values (0)`;
+        // Qualify public: CI’s catalyst login also has the internal catalyst schema.
+        await sql`create table public.writes (count integer not null)`;
+        await sql`insert into public.writes values (0)`;
         await sql.unsafe(
-          "create function count_write() returns trigger language plpgsql security definer set search_path = public as $$ begin update writes set count = count + 1; return new; end $$; create trigger count_write after update on holidays for each row execute function count_write()"
+          "create function public.count_write() returns trigger language plpgsql security definer set search_path = public as $$ begin update public.writes set count = count + 1; return new; end $$; create trigger count_write after update on public.holidays for each row execute function public.count_write()"
         );
-        await call("insert", { table: "holidays", rows: [alex] });
+        const inserted = await call("insert", { table: "holidays", rows: [alex] });
+        expect(inserted, JSON.stringify(inserted)).toMatchObject({ status: "done" });
         const input = { table: "holidays", rows: [{ key, set: { ends: "2026-11-05" } }] };
         const first = await call("update", input, "en", "alex-update");
-        expect(first).toMatchObject({ status: "done", output: { table: "holidays", updated: 1 } });
+        expect(first, JSON.stringify(first)).toMatchObject({
+          status: "done",
+          output: { table: "holidays", updated: 1 }
+        });
         // Remove the outer run record: the store's keyed writer must still replay its result.
         const platform = postgres(await fileTestDatabaseUrl(), { max: 1 });
         try {
@@ -274,7 +279,7 @@ export function testDataStoreRowWrites(): void {
           status: first.status,
           output: first.status === "done" ? first.output : undefined
         });
-        expect([...(await sql`select count from writes`)]).toEqual([{ count: 1 }]);
+        expect([...(await sql`select count from public.writes`)]).toEqual([{ count: 1 }]);
         expect(await snapshot()).toEqual([{ ...alex, ends: "2026-11-05", days: 4 }]);
         const deletion = { table: "holidays", keys: [key] };
         const deleted = await call("delete_rows", deletion, "en", "alex-delete");
