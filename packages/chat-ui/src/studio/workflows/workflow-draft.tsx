@@ -18,7 +18,7 @@ import {
   workflowRightsOn,
   type WorkflowDraftState
 } from "./workflow-model";
-import type { WorkflowView } from "./workflow-views";
+import type { WorkflowStepView, WorkflowView } from "./workflow-views";
 import { useWorkflowsHost } from "./workflows-host";
 import { WorkflowPublishRights } from "./workflow-publish-rights";
 import { workflowPublishRefusal } from "./workflow-publish-rights-model";
@@ -161,7 +161,7 @@ type DraftChange = DraftDecision;
  */
 export function useWorkflowDraft(
   workflow: string,
-  view: Pick<WorkflowView, "name" | "draft" | "allowed" | "ownerWorkspaceId"> | undefined
+  view: Pick<WorkflowView, "name" | "draft" | "allowed" | "ownerWorkspaceId" | "steps"> | undefined
 ): { bar: WorkflowDraftBarState | undefined; dialog: ReactNode } {
   const { t } = useTranslation();
   const host = useWorkflowsHost();
@@ -212,6 +212,8 @@ export function useWorkflowDraft(
   };
   // What this Workflow lets the reader do, as its record says.
   const rights = workflowRightsOn(host.rights, view);
+  // The page shows the draft's steps: what starts the revision that is published.
+  const starts = view.steps.find((step) => step.kind === "trigger")?.starts;
   return {
     bar: {
       state,
@@ -227,6 +229,7 @@ export function useWorkflowDraft(
           name={view.name}
           revision={draft.revision}
           publishedRevision={draft.publishedRevision}
+          {...(starts === undefined ? {} : { starts })}
           {...(draft.publishQuestion ? { question: draft.publishQuestion } : {})}
           rights={<WorkflowPublishRights workflow={workflow} />}
           narrative={narrative}
@@ -269,6 +272,7 @@ export function DraftChangeDialog({
   name,
   revision,
   publishedRevision,
+  starts,
   question = [],
   rights,
   narrative = NO_NARRATIVE,
@@ -283,6 +287,8 @@ export function DraftChangeDialog({
   /** The draft the page read: the revision a publish names. */
   revision: number;
   publishedRevision: number | undefined;
+  /** What starts the revision, as its trigger says. Absent: the body names no way it starts. */
+  starts?: Pick<NonNullable<WorkflowStepView["starts"]>, "byHand" | "onSchedule">;
   /** The instance's sentences on what a publish raises, each limit above its default. */
   question?: readonly string[];
   /** What the technical accounts of the publish lack, and the step that gives it. */
@@ -298,11 +304,12 @@ export function DraftChangeDialog({
 }) {
   const { t } = useTranslation();
   const publish = change === "publish";
+  const body = t(publishBodyKey(starts), { number: revision });
   const details = (
     <>
       {narrative.status === "none" ? null : (
         <p className="text-body text-muted-foreground" data-testid="workflow-publish-body">
-          {t("workflows.draft.publishBody", { number: revision })}
+          {body}
         </p>
       )}
       {question.length > 0 ? (
@@ -331,9 +338,7 @@ export function DraftChangeDialog({
       onClose={onClose}
     >
       {publish ? null : t("workflows.draft.discardBody", { number: publishedRevision ?? revision })}
-      {publish && narrative.status === "none"
-        ? t("workflows.draft.publishBody", { number: revision })
-        : null}
+      {publish && narrative.status === "none" ? body : null}
       {publish && narrative.status !== "none" ? (
         // The sentence leads; which revision goes live is a detail of it.
         <div className="grid gap-3 text-foreground">
@@ -350,4 +355,14 @@ export function DraftChangeDialog({
       ) : null}
     </ConfirmDialog>
   );
+}
+
+/** The publish body for how the revision starts: never a schedule it does not have (C3). */
+function publishBodyKey(
+  starts: Pick<NonNullable<WorkflowStepView["starts"]>, "byHand" | "onSchedule"> | undefined
+) {
+  if (starts?.byHand === true && starts.onSchedule) return "workflows.draft.publishBodyBoth";
+  if (starts?.byHand === true) return "workflows.draft.publishBodyByHand";
+  if (starts?.onSchedule === true) return "workflows.draft.publishBodySchedule";
+  return "workflows.draft.publishBody";
 }

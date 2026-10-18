@@ -32,7 +32,8 @@ type OperationTarget =
   | { kind: "other" };
 
 export type WorkflowTriggerFact =
-  | { kind: "schedule"; cron: string }
+  /** `timeZone`: the zone the trigger names; the narrator fills in the instance's. */
+  | { kind: "schedule"; cron: string; timeZone?: string }
   | { kind: "manual" }
   | { kind: "parent" }
   /** A trigger kind this release does not word. */
@@ -125,7 +126,11 @@ const workflowConfigSchema = z.object({
 
 const channelsSchema = z.array(z.string());
 
-const triggerSchema = z.object({ kind: z.string(), cron: z.string().optional() });
+const triggerSchema = z.object({
+  kind: z.string(),
+  cron: z.string().optional(),
+  timeZone: z.string().optional()
+});
 
 /** The facts of a Workflow revision, or nothing where its config holds no manifest. */
 export function workflowFacts(config: unknown, name: string): WorkflowFacts | undefined {
@@ -141,8 +146,10 @@ export function workflowFacts(config: unknown, name: string): WorkflowFacts | un
       ? first.triggers.flatMap((entry): WorkflowTriggerFact[] => {
           const trigger = triggerSchema.safeParse(entry);
           if (!trigger.success) return [];
-          const { kind, cron } = trigger.data;
-          if (kind === "schedule" && cron !== undefined) return [{ kind, cron }];
+          const { kind, cron, timeZone } = trigger.data;
+          if (kind === "schedule" && cron !== undefined) {
+            return [{ kind, cron, ...(timeZone === undefined ? {} : { timeZone }) }];
+          }
           if (kind === "manual" || kind === "parent") return [{ kind }];
           return [{ kind: "other", name: kind }];
         })

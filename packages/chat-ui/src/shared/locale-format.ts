@@ -32,6 +32,21 @@ export function formatMomentShort(value: string, locale: LocaleCode): string {
   return new Date(value).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/**
+ * A short moment with the name of the reader's zone it is shown in, such as "18. Okt. 2026,
+ * 23:34 MESZ": where a schedule names its own zone, the reader can compare the two.
+ */
+export function formatMomentShortZoned(value: string, locale: LocaleCode): string {
+  return new Date(value).toLocaleString(locale, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short"
+  });
+}
+
 /** The day of a moment, and its time of day: the two lines of a moment in a narrow column. */
 export function formatDate(value: string, locale: LocaleCode): string {
   return new Date(value).toLocaleDateString(locale);

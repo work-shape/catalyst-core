@@ -55,7 +55,12 @@ describe("platform.context.get", () => {
       (await t.expectOk(t.kai.id, "platform.context.get")).json()
     );
 
-    expect(context.instance).toEqual({ id: "demo-local", name: "Access test" });
+    expect(context.instance).toEqual({
+      id: "demo-local",
+      name: "Access test",
+      timeZone: "UTC",
+      timeZoneDefaulted: true
+    });
     expect(context.release.version).toMatch(/^\d+\.\d+\.\d+/u);
     // The CLI version Connect a local agent installs is the one on npm this commit names, and
     // none while it names none (CONNECT-1a, check 52); never merely the release's own version.

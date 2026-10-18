@@ -10,6 +10,8 @@ import {
   type ClientInstanceId,
   type PlatformStores
 } from "@work-shape/catalyst-core";
+import { authorizeHeldRightsWithin } from "../access/held-rights-within";
+import { principalRights, RELEASE_KEY } from "../access/principal-rights";
 import type { PlatformContextRead } from "@work-shape/catalyst-tool-execution";
 
 // Bounds directory results before identities and rights are loaded. More matches ask for a
@@ -49,6 +51,30 @@ export async function workflowAuthoringContext(
         clientInstanceId: options.clientInstanceId
       })
     : [];
+  const workflowPrincipals: NonNullable<PlatformContextRead["workflowPrincipals"]> = [];
+  for (const principal of principals) {
+    if (principal.status !== "active" || principal.owner) continue;
+    // Accounts with API keys are integrations, not shared Workflow run accounts. Keep even
+    // revoked keys out: revoking an integration's key does not repurpose its account.
+    const credentials = await options.stores.apiAccess.listApiCredentials({
+      clientInstanceId: options.clientInstanceId,
+      servicePrincipalId: principal.id
+    });
+    if (credentials.length > 0) continue;
+    const rights = await principalRights(
+      { clientInstanceId: options.clientInstanceId, access: options.stores.access },
+      principal.id
+    );
+    if (rights.some((right) => right.action === RELEASE_KEY)) continue;
+    const decision = await authorizeHeldRightsWithin(
+      { clientInstanceId: options.clientInstanceId, access: options.stores.access },
+      access,
+      rights,
+      { lends: { label: principal.displayLabel } }
+    );
+    if (decision.allowed)
+      workflowPrincipals.push({ name: principal.name, displayLabel: principal.displayLabel });
+  }
   const query = input.person?.trim();
   const canListPeople =
     query && hasAuthScope(actor, "user_admin:read") && access.authorize("users.manage").allowed;
@@ -68,9 +94,7 @@ export async function workflowAuthoringContext(
       : [];
   return {
     caller,
-    workflowPrincipals: principals
-      .filter((principal) => principal.status === "active" && !principal.owner)
-      .map(({ name, displayLabel }) => ({ name, displayLabel })),
+    workflowPrincipals,
     people: matches.slice(0, PERSON_MATCHES_MAX).map(({ id, displayLabel, email }) => ({
       id,
       displayLabel,

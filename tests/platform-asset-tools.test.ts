@@ -3,12 +3,15 @@ import {
   asCollaborationWorkspaceId,
   asConversationId,
   asUserId,
-  readToolResultMetadata
+  readToolResultMetadata,
+  type OperationRun
 } from "@work-shape/catalyst-core";
 import { DeterministicModelProvider } from "@work-shape/catalyst-model-provider";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { getTestJobs } from "./support/test-instance";
+import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
+import { waitUntil } from "./support/assertions";
 import { withTestSql } from "./support/test-sql";
 import {
   createAssetToolsFixture,
@@ -55,6 +58,28 @@ describe("a conversation about a Workflow", () => {
       clientInstanceId: t.clientInstanceId,
       name: "weekly-documents",
       displayLabel: "Weekly documents"
+    });
+    const integration = await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "local-config-cli",
+      displayLabel: "Local config CLI"
+    });
+    await t.app.stores.apiAccess.createApiCredential({
+      clientInstanceId: t.clientInstanceId,
+      servicePrincipalId: integration.id,
+      name: "Release key"
+    });
+    await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "release-without-key",
+      displayLabel: "Release account",
+      permissions: ["config_assets.release"]
+    });
+    await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "more-rights",
+      displayLabel: "More rights",
+      permissions: ["users.manage"]
     });
     const retired = await t.app.stores.apiAccess.createServicePrincipal({
       clientInstanceId: t.clientInstanceId,
@@ -167,6 +192,47 @@ describe("a conversation about a Workflow", () => {
         requestedById: context.caller.id
       })
     ).toBe(0);
+  });
+
+  it("offers a Workflow publish confirmation in chat and changes nothing before the person's click", async () => {
+    const t = await createAssetToolsFixture("in_process", [], {
+      publishTool: true,
+      filesStore: true
+    });
+    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
+    const written = writeSchema.parse(
+      await t.call(id, "platform.assets.put", {
+        ...subject,
+        expectedRevision: t.published,
+        config: { name: WORKFLOW, manifest: { ...manifest(), description: "Reviewed from chat" } }
+      })
+    );
+    const started = await injectStartConversationRun(
+      t.app,
+      id,
+      `/tool assets.publish ${JSON.stringify({ ...subject, revision: written.revision })}`
+    );
+    const observing = drainRunEvents(t.app, id, started.run.id);
+    let pending: OperationRun | undefined;
+    await waitUntil(async () => {
+      pending = (
+        await t.app.stores.operationRuns.list({ clientInstanceId: t.clientInstanceId })
+      ).find((run) => run.operation === "assets.publish" && run.origin.kind === "agent");
+      if (pending && pending.status !== "running" && pending.status !== "pending_confirmation")
+        expect(pending.status).toBe("pending_confirmation");
+      return pending?.status === "pending_confirmation";
+    }, "the Workflow publish asks its person to confirm");
+    expect((await t.asset()).publishedRevision).toBe(t.published);
+    if (!pending) throw new Error("The publish confirmation is missing");
+    await t.ok(
+      t.app.call("operations.decide", {
+        params: { runId: pending.id },
+        payload: { decision: "confirm" }
+      })
+    );
+    const events = await observing;
+    expect(events).toContain("tool_decision_requested");
+    expect((await t.asset()).publishedRevision).toBe(written.revision);
   });
 
   it("lets the agent test its subject draft without a prompt and read the run and each step through the real operations", async () => {

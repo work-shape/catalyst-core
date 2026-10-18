@@ -705,6 +705,22 @@ describe("the runs of a Workflow", () => {
     expect(markup).toContain("Ada Lovelace");
   });
 
+  // ACCEPT-2a E1: a run's time names the zone it is shown in, beside a schedule in its own zone.
+  it("names the zone of each run's time", () => {
+    const rows = [toWorkflowRun(runResource({ id: "wr_1", status: "done", trigger: "schedule" }))];
+    // The time in the reader's own zone, ending in that zone's name ("UTC", "MESZ").
+    const shown = new Date("2026-10-12T09:00:00.000Z").toLocaleString("de", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short"
+    });
+    expect(shown).toMatch(/\d \S+$/u);
+    expect(render(page(runList({ rows })), "de")).toContain(`>${shown}<`);
+  });
+
   it("says on a failed row why it failed, in the sentence of its page, on one line", () => {
     const rows = [
       toWorkflowRun(

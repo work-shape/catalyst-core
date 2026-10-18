@@ -8,8 +8,13 @@ import type {
 import { formatElapsed, formatMoment } from "../../shared/locale-format";
 import type { TranslationContextValue } from "../../shared/i18n";
 import { NO_RECIPIENT_NAMES, recipientsLine, type RecipientNames } from "./recipient-names";
-import { scheduleInWords } from "./schedule-words";
-import { failureHappened, stepFallbackSentence } from "./workflow-model";
+import { triggerInWords } from "./schedule-words";
+import {
+  failureHappened,
+  stepConnection,
+  stepFallbackSentence,
+  type InstanceTimeZone
+} from "./workflow-model";
 import type {
   WorkflowLoopCounts,
   WorkflowRunView,
@@ -171,12 +176,14 @@ function stepEyebrow(step: Pick<WorkflowStepView, "kind" | "effect">, t: Transla
 }
 
 /** The title of a step on the canvas and in its panel. */
-function stepTitle(step: WorkflowStepView, { t, locale }: CanvasText): string {
+function stepTitle(
+  step: WorkflowStepView,
+  { t, locale }: CanvasText,
+  instanceTimeZone: InstanceTimeZone | undefined
+): string {
   if (step.kind === "trigger" && step.starts !== undefined) {
     // C9: the schedule arrives as a cron expression; the common forms are put into words here.
-    return step.starts.cron === undefined
-      ? t(step.starts.onSchedule ? "workflows.schedule.custom" : "workflows.schedule.manualOnly")
-      : (scheduleInWords(step.starts.cron, { t, locale }) ?? t("workflows.schedule.custom"));
+    return triggerInWords(step.starts, { t, locale }, instanceTimeZone);
   }
   if (step.kind === "loop" && step.itemName !== undefined) {
     return t("workflows.step.loop", { item: step.itemName });
@@ -263,7 +270,9 @@ export function workflowGraph(
   text: CanvasText,
   run?: CanvasRun,
   /** The names of who a Notify step reaches, as far as the reader may read them. */
-  recipients: RecipientNames = NO_RECIPIENT_NAMES
+  recipients: RecipientNames = NO_RECIPIENT_NAMES,
+  /** The instance's zone, for a schedule saved without one of its own. */
+  instanceTimeZone?: InstanceTimeZone
 ): WorkflowGraph {
   const { t, locale } = text;
   const nodes: FlowGraphNode[] = [];
@@ -291,7 +300,7 @@ export function workflowGraph(
     ...(place.parentId === undefined ? {} : { parentId: place.parentId }),
     ...stepIcon(step),
     eyebrow: stepEyebrow(step, t),
-    title: stepTitle(step, text)
+    title: stepTitle(step, text, instanceTimeZone)
   });
 
   /** What a run says on a part: its state, one line and a time. */
@@ -341,7 +350,11 @@ export function workflowGraph(
         ? stepRun.status === "cancelled"
           ? { footer: t("workflows.run.cancelled") }
           : {}
-        : { footer: failureHappened(stepRun.failure, t) }),
+        : {
+            footer: failureHappened(stepRun.failure, t, {
+              connection: stepConnection(step, stepRun)
+            })
+          }),
       ...(took === undefined || status === "idle" ? {} : { meta: took })
     };
   };

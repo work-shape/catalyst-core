@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Badge, Button, List, ListRow, LoadError, SkeletonList } from "@work-shape/catalyst-ui";
-import { formatMomentShort } from "../../shared/locale-format";
+import { formatMomentShortZoned } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import type { WorkflowRunList } from "./workflow-data";
 import { doneWithFailedRuns, runFailedBecause } from "./workflow-model";
@@ -140,8 +140,8 @@ export function RunsList({
                   newest === undefined || oldest === undefined
                     ? undefined
                     : t("workflows.runs.emptyGroupLine", {
-                        from: formatMomentShort(oldest.createdAt, locale),
-                        to: formatMomentShort(newest.createdAt, locale)
+                        from: formatMomentShortZoned(oldest.createdAt, locale),
+                        to: formatMomentShortZoned(newest.createdAt, locale)
                       })
                 }
                 // Only runs without failed runs below them fold (`foldEmptyRuns`), so the
@@ -199,7 +199,7 @@ function RunRow({
   const translation = useTranslation();
   const { locale, t } = translation;
   const duration = durationText(run, now, translation);
-  const moment = formatMomentShort(run.createdAt, locale);
+  const moment = formatMomentShortZoned(run.createdAt, locale);
   const startedLine = (
     part === undefined ? [runKeyText(run, t), startedByText(run, t), duration] : [moment, duration]
   )
@@ -340,7 +340,7 @@ function RunGroupRow({
     .map(([name, value]) => `${name}: ${value}`)
     .join(" · ");
   const failedBecause = runFailedBecause(latest, t);
-  const moment = formatMomentShort(earliest.createdAt, locale);
+  const moment = formatMomentShortZoned(earliest.createdAt, locale);
   const label = t("workflows.runs.group", { date: moment });
   return (
     <ListRow
