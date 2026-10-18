@@ -242,6 +242,14 @@ export const load: StoreVerb = {
             await sql.run("select set_config('statement_timeout', $1, true)", [
               String(limits.timeoutMs)
             ]);
+            if (input.replace) {
+              // Group locks survive every streamed chunk. Serialize replacements of this
+              // table before any group lock, since later chunks can visit groups in any order.
+              await sql.run(
+                "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('catalyst replace table ' || $1::pg_catalog.text, 0))::pg_catalog.text as held",
+                [tableName]
+              );
+            }
             if (scopedReplace) {
               const group = JSON.stringify([scope]);
               await sql.run(scopedReplace.lock, [group, tableName]);

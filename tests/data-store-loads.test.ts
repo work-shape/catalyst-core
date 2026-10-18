@@ -357,6 +357,67 @@ describe("a load into a Data Store", () => {
     }
   );
 
+  it.each(["rows", "bytes"])(
+    "completes replacements with reversed groups across %s chunks",
+    async (chunkLimit) => {
+      const world = await store("reversed-groups");
+      await load(
+        world,
+        world.datasets.put("ds_stored", [
+          [...many(50), ...many(50, { month: "2026-10" }), found(0, { month: "2026-08" })]
+        ])
+      );
+      const replace = { key: KEY, replace: { by: ["month"] } };
+      // Large notes cross the byte boundary before 1,000 rows; short notes cross the row
+      // boundary. Both leave the first group's transaction lock held before the next part.
+      const note = chunkLimit === "bytes" ? "n".repeat(1_100) : "n";
+      let later: Promise<PromiseSettledResult<unknown>[]> | undefined;
+      const first = world.datasets.put(
+        "ds_a",
+        [
+          many(1_100, { note: `a${note}` }, 1_000),
+          many(1_400, { month: "2026-10", note: `a${note}` }, 2_100)
+        ],
+        async () => {
+          later = Promise.allSettled([
+            load(
+              world,
+              world.datasets.put("ds_b", [
+                many(1_100, { month: "2026-10", note: `b${note}` }, 10_000),
+                many(1_400, { note: `b${note}` }, 11_100)
+              ]),
+              replace
+            )
+          ]);
+          // Before serialization B holds October and waits for A's September. With
+          // serialization B waits before taking any group lock. Neither needs a sleep.
+          await eventually(async () => {
+            const [waiting] = await db.sql<{ count: number }[]>`
+              select count(*)::integer as count from pg_stat_activity
+              where datname = ${world.record.location.database} and wait_event_type = 'Lock'`;
+            expect(waiting?.count).toBe(1);
+          });
+        }
+      );
+
+      const [earlier] = await Promise.allSettled([load(world, first, replace)]);
+      const [second] = await required(later);
+      if (earlier?.status === "rejected") throw earlier.reason;
+      if (second?.status === "rejected") throw second.reason;
+      expect(earlier).toMatchObject({
+        status: "fulfilled",
+        value: { inserted: 2_500, deleted: 100 }
+      });
+      expect(second).toMatchObject({
+        status: "fulfilled",
+        value: { inserted: 2_500, deleted: 2_500 }
+      });
+      expect(await count(world)).toBe(2_501);
+      expect(await count(world, "left(note, 1) = 'b'")).toBe(2_500);
+      expect(await count(world, "month = '2026-08'")).toBe(1);
+    }
+  );
+
   it("refuses a dataset that holds one key twice, in one part or in two, and keeps none of its rows", async () => {
     const world = await store("twice");
     for (const mode of ["skip", "update", "fail"]) {
