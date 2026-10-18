@@ -141,7 +141,7 @@ export function accessOf(rights: CallRights): ActorAccess {
  * of the published Workflow would ask it. A refusal on the principal's side names it.
  */
 export async function authorizeRights(
-  context: Pick<RunContext, "definition" | "call" | "resource">,
+  context: Pick<RunContext, "definition" | "call" | "resource" | "resourceNotFound">,
   rights: CallRights
 ): Promise<OperationAuthorization> {
   const own = await authorizeActor(context, rights.own);
