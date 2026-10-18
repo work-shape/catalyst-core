@@ -180,6 +180,7 @@ async function direct(execute: OperationDefinition["execute"], timeoutMs = 300_0
     registry,
     runs: server.stores.operationRuns,
     authorizer: createAuthorizer(),
+    resolveResource: (resource) => Promise.resolve({ resource }),
     events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },
     audit: {
       record: async () => {
