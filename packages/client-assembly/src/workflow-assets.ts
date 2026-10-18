@@ -466,7 +466,7 @@ export function createWorkflowAssetDefinitions(options: {
 }): WorkflowDefinitionSource & {
   /** Every published Workflow in one read, those this engine refuses among them. */
   published(): Promise<PublishedWorkflow[]>;
-  /** The id of the asset of this name, a draft included: what a right on it is decided on. */
+  /** The retained asset id, including drafts and deleted assets: what rights are decided on. */
   assetIdOf(id: string): Promise<string | undefined>;
   /**
    * The draft of the Workflow of this id, which a test run runs: the asset's newest revision,
@@ -493,7 +493,8 @@ export function createWorkflowAssetDefinitions(options: {
     published,
     async assetIdOf(id) {
       const asset = await assetOf(id);
-      return asset?.status === "active" ? asset.id : undefined;
+      // Deletion retains the row and its grants; retained runs keep the same deny boundary.
+      return asset?.id;
     },
     async draft(id) {
       const asset = await assetOf(id);

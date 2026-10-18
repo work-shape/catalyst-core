@@ -122,7 +122,9 @@ export async function runOperation(
               "VALIDATION_FAILED",
               "The operation no longer supports a paged read"
             );
-          const resource = current.resource(parsed.data);
+          const declared = current.resource(parsed.data);
+          const resource =
+            current.action === null ? declared : await deps.resolveResource(declared);
           const right = await authorizeRights(
             { definition: current, call: pageCall, resource },
             await rightsOf(pageCall, deps)
@@ -148,7 +150,8 @@ export async function runOperation(
     };
   }
   const idempotencyKey = readIdempotencyKey(call, definition);
-  const resource = definition.resource(input);
+  const declared = definition.resource(input);
+  const resource = definition.action === null ? declared : await deps.resolveResource(declared);
   const now = deps.now ?? (() => new Date());
   const actor = runActor(call);
   const frozen: OperationCall = {

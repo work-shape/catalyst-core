@@ -85,6 +85,8 @@ export interface OperationApprovalRequests {
 export interface RunOperationDeps {
   clientInstanceId: ClientInstanceId;
   registry: OperationRegistry;
+  /** Resolves a named-right resource to its retained asset identity and owner before authorization. */
+  resolveResource(resource: OperationResource | undefined): Promise<OperationResource | undefined>;
   runs: OperationRunStore;
   authorizer: Authorizer;
   events: PlatformEventEmitter;
