@@ -12,6 +12,7 @@ import {
   InlineError,
   KeyValue,
   KeyValueList,
+  LoadError,
   Tabs,
   TabsContent,
   TabsDisclosure,
@@ -29,7 +30,6 @@ import {
 } from "../../shared/publish-narrative";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../../shared/routes";
-import { LoadError } from "../workflows/workflows-frame";
 import { AppDraftActions } from "./actions-view";
 import {
   useApp,

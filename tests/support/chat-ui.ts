@@ -449,3 +449,8 @@ export {
   parsePublishNarrative,
   type PublishNarrativeRead
 } from "../../packages/chat-ui/src/shared/publish-narrative";
+
+export {
+  runsReadable,
+  workflowRightsOn
+} from "../../packages/chat-ui/src/studio/workflows/workflow-model";

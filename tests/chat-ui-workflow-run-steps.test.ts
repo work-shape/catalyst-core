@@ -137,7 +137,9 @@ async function mountRunPage(
               WorkflowsHostProvider,
               {
                 value: {
-                  rights: { read: true, write: false, publish: false },
+                  rights: {
+                    instance: { read: true, write: false, publish: false, delete: false }
+                  },
                   viewerId: "user_1",
                   workspace: { id: "cw_1", name: "Office" },
                   showRoute: () => undefined

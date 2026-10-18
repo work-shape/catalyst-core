@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react";
-import { Input } from "@work-shape/catalyst-ui";
+import { Input, LoadError } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { RunsList } from "./runs-list";
 import { useStartRun } from "./start-run";
@@ -7,10 +7,11 @@ import {
   useRunsAvailable,
   useWorkflow,
   useWorkflowRuns,
+  type WorkflowReadProblem,
   type WorkflowRunList
 } from "./workflow-data";
 import { WorkflowHead } from "./workflow-head";
-import { startOffered } from "./workflow-model";
+import { runsReadable, startOffered } from "./workflow-model";
 import type { WorkflowView } from "./workflow-views";
 import { WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
@@ -26,7 +27,15 @@ export function WorkflowRunsPage({ workflow }: { workflow: string }) {
   const [keyFilter, setKeyFilter] = useState("");
   // The list is asked again once typing pauses, not on every key.
   const keyPrefix = useDeferredValue(keyFilter.trim());
-  const runs = useWorkflowRuns(workflow, RUNS_PAGE_SIZE, keyPrefix === "" ? undefined : keyPrefix);
+  // The runs are asked for once the Workflow says its reader may read them: a reader who may
+  // only write, publish or start it is told so, not refused by the list.
+  const readsRuns = host !== undefined && runsReadable(host.rights, read.workflow);
+  const runs = useWorkflowRuns(
+    workflow,
+    RUNS_PAGE_SIZE,
+    keyPrefix === "" ? undefined : keyPrefix,
+    read.workflow !== undefined && readsRuns
+  );
   const runsAvailable = useRunsAvailable();
   const start = useStartRun({
     workflow,
@@ -45,6 +54,10 @@ export function WorkflowRunsPage({ workflow }: { workflow: string }) {
         workspaceId={workspaceId}
         workflowId={workflow}
         workflow={read.workflow}
+        definition={
+          read.problem === undefined ? undefined : { problem: read.problem, retry: read.retry }
+        }
+        readsRuns={read.workflow === undefined || readsRuns}
         runs={runs}
         runsAvailable={runsAvailable}
         keyFilter={{ value: keyFilter, onChange: setKeyFilter }}
@@ -62,6 +75,8 @@ export function WorkflowRunsPageView({
   workspaceId,
   workflowId,
   workflow,
+  definition,
+  readsRuns = true,
   runs,
   runsAvailable,
   keyFilter,
@@ -73,6 +88,10 @@ export function WorkflowRunsPageView({
   workflowId: string;
   /** The Workflow, once its record arrived. */
   workflow: WorkflowView | undefined;
+  /** Why the Workflow's record did not arrive: the page says so in place of the runs. */
+  definition?: { problem: WorkflowReadProblem; retry(): void };
+  /** The reader may read the Workflow's runs. Starting it is apart. */
+  readsRuns?: boolean;
   runs: WorkflowRunList;
   /** The instance runs Workflows. Without that there is nothing to list. */
   runsAvailable: boolean;
@@ -87,6 +106,8 @@ export function WorkflowRunsPageView({
 }) {
   const { t } = useTranslation();
   const canStart = runsAvailable && workflow !== undefined && startOffered(workflow);
+  // The runs are listed while the instance runs Workflows and this reader may read them.
+  const listed = runsAvailable && definition === undefined && readsRuns;
   const filtering = keyFilter !== undefined && keyFilter.value.trim() !== "";
   const offerKeyFilter =
     keyFilter !== undefined &&
@@ -102,13 +123,13 @@ export function WorkflowRunsPageView({
         workflowId={workflowId}
         workflow={workflow}
         tab="runs"
-        runsAvailable={runsAvailable}
+        runsShown={runsAvailable && readsRuns}
         canStart={canStart}
         onStart={onStart}
         onOpenRoute={onOpenRoute}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-(--layout-gutter) pt-5 pb-(--layout-page-end)">
-        {runsAvailable && offerKeyFilter ? (
+        {listed && offerKeyFilter ? (
           <Input
             type="search"
             size="sm"
@@ -119,7 +140,17 @@ export function WorkflowRunsPageView({
             onChange={(event) => keyFilter.onChange(event.target.value)}
           />
         ) : null}
-        {runsAvailable ? (
+        {!runsAvailable ? (
+          <p className="text-body text-muted-foreground">{t("workflows.runsUnavailable")}</p>
+        ) : definition?.problem === "failed" ? (
+          <LoadError onRetry={definition.retry}>{t("workflows.failed")}</LoadError>
+        ) : definition !== undefined ? (
+          <p className="text-body text-muted-foreground">
+            {t(definition.problem === "missing" ? "workflows.missing" : "workflows.unavailable")}
+          </p>
+        ) : !readsRuns ? (
+          <p className="text-body text-muted-foreground">{t("workflows.runs.unreadable")}</p>
+        ) : (
           <RunsList
             workspaceId={workspaceId}
             runs={runs}
@@ -132,8 +163,6 @@ export function WorkflowRunsPageView({
             now={now}
             onOpenRoute={onOpenRoute}
           />
-        ) : (
-          <p className="text-body text-muted-foreground">{t("workflows.runsUnavailable")}</p>
         )}
       </div>
     </WorkflowsFrame>

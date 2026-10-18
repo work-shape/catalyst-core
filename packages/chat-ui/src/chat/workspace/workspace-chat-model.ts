@@ -526,8 +526,12 @@ export function useWorkspaceChatModel({
     context: platformContextQuery.data
   });
   const workflowRights = useMemo(
-    () => resolveWorkflowRights(workflowsOpen === "open" ? platformContextQuery.data : undefined),
-    [workflowsOpen, platformContextQuery.data]
+    () =>
+      resolveWorkflowRights(
+        workflowsOpen === "open" ? platformContextQuery.data : undefined,
+        activeCollaborationWorkspaceId
+      ),
+    [workflowsOpen, platformContextQuery.data, activeCollaborationWorkspaceId]
   );
   // With its module off, an address of the Apps or the Workflows area leads to the chat; so does
   // an address of the Workflows for a person who may read none.
@@ -855,7 +859,10 @@ export function useWorkspaceChatModel({
       rights: workflowRights,
       editWithAgent: (workflow, prompt) =>
         startConversationAbout({ kind: WORKFLOW_ASSET_KIND, name: workflow }, prompt),
-      ...(buildWithAgent !== undefined && workflowRights.write ? { startNew: buildWithAgent } : {})
+      // A new Workflow is made among the instance's own, the one owner the instance takes.
+      ...(buildWithAgent !== undefined && workflowRights.instance.write
+        ? { startNew: buildWithAgent }
+        : {})
     },
     selectedChat: {
       client,

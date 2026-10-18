@@ -11,6 +11,7 @@ import {
   type OperationAuthorization
 } from "@work-shape/catalyst-core";
 import { AssetWorkflow } from "../assets/asset-service";
+import { accessResource, readsAssetDraft } from "../assets/asset-access";
 import type { AssetWorkflowOptions } from "../types";
 
 // Which asset a conversation of the agent may be about, and which one its first save creates:
@@ -38,8 +39,9 @@ export const subjectUnavailable = () =>
 
 /**
  * Refuses a conversation about an asset its creator may not read. A kind the instance does
- * not have, an asset that does not exist and one the caller holds no read right on are told
- * the same way, so the refusal says nothing of what is stored. An asset of a kind without a
+ * not have, an asset that does not exist and one the caller cannot read are told the same
+ * way, so the refusal says nothing of what is stored. Workflow draft readers follow the
+ * decision of assets.get, including its writers and publishers. An asset of a kind without a
  * draft, such as an agent, may be a subject: the agent reads it, and its tools save drafts only,
  * or an agent's change proposal.
  * The right is asked where the asset is: an asset a workspace owns is read with a right in
@@ -58,11 +60,24 @@ export async function requireReadableSubject(
       kind: subject.kind,
       name: subject.name
     });
-    decision = await new AssetWorkflow(options).authorizeRead(await accessOf(options, actor), {
+    const workflow = new AssetWorkflow(options);
+    const access = await accessOf(options, actor);
+    const address = {
       kind: subject.kind,
       name: subject.name,
       ...(asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
-    });
+    };
+    // A Workflow builder reads its draft with assets.get's decision. Use alone still opens
+    // no subject conversation: everyone else needs the ordinary read right, as before.
+    const kind = options.configAssets.kinds.get(subject.kind);
+    const readsDraft =
+      subject.kind === WORKFLOW_ASSET_KIND &&
+      asset !== undefined &&
+      kind !== undefined &&
+      readsAssetDraft(kind, access, accessResource(asset.kind, asset.name, asset.scope, asset.id));
+    decision = await (readsDraft
+      ? workflow.reads.authorizeGet(access, { ...address, revision: "draft" })
+      : workflow.authorizeRead(access, address));
   } catch {
     // The kind is unknown here, or of a module that is off.
     throw subjectUnavailable();

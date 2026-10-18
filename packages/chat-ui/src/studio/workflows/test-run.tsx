@@ -23,7 +23,7 @@ type TestRefusal = { message: string } | { issues: readonly StartRefusalIssue[] 
  */
 export function useTestRun(
   workflow: string,
-  view: Pick<WorkflowView, "name" | "draft"> | undefined
+  view: Pick<WorkflowView, "name" | "draft" | "allowed" | "ownerWorkspaceId"> | undefined
 ): { open(): void; dialog: ReactNode } | undefined {
   const { t } = useTranslation();
   const host = useWorkflowsHost();
@@ -112,7 +112,7 @@ export interface LiveOnceControl {
  */
 export function useRunLiveOnce(
   workflow: string,
-  view: Pick<WorkflowView, "draft"> | undefined,
+  view: Pick<WorkflowView, "draft" | "allowed" | "ownerWorkspaceId"> | undefined,
   /** The run the page shows has ended: the switches are read again, as it may have used one. */
   runEnded: boolean
 ):
