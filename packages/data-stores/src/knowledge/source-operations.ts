@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   AppError,
+  isAuthenticatedServicePrincipal,
   isOperationRunId,
   KNOWLEDGE_SOURCE_OPERATIONS,
   knowledgeSyncInputSchema,
@@ -79,7 +80,11 @@ export function sourceOperation(
           const runId = await sources.start(
             payload,
             parsed.mode ?? "changes",
-            context.runtime.signal ?? new AbortController().signal
+            context.runtime.signal ?? new AbortController().signal,
+            parsed.mode === "full" &&
+              !isAuthenticatedServicePrincipal(context.actor) &&
+              (context.origin.kind === "user" ||
+                (context.origin.kind === "cli" && !context.origin.unattended))
           );
           if (isOperationRunId(runId)) context.joinAsyncRun?.(runId);
           return {};

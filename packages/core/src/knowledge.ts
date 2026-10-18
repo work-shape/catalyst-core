@@ -403,6 +403,17 @@ export interface KnowledgeBaseState extends Omit<KnowledgeCheckResult, "status">
 
 /** What the platform keeps of each Knowledge Base, as `PlatformStores.knowledgeBases`. */
 export interface KnowledgeBaseStateStore {
+  /** Published boundary changes outlive sync jobs and backend health checks. */
+  markSourceBoundaryChanged(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    sourceId: string;
+  }): Promise<void>;
+  changedSourceBoundaries(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    sourceIds: readonly string[];
+  }): Promise<string[]>;
   getKnowledgeBaseState(input: {
     clientInstanceId: ClientInstanceId;
     assetId: string;

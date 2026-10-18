@@ -46,6 +46,15 @@ export async function visibleSourceHits(
   if (!asset || asset.id !== knowledgeBaseId || asset.status !== "active")
     return { ...answer, hits: [] };
   const definition = knowledgeBaseDefinitionSchema.parse(asset.publishedConfig);
+  const changed = new Set(
+    await runtime.stores.knowledgeBases.changedSourceBoundaries({
+      clientInstanceId: runtime.clientInstanceId,
+      assetId: knowledgeBaseId,
+      sourceIds: rows
+        .filter((row) => row.parents?.length === 0 && row.definition_key === null)
+        .flatMap((row) => row.source_id ?? [])
+    })
+  );
   const hidden = new Set(
     rows
       .filter((row) => {
@@ -54,9 +63,12 @@ export async function visibleSourceHits(
         return (
           !source ||
           !row.parents ||
-          // Unknown ancestry is trusted only at the boundary that last listed it.
-          // Publishing a different boundary hides it until the queued full pass learns it.
-          (row.parents.length === 0 && row.definition_key !== sourceBoundaryKey(source)) ||
+          // Migration 5 leaves no listing key. Trust it until a committed publish
+          // changes this source; a known key is trusted only at its listed boundary.
+          (row.parents.length === 0 &&
+            (row.definition_key === null
+              ? changed.has(row.source_id)
+              : row.definition_key !== sourceBoundaryKey(source))) ||
           row.name === null ||
           row.path === null ||
           !withinSource(source, { parents: row.parents, name: row.name, path: row.path })

@@ -3,6 +3,7 @@ import type { KnowledgeSources, KnowledgeListingMode } from "../source-port";
 import { z } from "zod";
 import {
   AppError,
+  isAppError,
   knowledgeSourceItemsInputSchema,
   knowledgeSourceItemsOutputSchema,
   knowledgeSourcesOutputSchema,
@@ -47,8 +48,13 @@ const RETRY_BATCH_ITEMS = 100;
 export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSources {
   const store = (id: string, signal: AbortSignal) => createSourceStore(runtime, id, signal);
   return {
-    async start(payload: KnowledgeSyncJobPayload, mode: KnowledgeListingMode, signal: AbortSignal) {
-      return store(payload.knowledgeBaseId, signal).change(async (sql) => {
+    async start(
+      payload: KnowledgeSyncJobPayload,
+      mode: KnowledgeListingMode,
+      signal: AbortSignal,
+      supersedePending = false
+    ) {
+      const result = await store(payload.knowledgeBaseId, signal).change(async (sql) => {
         await sql.run("lock table catalyst_kb.documents in share row exclusive mode");
         const bound = createSourceStore(
           runtime,
@@ -57,13 +63,19 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
           runtime.stores,
           sql
         );
-        // An explicit sync replaces a held pass. Item retries keep its confirmation
-        // and decision; they are still work belonging to that same pass.
-        const superseded = await supersedeWaitingSource(sql, runtime.stores, runtime, payload);
-        if (superseded) {
-          await bound.finish(superseded, "knowledge_source_refused");
-          mode = "full";
+        let superseded: KnowledgeSyncJobPayload | undefined;
+        // Only a person's full re-check replaces a held confirmation.
+        if (mode === "full" && supersedePending) {
+          try {
+            superseded = await supersedeWaitingSource(sql, runtime.stores, runtime, payload);
+          } catch (error) {
+            // The executor sanitizes thrown callback errors. Carry expected
+            // decision contention out as a value to retain the operation's 409.
+            if (isAppError(error) && error.code === "CONFLICT") return { conflict: true };
+            throw error;
+          }
         }
+        if (superseded) await bound.finish(superseded, undefined, "superseded");
         const run = await bound.start(payload, mode);
         if (run.operationRunId === payload.operationRunId)
           await runtime.stores.transaction(async (stores) => {
@@ -72,6 +84,9 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
           });
         return run.operationRunId;
       });
+      if (typeof result !== "string")
+        throw new AppError("CONFLICT", "The source confirmation is being decided right now");
+      return result;
     },
     async sources(
       id: string,

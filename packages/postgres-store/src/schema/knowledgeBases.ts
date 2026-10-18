@@ -28,3 +28,14 @@ export const knowledgeBaseStates = pgTable(
     check("knowledge_base_states_status_check", sql`${table.status} in ('ok', 'needs_attention')`)
   ]
 );
+
+/** A publish invalidates unknown ancestry atomically with its published pointer. */
+export const knowledgeSourceBoundaryChanges = pgTable(
+  "knowledge_source_boundary_changes",
+  {
+    clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    assetId: text("asset_id").notNull(),
+    sourceId: text("source_id").notNull()
+  },
+  (table) => [primaryKey({ columns: [table.clientInstanceId, table.assetId, table.sourceId] })]
+);

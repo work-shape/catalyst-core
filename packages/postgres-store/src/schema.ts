@@ -72,7 +72,7 @@ import {
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 import { dataStores } from "./schema/dataStores";
 import { guardrailHits } from "./schema/guardrails";
-import { knowledgeBaseStates } from "./schema/knowledgeBases";
+import { knowledgeSourceBoundaryChanges, knowledgeBaseStates } from "./schema/knowledgeBases";
 
 import { conversationFollowUps } from "./schema/followUps";
 
@@ -140,6 +140,7 @@ export const schema = {
   workflowStepRuns,
   dataStores,
   knowledgeBaseStates,
+  knowledgeSourceBoundaryChanges,
   guardrailHits
 };
 export * from "./schema/workflowDatasets";

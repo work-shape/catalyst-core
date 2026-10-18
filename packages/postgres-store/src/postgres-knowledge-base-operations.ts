@@ -1,11 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type {
   ClientInstanceId,
   KnowledgeBaseState,
   KnowledgeBaseStateStore
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
-import { knowledgeBaseStates } from "./schema";
+import { knowledgeBaseStates, knowledgeSourceBoundaryChanges } from "./schema";
 
 type Row = typeof knowledgeBaseStates.$inferSelect;
 
@@ -31,6 +31,23 @@ export function createPostgresKnowledgeBaseStateStore(
       eq(knowledgeBaseStates.assetId, assetId)
     );
   return {
+    async markSourceBoundaryChanged(input) {
+      await db.insert(knowledgeSourceBoundaryChanges).values(input).onConflictDoNothing();
+    },
+    async changedSourceBoundaries({ clientInstanceId, assetId, sourceIds }) {
+      if (!sourceIds.length) return [];
+      const rows = await db
+        .select({ sourceId: knowledgeSourceBoundaryChanges.sourceId })
+        .from(knowledgeSourceBoundaryChanges)
+        .where(
+          and(
+            eq(knowledgeSourceBoundaryChanges.clientInstanceId, clientInstanceId),
+            eq(knowledgeSourceBoundaryChanges.assetId, assetId),
+            inArray(knowledgeSourceBoundaryChanges.sourceId, [...sourceIds])
+          )
+        );
+      return rows.map((row) => row.sourceId);
+    },
     async getKnowledgeBaseState({ clientInstanceId, assetId }) {
       const [row] = await db
         .select()

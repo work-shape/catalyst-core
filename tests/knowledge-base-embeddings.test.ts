@@ -202,7 +202,7 @@ describe("embedding the documents of a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 7 });
+      expect(record).toMatchObject({ status: "ready", level: 8 });
       return required(record);
     });
   }

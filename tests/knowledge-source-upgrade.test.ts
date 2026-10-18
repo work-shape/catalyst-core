@@ -20,7 +20,7 @@ describe("items synced before migration 5 (parents = [])", () => {
     world.world.put(file("upgraded-alpha.txt"));
     await world.drain(await world.sync());
     // What migration 5 leaves on every row synced by SRC-1b.
-    await world.sql`update catalyst_kb.source_items set parents='[]'::jsonb`;
+    await world.sql`update catalyst_kb.source_items set parents=default,seen_run_id=null`;
     const hits = await world.instance.api.call("knowledge_bases.search", {
       params: { knowledgeBase: KB },
       payload: { query: "upgraded" }
@@ -33,7 +33,7 @@ describe("items synced before migration 5 (parents = [])", () => {
     const world = await setup();
     world.world.put(file("upgraded-beta.txt"));
     await world.drain(await world.sync());
-    await world.sql`update catalyst_kb.source_items set parents='[]'::jsonb`;
+    await world.sql`update catalyst_kb.source_items set parents=default,seen_run_id=null`;
     await world.publishSources([
       { id: SOURCE, connection: "fixture", folders: ["folder", "other", "third"] }
     ]);
@@ -58,7 +58,7 @@ describe("items synced before migration 5 (parents = [])", () => {
       const outside = world.world.put({ ...file("outside.txt"), folderId: "other" });
       await world.drain(await world.sync());
       // Use the actual migration default, so this also guards its unknown marker.
-      await world.sql`update catalyst_kb.source_items set parents=default`;
+      await world.sql`update catalyst_kb.source_items set parents=default,seen_run_id=null`;
       expect(await world.sql`select distinct parents from catalyst_kb.source_items`).toEqual([
         { parents: [] }
       ]);
@@ -94,7 +94,7 @@ describe("items synced before migration 5 (parents = [])", () => {
     const world = await setup();
     world.world.put({ ...file("unknown-removed.txt"), folderId: "other" });
     await world.drain(await world.sync());
-    await world.sql`update catalyst_kb.source_items set parents=default`;
+    await world.sql`update catalyst_kb.source_items set parents=default,seen_run_id=null`;
     await world.publishSources([{ id: SOURCE, connection: "fixture", folders: ["folder"] }]);
     await eventually(async () => {
       await world.worker.runDue();
@@ -120,7 +120,7 @@ describe("items synced before migration 5 (parents = [])", () => {
       const world = await setup();
       world.world.put(file("filtered.txt"));
       await world.drain(await world.sync());
-      await world.sql`update catalyst_kb.source_items set parents='[]'::jsonb`;
+      await world.sql`update catalyst_kb.source_items set parents=default,seen_run_id=null`;
       await world.publishSources([
         { id: SOURCE, connection: "fixture", folders: ["folder", "other"], ...rule }
       ]);

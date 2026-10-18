@@ -230,6 +230,12 @@ export function createKnowledgeBases(input: {
         return !next || sourceBoundaryKey(next) !== sourceBoundaryKey(old);
       });
       if (changedSources.length) {
+        for (const source of changedSources)
+          await stores.knowledgeBases.markSourceBoundaryChanged({
+            clientInstanceId: input.clientInstanceId,
+            assetId,
+            sourceId: source.id
+          });
         await stores.jobs.enqueue(
           sourcePolicyJob,
           {

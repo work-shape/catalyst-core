@@ -82,7 +82,7 @@ export function createSourcePolicyHandler(runtime: SourceJobRuntime) {
               "update catalyst_kb.source_items set fetch_job_id=null,enqueued_run_id=null where source_id=$1::text and state='discovered' and enqueued_run_id=$2::text",
               [run.source_id, run.id]
             );
-            await bound.finish(runPayload, "knowledge_source_refused");
+            await bound.finish(runPayload, undefined, "superseded");
           });
         });
       }

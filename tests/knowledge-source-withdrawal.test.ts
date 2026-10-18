@@ -422,6 +422,9 @@ describe("source changes and withdrawal (SRC-3a, KB 78)", () => {
     const [replacement] =
       await world.sql`select id from catalyst_kb.sync_runs where state='running'`;
     expect(replacement?.id).not.toBe(waiting);
+    expect(
+      await world.sql`select state,failure_code from catalyst_kb.sync_runs where id=${waiting}`
+    ).toEqual([{ state: "superseded", failure_code: null }]);
     await world.drain(String(required(replacement).id));
     expect(
       await world.instance.stores.approvals.getApprovalRequest({

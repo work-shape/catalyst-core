@@ -278,6 +278,14 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
       add column processor_revision text,
       add column processing_key text,
       add column requested_processing_key text;`
+  },
+  {
+    number: 8,
+    name: "source_superseded",
+    sql: `alter table catalyst_kb.sync_runs drop constraint sync_runs_state_check;
+      alter table catalyst_kb.sync_runs add constraint sync_runs_state_check
+        check (state in ('running','done','failed','superseded')) not valid;
+      alter table catalyst_kb.sync_runs validate constraint sync_runs_state_check;`
   }
 ];
 
