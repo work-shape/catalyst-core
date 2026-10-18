@@ -35,6 +35,7 @@ describe("REC-1a records projection through the public operation source", () => 
     recordOf,
     settle,
     platformRole,
+    takeOver,
     platformDatabase
   } = useDataStoreWorld("record_projection");
   const actorOf = (clientInstanceId: AuthenticatedUser["clientInstanceId"]): AuthenticatedUser => ({
@@ -299,6 +300,17 @@ describe("REC-1a records projection through the public operation source", () => 
       expect(await w.target`select count(*)::int as n from catalyst.loads`).toEqual([{ n: 0 }]);
     }
   );
+
+  it("uses the installed frame without app-login repair or credentials on its fixed reads", async () => {
+    const w = await world("frame-login");
+    await takeOver(w.record.roles.app);
+    const item = await w.item("a0", "kaufvertrag", { kaufpreis: 100 });
+    expect(await call(w, "records.propose", { table: "objekt", items: [item] })).toMatchObject({
+      done: 1,
+      failed: 0
+    });
+    expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([{ kaufpreis: 100 }]);
+  });
 
   it("refuses an app-owned frame changed to SECURITY INVOKER by an earlier trigger", async () => {
     const w = await world("frame-flags");

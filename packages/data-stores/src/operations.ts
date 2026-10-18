@@ -556,14 +556,15 @@ async function runVerb(
         { reason: "data_store_not_ready" }
       );
     }
-    // Proposals use the preinstalled frame: no role repair or call-record DDL on this path.
+    // Fixed proposal reads use the platform connection; the preinstalled frame performs
+    // customer writes as the app role. Neither role repair nor call-record DDL runs here.
     if (verb.verb === "records.propose")
       return await verb.run(
         {
           runtime,
           store,
           target: {
-            ...runtime.server.asRole(record, "app", runtime.stores.connections),
+            ...runtime.server.asPlatform(record.location.database),
             ...(signal ? { signal } : {})
           },
           context,
