@@ -63,7 +63,7 @@ describe("execution workspace source attachments", () => {
           filename: "support.md",
           contentType: "application/octet-stream",
           content: "# Support",
-          expectedFormat: "md"
+          expectedFormat: "markdown"
         }
       ]) {
         await expectUpload(app, conversationId, file);
@@ -96,7 +96,14 @@ describe("execution workspace source attachments", () => {
     expect(detectWorkspaceSourceFileFormat("source.csv", "text/csv; charset=utf-8")).toBe("csv");
     expect(detectWorkspaceSourceFileFormat("notes.rtf", undefined)).toBe("rtf");
     expect(detectWorkspaceSourceFileFormat("notes.txt", undefined)).toBe("txt");
-    expect(detectWorkspaceSourceFileFormat("notes.md", undefined)).toBe("md");
+    expect(detectWorkspaceSourceFileFormat("notes.md", undefined)).toBe("markdown");
+    expect(detectWorkspaceSourceFileFormat("notes.md", "text/plain")).toBe("markdown");
+    expect(detectWorkspaceSourceFileFormat("notes.markdown", undefined)).toBe("markdown");
+    expect(detectWorkspaceSourceFileFormat("source.csv", "text/plain")).toBe("csv");
+    expect(detectWorkspaceSourceFileFormat("notes", "text/plain")).toBe("txt");
+    for (const filename of ["data.json", "script.py", "archive.bin"]) {
+      expect(detectWorkspaceSourceFileFormat(filename, "text/plain")).toBeUndefined();
+    }
     expect(detectWorkspaceSourceFileFormat("notes", "text/markdown; charset=utf-8")).toBe(
       "markdown"
     );
@@ -297,6 +304,18 @@ describe("execution workspace source attachments", () => {
         contentType: "image/png",
         content: "png",
         expectedFormat: "png"
+      });
+      await expectUpload(app, conversation.id, {
+        filename: "notes.md",
+        contentType: "text/markdown",
+        content: "# Notes",
+        expectedFormat: "markdown"
+      });
+      await expectUpload(app, conversation.id, {
+        filename: "notes.txt",
+        contentType: "text/plain",
+        content: "Notes",
+        expectedFormat: "txt"
       });
 
       const unsupported = await uploadFile(app, conversation.id, {
@@ -981,9 +1000,9 @@ function createStrictUploadCapability(): ClientInstanceCapability {
           {
             name: "strict-pdf-image-attachments",
             maxFileBytes,
-            acceptedFileTypes: ["application/pdf", "image/png"],
+            acceptedFileTypes: ["application/pdf", "image/png", "text/plain", "text/markdown"],
             acceptsFile(file) {
-              return file.mimeType === "application/pdf" || file.mimeType === "image/png";
+              return formatForMimeType(file.mimeType) !== undefined;
             },
             async listDraftAttachments(conversationId) {
               return attachmentsByConversation.get(conversationId) ?? [];
@@ -1110,6 +1129,8 @@ function createStrictUploadCapability(): ClientInstanceCapability {
 }
 
 function formatForMimeType(mimeType: string | undefined): FileAttachmentFormat | undefined {
+  if (mimeType === "text/plain") return "txt";
+  if (mimeType === "text/markdown") return "markdown";
   if (mimeType === "application/pdf") {
     return "pdf";
   }
