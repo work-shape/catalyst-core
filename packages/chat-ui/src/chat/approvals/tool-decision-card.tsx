@@ -26,7 +26,8 @@ import { workspaceRoutePath } from "../../shared/routes";
 import { useApprovalRevisionHost } from "./approval-revision-host";
 import { ApprovalRequestCard } from "./approval-request-card";
 import { formatApprovalDate } from "./approval-request-model";
-import { CallInputs } from "./operation-call-body";
+import { dataStoreRowChange } from "./data-store-row-change";
+import { CallInputs, RowChangeInputs } from "./operation-call-body";
 import {
   useToolDecisionDecide,
   useWaitingOperationRunQuery,
@@ -217,8 +218,16 @@ export function ToolDecisionCardView({
   const rows = toolDecisionInputRows(decision.inputPreview).filter(
     (row) => ask === undefined || row.key !== "audience"
   );
+  // A row write of a Data Store asks what it changes in one question and lists its rows.
+  const rowChange = dataStoreRowChange(
+    decision.operationId,
+    decision.inputPreview,
+    decision.targetTitle
+  );
 
-  const inputs = (
+  const inputs = rowChange ? (
+    <RowChangeInputs change={rowChange} />
+  ) : (
     <CallInputs
       call={{ inputs: rows, inputFieldCount: rows.length, inputRemoved: false }}
       hiddenFields={0}

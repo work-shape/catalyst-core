@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres from "postgres";
 import { afterEach, expect } from "vitest";
-import type { ClientInstanceCapability } from "@work-shape/catalyst-client-assembly";
+import {
+  PLATFORM_TOOL_NAMES,
+  type ClientInstanceCapability
+} from "@work-shape/catalyst-client-assembly";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   DATA_STORE_ASSET_KIND,
@@ -18,7 +21,7 @@ import {
   type UserRole
 } from "@work-shape/catalyst-core";
 import { eventually, required } from "./assertions";
-import { createTestConfig } from "./fixtures";
+import { createTestConfig, setTestAgent } from "./fixtures";
 import { fileTestDatabaseUrl } from "./test-database";
 import {
   createTestInstance,
@@ -64,6 +67,12 @@ export const finding: JsonObject = {
   amount: 119.5,
   details: { booking: 7 }
 };
+
+interface AgentOptions {
+  capability?: ClientInstanceCapability;
+  provider?: string;
+  locale?: "en" | "de";
+}
 
 /** One instance of a test: its API process, its rows and its call path. */
 export interface DataStoreInstance {
@@ -130,6 +139,8 @@ export function useDataStoreInstance(): {
     knowledge?: boolean | KnowledgeOptions,
     workflows?: true
   ): Promise<DataStoreInstance>;
+  /** A platform-tool agent on the same isolated store fixture. */
+  startWithAgent(agent?: AgentOptions): Promise<DataStoreInstance>;
   /** Closes the processes of every instance the test started. */
   close(): Promise<unknown>;
   put(world: DataStoreInstance, storeFiles?: StoreFiles, expectedRevision?: number | null): Answer;
@@ -186,12 +197,17 @@ export function useDataStoreInstance(): {
     developmentAuth?: unknown,
     guardrails?: Record<string, unknown>,
     knowledge: boolean | KnowledgeOptions = false,
-    workflows?: true
+    workflows?: true,
+    agent?: AgentOptions
   ): Promise<DataStoreInstance> {
     const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
     roots.push(root);
-    const options = typeof knowledge === "object" ? knowledge : {};
+    const options = {
+      ...(typeof knowledge === "object" ? knowledge : {}),
+      ...(agent?.locale ? { defaultLocale: agent.locale } : {})
+    };
     const base = createTestConfig({
+      ...(agent ? { toolNames: [...PLATFORM_TOOL_NAMES] } : {}),
       ...(developmentAuth === undefined ? {} : { developmentAuth }),
       ...(options.embeddingBaseUrl === undefined
         ? {}
@@ -272,6 +288,9 @@ export function useDataStoreInstance(): {
       secretStore: { keys: [{ id: "k1", ref: KEY_VARIABLE }] },
       infrastructure: {
         ...base.infrastructure,
+        ...(agent?.provider
+          ? { models: { local: { provider: agent.provider, model: "local" } } }
+          : {}),
         objectStorage: {
           ...base.infrastructure.objectStorage,
           files: { provider: "filesystem", root }
@@ -285,19 +304,31 @@ export function useDataStoreInstance(): {
       [KEY_VARIABLE]: randomBytes(32).toString("base64"),
       [EMBEDDING_KEY_VARIABLE]: "embedding-test-key"
     };
+    const capabilities = [
+      ...(agent?.capability ? [agent.capability] : []),
+      ...(typeof knowledge === "object" && knowledge.attachments ? [knowledge.attachments] : []),
+      ...(typeof knowledge === "object" && knowledge.documents ? [documentsModuleCapability] : [])
+    ];
+    const apiConfig = parseClientInstanceConfig({
+      ...settings,
+      ...(guardrails ? { guardrails } : {})
+    });
+    if (agent)
+      setTestAgent(apiConfig, {
+        name: "platform-agent",
+        displayName: "Platform agent",
+        instructions: "Use configured tools only.",
+        modelProviderId: "local",
+        toolNames: [...PLATFORM_TOOL_NAMES],
+        skillNames: [],
+        initialPrompts: []
+      });
     const api = await createTestInstance({
-      config: parseClientInstanceConfig({ ...settings, ...(guardrails ? { guardrails } : {}) }),
+      config: apiConfig,
       env,
       tools: [],
       knowledgeWorker: options.knowledgeWorker,
-      ...(typeof knowledge === "object" && (knowledge.attachments || knowledge.documents)
-        ? {
-            capabilities: [
-              ...(knowledge.attachments ? [knowledge.attachments] : []),
-              ...(knowledge.documents ? [documentsModuleCapability] : [])
-            ]
-          }
-        : {})
+      capabilities
     });
     started.push(api);
     const calls = await createTestInstance({
@@ -309,14 +340,15 @@ export function useDataStoreInstance(): {
         }),
         env,
         tools: [],
-        ...(typeof knowledge === "object" && (knowledge.attachments || knowledge.documents)
-          ? {
-              capabilities: [
-                ...(knowledge.attachments ? [knowledge.attachments] : []),
-                ...(knowledge.documents ? [documentsModuleCapability] : [])
-              ]
-            }
-          : {})
+        capabilities: [
+          ...(agent?.capability ? [agent.capability] : []),
+          ...(typeof knowledge === "object" && knowledge.attachments
+            ? [knowledge.attachments]
+            : []),
+          ...(typeof knowledge === "object" && knowledge.documents
+            ? [documentsModuleCapability]
+            : [])
+        ]
       }
     });
     started.push(calls);
@@ -377,5 +409,16 @@ export function useDataStoreInstance(): {
     return user;
   }
 
-  return { start, close, put, publish, publishStore, recordOf, settle, person };
+  return {
+    start,
+    startWithAgent: (agent = {}) =>
+      start(true, undefined, undefined, undefined, false, undefined, agent),
+    close,
+    put,
+    publish,
+    publishStore,
+    recordOf,
+    settle,
+    person
+  };
 }

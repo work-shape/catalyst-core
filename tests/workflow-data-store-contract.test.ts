@@ -428,19 +428,30 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
     expect(DATA_STORE_OPERATION_VERBS).toEqual([
       "query",
       "insert",
+      "update",
+      "delete_rows",
       "load",
       "records.propose",
       "describe",
       "preview_rows"
     ]);
     expectTypeOf<DataStoreOperationVerb>().toEqualTypeOf<
-      "query" | "insert" | "load" | "records.propose" | "describe" | "preview_rows"
+      | "query"
+      | "insert"
+      | "update"
+      | "delete_rows"
+      | "load"
+      | "records.propose"
+      | "describe"
+      | "preview_rows"
     >();
     // Adding rows is a right of its own: a run's principal holds `data_store.insert` on the
     // store and cannot edit its migrations, which is `data_store.write`.
     expect(DATA_STORE_OPERATION_RIGHTS).toEqual({
       query: "data_store.read",
       insert: "data_store.insert",
+      update: "data_store.execute",
+      delete_rows: "data_store.execute",
       load: "data_store.insert",
       "records.propose": "data_store.records",
       describe: "data_store.read",
@@ -448,9 +459,10 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
     });
     expect(DATA_STORE_ACTIONS).not.toHaveProperty("use");
     expect(DATA_STORE_ACTIONS.insert).not.toBe(DATA_STORE_ACTIONS.write);
-    // Reserved for changing statements other than an insert: no operation asks it yet.
+    // Changing and removing existing rows asks the separate execute right.
     expect(DATA_STORE_ACTIONS.execute).toBe("data_store.execute");
-    expect(Object.values(DATA_STORE_OPERATION_RIGHTS)).not.toContain(DATA_STORE_ACTIONS.execute);
+    expect(DATA_STORE_OPERATION_RIGHTS.update).toBe(DATA_STORE_ACTIONS.execute);
+    expect(DATA_STORE_OPERATION_RIGHTS.delete_rows).toBe(DATA_STORE_ACTIONS.execute);
     expect(DATA_STORE_PREVIEW_ROW_LIMIT).toBe(50);
     for (const action of [
       ...Object.values(WORKFLOW_ACTIONS),
@@ -464,13 +476,10 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
     expect(KNOWLEDGE_OPERATION_PREFIX).toBe("knowledge.");
     expect(KNOWLEDGE_QUERY_TOOL_NAME).toBe("knowledge.query");
     expect(knowledgeQueryOperationName("findings")).toBe("knowledge.findings.query");
-    // None of the new prefixes is a data tool prefix: an agent carries none of these names as
+    expect(isDataToolName(dataStoreOperationName("s", "query"))).toBe(true);
+    // Workflow and Knowledge prefixes are not data tool prefixes: an agent carries none of these names as
     // a data tool. The registry keeps a release tool off them (`SOURCED_OPERATION_PREFIXES`).
-    for (const name of [
-      workflowStartOperationName("w"),
-      dataStoreOperationName("s", "query"),
-      KNOWLEDGE_QUERY_TOOL_NAME
-    ]) {
+    for (const name of [workflowStartOperationName("w"), KNOWLEDGE_QUERY_TOOL_NAME]) {
       expect(isDataToolName(name), name).toBe(false);
     }
 

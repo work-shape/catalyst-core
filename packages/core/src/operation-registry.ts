@@ -52,6 +52,8 @@ export type OperationChangeClass = "reversible" | "irreversible" | "outward";
  * and the subject of the call's events.
  */
 export interface OperationResource extends AccessResource {
+  /** Human title for the target of a held call; never used for authorization. */
+  title?: string;
   kind: string;
   id: string;
   workspaceId?: CollaborationWorkspaceId;
