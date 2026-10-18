@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import { notifyManager, type QueryClient } from "@tanstack/react-query";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { apiErrorStatus } from "./workspace-utils";
 
@@ -30,6 +30,16 @@ export function personIdIn(queryClient: QueryClient, apiBaseUrl: string): string
   return typeof data === "object" && data !== null && "id" in data && typeof data.id === "string"
     ? data.id
     : undefined;
+}
+
+/**
+ * Tells `listener` of a change of the cache the shell reads, as React Query's own hooks are
+ * told: after the change, not inside it. React Query creates a query while a component renders,
+ * so a listener told at once would update the shell inside that render, which React refuses
+ * ("Cannot update a component while rendering a different component").
+ */
+export function subscribeToShellCache(queryClient: QueryClient, listener: () => void): () => void {
+  return queryClient.getQueryCache().subscribe(notifyManager.batchCalls(listener));
 }
 
 /**

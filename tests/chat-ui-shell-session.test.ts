@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import { startNewAgent } from "@work-shape/catalyst-chat-ui/agents";
@@ -20,6 +20,7 @@ import {
   sessionStillOn,
   shellSessionFor,
   showsWorkspace,
+  subscribeToShellCache,
   useDraftForNewConnection,
   type ShellSession
 } from "./support/chat-ui";
@@ -43,6 +44,39 @@ const nextFor = (session: ShellSession, personId: string | undefined) =>
   shellSessionFor(session, personId, apiBaseUrl, () => new QueryClient());
 
 describe("the session of the shell", () => {
+  it("hears of a query made while a component renders only after that render", async () => {
+    const queryClient = new QueryClient();
+    let told = 0;
+    const unsubscribe = subscribeToShellCache(queryClient, () => {
+      told += 1;
+    });
+    const afterTheRender = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    // What useQuery does while a component renders: its observer makes the query in the cache.
+    new QueryObserver(queryClient, {
+      queryKey: ["conversations", apiBaseUrl],
+      queryFn: () => Promise.resolve([])
+    });
+    // Told now, the shell would update inside another component's render, which React refuses.
+    expect(told).toBe(0);
+    await afterTheRender();
+    expect(told).toBeGreaterThan(0);
+
+    // A new person in the answer of /me still reaches the shell, a moment later.
+    const before = told;
+    queryClient.setQueryData(meKey, person("usr_b"));
+    expect(told).toBe(before);
+    await afterTheRender();
+    expect(told).toBeGreaterThan(before);
+    expect(personIdIn(queryClient, apiBaseUrl)).toBe("usr_b");
+
+    unsubscribe();
+    const unsubscribed = told;
+    queryClient.setQueryData(meKey, person("usr_c"));
+    await afterTheRender();
+    expect(told).toBe(unsubscribed);
+  });
+
   it("reads the person signed in from the answer of /me, and nothing else", () => {
     expect(personIdIn(sessionOf("usr_a").queryClient, apiBaseUrl)).toBe("usr_a");
     expect(personIdIn(sessionOf(undefined).queryClient, apiBaseUrl)).toBeUndefined();

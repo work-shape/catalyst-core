@@ -9,6 +9,7 @@ import {
   personIdIn,
   shellSessionFor,
   showsWorkspace,
+  subscribeToShellCache,
   type ShellSession
 } from "./shared/shell-session";
 import {
@@ -111,7 +112,7 @@ function useShellSession(apiBaseUrl: string): ShellSession {
   }));
   const { queryClient } = session;
   const subscribe = useCallback(
-    (listener: () => void) => queryClient.getQueryCache().subscribe(listener),
+    (listener: () => void) => subscribeToShellCache(queryClient, listener),
     [queryClient]
   );
   const personId = useSyncExternalStore(subscribe, () => personIdIn(queryClient, apiBaseUrl));

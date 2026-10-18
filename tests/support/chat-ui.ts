@@ -463,6 +463,7 @@ export {
   sessionStillOn,
   shellSessionFor,
   showsWorkspace,
+  subscribeToShellCache,
   type ShellSession
 } from "../../packages/chat-ui/src/shared/shell-session";
 export { useDraftForNewConnection } from "../../packages/chat-ui/src/studio/build-area/connection-draft";
