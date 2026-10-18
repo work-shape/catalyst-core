@@ -8,15 +8,17 @@ import type { ObjectStorage, WorkflowDatasetPart } from "@work-shape/catalyst-co
  * Authorization and live metadata are still checked by the caller on every read.
  */
 export function createDatasetPartCache(objects: ObjectStorage, maxBytes: number, rowBytes: number) {
-  let held: { key: string; hash: string; lines: readonly string[] } | undefined;
+  let held: { scope: string; key: string; hash: string; lines: readonly string[] } | undefined;
   return async (
     part: WorkflowDatasetPart,
+    scope: string | undefined,
     signal: AbortSignal | undefined,
     invalid: () => Error
   ): Promise<readonly string[] | undefined> => {
-    if (part.bytes > maxBytes) return undefined; // Large paged parts keep the streaming path.
+    if (scope === undefined || part.bytes > maxBytes) return undefined; // Large paged parts keep the streaming path.
     signal?.throwIfAborted();
-    if (held?.key === part.key && held.hash === part.hash) return held.lines;
+    if (held?.scope === scope && held.key === part.key && held.hash === part.hash)
+      return held.lines;
     const object = await objects.get(part.key);
     signal?.throwIfAborted();
     const source = Readable.from(object.body);
@@ -52,7 +54,7 @@ export function createDatasetPartCache(objects: ObjectStorage, maxBytes: number,
         lines.some((line) => Buffer.byteLength(line) + 1 > rowBytes)
       )
         throw invalid();
-      held = { key: part.key, hash: part.hash, lines };
+      held = { scope, key: part.key, hash: part.hash, lines };
       return lines;
     } finally {
       signal?.removeEventListener("abort", stop);

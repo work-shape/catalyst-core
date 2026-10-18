@@ -290,7 +290,7 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
         const current = await metadata(row.id);
         if (current.state !== "complete") throw datasetExpired();
         try {
-          const cached = await cachedPart(part, input.signal, datasetExpired);
+          const cached = await cachedPart(part, input.runId, input.signal, datasetExpired);
           if (cached) {
             for (let position = skip; position < cached.length && left > 0; position++) {
               input.signal?.throwIfAborted();
