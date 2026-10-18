@@ -24,6 +24,7 @@ function createCapabilityModels(input: {
   clientInstanceId: ClientInstanceId;
   providers: readonly ModelProviderConfig[];
   bindings: readonly ModelBindingConfig[];
+  costs: ClientInstanceConfig["usage"]["costs"];
 }): ClientInstanceCapabilityModels {
   const { gateway, clientInstanceId } = input;
   return {
@@ -33,6 +34,7 @@ function createCapabilityModels(input: {
         messages: [{ role: "user", content: call.content }],
         tools: [],
         ...(call.output ? { output: call.output } : {}),
+        ...(call.maxOutputTokens === undefined ? {} : { maxOutputTokens: call.maxOutputTokens }),
         attribution: {
           kind: "system",
           purpose: call.purpose,
@@ -46,7 +48,7 @@ function createCapabilityModels(input: {
         ...(call.signal ? { signal: call.signal } : {}),
         ...(call.deadline ? { deadline: call.deadline } : {})
       });
-      return { text: completion.text };
+      return { text: completion.text, usage: completion.usage };
     },
     describeBinding(bindingId) {
       const binding = input.bindings.find((candidate) => candidate.id === bindingId);
@@ -55,9 +57,23 @@ function createCapabilityModels(input: {
         throw new AppError("NOT_FOUND", `Model binding '${bindingId}' is not defined`);
       }
       const capabilities = gateway.capabilities({ bindingId });
+      const model = binding.model ?? provider.model;
+      const card = input.costs.customer;
+      const rate = card?.models.find(
+        (rate) => rate.providerId === provider.id && rate.model === model
+      );
       return {
         providerId: provider.id,
-        model: binding.model ?? provider.model,
+        model,
+        ...(rate && card
+          ? {
+              price: {
+                currency: card.currency,
+                inputPerMillionTokens: rate.uncachedInputPricePerMillionTokens,
+                outputPerMillionTokens: rate.outputPricePerMillionTokens
+              }
+            }
+          : {}),
         ...(provider.region ? { region: provider.region } : {}),
         documentInput: capabilities.documentInput,
         structuredOutput: capabilities.structuredOutput
@@ -165,7 +181,8 @@ export async function createInstanceModels(input: {
       gateway,
       clientInstanceId: input.clientInstanceId,
       providers,
-      bindings
+      bindings,
+      costs: config.usage.costs
     })
   };
 }

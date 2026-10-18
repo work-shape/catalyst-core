@@ -122,9 +122,11 @@ export async function runOperation(
               "VALIDATION_FAILED",
               "The operation no longer supports a paged read"
             );
-          const resource = current.resource(parsed.data);
+          const declared = current.resource(parsed.data);
+          const resolved =
+            current.action === null ? { resource: declared } : await deps.resolveResource(declared);
           const right = await authorizeRights(
-            { definition: current, call: pageCall, resource },
+            { definition: current, call: pageCall, ...resolved },
             await rightsOf(pageCall, deps)
           );
           if (!right.allowed) throw operationDenialError({ kind: "forbidden", ...right });
@@ -148,7 +150,10 @@ export async function runOperation(
     };
   }
   const idempotencyKey = readIdempotencyKey(call, definition);
-  const resource = definition.resource(input);
+  const declared = definition.resource(input);
+  const resolved =
+    definition.action === null ? { resource: declared } : await deps.resolveResource(declared);
+  const { resource } = resolved;
   const now = deps.now ?? (() => new Date());
   const actor = runActor(call);
   const frozen: OperationCall = {
@@ -184,8 +189,12 @@ export async function runOperation(
     deps,
     admitted: async () =>
       surface.allowed &&
-      (await authorizeRights({ definition, call: frozen, resource }, await rightsOf(frozen, deps)))
-        .allowed
+      (
+        await authorizeRights(
+          { definition, call: frozen, ...resolved },
+          await rightsOf(frozen, deps)
+        )
+      ).allowed
   });
   // A dry run holds no key: it would only ever answer a simulation again, and the same key
   // stays free for the live call (ADR-0031).
@@ -235,7 +244,7 @@ export async function runOperation(
         throw new AppError("CONFLICT", "The paged operation cannot resume this call");
       if (held.status === "done") {
         const right = await authorizeRights(
-          { definition, call: frozen, resource },
+          { definition, call: frozen, ...resolved },
           await rightsOf(frozen, deps)
         );
         if (!surface.allowed || !right.allowed)
@@ -254,7 +263,7 @@ export async function runOperation(
         definition,
         // A call a conversation caused is in that conversation's workspace, as its run says.
         call: { ...frozen, workspaceId: frozen.workspaceId ?? run.workspaceId },
-        resource,
+        ...resolved,
         deps,
         runtime
       });

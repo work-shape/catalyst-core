@@ -109,6 +109,11 @@ const tableSchema = z.strictObject({
 const KNOWLEDGE_METHODS = ["structured", ...KNOWLEDGE_SEARCH_METHODS] as const;
 
 /** The fields a definition is read with, before its backend decides what they must be. */
+export const knowledgeExtractionBudgetSchema = z.strictObject({
+  perMonth: z.number().nonnegative().optional(),
+  maxTokensPerDocument: z.number().int().positive().default(8000)
+});
+
 const definitionFieldsSchema = z.strictObject({
   name: z.string(),
   title: z.string().trim().min(1).max(KNOWLEDGE_TITLE_MAX_CHARS),
@@ -146,7 +151,13 @@ const definitionFieldsSchema = z.strictObject({
   records: knowledgeRecordsRefusalSchema,
   indexing: later("indexing", "DS-7, indexing settings"),
   search: later("search", "DS-7, search settings"),
-  extraction: later("extraction", "DS-6a, structured extraction"),
+  extraction: z
+    .strictObject({
+      budget: knowledgeExtractionBudgetSchema.default(() =>
+        knowledgeExtractionBudgetSchema.parse({})
+      )
+    })
+    .optional(),
   // Withdrawn by SPEC-DMS: a schedule of its own would be a second, invisible one.
   schedule: z
     .never({
@@ -193,6 +204,11 @@ export const knowledgeBaseDefinitionSchema = definitionFieldsSchema.transform(
       return z.NEVER;
     };
     if (backend) {
+      if (fields.extraction)
+        return refuse(
+          "extraction",
+          "Field extraction is available only on a Knowledge Base that keeps documents"
+        );
       if (fields.documentTypes?.length)
         return refuse(
           "documentTypes",

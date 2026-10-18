@@ -3,6 +3,7 @@ import {
   createActorAccess,
   workflowNeededRightResource,
   type ActorAccess,
+  type AssetScope,
   type ConfigAssetStore,
   type OperationRegistry,
   type ServicePrincipalRecord,
@@ -42,14 +43,14 @@ export async function workflowRightsOf(
   const children = new Set<string>();
   for (const { step } of indexWorkflowSteps(manifest).values())
     if (step.type === "workflow") children.add(step.workflow);
-  const workflowAssets = new Map<string, string>();
+  const workflowAssets = new Map<string, { id: string; scope: AssetScope }>();
   for (const child of children) {
     const asset = await options.configAssets.getConfigAsset({
       clientInstanceId: options.clientInstanceId,
       kind: WORKFLOW_ASSET_KIND,
       name: child
     });
-    if (asset?.status === "active") workflowAssets.set(child, asset.id);
+    if (asset) workflowAssets.set(child, { id: asset.id, scope: asset.scope });
   }
   return workflowNeededRights(manifest, { operations, workflowAssets });
 }

@@ -52,6 +52,18 @@ const listInputSchema = z.strictObject({
 
 const documentSchema = z.object({
   id: z.string(),
+  fieldsPending: z.boolean().optional(),
+  fieldsPendingReason: z
+    .discriminatedUnion("reason", [
+      z.object({ reason: z.literal("monthly_budget") }),
+      z.object({
+        reason: z.literal("token_budget"),
+        estimatedTokens: z.number(),
+        reservedOutputTokens: z.number(),
+        maxTokensPerDocument: z.number()
+      })
+    ])
+    .optional(),
   /** The copy the Knowledge Base owns. */
   fileId: z.string(),
   fileName: z.string(),

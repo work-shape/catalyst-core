@@ -159,6 +159,7 @@ export function useDataStoreWorld(prefix: string) {
     });
     const start = (stores: PlatformStores) => {
       const dataStores = createDataStores({
+        defaultLocale: "en",
         clientInstanceId,
         stores,
         databaseUrl,

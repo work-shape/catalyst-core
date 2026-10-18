@@ -8,12 +8,15 @@ import type {
   KnowledgeFiles,
   KnowledgeQueryEmbedder,
   Logger,
+  LocaleCode,
   PlatformStores
 } from "@work-shape/catalyst-core";
 import { knowledgeTargetOf, type KnowledgeBaseDefinition } from "./definition";
 
 /** What everything that serves Knowledge Bases in one process is built on. */
 export interface KnowledgeRuntime {
+  /** Instance content locale until Knowledge Bases support a content-language setting. */
+  defaultLocale: LocaleCode;
   clientInstanceId: ClientInstanceId;
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;
@@ -26,6 +29,7 @@ export interface KnowledgeRuntime {
    * search there answers from full text and titles.
    */
   embedQuery?: KnowledgeQueryEmbedder;
+  fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor;
   /** The formats a file added here may be in: text, and PDF and DOCX with document processing. */
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */

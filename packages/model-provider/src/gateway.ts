@@ -54,6 +54,7 @@ export interface ModelCall {
   messages: ModelMessage[];
   tools: ModelTool[];
   output?: ModelOutputFormat;
+  maxOutputTokens?: number;
   reasoningEffort?: ReasoningEffortConfig;
   fastTier?: boolean;
   continuation?: ModelProviderContinuation;
@@ -243,6 +244,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       messages: call.messages,
       tools: call.tools,
       output: call.output,
+      maxOutputTokens: call.maxOutputTokens,
       reasoningEffort: call.reasoningEffort,
       fastTier: call.fastTier,
       continuation: call.continuation,
@@ -349,7 +351,10 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       ...(target.bindingId === undefined ? {} : { bindingId: target.bindingId }),
       fastMode: call.fastTier === true,
       correlationId: call.correlationId,
-      request: { inputCharacters }
+      request: {
+        inputCharacters,
+        ...(call.maxOutputTokens === undefined ? {} : { maxOutputTokens: call.maxOutputTokens })
+      }
     });
     let estimatedRequest: number | undefined;
     const seen: SeenOfCall = {
