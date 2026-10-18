@@ -20,6 +20,7 @@ import {
   appBuilder,
   appDescription,
   appDraftShown,
+  appRightsOn,
   appTitle,
   type AppRights
 } from "./app-model";
@@ -37,8 +38,9 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const { t } = useTranslation();
   const host = useAppsHost();
   const workspace = host?.workspace;
-  const rights = host?.rights;
   const record = useApp(workspace?.id ?? "", app, workspace !== undefined);
+  // What the reader may do to this App, as the instance says with its record.
+  const rights = host && appRightsOn(host.rights, record.app);
   const [shown, setShown] = useState<AppPreviewResponse>();
   const [detailsOpen, setDetailsOpen] = useState(false);
   // The list is read by whoever reads the App's record. Everybody else is shown the names of

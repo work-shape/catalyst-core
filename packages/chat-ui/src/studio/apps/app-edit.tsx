@@ -35,6 +35,7 @@ import {
   appManifestSummary,
   appReadsStoredData,
   appRefusalText,
+  appRightsOn,
   appTitle,
   type AppManifestSummary,
   type AppRights
@@ -91,16 +92,16 @@ function askToPublish(revision: number, config: unknown): PublishAsk {
 /**
  * The draft of one App (layout 3): the draft revision in the frame, and the place it is
  * published, discarded or deleted from. The screen is the surface alone; the conversation
- * with the Build Agent beside it comes with PA-8. Whoever may not write the App gets the
- * sentence that the draft is not there for them, and no request for its record is made.
+ * with the Build Agent beside it comes with PA-8. What the reader may do is what the instance
+ * says with the App's record; whoever may not write the App gets the sentence that the draft
+ * is not there for them.
  */
 export function AppEdit({ app }: { app: string }) {
   const { t } = useTranslation();
   const host = useAppsHost();
   const workspace = host?.workspace;
-  const rights = host?.rights;
-  const mayWrite = Boolean(workspace && rights?.write);
-  const record = useApp(workspace?.id ?? "", app, mayWrite);
+  const record = useApp(workspace?.id ?? "", app, workspace !== undefined);
+  const rights = host && appRightsOn(host.rights, record.app);
   const writes = useAppWrites(workspace?.id);
   const [turn, setTurn] = useState(0);
   const [view, setView] = useState<AppDraftView>("preview");
@@ -133,6 +134,14 @@ export function AppEdit({ app }: { app: string }) {
   const asset = record.app;
   const name = appTitle(asset, app);
 
+  // A grant on this App alone can let a reader write it: the record says so once it arrives.
+  if (!rights.write && record.loading) {
+    return (
+      <AppEditFrame name={name} workspace={workspace} rights={rights} onBack={backToList}>
+        {null}
+      </AppEditFrame>
+    );
+  }
   // An answer that names no draft is the published view: the draft is not this reader's.
   if (!rights.write || record.missing || (asset !== undefined && !appDraftShown(asset))) {
     return (

@@ -52,6 +52,11 @@ export interface BuildRights {
   readsInstance: boolean;
   /** The Shared Workspaces whose own assets the reader holds a right on. */
   workspaces: readonly BuildWorkspace[];
+  /**
+   * The reader holds the right on what the workspace owns, as the instance names it for that
+   * workspace: through a membership, a grant there or a right on the whole instance.
+   */
+  holdsInWorkspace(kind: string, verb: AssetVerb, workspaceId: string): boolean;
   may(
     verb: Exclude<AssetVerb, "read">,
     asset: { kind: string; namespace?: string; workspaceId?: string }
@@ -134,6 +139,7 @@ export function resolveBuildRights(
     instanceWrite,
     namespaces: held.map(toBuildNamespace),
     readsInstance,
+    holdsInWorkspace: holdsIn,
     workspaces: [
       ...inWorkspaces.map(({ id, name, member }) => ({ id, name, member })),
       ...(readsAny
