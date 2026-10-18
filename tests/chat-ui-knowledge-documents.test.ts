@@ -233,6 +233,45 @@ describe("the Documents section", () => {
     expect(row("kopie").textContent).not.toContain("Original liegt in der Quelle");
   });
 
+  it("marks a searchable document whose fields wait for the budget, in both languages", () => {
+    const paused = [
+      document_("rechnung", "indexed", {
+        format: "pdf",
+        fileName: "rechnung.pdf",
+        fieldsPending: true
+      }),
+      document_("angebot", "indexed", { fieldsPending: false }),
+      document_("kaputt", "failed", { fieldsPending: true, failureCode: "knowledge_text_empty" })
+    ];
+    const shown = {
+      source: plantedSource({ useDocuments: () => ready({ documents: paused }) }),
+      knowledgeBase: "objektunterlagen",
+      publishedRevision: 1,
+      canWrite: true
+    };
+
+    show(createElement(KnowledgeDocuments, shown));
+    // Still searchable: the pause is beside the state, not instead of it.
+    expect(row("rechnung").textContent).toContain("Searchable");
+    expect(row("rechnung").textContent).toContain("Fields pending");
+    expect(row("rechnung").textContent).toContain(
+      "PDF · 2 KiB · Fields are filled in once the budget resets or is raised"
+    );
+    expect(row("rechnung").hasAttribute("data-knowledge-fields-pending")).toBe(true);
+    expect(row("angebot").textContent).not.toContain("Fields pending");
+    // A failed document says why it failed; the pause is not its concern.
+    expect(row("kaputt").textContent).not.toContain("Fields pending");
+    expect(row("rechnung").textContent).not.toContain("fieldsPending");
+
+    show(createElement(KnowledgeDocuments, shown), "de");
+    expect(row("rechnung").textContent).toContain("Durchsuchbar");
+    expect(row("rechnung").textContent).toContain("Felder ausstehend");
+    expect(row("rechnung").textContent).toContain(
+      "Felder werden gefüllt, sobald das Budget zurückgesetzt oder erhöht wird"
+    );
+    expect(row("angebot").textContent).not.toContain("Felder ausstehend");
+  });
+
   it("names the page limit of a document with too many pages, in both languages", () => {
     const showDocument = (long: KnowledgeDocument, locale?: "de") =>
       show(

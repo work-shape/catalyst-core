@@ -1,3 +1,4 @@
+import { KNOWLEDGE_FIELD_SCHEMA } from "./field-schema";
 import { RECORD_FIELDS_SCHEMA, RECORD_FIELDS_CONTENT_HASH } from "../../records/schema";
 import { SOURCE_WITHDRAWAL_SCHEMA } from "./source-withdrawal-schema";
 import { createHash } from "node:crypto";
@@ -292,11 +293,14 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
       alter table catalyst_kb.sync_runs add constraint sync_runs_state_check
         check (state in ('running','done','failed','superseded')) not valid;
       alter table catalyst_kb.sync_runs validate constraint sync_runs_state_check;`
-  }
+  },
+  { number: 10, name: "field_extraction_budget", sql: KNOWLEDGE_FIELD_SCHEMA }
 ];
 
 /** The level the store of a built-in Knowledge Base is at when its tables are this release's. */
-export const KNOWLEDGE_STORE_LEVEL = KNOWLEDGE_STORE_MIGRATIONS.length;
+export const KNOWLEDGE_STORE_LEVEL = Math.max(
+  ...KNOWLEDGE_STORE_MIGRATIONS.map((migration) => migration.number)
+);
 
 const appliedRow = z.object({ number: z.number().int() });
 

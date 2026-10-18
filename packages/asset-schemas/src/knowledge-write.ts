@@ -160,17 +160,19 @@ export const knowledgePutProcessedInputSchema = z.strictObject({
     workflowDatasetReferenceSchema
   ])
 });
+export const knowledgeFieldValueSchema = z.json();
 export const knowledgeExtractFieldsInputSchema = z.strictObject({
   documentId: id,
-  schema: z.record(z.string(), z.json())
+  schema: z.record(z.string(), knowledgeFieldValueSchema)
 });
 export const knowledgeExtractFieldsOutputSchema = z.strictObject({
+  droppedFields: z.number().int().nonnegative().optional(),
   path: z.string(),
   date: z.iso.date().nullable(),
   type: id,
   fields: z.record(
     z.string(),
-    z.strictObject({ value: z.json(), page: pageNumber, quote: z.string().min(1) })
+    z.strictObject({ value: knowledgeFieldValueSchema, page: pageNumber, quote: z.string().min(1) })
   )
 });
 

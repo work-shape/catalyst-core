@@ -142,7 +142,8 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
       | "list_documents"
       | "retry"
       | "remove_documents"
-      | "search",
+      | "search"
+      | "extract_fields",
     right: string
   ) => ({
     target: ({ knowledgeBase, ...input }: { knowledgeBase: string }) => ({
@@ -197,6 +198,10 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
     bind("retry", KNOWLEDGE_BASE_ACTIONS.write)
   );
   routes.resourceOperation(
+    apiOperations["knowledge_bases.extract_fields"],
+    bind("extract_fields", KNOWLEDGE_BASE_ACTIONS.read)
+  );
+  routes.resourceOperation(
     apiOperations["knowledge_bases.search"],
     bind("search", KNOWLEDGE_BASE_ACTIONS.use)
   );
@@ -245,7 +250,8 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
     operationSources: (runtime) => [
       knowledgeBases.operationSource(
         runtime.files,
-        queryEmbedder(parts.config, parts.clientInstanceId, runtime.modelGateway)
+        queryEmbedder(parts.config, parts.clientInstanceId, runtime.modelGateway),
+        runtime.knowledgeFieldExtractor
       )
     ],
     start: (runtime) => {

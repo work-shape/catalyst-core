@@ -7,6 +7,8 @@ import {
   knowledgeSourceItemsOutputSchema,
   knowledgeLocateInputSchema,
   knowledgeLocateOutputSchema,
+  knowledgeExtractFieldsInputSchema,
+  knowledgeExtractFieldsOutputSchema,
   knowledgeRetryInputSchema,
   knowledgeRetryOutputSchema
 } from "@work-shape/catalyst-asset-schemas";
@@ -129,6 +131,11 @@ const knowledgeListDocumentsResponseSchema = z.object({
        * that refuses its embedding. It goes on by itself once the limit resets or is raised.
        */
       waitCode: z.enum(KNOWLEDGE_DOCUMENT_WAIT_CODES).optional(),
+      /**
+       * Field extraction paused at the Knowledge Base's budget before it reached this document.
+       * The document stays searchable; its fields follow once the budget resets or is raised.
+       */
+      fieldsPending: z.boolean().optional(),
       /**
        * The source the document was synced from. Source withdrawal removes it; a manual
        * remove is refused with `knowledge_synced_document_remove_refused`.
@@ -327,6 +334,20 @@ export const knowledgeOperations = {
     response: json(knowledgeRetryOutputSchema),
     errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
     rateClass: "write"
+  }),
+  "knowledge_bases.extract_fields": defineRegisteredOperation({
+    ...BASE,
+    id: "knowledge_bases.extract_fields",
+    method: "POST",
+    path: "/api/v1/knowledge-bases/:knowledgeBase/extract-fields",
+    summary:
+      "Extract declared fields with page and quote evidence through the approved model binding, within this Knowledge Base's extraction budget. Unsupported evidence is dropped and counted.",
+    scope: "data_store_rows:read",
+    effect: "reading",
+    body: knowledgeExtractFieldsInputSchema,
+    response: json(knowledgeExtractFieldsOutputSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
+    rateClass: "read"
   }),
   "knowledge_bases.search": defineRegisteredOperation({
     ...BASE,

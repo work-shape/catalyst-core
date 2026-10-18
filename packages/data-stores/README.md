@@ -193,3 +193,35 @@ not offered as agent tools. Direct chat, App and CLI calls fail before store wor
 `workflow_dataset_owner_required`: "`records.propose` runs only as a step of a Workflow Run."
 The refusal follows the caller's EN/DE locale. The store's existing Filled by section
 receives the published Workflow and the readable Knowledge Bases its operation steps name.
+
+### Extraction by schema (PROC-2)
+
+`knowledge.<id>.extract_fields({ documentId, schema })` reads an active indexed document
+under `knowledge_base.read`. Use it in a data Workflow before `records.propose`; it returns
+`path`, the document's own `date` (or null), its classified `type`, and `fields` keyed by
+name with `{ value, page, quote }`. `droppedFields` counts values whose evidence could not
+be verified; these never enter the returned fields. Evidence is checked again by records
+at its write boundary. A matching quote is a necessary condition, not proof of correctness.
+
+The document-processing capability supplies its explicitly approved extraction binding.
+That binding must support structured output and document input and process in `eu` (or
+inside the instance). Its customer rate card supplies the currency. Page text is untrusted
+data inside fixed instructions; calls carry a JSON-schema answer format, abort and deadline.
+No prompt, page text, field value or quote is kept in logs, errors, audit or Operation Runs.
+Only the owning Knowledge Base's retained text and the caller's returned result contain them.
+
+`extraction.budget.perMonth` optionally limits this Knowledge Base's field extraction in
+the instance usage currency. `maxTokensPerDocument` defaults to 8000 and covers conservative
+input tokens plus the maximum output. A document is never silently truncated. Admission
+reserves the maximum call cost in one monthly row before contacting the model; settlement
+returns unused money. A failed or interrupted call conservatively keeps its reservation,
+including a process crash. This can pause earlier than the provider's final invoice. A new
+UTC month has its own counter. Raising and publishing the budget permits the next Workflow
+call to continue; the Workflow controls retries and scheduling. A refusal marks the document
+“Fields pending” / “Felder ausstehend”; it remains indexed and searchable. No per-document
+or per-customer total count limit is added.
+
+Owned-store migration 10 adds the monthly counter and the document's pending marker;
+9 is reserved by SRC-3b. There is no core database migration. Old application versions may
+run on the additive tables; keep the new migration recorded on rollback. Admission costs one
+monthly-row lock plus an indexed document update; no list or sum grows with the corpus.

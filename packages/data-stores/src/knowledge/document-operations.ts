@@ -52,6 +52,7 @@ const listInputSchema = z.strictObject({
 
 const documentSchema = z.object({
   id: z.string(),
+  fieldsPending: z.boolean().optional(),
   /** The copy the Knowledge Base owns. */
   fileId: z.string(),
   fileName: z.string(),

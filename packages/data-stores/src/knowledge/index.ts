@@ -87,7 +87,8 @@ export interface KnowledgeBases {
    */
   operationSource(
     files: KnowledgeFiles | undefined,
-    embedQuery?: KnowledgeQueryEmbedder
+    embedQuery?: KnowledgeQueryEmbedder,
+    fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor
   ): OperationSource;
   /**
    * The jobs of the documents of Knowledge Bases, where the process keeps files: the one that
@@ -307,11 +308,12 @@ export function createKnowledgeBases(input: {
         if (target.backend === "builtin") await enqueueKnowledgeRemoval(stores, runtime, target);
       }
     },
-    operationSource: (files, embedQuery) =>
+    operationSource: (files, embedQuery, fieldExtractor) =>
       createKnowledgeOperationSource({
         ...runtime,
         ...(files ? { files } : {}),
-        ...(embedQuery ? { embedQuery } : {})
+        ...(embedQuery ? { embedQuery } : {}),
+        ...(fieldExtractor ? { fieldExtractor } : {})
       }),
     fileJobs: (files, auditRecorder, embed) => {
       const cleanup = createKnowledgeFileCleanupJobs(runtime, files);

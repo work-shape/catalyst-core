@@ -126,6 +126,8 @@ export const knowledge = defineTranslations({
     "knowledge.documentIndexed": "Searchable",
     "knowledge.documentFailed": "Failed",
     "knowledge.originalReleased": "Original is stored at the source",
+    "knowledge.fieldsPending": "Fields pending",
+    "knowledge.fieldsPendingReason": "Fields are filled in once the budget resets or is raised",
     "knowledge.retry": "Retry",
     "knowledge.retryFailed": "The document could not be retried.",
     "knowledge.retryRefused": "You may not change this knowledge base.",
@@ -316,6 +318,9 @@ export const knowledge = defineTranslations({
     "knowledge.documentIndexed": "Durchsuchbar",
     "knowledge.documentFailed": "Fehlgeschlagen",
     "knowledge.originalReleased": "Original liegt in der Quelle",
+    "knowledge.fieldsPending": "Felder ausstehend",
+    "knowledge.fieldsPendingReason":
+      "Felder werden gefüllt, sobald das Budget zurückgesetzt oder erhöht wird",
     "knowledge.retry": "Erneut versuchen",
     "knowledge.retryFailed": "Der neue Versuch konnte nicht gestartet werden.",
     "knowledge.retryRefused": "Du darfst diese Wissensbasis nicht ändern.",

@@ -62,7 +62,8 @@ export function useKnowledgeSync() {
     wrap: (source: DocumentSourceCapability) => DocumentSourceCapability = (source) => source,
     extractor?: KnowledgeExtractor,
     withFileRoute = false,
-    developmentAuth?: unknown
+    developmentAuth?: unknown,
+    fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor
   ) {
     const logs: unknown[] = [];
     const logger: Logger = {
@@ -84,6 +85,14 @@ export function useKnowledgeSync() {
       embedding: true,
       apiAccess: true,
       ...(extractor ? { documents: true as const } : {}),
+      ...(fieldExtractor
+        ? {
+            attachments: {
+              name: "fake-field-binding",
+              create: () => ({ knowledgeFieldExtractor: fieldExtractor })
+            }
+          }
+        : {}),
       ...(withFileRoute
         ? { attachments: createManagedObjectTestAttachmentCapability().capability }
         : {})
@@ -302,7 +311,8 @@ export function useKnowledgeSync() {
         folders: string[];
         include?: string[];
         exclude?: string[];
-      }[]
+      }[],
+      extra: { extraction?: { budget: { perMonth?: number; maxTokensPerDocument: number } } } = {}
     ) {
       const asset = required(
         await instance.stores.configAssets.getConfigAsset({
@@ -311,7 +321,7 @@ export function useKnowledgeSync() {
           name: KB
         })
       );
-      const config = { ...definition, sources };
+      const config = { ...definition, sources, ...extra };
       const put = await instance.api.call("assets.put", {
         params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB },
         payload: { config, expectedRevision: asset.revision }

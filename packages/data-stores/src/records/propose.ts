@@ -19,7 +19,8 @@ import { recordProjection } from "./projection";
 import { storeSizeBytes } from "../size";
 import { AnsweredBefore, changeWhole, reclaim, storeFull, type StoreVerb } from "../verbs";
 import { RECORD_FIELDS_SCHEMA, RECORD_FIELDS_CONTENT_HASH } from "./schema";
-import { recordKey, recordEvidence, mergeField } from "./merge";
+import { recordKey, mergeField } from "./merge";
+import { recordEvidence } from "@work-shape/catalyst-core";
 import { proposalSource } from "./source";
 
 const candidateRow = z.object({

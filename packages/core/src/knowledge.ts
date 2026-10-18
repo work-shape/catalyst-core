@@ -1,3 +1,4 @@
+import { KNOWLEDGE_DOCUMENT_FORMATS, type KnowledgeDocumentFormat } from "./knowledge-formats";
 import type { AgentConfig } from "@work-shape/catalyst-asset-schemas";
 
 export type {
@@ -420,9 +421,7 @@ export interface KnowledgeBaseStateStore {
  * DOCX need the extraction of the document-processing capability, and an instance without it
  * refuses them when they are added. Spec: Adding files, Ingestion as jobs.
  */
-export const KNOWLEDGE_DOCUMENT_FORMATS = ["txt", "markdown", "pdf", "docx"] as const;
-
-export type KnowledgeDocumentFormat = (typeof KNOWLEDGE_DOCUMENT_FORMATS)[number];
+export { KNOWLEDGE_DOCUMENT_FORMATS, type KnowledgeDocumentFormat } from "./knowledge-formats";
 
 /** The formats an instance reads without the document-processing capability. */
 export const KNOWLEDGE_TEXT_FORMATS: readonly KnowledgeDocumentFormat[] = ["txt", "markdown"];
@@ -734,6 +733,8 @@ export interface KnowledgePassageToEmbed {
 
 /** A document of a Knowledge Base as its page lists it. */
 export interface KnowledgeDocumentEntry {
+  /** Extraction budget paused; indexing and search remain available. */
+  fieldsPending?: boolean;
   id: string;
   /** The Managed File the Knowledge Base owns that holds the bytes. */
   fileId: string;
@@ -811,6 +812,7 @@ export interface KnowledgeProcessingGroup {
   unestimated: number;
 }
 export interface KnowledgeDocumentStore {
+  readonly fieldExtraction?: import("./knowledge-fields").KnowledgeFieldStore;
   /** Authorizes one effective processing revision after publish confirmation, before queuing it. */
   requestProcessing(
     input: { contentSha256: string; processingKey: string },

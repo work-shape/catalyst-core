@@ -72,7 +72,7 @@ describe("the store a Knowledge Base owns", () => {
     return eventually(async () => {
       await jobs.runDue();
       const record = await ownedRecord(world);
-      expect(record).toMatchObject({ status: "ready", level: 9 });
+      expect(record).toMatchObject({ status: "ready", level: 10 });
       return required(record);
     });
   }
@@ -205,7 +205,7 @@ describe("the store a Knowledge Base owns", () => {
           name: `knowledge-base:${KB}`,
           title: "Objektunterlagen",
           status: "ready",
-          level: 9,
+          level: 10,
           ownedBy: { knowledgeBase: KB }
         }
       ]

@@ -198,6 +198,7 @@ export interface ModelOutputFormat {
 
 /** One request to one model, as the gateway hands it to an adapter. */
 export interface ModelAdapterRequest {
+  maxOutputTokens?: number;
   model: string;
   messages: ModelMessage[];
   tools: ModelTool[];

@@ -26,6 +26,7 @@ export interface KnowledgeRuntime {
    * search there answers from full text and titles.
    */
   embedQuery?: KnowledgeQueryEmbedder;
+  fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor;
   /** The formats a file added here may be in: text, and PDF and DOCX with document processing. */
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */

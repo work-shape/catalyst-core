@@ -224,8 +224,8 @@ export function KnowledgeDocuments({
 }
 
 /**
- * One document: its name, format and size, when it was added, its state, and whether its
- * original is stored at the source.
+ * One document: its name, format and size, when it was added, its state, whether its
+ * original is stored at the source, and whether its fields wait for the extraction budget.
  */
 function DocumentRow({
   document,
@@ -255,11 +255,14 @@ function DocumentRow({
   };
   const summary =
     document.state === "failed" ? t(documentFailureText(document), failurePages) : facts;
+  // Field extraction paused at the budget: the document is searchable, its fields follow.
+  const fieldsPending = document.fieldsPending === true && document.state !== "failed";
   // A synced document whose original stays at its source keeps no copy of the file here.
-  const description =
-    document.originalStatus === "released"
-      ? `${summary} · ${t("knowledge.originalReleased")}`
-      : summary;
+  const description = [
+    summary,
+    ...(document.originalStatus === "released" ? [t("knowledge.originalReleased")] : []),
+    ...(fieldsPending ? [t("knowledge.fieldsPendingReason")] : [])
+  ].join(" · ");
   return (
     <ListRow
       data-knowledge-document={document.id}
@@ -267,15 +270,19 @@ function DocumentRow({
       leading={<FileText aria-hidden="true" />}
       title={title}
       description={description}
-      descriptionWraps={document.state === "failed"}
+      data-knowledge-fields-pending={fieldsPending ? "" : undefined}
+      descriptionWraps={document.state === "failed" || fieldsPending}
       chips={
-        <Badge
-          tone={view.tone}
-          dot={document.state !== "pending"}
-          leading={document.state === "pending" ? <Spinner size="sm" /> : undefined}
-        >
-          {t(view.label)}
-        </Badge>
+        <>
+          <Badge
+            tone={view.tone}
+            dot={document.state !== "pending"}
+            leading={document.state === "pending" ? <Spinner size="sm" /> : undefined}
+          >
+            {t(view.label)}
+          </Badge>
+          {fieldsPending ? <Badge tone="neutral">{t("knowledge.fieldsPending")}</Badge> : null}
+        </>
       }
       time={formatMomentShort(document.addedAt, locale)}
       actionsVisible

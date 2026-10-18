@@ -1,3 +1,4 @@
+import { extractFieldsOperation } from "./field-extraction";
 import { workflowDataFlowsSchema } from "@work-shape/catalyst-core";
 import { readWorkflowDataFlows } from "../workflow-data-flows";
 import { sourceOperation } from "./source-operations";
@@ -401,6 +402,10 @@ const sourceTarget = (
     part
   );
 const OPERATIONS = {
+  extract_fields: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) => {
+    const target = documentsTargetOf(runtime, kb);
+    return target && extractFieldsOperation(runtime, target);
+  },
   sync: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
     sourceTarget(runtime, kb, "sync"),
   sources: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
@@ -501,7 +506,10 @@ export function createKnowledgeOperationSource(runtime: KnowledgeRuntime): Opera
           .flatMap((knowledgeBase) =>
             isStructured(knowledgeBase)
               ? [queryOperation(runtime, knowledgeBase)]
-              : (OPERATIONS.search(runtime, knowledgeBase) ?? [])
+              : [
+                  OPERATIONS.search(runtime, knowledgeBase),
+                  OPERATIONS.extract_fields(runtime, knowledgeBase)
+                ].filter((operation): operation is OperationDefinition => operation !== undefined)
           ),
         truncated:
           assets.length > KNOWLEDGE_LIST_MAX_COUNT
