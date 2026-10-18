@@ -54,11 +54,13 @@ export type GrantVerb = GrantableAction extends `${string}.${infer Verb}` ? Verb
 const GRANT_VERB_RANK: Record<GrantVerb, number> = {
   read: 0,
   use: 1,
-  write: 2,
-  publish: 3,
-  delete: 4,
-  read_run_data: 5,
-  records: 6
+  insert: 2,
+  execute: 3,
+  write: 4,
+  publish: 5,
+  delete: 6,
+  read_run_data: 7,
+  records: 8
 };
 
 function isGrantKind(kind: string): kind is GrantKind {

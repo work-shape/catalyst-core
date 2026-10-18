@@ -21,6 +21,7 @@ export const accessKinds = defineTranslations({
     "access.chooseApp": "Choose an App",
     "access.noApps": "This instance has no App yet.",
     "access.appsLoadFailed": "The Apps could not be loaded.",
+    "access.actionExecuteDataStoreDescription": "Needs View as well, to find the rows.",
     "access.actionOnDataStore": "{action} Data Stores",
     "access.scopeDataStore": "Data Store {name}",
     "access.scopeOnDataStore": "On one Data Store",
@@ -47,6 +48,8 @@ export const accessKinds = defineTranslations({
     "access.chooseApp": "App wählen",
     "access.noApps": "Auf dieser Instanz gibt es noch keine App.",
     "access.appsLoadFailed": "Die Apps konnten nicht geladen werden.",
+    "access.actionExecuteDataStoreDescription":
+      "Braucht auch Ansehen, um die Datensätze zu finden.",
     "access.actionOnDataStore": "Datenspeicher: {action}",
     "access.scopeDataStore": "Datenspeicher {name}",
     "access.scopeOnDataStore": "An einem Datenspeicher",
