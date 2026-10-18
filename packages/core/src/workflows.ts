@@ -272,7 +272,7 @@ export type WorkflowStep =
        * `after` requests a fresh history after this many items, even below the run limits.
        * Without `after`, the duration and step-run budget decide when to continue.
        */
-      continueAsNew?: { position: string; after?: number };
+      continueAsNew?: { position: string; after?: number; cursor?: string };
       steps: readonly WorkflowStep[];
     })
   /** Runs one script file of the step files folder on its input as JSON and returns JSON. */
@@ -381,7 +381,8 @@ export const workflowLoopOptionsSchema = z.object({
   continueAsNew: z
     .strictObject({
       position: z.string().min(1),
-      after: z.number().int().positive().optional()
+      after: z.number().int().positive().optional(),
+      cursor: z.string().optional()
     })
     .optional(),
   collect: z.strictObject({ step: z.string().min(1), path: z.string() }).optional()
@@ -428,7 +429,7 @@ export const workflowPaginateSchema = z.union([
     sizeParam: z.string().min(1).optional(),
     size: z.number().int().min(1).optional(),
     start: z.number().int().min(0).optional(),
-    cursor: z.string().min(1).optional()
+    cursor: z.string().optional()
   })
 ]);
 
@@ -645,7 +646,12 @@ export interface WorkflowRunIdentity {
   runKey?: string;
   labels?: WorkflowRunLabels;
   /** One logical run, with bounded histories numbered from 1. The base runKey is unchanged. */
-  continuation?: { rootRunId: WorkflowRunId; previousRunId?: WorkflowRunId; number: number };
+  continuation?: {
+    rootRunId: WorkflowRunId;
+    previousRunId?: WorkflowRunId;
+    successorRunId?: WorkflowRunId;
+    number: number;
+  };
 }
 
 /**

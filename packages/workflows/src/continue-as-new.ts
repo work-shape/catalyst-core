@@ -1,3 +1,6 @@
+import { indexWorkflowSteps } from "./definition";
+import { fieldAt } from "./references";
+import type { WorkflowDatasets } from "./datasets";
 import { continuationCheckpoint, sameContinuationPosition } from "./continuation-checkpoint";
 import {
   AppError,
@@ -28,6 +31,7 @@ const inputIssues = z.object({
 export function createContinuation(options: {
   clientInstanceId: ClientInstanceId;
   definitions: WorkflowDefinitionSource;
+  datasets?: WorkflowDatasets;
   now(): Date;
   prepare: (
     revision: import("./definition-source").WorkflowDefinitionRevision,
@@ -60,6 +64,10 @@ export function createContinuation(options: {
       ...(await tx.workflowRuns.readRunInput({ clientInstanceId, id: run.id })),
       [loop.continueAsNew.position]: offset
     };
+    const completePage =
+      loop.continueAsNew.cursor !== undefined &&
+      before === undefined &&
+      completed === (await tx.workflowRuns.countLoopItems({ clientInstanceId, id: loopRun.id }));
     const published = await options.definitions.read(run.workflow);
     const priorDefinition = await tx.workflowRuns.readRunDefinition({
       clientInstanceId,
@@ -68,7 +76,53 @@ export function createContinuation(options: {
     let prepared: PreparedStart | undefined;
     let error: WorkflowRunError | undefined;
     try {
+      if (loop.continueAsNew.cursor !== undefined) {
+        if (completed === 0) {
+          const original = await tx.workflowRuns.readRunInput({ clientInstanceId, id: run.id });
+          input[loop.continueAsNew.position] = original?.[loop.continueAsNew.position] ?? null;
+        } else {
+          let item = await tx.workflowRuns.readLoopItem({
+            clientInstanceId,
+            id: loopRun.id,
+            index: completed - 1
+          });
+          const dataset = await tx.workflowRuns.readLoopDataset({
+            clientInstanceId,
+            id: loopRun.id
+          });
+          if (!item && dataset && options.datasets) {
+            const reader = await options.datasets.reader({
+              id: dataset.$dataset,
+              runId: run.id,
+              reference: dataset,
+              offset: Math.min(completed * (loop.batch ?? 1), dataset.rowCount) - 1,
+              limit: 1
+            });
+            for await (const row of reader.rows) item = { value: row };
+          }
+          const cursor = item ? fieldAt(item.value, loop.continueAsNew.cursor) : undefined;
+          if (!cursor?.found)
+            throw new AppError("VALIDATION_FAILED", "The continuation cursor is missing", {
+              issues: [
+                { path: [loop.continueAsNew.position], message: "The cursor field is missing" }
+              ]
+            });
+          input[loop.continueAsNew.position] = cursor.value;
+        }
+      }
       if (!published) throw new AppError("NOT_FOUND", "The Workflow is no longer published");
+      if (!completePage) {
+        const index = indexWorkflowSteps(published.manifest);
+        if (
+          [checkpoint, ...(checkpoint.ancestors ?? [])].some(
+            (frame) => index.get(frame.stepId)?.step.type !== "loop"
+          )
+        )
+          throw new AppError(
+            "CONFLICT",
+            "The published revision no longer has the checkpointed loop"
+          );
+      }
       prepared = await options.prepare(
         {
           ...published,
@@ -100,7 +154,7 @@ export function createContinuation(options: {
       startedBy: run.startedBy,
       correlationId: run.correlationId,
       ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
-      ...(run.labels ? { labels: run.labels } : {}),
+      labels: run.labels ?? {},
       continuation,
       actor: principalActor(run),
       ...(run.parentRunId
@@ -117,9 +171,15 @@ export function createContinuation(options: {
     };
     let successor: WorkflowRun | undefined;
     if (prepared) {
-      successor = await options.open(tx, { ...prepared, checkpoint }, origin, run.mode, {
-        sourceRunId: run.id
-      });
+      successor = await options.open(
+        tx,
+        { ...prepared, ...(completePage ? {} : { checkpoint }) },
+        origin,
+        run.mode,
+        {
+          sourceRunId: run.id
+        }
+      );
     } else {
       const failed = await tx.workflowRuns.createRun({
         id: createPlatformId<"WorkflowRunId">("wfr"),

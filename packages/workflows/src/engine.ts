@@ -279,6 +279,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
   const continueRun = createContinuation({
     clientInstanceId,
+    datasets,
     definitions,
     now,
     prepare: (...args) => prepareStart(...args),

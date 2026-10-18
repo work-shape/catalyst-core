@@ -13,6 +13,13 @@ including earlier histories. With `batch`, it counts rows rather than batches.
 `after: 1000` optionally requests a new history after 1,000 complete iterations;
 otherwise the step-run budget and active duration decide when it continues.
 
+For a source that pages by a cursor or last key, add `cursor: "id"` (a dotted item
+field path). The declared position input then receives that value from the last
+completed row, checked against its own schema, rather than a numeric offset. A
+nonempty page continues after the loop, and an empty page proceeds to the following
+steps. Map that input into the source operation's cursor parameter. A completed
+page starts a fresh source read; an unfinished page retains its remaining rows.
+
 Each history starts its trigger and fixed steps on the revision published at that
 moment. The checkpointed loop resumes its remaining immutable dataset view or inline
 items. Checkpoints are internal values, never included in list/read responses. A
@@ -22,7 +29,8 @@ at a deadline; admitted items finish their current boundary. No process sleeps w
 waiting for a successor. Dataset grants transfer before the old history releases them.
 
 The public product contract is `WorkflowRunIdentity.continuation` in catalyst-core and
-the matching API schema: `{ rootRunId, previousRunId?, number }`, numbered from 1. The
+the matching API schema: `{ rootRunId, previousRunId?, successorRunId?, number }`, numbered from 1. A caller can follow `successorRunId` from a `continued` response, even for an
+unkeyed run, without scanning the runs list. The
 base `runKey` stays unchanged for idempotent starts; the interface shows `<key>/<number>`.
 `continued` releases the per-history key, while its successor holds it. A failed or
 cancelled final history releases it as usual. Each step and its usage stay on exactly

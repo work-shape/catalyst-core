@@ -102,6 +102,7 @@ export const workflowRunSchema = z.object({
     .object({
       rootRunId: z.string(),
       previousRunId: z.string().optional(),
+      successorRunId: z.string().optional(),
       number: z.number().int().positive()
     })
     .optional(),

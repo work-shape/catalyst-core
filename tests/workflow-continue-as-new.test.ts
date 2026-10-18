@@ -111,6 +111,7 @@ describe("continue-as-new", () => {
       }))
     );
     if (!next) throw new Error("Missing successor");
+    expect(first?.continuation?.successorRunId).toBe(next.id);
     expect(
       await t.stores.workflowRuns.readRunInput({ clientInstanceId, id: next.id })
     ).toMatchObject({ offset: 2 });
@@ -218,6 +219,49 @@ describe("continue-as-new", () => {
     expect(chain.every((run) => run.status === "continued" || run.status === "done")).toBe(true);
     expect(writesOf(t)).toHaveLength(12);
     expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(12);
+  });
+
+  it("carries a last-key cursor through declared input and continues nonempty pages until the source is empty", async () => {
+    const manifest = definition();
+    const steps = manifest.steps.map((step) => {
+      if (step.id === "clients")
+        return { ...step, input: { text: { ref: { step: "start", path: "input.offset" } } } };
+      if (step.id === "each_client")
+        return { ...step, continueAsNew: { position: "offset", cursor: "id" } };
+      return step;
+    });
+    const { t } = await ready({
+      ...manifest,
+      steps,
+      inputs: {
+        type: "object",
+        properties: { note: { type: "string" }, offset: { type: "string" } },
+        required: ["offset"]
+      }
+    });
+    const cursors: string[] = [];
+    t.setBehaviour((operation, input) => {
+      if (operation !== "echo") return Promise.resolve<JsonValue>({ received: input });
+      const cursor =
+        typeof input === "object" &&
+        input !== null &&
+        !Array.isArray(input) &&
+        typeof input.text === "string"
+          ? input.text
+          : "invalid";
+      cursors.push(cursor);
+      return Promise.resolve<JsonValue>({
+        clients: cursor === "" ? [{ id: "a" }, { id: "b" }] : cursor === "b" ? [{ id: "c" }] : []
+      });
+    });
+    await t.expectOk(t.root.id, "workflows.start", {
+      params: { workflow: "notify-clients" },
+      payload: { input: { note: "Cursor", offset: "" } }
+    });
+    const chain = await finishChain(t);
+    expect(chain.map((run) => run.status).sort()).toEqual(["continued", "continued", "done"]);
+    expect(cursors).toEqual(["", "b", "c"]);
+    expect(writesOf(t)).toHaveLength(3);
   });
 
   it("check 112: continues a 50,000-row dataset at 20,000 step runs into three histories, with exactly one step per row plus fixed steps", async () => {

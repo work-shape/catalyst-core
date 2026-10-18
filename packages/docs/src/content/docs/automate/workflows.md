@@ -85,6 +85,10 @@ Set `continueAsNew: { position: offset }` on the loop and declare `offset` as an
 integer in the Workflow's inputs. The next run receives the next row offset. You can
 request a smaller history with `after`, for example `{ position: offset, after: 1000 }`.
 
+For a paged source, add `cursor: id` to pass the last completed row’s `id` as the
+position input instead. A nonempty page continues and an empty page finishes the
+loop. Map that position input into the source operation’s paging parameter.
+
 The runs list groups these histories into one expandable run. Each part has its own
 status and a numbered key. Work and usage count once across the parts. Labels and the
 failure policy stay with the original run. A change published between parts applies

@@ -20368,6 +20368,9 @@
                         "previousRunId": {
                           "type": "string"
                         },
+                        "successorRunId": {
+                          "type": "string"
+                        },
                         "number": {
                           "type": "integer",
                           "exclusiveMinimum": 0,
@@ -20739,6 +20742,9 @@
                           "type": "string"
                         },
                         "previousRunId": {
+                          "type": "string"
+                        },
+                        "successorRunId": {
                           "type": "string"
                         },
                         "number": {
@@ -22116,6 +22122,9 @@
                               "previousRunId": {
                                 "type": "string"
                               },
+                              "successorRunId": {
+                                "type": "string"
+                              },
                               "number": {
                                 "type": "integer",
                                 "exclusiveMinimum": 0,
@@ -22515,6 +22524,9 @@
                           "type": "string"
                         },
                         "previousRunId": {
+                          "type": "string"
+                        },
+                        "successorRunId": {
                           "type": "string"
                         },
                         "number": {
@@ -22939,6 +22951,9 @@
                           "type": "string"
                         },
                         "previousRunId": {
+                          "type": "string"
+                        },
+                        "successorRunId": {
                           "type": "string"
                         },
                         "number": {

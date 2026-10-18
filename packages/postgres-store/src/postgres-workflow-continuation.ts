@@ -65,6 +65,12 @@ export function continuationWorkflowRuns(
     },
     async handoffContinuation(ref) {
       await db
+        .update(workflowRuns)
+        .set({
+          continuation: sql`jsonb_set(${workflowRuns.continuation}, '{successorRunId}', to_jsonb(${ref.successorId}::text))`
+        })
+        .where(runIs(ref));
+      await db
         .update(workflowStepRuns)
         .set({ linkedRunId: ref.successorId })
         .where(

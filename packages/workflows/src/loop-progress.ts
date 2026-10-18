@@ -132,6 +132,9 @@ export function createLoopProgress(options: {
       });
       return;
     }
+    if (total > 0 && loop?.type === "loop" && loop.continueAsNew?.cursor !== undefined) {
+      if (await options.continueRun(tx, run, loopRun, loop, started)) return;
+    }
     const counts = await tx.workflowRuns.readLoopCounts(loopRef);
     const output: WorkflowLoopOutput = {
       total: counts?.total ?? 0,

@@ -104,6 +104,7 @@ export const workflowRuns = pgTable(
     continuation: jsonb("continuation").$type<{
       rootRunId: WorkflowRunId;
       previousRunId?: WorkflowRunId;
+      successorRunId?: WorkflowRunId;
       number: number;
     }>(),
     // When the run's values and those of its step runs were removed. Null while it has them.

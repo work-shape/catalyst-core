@@ -80,7 +80,7 @@ const STEP_REFERENCE: {
     does: `Runs its \`steps\` in order once for each item of a list or dataset of at most ${WORKFLOW_LOOP_MAX_ITEMS} items, or the Workflow's \`limits.loopItems\`. Its output is the counts { total, done, failed } and never the results of its items: what an item produces is kept by a step inside the loop, such as a changing operation.`,
     fields: {
       continueAsNew:
-        "{ position: <input field>, after?: <items per history> }: continue on the published revision at a complete item boundary, carrying the next offset as that input field. Without after, continue at the run budget or deadline. Declare the position field in inputs; successors validate it again. Labels and onFailure stay those of the first run.",
+        "{ position: <input field>, after?: <items per history>, cursor?: <item field path> }: continue on the published revision at a complete item boundary, carrying the next offset as that input field. Without after, continue at the run budget or deadline. Declare the position field in inputs; successors validate it again. With cursor, carry that field of the last completed item instead of an offset; a nonempty page continues after its loop and an empty page ends normally. Labels and onFailure stay those of the first run.",
       items:
         "A reference to the list or dataset: { step, path }, without `ref:` around it. The list is a field of the output of an earlier step.",
       steps:
