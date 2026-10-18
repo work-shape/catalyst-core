@@ -1,3 +1,4 @@
+import { FIELD_OUTPUT_MIN_TOKENS } from "./field-budget";
 import { z } from "zod";
 import { outsideSchemaChecker } from "@work-shape/catalyst-connections";
 import {
@@ -24,8 +25,6 @@ const FIELD_EXTRACTION_BASE_TIMEOUT_MS = 60_000;
 const FIELD_EXTRACTION_PER_1000_TOKENS_MS = 15_000;
 // Estimate German and English text without treating UTF-8 bytes as tokens; never truncate evidence.
 const FIELD_INPUT_BYTES_PER_TOKEN = 4;
-// Keep room for values and evidence; documents that cannot fit both pause with the required reserve.
-const FIELD_OUTPUT_MIN_TOKENS = 512;
 const FIELD_OUTPUT_TOKENS_PER_FIELD = 64;
 const answerSchema = z.strictObject({
   date: z.iso.date().nullable().optional(),

@@ -1,7 +1,7 @@
 import { hasOutdatedProcessor, processingSummary } from "./processing-summary";
 import { createKnowledgeFieldStore } from "./field-store";
 import { processingContents } from "./processing-store";
-import { visibleSourceHits } from "./source-search-visibility";
+import { visibleSourceHits } from "./source-visibility";
 import { z } from "zod";
 import {
   AppError,

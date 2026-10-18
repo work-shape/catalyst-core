@@ -18,7 +18,8 @@ import { statementsOf } from "../load-statements";
 import { recordProjection } from "./projection";
 import { storeSizeBytes } from "../size";
 import { AnsweredBefore, changeWhole, reclaim, storeFull, type StoreVerb } from "../verbs";
-import { RECORD_FIELDS_SCHEMA, RECORD_FIELDS_CONTENT_HASH } from "./schema";
+import { requireRecordsUpgrade } from "./readiness";
+import { readRecordedCall } from "../calls";
 import { recordKey, mergeField } from "./merge";
 import { recordEvidence } from "@work-shape/catalyst-core";
 import { proposalSource } from "./source";
@@ -53,6 +54,28 @@ export const recordsPropose: StoreVerb = {
       throw new AppError("CONFLICT", "Records proposals need failures dataset storage", {
         reason: "dataset_storage_unavailable"
       });
+    const platformTarget = {
+      ...runtime.server.asPlatform(store.record.location.database),
+      ...(target.signal ? { signal: target.signal } : {})
+    };
+    await requireRecordsUpgrade(
+      {
+        run: async (sql, parameters) =>
+          (
+            await runtime.server.executor.query({
+              ...platformTarget,
+              sql,
+              ...(parameters ? { parameters } : {})
+            })
+          ).rows
+      },
+      store.record,
+      context.runtime.locale ?? runtime.defaultLocale
+    );
+    if (keyed) {
+      const previous = await readRecordedCall(runtime, platformTarget, keyed);
+      if (previous) throw new AnsweredBefore(previous);
+    }
     const input = dataStoreRecordsProposeInputSchema.parse(call);
     const stepId = context.origin.kind === "workflow" ? context.origin.stepRunId : undefined;
     const replay = async (sql: Pick<PostgresChangeStatements, "run">) => {
@@ -116,20 +139,15 @@ export const recordsPropose: StoreVerb = {
         failures.push({
           item,
           code: "record_document_unavailable",
-          message: "The source document is not available"
+          message:
+            (context.runtime.locale ?? runtime.defaultLocale) === "de"
+              ? "Das Quelldokument ist entfernt, nicht verfügbar oder außerhalb der veröffentlichten Quellgrenze."
+              : "The source document is withdrawn, unavailable, or outside the published source boundary."
         });
         continue;
       }
       valid.push({ item, source, key: recordKey(rule, item, keyColumn) });
     }
-    // The additive setup reaches older customer stores as well as owned-store migration 8.
-    const platformTarget = {
-      ...runtime.server.asPlatform(store.record.location.database),
-      ...(target.signal ? { signal: target.signal } : {})
-    };
-    await runtime.server.executor.change({ ...platformTarget, timeoutMs: 30_000 }, (sql) =>
-      sql.script(RECORD_FIELDS_SCHEMA + RECORD_FIELDS_CONTENT_HASH)
-    );
     const failureDataset = workflowDatasetReferenceSchema.parse(
       await runtime.recordFailures.write(failures, context)
     );
@@ -164,7 +182,10 @@ export const recordsPropose: StoreVerb = {
                 [`records:${table.name}:${key}`]
               );
             for (const { item, source, key } of valid) {
-              const live = await proposalSource(runtime, item, context);
+              const live = await proposalSource(runtime, item, context, {
+                database: store.record.location.database,
+                sql
+              });
               if (!live || live.content_sha256 !== source.content_sha256)
                 throw new AppError(
                   "CONFLICT",
@@ -206,7 +227,7 @@ export const recordsPropose: StoreVerb = {
               }
             }
             const counts = { inserted: 0, updated: 0, rows: 0, bytes: 0 };
-            const projection = await recordProjection(sql, store.record.roles.app);
+            const projection = recordProjection(sql);
             for (const encodedKey of keys) {
               if (encodedKey === "null") continue;
               const key: unknown = JSON.parse(encodedKey);
@@ -268,7 +289,6 @@ export const recordsPropose: StoreVerb = {
               if (after > store.record.sizeLimitBytes) throw storeFull(store.record, after);
             }
             await projection.write(null, "[]");
-            await projection.close();
             const result = {
               done: valid.length,
               failed: failures.length,
