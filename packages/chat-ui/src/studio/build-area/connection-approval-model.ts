@@ -90,21 +90,51 @@ export function discoveredCandidates(
 }
 
 /**
+ * A declared operation the first cut of a REST API cannot take: one that changes data or is
+ * sent with another method than GET. Its row cannot be ticked; the instance refuses it too.
+ */
+export function outsideReadingCut(candidate: ApprovalCandidate): boolean {
+  return (
+    candidate.request !== undefined &&
+    (candidate.effect === "changing" || candidate.request.method.toUpperCase() !== "GET")
+  );
+}
+
+/**
  * What the list starts with ticked: the tools that only read. For a custom MCP server that is
  * a tool whose `readOnlyHint` is true; the hint is trusted only at this one confirmation.
  */
 export function readingNames(candidates: readonly ApprovalCandidate[]): string[] {
   return candidates
-    .filter((candidate) => candidate.effect === "reading")
+    .filter((candidate) => candidate.effect === "reading" && !outsideReadingCut(candidate))
     .map((candidate) => candidate.name);
 }
 
-/** The rows the person ticked, in the list's order. */
+/**
+ * The rows with the effect the person chose for a discovered tool, where they chose one. The
+ * hint only proposes; the accepted effect is what the approval saves (CS :105).
+ */
+export function withChosenEffects(
+  candidates: readonly ApprovalCandidate[],
+  effects: ReadonlyMap<string, ApprovalCandidate["effect"]>
+): ApprovalCandidate[] {
+  return candidates.map((candidate) => {
+    const effect = effects.get(candidate.name);
+    return effect === undefined || candidate.request !== undefined
+      ? candidate
+      : { ...candidate, effect };
+  });
+}
+
+/** The rows the person ticked, in the list's order, with the effect they chose. */
 export function selectedCandidates(
   candidates: readonly ApprovalCandidate[],
-  selected: ReadonlySet<string>
+  selected: ReadonlySet<string>,
+  effects: ReadonlyMap<string, ApprovalCandidate["effect"]> = new Map()
 ): ApprovalCandidate[] {
-  return candidates.filter((candidate) => selected.has(candidate.name));
+  return withChosenEffects(candidates, effects).filter(
+    (candidate) => selected.has(candidate.name) && !outsideReadingCut(candidate)
+  );
 }
 
 /** What a pasted text is, where it is not a list of operations. */

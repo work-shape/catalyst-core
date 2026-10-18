@@ -17,7 +17,11 @@ import type { ResolvedThemeMode } from "../../shared/theme";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { type AgentListStatus } from "../../studio/agents/agents-model";
 import { type AppRights } from "../../studio/apps/app-model";
-import { type WorkflowRights, type WorkflowsAccess } from "../../studio/workflows/workflow-model";
+import {
+  type InstanceTimeZone,
+  type WorkflowRights,
+  type WorkflowsAccess
+} from "../../studio/workflows/workflow-model";
 import { type ApprovalRevisionHost } from "../approvals/approval-revision-host";
 import type { LocalUploadingAttachment } from "../assistant/assistant-composer";
 import type { SendBlock } from "../assistant/send-block";
@@ -55,6 +59,11 @@ export interface WorkspaceChatModel {
 interface WorkflowsModel {
   access: WorkflowsAccess;
   rights: WorkflowRights;
+  /**
+   * The instance's time zone, for a schedule saved without one of its own; `defaulted`: the
+   * instance sets none, so it is UTC. Absent until the instance has answered.
+   */
+  instanceTimeZone?: InstanceTimeZone;
   /**
    * Starts a conversation of the open workspace about this Workflow and opens it, with `prompt`
    * in its composer where one is given. Rejects where the instance refuses the conversation.
@@ -222,6 +231,11 @@ export interface SelectedChatModel {
   selectedConversationTitle: string | undefined;
   /** The conversation stands in the dock of a page, not on its chat route. */
   docked: boolean;
+  /**
+   * The kind of asset the page beside the dock is about, such as `workflow` beside the
+   * Workflows: a new conversation there is about building one.
+   */
+  dockKind: string | undefined;
   /** Goes to a route of the interface, such as the page of that asset. */
   openRoute(route: WorkspaceRoute): void;
   /** The assets the agent opened, and the way to their pages. */

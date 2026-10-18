@@ -4,6 +4,7 @@ import {
   MODEL_CALL_RESERVED_OUTPUT_TOKENS,
   ModelNotPricedError,
   ModelUsageLimitReachedError,
+  KNOWLEDGE_INGESTION_PURPOSES,
   type AdmittedModelCall,
   type ClientInstanceId,
   type ModelAttribution,
@@ -11,7 +12,8 @@ import {
   type ModelCallUsage,
   type ModelUsageAttributionGroup,
   type ModelUsageCounted,
-  type ModelUsageCounterLimits,
+  type ModelUsageLimits,
+  type ModelUsagePeriodLimits,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventRecordInput,
@@ -118,6 +120,9 @@ export interface SafeCostedModelUsageEvent extends SafeModelUsageEvent {
 }
 
 export interface SafeUsageSpendBudget {
+  /** Settled spend counted toward chat budgets; Knowledge Base ingestion is excluded. */
+  dailySpentMicros: number;
+  monthlySpentMicros: number;
   currency?: string;
   dailyLimitMicros?: number;
   monthlyLimitMicros?: number;
@@ -152,6 +157,14 @@ const RESERVED_CHARACTERS_PER_INPUT_TOKEN = 3;
 const USAGE_ABANDONED_AFTER_MS = 6 * 60 * 60 * 1000;
 /** Abandoned calls recovery releases between two looks at whether it was stopped. */
 const USAGE_RECOVERY_BATCH = 200;
+/**
+ * How many times a person's safeguards the calls no person made share, such as the workflow
+ * runs of a service principal. At the shipped daily default this is 1.4 billion tokens:
+ * 700 minutes at 2 million counted tokens a minute. Even when a loop crosses a UTC day reset,
+ * two daily windows take at most 1,400 minutes (23 h 20 min). Custom limits change that bound.
+ * A call refused by it ends its run with `MODEL_USAGE_LIMIT_REACHED`.
+ */
+const UNATTENDED_SAFEGUARD_FACTOR = 7;
 
 /** What a call that reported nothing is settled with. */
 const NOTHING_REPORTED: ModelCallUsage = {
@@ -186,7 +199,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
    * and the month when every limit still holds afterwards, and writes the usage event as
    * `pending`. Of any number of processes that ask at once, exactly as many are admitted as
    * the limits have room for. The event counts as one call from here on, whatever becomes of
-   * the call.
+   * the call. Knowledge Base ingestion writes its event without using these chat counters.
    */
   async admitModelCall(call: ModelCallAdmission): Promise<AdmittedModelCall> {
     const reserved = this.reservationOf(call);
@@ -276,7 +289,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   }): Promise<SafeUsageSummary> {
     const now = input.now ?? new Date();
     const { todayStart, currentMonthStart } = createModelUsageWindowBounds(now);
-    const [history, recent, recentEvents] = await Promise.all([
+    const [history, recent, recentEvents, budgetSpend] = await Promise.all([
       this.store.summarizeModelUsageHistory({ clientInstanceId: input.clientInstanceId }),
       this.store.summarizeRecentModelUsage({
         clientInstanceId: input.clientInstanceId,
@@ -285,6 +298,11 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       this.store.listModelUsageEvents({
         clientInstanceId: input.clientInstanceId,
         limit: RECENT_EVENT_COUNT
+      }),
+      this.store.summarizeModelUsageBudget({
+        clientInstanceId: input.clientInstanceId,
+        todayStart,
+        currentMonthStart
       })
     ]);
     const rateCard = this.costs.customer;
@@ -329,6 +347,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     return {
       generatedAt: now.toISOString(),
       spendBudget: {
+        ...budgetSpend,
         ...(rateCard?.currency ? { currency: rateCard.currency } : {}),
         ...(this.budget.dailySpendLimit === undefined
           ? {}
@@ -356,21 +375,34 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     };
   }
 
-  private limits(): { day: ModelUsageCounterLimits; month: ModelUsageCounterLimits } {
+  /**
+   * The spend budgets hold for the instance as a whole. The safeguards hold for each person on
+   * their own, and for the calls of no person together (`ModelUsageLimits`).
+   */
+  private limits(): ModelUsageLimits {
     const { safeguards, budget } = this;
     // A counter holds costs as they are settled. The safety multiplier lowers the limit.
     const spend = (limit: number | undefined): { costMicros?: number } =>
       limit ? { costMicros: Math.floor(toMicros(limit) / (budget.costSafetyMultiplier ?? 1)) } : {};
+    const safeguardsTimes = (factor: number): ModelUsagePeriodLimits => {
+      const { modelCallsPerDay, tokensPerDay, tokensPerMonth } = safeguards;
+      // A valid limit is a safe integer; so is the shared bucket's, however large the limit.
+      const times = (limit: number) => Math.min(limit * factor, Number.MAX_SAFE_INTEGER);
+      return {
+        day: {
+          ...(modelCallsPerDay ? { modelCallCount: times(modelCallsPerDay) } : {}),
+          ...(tokensPerDay ? { tokens: times(tokensPerDay) } : {})
+        },
+        month: tokensPerMonth ? { tokens: times(tokensPerMonth) } : {}
+      };
+    };
     return {
-      day: {
-        ...(safeguards.modelCallsPerDay ? { modelCallCount: safeguards.modelCallsPerDay } : {}),
-        ...(safeguards.tokensPerDay ? { tokens: safeguards.tokensPerDay } : {}),
-        ...spend(budget.dailySpendLimit)
+      instance: {
+        day: spend(budget.dailySpendLimit),
+        month: spend(budget.monthlySpendLimit)
       },
-      month: {
-        ...(safeguards.tokensPerMonth ? { tokens: safeguards.tokensPerMonth } : {}),
-        ...spend(budget.monthlySpendLimit)
-      }
+      person: safeguardsTimes(1),
+      unattended: safeguardsTimes(UNATTENDED_SAFEGUARD_FACTOR)
     };
   }
 
@@ -391,9 +423,11 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     const costMicros = this.freeProviderIds.has(call.providerId)
       ? 0
       : this.highestCost(call, inputTokens, outputTokens);
+    const purpose = call.attribution.kind === "system" ? call.attribution.purpose : undefined;
     if (
       costMicros === undefined &&
-      (this.budget.dailySpendLimit || this.budget.monthlySpendLimit)
+      (this.budget.dailySpendLimit || this.budget.monthlySpendLimit) &&
+      !KNOWLEDGE_INGESTION_PURPOSES.some((ingestion) => ingestion === purpose)
     ) {
       throw new ModelNotPricedError();
     }
@@ -472,11 +506,23 @@ function countedOf(
 
 function refusalError(refusal: ModelUsageRefusal): ModelUsageLimitReachedError {
   const period = refusal.period === "day" ? "Daily" : "Monthly";
-  if (refusal.metric === "modelCallCount")
-    return new ModelUsageLimitReachedError(`${period} model call safeguard has been reached`);
-  if (refusal.metric === "tokens")
-    return new ModelUsageLimitReachedError(`${period} model token safeguard has been reached`);
-  return new ModelUsageLimitReachedError(`${period} model spend budget has been reached`);
+  const limit =
+    refusal.metric === "modelCallCount"
+      ? "model call safeguard"
+      : refusal.metric === "tokens"
+        ? "model token safeguard"
+        : "model spend budget";
+  const scope =
+    refusal.scope === "user"
+      ? "your own calls"
+      : refusal.scope === "system"
+        ? "product calls"
+        : "the instance";
+  const reset = refusal.period === "day" ? "at midnight UTC" : "at the start of next month UTC";
+  return new ModelUsageLimitReachedError(
+    `${period} ${limit} has been reached for ${scope}. Resets ${reset}.`,
+    refusal
+  );
 }
 
 /**

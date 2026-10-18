@@ -50,8 +50,8 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.stepKey": "Checking the key",
     "connectionCreate.stepTools": "Read tools",
     "connectionCreate.errorUrl": "No server answers at this address. Check it and connect again.",
-    "connectionCreate.errorUrlDenied":
-      "This instance may not reach this address. The operator allows it in the instance's network rules.",
+    "connectionCreate.errorEgress":
+      "The operator's network rule blocks this destination. To have it allowed, send the operator the host {host}.",
     "connectionCreate.errorKey":
       "The server refused the key. Enter it again or create a new one there.",
     "connectionCreate.errorKeyMissing": "The server asks for a key. Enter it and connect again.",
@@ -83,6 +83,13 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.changes": "changes",
     "connectionCreate.changingNote": "Changing tools ask before every call.",
     "connectionCreate.readsOnly": "This connection only reads.",
+    "connectionCreate.outsideReadingCutOne":
+      "This connection only reads: an operation that changes data or does not use GET cannot be approved. 1 operation cannot be selected.",
+    "connectionCreate.outsideReadingCut":
+      "This connection only reads: an operation that changes data or does not use GET cannot be approved. {count} operations cannot be selected.",
+    "connectionCreate.effectOf": "Effect of {name}",
+    "connectionCreate.effectHint":
+      "The server's hint proposes whether a tool reads or changes. Set a tool to reads only if you know it changes nothing.",
     "connectionCreate.approve": "Approve {count} tools",
     "connectionCreate.approveOne": "Approve 1 tool",
     "connectionCreate.later": "Later",
@@ -174,8 +181,8 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.stepTools": "Tools lesen",
     "connectionCreate.errorUrl":
       "Unter dieser Adresse antwortet kein Server. Prüf sie und verbinde erneut.",
-    "connectionCreate.errorUrlDenied":
-      "Diese Instanz darf die Adresse nicht erreichen. Der Betreiber erlaubt sie in den Netzregeln der Instanz.",
+    "connectionCreate.errorEgress":
+      "Eine Netzwerkregel des Betreibers sperrt dieses Ziel. Damit es erlaubt wird, schick dem Betreiber den Host {host}.",
     "connectionCreate.errorKey":
       "Der Server hat den Schlüssel abgelehnt. Gib ihn erneut ein oder erzeuge dort einen neuen.",
     "connectionCreate.errorKeyMissing":
@@ -209,6 +216,13 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.changes": "ändert",
     "connectionCreate.changingNote": "Ändernde Tools fragen vor jedem Aufruf nach.",
     "connectionCreate.readsOnly": "Diese Verbindung liest nur.",
+    "connectionCreate.outsideReadingCutOne":
+      "Diese Verbindung liest nur: Eine Operation, die Daten ändert oder nicht GET nutzt, lässt sich nicht freigeben. 1 Operation ist nicht auswählbar.",
+    "connectionCreate.outsideReadingCut":
+      "Diese Verbindung liest nur: Eine Operation, die Daten ändert oder nicht GET nutzt, lässt sich nicht freigeben. {count} Operationen sind nicht auswählbar.",
+    "connectionCreate.effectOf": "Wirkung von {name}",
+    "connectionCreate.effectHint":
+      "Der Hinweis des Servers schlägt vor, ob ein Tool liest oder ändert. Stell ein Tool nur auf liest, wenn du weißt, dass es nichts ändert.",
     "connectionCreate.approve": "{count} Tools freigeben",
     "connectionCreate.approveOne": "1 Tool freigeben",
     "connectionCreate.later": "Später",

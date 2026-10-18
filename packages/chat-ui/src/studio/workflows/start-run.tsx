@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { Button, Dialog, Field, InlineError, Input, Select, Switch } from "@work-shape/catalyst-ui";
 import { instanceSentence, readRefusalDetails } from "../build-area/build-refusals";
+import { workflowAccountRefusal } from "./workflow-publish-rights-model";
 import { useTranslation } from "../../shared/i18n";
 import {
   NO_START_FORM,
@@ -71,7 +72,12 @@ export function useStartRun(input: {
             }
           : details.reason === "input_invalid"
             ? { issues: details.issues }
-            : { message: instanceSentence(failure) ?? t("workflows.start.failed") }
+            : {
+                message:
+                  workflowAccountRefusal(failure, t) ??
+                  instanceSentence(failure) ??
+                  t("workflows.start.failed")
+              }
       );
     } finally {
       setBusy(false);

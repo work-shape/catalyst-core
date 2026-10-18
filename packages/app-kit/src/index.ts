@@ -30,3 +30,5 @@ export type {
   HostMessage,
   PageMessage
 } from "./protocol";
+
+export { storage } from "./storage";

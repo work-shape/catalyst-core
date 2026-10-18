@@ -30,6 +30,21 @@ const headings = [...workflowAuthoringSkill.content.matchAll(/^### `type: ([a-z]
 );
 
 describe("the skill for writing a Workflow", () => {
+  it("requires a discovered run account and resolves notification people without asking for ids", () => {
+    expect(workflowAuthoringSkill.content).toContain("choose a name from workflowPrincipals");
+    expect(workflowAuthoringSkill.content).not.toContain("runAs: workflow-runner");
+    expect(workflowAuthoringSkill.content).toContain("platform.context caller.id");
+    expect(workflowAuthoringSkill.content).toContain("never ask the person to type an id");
+    expect(workflowAuthoringSkill.content).toContain("sends no Inbox item or mail");
+  });
+  it("offers publishing confirmation, the sole account and a named schedule zone", () => {
+    expect(workflowAuthoringSkill.content).toContain("use assets.publish if it is available");
+    expect(workflowAuthoringSkill.content).toContain(
+      "If exactly one is offered, use it without asking"
+    );
+    expect(workflowAuthoringSkill.content).toContain("instance.timeZone");
+    expect(workflowAuthoringSkill.content).toContain("German time means Europe/Berlin");
+  });
   it("has one section per step type the engine runs, and no other", () => {
     expect(headings).toEqual([...WORKFLOW_EXECUTED_STEP_TYPES]);
   });
@@ -103,12 +118,12 @@ describe("the skill for writing a Workflow", () => {
     }
   });
 
-  it("shows the Workflow of the fixtures as it is stored there", async () => {
+  it("shows the fixture Workflow with an account-discovery placeholder for the target instance", async () => {
     const file = await readFile(`${WORKFLOW_FIXTURES}/top-customers/workflow.yaml`, "utf8");
     const stored = readWorkflowManifest(file);
     const shown = readWorkflowManifest(WORKFLOW_AUTHORING_EXAMPLES[0]?.yaml ?? "");
     expect(stored.ok && shown.ok ? shown.manifest : shown).toEqual(
-      stored.ok ? stored.manifest : stored
+      stored.ok ? { ...stored.manifest, runAs: "choose-from-platform-context" } : stored
     );
   });
 

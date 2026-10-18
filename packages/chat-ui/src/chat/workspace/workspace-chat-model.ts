@@ -4,6 +4,7 @@ import {
   type ConversationListItem,
   type StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
+import { dockKindOfRoute } from "../dock/subject-starters";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useControlPlaneModel } from "../../admin/control-plane/control-plane-model";
@@ -41,6 +42,7 @@ import {
 } from "../../studio/agents/agents-model";
 import { appsRowShown, NO_APP_RIGHTS, resolveAppRights } from "../../studio/apps/app-model";
 import {
+  instanceTimeZoneOf,
   resolveWorkflowRights,
   workflowsAccess,
   workflowsRowShown
@@ -388,6 +390,13 @@ export function useWorkspaceChatModel({
     workspaceCache,
     conversationListRefresh,
     selectedConversationId,
+    selectedConversationAbout:
+      threadQuery.data !== undefined && threadQuery.data.conversation.id === selectedConversationId
+        ? {
+            subject: threadQuery.data.conversation.subject,
+            collaborationWorkspaceId: threadQuery.data.conversation.collaborationWorkspaceId
+          }
+        : undefined,
     activeCollaborationWorkspaceId,
     personalCollaborationWorkspaceId: collaborationWorkspace.personalCollaborationWorkspaceId,
     messagesLoaded,
@@ -521,6 +530,7 @@ export function useWorkspaceChatModel({
     workspaces: collaborationWorkspacesAvailable,
     context: platformContextQuery.data
   });
+  const instanceTimeZone = instanceTimeZoneOf(platformContextQuery.data);
   const workflowRights = useMemo(
     () =>
       resolveWorkflowRights(
@@ -851,6 +861,7 @@ export function useWorkspaceChatModel({
     workflows: {
       access: workflowsOpen,
       rights: workflowRights,
+      ...(instanceTimeZone === undefined ? {} : { instanceTimeZone }),
       editWithAgent: (workflow, prompt) =>
         startConversationAbout({ kind: WORKFLOW_ASSET_KIND, name: workflow }, prompt),
       // A new Workflow is made among the instance's own, the one owner the instance takes.
@@ -874,6 +885,7 @@ export function useWorkspaceChatModel({
       selectedConversationSubject: selectedThread?.conversation.subject,
       selectedConversationTitle: selectedThread?.conversation.title,
       docked,
+      dockKind: docked ? dockKindOfRoute(route) : undefined,
       agentOpens,
       // A page the conversation links to opens with the conversation in the dock beside it.
       openRoute: (target) =>

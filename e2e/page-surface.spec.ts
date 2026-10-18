@@ -75,7 +75,8 @@ test("a Page built in chat shows beside the conversation, changes with the next 
     throw new Error("The Page's frame is not there");
   }
   expect(await frame.evaluate(() => window.origin)).toBe("null");
-  // A frame without an origin has neither: the browser refuses the read itself.
+  // Cookies remain inaccessible. The runtime supplies an isolated, temporary storage shim
+  // for unsaved Pages, so familiar localStorage reads can render the agent's App.
   expect(
     await frame.evaluate(() =>
       [() => document.cookie, () => typeof window.localStorage].map((read) => {
@@ -86,7 +87,8 @@ test("a Page built in chat shows beside the conversation, changes with the next 
         }
       })
     )
-  ).toEqual(["SecurityError", "SecurityError"]);
+  ).toEqual(["SecurityError", "object"]);
+  expect(await frame.evaluate(() => window.localStorage.length)).toBe(0);
   // A request to another host is refused by the Page's policy, and the browser says so.
   expect(
     await frame.evaluate(

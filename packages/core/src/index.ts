@@ -4,6 +4,7 @@ export * from "./agent-try-conversations";
 export * from "./agent-run-projection";
 export * from "./artifact-preview-lifecycle";
 export * from "./asset-address";
+export * from "./attached-file-titles";
 export * from "./errors";
 export * from "./ids";
 export * from "./follow-ups";
@@ -211,3 +212,5 @@ export { workflowDataFlowsSchema } from "@work-shape/catalyst-asset-schemas";
 export * from "./data-store-record-withdrawal";
 
 export * from "./operation-execution-stop";
+
+export { personalWorkspaceOwnerName } from "./personal-workspace-name";

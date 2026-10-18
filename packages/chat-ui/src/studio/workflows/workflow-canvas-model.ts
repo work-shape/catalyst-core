@@ -7,8 +7,14 @@ import type {
 } from "@work-shape/catalyst-ui";
 import { formatElapsed, formatMoment } from "../../shared/locale-format";
 import type { TranslationContextValue } from "../../shared/i18n";
-import { scheduleInWords } from "./schedule-words";
-import { failureHappened, stepFallbackSentence } from "./workflow-model";
+import { NO_RECIPIENT_NAMES, recipientsLine, type RecipientNames } from "./recipient-names";
+import { triggerInWords } from "./schedule-words";
+import {
+  failureHappened,
+  stepConnection,
+  stepFallbackSentence,
+  type InstanceTimeZone
+} from "./workflow-model";
 import type {
   WorkflowLoopCounts,
   WorkflowRunView,
@@ -170,12 +176,14 @@ function stepEyebrow(step: Pick<WorkflowStepView, "kind" | "effect">, t: Transla
 }
 
 /** The title of a step on the canvas and in its panel. */
-function stepTitle(step: WorkflowStepView, { t, locale }: CanvasText): string {
+function stepTitle(
+  step: WorkflowStepView,
+  { t, locale }: CanvasText,
+  instanceTimeZone: InstanceTimeZone | undefined
+): string {
   if (step.kind === "trigger" && step.starts !== undefined) {
     // C9: the schedule arrives as a cron expression; the common forms are put into words here.
-    return step.starts.cron === undefined
-      ? t(step.starts.onSchedule ? "workflows.schedule.custom" : "workflows.schedule.manualOnly")
-      : (scheduleInWords(step.starts.cron, { t, locale }) ?? t("workflows.schedule.custom"));
+    return triggerInWords(step.starts, { t, locale }, instanceTimeZone);
   }
   if (step.kind === "loop" && step.itemName !== undefined) {
     return t("workflows.step.loop", { item: step.itemName });
@@ -221,7 +229,16 @@ function stepIcon(step: WorkflowStepView): Pick<FlowGraphNode, "icon" | "iconFal
   }
 }
 
-function stepSummary(step: WorkflowStepView, { t, locale }: CanvasText): string | undefined {
+function stepSummary(
+  step: WorkflowStepView,
+  { t, locale }: CanvasText,
+  recipients: RecipientNames
+): string | undefined {
+  if (step.kind === "notify") {
+    // workflow-canvas.md, Notify: the node says who receives it.
+    const line = recipientsLine(step.to, recipients, { t, locale });
+    if (line !== undefined) return line;
+  }
   if (step.kind === "trigger") {
     return step.starts?.onSchedule === true && step.starts.byHand
       ? t("workflows.canvas.orByHand")
@@ -251,7 +268,11 @@ export type WorkflowGraph = FlowGraph & { groups: FlowGraphGroup[] };
 export function workflowGraph(
   steps: readonly WorkflowStepView[],
   text: CanvasText,
-  run?: CanvasRun
+  run?: CanvasRun,
+  /** The names of who a Notify step reaches, as far as the reader may read them. */
+  recipients: RecipientNames = NO_RECIPIENT_NAMES,
+  /** The instance's zone, for a schedule saved without one of its own. */
+  instanceTimeZone?: InstanceTimeZone
 ): WorkflowGraph {
   const { t, locale } = text;
   const nodes: FlowGraphNode[] = [];
@@ -279,7 +300,7 @@ export function workflowGraph(
     ...(place.parentId === undefined ? {} : { parentId: place.parentId }),
     ...stepIcon(step),
     eyebrow: stepEyebrow(step, t),
-    title: stepTitle(step, text)
+    title: stepTitle(step, text, instanceTimeZone)
   });
 
   /** What a run says on a part: its state, one line and a time. */
@@ -329,7 +350,11 @@ export function workflowGraph(
         ? stepRun.status === "cancelled"
           ? { footer: t("workflows.run.cancelled") }
           : {}
-        : { footer: failureHappened(stepRun.failure, t) }),
+        : {
+            footer: failureHappened(stepRun.failure, t, {
+              connection: stepConnection(step, stepRun)
+            })
+          }),
       ...(took === undefined || status === "idle" ? {} : { meta: took })
     };
   };
@@ -359,7 +384,9 @@ export function workflowGraph(
   const one = (step: WorkflowStepView, place: Place): Ends => {
     // In a run the start says who started it, so how else it could start is left out.
     const summary =
-      run !== undefined && step.kind === "trigger" ? undefined : stepSummary(step, text);
+      run !== undefined && step.kind === "trigger"
+        ? undefined
+        : stepSummary(step, text, recipients);
     const described = summary === undefined ? {} : { summary };
     const state = ran(step, place);
     const stepRun = place.repeated || place.skipped ? undefined : stepRuns.get(step.id);

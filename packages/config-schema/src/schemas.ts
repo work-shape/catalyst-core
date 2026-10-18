@@ -503,11 +503,7 @@ export const clientInstanceConfigSchema = z.object({
       safeguards: usageSafeguardsConfigSchema,
       costs: usageCostConfigSchema
     })
-    .default({
-      budget: { costSafetyMultiplier: 1 },
-      safeguards: {},
-      costs: {}
-    }),
+    .prefault({}),
   tools: z.array(toolInstanceConfigSchema).default([]),
   views: viewsConfigSchema,
   replies: repliesConfigSchema,

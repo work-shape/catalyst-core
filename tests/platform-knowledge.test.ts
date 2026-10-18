@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { RELEASED_KIT_VERSIONS } from "@work-shape/catalyst-app-build";
 import {
   createPlatformTools,
   platformDocsSkill,
@@ -48,9 +49,14 @@ const stand = (name: string) =>
   });
 
 /** What a conversation of an agent that lists `agentToolNames` is offered. */
-async function offerFor(agentToolNames: string[], subject?: { kind: string; name: string }) {
+async function offerFor(
+  agentToolNames: string[],
+  subject?: { kind: string; name: string },
+  connections = false
+) {
   const harness = await createWorkspaceHarness();
   const modules = createModuleRegistry(platformModules).snapshot({
+    connections: { enabled: connections },
     apps: { enabled: true },
     workflows: { enabled: true },
     assetManagement: { enabled: true }
@@ -59,6 +65,7 @@ async function offerFor(agentToolNames: string[], subject?: { kind: string; name
   platform.registry(
     [
       stand("read_skill"),
+      stand("platform.connections.draft_tools"),
       stand("workspace.open"),
       stand("workspace.write_file"),
       ...platform.tools
@@ -155,6 +162,28 @@ describe("the platform's knowledge of an agent", () => {
     expect(offer.orientation).toContain("it is not a row editor");
   });
 
+  it("offers connection drafting to platform agents by default only while Connections is enabled", async () => {
+    const offered = await offerFor(PLATFORM_TOOLS, undefined, true);
+    expect(offered.toolNames).toContain("platform.connections.draft_tools");
+    expect((await offerFor(PLATFORM_TOOLS)).toolNames).not.toContain(
+      "platform.connections.draft_tools"
+    );
+    expect((await offerFor(["read_skill"], undefined, true)).toolNames).not.toContain(
+      "platform.connections.draft_tools"
+    );
+    expect(
+      (await offerFor(["read_skill"], { kind: "connection", name: "crm" }, true)).toolNames
+    ).toContain("platform.connections.draft_tools");
+    expect(offered.orientation).toContain("never dump HTTP or YAML");
+  });
+
+  it("leaves new agents on the default model and requires a reader for their skills", async () => {
+    const offer = await offerFor(PLATFORM_TOOLS);
+    expect(offer.orientation).toContain("leave all model settings out");
+    expect(offer.orientation).toContain("Never copy a model binding");
+    expect(offer.orientation).toContain("An agent with skills needs read_skill");
+  });
+
   it("is none of the tools, the orientation or the docs for an agent that lists no platform tool, also about a Workflow", async () => {
     for (const subject of [undefined, { kind: "workflow", name: "month-end" }]) {
       const offer = await offerFor(["read_skill", "show_view"], subject);
@@ -171,6 +200,13 @@ describe("the platform's knowledge of an agent", () => {
     expect(offer.toolNames).toEqual(expect.arrayContaining([...PLATFORM_TOOLS, "read_skill"]));
     expect(offer.orientation).toContain("platform.assets.list");
     expect(offer.orientation).toContain("'platform-docs'");
+    // Personal work must not inherit a company's domain prefix (ACCEPT-1c C12).
+    expect(offer.orientation).toContain(
+      "Naming: give a new asset a short name for what it does, with no prefix."
+    );
+    expect(offer.orientation).toContain("A person's own workspace is no name prefix");
+    expect(offer.orientation).toContain("only where the person chose that area for the asset");
+    expect(offer.orientation).not.toMatch(/\bhr-|Personalwesen/u);
     expect(offer.skillNames).toContain("platform-docs");
     expect(offer.skillNames).not.toContain("platform-guide");
 
@@ -201,7 +237,9 @@ describe("the shipped skill platform-docs", () => {
     expect(guide?.content).toContain(
       "Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load."
     );
-    expect(guide?.content).toContain("/app-runtime/kit/1.5.0/fonts/fonts.css");
+    expect(guide?.content).toContain(
+      `/app-runtime/kit/${RELEASED_KIT_VERSIONS.at(-1)}/fonts/fonts.css`
+    );
   });
   it("carries every page of the platform's docs as a reference that its index names", async () => {
     const pages = (await readdir(docsRoot, { recursive: true }))

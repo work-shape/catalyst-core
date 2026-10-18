@@ -1,3 +1,4 @@
+import { ATTACHED_FILE_TITLES } from "@work-shape/catalyst-core";
 import { defineTranslations } from "./translation-area";
 
 export const conversation = defineTranslations({
@@ -15,6 +16,8 @@ export const conversation = defineTranslations({
     conversationSubjectOther: "This conversation is about “{name}”.",
     conversationSubjectWorkingOn: "Working on:",
     conversationOpened: "Opened {name}",
+    conversationAttachedFile: ATTACHED_FILE_TITLES.en.one,
+    conversationAttachedFiles: ATTACHED_FILE_TITLES.en.many,
     conversationCreatedAgent: "Agent “{name}” created",
     conversationCreatedDataStore: "Data Store draft “{name}” created",
     conversationCreatedOpen: "Open",
@@ -50,6 +53,8 @@ export const conversation = defineTranslations({
     conversationSubjectOther: "In dieser Unterhaltung geht es um „{name}“.",
     conversationSubjectWorkingOn: "Arbeitet an:",
     conversationOpened: "{name} geöffnet",
+    conversationAttachedFile: ATTACHED_FILE_TITLES.de.one,
+    conversationAttachedFiles: ATTACHED_FILE_TITLES.de.many,
     conversationCreatedAgent: "Agent „{name}“ erstellt",
     conversationCreatedDataStore: "Datenspeicher-Entwurf „{name}“ erstellt",
     conversationCreatedOpen: "Öffnen",

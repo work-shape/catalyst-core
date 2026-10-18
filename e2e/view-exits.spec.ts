@@ -656,7 +656,9 @@ exitTest.describe("a Page is held where the interface put it", () => {
     const altered = stored.url.replace(/.\/$/u, (end) => (end === "A/" ? "B/" : "A/"));
     const refused = await page.request.get(`${altered}assets/main.js`);
     expect(refused.status()).toBe(404);
-    expect(refused.headers()["content-security-policy"]).toContain("sandbox allow-scripts;");
+    expect(refused.headers()["content-security-policy"]).toContain(
+      "sandbox allow-scripts allow-forms allow-downloads;"
+    );
   });
 
   exitTest(pageTestTitles.otherSite, async ({ page, otherHost, refusals }) => {
@@ -774,7 +776,8 @@ exitTest.describe("a Page is held where the interface put it", () => {
     await expect(view.locator("#page-title")).toHaveCSS("color", "rgb(1, 2, 3)");
     await expect(body).toHaveAttribute("data-origin", "null");
     await expect(body).toHaveAttribute("data-cookie", "threw SecurityError");
-    await expect(body).toHaveAttribute("data-storage", "threw SecurityError");
+    // The shim exposes only this preview's empty state, never host browser storage.
+    await expect(body).toHaveAttribute("data-storage", "0");
     await expect(body).toHaveAttribute("data-session-storage", "threw SecurityError");
     await expect(body).toHaveAttribute("data-databases", "threw SecurityError");
     await expect(body).toHaveAttribute("data-parent", "threw SecurityError");

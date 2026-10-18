@@ -50,14 +50,14 @@ const STEP_REFERENCE: {
     does: "Starts the run. It is always the first step, and a definition has exactly one. Its output is { input, startedAt, trigger, scheduledFor }, where `input` is the run's input, checked against the definition's `inputs`.",
     fields: {
       triggers:
-        'A nonempty list of { kind: manual } (a person or a call starts it), { kind: schedule, cron: "<five fields>" } (a due time in the instance time zone), or { kind: parent } (a workflow step starts it). With parent alone, only another Workflow starts it. Values of missed and overlap other than last and skip are not run yet.'
+        'A nonempty list of { kind: manual } (a person or a call starts it), { kind: schedule, cron: "<five fields>", timeZone: "<IANA zone>" } (a wall-clock time in that zone), or { kind: parent } (a workflow step starts it). With parent alone, only another Workflow starts it. Values of missed and overlap other than last and skip are not run yet.'
     }
   },
   operation: {
     does: "Calls one operation by its name, as the service principal the Workflow runs as. Its output is what the operation answered.",
     fields: {
       operation:
-        "The full name of the operation, such as `connection.<connection>.<operation>`. Ask the tool that lists the callable operations for the names and their input schemas; do not guess one.",
+        "The full name of the operation, such as `connection.<connection>.<operation>`. Ask `platform.assets.operations` for the names and input schemas; filter by exact `name` or a `prefix` such as `connection.crm.` or `data_store.orders.`. Each page has at most 200 operations: pass `nextCursor` as `cursor` with the same filters until it is absent before concluding an operation does not exist. Do not guess a name. To run another Workflow and wait for its result, use a `workflow` step, not `workflow.<name>.start` here.",
       input:
         "The mapping onto the operation's input: one entry per field of its input schema. See 'Mappings and references'.",
       dataset:
@@ -105,9 +105,9 @@ const STEP_REFERENCE: {
     }
   },
   notify: {
-    does: "Leaves a notice in each active recipient's Inbox. With mail, queues a counts-only digest and a link; no title, text, client name or finding leaves by mail. A test notifies only its tester.",
+    does: "Leaves a notice in each active recipient's Inbox. With mail, queues a counts-only digest and a link; no title, text, client name or finding leaves by mail. A test simulates this changing step: its result shows wouldHaveDone with the intended recipients and frozen content; it sends no Inbox item or mail.",
     fields: {
-      to: "Instance user ids under users and Shared Workspace ids under workspaces (their active members). No free e-mail address.",
+      to: "Instance user ids under users and Shared Workspace ids under workspaces (their active members). For 'me', use platform.context caller.id. For a name or email, call platform.context with person and use the returned people match; ask which person if ambiguous, never ask the person to type an id. No free e-mail address.",
       channels: "[inbox], or [inbox, mail]. Every notice has an Inbox item.",
       title: "A mapping { value: text } or { ref: { step, path } }; Inbox only, one line.",
       text: "A mapping { value: text } or { ref: { step, path } }; Inbox only, one paragraph.",
@@ -129,7 +129,7 @@ const EXAMPLES: { title: string; yaml: string }[] = [
     yaml: `id: top-customers
 name: Top customers
 description: Reads the customers with the highest revenue from the sample system.
-runAs: workflow-runner
+runAs: choose-from-platform-context
 inputs:
   type: object
   properties:
@@ -167,7 +167,7 @@ steps:
     title: "A loop that makes one changing call per item and returns its counts",
     yaml: `id: notify-clients
 name: Notify clients
-runAs: workflow-runner
+runAs: choose-from-platform-context
 inputs:
   type: object
   properties:
@@ -218,7 +218,7 @@ steps:
     title: "A schedule and a literal value in a mapping",
     yaml: `id: nightly-check
 name: Nightly check
-runAs: workflow-runner
+runAs: choose-from-platform-context
 inputs:
   type: object
 outputs:
@@ -367,6 +367,10 @@ function content(packages: readonly WorkflowRunnerPackage[]): string {
 Read this before you change the definition of a Workflow. It says what a definition holds, what
 the engine of this release runs, and how to save a change safely.
 
+When the person asks to publish, use assets.publish if it is available: it offers the person the publish confirmation and cannot publish without their click. Do not say you cannot publish when that tool is offered. Speak in the person's language: say schedule and draft, not Cron or Draft Revision numbers.
+
+For a schedule, read platform.context instance.timeZone. Write the wall-clock hour the person asks for together with timeZone on the schedule trigger. Use an explicit IANA zone the person names (German time means Europe/Berlin), otherwise the instance zone. When instance.timeZoneDefaulted is true and no other zone was requested, explain that the default is UTC. Never subtract a UTC offset from the hour yourself.
+
 Whether the work is a Workflow at all, or an App or a View: \`references/apps/app-or-workflow.md\`
 in \`platform-docs\`.
 
@@ -427,7 +431,7 @@ ${RULES_REVISION_STEPS.replace(/^/gmu, "  ")}
   the config. Never change it.
 - \`name\`: what a person calls the Workflow. \`description\`: one or two plain sentences, optional.
 - \`runAs\`: the name of the service principal every step acts as. Its rights decide what a step
-  may call. Do not change it unless the person asks: a publish checks whether its publisher
+  may call. For a new Workflow, call platform.context and choose a name from workflowPrincipals, never an invented name or the placeholder in these examples. If exactly one is offered, use it without asking. If none is offered, explain that a Workflow account without an API key is created under Settings > API access. Never use an integration, CLI or release account. Do not change it unless the person asks: a publish checks whether its publisher
   may let a Workflow act as that principal.
 - \`kind\`: \`process\` unless set. Use \`data\` for a Workflow that fills or processes a Knowledge Base or Data Store. Publishing Knowledge Base \`ingest\`, \`withdraw\`, \`put_processed\` or Data Store \`records.propose\` from a process Workflow is refused with \`process_workflow_write_operation\`. A copied data template keeps \`kind: data\`.
 - \`labels\`: optional mapping of names to text or numbers, as literals such as

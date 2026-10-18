@@ -3,13 +3,10 @@ import {
   AppError,
   moduleOffError,
   operationDenialError,
-  unknownToJsonValue,
   type AuditRecorder,
   type Conversation,
   type ConversationSubject,
-  type JsonObject,
   type OperationAuthorization,
-  type OperationDefinition,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
 import {
@@ -20,10 +17,8 @@ import {
   type AppSaved,
   type PlatformAssetCalls,
   type PlatformAssetPut,
-  type PlatformAssetFound,
-  type PlatformCallableOperation
+  type PlatformAssetFound
 } from "@work-shape/catalyst-tool-execution";
-import { z } from "zod";
 import {
   DRAFT_CHANGED_ELSEWHERE,
   DRAFT_MOVED_TO_OTHER_PAGE,
@@ -38,9 +33,12 @@ import type { AssetCall } from "../assets/asset-access";
 import { assetWriteEvent } from "../guardrails/asset-guardrail-events";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { AssetWorkflow } from "../assets/asset-service";
-import { callableByAudience, listingOrigin } from "./platform-operations-audience";
+import { listCallableOperations } from "./platform-callable-operations";
+import { authorizePlatformAssetPut } from "./platform-asset-preflight";
+import { assetTitle } from "../assets/asset-reference-labels";
 import { createPlatformAssetPolicy } from "./platform-asset-policy";
 import { readPlatformContext } from "./platform-context";
+import { workflowAuthoringContext } from "./workflow-authoring-context";
 import {
   CREATED_FROM_CHAT,
   accessOf,
@@ -52,7 +50,6 @@ import {
   requireReadableSubject,
   subjectUnavailable
 } from "../conversations/platform-asset-subject";
-import { resolveOperationResource } from "../operations/operation-resource";
 import { findWorkspaceFiles } from "../workspaces/workspace-files";
 import type { AssetWorkflowOptions } from "../types";
 
@@ -80,24 +77,6 @@ const APP_FROM_PAGE_OPERATIONS = {
 /** How many revisions of an App back a save of a Page looks for one written from that Page. */
 const APP_REVISIONS_LOOKED_BACK = 200;
 
-/** How many operations one list answers. The list has no pages, so this is its bound. */
-const CALLABLE_OPERATION_LIST_MAX = 200;
-
-const jsonObjectSchema = z.record(z.string(), z.unknown());
-
-/** The input or output of an operation as JSON Schema, where it can be told as one. */
-function jsonSchemaOf(given: JsonObject | undefined, schema: z.ZodType): JsonObject | undefined {
-  if (given) return given;
-  try {
-    const derived = jsonObjectSchema.safeParse(z.toJSONSchema(schema, { unrepresentable: "any" }));
-    if (!derived.success || Object.keys(derived.data).length <= 1) return undefined;
-    const value = unknownToJsonValue(derived.data);
-    return typeof value === "object" && value !== null && !Array.isArray(value) ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /** The refusal of a call that names no asset in a conversation about none yet. */
 const withoutSubject = () =>
   new AppError(
@@ -119,6 +98,7 @@ const namedBy = (input: { kind?: string; name?: string }): ConversationSubject |
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
   const { centralFloor, putFloor } = createPlatformAssetPolicy(options, workflow);
+  const titleOf = assetTitle.bind(undefined, options.configAssets.kinds.kinds);
 
   const pageApps = new PageApps(options);
 
@@ -184,7 +164,10 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     ) {
       throw subjectUnavailable();
     }
-    const app = { name: row.name, title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}) };
+    const app = {
+      name: row.name,
+      title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}, context.locale)
+    };
     const page = await pageApps.named(conversation.id, input.page);
     const origin = await options.configAssets.store.getConfigAssetPageOrigin({
       clientInstanceId: options.clientInstanceId,
@@ -394,16 +377,6 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     };
   }
 
-  /** The name people read for an asset, as a list shows it: its name where none is told. */
-  function titleOf(kind: string, name: string, config: JsonObject): string {
-    const assetKind = options.configAssets.kinds.kinds.find((each) => each.kind === kind);
-    try {
-      return assetKind?.summarize(config).title ?? name;
-    } catch {
-      return name;
-    }
-  }
-
   /** The kinds that exist here: a kind of a module that is off does not. */
   const existingKinds = () =>
     options.configAssets.kinds.kinds.filter(
@@ -500,7 +473,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       created: true,
       kind: named.kind,
       name: named.name,
-      title: titleOf(named.kind, named.name, read.config),
+      title: titleOf(named.kind, named.name, read.config, context.locale),
       ...ownerOf(kind, conversation),
       ...(beside ? { besideSubject: true as const } : {})
     };
@@ -526,7 +499,10 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         await requireOwnTranscript(options, conversation);
       }
       const read = await readAsset(context, conversation, named);
-      const opened = { ...read, title: titleOf(read.kind, read.name, read.config) };
+      const opened = {
+        ...read,
+        title: titleOf(read.kind, read.name, read.config, context.locale)
+      };
       if (!moves) return opened;
       // An asset of the instance becomes the subject only by a person's step: the agent's own
       // open is none, since a document or a tool's answer the agent read can ask for it, and
@@ -582,6 +558,22 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         if (refused && "issues" in refused) return { issues: refused.issues };
         throw error;
       }
+    },
+
+    async authorizePut(input, context) {
+      // Draft saves keep their structured validation result. Live creates must pass before Allow.
+      if (input.expectedRevision !== undefined) return { allowed: true };
+      if (context.origin.kind !== "agent") return { allowed: false, reason: "user_only" };
+      const conversation = await options.stores.conversations.getConversation(
+        options.clientInstanceId,
+        context.origin.conversationId
+      );
+      if (!conversation) throw subjectUnavailable();
+      const target = await putTarget(conversation, input);
+      if (!target || options.configAssets.kinds.get(target.kind)?.lifecycle === "draft_published")
+        return { allowed: true };
+      await requireOwnTranscript(options, conversation);
+      return authorizePlatformAssetPut(options, workflow, target, input, context);
     },
 
     async put(context, input) {
@@ -747,14 +739,24 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       return [assetWriteEvent({ kind: target.kind, name: target.name, ...contentOf(input) })];
     },
 
-    async readContext(context) {
+    async readContext(context, input) {
       const call = await callOf(context);
       const read = await readPlatformContext(options, call);
       const kinds = existingKinds();
       const existing = new Set<string>(kinds.flatMap((kind) => Object.values(kind.actions)));
       const ofExisting = (actions: string[]) => actions.filter((action) => existing.has(action));
       return {
-        instance: { name: read.instance.name },
+        ...(await workflowAuthoringContext(
+          options,
+          call,
+          input,
+          options.modules.isEnabled("workflows")
+        )),
+        instance: {
+          name: read.instance.name,
+          timeZone: options.config.clientInstance.timeZone ?? "UTC",
+          timeZoneDefaulted: options.config.clientInstance.timeZone === undefined
+        },
         modules: options.modules.modules.filter((module) => module.enabled).map(({ name }) => name),
         kinds: kinds.map((kind) => ({
           kind: kind.kind,
@@ -836,58 +838,16 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       };
     },
 
-    async listOperations(context, audience) {
-      // The list is of the instance, so it needs no subject: an agent asks it while it builds
-      // a Page, before the conversation is about any asset.
+    async listOperations(context, audience, input = {}) {
+      // An agent asks while building, before the conversation is about any asset.
       const conversation = await conversationOf(context);
-      const call = await callOf(context);
-      const listing = await options.operationCalls?.registry.list({});
-      const candidates = (listing?.operations ?? [])
-        .filter((definition) => callableByAudience(definition.name, audience))
-        .sort((left, right) => (left.name < right.name ? -1 : 1));
-      const visible = async (definition: OperationDefinition): Promise<boolean> => {
-        try {
-          const { resource, resourceNotFound } = await resolveOperationResource(
-            options,
-            definition.resource({})
-          );
-          if (resourceNotFound) return false;
-          if (definition.action !== null) {
-            return call.access.authorize(definition.action, resource).allowed;
-          }
-          const decision = await definition.authorize(
-            {},
-            {
-              actor: call.actor,
-              origin: listingOrigin(audience, conversation.id),
-              correlationId: call.correlationId,
-              access: call.access,
-              resource
-            }
-          );
-          return decision.allowed;
-        } catch {
-          return false;
-        }
-      };
-      const operations: PlatformCallableOperation[] = [];
-      let truncated = (listing?.truncated.length ?? 0) > 0;
-      for (const definition of candidates) {
-        if (!(await visible(definition))) continue;
-        if (operations.length >= CALLABLE_OPERATION_LIST_MAX) {
-          truncated = true;
-          break;
-        }
-        const inputSchema = jsonSchemaOf(definition.inputJsonSchema, definition.inputSchema);
-        const outputSchema = jsonSchemaOf(definition.outputJsonSchema, definition.outputSchema);
-        operations.push({
-          name: definition.name,
-          effect: definition.effect,
-          ...(inputSchema ? { inputSchema } : {}),
-          ...(outputSchema ? { outputSchema } : {})
-        });
-      }
-      return { operations, truncated };
+      return listCallableOperations(
+        options,
+        await callOf(context),
+        conversation.id,
+        audience,
+        input
+      );
     }
   };
 }

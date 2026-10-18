@@ -272,12 +272,20 @@ export {
 
 export type { LocalizationConfig, LocalizedStringConfig };
 
+/** The spend budgets of the whole instance. */
 export interface UsageBudgetConfig {
   dailySpendLimit?: number;
   monthlySpendLimit?: number;
   costSafetyMultiplier?: number;
 }
 
+/**
+ * Protection against a runaway loop, held per person: each value is what one person's calls
+ * may use, and apart from those what the calls the product makes for that person may use (a
+ * title or a guardrail check). The calls no person made share one larger bucket
+ * (`UNATTENDED_SAFEGUARD_FACTOR` in usage-governance). Release config parsing fills absent
+ * values with the shipped defaults. Knowledge Base ingestion is outside these safeguards.
+ */
 export interface UsageSafeguardsConfig {
   modelCallsPerDay?: number;
   tokensPerDay?: number;

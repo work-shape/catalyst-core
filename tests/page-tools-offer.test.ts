@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createPlatformTools, platformModules } from "@work-shape/catalyst-client-assembly";
 import { createModuleRegistry } from "@work-shape/catalyst-core";
+import { createAppPublishTool } from "@work-shape/catalyst-tool-execution";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
@@ -52,6 +53,16 @@ async function offered(input: { apps: boolean; release: string[]; registered?: s
 }
 
 describe("the tools a conversation is offered to build an App", () => {
+  it("offers the existing publish confirmation for a Workflow", () => {
+    const tool = createAppPublishTool();
+    expect(
+      tool.inputSchema.safeParse({ kind: "workflow", name: "check-books", revision: 1 }).success
+    ).toBe(true);
+    expect(
+      tool.inputSchema.safeParse({ kind: "connection", name: "books", revision: 1 }).success
+    ).toBe(false);
+  });
+
   it("are the open, the save and the file tools, without the release naming the two App tools", async () => {
     const names = await offered({
       apps: true,

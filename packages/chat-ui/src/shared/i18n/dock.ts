@@ -1,14 +1,38 @@
 import { defineTranslations } from "./translation-area";
 
 /**
- * The chat dock beside every page, the buttons that bring it back, and the starters of a
- * conversation about an App or a Workflow.
+ * The chat dock beside every page, the buttons that bring it back, and the start page of a
+ * conversation about an asset or about a new one.
  */
 export const dock = defineTranslations({
   en: {
     "dock.answerRunning": "an answer is running",
     "dock.chat": "Chat",
     "dock.close": "Close chat",
+    "dock.greetingAbout": "What should change in “{title}”?",
+    "dock.greetingAboutUntitled": "What should change?",
+    "dock.greetingNewAgent": "What should the new agent do?",
+    "dock.greetingNewApp": "What should the new app do?",
+    "dock.greetingNewDataStore": "What should the new data store hold?",
+    "dock.greetingNewOther": "What do you want to build?",
+    "dock.greetingNewSkill": "What should the new skill know how to do?",
+    "dock.greetingNewWorkflow": "What should the new workflow do?",
+    "dock.newAgentAnswersHint": "From your price list and terms",
+    "dock.newAgentAnswersPrompt":
+      "Build an agent that answers client questions from our price list and terms of business, and says so when it does not know.",
+    "dock.newAgentAnswersTitle": "Answer client questions",
+    "dock.newAgentRepliesHint": "In your tone, for you to check",
+    "dock.newAgentRepliesPrompt":
+      "Build an agent that drafts replies to client emails in our tone, for me to check before I send them.",
+    "dock.newAgentRepliesTitle": "Draft email replies",
+    "dock.newSkillInvoiceHint": "Required details and totals",
+    "dock.newSkillInvoicePrompt":
+      "Write a skill that checks an invoice for the required details and whether the totals add up.",
+    "dock.newSkillInvoiceTitle": "Check an invoice",
+    "dock.newSkillNotesHint": "Decisions, owners and dates",
+    "dock.newSkillNotesPrompt":
+      "Write a skill that turns a meeting transcript into notes with decisions, owners and dates.",
+    "dock.newSkillNotesTitle": "Write meeting notes",
     "dock.openFullChat": "Open as full chat",
     "dock.resize": "Resize chat",
     "dock.showChat": "Show chat",
@@ -31,6 +55,30 @@ export const dock = defineTranslations({
     "dock.answerRunning": "eine Antwort läuft",
     "dock.chat": "Chat",
     "dock.close": "Chat schließen",
+    "dock.greetingAbout": "Was soll sich an „{title}“ ändern?",
+    "dock.greetingAboutUntitled": "Was soll sich ändern?",
+    "dock.greetingNewAgent": "Was soll der neue Agent tun?",
+    "dock.greetingNewApp": "Was soll die neue App können?",
+    "dock.greetingNewDataStore": "Was soll der neue Datenspeicher enthalten?",
+    "dock.greetingNewOther": "Was möchtest du bauen?",
+    "dock.greetingNewSkill": "Was soll der neue Skill können?",
+    "dock.greetingNewWorkflow": "Was soll der neue Workflow tun?",
+    "dock.newAgentAnswersHint": "Aus Preisliste und AGB",
+    "dock.newAgentAnswersPrompt":
+      "Bau einen Agenten, der Kundenfragen aus unserer Preisliste und unseren AGB beantwortet und sagt, wenn er etwas nicht weiß.",
+    "dock.newAgentAnswersTitle": "Kundenfragen beantworten",
+    "dock.newAgentRepliesHint": "In eurem Ton, zum Prüfen",
+    "dock.newAgentRepliesPrompt":
+      "Bau einen Agenten, der Antworten auf Kunden-E-Mails in unserem Ton entwirft, die ich vor dem Senden prüfe.",
+    "dock.newAgentRepliesTitle": "E-Mail-Antworten entwerfen",
+    "dock.newSkillInvoiceHint": "Pflichtangaben und Summen",
+    "dock.newSkillInvoicePrompt":
+      "Schreib einen Skill, der eine Rechnung auf die Pflichtangaben prüft und ob die Summen stimmen.",
+    "dock.newSkillInvoiceTitle": "Rechnung prüfen",
+    "dock.newSkillNotesHint": "Entscheidungen, Zuständige und Termine",
+    "dock.newSkillNotesPrompt":
+      "Schreib einen Skill, der aus einem Gesprächsmitschnitt ein Protokoll mit Entscheidungen, Zuständigen und Terminen macht.",
+    "dock.newSkillNotesTitle": "Protokoll schreiben",
     "dock.openFullChat": "Als ganzen Chat öffnen",
     "dock.resize": "Chatbreite ändern",
     "dock.showChat": "Chat anzeigen",

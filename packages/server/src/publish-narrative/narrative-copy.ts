@@ -97,12 +97,17 @@ interface When {
 
 interface Copy {
   quote(name: string): string;
-  /** A cron expression in words, or nothing where it is no daily, weekly or monthly form. */
+  /** A cron expression in words; `other` for a form not put into words, never the cron itself. */
   schedule: {
     daily(time: string): string;
     weekly(day: string, time: string): string;
     monthly(day: number, time: string): string;
-    other(cron: string): string;
+    /** One day of one month, such as "18 October". */
+    yearly(date: string, time: string): string;
+    other: string;
+    /** The zone the clock time is in: an IANA name, or UTC as the default. */
+    zone(words: string, zone: string): string;
+    defaultZone(words: string): string;
   };
   /** How a clock time reads in a schedule: "2:00 AM", "02:00". */
   clock: Intl.DateTimeFormatOptions;
@@ -176,7 +181,10 @@ const EN: Copy = {
     daily: (time) => `every day at ${time}`,
     weekly: (day, time) => `every ${day} at ${time}`,
     monthly: (day, time) => `on the ${day}${ordinal(day)} of every month at ${time}`,
-    other: (cron) => `on the schedule “${cron}”`
+    yearly: (date, time) => `every year on ${date} at ${time}`,
+    other: "on a schedule",
+    zone: (words, zone) => `${words} (${zone})`,
+    defaultZone: (words) => `${words} (UTC, the default time zone)`
   },
   clock: { hour: "numeric", minute: "2-digit" },
   manual: "when someone starts it",
@@ -278,7 +286,10 @@ const DE: Copy = {
     daily: (time) => `jeden Tag um ${time} Uhr`,
     weekly: (day, time) => `jeden ${day} um ${time} Uhr`,
     monthly: (day, time) => `am ${day}. jedes Monats um ${time} Uhr`,
-    other: (cron) => `nach dem Zeitplan „${cron}“`
+    yearly: (date, time) => `jedes Jahr am ${date} um ${time} Uhr`,
+    other: "nach Zeitplan",
+    zone: (words, zone) => `${words} (${zone})`,
+    defaultZone: (words) => `${words} (UTC, die Standardzeitzone)`
   },
   clock: { hour: "2-digit", minute: "2-digit" },
   manual: "wenn jemand ihn startet",
@@ -411,8 +422,21 @@ function ordinal(day: number): string {
 
 const NUMBER = /^\d{1,2}$/u;
 
-/** A cron expression in words: every day, every week on one day, every month on one day. */
-function scheduleWords(cron: string, locale: LocaleCode): string {
+/**
+ * A schedule in words with the zone its clock time is in. The wall-clock time of the cron is
+ * said as written: it is a time in that zone, never converted to another.
+ */
+function scheduleWords(cron: string, timeZone: string | undefined, locale: LocaleCode): string {
+  const copy = COPY[locale].schedule;
+  const words = cronWords(cron, locale);
+  return timeZone === undefined ? copy.defaultZone(words) : copy.zone(words, oneLine(timeZone));
+}
+
+/**
+ * A cron expression in words: every day, every week on one day, every month on one day, every
+ * year on one date. Any other form is "on a schedule".
+ */
+function cronWords(cron: string, locale: LocaleCode): string {
   const copy = COPY[locale].schedule;
   const fields = cron.trim().split(/\s+/u);
   const [minute = "", hour = "", day = "", month = "", weekday = ""] = fields;
@@ -420,15 +444,26 @@ function scheduleWords(cron: string, locale: LocaleCode): string {
     fields.length === 5 &&
     NUMBER.test(minute) &&
     NUMBER.test(hour) &&
-    month === "*" &&
+    (month === "*" || NUMBER.test(month)) &&
     Number(minute) <= 59 &&
     Number(hour) <= 23;
-  if (!plain) return copy.other(oneLine(cron));
+  if (!plain) return copy.other;
   // A clock time has no day: any day in UTC gives the same words. Some ICU versions put a narrow
   // no-break space before "AM"; the sentence reads the same on every runtime with a plain one.
   const time = new Date(Date.UTC(2026, 0, 1, Number(hour), Number(minute)))
     .toLocaleTimeString(locale, { ...COPY[locale].clock, timeZone: "UTC" })
     .replace(/\u202f/gu, " ");
+  if (month !== "*") {
+    // One date a year. 2028 is a leap year, so 29 February is a date too.
+    const date = new Date(Date.UTC(2028, Number(month) - 1, Number(day)));
+    const real = weekday === "*" && NUMBER.test(day) && date.getUTCMonth() === Number(month) - 1;
+    return real
+      ? copy.yearly(
+          date.toLocaleDateString(locale, { day: "numeric", month: "long", timeZone: "UTC" }),
+          time
+        )
+      : copy.other;
+  }
   if (day === "*" && weekday === "*") return copy.daily(time);
   if (day === "*" && NUMBER.test(weekday) && Number(weekday) <= 7) {
     // 4 January 2026 is a Sunday, which cron counts as 0 and as 7.
@@ -441,7 +476,7 @@ function scheduleWords(cron: string, locale: LocaleCode): string {
   if (weekday === "*" && NUMBER.test(day) && Number(day) >= 1 && Number(day) <= 31) {
     return copy.monthly(Number(day), time);
   }
-  return copy.other(oneLine(cron));
+  return copy.other;
 }
 
 const lists = (locale: LocaleCode) => ({
@@ -459,7 +494,7 @@ export function workflowSummary(input: WorkflowSentence, locale: LocaleCode): st
       ? [{ words: copy.noTrigger, clause: true }]
       : input.triggers.map((trigger) =>
           trigger.kind === "schedule"
-            ? { words: scheduleWords(trigger.cron, locale), clause: false }
+            ? { words: scheduleWords(trigger.cron, trigger.timeZone, locale), clause: false }
             : trigger.kind === "manual"
               ? { words: copy.manual, clause: true }
               : trigger.kind === "parent"

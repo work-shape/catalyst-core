@@ -30,7 +30,8 @@ export { AppAudienceChange, appPublishMaySend } from "./app-publish-question";
 export {
   appPublishCall,
   appPublishConfirmationReady,
-  AppPublishConfirmationView
+  AppPublishConfirmationView,
+  appWorkspaceName
 } from "./app-publish-confirmation";
 export { AppDeleteDialog, AppDetailsDialog, appLink } from "./app-header";
 export {

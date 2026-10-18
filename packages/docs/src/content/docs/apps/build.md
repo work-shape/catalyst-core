@@ -9,6 +9,50 @@ An agent writes an App's files in its execution workspace and shows the folder b
 
 A quick preview may show data the agent wrote into it. Live data comes through named actions: one file per action in the folder `actions/`, which the build compiles into the manifest. The browser calls an action by its name and nothing else: it never calls a Connection, a Data Store or a Workflow directly, and it never holds a key.
 
+## Sandbox, forms and personal state
+
+Apps run with `allow-scripts allow-forms allow-downloads`, without `allow-same-origin`.
+A form's validation and `submit` event work. Handle `submit` with `event.preventDefault()`
+and call a named action; `form-action 'none'` blocks navigation to every form target.
+Inline `onclick` and `onsubmit` attributes are refused: use `addEventListener` or React handlers.
+
+An App or unsaved preview gets a `window.localStorage`-compatible shim before its first script runs.
+It reads only the current person's state in that App; it never exposes the platform's browser
+storage. The state is stored on the instance, survives reloads and App revisions, and is erased
+with the App or the person's account. Native `getItem`, `setItem`, `removeItem`, `clear`,
+`key`, `length` and property access work. Writes are synchronous in memory and persisted
+in batches about every 250 ms, with the last write to each key winning. A
+`catalyst-storage-error` event reports a persistence failure. A builder's draft preview
+shares the same per-person state with the published App, so trying a draft can change
+that person's preferences in the published App.
+
+There is no `sessionStorage` shim: accessing it throws `SecurityError` in the sandbox.
+The `localStorage` shim is not a native `Storage` object: `localStorage instanceof Storage`
+is false. On `pagehide` and when the document becomes hidden, it tries to flush the batch,
+but this is best effort. A write is lost if the page closes before its batch is saved.
+An immediate reload within the batching window can also lose the write; await kit
+`storage.set` before navigating or reloading when the save must persist.
+
+Prefer the JSON API in kit **1.6.0**, whose save waits for persistence and rejects on failure:
+
+```ts
+import { storage } from "@work-shape/catalyst-app-kit";
+const filters = await storage.get("filters"); // null until set
+await storage.set("filters", { status: "open" });
+```
+
+Personal state holds at most 64 KiB of UTF-8 JSON per App and person. Catch storage errors
+and show a retry beside the action. An unsaved preview keeps temporary in-memory state only.
+When running outside the App runtime, catch `SecurityError` from native storage and keep rendering.
+Use a **Data Store** and named actions for shared business records such as leave requests;
+personal storage is for preferences and a person's unfinished input, not shared records.
+
+Network requests are restricted by `connect-src`: an unsaved preview or a draft has no
+outside network, and a published App reaches only reviewed hosts declared in its manifest.
+Use named actions for Connections and Data Stores, never fetch the instance API directly.
+Bundle fonts and libraries or use the kit; public CDNs do not load. When diagnosing a failure,
+check form handlers, storage availability and the declared network policy before blaming the data.
+
 ## Preparing data scope
 
 Follow the [build rules for data scope](/configure/release-config/#build-rules-for-data-scope).
@@ -37,9 +81,9 @@ A React App imports only its own files, `react`, `react-dom`, `@tanstack/react-r
 
 Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load.
 
-Kit 1.5.0 supplies Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.5.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.5.0/fonts/README.md`.
+Kit 1.6.0 supplies Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.6.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.6.0/fonts/README.md`.
 
-A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.5.0/fonts/fonts.css");` and `body { font-family: Lora; }`.
+A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.6.0/fonts/fonts.css");` and `body { font-family: Lora; }`.
 
 ## The manifest
 
@@ -50,7 +94,7 @@ A React App imports its CSS from a route (for example, `import "../fonts.css"`);
 | `id`                  | Lowercase letters, digits and `-`, at most 63 characters.                                                                                |
 | `name`                | The name people read.                                                                                                                    |
 | `description`, `icon` | Optional.                                                                                                                                |
-| `kit`                 | The exact kit version. Use `1.5.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
+| `kit`                 | The exact kit version. Use `1.6.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
 | `entry`               | `index.html` for a plain HTML App. A React App leaves it out.                                                                            |
 | `connections`         | The Connections the App's actions call, by name.                                                                                         |
 | `dataStores`          | The Data Store the App's `sql` actions use: `{ name, minSchema }`. One at most while the App has `sql` actions.                          |
@@ -177,7 +221,7 @@ A dashboard for one client of an accounting data source: it reads bookings from 
 ```yaml title="app.yaml"
 id: accounting-dashboard
 name: Accounting dashboard
-kit: 1.5.0
+kit: 1.6.0
 connections:
   - accounting_source
 dataStores:
@@ -325,7 +369,7 @@ The same call from a plain HTML App, with one action on the Connection.
 ```yaml title="app.yaml"
 id: accounting-bookings
 name: Accounting bookings
-kit: 1.5.0
+kit: 1.6.0
 entry: index.html
 connections:
   - accounting_source

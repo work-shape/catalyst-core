@@ -9,6 +9,8 @@ import {
   type ConversationSubject,
   type JsonObject,
   type OperationBeforeEvent,
+  type OperationAuthorization,
+  type OperationAuthorizeContext,
   type PolicyValue,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
@@ -161,6 +163,13 @@ type PlatformAssetWrite =
  */
 export type PlatformOperationsAudience = (typeof OPERATIONS_AUDIENCES)[number];
 
+/** Filters and the continuation of one callable-operation page. */
+export interface PlatformOperationsQuery {
+  cursor?: string;
+  name?: string;
+  prefix?: string;
+}
+
 /** One operation a step or an action may call, as far as the person the agent acts for may see it. */
 export interface PlatformCallableOperation {
   name: string;
@@ -201,6 +210,11 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls, AppSaveCalls
    * they name: the subject in a conversation about no asset yet, else a draft beside it.
    */
   put(context: ToolExecutionContext, input: PlatformAssetPut): Promise<PlatformAssetWrite>;
+  /** Checks the same write before the person is offered its confirmation. */
+  authorizePut(
+    input: PlatformAssetPut,
+    context: OperationAuthorizeContext
+  ): Promise<OperationAuthorization>;
   /**
    * What an administrator's setting on the operation a save projects asks for the subject of a
    * conversation, or nothing where no setting matches it. A save is never looser than it. In a
@@ -221,8 +235,9 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls, AppSaveCalls
   ): Promise<readonly OperationBeforeEvent[]>;
   listOperations(
     context: ToolExecutionContext,
-    audience: PlatformOperationsAudience
-  ): Promise<{ operations: PlatformCallableOperation[]; truncated: boolean }>;
+    audience: PlatformOperationsAudience,
+    input?: PlatformOperationsQuery
+  ): Promise<{ operations: PlatformCallableOperation[]; nextCursor?: string; truncated: boolean }>;
 }
 
 /**
@@ -257,11 +272,13 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       get: (context, named) => required().get(context, named),
       validate: (context, config, named) => required().validate(context, config, named),
       put: (context, input) => required().put(context, input),
+      authorizePut: (input, context) => required().authorizePut(input, context),
       putPolicyFloor: (conversationId, input) => required().putPolicyFloor(conversationId, input),
       putBeforeEvents: (conversationId, config) =>
         required().putBeforeEvents(conversationId, config),
-      listOperations: (context, audience) => required().listOperations(context, audience),
-      readContext: (context) => required().readContext(context),
+      listOperations: (context, audience, input) =>
+        required().listOperations(context, audience, input),
+      readContext: (context, input) => required().readContext(context, input),
       listAssets: (context, input) => required().listAssets(context, input),
       listFiles: (context, input) => required().listFiles(context, input),
       saveApp: (context, input) => required().saveApp(context, input),
@@ -333,6 +350,7 @@ const operationsOutputSchema = z.object({
       outputSchema: jsonObjectSchema.optional()
     })
   ),
+  nextCursor: z.string().optional(),
   truncated: z.boolean()
 });
 
@@ -513,12 +531,12 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       description: [
         "Save the definition of the asset you opened, or create a new asset. Existing agent changes save the shared draft; Apps, Workflows and Data Stores save drafts. The person sees the saved change beside the chat.",
         "Choosing a View, an App or a Workflow: references/apps/app-or-workflow.md in 'platform-docs'.",
-        "A draft save changes nothing that runs: it publishes nothing and starts nothing, and the published revision stays what it is until a person publishes the draft. That is why it runs on your call without a confirmation, unless an administrator set it stricter. You never publish: Publish is the person's click on the asset's page.",
+        "A draft save changes nothing that runs: it publishes nothing and starts nothing, and the published revision stays what it is until a person publishes the draft. That is why it runs on your call without a confirmation, unless an administrator set it stricter. When the person asks to publish an App or Workflow, call assets.publish to offer their confirmation; nothing goes live before their click.",
         "Send the whole config and, as 'expectedRevision', the revision you read. A kind written as files, such as a Data Store, is sent as 'files' instead: every file of the asset, its manifest among them, as a read of it lists them. Answers the new draft revision; or the issues the definition is refused for, with nothing saved; or REVISION_CONFLICT where somebody saved since you read: read again, apply your change to what is there now and save with the new revision.",
         "For an existing agent, every Build conversation and author shares one pending draft. The live agent stays unchanged until a person publishes the draft. Send the live 'revision' as 'expectedRevision' and the 'draftRevision' as 'expectedDraftRevision', null when no draft is pending. A draft conflict identifies its current revision, last author and change time: read again and apply your change to the shared draft before saving.",
         "Creating an agent or skill is live at once and waits for the person's confirmation of the exact call. Before Allow nothing is written. Report the workspaceId from the successful result as the actual owner; a name prefix never selects an owner or workspace. A new agent stays unavailable: direct the person to Studio > Agents > the agent > Available in > Selected workspaces, select the requested workspace and Save changes (German: Studio > Agenten > Verfügbar in > Ausgewählte Arbeitsbereiche > Änderungen speichern). Never report that it is available before this step.",
         "A skill that exists is refused: a save of it would be live at once. Say what you would change, and the person changes it on the skill's page.",
-        `To make a new asset, leave 'expectedRevision' out and name its 'kind' and 'name'. That save creates a Workflow or a Data Store as a draft (a Data Store with its first migration among its files), or an agent or a skill. In a conversation that is about no asset yet it becomes the asset the conversation is about and the person is taken to its page. An agent made so is offered to nobody until a person makes it available on its page. Read ${PLATFORM_ASSET_TOOLS.get.name} of a similar asset first where you do not know the shape of the kind's config.`,
+        `To make a new asset, leave 'expectedRevision' out and name its 'kind' and 'name'. That save creates a Workflow or a Data Store as a draft (a Data Store with its first migration among its files), or an agent or a skill. In a conversation that is about no asset yet it becomes the asset the conversation is about and the person is taken to its page. An agent made so is offered to nobody until a person makes it available on its page. Read ${PLATFORM_ASSET_TOOLS.get.name} of a similar asset first where you do not know the shape of the kind's config. For a new agent leave model settings out unless the person explicitly requests a model change; never copy modelBindingId, provider or model from the example. Add read_skill whenever skillNames is nonempty.`,
         "You may also create one while the conversation is about another asset, such as the Workflow or the Data Store an App needs: say first what you create and why, in a sentence such as \"Dafür legen wir zuerst den Workflow an.\" Such a draft stays beside the asset the conversation is about: the answer has 'besideSubject', the conversation stays about that asset and the person stays on the page they are on, offered a link to the new draft. Build what an App needs first and the App last.",
         "Without a new asset to make, the save works on the asset this conversation is about, naming none: open an asset that existed before with " +
           PLATFORM_ASSET_TOOLS.open.name +
@@ -566,6 +584,7 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
           )
       }),
       outputSchema: putOutputSchema,
+      authorize: (input, context) => calls.authorizePut(input, context),
       // Draft saves need no confirmation by default. The call's policy floor below holds
       // live first saves for confirmation and keeps stricter administrative settings.
       permission: { mode: "allow" },
@@ -605,8 +624,8 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       name: operations.name,
       title: { en: "List callable operations", de: "Aufrufbare Operationen auflisten" },
       summary: {
-        en: "Lists the operations a Workflow step or an App action may call.",
-        de: "Listet die Operationen auf, die ein Workflow-Schritt oder eine App-Aktion aufrufen darf."
+        en: "Lists a page of operations a Workflow step or an App action may call; filter by name or prefix.",
+        de: "Listet eine Seite aufrufbarer Operationen für Workflow-Schritte oder App-Aktionen; nach Name oder Präfix filtern."
       },
       group: "platform",
       icon: "guide",
@@ -614,7 +633,7 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       description: [
         "List the operations a step of a Workflow may call, as far as the person you act for may see them: the name a step writes under 'operation', whether the operation reads or changes, and its input and output as JSON Schema where it has one.",
         "With 'for: app' it lists instead the operations of Connections that an App's connection action may call, each named 'connection.<connection>.<operation>': the action file writes the two parts as 'connection' and 'operation', and the effect as it is listed.",
-        "The list is of the instance, not of one asset. 'truncated' says that there are more operations than the list holds."
+        "Each page holds at most 200 operations. Pass 'nextCursor' back as 'cursor', keeping 'for', 'name' and 'prefix' unchanged, until 'nextCursor' is absent. Filter by exact 'name' or by 'prefix', such as 'connection.crm.' or 'data_store.orders.', to find one Connection's or store's operations directly. Do this before concluding an operation does not exist. 'truncated' without 'nextCursor' means a source left operations out; it does not prove absence."
       ].join(" "),
       inputSchema: z.object({
         for: z
@@ -622,11 +641,18 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
           .optional()
           .describe(
             "Who calls the operations: 'workflow' for a step of a Workflow (the default), 'app' for an App's connection action."
-          )
+          ),
+        cursor: z.string().min(1).optional().describe("The previous page's nextCursor."),
+        name: z.string().min(1).optional().describe("An exact full operation name."),
+        prefix: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Only operation names starting with this prefix.")
       }),
       outputSchema: operationsOutputSchema,
       async execute(input, context) {
-        const listed = await calls.listOperations(context, input.for ?? "workflow");
+        const listed = await calls.listOperations(context, input.for ?? "workflow", input);
         return toolSuccess(listed, {
           auditSummary: {
             action: operations.name,

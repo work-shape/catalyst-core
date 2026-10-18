@@ -551,7 +551,8 @@ describe("a seeded Connection is read-only on the instance", () => {
         {
           message:
             "egress_denied: the address outside.example.test:443 is not on this instance's egress list. An operator adds it under 'egress.allow' in release config, or allows every public HTTPS host on port 443 with 'egress.allowPublicHttps: true'",
-          path: ["settings"]
+          path: ["settings"],
+          code: "egress_denied"
         }
       ]
     });

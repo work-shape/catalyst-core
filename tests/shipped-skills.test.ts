@@ -1,12 +1,20 @@
+import { RELEASED_KIT_VERSIONS } from "@work-shape/catalyst-app-build";
+import { ASSET_GET_FILES_MAX_BYTES } from "@work-shape/catalyst-api-contract";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { seedShippedSkills } from "@work-shape/catalyst-server";
+import { SKILL_MAX_BYTES, seedShippedSkills } from "@work-shape/catalyst-server";
 import {
+  shippedSkillsOf,
+  platformModules,
   createConfigAssetSource,
   platformDocsSkill,
   type ClientInstanceCapability
 } from "@work-shape/catalyst-client-assembly";
-import { asClientInstanceId, type ShippedSkill } from "@work-shape/catalyst-core";
+import {
+  asClientInstanceId,
+  createModuleRegistry,
+  type ShippedSkill
+} from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
 
@@ -465,5 +473,76 @@ describe("the skills that ship with the platform", () => {
     const kept = await read(earlier, "pdf");
     expect(kept.config.content).toBe("Ours.");
     expect(kept.config).not.toHaveProperty("origin");
+  });
+});
+
+// The authoring skill is the first source an agent consults, including on diagnosis.
+it("teaches the App sandbox before sending an agent to the detailed guide", () => {
+  for (const rule of [
+    "allow-scripts allow-forms allow-downloads",
+    "without allow-same-origin",
+    "form-action 'none'",
+    "localStorage",
+    "storage.get/set",
+    "draft preview shares",
+    "250 ms",
+    "before its batch is saved",
+    "sessionStorage shim (it throws SecurityError)",
+    "localStorage instanceof Storage is false",
+    "Data Stores",
+    "Network"
+  ])
+    expect(platformDocsSkill.content).toContain(rule);
+  const guide = platformDocsSkill.resources?.find(
+    (resource) => resource.path === "references/apps/build.md"
+  );
+  for (const rule of [
+    "draft preview",
+    "shares the same per-person state",
+    "250 ms",
+    "A write is lost if the page closes before its batch is saved",
+    "immediate reload",
+    "sessionStorage",
+    "throws `SecurityError`",
+    "localStorage instanceof Storage",
+    "is false"
+  ])
+    expect(guide?.content).toContain(rule);
+  expect(guide?.content).toContain("SecurityError");
+  expect(guide?.content).toContain("event.preventDefault()");
+  if (typeof guide?.content !== "string") throw new Error("The App guide must be text");
+  // Every new-App manifest and font URL must name the kit the instance builds by default.
+  const versions = [
+    ...guide.content.matchAll(/^kit:\s*(\S+)/gmu),
+    ...guide.content.matchAll(/\/app-runtime\/kit\/([^/]+)\/fonts/gu)
+  ];
+  expect(versions.length).toBeGreaterThan(0);
+  for (const match of versions) expect(match[1]).toBe(RELEASED_KIT_VERSIONS.at(-1));
+});
+
+// Platform Access check 72: one authorized assets.get must carry the entire skill.
+describe("one read carries a whole skill (ADISC-2 check 72)", () => {
+  it("keeps SKILL_MAX_BYTES within ASSET_GET_FILES_MAX_BYTES", () => {
+    expect(SKILL_MAX_BYTES).toBeLessThanOrEqual(ASSET_GET_FILES_MAX_BYTES);
+  });
+
+  it("keeps every shipped skill, platform-docs included, within one read", () => {
+    const modules = createModuleRegistry(platformModules).snapshot({
+      workflows: { enabled: true }
+    });
+    const skills = shippedSkillsOf({ modules, capabilities: [], hasTool: () => true });
+    expect(skills.map((skill) => skill.name)).toEqual(
+      expect.arrayContaining(["platform-docs", "workflow-authoring"])
+    );
+    for (const skill of skills) {
+      const bytes =
+        Buffer.byteLength(skill.content) +
+        (skill.resources ?? []).reduce(
+          (sum, resource) => sum + Buffer.byteLength(resource.content),
+          0
+        );
+      expect(bytes, skill.name).toBeLessThanOrEqual(ASSET_GET_FILES_MAX_BYTES);
+      expect(bytes, skill.name).toBeLessThanOrEqual(SKILL_MAX_BYTES);
+    }
   });
 });

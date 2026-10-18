@@ -568,10 +568,14 @@ export async function connectApi(
 /** The selected instance and the workspace its working copy is bound to. */
 export async function openInstance(
   options: ConfigCommandOptions
-): Promise<{ api: ConfigApi; workspace: string | undefined }> {
+): Promise<{ api: ConfigApi; workspace: string | undefined; url: string }> {
   const manifest = await readManifestIfPresent(resolveWorkingDir(options));
   const instance = await resolveInstance(manifest, options);
-  return { api: await connectApi(instance.url, options), workspace: instance.workspace };
+  return {
+    api: await connectApi(instance.url, options),
+    workspace: instance.workspace,
+    url: instance.url
+  };
 }
 
 export function assetHash(contents: string): string {

@@ -17,6 +17,7 @@ import {
   runAppCommand,
   type AppCommandOptions
 } from "./app-commands";
+import { pullSkill } from "./skill-pull";
 import { workflowPublishDetails } from "./workflow-publish-review";
 import { readAssetSource } from "./asset-sources";
 import { setAvailability, setDefault } from "./asset-pointers";
@@ -90,6 +91,7 @@ type OptionName = keyof typeof OPTIONS;
 
 interface Session {
   api: ConfigApi;
+  instance: string;
   kind: AssetKind;
   values: Values;
   /** The workspace the call addresses. Left out, it addresses the instance's own assets. */
@@ -108,7 +110,13 @@ interface Verb {
   named: boolean;
   /** Options beside `--instance`, `--dir`, `--workspace` and `--json`. */
   flags: readonly OptionName[];
-  prepare(values: Values, name: string, cwd: string): (session: Session) => Promise<number>;
+  prepare(
+    values: Values,
+    name: string,
+    cwd: string,
+    noun: string,
+    folder?: string
+  ): (session: Session) => Promise<number>;
 }
 
 const COMMON_FLAGS: readonly OptionName[] = ["instance", "dir", "workspace", "json", "help"];
@@ -158,6 +166,33 @@ const VERBS: Record<string, Verb> = {
         })
       );
       return print(session, asset, () => formatAsset(asset));
+    }
+  },
+  pull: {
+    usage: "pull <name> <folder>",
+    summary: "Pull one skill as a folder, checking hashes and keeping local edits (assets.get)",
+    named: true,
+    flags: [],
+    prepare: (_values, name, cwd, noun, folder) => {
+      if (noun !== "skill" && noun !== "skills")
+        throw new UsageError("'pull' is a command of skills and Apps only.");
+      if (!folder) throw new UsageError("Usage: catalyst skill pull <name> <folder>");
+      const directory = resolve(cwd, folder);
+      return async (session) => {
+        const result = await pullSkill({
+          api: session.api,
+          instance: session.instance,
+          ...session.scope,
+          skill: name,
+          directory
+        });
+        return print(
+          session,
+          result,
+          () =>
+            `Pulled revision ${result.revision} of skill '${name}' into ${folder} (${result.files} files).`
+        );
+      };
     }
   },
   history: {
@@ -796,15 +831,19 @@ export async function runAssetCommand(
     if (verb === undefined) throw new UsageError(`Unknown command '${noun} ${verbName}'.`);
     refuseFlags(values, [...COMMON_FLAGS, ...verb.flags], verbName);
     if (verb.named && name === "") throw new UsageError(`Usage: catalyst ${noun} ${verb.usage}`);
-    if (extra.length > 0 || (!verb.named && verbName !== "set-default" && name !== "")) {
+    if (
+      extra.length > (verbName === "pull" ? 1 : 0) ||
+      (!verb.named && verbName !== "set-default" && name !== "")
+    ) {
       throw new UsageError(`Unexpected argument '${extra[0] ?? name}'.`);
     }
-    const call = verb.prepare(values, name, options.cwd);
-    const { api, workspace } = await openInstance(options);
+    const call = verb.prepare(values, name, options.cwd, noun, extra[0]);
+    const { api, workspace, url } = await openInstance(options);
     const context = await api.read((client) => client.platform.context.get());
     const workspaceId = values.workspace ?? workspace;
     return await call({
       api,
+      instance: url,
       kind: findKind(context.kinds, noun),
       values,
       scope: workspaceId === undefined ? {} : { workspaceId },
@@ -986,4 +1025,8 @@ function refuseFlags(values: Values, allowed: readonly OptionName[], command: st
 /** A command line this tool cannot run. Nothing was sent. */
 class UsageError extends Error {}
 
-export const assetHelpText = formatAssetHelp(Object.values(VERBS));
+export const assetHelpText = formatAssetHelp(
+  Object.entries(VERBS)
+    .filter(([name]) => name !== "pull")
+    .map(([, verb]) => verb)
+);

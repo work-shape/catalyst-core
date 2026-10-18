@@ -502,13 +502,31 @@ export function createStepExecutor(options: StepExecutorOptions) {
             );
           }
           const { actor } = await callerOf(run, stepRun);
-          const tester = run.mode === "test" ? run.startedBy.id : undefined;
-          const to = tester ? { users: [tester] } : step.to;
+          if (run.mode === "test") {
+            return {
+              kind: "done",
+              call: { effect: "changing", target: "dry_run" },
+              output: {
+                wouldHaveDone: {
+                  operation: "notify",
+                  input: {
+                    to: {
+                      ...(step.to.users ? { users: [...step.to.users] } : {}),
+                      ...(step.to.workspaces ? { workspaces: [...step.to.workspaces] } : {})
+                    },
+                    title: mapped.title,
+                    text: mapped.text,
+                    channels: [...step.channels]
+                  }
+                }
+              }
+            };
+          }
           return {
             kind: "notice",
             notice: {
               from: actor,
-              to,
+              to: step.to,
               title: mapped.title,
               text: mapped.text,
               channels: step.channels,

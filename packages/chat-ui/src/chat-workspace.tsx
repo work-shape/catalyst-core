@@ -12,14 +12,18 @@ import type { ChatShellProps } from "./chat-shell";
 import { collaborationWorkspaceDisplayName } from "./shared/collaboration-workspace/collaboration-workspace-name";
 import { CollaborationWorkspacePanel } from "./shared/collaboration-workspace/collaboration-workspace-panel";
 import { CollaborationWorkspaceSelector } from "./shared/collaboration-workspace/collaboration-workspace-selector";
-import { canViewAudit } from "./shared/governance";
+import { canManageUsers, canViewAudit } from "./shared/governance";
 import { ControlPlaneRoutes } from "./admin/control-plane/control-plane-routes";
 import { DockedChat, DockedPage, useChatDockView } from "./chat/dock/docked-chat";
 import { createTranslationContext, TranslationProvider, useTranslation } from "./shared/i18n";
 import { AppsArea, isAppsRoute } from "./studio/apps/apps-area";
 import { AppsHostProvider, type AppsHost } from "./studio/apps/apps-host";
 import { WorkflowsArea, isWorkflowsRoute } from "./studio/workflows/workflows-area";
-import { WorkflowsHostProvider, type WorkflowsHost } from "./studio/workflows/workflows-host";
+import {
+  readsRecipientPeople,
+  WorkflowsHostWithRecipients,
+  type WorkflowsHost
+} from "./studio/workflows/workflows-host";
 import {
   ConnectionDraftHostProvider,
   connectionDraftHost
@@ -441,6 +445,9 @@ function ChatWorkspaceContent({
     model.workflows.access === "open"
       ? {
           rights: model.workflows.rights,
+          ...(model.workflows.instanceTimeZone
+            ? { instanceTimeZone: model.workflows.instanceTimeZone }
+            : {}),
           viewerId: model.auth.user.id,
           workspace: activeWorkspace
             ? { id: activeWorkspace.id, name: activeWorkspace.name }
@@ -586,7 +593,23 @@ function ChatWorkspaceContent({
               <AppsHostProvider value={appsHost}>
                 {/* Around every area: a Data Store's page in Studio links to the Workflows
                     that use the store. */}
-                <WorkflowsHostProvider value={workflowsHost}>
+                <WorkflowsHostWithRecipients
+                  value={workflowsHost}
+                  api={{
+                    apiBaseUrl: model.auth.apiBaseUrl,
+                    authScope: WORKSPACE_AUTH_SCOPE,
+                    client: chat.client
+                  }}
+                  viewer={{ id: model.auth.user.id, name: userLabel }}
+                  workspaces={collaborationWorkspace.collaborationWorkspaces.map((workspace) => ({
+                    id: workspace.id,
+                    name: collaborationWorkspaceDisplayName(workspace, userLabel, t)
+                  }))}
+                  readsPeople={readsRecipientPeople(
+                    model.route.route,
+                    canManageUsers(model.auth.user)
+                  )}
+                >
                   <ConnectionDraftHostProvider value={connectionDraft}>
                     {dockView.mode === undefined ? null : (
                       <DockedChat
@@ -750,7 +773,7 @@ function ChatWorkspaceContent({
                       </DockedPage>
                     )}
                   </ConnectionDraftHostProvider>
-                </WorkflowsHostProvider>
+                </WorkflowsHostWithRecipients>
               </AppsHostProvider>
             </ApprovalRevisionHostProvider>
           </div>

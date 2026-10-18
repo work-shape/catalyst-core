@@ -51,9 +51,7 @@ import {
 import { BUILD_SEARCH_DELAY_MS, type BuildListFilter, type BuildSource } from "./build-data";
 import {
   formatUpdated,
-  readLastBuildKindPath,
   resolveBuildPlace,
-  storeLastBuildKindPath,
   visibleBuildKinds,
   type VisibleBuildKind
 } from "./build-model";
@@ -95,8 +93,7 @@ export function BuildFrame({
   const { t } = useTranslation();
   const { location, open, href } = useBuildNavigation();
   const kinds = visibleBuildKinds(useBuildAssetKinds(), source.kinds);
-  const [lastKindPath] = useState(readLastBuildKindPath);
-  const place = resolveBuildPlace(kinds, location, lastKindPath);
+  const place = resolveBuildPlace(kinds, location);
   const placePath = place?.kind.entry.path;
   const corrected = place?.corrected ?? false;
 
@@ -145,13 +142,8 @@ export function BuildFrame({
     openRef.current = open;
   }, [open]);
   useEffect(() => {
-    if (placePath === undefined) {
-      return;
-    }
-    if (corrected) {
+    if (placePath !== undefined && corrected) {
       openRef.current({ kindPath: placePath }, { replace: true });
-    } else {
-      storeLastBuildKindPath(placePath);
     }
   }, [corrected, placePath]);
 

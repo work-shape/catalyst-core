@@ -1,16 +1,33 @@
 import type { ApiClient, LocaleCode, Message } from "@work-shape/catalyst-api-client";
 import type { useWorkspaceCacheActions } from "../../shared/api/workspace-queries";
+import { createTranslationContext } from "../../shared/i18n";
 import type { ApprovalRevisionRunInput } from "../approvals/approval-revision-host";
 import {
   createRunIdempotencyKey,
   startProductConversationRun
 } from "../assistant/product-run-transport";
-import { openConversationAbout } from "./open-conversation-about";
+import {
+  dockConversationToReuse,
+  openConversationAbout,
+  type ThreadAbout
+} from "./open-conversation-about";
 import type { useConversationListRefresh } from "./use-conversation-list-refresh";
 import type { WorkspaceDock } from "./use-workspace-dock";
 import { WORKSPACE_AUTH_SCOPE, isAbandonedDraftConversation } from "./workspace-chat-state";
 import type { useWorkspaceDraftController } from "./workspace-drafts";
 import type { useWorkspaceChromeState, useWorkspaceRouteState } from "./workspace-ui-state";
+
+/**
+ * The title of a conversation whose first message only attached files, until the title job
+ * names it: the file's name, or the count in the person's language. The job recognises each
+ * language's form (`server/src/conversations/conversation-title.ts`).
+ */
+export function attachedFilesTitle(files: readonly File[], locale: LocaleCode): string {
+  const { t } = createTranslationContext(locale);
+  return files.length === 1
+    ? files[0]?.name || t("conversationAttachedFile")
+    : t("conversationAttachedFiles", { count: String(files.length) });
+}
 
 interface WorkspaceConversationActionsInput {
   client: ApiClient;
@@ -23,6 +40,8 @@ interface WorkspaceConversationActionsInput {
   workspaceCache: ReturnType<typeof useWorkspaceCacheActions>;
   conversationListRefresh: ReturnType<typeof useConversationListRefresh>;
   selectedConversationId: string | undefined;
+  /** What the open conversation is about and where, once its thread has loaded. */
+  selectedConversationAbout: ThreadAbout | undefined;
   activeCollaborationWorkspaceId: string | undefined;
   personalCollaborationWorkspaceId: string | undefined;
   messagesLoaded: boolean;
@@ -43,6 +62,7 @@ export function createWorkspaceConversationActions({
   workspaceCache,
   conversationListRefresh,
   selectedConversationId,
+  selectedConversationAbout,
   activeCollaborationWorkspaceId,
   personalCollaborationWorkspaceId,
   messagesLoaded,
@@ -92,8 +112,7 @@ export function createWorkspaceConversationActions({
     if (selectedConversationId) {
       return selectedConversationId;
     }
-    const title =
-      files.length === 1 ? (files[0]?.name ?? "Attached file") : `${files.length} attached files`;
+    const title = attachedFilesTitle(files, activeLocale);
     const conversation = await client.conversations.create({
       body: {
         title,
@@ -128,6 +147,39 @@ export function createWorkspaceConversationActions({
   ): Promise<void> {
     if (!activeCollaborationWorkspaceId) {
       throw new Error("A conversation about an asset belongs to a workspace");
+    }
+    // The dock already holds a conversation about this asset: it opens again, also where the
+    // person closed it or it lies behind the page, and keeps what was said there.
+    const dockConversationId = dock.conversationId;
+    const reused = dockConversationToReuse({
+      dockConversationId,
+      dock:
+        dockConversationId === undefined
+          ? undefined
+          : dockConversationId === selectedConversationId
+            ? selectedConversationAbout
+            : workspaceCache.knownThreadAbout(dockConversationId),
+      subject,
+      workspaceId: activeCollaborationWorkspaceId,
+      prompt,
+      draftText:
+        dockConversationId === undefined
+          ? ""
+          : draftController.draftFor({
+              authScope: WORKSPACE_AUTH_SCOPE,
+              conversationId: dockConversationId
+            })
+    });
+    if (reused !== undefined) {
+      openConversationAbout(
+        { id: reused, collaborationWorkspaceId: activeCollaborationWorkspaceId },
+        subject,
+        prompt,
+        { routeState, dock, draftController }
+      );
+      setNotice(undefined);
+      chrome.requestComposerFocus();
+      return;
     }
     const conversation = await client.conversations.create({
       body: {

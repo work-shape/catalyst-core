@@ -18,6 +18,23 @@ export const workspace = defineTranslations({
       "This model cannot be used at the moment. Choose another model or ask an administrator.",
     runModelNotPricedOperator:
       "This model has no price on the rate card, so its cost cannot be counted against the spend budget. Choose another model until the operator has added the price.",
+    runUsageLimitReached: "A usage limit stopped this reply. {advice}",
+    runUsageLimitNamed:
+      "The {period} limit on {metric} stopped this reply. It counts {scope} and resets {reset}. {advice}",
+    runUsageLimitAdvice:
+      "Your answer so far is kept. Ask an administrator of this instance to check the usage limits.",
+    runUsageLimitAdviceOperator:
+      "Your answer so far is kept. Settings › Usage shows the usage limits and what has been used. Ask the instance operator to review the limits they set.",
+    runUsageLimitPeriodDay: "daily",
+    runUsageLimitPeriodMonth: "monthly",
+    runUsageLimitMetricModelCallCount: "model calls",
+    runUsageLimitMetricTokens: "tokens",
+    runUsageLimitMetricCostMicros: "spending",
+    runUsageLimitScopeUser: "your own calls",
+    runUsageLimitScopeSystem: "the calls the product makes",
+    runUsageLimitScopeInstance: "the calls of everyone on this instance",
+    runUsageLimitResetDay: "at midnight UTC",
+    runUsageLimitResetMonth: "at the start of next month (UTC)",
     runNotStarted:
       "The reply could not be started because the service is busy or unavailable. Please send your message again.",
     runStopped: "The reply was stopped.",
@@ -54,6 +71,23 @@ export const workspace = defineTranslations({
       "Dieses Modell kann gerade nicht verwendet werden. Wähle ein anderes Modell oder wende dich an einen Administrator.",
     runModelNotPricedOperator:
       "Für dieses Modell steht kein Preis in der Preisliste, deshalb lassen sich seine Kosten nicht auf das Budget anrechnen. Wähle ein anderes Modell, bis der Betreiber den Preis eingetragen hat.",
+    runUsageLimitReached: "Eine Nutzungsgrenze hat diese Antwort gestoppt. {advice}",
+    runUsageLimitNamed:
+      "Die {period} Grenze für {metric} hat diese Antwort gestoppt. Sie zählt {scope} und wird {reset} zurückgesetzt. {advice}",
+    runUsageLimitAdvice:
+      "Was bisher geantwortet wurde, bleibt erhalten. Bitte einen Administrator dieser Instanz, die Nutzungsgrenzen zu prüfen.",
+    runUsageLimitAdviceOperator:
+      "Was bisher geantwortet wurde, bleibt erhalten. Unter Einstellungen › Nutzung siehst du die Nutzungsgrenzen und den Verbrauch. Bitte den Betreiber der Instanz, die Grenzen zu prüfen, die er festgelegt hat.",
+    runUsageLimitPeriodDay: "tägliche",
+    runUsageLimitPeriodMonth: "monatliche",
+    runUsageLimitMetricModelCallCount: "Modellaufrufe",
+    runUsageLimitMetricTokens: "Tokens",
+    runUsageLimitMetricCostMicros: "Ausgaben",
+    runUsageLimitScopeUser: "deine eigenen Aufrufe",
+    runUsageLimitScopeSystem: "die Aufrufe des Produkts",
+    runUsageLimitScopeInstance: "die Aufrufe aller auf dieser Instanz",
+    runUsageLimitResetDay: "um Mitternacht UTC",
+    runUsageLimitResetMonth: "zu Beginn des nächsten Monats (UTC)",
     runNotStarted:
       "Die Antwort konnte nicht gestartet werden, weil der Dienst ausgelastet oder nicht erreichbar ist. Bitte sende deine Nachricht erneut.",
     runStopped: "Die Antwort wurde gestoppt.",

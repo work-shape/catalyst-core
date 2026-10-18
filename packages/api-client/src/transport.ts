@@ -9,6 +9,8 @@ export interface ApiClientOptions {
    */
   getToken?: () => string | undefined | Promise<string | undefined>;
   fetchImpl?: typeof fetch;
+  /** Cancels this client's requests when its owning session ends. */
+  signal?: AbortSignal;
   /** Only available without a token source; browser navigation cannot send a bearer token. */
   browserManagedDownloads?: boolean;
   /**
@@ -76,10 +78,16 @@ export function createApiTransport(options: ApiClientOptions) {
         headers.set("catalyst-unattended", "1");
       }
       const token = await options.getToken?.();
+      const sessionSignal = options.signal;
+      const signal =
+        sessionSignal && request.signal
+          ? AbortSignal.any([sessionSignal, request.signal])
+          : (sessionSignal ?? request.signal);
       if (token) {
         headers.set("authorization", `Bearer ${token}`);
       }
 
+      signal?.throwIfAborted();
       let response: Response;
       try {
         response = await (options.fetchImpl ?? fetch)(url, {
@@ -87,10 +95,10 @@ export function createApiTransport(options: ApiClientOptions) {
           headers,
           body,
           credentials: cookieMode ? "include" : "omit",
-          signal: request.signal
+          signal
         });
       } catch (error) {
-        throw request.signal?.aborted ? error : transportError(error);
+        throw signal?.aborted ? error : transportError(error);
       }
       if (response.ok) {
         return response;

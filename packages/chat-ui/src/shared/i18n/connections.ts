@@ -47,6 +47,18 @@ export const connections = defineTranslations({
     "connections.settingsEdit": "Edit",
     "connections.settingsSave": "Save settings",
     "connections.settingsCancel": "Cancel",
+    "connections.refusedAddress":
+      "Enter the address as a web address that starts with https:// or http://, such as https://example.com/api, without user name, password, query (?) or fragment (#).",
+    "connections.refusedHeaders":
+      "The instance did not accept these headers. Check each header's name and value.",
+    "connections.refusedName": "The instance did not accept this name. Choose another one.",
+    "connections.refusedOperation": "The instance did not accept this tool.",
+    "connections.refusedSettings":
+      "The instance did not accept these settings. Check that the address starts with https:// or http:// and has no user name, password, query or fragment.",
+    "connections.refusedTestPath":
+      "Enter the test path as a path that starts with /, without query (?).",
+    "connections.refusedUnknown":
+      "The instance did not accept this connection. An administrator of the instance sees why under Technical details.",
     "connections.writeFailed": "The change could not be saved.",
     "connections.discoveredTitle": "Discovered tools",
     "connections.discoveredDescription":
@@ -64,6 +76,16 @@ export const connections = defineTranslations({
       "Enter the key under Credential. Then test again.",
     "connections.healthUnauthorizedNextRuntime":
       "Enter a new key under Credential. Then test again.",
+    "connections.healthUnauthorizedTextNoKey":
+      "The outside system refuses access without a credential, and this connection sends none.",
+    "connections.healthUnauthorizedNextNoKey":
+      "The server asks for a key, and this connection sends none. Under Settings, choose Edit, set how the key is sent and save. Then enter the key.",
+    "connections.secretRemove": "Remove key",
+    "connections.secretRemoveTitle": "Remove the key?",
+    "connections.secretRemoveAgents":
+      "The key is deleted and the connection sends no key from now on. Calls of {agents} and of Workflows that use this connection are refused by a server that asks for a key.",
+    "connections.secretRemoveNoAgents":
+      "The key is deleted and the connection sends no key from now on. No agent uses its tools; Workflows that use this connection are refused by a server that asks for a key.",
     "connections.healthSecretUnreadableNextRuntime":
       "Enter the key again under Credential. Then test again.",
     "connections.healthUnavailableNextRuntime":
@@ -285,6 +307,19 @@ export const connections = defineTranslations({
     "connections.settingsEdit": "Bearbeiten",
     "connections.settingsSave": "Einstellungen speichern",
     "connections.settingsCancel": "Abbrechen",
+    "connections.refusedAddress":
+      "Gib die Adresse als Webadresse an, die mit https:// oder http:// beginnt, etwa https://example.com/api, ohne Benutzername, Passwort, Abfrage (?) oder Fragment (#).",
+    "connections.refusedHeaders":
+      "Die Instanz hat diese Header nicht angenommen. Prüfe Name und Wert jedes Headers.",
+    "connections.refusedName":
+      "Die Instanz hat diesen Namen nicht angenommen. Wähle einen anderen.",
+    "connections.refusedOperation": "Die Instanz hat dieses Tool nicht angenommen.",
+    "connections.refusedSettings":
+      "Die Instanz hat diese Einstellungen nicht angenommen. Prüfe, ob die Adresse mit https:// oder http:// beginnt und keinen Benutzernamen, kein Passwort, keine Abfrage und kein Fragment enthält.",
+    "connections.refusedTestPath":
+      "Gib den Testpfad als Pfad an, der mit / beginnt, ohne Abfrage (?).",
+    "connections.refusedUnknown":
+      "Die Instanz hat diese Verbindung nicht angenommen. Ein Administrator der Instanz sieht den Grund unter Technische Details.",
     "connections.writeFailed": "Die Änderung konnte nicht gespeichert werden.",
     "connections.discoveredTitle": "Gefundene Tools",
     "connections.discoveredDescription":
@@ -303,6 +338,16 @@ export const connections = defineTranslations({
       "Gib den Schlüssel unter Zugangsdaten ein. Teste danach erneut.",
     "connections.healthUnauthorizedNextRuntime":
       "Gib unter Zugangsdaten einen neuen Schlüssel ein. Teste danach erneut.",
+    "connections.healthUnauthorizedTextNoKey":
+      "Das externe System lässt ohne Zugangsdaten keinen Zugriff zu, und diese Verbindung sendet keine.",
+    "connections.healthUnauthorizedNextNoKey":
+      "Der Server verlangt einen Schlüssel, und diese Verbindung sendet keinen. Wähl unter Einstellungen Bearbeiten, leg fest, wie der Schlüssel gesendet wird, und speichere. Gib dann den Schlüssel ein.",
+    "connections.secretRemove": "Schlüssel entfernen",
+    "connections.secretRemoveTitle": "Schlüssel entfernen?",
+    "connections.secretRemoveAgents":
+      "Der Schlüssel wird gelöscht, und die Verbindung sendet ab jetzt keinen. Aufrufe von {agents} und von Workflows, die diese Verbindung nutzen, lehnt ein Server ab, der einen Schlüssel verlangt.",
+    "connections.secretRemoveNoAgents":
+      "Der Schlüssel wird gelöscht, und die Verbindung sendet ab jetzt keinen. Kein Agent nutzt ihre Tools; Aufrufe von Workflows, die diese Verbindung nutzen, lehnt ein Server ab, der einen Schlüssel verlangt.",
     "connections.healthSecretUnreadableNextRuntime":
       "Gib den Schlüssel unter Zugangsdaten erneut ein. Teste danach erneut.",
     "connections.healthUnavailableNextRuntime":

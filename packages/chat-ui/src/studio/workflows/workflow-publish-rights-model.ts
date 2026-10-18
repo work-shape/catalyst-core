@@ -125,6 +125,40 @@ export function giveFailureSentence(error: unknown, t: Translate): string {
 }
 
 /**
+ * Why the instance refused to publish, test or start a Workflow over the technical account it
+ * runs as, in the reader's language: which account, by the label people see, and that an
+ * administrator changes it under Settings › API access. Undefined for any other refusal.
+ * `principal_inactive` names the account by its label only where it exists, which is then
+ * switched off.
+ */
+export function workflowAccountRefusal(error: unknown, t: Translate): string | undefined {
+  if (!(error instanceof ApiError)) return undefined;
+  const details = detailsOf(error.payload);
+  const place = `${t("nav.settings")} › ${t("settings.apiAccess")}`;
+  const label = details.principalDisplayLabel;
+  switch (details.reason) {
+    case "run_as_missing":
+      return t("workflowRights.refusedAccountMissing", { place });
+    case "run_as_unknown":
+      return details.runAs === undefined
+        ? t("workflowRights.refusedAccountMissing", { place })
+        : t("workflowRights.refusedAccountUnknown", { name: details.runAs, place });
+    case "run_as_disabled": {
+      const name = label ?? details.runAs;
+      return name === undefined
+        ? t("workflowRights.refusedAccountInactive", { place })
+        : t("workflowRights.refusedAccountDisabled", { name, place });
+    }
+    case "principal_inactive":
+      return label === undefined
+        ? t("workflowRights.refusedAccountInactive", { place })
+        : t("workflowRights.refusedAccountDisabled", { name: label, place });
+    default:
+      return undefined;
+  }
+}
+
+/**
  * The reader's sentence for a publish of a Workflow the instance refused, where the page has
  * one: the reasons of the publish check of a Workflow and its children. Nothing for any other
  * refusal, which the page then says as the instance said it.
@@ -133,7 +167,6 @@ export function workflowPublishRefusal(error: unknown, t: Translate): string | u
   if (!(error instanceof ApiError)) return undefined;
   const details = detailsOf(error.payload);
   const workflow = details.workflow;
-  const runAs = details.runAs;
   switch (details.reason) {
     case "child_use_forbidden":
       return workflow === undefined
@@ -148,15 +181,10 @@ export function workflowPublishRefusal(error: unknown, t: Translate): string | u
     case "workflow_cycle":
       return t("workflowRights.refusedCycle");
     case "run_as_missing":
-      return t("workflowRights.refusedAccountMissing");
     case "run_as_unknown":
-      return runAs === undefined
-        ? t("workflowRights.refusedAccountMissing")
-        : t("workflowRights.refusedAccountUnknown", { name: runAs });
     case "run_as_disabled":
-      return runAs === undefined
-        ? t("workflowRights.accountUnavailable")
-        : t("workflowRights.refusedAccountDisabled", { name: runAs });
+    case "principal_inactive":
+      return workflowAccountRefusal(error, t);
     case "user_only":
       return t("workflowRights.refusedPersonOnly");
     case "no_grant":
@@ -172,17 +200,17 @@ export function workflowPublishRefusal(error: unknown, t: Translate): string | u
   }
 }
 
-function detailsOf(
-  payload: unknown
-): Partial<Record<"reason" | "action" | "workflow" | "runAs", string>> {
+type DetailName = "reason" | "action" | "workflow" | "runAs" | "principalDisplayLabel";
+
+function detailsOf(payload: unknown): Partial<Record<DetailName, string>> {
   const envelope = field(payload, "error");
   const details = field(envelope, "details");
   const read = (name: string) => {
     const value = field(details, name);
     return typeof value === "string" ? value : undefined;
   };
-  const found: Partial<Record<"reason" | "action" | "workflow" | "runAs", string>> = {};
-  for (const name of ["reason", "action", "workflow", "runAs"] as const) {
+  const found: Partial<Record<DetailName, string>> = {};
+  for (const name of ["reason", "action", "workflow", "runAs", "principalDisplayLabel"] as const) {
     const value = read(name);
     if (value !== undefined) found[name] = value;
   }

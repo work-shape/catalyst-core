@@ -9,7 +9,11 @@ import {
 } from "./data-store-model";
 import { dataStoreNeverPublished } from "./data-store-draft";
 import { DataStorePage } from "./data-store-page";
-import { useDataStoreSource, type DataStoreSource } from "./data-store-source";
+import {
+  serverConditionsShown,
+  useDataStoreSource,
+  type DataStoreSource
+} from "./data-store-source";
 
 /** The kind's segment in an address: `/build/data-stores`. */
 const DATA_STORES_BUILD_PATH = "data-stores";
@@ -21,13 +25,14 @@ const DATA_STORES_BUILD_PATH = "data-stores";
  */
 function DataStoreRowState({ name, useSource }: { name: string; useSource(): DataStoreSource }) {
   const { locale, t } = useTranslation();
-  const read = useSource().useStoreState(name);
+  const source = useSource();
+  const read = source.useStoreState(name);
   if (read.status !== "ready") {
     return null;
   }
   const state = read.data;
   const view = DATA_STORE_STATE_VIEWS[dataStoreStateView(state)];
-  const open = state.conditions.length;
+  const open = serverConditionsShown(source, state).length;
   return (
     <>
       <Badge tone={view.tone} dot data-data-store-row-state={dataStoreStateView(state)}>

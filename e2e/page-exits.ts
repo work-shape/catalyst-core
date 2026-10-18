@@ -27,8 +27,8 @@ const directive = (name: string) =>
 
 const FRAMING =
   /^Framing '[^']*' violates the following Content Security Policy directive: "frame-src 'none'"\./u;
-const NO_FORMS =
-  /^Blocked form submission to '[^']*' because the form's frame is sandboxed and the 'allow-forms' permission is not set\./u;
+const NO_FORM_NAVIGATION =
+  /^Sending form data to '[^']*' violates the following Content Security Policy directive: "form-action 'none'"\./u;
 const NO_POPUPS =
   /^Blocked opening '[^']*' in a new window because the request was made in a sandboxed frame whose 'allow-popups' permission is not set\./u;
 const NO_ANCESTOR_NAVIGATION =
@@ -135,28 +135,28 @@ export const pageNavigationExits: readonly PageExit[] = [
     html: (there) =>
       `<form id="form" action="${there}/hit" method="get"><input name="rows" value="secret"></form>`,
     script: () => `document.getElementById("form").submit();`,
-    refusal: NO_FORMS
+    refusal: NO_FORM_NAVIGATION
   },
   {
     name: "a form a script submits to a new window",
     html: (there) =>
       `<form id="form" action="${there}/hit" method="post" target="_blank"><input name="rows" value="secret"></form>`,
     script: () => `document.getElementById("form").submit();`,
-    refusal: NO_FORMS
+    refusal: NO_POPUPS
   },
   {
     name: "a button with a form address of its own",
     html: (there) =>
       `<form><input name="rows" value="secret"><button id="send" formmethod="get" formaction="${there}/hit">Send</button></form>`,
     act: { how: "click", target: "#send" },
-    refusal: NO_FORMS
+    refusal: NO_FORM_NAVIGATION
   },
   {
     name: "an image button with a form address of its own",
     html: (there) =>
       `<form><input name="rows" value="secret"><input id="send" type="image" alt="Send" width="80" height="30" src="${PIXEL}" formaction="${there}/hit"></form>`,
     act: { how: "click", target: "#send" },
-    refusal: NO_FORMS
+    refusal: NO_FORM_NAVIGATION
   }
 ];
 

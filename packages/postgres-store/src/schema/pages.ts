@@ -1,4 +1,13 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex
+} from "drizzle-orm/pg-core";
 import type {
   ClientInstanceId,
   ConversationId,
@@ -12,6 +21,8 @@ import type {
   PageId,
   UserId
 } from "@work-shape/catalyst-core";
+import { configAssets } from "./configAssets";
+import { productUsers } from "./users";
 import { conversations } from "./conversations";
 
 /**
@@ -90,4 +101,21 @@ export const pageBuilds = pgTable(
     finishedAt: timestamp("finished_at", { withTimezone: true })
   },
   (table) => [index("page_builds_conversation_idx").on(table.conversationId, table.createdAt)]
+);
+
+/** Per-person preferences, independent of an App's revision; foreign keys own erasure. */
+export const appUserStorage = pgTable(
+  "app_user_storage",
+  {
+    clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    appId: text("app_id")
+      .notNull()
+      .references(() => configAssets.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => productUsers.id, { onDelete: "cascade" }),
+    values: jsonb("values").$type<Record<string, string>>().notNull()
+  },
+  (table) => [primaryKey({ columns: [table.clientInstanceId, table.appId, table.userId] })]
 );

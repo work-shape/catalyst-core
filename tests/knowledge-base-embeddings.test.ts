@@ -9,10 +9,7 @@ import {
   type DataStoreRecord,
   type JsonObject
 } from "@work-shape/catalyst-core";
-import {
-  KNOWLEDGE_EMBEDDING_BATCH,
-  KNOWLEDGE_USAGE_LIMIT_WAIT_MS
-} from "@work-shape/catalyst-data-stores";
+import { KNOWLEDGE_EMBEDDING_BATCH } from "@work-shape/catalyst-data-stores";
 import { eventually, required } from "./support/assertions";
 import {
   createManagedObjectTestAttachmentCapability,
@@ -30,8 +27,8 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 // Embeddings of a Knowledge Base on the built-in backend (KB-5d): the index job embeds the
 // passages of a Knowledge Base that searches by meaning through `gateway.embed`, in batches of
 // at most 2,048, into generation 1 with `halfvec(<dimensions>)`; usage `knowledge_embedding`
-// names the person, the workspace and the run of `add_files`; a 429 and a usage limit make it
-// wait, the limit with its reason on the page. Spec: data-stores-and-knowledge-bases.md,
+// names the person, the workspace and the run of `add_files`; a provider 429 makes it wait.
+// Chat safeguards never stop ingestion (KB-ISO). Spec: data-stores-and-knowledge-bases.md,
 // "Embeddings and documents on the built-in backend", check 63.
 //
 // The embedding provider is an OpenAI-compatible entry in region `eu` whose `/embeddings` the
@@ -498,44 +495,24 @@ describe("embedding the documents of a Knowledge Base", () => {
     expect(await vectorCount(record)).toBe(3);
   });
 
-  it("stops at a usage limit with the reason on the page, and goes on once the limit is raised", async () => {
+  it("finishes ingestion across batches without consuming the person's chat safeguard", async () => {
     const provider = stubEmbeddings();
-    // One embedding call a day: the first batch is admitted, the second refused.
+    // KB-ISO: ingestion is outside chat safeguards, including the caller's product bucket.
+    // The previous behaviour admitted one batch and made the rest wait for a limit raise.
     const { instance, record } = await instanceWith(["semantic", "keyword"], {
       usageSafeguards: { modelCallsPerDay: 1 }
     });
     const passages = KNOWLEDGE_EMBEDDING_BATCH + 5;
     const added = await add(instance, { filename: "Akte.md", content: sections(passages) });
-    const before = Date.now();
     await runJobs(instance);
 
-    expect(provider.sizes()).toEqual([KNOWLEDGE_EMBEDDING_BATCH]);
-    expect(await documents(instance)).toEqual([
-      { id: added.id, state: "pending", waitCode: "knowledge_usage_limit_reached" }
-    ]);
-    const [queued] = await queuedIndexJobs();
-    expect(required(queued).run_after.getTime() - before).toBeGreaterThanOrEqual(
-      KNOWLEDGE_USAGE_LIMIT_WAIT_MS - 1_000
-    );
-    // Still at the limit when it looks again: it waits once more and pays for nothing twice.
-    await dueNow();
-    await runJobs(instance);
-    expect(provider.sizes()).toEqual([KNOWLEDGE_EMBEDDING_BATCH]);
-    expect(await vectorCount(record)).toBe(KNOWLEDGE_EMBEDDING_BATCH);
-
-    // The operator raises the limit: the instance starts again with the new release config.
-    await instance.api.close();
-    const raised = await start(true, undefined, developmentAuth, undefined, {
-      embedding: true,
-      embeddingBaseUrl: BASE_URL,
-      usageSafeguards: { modelCallsPerDay: 100 }
-    });
-    await dueNow();
-    await runJobs(raised);
     expect(provider.sizes()).toEqual([KNOWLEDGE_EMBEDDING_BATCH, 5]);
-    expect(await documents(raised)).toEqual([{ id: added.id, state: "indexed" }]);
+    expect(await documents(instance)).toEqual([{ id: added.id, state: "indexed" }]);
     expect(await vectorCount(record)).toBe(passages);
-    expect(await embeddingUsage(raised)).toHaveLength(2);
+    expect(await embeddingUsage(instance)).toHaveLength(2);
+    expect(await queuedIndexJobs()).toEqual([]);
+    await runJobs(instance);
+    expect(provider.sizes()).toEqual([KNOWLEDGE_EMBEDDING_BATCH, 5]);
   });
 
   it("makes no embedding call and keeps no vectors for a Knowledge Base that searches by keyword only", async () => {

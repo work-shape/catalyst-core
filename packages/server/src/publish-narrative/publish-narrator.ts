@@ -45,6 +45,7 @@ import {
   type WorkflowSentence
 } from "./narrative-copy";
 import { appFacts, workflowFacts, type AppFacts, type WorkflowFacts } from "./narrative-facts";
+import { workspaceDisplayName, type NamedWorkspace } from "./workspace-name";
 
 // Keeps outside input checks from holding the publish question; unchecked steps say they may stop.
 const NARRATION_BUDGET_MS = 3_000;
@@ -76,7 +77,7 @@ export interface PublishNarratorOptions {
     workspaces: {
       getWorkspace(
         ...input: Parameters<PlatformStores["workspaces"]["getWorkspace"]>
-      ): Promise<{ name: string } | undefined>;
+      ): Promise<NamedWorkspace | undefined>;
     };
     /** The people a `notify` step names, for their names. */
     users: {
@@ -95,6 +96,8 @@ export interface PublishNarratorOptions {
   policy?: RunOperationDeps["policy"];
   /** Who sees which stored data (DS-13b). Absent where the stored-data module is off. */
   storedData?: PublishNarrativeStoredData;
+  /** The instance's time zone, for a schedule that names none. Absent: UTC, said as the default. */
+  timeZone?: string;
 }
 
 export interface PublishNarrateInput {
@@ -201,7 +204,14 @@ function assetTitles(
   };
 }
 
-function namers(options: PublishNarratorOptions, access: ActorAccess) {
+function namers(options: PublishNarratorOptions, access: ActorAccess, locale: LocaleCode) {
+  const person = async (id: string) =>
+    (
+      await options.stores.users.getUser({
+        clientInstanceId: options.clientInstanceId,
+        userId: asUserId(id)
+      })
+    )?.displayLabel;
   return {
     connection: assetTitles(
       options,
@@ -224,29 +234,30 @@ function namers(options: PublishNarratorOptions, access: ActorAccess) {
       [WORKFLOW_ACTIONS.read, WORKFLOW_ACTIONS.use],
       (config) => workflowTitleSchema.safeParse(config).data?.manifest.name
     ),
-    workspace: async (id: string) =>
-      (
-        await options.stores.workspaces.getWorkspace(
-          options.clientInstanceId,
-          asCollaborationWorkspaceId(id)
-        )
-      )?.name,
-    person: async (id: string) =>
-      (
-        await options.stores.users.getUser({
-          clientInstanceId: options.clientInstanceId,
-          userId: asUserId(id)
-        })
-      )?.displayLabel
+    // A workspace by the name the interface shows: a Personal Workspace after its owner.
+    workspace: async (id: string) => {
+      const workspace = await options.stores.workspaces.getWorkspace(
+        options.clientInstanceId,
+        asCollaborationWorkspaceId(id)
+      );
+      return workspace && workspaceDisplayName(workspace, locale, person);
+    },
+    person
   };
 }
 
-/** Every name the stored-data module answers, on one line: a line break would forge a line. */
-function audienceOnOneLine(audience: PublishNarrativeAudience): PublishNarrativeAudience {
+/** Every audience name stays on one line. An App supplies its already resolved owner name. */
+function audienceOnOneLine(
+  audience: PublishNarrativeAudience,
+  workspaceName?: string
+): PublishNarrativeAudience {
   return audience.workspace
     ? {
         ...audience,
-        workspace: { ...audience.workspace, title: oneLine(audience.workspace.title) }
+        workspace: {
+          ...audience.workspace,
+          title: oneLine(workspaceName ?? audience.workspace.title)
+        }
       }
     : audience;
 }
@@ -324,7 +335,7 @@ async function workflowSentence(
   facts: WorkflowFacts,
   definitions: ReadonlyMap<string, OperationDefinition | undefined>
 ): Promise<WorkflowSentence> {
-  const names = namers(options, input.access);
+  const names = namers(options, input.access, input.locale);
   const reads: string[] = [];
   const adds: string[] = [];
   const changes: string[] = [];
@@ -359,7 +370,12 @@ async function workflowSentence(
     input.config && kind?.readRunsAs ? await kind.readRunsAs(input.config) : facts.runAs;
   return {
     title: oneLine(facts.title),
-    triggers: facts.triggers,
+    // A schedule without a zone of its own runs in the instance's (spec events :203).
+    triggers: facts.triggers.map((trigger) =>
+      trigger.kind === "schedule" && trigger.timeZone === undefined && options.timeZone
+        ? { ...trigger, timeZone: options.timeZone }
+        : trigger
+    ),
     ...(account === undefined ? {} : { account: oneLine(account) }),
     reads: once(reads),
     // A store that a step may change is said once, as changed, and not also as added to.
@@ -525,7 +541,7 @@ async function narrateApp(
   input: PublishNarrateInput,
   facts: AppFacts
 ): Promise<PublishNarrative> {
-  const names = namers(options, input.access);
+  const names = namers(options, input.access, input.locale);
   // Who may use it and what its reading statements show them, as DS-13b reads it for this
   // revision. A reader the stored-data module refuses gets the plain line without counts.
   const stored = await options.storedData
@@ -547,7 +563,7 @@ async function narrateApp(
       {
         title: oneLine(facts.title),
         ...(input.audienceLabel ? { audienceLabel: input.audienceLabel } : {}),
-        ...(stored?.audience ? { audience: audienceOnOneLine(stored.audience) } : {}),
+        ...(stored?.audience ? { audience: audienceOnOneLine(stored.audience, workspace) } : {}),
         ...(stored?.truncated ? { truncated: true } : {}),
         ...(workspace === undefined ? {} : { workspace: oneLine(workspace) }),
         stores: stores.map((store) => ({

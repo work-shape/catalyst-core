@@ -525,6 +525,25 @@ describe("the agent's first save of a conversation (NAV-2)", () => {
     });
   });
 
+  it("names the agent it created and opened in the language of the run", async () => {
+    // ACCEPT-1c C8: a German run's line said "Agent „Leave Reviewer“ erstellt".
+    const { t, team } = await setup();
+    const calls = await callsOf(t);
+    const conversation = await ownConversation(t, team);
+    const german = { ...kaiContext(t, conversation), locale: "de" as const };
+    const displayName = { en: "Leave reviewer", de: "Urlaubsprüfer" };
+    expect(
+      await calls.put(german, {
+        kind: "agent",
+        name: "leave-reviewer",
+        config: agent("leave-reviewer", { displayName })
+      })
+    ).toMatchObject({ created: true, title: "Urlaubsprüfer" });
+    expect(await calls.open(german, { kind: "agent", name: "leave-reviewer" })).toMatchObject({
+      title: "Urlaubsprüfer"
+    });
+  });
+
   it("is refused where the person may not write, as the API refuses the same put", async () => {
     const { t, other } = await setup();
     await join(t, t.kai, other);

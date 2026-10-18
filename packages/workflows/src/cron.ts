@@ -4,6 +4,8 @@
 
 /** A cron expression as the minutes, hours, days and months it is due in. */
 export interface CronExpression {
+  /** A schedule may name its own zone; otherwise the engine supplies the instance zone. */
+  timeZone?: string;
   minutes: ReadonlySet<number>;
   hours: ReadonlySet<number>;
   daysOfMonth: ReadonlySet<number>;
@@ -199,7 +201,7 @@ export function nextDueAfter(
   timeZone: string
 ): Date | undefined {
   const times = crons.flatMap((cron) => {
-    const time = look(cron, after.getTime() + 1, 1, timeZone);
+    const time = look(cron, after.getTime() + 1, 1, cron.timeZone ?? timeZone);
     return time === undefined ? [] : [time];
   });
   return times.length === 0 ? undefined : new Date(Math.min(...times));
@@ -213,7 +215,7 @@ export function lastDueWithin(
   timeZone: string
 ): Date | undefined {
   const times = crons.flatMap((cron) => {
-    const time = look(cron, to.getTime(), -1, timeZone);
+    const time = look(cron, to.getTime(), -1, cron.timeZone ?? timeZone);
     return time === undefined || time < from.getTime() ? [] : [time];
   });
   return times.length === 0 ? undefined : new Date(Math.max(...times));

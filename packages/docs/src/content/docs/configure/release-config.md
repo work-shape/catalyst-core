@@ -74,9 +74,10 @@ usage:
     dailySpendLimit: 50
     monthlySpendLimit: 400
     costSafetyMultiplier: 1.3
+  # Per person. Left out, each takes its default: 20,000 calls and 200 million tokens a day,
+  # 4 billion tokens a month.
   safeguards:
-    modelCallsPerDay: 1000
-    tokensPerDay: 2500000
+    modelCallsPerDay: 20000
   costs:
     customer:
       id: example-customer
@@ -181,7 +182,7 @@ A guardrail answers one event. A rule that should hold wherever content can go l
 
 Content longer than 2 Mi characters is not read in part: a guardrail that blocks or asks for an approval answers it as a match; one that warns warns. A text file in UTF-8, or in UTF-16 with its byte order mark or without one where at least 90% of the bytes at one parity of its first KiB are NUL and at most 10% at the other, is read as text. Any other file is read by a `pattern` as its printable runs (printable ASCII, tab and line ends) of at least 4 characters, as `strings` finds them, so text beside a NUL byte is still found and a photo adds next to nothing. A `model_judge` reads the text files and, of an image or a font (PNG, JPEG, GIF, WebP, ICO, WOFF, WOFF2, TrueType, OpenType), the printable runs of at least 16 characters, which a photo has next to none of and text put into the file has throughout; any other file that is no text leaves it nothing it can judge, which a judge that blocks or asks for an approval answers as a match. Such a refusal does not say to try again, as nothing about it is temporary; a judge that failed or timed out does.
 
-All guardrails bound to an event run concurrently. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Each check is a model call of the instance: it counts toward the usage budgets and safeguards and leaves one usage record with the purpose `guardrail_judge`, also when it fails or times out. The record names the originating conversation when there is one and never an agent run.
+All guardrails bound to an event run concurrently. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Each check is a model call of the instance: it counts toward the spend budgets and, as a call the product makes for the person who caused it, toward that person's second safeguard bucket, never their own (see [governance](/operate/governance/)). It leaves one usage record with the purpose `guardrail_judge`, also when it fails or times out. The record names the originating conversation when there is one and never an agent run.
 
 `warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking guardrail never lets unchecked content through. When a usage limit of the instance refuses the check, the reason given to the agent says that the limit is reached. When a skill change is approved, the skill as the approval would write it is checked again at `asset.before_write`: a block then leaves the skill unchanged, and the request ends as not applied with the guardrail's reason. Undoing an approved change writes the earlier revision back, which is checked the same way: a block refuses the undo and the request stays approved. A call that waited for an approval is checked again before it runs. Request kinds without a proposed-content extractor are not checked.
 

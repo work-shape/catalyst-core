@@ -310,7 +310,28 @@ export const PAGE_BUILD_KEEP_MS = 60 * 60 * 1000;
  * that changes or replaces one, and its id is new with every save, so no later save writes to
  * its row or below its object prefix.
  */
+/** One person's small browser state in one App; erased with the App or the account. */
+export interface AppUserStorageKey {
+  clientInstanceId: ClientInstanceId;
+  appId: string;
+  userId: UserId;
+}
+
+export type AppUserStorageMutation =
+  | { type: "set"; key: string; value: string }
+  | { type: "remove"; key: string }
+  | { type: "clear" }
+  | { type: "batch"; clear: boolean; values: Record<string, string | null> };
+
+/** Protects per-person state; larger business records belong in a Data Store. */
+export const APP_USER_STORAGE_MAX_BYTES = 64 * 1024;
+
 export interface PagesStore {
+  getAppUserStorage(input: AppUserStorageKey): Promise<Record<string, string>>;
+  mutateAppUserStorage(
+    input: AppUserStorageKey & { mutation: AppUserStorageMutation }
+  ): Promise<void>;
+
   /**
    * The Page of that name in the conversation, created when there is none. Refuses the name
    * that would be one Page too many with `page_limit`.

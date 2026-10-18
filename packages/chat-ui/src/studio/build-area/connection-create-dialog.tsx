@@ -13,7 +13,14 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildCreateDialogProps } from "./build-asset-kind";
-import { readBuildRefusal, readRefusalDetails } from "./build-refusals";
+import { readBuildRefusal } from "./build-refusals";
+import {
+  approvalRefusals,
+  connectionWriteErrors,
+  egressRefusal,
+  type ApprovalRefused
+} from "./connection-refusals";
+import { RefusalDetail } from "./refusal-notice";
 import { addressBlocksCreate, useAddressCheck } from "./name-check";
 import { ConnectionApprovalList, approveLabel, useApprovalChoice } from "./connection-approval";
 import {
@@ -128,7 +135,7 @@ export function ConnectionCreateFlow({
   const [busy, setBusy] = useState(false);
   const [asking, setAsking] = useState(false);
   const [discarding, setDiscarding] = useState(false);
-  const [refusals, setRefusals] = useState<string[]>();
+  const [refusals, setRefusals] = useState<ApprovalRefused>();
   const [pasted, setPasted] = useState("");
   const approval = useApprovalChoice([]);
   // What the dialog wrote and sent so far: a later Verbinden picks up from here.
@@ -273,11 +280,10 @@ export function ConnectionCreateFlow({
           });
         } else {
           setErrors({
-            url: t(
+            url:
               outcome.reason === "network_denied"
-                ? "connectionCreate.errorUrlDenied"
-                : "connectionCreate.errorUrl"
-            )
+                ? egressRefusal(fields.form.url, t)
+                : t("connectionCreate.errorUrl")
           });
         }
         return;
@@ -292,21 +298,10 @@ export function ConnectionCreateFlow({
     }
   };
 
-  /** The fields a refused definition is about, each with the instance's sentence. */
+  /** The fields a refused definition is about, in the reader's words. */
   const writeErrors = (error: unknown): CreateFieldErrors => {
-    const outcome = readBuildRefusal(error, t);
-    if (!outcome.ok && outcome.conflict) {
-      return { id: t("connectionCreate.errorIdTaken", { name }) };
-    }
-    const issues = readRefusalDetails(error).issues;
-    if (issues.length === 0) return { general: sentenceOf(error) };
-    const found: CreateFieldErrors = {};
-    for (const issue of issues) {
-      const field = fieldOfIssue(issue.path);
-      found[field] =
-        found[field] === undefined ? issue.message : `${found[field]} ${issue.message}`;
-    }
-    return found;
+    const { errors: found, detail } = connectionWriteErrors(error, name, t, fields.form.url);
+    return detail === undefined ? found : { ...found, detail };
   };
 
   const sentenceOf = (error: unknown): string => {
@@ -366,7 +361,11 @@ export function ConnectionCreateFlow({
   const approve = async (candidates: ApprovalCandidate[]) => {
     const revision = memory.current.revision;
     if (revision === undefined) return;
-    const chosen = selectedCandidates(candidates, approval.choice.selected);
+    const chosen = selectedCandidates(
+      candidates,
+      approval.choice.selected,
+      approval.choice.effects
+    );
     const config = withApprovedOperations(written.current, chosen, [...approval.choice.surfaces]);
     setBusy(true);
     setRefusals(undefined);
@@ -578,10 +577,12 @@ export function ConnectionCreateFlow({
                 choice={approval.choice}
                 onSelectedChange={approval.setSelected}
                 onSurfacesChange={approval.setSurfaces}
+                onEffectsChange={approval.setEffects}
                 disabled={busy}
               />
             ) : null}
-            {refusals ? <ApprovalRefusals refusals={refusals} /> : null}
+            {refusals ? <ApprovalRefusals refusals={refusals.refusals} /> : null}
+            <RefusalDetail detail={refusals?.detail} />
           </div>
         );
       case "review":
@@ -604,7 +605,8 @@ export function ConnectionCreateFlow({
               {...(stage.drafted ? {} : { source: pasted })}
               disabled={busy}
             />
-            {refusals ? <ApprovalRefusals refusals={refusals} /> : null}
+            {refusals ? <ApprovalRefusals refusals={refusals.refusals} /> : null}
+            <RefusalDetail detail={refusals?.detail} />
           </div>
         );
     }
@@ -684,7 +686,11 @@ export function ConnectionCreateFlow({
       case "tools":
       case "review": {
         const { candidates } = stage;
-        const count = selectedCandidates(candidates, approval.choice.selected).length;
+        const count = selectedCandidates(
+          candidates,
+          approval.choice.selected,
+          approval.choice.effects
+        ).length;
         return (
           <>
             <Button
@@ -757,43 +763,4 @@ function ConnectedLine({ text }: { text: string }) {
       {text}
     </Banner>
   );
-}
-
-/** The field of the dialog an issue of the definition is about, by the issue's path. */
-function fieldOfIssue(path: readonly unknown[]): keyof CreateFieldErrors {
-  if (path.includes("url") || path.includes("baseUrl")) return "url";
-  if (path.includes("headers")) return "headers";
-  if (path.includes("testPath")) return "testPath";
-  if (path.includes("headerName")) return "headerName";
-  if (path[0] === "name") return "id";
-  return "general";
-}
-
-/**
- * Why the approved tools were not saved: each sentence of the instance, with the name of the
- * operation it is about where its path names one.
- */
-function approvalRefusals(
-  error: unknown,
-  config: Record<string, unknown>,
-  t: ReturnType<typeof useTranslation>["t"]
-): string[] {
-  const issues = readRefusalDetails(error).issues;
-  const operations = Array.isArray(config.operations) ? config.operations : [];
-  if (issues.length === 0) {
-    const outcome = readBuildRefusal(error, t);
-    return outcome.ok || outcome.conflict
-      ? [t("connectionCreate.errorFailed")]
-      : outcome.refusals.map((refusal) => refusal.message);
-  }
-  return issues.map((issue) => {
-    const [first, index] = issue.path;
-    const operation: unknown =
-      first === "operations" && typeof index === "number" ? operations[index] : undefined;
-    const named =
-      typeof operation === "object" && operation !== null && "name" in operation
-        ? operation.name
-        : undefined;
-    return typeof named === "string" ? `${named}: ${issue.message}` : issue.message;
-  });
 }

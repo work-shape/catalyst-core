@@ -8,6 +8,8 @@ import {
   appPreviewRequestSchema,
   appSessionContextRequestSchema,
   appSessionContextSchema,
+  appStorageWriteRequestSchema,
+  appStorageWriteResponseSchema,
   appPreviewSchema,
   createAppFromPageRequestSchema,
   createAppFromPageResponseSchema,
@@ -132,6 +134,21 @@ export const appOperations = {
     response: json(appSessionContextSchema),
     errors: ["NOT_FOUND"],
     rateClass: "read"
+  }),
+  "apps.sessions.write_storage": defineRegisteredOperation({
+    id: "apps.sessions.write_storage",
+    method: "POST",
+    path: "/api/v1/app-content-sessions/:pageSessionId/storage",
+    summary: "Update the caller's private storage in the App shown by a frame",
+    tag: "Apps",
+    auth: "user",
+    scope: "conversation:write",
+    requires: [],
+    effect: "changing",
+    body: appStorageWriteRequestSchema,
+    response: json(appStorageWriteResponseSchema),
+    errors: ["NOT_FOUND", "VALIDATION_FAILED"],
+    rateClass: "write"
   }),
   // A path of its own: `actions` beside `/apps/:app` would read an App named `actions`. The
   // Named details require app.read. The unnamed chooser lists published actions through

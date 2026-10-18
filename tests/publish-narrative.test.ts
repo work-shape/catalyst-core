@@ -34,7 +34,7 @@ describe("PUBQ-1 the publish question's sentence", () => {
   it("check 75: names the schedule, the account, Exampledata, Findings, the mail and the App's audience, and warns of the mail step before the click", async () => {
     const narrative = await narrateWorkflow("en");
     expect(narrative.summary).toBe(
-      "Nachtimport runs as the account “nachtimport-runner” every day at 2:00 AM, reads from Exampledata, adds rows to Findings, and uses Outlook for “Mail an Mandanten”. The App “Findings” shows the rows of Findings to the 14 people of “Kai Spezis”."
+      "Nachtimport runs as the account “nachtimport-runner” every day at 2:00 AM (UTC, the default time zone), reads from Exampledata, adds rows to Findings, and uses Outlook for “Mail an Mandanten”. The App “Findings” shows the rows of Findings to the 14 people of “Kai Spezis”."
     );
     expect(narrative.warnings).toEqual([
       "The step “Mail an Mandanten” may stop: the guardrail “E-Mail senden: IBAN → Freigabe” asks for approval when what it checks matches, and a published run cannot wait for one."
@@ -44,7 +44,7 @@ describe("PUBQ-1 the publish question's sentence", () => {
   it("check 75 in German: the same sentence and warning in the reader's language", async () => {
     const narrative = await narrateWorkflow("de");
     expect(narrative.summary).toBe(
-      "Nachtimport läuft jeden Tag um 02:00 Uhr unter dem Konto „nachtimport-runner“, liest aus Exampledata, fügt Zeilen in Findings hinzu und nutzt Outlook für „Mail an Mandanten“. Die App „Findings“ zeigt den 14 Personen von „Kai Spezis“ die Zeilen von Findings."
+      "Nachtimport läuft jeden Tag um 02:00 Uhr (UTC, die Standardzeitzone) unter dem Konto „nachtimport-runner“, liest aus Exampledata, fügt Zeilen in Findings hinzu und nutzt Outlook für „Mail an Mandanten“. Die App „Findings“ zeigt den 14 Personen von „Kai Spezis“ die Zeilen von Findings."
     );
     expect(narrative.warnings).toEqual([
       "Der Schritt „Mail an Mandanten“ kann angehalten werden: Die Leitplanke „E-Mail senden: IBAN → Freigabe“ verlangt eine Freigabe, wenn ihre Prüfung einen Treffer ergibt, und ein veröffentlichter Lauf kann nicht auf sie warten."
@@ -288,7 +288,7 @@ describe("PUBQ-1 the publish question's sentence", () => {
       { ...config, manifest: { ...manifest, steps } }
     );
     expect(narrative.summary).toBe(
-      "Nachtimport runs as the account “nachtimport-runner” every day at 2:00 AM, reads from Exampledata, adds rows to Findings, and sends nothing. 2 more Apps or knowledge bases you may not see read Findings."
+      "Nachtimport runs as the account “nachtimport-runner” every day at 2:00 AM (UTC, the default time zone), reads from Exampledata, adds rows to Findings, and sends nothing. 2 more Apps or knowledge bases you may not see read Findings."
     );
   });
 
@@ -362,11 +362,66 @@ describe("PUBQ-1 the publish question's sentence", () => {
     );
     const evening = { kind: "schedule", cron: "30 18 * * 1" };
     expect(await summary("en", manual(true, evening))).toContain(
-      "runs as the account “nachtimport-runner” every Monday at 6:30 PM and uses"
+      "runs as the account “nachtimport-runner” every Monday at 6:30 PM (UTC, the default time zone) and uses"
     );
     expect(await summary("de", manual(true, evening))).toContain(
-      "läuft jeden Montag um 18:30 Uhr unter dem Konto „nachtimport-runner“ und nutzt"
+      "läuft jeden Montag um 18:30 Uhr (UTC, die Standardzeitzone) unter dem Konto „nachtimport-runner“ und nutzt"
     );
+  });
+
+  it("E1: names the zone of a schedule's clock time and never says the cron itself", async () => {
+    const config = nightlyImport();
+    const manifest = config.manifest;
+    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) throw new Error();
+    const scheduled = (trigger: JsonObject) => ({
+      ...config,
+      manifest: {
+        ...manifest,
+        steps: [{ id: "start", name: "Start", type: "trigger", triggers: [trigger] }]
+      }
+    });
+    const summary = async (
+      locale: LocaleCode,
+      trigger: JsonObject,
+      timeZone?: string
+    ): Promise<string> =>
+      (
+        await narrateWorkflow(
+          locale,
+          timeZone === undefined ? {} : { timeZone },
+          scheduled({ kind: "schedule", ...trigger })
+        )
+      ).summary;
+
+    // The trigger's own zone wins over the instance's; 23:25 stays 23:25, never converted.
+    expect(
+      await summary("de", { cron: "25 23 * * *", timeZone: "Europe/Berlin" }, "America/New_York")
+    ).toContain("läuft jeden Tag um 23:25 Uhr (Europe/Berlin) unter dem Konto");
+    // Without one, the instance's zone.
+    expect(await summary("en", { cron: "25 23 * * *" }, "Europe/Berlin")).toContain(
+      "every day at 11:25 PM (Europe/Berlin)"
+    );
+    // Without either, UTC, said as the default.
+    expect(await summary("de", { cron: "25 23 * * *" })).toContain(
+      "jeden Tag um 23:25 Uhr (UTC, die Standardzeitzone)"
+    );
+    // A fixed day of a fixed month reads as a date, never as the cron.
+    const once = { cron: "34 21 18 10 *", timeZone: "Europe/Berlin" };
+    expect(await summary("de", once)).toContain(
+      "läuft jedes Jahr am 18. Oktober um 21:34 Uhr (Europe/Berlin)"
+    );
+    expect(await summary("en", once)).toContain(
+      "every year on October 18 at 9:34 PM (Europe/Berlin)"
+    );
+    // A form not put into words is a plain schedule with its zone; no date that does not exist.
+    for (const cron of ["*/5 * * * *", "0 9 31 2 *", "0 9 1-5 * *"]) {
+      const de = await summary("de", { cron, timeZone: "Europe/Berlin" });
+      expect(de).toContain("läuft nach Zeitplan (Europe/Berlin) unter dem Konto");
+      expect(de).not.toContain(cron);
+      expect(await summary("en", { cron })).toContain(
+        "runs as the account “nachtimport-runner” on a schedule (UTC, the default time zone)"
+      );
+    }
   });
 
   it("names holders alone in the case the sentence asks for, and never as others", async () => {

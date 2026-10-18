@@ -10,6 +10,7 @@ import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { required } from "./support/assertions";
 import { usePostgresSuite } from "./support/postgres-suite";
 import { createTestInstance } from "./support/test-instance";
+import { ensureTestUser } from "./support/test-store";
 
 const CONCURRENT_CALLS = 200;
 const ROOM = 7;
@@ -37,10 +38,18 @@ const RESERVED_COST_MICROS = 130_000;
 
 type Limits = Pick<ConstructorParameters<typeof ModelUsageGovernance>[0], "budget" | "safeguards">;
 
+/** The person the calls are made for. Their row exists: `withPerson` makes it. */
+const personOf = (clientInstanceId: ClientInstanceId): string => `${clientInstanceId}_person`;
+
 function call(clientInstanceId: ClientInstanceId, index: number): ModelCallAdmission {
   return {
     clientInstanceId,
-    attribution: { kind: "system", purpose: "document_extraction" },
+    // A call the product makes for one person: held on that person's `system` safeguards.
+    attribution: {
+      kind: "system",
+      purpose: "document_extraction",
+      userId: personOf(clientInstanceId)
+    },
     providerId: "azure-eu",
     model: "gpt-main",
     correlationId: `corr_race_${index}`,
@@ -51,13 +60,22 @@ function call(clientInstanceId: ClientInstanceId, index: number): ModelCallAdmis
 describe("usage admission under concurrent calls", () => {
   const db = usePostgresSuite("usageadmission");
 
+  /** A client instance of its own for one test, with the row of the person its calls are for. */
+  async function withPerson(label: string): Promise<ClientInstanceId> {
+    const clientInstanceId = db.clientInstance(label);
+    await ensureTestUser(clientInstanceId, personOf(clientInstanceId));
+    return clientInstanceId;
+  }
+
+  /** The counters of the instance as a whole. */
   async function counters(clientInstanceId: ClientInstanceId) {
     const rows = await db.sql<
       { period_kind: string; calls: number; tokens: number; cost: number }[]
     >`
       select period_kind, model_call_count::float8 as calls, tokens::float8 as tokens,
         cost_micros::float8 as cost
-      from model_usage_counters where client_instance_id = ${clientInstanceId}
+      from model_usage_counters
+      where client_instance_id = ${clientInstanceId} and scope_kind = 'instance'
       order by period_kind`;
     return rows.map((row) => ({ ...row }));
   }
@@ -101,14 +119,17 @@ describe("usage admission under concurrent calls", () => {
 
   // Fails without the change: each process counted its own calls.
   it("admits exactly seven of two hundred calls against a daily call limit with room for seven", async () => {
-    const clientInstanceId = db.clientInstance("calls");
+    const clientInstanceId = await withPerson("calls");
 
     const results = await race(clientInstanceId, {
       budget: {},
       safeguards: { modelCallsPerDay: ROOM }
     });
 
-    expectExactlyTheRoom(results, "Daily model call safeguard has been reached");
+    expectExactlyTheRoom(
+      results,
+      "Daily model call safeguard has been reached for product calls. Resets at midnight UTC."
+    );
     await expect(db.store.usage.listModelUsageEvents({ clientInstanceId })).resolves.toHaveLength(
       ROOM
     );
@@ -117,14 +138,17 @@ describe("usage admission under concurrent calls", () => {
   // Fails without the change: a call in flight held no tokens, so every call was admitted
   // until the first one ended.
   it("admits exactly the calls whose reserved tokens fit a daily token limit", async () => {
-    const clientInstanceId = db.clientInstance("tokens");
+    const clientInstanceId = await withPerson("tokens");
 
     const results = await race(clientInstanceId, {
       budget: {},
       safeguards: { tokensPerDay: ROOM * RESERVED_TOKENS + RESERVED_TOKENS - 1 }
     });
 
-    expectExactlyTheRoom(results, "Daily model token safeguard has been reached");
+    expectExactlyTheRoom(
+      results,
+      "Daily model token safeguard has been reached for product calls. Resets at midnight UTC."
+    );
     expect(await counters(clientInstanceId)).toEqual([
       {
         period_kind: "day",
@@ -144,20 +168,23 @@ describe("usage admission under concurrent calls", () => {
   // Fails without the change: the second call in flight was refused because the cost of the
   // first was not whole, and nothing held the cost of calls in flight against the budget.
   it("admits exactly the calls whose reserved cost fits a monthly spend budget", async () => {
-    const clientInstanceId = db.clientInstance("cost");
+    const clientInstanceId = await withPerson("cost");
 
     const results = await race(clientInstanceId, {
       budget: { monthlySpendLimit: (ROOM * RESERVED_COST_MICROS + 1) / 1_000_000 },
       safeguards: {}
     });
 
-    expectExactlyTheRoom(results, "Monthly model spend budget has been reached");
+    expectExactlyTheRoom(
+      results,
+      "Monthly model spend budget has been reached for the instance. Resets at the start of next month UTC."
+    );
   });
 
   // Fails without the change: a call that failed stayed a row without a whole cost, and every
   // later call was refused for the rest of the month.
   it("lets the next call in after a call that failed", async () => {
-    const clientInstanceId = db.clientInstance("failed");
+    const clientInstanceId = await withPerson("failed");
     const governance = new ModelUsageGovernance({
       store: db.store.usage,
       costs: { customer: rateCard },
@@ -184,7 +211,7 @@ describe("usage admission under concurrent calls", () => {
 
   // Fails without the change: a call whose process went away held its place for good.
   it("releases what a call reserved that never ended", async () => {
-    const clientInstanceId = db.clientInstance("abandoned");
+    const clientInstanceId = await withPerson("abandoned");
     const governance = new ModelUsageGovernance({
       store: db.store.usage,
       costs: { customer: rateCard },
@@ -212,7 +239,7 @@ describe("usage admission under concurrent calls", () => {
 
   // Fails without the change: there were no counters and no sums to compare.
   it("keeps the counters and the sums equal to the events through a mixed run", async () => {
-    const clientInstanceId = db.clientInstance("mixed");
+    const clientInstanceId = await withPerson("mixed");
     const governances = [db.store, db.secondStore].map(
       (store) =>
         new ModelUsageGovernance({
@@ -312,7 +339,7 @@ describe("usage admission under concurrent calls", () => {
 
   // Fails without the change: nothing compared the counters with the events.
   it("corrects the counters and the sums by what a process of the previous release wrote", async () => {
-    const clientInstanceId = db.clientInstance("drift");
+    const clientInstanceId = await withPerson("drift");
     const governance = new ModelUsageGovernance({
       store: db.store.usage,
       costs: { customer: rateCard },
@@ -356,7 +383,7 @@ describe("usage admission under concurrent calls", () => {
   // Fails without the change: each reconciler read the same difference and added it, so the
   // counters and the sums ended two differences too high.
   it("corrects a difference once when three reconcilers find it at the same time", async () => {
-    const clientInstanceId = db.clientInstance("reconcilers");
+    const clientInstanceId = await withPerson("reconcilers");
     const governance = new ModelUsageGovernance({
       store: db.store.usage,
       costs: { customer: rateCard },

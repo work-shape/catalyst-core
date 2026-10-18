@@ -3,12 +3,15 @@ import {
   asCollaborationWorkspaceId,
   asConversationId,
   asUserId,
-  readToolResultMetadata
+  readToolResultMetadata,
+  type OperationRun
 } from "@work-shape/catalyst-core";
 import { DeterministicModelProvider } from "@work-shape/catalyst-model-provider";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { getTestJobs } from "./support/test-instance";
+import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
+import { waitUntil } from "./support/assertions";
 import { withTestSql } from "./support/test-sql";
 import {
   createAssetToolsFixture,
@@ -40,6 +43,197 @@ describe("a conversation about a Workflow", () => {
     });
   });
   afterAll(() => vi.restoreAllMocks());
+
+  it("builds a new Workflow from chat and completes its first test using a discovered account and caller, without account-management rights or a manual principal", async () => {
+    const t = await createAssetToolsFixture();
+    const principals = await t.app.stores.apiAccess.listServicePrincipals({
+      clientInstanceId: t.clientInstanceId
+    });
+    for (const principal of principals)
+      await t.app.stores.apiAccess.deleteServicePrincipal({
+        clientInstanceId: t.clientInstanceId,
+        servicePrincipalId: principal.id
+      });
+    const account = await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "weekly-documents",
+      displayLabel: "Weekly documents"
+    });
+    const integration = await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "local-config-cli",
+      displayLabel: "Local config CLI"
+    });
+    await t.app.stores.apiAccess.createApiCredential({
+      clientInstanceId: t.clientInstanceId,
+      servicePrincipalId: integration.id,
+      name: "Release key"
+    });
+    await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "release-without-key",
+      displayLabel: "Release account",
+      permissions: ["config_assets.release"]
+    });
+    await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "more-rights",
+      displayLabel: "More rights",
+      permissions: ["users.manage"]
+    });
+    const retired = await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "retired-documents",
+      displayLabel: "Retired documents"
+    });
+    await t.app.stores.apiAccess.updateServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      servicePrincipalId: retired.id,
+      status: "disabled"
+    });
+    const existingAsset = await t.app.stores.configAssets.getConfigAsset({
+      clientInstanceId: t.clientInstanceId,
+      ...subject
+    });
+    if (!existingAsset) throw new Error("The fixture Workflow is missing");
+    await t.app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.clientInstanceId,
+      name: "owned-documents",
+      displayLabel: "Owned documents",
+      owner: { kind: "workflow", assetId: existingAsset.id }
+    });
+    const { id, createdByUserId } = z
+      .object({ id: z.string(), createdByUserId: z.string() })
+      .parse((await t.ok(t.converse(undefined, OTHER))).json());
+    const call = async (tool: string, input: unknown = {}) => {
+      const { answer } = await t.say(id, `/tool ${tool} ${JSON.stringify(input)}`, OTHER);
+      const parsed: unknown = JSON.parse(answer ?? "null");
+      return parsed;
+    };
+    expect(await call("platform.context")).toMatchObject({ workflowPrincipals: [] });
+    for (const action of ["workflow.write", "workflow.read"])
+      await t.ok(
+        t.app.call("permissions.grant", {
+          payload: {
+            holderKind: "user",
+            holderId: createdByUserId,
+            action,
+            effect: "allow",
+            scopeKind: "instance"
+          }
+        })
+      );
+    const rights = z
+      .object({ instanceActions: z.array(z.string()) })
+      .parse((await t.ok(t.app.call("platform.context.get", {}, OTHER))).json());
+    expect(rights.instanceActions).not.toContain("service_principals.manage");
+    expect(rights.instanceActions).not.toContain("api_access.manage");
+    const context = z
+      .object({
+        caller: z.object({ id: z.string() }),
+        workflowPrincipals: z.array(z.object({ name: z.string(), displayLabel: z.string() }))
+      })
+      .parse(await call("platform.context"));
+    expect(context.workflowPrincipals).toEqual([
+      { name: account.name, displayLabel: account.displayLabel }
+    ]);
+    const selected = context.workflowPrincipals[0];
+    expect(selected).toBeDefined();
+    const name = "weekly-document-summary";
+    expect(
+      await call("platform.assets.put", {
+        kind: "workflow",
+        name,
+        config: {
+          name,
+          manifest: {
+            ...manifest(),
+            id: name,
+            name: "Weekly document summary",
+            runAs: selected?.name,
+            steps: [
+              trigger,
+              {
+                id: "tell",
+                name: "Send me the summary",
+                type: "notify",
+                to: { users: [context.caller.id] },
+                channels: ["inbox", "mail"],
+                title: { value: "Weekly summary" },
+                text: { ref: { step: "start", path: "input.note" } }
+              },
+              result
+            ]
+          }
+        }
+      })
+    ).toMatchObject({ saved: true });
+    const run = runSchema.parse(
+      await call("workflows.test", { workflow: name, input: { note: "No new documents" } })
+    );
+    const jobs = getTestJobs(t.app);
+    for (let pass = 0; pass < 8; pass++) await jobs.runDue();
+    expect(await call("workflows.get_run", { runId: run.id })).toMatchObject({
+      status: "done",
+      principal: { name: account.name },
+      startedBy: { id: context.caller.id }
+    });
+    expect(await call("workflows.list_step_runs", { runId: run.id })).toMatchObject({
+      items: [
+        { stepId: "start", status: "done" },
+        { stepId: "tell", status: "done", target: "dry_run" },
+        { stepId: "result", status: "done" }
+      ]
+    });
+    expect(
+      await t.app.stores.approvals.countApprovalRequests({
+        clientInstanceId: t.clientInstanceId,
+        kinds: ["notice"],
+        requestedById: context.caller.id
+      })
+    ).toBe(0);
+  });
+
+  it("offers a Workflow publish confirmation in chat and changes nothing before the person's click", async () => {
+    const t = await createAssetToolsFixture("in_process", [], {
+      publishTool: true,
+      filesStore: true
+    });
+    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
+    const written = writeSchema.parse(
+      await t.call(id, "platform.assets.put", {
+        ...subject,
+        expectedRevision: t.published,
+        config: { name: WORKFLOW, manifest: { ...manifest(), description: "Reviewed from chat" } }
+      })
+    );
+    const started = await injectStartConversationRun(
+      t.app,
+      id,
+      `/tool assets.publish ${JSON.stringify({ ...subject, revision: written.revision })}`
+    );
+    const observing = drainRunEvents(t.app, id, started.run.id);
+    let pending: OperationRun | undefined;
+    await waitUntil(async () => {
+      pending = (
+        await t.app.stores.operationRuns.list({ clientInstanceId: t.clientInstanceId })
+      ).find((run) => run.operation === "assets.publish" && run.origin.kind === "agent");
+      if (pending && pending.status !== "running" && pending.status !== "pending_confirmation")
+        expect(pending.status).toBe("pending_confirmation");
+      return pending?.status === "pending_confirmation";
+    }, "the Workflow publish asks its person to confirm");
+    expect((await t.asset()).publishedRevision).toBe(t.published);
+    if (!pending) throw new Error("The publish confirmation is missing");
+    await t.ok(
+      t.app.call("operations.decide", {
+        params: { runId: pending.id },
+        payload: { decision: "confirm" }
+      })
+    );
+    const events = await observing;
+    expect(events).toContain("tool_decision_requested");
+    expect((await t.asset()).publishedRevision).toBe(written.revision);
+  });
 
   it("lets the agent test its subject draft without a prompt and read the run and each step through the real operations", async () => {
     const t = await createAssetToolsFixture();
@@ -491,9 +685,9 @@ describe("a conversation about a Workflow", () => {
       const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
       const read = readSchema.parse(await t.call(id, "platform.assets.get"));
       expect(read.config.name).toBe(WORKFLOW);
-      // The operations a step may call, as far as the owner sees them: this instance has none.
-      expect(await t.call(id, "platform.assets.operations")).toEqual({
-        operations: [],
+      // The published Workflow is discoverable through the agent's operation tool.
+      expect(await t.call(id, "platform.assets.operations")).toMatchObject({
+        operations: [{ name: `workflow.${WORKFLOW}.start`, effect: "changing" }],
         truncated: false
       });
       // A config that names another asset is no save of this one, and none of the other.

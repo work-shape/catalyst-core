@@ -274,7 +274,30 @@ test("New agent in a workspace's Studio waits for Allow before creating an agent
   await page.getByRole("button", { name: "Send message", exact: true }).click();
   const confirmation = page.getByTestId("tool-decision-card");
   await expect(confirmation).toBeVisible();
-  await expect(confirmation).toContainText(name);
+  // The card says in words which agent the save creates; its internal name and definition stand
+  // under "Technical details", closed by default.
+  const summary = confirmation.getByTestId("tool-decision-agent");
+  await expect(summary).toContainText("NameBuilt helper");
+  await expect(summary).toContainText("InstructionsHelp the team.");
+  await expect(summary).toContainText("SkillsNone");
+  await expect(summary).toContainText("ToolsNone");
+  await expect(confirmation).not.toContainText(name);
+  const details = confirmation.getByRole("button", { name: "Technical details", exact: true });
+  await expect(details).toHaveAttribute("aria-expanded", "false");
+  await expect(confirmation.locator('[data-input-key="name"]')).toBeHidden();
+  await details.click();
+  await expect(details).toHaveAttribute("aria-expanded", "true");
+  await expect(confirmation.locator('[data-field="operation"]')).toHaveText(
+    /platform\.assets\.put$/u
+  );
+  await expect(confirmation.locator('[data-input-key="kind"]')).toContainText("agent");
+  await expect(confirmation.locator('[data-input-key="name"]')).toContainText(name);
+  await expect(confirmation.locator('[data-input-key="config.displayName"]')).toContainText(
+    "Built helper"
+  );
+  await expect(confirmation.locator('[data-input-key="config.instructions"]')).toContainText(
+    "Help the team."
+  );
   // A live first save is held at the host's card, with nothing persisted before Allow.
   const stored = () =>
     page.request.get(`${apiBaseUrl}/api/v1/assets/agent/${name}?workspaceId=${workspaceId}`);
@@ -331,8 +354,18 @@ test("the first save of a Data Store in a personal chat opens its draft in Studi
   await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
   await page.reload();
 
-  // Publish is the person's click: the store then has a database and a state.
+  // Publish is the person's click, and it asks first: a migration is not taken back.
   await page.locator("[data-data-store-publish]").click();
+  const question = page.locator("dialog[open]");
+  await expect(question.locator("[data-data-store-publish-confirm]")).toContainText(
+    "cannot be taken back"
+  );
+  await question.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(draft).toBeVisible();
+  await page.locator("[data-data-store-publish]").click();
+  await page.locator("dialog[open]").getByRole("button", { name: "Publish" }).click();
+  // The store then has a database and a state.
   await expect(page.locator("[data-data-store-draft]")).toHaveCount(0);
   await expect(page.locator("[data-data-store-state]")).toBeVisible();
 

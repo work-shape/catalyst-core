@@ -110,6 +110,82 @@ describe("the confirmation card", () => {
     expect(markup).not.toContain('data-testid="tool-decision-outcome"');
   });
 
+  it("says in words which agent a save creates, with its definition only under details (ACCEPT-FIX-7 E5)", () => {
+    const agentSave: ToolDecision = {
+      ...waiting,
+      operationId: "assets.put",
+      inputPreview: {
+        kind: "agent",
+        name: "protokollant",
+        config: {
+          name: "protokollant",
+          displayName: { de: "Protokollant", en: "Minute taker" },
+          instructions: "Mach aus Stichpunkten ein kurzes Besprechungsprotokoll mit Datum.",
+          skillNames: ["meeting-minutes"],
+          toolNames: ["web_search", "read_skill"],
+          welcomeMessage: { de: "Schick mir deine Stichpunkte", en: "Send me your notes" }
+        }
+      }
+    };
+    const markup = renderView(agentSave);
+    const summary = /data-testid="tool-decision-agent".*?<\/dl>/su.exec(markup)?.[0] ?? "";
+    expect(text(summary)).toContain("Name Minute taker");
+    expect(text(summary)).toContain(
+      "Instructions Mach aus Stichpunkten ein kurzes Besprechungsprotokoll mit Datum."
+    );
+    expect(text(summary)).toContain("Skills meeting-minutes");
+    expect(text(summary)).toContain("Tools web_search read_skill");
+    // The raw definition is folded under Technical details, which renders no content here.
+    expect(markup).not.toContain('data-input-key="config.welcomeMessage"');
+    expect(markup).not.toContain("Send me your notes");
+    expect(markup).toContain('data-testid="tool-decision-details"');
+    const german = text(renderView(agentSave, {}, "de"));
+    expect(german).toContain("Name Protokollant");
+    expect(german).toContain("Anweisungen Mach aus Stichpunkten");
+    expect(german).toContain("Skills meeting-minutes");
+    // Another call keeps its input as the card's body.
+    expect(renderView(waiting)).not.toContain('data-testid="tool-decision-agent"');
+    const noSkills = text(
+      renderView({
+        ...agentSave,
+        inputPreview: { kind: "agent", name: "leer", config: { displayName: "Leer" } }
+      })
+    );
+    expect(noSkills).toContain("Skills None");
+    expect(noSkills).toContain("Tools None");
+  });
+
+  it("summarises the agent a chat agent's save creates, which waits under its tool name (ACCEPT-FIX-7 E5)", () => {
+    // An agent's call waits under the name the agent called it by (`tool-operation.ts`), so an
+    // agent created in chat reaches the card as `platform.assets.put`.
+    const chatSave: ToolDecision = {
+      ...waiting,
+      operationId: "platform.assets.put",
+      inputPreview: {
+        kind: "agent",
+        name: "protokollant",
+        config: {
+          displayName: "Protokollant",
+          instructions: "Mach aus Stichpunkten ein Protokoll.",
+          skillNames: [],
+          toolNames: ["web_search"],
+          modelBindingId: "primary"
+        }
+      }
+    };
+    const markup = renderView(chatSave, {}, "de");
+    const summary = /data-testid="tool-decision-agent".*?<\/dl>/su.exec(markup)?.[0] ?? "";
+    expect(text(summary)).toContain("Name Protokollant");
+    expect(text(summary)).toContain("Anweisungen Mach aus Stichpunkten ein Protokoll.");
+    expect(text(summary)).toContain("Skills Keine");
+    expect(text(summary)).toContain("Tools web_search");
+    expect(markup).not.toContain('data-input-key="config.modelBindingId"');
+    // A save of another kind keeps its input as the card's body.
+    expect(
+      renderView({ ...chatSave, inputPreview: { kind: "skill", name: "notes", config: {} } })
+    ).not.toContain('data-testid="tool-decision-agent"');
+  });
+
   it("says in German what it asks", () => {
     const markup = text(renderView(waiting, {}, "de"));
     expect(markup).toContain("Läuft erst, wenn du es erlaubst.");

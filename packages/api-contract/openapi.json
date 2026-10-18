@@ -714,6 +714,136 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/app-content-sessions/{pageSessionId}/storage": {
+      "post": {
+        "operationId": "apps.sessions.write_storage",
+        "summary": "Update the caller's private storage in the App shown by a frame",
+        "tags": [
+          "Apps"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pageSessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppStorageWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppStorageWriteResponse"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/app-content-sessions/{pageSessionId}/workflow-runs/{runId}": {
       "post": {
         "operationId": "apps.sessions.get_workflow_run",
@@ -26752,6 +26882,39 @@
           },
           "tool": {
             "type": "string"
+          },
+          "usageLimit": {
+            "type": "object",
+            "properties": {
+              "period": {
+                "type": "string",
+                "enum": [
+                  "day",
+                  "month"
+                ]
+              },
+              "metric": {
+                "type": "string",
+                "enum": [
+                  "modelCallCount",
+                  "tokens",
+                  "costMicros"
+                ]
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "instance",
+                  "user",
+                  "system"
+                ]
+              }
+            },
+            "required": [
+              "period",
+              "metric",
+              "scope"
+            ]
           }
         },
         "required": [
@@ -28484,6 +28647,123 @@
         "type": "string",
         "enum": [
           "data_store_missing"
+        ]
+      },
+      "AppStorageWriteRequest": {
+        "type": "object",
+        "properties": {
+          "fileSetId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "mutation": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "set"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "key",
+                  "value"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "remove"
+                  },
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "key"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "clear"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "batch"
+                  },
+                  "clear": {
+                    "type": "boolean"
+                  },
+                  "values": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "clear",
+                  "values"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "fileSetId",
+          "token",
+          "mutation"
+        ]
+      },
+      "AppStorageWriteResponse": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "saved"
         ]
       },
       "AppWorkflowActionUnavailable": {
@@ -35185,6 +35465,12 @@
               },
               "name": {
                 "type": "string"
+              },
+              "timeZone": {
+                "type": "string"
+              },
+              "timeZoneDefaulted": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -37428,6 +37714,16 @@
       "UsageSpendBudget": {
         "type": "object",
         "properties": {
+          "dailySpentMicros": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "monthlySpentMicros": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "currency": {
             "type": "string"
           },

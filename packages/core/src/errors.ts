@@ -1,6 +1,10 @@
-import { APP_ERROR_STATUS_CODES, type AppErrorCode } from "@work-shape/catalyst-asset-schemas";
+import {
+  APP_ERROR_STATUS_CODES,
+  type AppErrorCode,
+  type ModelUsageRefusal
+} from "@work-shape/catalyst-asset-schemas";
 
-export { APP_ERROR_STATUS_CODES, type AppErrorCode };
+export { APP_ERROR_STATUS_CODES, type AppErrorCode, type ModelUsageRefusal };
 
 export class AppError extends Error {
   readonly code: AppErrorCode;
@@ -32,12 +36,22 @@ export class AppError extends Error {
 }
 
 /**
- * A model call that a usage limit of the instance refused before it was sent. A caller that
- * answers for the refusal can say that the limit is the cause.
+ * The code a run fails with when a usage limit refused its model call: a safeguard of a person
+ * or of the calls the product makes, or a spend budget of the instance. A client reads it to
+ * say what happened in the reader's language.
+ */
+export const MODEL_USAGE_LIMIT_REACHED_CODE = "MODEL_USAGE_LIMIT_REACHED";
+
+/**
+ * A model call that a usage limit refused before it was sent. Its details name the limit, so
+ * a caller words the refusal without reading the message.
  */
 export class ModelUsageLimitReachedError extends AppError {
-  constructor(message: string) {
-    super("FORBIDDEN", message);
+  readonly refusal: ModelUsageRefusal;
+
+  constructor(message: string, refusal: ModelUsageRefusal) {
+    super("FORBIDDEN", message, { reason: MODEL_USAGE_LIMIT_REACHED_CODE, ...refusal });
+    this.refusal = refusal;
   }
 }
 
@@ -66,11 +80,23 @@ export class ModelNotPricedError extends AppError {
 }
 
 /**
- * The code a failed run carries for an error: the error's own, or the narrower one of a
- * refusal a client words itself.
+ * What a failed run carries of an error besides its message: the error's own code, or the
+ * narrower one of a refusal a client words itself, and for a usage limit which limit it was.
  */
+export function runFailureOf(error: AppError): { code: string; usageLimit?: ModelUsageRefusal } {
+  const code = runFailureCodeOf(error);
+  if (error instanceof ModelUsageLimitReachedError) {
+    const { period, metric, scope } = error.refusal;
+    return { code, usageLimit: { period, metric, scope } };
+  }
+  return { code };
+}
+
+/** The stable code of a run failure, without its optional refusal details. */
 export function runFailureCodeOf(error: AppError): string {
-  return error instanceof ModelNotPricedError ? MODEL_NOT_PRICED_CODE : error.code;
+  if (error instanceof ModelNotPricedError) return MODEL_NOT_PRICED_CODE;
+  if (error instanceof ModelUsageLimitReachedError) return MODEL_USAGE_LIMIT_REACHED_CODE;
+  return error.code;
 }
 
 export function isAppError(error: unknown): error is AppError {

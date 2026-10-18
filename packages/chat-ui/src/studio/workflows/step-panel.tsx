@@ -25,10 +25,12 @@ import {
 import { formatMoment } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import { FailureBanner } from "./failure-banner";
+import { recipientsLine } from "./recipient-names";
 import type { LiveOnceControl } from "./test-run";
 import { StepDatasets } from "./step-datasets";
 import { simulatedCall, stepDatasets, stepOutputRows } from "./step-output";
 import { countsLine } from "./workflow-canvas-model";
+import { stepConnection, stepFallbackSentence } from "./workflow-model";
 import type {
   WorkflowDatasetView,
   WorkflowLoopCounts,
@@ -38,6 +40,7 @@ import type {
   WorkflowStepView
 } from "./workflow-views";
 import { RunStateBadge, durationText } from "./workflows-frame";
+import { useRecipientNames } from "./workflows-host";
 
 /** How many lines of what a step returned are shown. */
 const OUTPUT_PREVIEW_LINES = 40;
@@ -183,6 +186,7 @@ function OutputPreview({
  */
 export function StepPanel({
   step,
+  account,
   part,
   run,
   tab,
@@ -192,6 +196,8 @@ export function StepPanel({
   onClose
 }: {
   step: WorkflowStepView;
+  /** The label of the account the Workflow runs as, for a refusal that names it. */
+  account?: string | undefined;
   /** The step as the canvas draws it: its icon, the words above its title and its title. */
   part: FlowGraphNode | FlowGraphGroup;
   run: StepPanelRun | undefined;
@@ -237,7 +243,7 @@ export function StepPanel({
       {shown === "what" ? (
         <StepDescription step={step} summary={part.summary} onOpenChild={onOpenChild} />
       ) : shown === "run" && run !== undefined ? (
-        <StepRunDetails step={step} run={run} onOpenChild={onOpenChild} />
+        <StepRunDetails step={step} account={account} run={run} onOpenChild={onOpenChild} />
       ) : (
         entries
       )}
@@ -270,7 +276,14 @@ function StepDescription({
   onOpenChild: (() => void) | undefined;
 }) {
   const { locale, t } = useTranslation();
-  const sentence = step.description ?? summary;
+  const recipientNames = useRecipientNames();
+  const recipients =
+    step.kind === "notify" ? recipientsLine(step.to, recipientNames, { t, locale }) : undefined;
+  // A Notify node's line names its recipients, which the panel lists in a row of their own.
+  const fallback = stepFallbackSentence(step);
+  const sentence =
+    step.description ??
+    (recipients === undefined ? summary : fallback === undefined ? undefined : t(fallback));
   const worksOn =
     step.source === undefined
       ? undefined
@@ -300,11 +313,16 @@ function StepDescription({
     ...(step.concurrency === undefined
       ? []
       : [{ label: t("workflows.panel.atOnce"), value: step.concurrency.toLocaleString(locale) }]),
+    ...(recipients === undefined
+      ? []
+      : [{ label: t("workflows.panel.recipients"), value: recipients }]),
     ...(step.kind === "notify"
       ? [
           {
-            label: t("workflows.panel.goesTo"),
-            value: t(step.channel === "mail" ? "workflows.panel.mail" : "workflows.panel.inbox")
+            label: t("workflows.panel.delivered"),
+            value: t(
+              step.channel === "mail" ? "workflows.panel.viaMail" : "workflows.panel.viaInbox"
+            )
           }
         ]
       : []),
@@ -363,10 +381,12 @@ function StepDescription({
 /** What a run made of a step. */
 function StepRunDetails({
   step,
+  account,
   run,
   onOpenChild
 }: {
   step: WorkflowStepView;
+  account: string | undefined;
   run: StepPanelRun;
   onOpenChild: (() => void) | undefined;
 }) {
@@ -434,7 +454,13 @@ function StepRunDetails({
       {stepRun.loop === undefined ? null : (
         <p>{countsLine(stepRun.loop, translation, stepRun.finishedAt !== undefined)}</p>
       )}
-      {stepRun.failure ? <FailureBanner failure={stepRun.failure} /> : null}
+      {stepRun.failure ? (
+        <FailureBanner
+          failure={stepRun.failure}
+          account={account}
+          connection={stepConnection(step, stepRun)}
+        />
+      ) : null}
       {stepRun.publishedWouldAsk === "approval" ? <PublishedAsksApproval /> : null}
       {run.liveOnce === undefined ? null : <LiveOnce control={run.liveOnce} />}
       {stepRun.target === "dry_run" ? (

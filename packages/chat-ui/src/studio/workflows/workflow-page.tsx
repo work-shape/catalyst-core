@@ -240,6 +240,8 @@ function NotRunnableBanner({ issues }: { issues: readonly WorkflowStartIssue[] }
   const { t } = useTranslation();
   // What the engine does not run yet is no fault of the Workflow: the head line says which.
   const notBuilt = issues.every((issue) => issue.code === "not_supported_yet");
+  // Where an administrator changes the account, in the words of the settings' own navigation.
+  const accountsPlace = `${t("nav.settings")} › ${t("settings.apiAccess")}`;
   return (
     <Banner tone="warning" layout="inline" data-not-runnable="">
       <p>{t(notBuilt ? "workflows.notRunnable.title" : "workflows.notRunnable.refused")}</p>
@@ -248,8 +250,11 @@ function NotRunnableBanner({ issues }: { issues: readonly WorkflowStartIssue[] }
           <li key={`${String(position)}:${issue.code}`}>
             {issue.code === "principal_inactive"
               ? issue.principalDisplayLabel === undefined
-                ? t("workflows.notRunnable.accountUnavailable")
-                : t("workflows.notRunnable.accountDisabled", { name: issue.principalDisplayLabel })
+                ? t("workflows.notRunnable.accountUnavailable", { place: accountsPlace })
+                : t("workflows.notRunnable.accountDisabled", {
+                    name: issue.principalDisplayLabel,
+                    place: accountsPlace
+                  })
               : issue.message}
           </li>
         ))}

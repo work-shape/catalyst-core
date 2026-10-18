@@ -154,7 +154,7 @@ function EmptyThread() {
       showContextIndicator: false,
       contextSnapshot: undefined,
       notice: undefined,
-      subjectKind: APP_ASSET_KIND,
+      start: { about: "asset", kind: APP_ASSET_KIND, title: undefined },
       draftAttachments: [],
       localUploadingAttachments: [],
       sendQueued: false,
