@@ -475,7 +475,10 @@ export async function shareAsksForWhom(
       await picture(memberPage, testInfo, "dialog-limited-en-light-1280");
       await memberDialog.getByRole("button", { name: PUBLISH }).click();
       await expect(memberDialog.getByTestId("app-publish-waits")).toBeVisible();
-      await memberDialog.getByRole("button", { name: "Close", exact: true }).click();
+      await memberDialog
+        .getByRole("button", { name: "Close", exact: true })
+        .filter({ hasText: "Close" })
+        .click();
     } else {
       // The Apps screens read the publish right on the whole instance until ui-fix-1 lands, so
       // this member's Publish is held there. The offer and the gate are proved above; the
