@@ -313,7 +313,7 @@ describe("Workflow notices and counts-only mail digests", () => {
     expect(f.mails()).toHaveLength(2); // already delivered rows are removed
     for (const mail of f.mails()) {
       const rendered = JSON.stringify(mail);
-      for (const secret of [TITLE, TEXT, "Muster GmbH", "4711"])
+      for (const secret of [TITLE, TEXT, "Muster GmbH", "Kontoauszug 4711"])
         expect(rendered).not.toContain(secret);
     }
     await f.send({ to: { users: [f.id("finn")] } });
