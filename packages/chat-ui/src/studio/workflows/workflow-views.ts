@@ -110,6 +110,8 @@ export interface WorkflowStepView {
   steps: readonly WorkflowStepView[];
   /** On a notice: where it goes. */
   channel?: (typeof NOTIFY_CHANNELS)[number];
+  /** On a notice: who receives it, by the ids of people and workspaces the definition names. */
+  to?: { users: readonly string[]; workspaces: readonly string[] };
   /** The steps whose results the step is given. */
   sources: readonly WorkflowStepSource[];
 }

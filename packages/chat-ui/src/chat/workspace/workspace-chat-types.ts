@@ -222,6 +222,11 @@ export interface SelectedChatModel {
   selectedConversationTitle: string | undefined;
   /** The conversation stands in the dock of a page, not on its chat route. */
   docked: boolean;
+  /**
+   * The kind of asset the page beside the dock is about, such as `workflow` beside the
+   * Workflows: a new conversation there is about building one.
+   */
+  dockKind: string | undefined;
   /** Goes to a route of the interface, such as the page of that asset. */
   openRoute(route: WorkspaceRoute): void;
   /** The assets the agent opened, and the way to their pages. */

@@ -217,7 +217,9 @@ describe("a refused publish of a Workflow", () => {
         refusal("VALIDATION_FAILED", { reason: "run_as_unknown", runAs: "runner" }),
         en
       )
-    ).toBe("The technical account “runner” does not exist on this instance.");
+    ).toBe(
+      "This workflow runs as the technical account “runner”, which does not exist. Choose an active account in the workflow. An administrator manages the accounts under Settings › API access."
+    );
     expect(
       workflowPublishRefusal(
         refusal("FORBIDDEN", { reason: "no_grant", action: "connection.use" }),

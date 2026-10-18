@@ -16,7 +16,8 @@ import {
   type SendBlock,
   AssistantThread,
   ThreadStartBlock,
-  ThreadWelcomeHeading
+  ThreadWelcomeHeading,
+  type ConversationStart
 } from "./support/chat-ui";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { createTestConfig } from "./support/fixtures";
@@ -498,7 +499,7 @@ function EmptyConversation({ children }: { children: ReactNode }) {
 function startPage(
   of: Pick<StarterAgent, "starters"> & Partial<Pick<StarterAgent, "initialPrompts">>,
   locale: "en" | "de" = "en",
-  subjectKind?: string
+  start?: ConversationStart
 ): string {
   return renderToStaticMarkup(
     createElement(
@@ -510,7 +511,7 @@ function startPage(
         createElement(ThreadStartBlock, {
           initialPrompts: of.initialPrompts ?? [],
           starters: of.starters ?? [],
-          subjectKind,
+          start,
           onStarterChosen: noStarterAction
         })
       )
@@ -601,6 +602,7 @@ describe("starters on the empty chat", () => {
 });
 
 describe("starters of a conversation about an asset", () => {
+  const about = (kind: string): ConversationStart => ({ about: "asset", kind, title: undefined });
   const agentStarters = [{ skillName: "sheets", title: "Build a sheet", prompt: "Build a sheet." }];
   const titles = (markup: string | undefined) =>
     [...(markup ?? "").matchAll(/<span class="truncate text-label">([^<]*)<\/span>/gu)].map(
@@ -611,7 +613,7 @@ describe("starters of a conversation about an asset", () => {
     const markup = startPage(
       { starters: agentStarters, initialPrompts: [{ title: "Check weather", prompt: "Check." }] },
       "en",
-      "app"
+      about("app")
     );
 
     expect(titles(startersOf(markup))).toEqual(["Add a field", "Change the look"]);
@@ -620,26 +622,27 @@ describe("starters of a conversation about an asset", () => {
   });
 
   it("offers what a person changes on a Workflow", () => {
-    expect(titles(startersOf(startPage({ starters: [] }, "en", "workflow")))).toEqual([
+    expect(titles(startersOf(startPage({ starters: [] }, "en", about("workflow"))))).toEqual([
       "Add a step",
       "Run a test"
     ]);
   });
 
   it("speaks German", () => {
-    expect(titles(startersOf(startPage({ starters: [] }, "de", "app")))).toEqual([
+    expect(titles(startersOf(startPage({ starters: [] }, "de", about("app"))))).toEqual([
       "Feld hinzufügen",
       "Aussehen ändern"
     ]);
-    expect(titles(startersOf(startPage({ starters: [] }, "de", "workflow")))).toEqual([
+    expect(titles(startersOf(startPage({ starters: [] }, "de", about("workflow"))))).toEqual([
       "Schritt hinzufügen",
       "Testlauf starten"
     ]);
   });
 
-  it("keeps the agent's starters for a kind without its own", () => {
-    expect(titles(startersOf(startPage({ starters: agentStarters }, "en", "agent")))).toEqual([
-      "Build a sheet"
-    ]);
+  // ACCEPT-1c C6: the agent's own starters are written for a chat of its own, never for an asset.
+  it("offers no agent starters for a kind without its own", () => {
+    expect(
+      startersOf(startPage({ starters: agentStarters }, "en", about("agent")))
+    ).toBeUndefined();
   });
 });

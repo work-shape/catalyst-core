@@ -1,6 +1,7 @@
 import { Bot, Play } from "lucide-react";
 import { Button, PageHeader, PageLead, TabsLink, TabsNav } from "@work-shape/catalyst-ui";
 import { CopyIdItem } from "../copy-id-item";
+import { HeadAgentAction } from "../head-agent-action";
 import { useTranslation } from "../../shared/i18n";
 import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowView } from "./workflow-views";
@@ -67,24 +68,26 @@ export function WorkflowHead({
         // Until the record arrived a placeholder stands for the name: the way back already
         // names the area, and the Workflow's id is never shown.
         title={workflow?.name ?? <TitlePlaceholder>{t("workflows.title")}</TitlePlaceholder>}
-        secondaryActions={
-          edit === undefined
-            ? undefined
-            : [
-                {
-                  label: t("workflows.edit.withAgent"),
-                  icon: <Bot aria-hidden="true" />,
-                  loading: edit.busy,
-                  onSelect: edit.start
-                }
-              ]
-        }
         primaryAction={
-          canStart || startOff ? (
-            <Button disabled={startOff} onClick={onStart}>
-              <Play aria-hidden="true" />
-              {t("workflows.startNow")}
-            </Button>
+          edit !== undefined || canStart || startOff ? (
+            <span className="flex items-center gap-2">
+              {edit === undefined ? null : (
+                <HeadAgentAction
+                  action={{
+                    label: t("workflows.edit.withAgent"),
+                    icon: <Bot aria-hidden="true" />,
+                    loading: edit.busy,
+                    onSelect: edit.start
+                  }}
+                />
+              )}
+              {canStart || startOff ? (
+                <Button disabled={startOff} onClick={onStart}>
+                  <Play aria-hidden="true" />
+                  {t("workflows.startNow")}
+                </Button>
+              ) : null}
+            </span>
           ) : undefined
         }
         menu={edit === undefined ? undefined : <CopyIdItem id={workflowId} />}

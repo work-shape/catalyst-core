@@ -4,6 +4,7 @@ import {
   type ConversationListItem,
   type StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
+import { dockKindOfRoute } from "../dock/subject-starters";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useControlPlaneModel } from "../../admin/control-plane/control-plane-model";
@@ -388,6 +389,13 @@ export function useWorkspaceChatModel({
     workspaceCache,
     conversationListRefresh,
     selectedConversationId,
+    selectedConversationAbout:
+      threadQuery.data !== undefined && threadQuery.data.conversation.id === selectedConversationId
+        ? {
+            subject: threadQuery.data.conversation.subject,
+            collaborationWorkspaceId: threadQuery.data.conversation.collaborationWorkspaceId
+          }
+        : undefined,
     activeCollaborationWorkspaceId,
     personalCollaborationWorkspaceId: collaborationWorkspace.personalCollaborationWorkspaceId,
     messagesLoaded,
@@ -874,6 +882,7 @@ export function useWorkspaceChatModel({
       selectedConversationSubject: selectedThread?.conversation.subject,
       selectedConversationTitle: selectedThread?.conversation.title,
       docked,
+      dockKind: docked ? dockKindOfRoute(route) : undefined,
       agentOpens,
       // A page the conversation links to opens with the conversation in the dock beside it.
       openRoute: (target) =>

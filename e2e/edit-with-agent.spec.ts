@@ -13,7 +13,8 @@ import { apiOrigin, uiOrigin } from "./view-fixtures";
 // mark and "Working on:" the asset, its starters fit the kind, and the agent's first changing
 // call acts on that asset. At 390 px the dock lies in front of the page, and "Show page" brings
 // the page forward. Fails where the head names only the conversation, where the empty
-// conversation offers the agent's own starters, or where the page is left.
+// conversation offers the agent's own starters, or where the page is left. ACCEPT-1c: the action
+// also stays in the head with the dock open, and pressing it again reopens the same conversation.
 
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
@@ -199,6 +200,17 @@ test("Edit with the agent keeps the App's draft and opens the dock about it", as
   await expect.poll(() => starterTitles(page)).toEqual(["Add a field", "Change the look"]);
   // The dock beside the page at 1280 px gives each starter a row, so no hint is cut.
   expect(await startersInFirstRow(page)).toBe(1);
+  // ACCEPT-1c C6: the start page speaks of the App, never with the configured agent's welcome.
+  await expect(chatColumn(page)).not.toContainText("demo workflow");
+  // ACCEPT-1c C12: beside the open dock the head still shows the action, not only in "…", and
+  // pressing it again opens the same conversation rather than a second one.
+  const conversation = new URL(page.url()).searchParams.get("chat");
+  const again = page.getByTestId("app-edit").getByRole("button", { name: EDIT, exact: true });
+  await expect(again).toBeVisible();
+  await again.click();
+  await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "dock");
+  expect(new URL(page.url()).searchParams.get("chat")).toBe(conversation);
+  await expect(chatColumn(page).getByPlaceholder("Message")).toBeFocused();
 
   const ready = async () => {
     await expect(head).toContainText(appName);
@@ -233,7 +245,7 @@ test("Edit with the agent keeps the App's draft and opens the dock about it", as
 const NAME = "Invoice check";
 
 /** A definition of the Workflow with this description. */
-function workflowConfig(id: string, runAs: string, description: string) {
+function workflowConfig(id: string, runAs: string, description: string, recipient?: string) {
   return {
     name: id,
     manifest: {
@@ -249,6 +261,19 @@ function workflowConfig(id: string, runAs: string, description: string) {
       },
       steps: [
         { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
+        ...(recipient === undefined
+          ? []
+          : [
+              {
+                id: "tell",
+                name: "Send summary",
+                type: "notify",
+                to: { users: [recipient] },
+                channels: ["inbox"],
+                title: { value: "Document summary" },
+                text: { value: "Ready" }
+              }
+            ]),
         { id: "result", name: "Result", type: "output", input: { done: { value: 1 } } }
       ]
     }
@@ -263,6 +288,9 @@ test("Edit with the agent keeps the Workflow's page and opens the dock about it"
   await signIn(page);
   page.setDefaultTimeout(30_000);
   const id = `invoice-check-${randomUUID().slice(0, 8)}`;
+  const meResponse = await page.request.get(`${apiOrigin}/api/v1/me`);
+  expect(meResponse.ok()).toBe(true);
+  const me = z.object({ id: z.string(), displayLabel: z.string() }).parse(await meResponse.json());
   const runAs = `${id}-runner`;
   const principal = await requestWithOrigin(
     page,
@@ -273,7 +301,7 @@ test("Edit with the agent keeps the Workflow's page and opens the dock about it"
   expect(principal.ok(), await principal.text()).toBe(true);
   const assetUrl = `${apiOrigin}/api/v1/assets/workflow/${id}`;
   const saved = await requestWithOrigin(page, "put", assetUrl, {
-    data: { expectedRevision: null, config: workflowConfig(id, runAs, "The first draft.") }
+    data: { expectedRevision: null, config: workflowConfig(id, runAs, "The first draft.", me.id) }
   });
   expect(saved.ok(), await saved.text()).toBe(true);
   const revision = () => assetRevision(page, assetUrl);
@@ -296,6 +324,37 @@ test("Edit with the agent keeps the Workflow's page and opens the dock about it"
   await expect(head.locator('[data-kind="agent"]')).toBeVisible();
   await expect.poll(() => starterTitles(page)).toEqual(["Add a step", "Run a test"]);
   expect(await startersInFirstRow(page)).toBe(1);
+  await expect(chatColumn(page)).not.toContainText("demo workflow");
+  // ACCEPT-1c C12: the action stays in the head beside the dock and opens the same conversation.
+  const conversation = new URL(page.url()).searchParams.get("chat");
+  const again = workflowPage.getByRole("button", { name: EDIT, exact: true });
+  await expect(again).toBeVisible();
+  await again.click();
+  expect(new URL(page.url()).searchParams.get("chat")).toBe(conversation);
+
+  // C9: resolve the real signed-in recipient through the host, on the node and its detail,
+  // in both languages. The rendering must not substitute the delivery channel for the person.
+  for (const locale of ["en", "de"]) {
+    await page.evaluate(
+      (value) => window.localStorage.setItem("vivd-catalyst:locale", value),
+      locale
+    );
+    await page.reload();
+    const notify = workflowPage.locator('[data-flow-id="tell"]');
+    await expect(notify).toContainText(me.displayLabel);
+    await notify.click();
+    const details = workflowPage.locator('[data-step-panel="tell"]');
+    await expect(details).toBeVisible();
+    await expect(details).toContainText(me.displayLabel);
+    await expect(details).not.toContainText(me.id);
+    if (shotsDir)
+      await page.screenshot({
+        path: join(shotsDir, `accept-fix-3-notify-${locale}.png`),
+        animations: "disabled"
+      });
+  }
+  await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
+  await page.reload();
 
   const ready = async () => {
     await expect(head).toContainText(NAME);

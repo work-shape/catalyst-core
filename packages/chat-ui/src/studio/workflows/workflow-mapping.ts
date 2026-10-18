@@ -502,6 +502,17 @@ function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
 }
 
+/** The distinct ids of a list, in their first order: nothing else is kept. */
+function ids(value: unknown): string[] {
+  return Array.isArray(value)
+    ? [
+        ...new Set(
+          value.filter((entry): entry is string => typeof entry === "string" && entry !== "")
+        )
+      ]
+    : [];
+}
+
 function records(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
 }
@@ -619,7 +630,12 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
       ...(branches === undefined ? {} : { branches }),
       ...(kind === "notify"
         ? {
-            channel: Array.isArray(raw.channels) && raw.channels.includes("mail") ? "mail" : "inbox"
+            channel:
+              Array.isArray(raw.channels) && raw.channels.includes("mail") ? "mail" : "inbox",
+            to: {
+              users: ids(isRecord(raw.to) ? raw.to.users : undefined),
+              workspaces: ids(isRecord(raw.to) ? raw.to.workspaces : undefined)
+            }
           }
         : {}),
       sources: stepSources(raw.input, known)

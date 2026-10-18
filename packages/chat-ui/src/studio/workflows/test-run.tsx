@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import { instanceSentence, readRefusalDetails } from "../build-area/build-refusals";
+import { workflowAccountRefusal } from "./workflow-publish-rights-model";
 import { useTranslation } from "../../shared/i18n";
 import type { StartRefusalIssue } from "./start-form";
 import { StartDialog } from "./start-run";
@@ -62,7 +63,12 @@ export function useTestRun(
             }
           : details.reason === "input_invalid"
             ? { issues: details.issues }
-            : { message: instanceSentence(failure) ?? t("workflows.test.failed") }
+            : {
+                message:
+                  workflowAccountRefusal(failure, t) ??
+                  instanceSentence(failure) ??
+                  t("workflows.test.failed")
+              }
       );
     } finally {
       setBusy(false);
@@ -152,7 +158,9 @@ export function useRunLiveOnce(
             ? t("workflows.liveOnce.stale")
             : workflowWriteRefusal(failure) === "refused"
               ? t("workflows.test.refused")
-              : (instanceSentence(failure) ?? t("workflows.liveOnce.failed"))
+              : (workflowAccountRefusal(failure, t) ??
+                instanceSentence(failure) ??
+                t("workflows.liveOnce.failed"))
       });
     }
   };

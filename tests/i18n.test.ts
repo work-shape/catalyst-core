@@ -104,11 +104,18 @@ describe("interface translations", () => {
   });
 
   it("translates an unavailable technical account without showing its internal name", () => {
-    expect(en.t("workflows.notRunnable.accountDisabled", { name: "Booking checks" })).toBe(
-      "The technical account “Booking checks” is disabled."
+    expect(
+      en.t("workflows.notRunnable.accountDisabled", { name: "Booking checks", place: "Settings" })
+    ).toBe(
+      "This workflow runs as the technical account “Booking checks”, which is switched off. An administrator switches it on under Settings."
     );
-    expect(de.t("workflows.notRunnable.accountDisabled", { name: "Booking checks" })).toBe(
-      "Das technische Konto „Booking checks“ ist deaktiviert."
+    expect(
+      de.t("workflows.notRunnable.accountDisabled", {
+        name: "Booking checks",
+        place: "Einstellungen"
+      })
+    ).toBe(
+      "Dieser Workflow läuft als Technisches Konto „Booking checks“, das ausgeschaltet ist. Ein Administrator schaltet es unter Einstellungen ein."
     );
     expect(de.t("workflows.notRunnable.accountUnavailable")).not.toBe(
       en.t("workflows.notRunnable.accountUnavailable")

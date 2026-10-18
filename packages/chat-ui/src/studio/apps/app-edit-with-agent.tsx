@@ -11,8 +11,8 @@ import { useAppsHost } from "./apps-host";
  * "Edit with the agent" in the head of an App, for a reader who may write it by the `rights`
  * on that App (`appRightsOn`), not the workspace's: it makes a conversation about the App and
  * opens it in the dock beside the App's draft, which stays the page. A refusal is said in a
- * dialog, which the page draws outside its head: the action may stand in the head's "…" menu,
- * which is gone by the time the answer comes.
+ * dialog, which the page draws outside its head, so the answer stays readable whatever the
+ * head shows by the time it comes.
  */
 export function useAppEditWithAgent(
   app: string | undefined,

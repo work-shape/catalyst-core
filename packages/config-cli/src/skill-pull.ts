@@ -1,3 +1,5 @@
+import { realpath } from "node:fs/promises";
+import { join, sep } from "node:path";
 import { ASSET_GET_FILES_MAX_BYTES } from "@work-shape/catalyst-api-contract";
 import type { ConfigApi } from "./api";
 import {
@@ -62,13 +64,24 @@ async function pullableFolder(input: {
   directory: string;
 }) {
   const { instance, workspaceId, skill, directory } = input;
-  await refuseLinks(directory);
+  await refuseLinks(directory, false);
+  await refuseLinks(join(directory, SKILL_STATE_FILE));
   const previous = await readFolderState(directory, SKILL_STATE_FILE, "skill");
   if (previous === undefined && !(await folderIsEmpty(directory))) {
     throw new Error(
       `'${directory}' holds files and no pulled skill. Pull into an empty or new folder.`
     );
   }
+  await refuseLinks(directory);
+  const target = await realpath(directory).catch((error: unknown) => {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+    throw error;
+  });
+  const cwd = await realpath(process.cwd());
+  if (target !== undefined && (cwd === target || cwd.startsWith(`${target}${sep}`)))
+    throw new Error(
+      `'${directory}' contains the current working directory. Pull into another folder.`
+    );
   if (previous !== undefined) {
     if (
       previous.name !== skill ||

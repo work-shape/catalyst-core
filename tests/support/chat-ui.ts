@@ -311,7 +311,10 @@ export {
   dockPlacement,
   searchWithDock
 } from "../../packages/chat-ui/src/chat/workspace/dock-state";
-export { openConversationAbout } from "../../packages/chat-ui/src/chat/workspace/open-conversation-about";
+export {
+  dockConversationToReuse,
+  openConversationAbout
+} from "../../packages/chat-ui/src/chat/workspace/open-conversation-about";
 export { UserMenu } from "../../packages/chat-ui/src/chat/workspace/user-menu";
 export {
   activeAgentNameFor,
@@ -471,4 +474,14 @@ export {
   type ShellSession
 } from "../../packages/chat-ui/src/shared/shell-session";
 export { useDraftForNewConnection } from "../../packages/chat-ui/src/studio/build-area/connection-draft";
+export {
+  conversationStart,
+  dockKindOfRoute,
+  type ConversationStart
+} from "../../packages/chat-ui/src/chat/dock/subject-starters";
+export { useStartRun } from "../../packages/chat-ui/src/studio/workflows/start-run";
+export {
+  readsRecipientPeople,
+  WorkflowsHostWithRecipients
+} from "../../packages/chat-ui/src/studio/workflows/workflows-host";
 export { attachedFilesTitle } from "../../packages/chat-ui/src/chat/workspace/workspace-conversation-actions";
