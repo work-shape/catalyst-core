@@ -14,7 +14,9 @@ section: Fixed
   referenced asset; their separate workspace reach rule remains enforced.
 - Align agent Knowledge Base and App action choosers with ownership and reference access.
   The unnamed App action catalog also accepts use of a published App; named action details
-  still require read. Use-held Connections list safe summary fields, including title and connector type, while
+  still require read. Use-only holders see only action name, description and effect, without
+  configuration or a call preview. Readers retain the full action view. Use-held Connections
+  list safe summary fields, including title and connector type, while
   configuration, history and secrets remain hidden. Reference refusals also use English or German.
 - Existing invalid pairs keep running; a save or publish of their source, or creation of a
   previously missing target, checks them. Editing an existing target remains allowed because

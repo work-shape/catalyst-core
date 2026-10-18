@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { AppActions } from "@work-shape/catalyst-api-client";
+import { appActionOperationName } from "@work-shape/catalyst-core";
 import {
   ToolChip,
   ToolGroup,
@@ -15,7 +16,9 @@ import { useSettingsPage } from "../../shared/settings-page-context";
 // offers those of the agent's owner and of the instance. An action
 // is offered where an agent can carry it now: its App is published and the operation it stands
 // for is exposed to agents. A name the agent holds and the answer lacks is kept and shown as
-// unavailable. The page never drops a name the reader did not remove.
+// unavailable. The page never drops a name the reader did not remove. A reader gets each action
+// in full; a holder of use alone gets its name, description and effect, and every one of those is
+// offered under its deterministic tool name.
 
 /** What every tool name of an App's action starts with. */
 const APP_TOOL_PREFIX = "app.";
@@ -31,6 +34,24 @@ export type AppToolsRead =
       /** The instance has more published Apps than one answer lists, and left some out. */
       truncated: boolean;
     };
+
+/** One listed action of an App: in full for a reader, its summary for a holder of use alone. */
+type ListedAppAction = AppActions["apps"][number]["actions"][number];
+
+/** The check box an action gets, where an agent can carry it now. */
+function offeredTool(app: string, action: ListedAppAction): ToolGroupTool[] {
+  if ("kind" in action && !action.agentTool) {
+    return [];
+  }
+  return [
+    {
+      toolName: "kind" in action ? action.toolName : appActionOperationName(app, action.name),
+      label: action.name,
+      effect: action.effect,
+      ...(action.description === undefined ? {} : { description: action.description })
+    }
+  ];
+}
 
 /** Whether a tool name is one of an App's action, by its form alone. */
 export function isAppToolName(toolName: string): boolean {
@@ -67,14 +88,7 @@ export function appToolsView(read: AppToolsRead, selected: readonly string[]): A
     return { groups: [], cut: false, unavailable: [], unchecked: held };
   }
   const offering = read.apps.flatMap((app) => {
-    const tools = app.actions
-      .filter((action) => action.agentTool)
-      .map((action) => ({
-        toolName: action.toolName,
-        label: action.name,
-        effect: action.effect,
-        ...(action.description === undefined ? {} : { description: action.description })
-      }));
+    const tools = app.actions.flatMap((action) => offeredTool(app.name, action));
     return tools.length > 0 ? [{ name: app.name, title: app.title, tools }] : [];
   });
   const offered = new Set(offering.flatMap((app) => app.tools.map((tool) => tool.toolName)));

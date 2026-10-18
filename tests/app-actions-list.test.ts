@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { appActionsSchema } from "@work-shape/catalyst-api-contract";
+import { appActionSchema, appActionsSchema } from "@work-shape/catalyst-api-contract";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus, type AppFile } from "./support/app-instance";
 import { action, setupAppActions, type AppActionsInstance } from "./support/app-actions";
@@ -50,7 +50,9 @@ describe("apps.actions.list", () => {
   };
   const actionsOf = async (userId: string, app: string) => {
     const [listed] = (await list(userId, app)).apps;
-    return Object.fromEntries((listed?.actions ?? []).map((entry) => [entry.name, entry]));
+    return Object.fromEntries(
+      (listed?.actions ?? []).map((entry) => [entry.name, appActionSchema.parse(entry)])
+    );
   };
 
   it("answers a writer the draft: each action with its kind, its effect, the Connection by its label, the operation and what a call would come to", async () => {
@@ -133,13 +135,15 @@ describe("apps.actions.list", () => {
     }
   });
 
-  it("answers the unnamed chooser the published actions of Apps the caller reads or uses", async () => {
+  it("References across owners: Holding use on a published App lists its actions by name, description and effect where they can be chosen, without the call preview or configuration", async () => {
     const answer = await list(t.admin.id);
 
     const orders = answer.apps.find((app) => app.name === "orders");
     expect(orders).toMatchObject({ title: "Orders", view: "published", revision: 1 });
     expect(
-      Object.fromEntries((orders?.actions ?? []).map((entry) => [entry.name, entry.agentTool]))
+      Object.fromEntries(
+        (orders?.actions ?? []).map((entry) => [entry.name, appActionSchema.parse(entry).agentTool])
+      )
     ).toEqual({
       // `crm.echo` and `erp.echo` are exposed to agents, `crm.write` to Apps alone.
       load: true,
@@ -149,9 +153,21 @@ describe("apps.actions.list", () => {
 
     // A member may choose published actions through use; named details still require read.
     const chosen = await list(t.kai.id);
-    expect(chosen.apps.map((app) => app.name)).toContain("orders");
-    expect(chosen.apps[0]).not.toHaveProperty("config");
-    expect(chosen.apps[0]).not.toHaveProperty("manifest");
+    const chosenOrders = chosen.apps.find((app) => app.name === "orders");
+    expect(chosenOrders).toEqual({
+      name: "orders",
+      title: "Orders",
+      view: "published",
+      revision: 1,
+      scope: { kind: "workspace", workspaceId: t.workspaceId },
+      actions: [
+        { name: "agent-only", effect: "reading" },
+        { name: "load", description: "Reads one row.", effect: "reading" },
+        { name: "save", effect: "changing" }
+      ]
+    });
+    const refused = await t.call(t.kai.id, "apps.actions.list", { query: { app: "orders" } });
+    expect(refused.statusCode).toBe(403);
   });
 
   it("says why a call cannot reach its operation: the Connection is off, or no longer accepts the operation", async () => {

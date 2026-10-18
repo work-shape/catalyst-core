@@ -27343,7 +27343,33 @@
                 "actions": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/AppAction"
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/AppAction"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "effect": {
+                            "type": "string",
+                            "enum": [
+                              "reading",
+                              "changing"
+                            ]
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "effect"
+                        ]
+                      }
+                    ]
                   }
                 }
               },
