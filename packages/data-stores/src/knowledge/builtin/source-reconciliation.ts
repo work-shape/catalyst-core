@@ -35,13 +35,14 @@ export async function reconcileSource(
       if (!run || run.state !== "running") return false;
       const found = await sourceTarget(runtime, payload, stores, "share");
       if (!found || run.definition_key !== sourceBoundaryKey(found.source)) {
-        await store.finish(payload, "knowledge_source_refused");
+        await store.finish(payload, undefined, "superseded");
         return false;
       }
       async function approvalAllows(status: string | undefined) {
         if (status === undefined || status === "pending") return false;
         if (status === "approved") return true;
-        await store.finish(payload, "knowledge_source_refused");
+        if (status === "superseded") await store.finish(payload, undefined, "superseded");
+        else await store.finish(payload, "knowledge_source_refused");
         return false;
       }
       // Once a confirmation exists, its decision owns the pass even if retries
@@ -119,7 +120,7 @@ export async function reconcileSource(
         if (!active.length) return false;
         const found = await sourceTarget(runtime, payload, stores, "share");
         if (!found || active[0]?.definition_key !== sourceBoundaryKey(found.source)) {
-          await store.finish(payload, "knowledge_source_refused");
+          await store.finish(payload, undefined, "superseded");
           return false;
         }
         const ids = z

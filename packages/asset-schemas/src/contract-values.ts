@@ -823,7 +823,7 @@ export type KnowledgeSourceItemState = (typeof KNOWLEDGE_SOURCE_ITEM_STATES)[num
 export const KNOWLEDGE_SYNC_MODES = ["initial", "changes", "full"] as const;
 export type KnowledgeSyncMode = (typeof KNOWLEDGE_SYNC_MODES)[number];
 
-export const KNOWLEDGE_SYNC_RUN_STATES = ["running", "done", "failed"] as const;
+export const KNOWLEDGE_SYNC_RUN_STATES = ["running", "done", "failed", "superseded"] as const;
 export type KnowledgeSyncRunState = (typeof KNOWLEDGE_SYNC_RUN_STATES)[number];
 
 /** What a sync run counts, in this order wherever it shows them. */

@@ -117,7 +117,9 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
       const found = await sourceTarget(runtime, payload);
       if (!found || run.definitionKey !== sourceBoundaryKey(found.source)) {
         await sourceTransaction(runtime.data, payload, control, (store) =>
-          store.finish(payload, found ? "knowledge_source_refused" : "knowledge_source_unreachable")
+          found
+            ? store.finish(payload, undefined, "superseded")
+            : store.finish(payload, "knowledge_source_unreachable")
         );
         return;
       }

@@ -280,7 +280,19 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
       add column processing_key text,
       add column requested_processing_key text;`
   },
-  { number: 8, name: "record_content_hash", sql: RECORD_FIELDS_SCHEMA + RECORD_FIELDS_CONTENT_HASH }
+  {
+    number: 8,
+    name: "record_content_hash",
+    sql: RECORD_FIELDS_SCHEMA + RECORD_FIELDS_CONTENT_HASH
+  },
+  {
+    number: 9,
+    name: "source_superseded",
+    sql: `alter table catalyst_kb.sync_runs drop constraint sync_runs_state_check;
+      alter table catalyst_kb.sync_runs add constraint sync_runs_state_check
+        check (state in ('running','done','failed','superseded')) not valid;
+      alter table catalyst_kb.sync_runs validate constraint sync_runs_state_check;`
+  }
 ];
 
 /** The level the store of a built-in Knowledge Base is at when its tables are this release's. */

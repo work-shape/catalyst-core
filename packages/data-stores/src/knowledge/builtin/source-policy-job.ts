@@ -1,3 +1,4 @@
+import { enqueueSourceSync, initialSyncIds, sourceSyncStarted } from "./source-lifecycle";
 import { z } from "zod";
 import { defineJobKind, defineJobHandler, KNOWLEDGE_JOB_KINDS } from "@work-shape/catalyst-core";
 import { knowledgeBaseDefinitionSchema } from "../definition";
@@ -81,8 +82,45 @@ export function createSourcePolicyHandler(runtime: SourceJobRuntime) {
               "update catalyst_kb.source_items set fetch_job_id=null,enqueued_run_id=null where source_id=$1::text and state='discovered' and enqueued_run_id=$2::text",
               [run.source_id, run.id]
             );
-            await bound.finish(runPayload, "knowledge_source_refused");
+            await bound.finish(runPayload, undefined, "superseded");
           });
+        });
+      }
+      // A changed boundary cannot classify legacy items with unknown ancestry.
+      // Start the listing now rather than leaving them until the nightly full pass.
+      for (const sourceId of job.payload.sourceIds) {
+        const next = initialSyncIds(asset.id, sourceId);
+        await sourceTransaction(runtime.data, next, control, async (bound, stores) => {
+          const found = await sourceTarget(runtime, next, stores, "share");
+          if (!found) return;
+          const unknown = await bound.change((sql) =>
+            sql.run(
+              "select id from catalyst_kb.source_items where source_id=$1::text and state<>'withdrawn' and parents='[]'::jsonb limit 1",
+              [sourceId]
+            )
+          );
+          if (!unknown.length) return;
+          const started = await bound.start(next, "full");
+          if (!started.created) return;
+          const principal = await stores.apiAccess.findServicePrincipalByOwner({
+            clientInstanceId: runtime.data.clientInstanceId,
+            owner: { kind: "knowledge_base", assetId: asset.id }
+          });
+          if (!principal) throw new Error("The source ingestion principal is unavailable");
+          await stores.operationRuns.create({
+            id: next.operationRunId,
+            clientInstanceId: runtime.data.clientInstanceId,
+            operation: `knowledge.${asset.name}.sync`,
+            effect: "changing",
+            actor: { kind: "service_principal", id: principal.id, label: principal.displayLabel },
+            origin: { kind: "user" },
+            target: "live",
+            inputHash: "source_boundary_changed",
+            correlationId: next.operationRunId,
+            startedAt: new Date().toISOString()
+          });
+          await enqueueSourceSync(stores, runtime.data, next);
+          await sourceSyncStarted(stores, runtime.data, next);
         });
       }
       let after = "";
