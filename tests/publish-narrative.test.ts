@@ -47,7 +47,7 @@ describe("PUBQ-1 the publish question's sentence", () => {
       "Nachtimport läuft jeden Tag um 02:00 Uhr unter dem Konto „nachtimport-runner“, liest aus Exampledata, fügt Zeilen in Findings hinzu und nutzt Outlook für „Mail an Mandanten“. Die App „Findings“ zeigt den 14 Personen von „Kai Spezis“ die Zeilen von Findings."
     );
     expect(narrative.warnings).toEqual([
-      "Der Schritt „Mail an Mandanten“ kann angehalten werden: Die Leitplanke „E-Mail senden: IBAN → Freigabe“ verlangt eine Freigabe, wenn sie beim Geprüften anschlägt, und ein veröffentlichter Lauf kann nicht auf sie warten."
+      "Der Schritt „Mail an Mandanten“ kann angehalten werden: Die Leitplanke „E-Mail senden: IBAN → Freigabe“ verlangt eine Freigabe, wenn ihre Prüfung einen Treffer ergibt, und ein veröffentlichter Lauf kann nicht auf sie warten."
     ]);
   });
 

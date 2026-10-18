@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   PUBLISH_APPROVAL_GUARDRAIL,
@@ -210,6 +210,49 @@ describe("publishing needs an instance admin's approval", () => {
       await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, locale: null });
     }
   });
+
+  it.each(["en", "de"] as const)(
+    "keeps the draft, Details and Inbox approval available after narration fails in %s",
+    async (locale) => {
+      const name = `summary-failure-${locale}`;
+      await created(name);
+      const held = heldSchema.parse((await t.publish(t.kai.id, name, 1)).json());
+      const calls = await getTestOperationCalls(t.instance);
+      const failed = vi
+        .spyOn(calls.publishNarrator, "narrate")
+        .mockRejectedValue(new Error("private Connection error"));
+      await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, locale });
+      try {
+        const draft = (
+          await t.expectOk(t.admin.id, "assets.get", {
+            params: { kind: "app", name },
+            query: { workspaceId: t.workspaceId, revision: "1" }
+          })
+        ).json();
+        const review = (await request(t.admin.id, held.approvalRequestId)).preview.review;
+        const summary =
+          locale === "de"
+            ? "Die Zusammenfassung konnte nicht erstellt werden. Die Details sind weiterhin verfügbar."
+            : "The summary could not be prepared. Details are still available.";
+        expect(draft.publishNarrative).toEqual({ summary, warnings: [] });
+        expect(draft.allowed).toContain("publish");
+        expect(review).toMatchObject({
+          publishNarrative: { summary, warnings: [] },
+          files: [
+            { path: "app.yaml", change: "added" },
+            { path: "index.html", change: "added" }
+          ]
+        });
+        expect(JSON.stringify(review)).not.toContain("private Connection error");
+        expectStatus(await decide(t.admin.id, held.approvalRequestId, "approve"), 200);
+        await getTestJobs(t.instance).runDue();
+        expect((await stored(name))?.publishedRevision).toBe(1);
+      } finally {
+        failed.mockRestore();
+        await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, locale: null });
+      }
+    }
+  );
 
   it("publishes exactly the held revision once an admin approves, as the member with the admin as approver", async () => {
     await created("rates");

@@ -212,6 +212,7 @@ export function narrator(input: {
   stored?: PublishNarrativeStoredData;
   definitions?: readonly OperationDefinition[];
   policy?: RunOperationDeps["policy"];
+  onGuardrailRead?: () => void;
   onModel?: () => void;
   onHit?: () => void;
 }) {
@@ -235,8 +236,9 @@ export function narrator(input: {
       }
     },
     assets: {
-      listPublishedConfigAssets: () =>
-        Promise.resolve(
+      listPublishedConfigAssets: () => {
+        input.onGuardrailRead?.();
+        return Promise.resolve(
           (input.guardrails ?? []).map(({ guardrail, scope }) =>
             record(
               "guardrail",
@@ -245,7 +247,8 @@ export function narrator(input: {
               scope ?? INSTANCE_ASSET_SCOPE
             )
           )
-        )
+        );
+      }
     },
     shipped: {
       listShippedGuardrailSwitches: () =>

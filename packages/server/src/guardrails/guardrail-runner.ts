@@ -237,7 +237,8 @@ export class GuardrailRunner {
   }
 
   private async boundAt(
-    input: Pick<GuardrailEventInput, "event" | "match" | "aboutGuardrails" | "subject">
+    input: Pick<GuardrailEventInput, "event" | "match" | "aboutGuardrails" | "subject">,
+    published?: Promise<GuardrailOfAsset[]>
   ): Promise<Bound[]> {
     const floor = Object.entries(this.options.config.guardrails)
       .filter(
@@ -253,7 +254,7 @@ export class GuardrailRunner {
       (input.event === "asset.before_write" && input.subject.kind === GUARDRAIL_ASSET_KIND);
     const assets = aboutGuardrails
       ? []
-      : (await this.publishedGuardrails())
+      : (await (published ?? this.publishedGuardrails()))
           .filter(
             ({ guardrail, scope }) =>
               guardrail.on === input.event &&
@@ -273,7 +274,26 @@ export class GuardrailRunner {
     input: GuardrailEventInput,
     dynamic: boolean
   ): Promise<(GuardrailAnswer & { checked: boolean })[]> {
-    const bound = await this.boundAt(input);
+    return this.previewAt(input, dynamic);
+  }
+
+  /** One read of published guardrails for all steps of one narration; never cached across reads. */
+  previewSession(): Pick<GuardrailRunner, "preview"> {
+    let published: Promise<GuardrailOfAsset[]> | undefined;
+    return {
+      preview: (input, dynamic) => {
+        published ??= this.publishedGuardrails();
+        return this.previewAt(input, dynamic, published);
+      }
+    };
+  }
+
+  private async previewAt(
+    input: GuardrailEventInput,
+    dynamic: boolean,
+    published?: Promise<GuardrailOfAsset[]>
+  ): Promise<(GuardrailAnswer & { checked: boolean })[]> {
+    const bound = await this.boundAt(input, published);
     const answers = await this.evaluateBound(
       bound,
       dynamic

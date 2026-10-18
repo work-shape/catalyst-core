@@ -46,6 +46,13 @@ import {
 } from "./narrative-copy";
 import { appFacts, workflowFacts, type AppFacts, type WorkflowFacts } from "./narrative-facts";
 
+// Keeps outside input checks from holding the publish question; unchecked steps say they may stop.
+const NARRATION_BUDGET_MS = 3_000;
+// Leaves time inside the same budget to assemble warnings for unfinished checks.
+const NARRATION_FINISH_MARGIN_MS = 50;
+// Bounds concurrent schema and policy work without serializing a large Workflow's review.
+const NARRATION_CHECK_CONCURRENCY = 4;
+
 // The plain sentence the publish question leads with, and the warning for each step a guardrail
 // in force will stop (PUBQ-1). It is computed from the revision's config and what the instance
 // knows of the names in it: no step runs, no model is called, no hit is kept and no row is read. The
@@ -81,7 +88,7 @@ export interface PublishNarratorOptions {
   /** The registered kinds, for the account a Workflow runs as. */
   kinds?: Pick<AssetKindRegistry<WorkflowAssetKind>, "get">;
   /** Runtime guardrails, dry-evaluated without model calls or recorded hits. */
-  guardrails?: Pick<GuardrailRunner, "preview">;
+  guardrails?: Pick<GuardrailRunner, "previewSession">;
   /** The definition of an operation a step calls, where this process registers it. */
   resolve(operation: string): Promise<OperationDefinition | undefined>;
   /** The same central settings and defaults used by operation admission. */
@@ -107,20 +114,48 @@ export interface PublishNarrator {
   narrate(input: PublishNarrateInput): Promise<PublishNarrative | undefined>;
 }
 
+/** A failed optional summary must leave the revision's Details and publish action available. */
+export function unavailablePublishNarrative(locale: LocaleCode): PublishNarrative {
+  return {
+    summary:
+      locale === "de"
+        ? "Die Zusammenfassung konnte nicht erstellt werden. Die Details sind weiterhin verfügbar."
+        : "The summary could not be prepared. Details are still available.",
+    warnings: []
+  };
+}
+
 export function createPublishNarrator(options: PublishNarratorOptions): PublishNarrator {
   return {
     async narrate(input) {
       if (input.kind === WORKFLOW_ASSET_KIND) {
         const facts = workflowFacts(input.config, input.name);
-        return facts && narrateWorkflow(options, input, facts);
+        return facts && withinNarrationBudget(narrateWorkflow(options, input, facts));
       }
       if (input.kind === APP_ASSET_KIND) {
         const facts = appFacts(input.config, input.name);
-        return facts && narrateApp(options, input, facts);
+        return facts && withinNarrationBudget(narrateApp(options, input, facts));
       }
       return undefined;
     }
   };
+}
+
+async function withinNarrationBudget<T>(work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("Publish narration timed out")),
+          NARRATION_BUDGET_MS
+        );
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const displayNameSchema = z.object({ displayName: z.string().min(1) });
@@ -264,7 +299,7 @@ async function narrateWorkflow(
   input: PublishNarrateInput,
   facts: WorkflowFacts
 ): Promise<PublishNarrative> {
-  const names = namers(options, input.access);
+  const deadline = Date.now() + NARRATION_BUDGET_MS - NARRATION_FINISH_MARGIN_MS;
   const definitions = new Map(
     await Promise.all(
       once(facts.calls.map((step) => step.operation)).map(
@@ -272,6 +307,23 @@ async function narrateWorkflow(
       )
     )
   );
+  const [sentence, stops] = await Promise.all([
+    workflowSentence(options, input, facts, definitions),
+    stepStops(options, facts, definitions, deadline)
+  ]);
+  return {
+    summary: workflowSummary(sentence, input.locale),
+    warnings: stopWarnings(stops, input.locale)
+  };
+}
+
+async function workflowSentence(
+  options: PublishNarratorOptions,
+  input: PublishNarrateInput,
+  facts: WorkflowFacts,
+  definitions: ReadonlyMap<string, OperationDefinition | undefined>
+): Promise<WorkflowSentence> {
+  const names = namers(options, input.access);
   const reads: string[] = [];
   const adds: string[] = [];
   const changes: string[] = [];
@@ -304,7 +356,7 @@ async function narrateWorkflow(
   const kind = options.kinds?.get(WORKFLOW_ASSET_KIND);
   const account =
     input.config && kind?.readRunsAs ? await kind.readRunsAs(input.config) : facts.runAs;
-  const sentence: WorkflowSentence = {
+  return {
     title: oneLine(facts.title),
     triggers: facts.triggers,
     ...(account === undefined ? {} : { account: oneLine(account) }),
@@ -334,10 +386,6 @@ async function narrateWorkflow(
         }
       : {})
   };
-  return {
-    summary: workflowSummary(sentence, input.locale),
-    warnings: stopWarnings(await stepStops(options, facts, definitions), input.locale)
-  };
 }
 
 /**
@@ -348,16 +396,34 @@ async function narrateWorkflow(
 async function stepStops(
   options: PublishNarratorOptions,
   facts: WorkflowFacts,
-  definitions: ReadonlyMap<string, OperationDefinition | undefined>
+  definitions: ReadonlyMap<string, OperationDefinition | undefined>,
+  deadline: number
 ): Promise<StepStop[]> {
-  const stops: StepStop[] = [];
-  for (const step of facts.calls) {
+  const guardrails = options.guardrails?.previewSession();
+  const unchecked = (step: WorkflowFacts["calls"][number]): StepStop[] => [
+    {
+      step: oneLine(step.name),
+      guardrail: "",
+      outcome: "require_approval",
+      checked: true,
+      unavailable: true
+    }
+  ];
+  // Each slot starts conservatively and is replaced only when its complete check answers.
+  // A late check cannot change the returned warnings or start another check after the deadline.
+  const results = facts.calls.map(unchecked);
+  let next = 0;
+  let expired = false;
+  const check = async (step: WorkflowFacts["calls"][number]): Promise<StepStop[]> => {
+    const stops: StepStop[] = [];
     const definition = definitions.get(step.operation);
-    if (!definition) continue;
-    const parsed = await definition.inputSchema.safeParseAsync(step.input);
+    if (!definition) return [];
+    const parsed = await definition.inputSchema.safeParseAsync(step.input).catch(() => undefined);
+    if (expired) return unchecked(step);
+    if (!parsed) return unchecked(step);
     // Literal inputs use the same parsed value as runtime. References have no value until
     // the run; constant resources (Connections, stores, child Workflows) can still name it.
-    if (!parsed.success && !step.dynamic) continue;
+    if (!parsed.success && !step.dynamic) return unchecked(step);
     const input = !step.dynamic && parsed.success ? parsed.data : step.input;
     const resource = definition.resource(input);
     const call = {
@@ -378,8 +444,8 @@ async function stepStops(
         }
       },
       emit: async (event, _phase, _payload, before = {}) => {
-        if (!isGuardrailEvent(event) || !options.guardrails) return PLATFORM_EVENT_ALLOW;
-        const guardrails = await options.guardrails.preview(
+        if (expired || !isGuardrailEvent(event) || !guardrails) return PLATFORM_EVENT_ALLOW;
+        const answers = await guardrails.preview(
           {
             event,
             match: guardrailMatch({ ...call, filterBy: before.filterBy }),
@@ -393,10 +459,10 @@ async function stepStops(
           },
           step.dynamic
         );
-        met.push(...guardrails);
+        met.push(...answers);
         return {
-          outcome: strictestOutcome(guardrails.map((answer) => answer.outcome)),
-          guardrails
+          outcome: strictestOutcome(answers.map((answer) => answer.outcome)),
+          guardrails: answers
         };
       }
     });
@@ -421,8 +487,36 @@ async function stepStops(
           (definition.policyFloorOf !== undefined || definition.policyTargets !== undefined)
       });
     }
+    return stops;
+  };
+  const worker = async () => {
+    while (!expired && Date.now() < deadline && next < facts.calls.length) {
+      const index = next++;
+      const step = facts.calls[index];
+      if (!step) return;
+      const checked = await check(step);
+      if (!expired) results[index] = checked;
+    }
+  };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      Promise.all(Array.from({ length: NARRATION_CHECK_CONCURRENCY }, worker)),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(
+          () => {
+            expired = true;
+            resolve();
+          },
+          Math.max(0, deadline - Date.now())
+        );
+      })
+    ]);
+    return results.flat();
+  } finally {
+    expired = true;
+    clearTimeout(timer);
   }
-  return stops;
 }
 
 async function narrateApp(

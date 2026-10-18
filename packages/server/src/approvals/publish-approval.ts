@@ -24,7 +24,10 @@ import { APP_ACTIONS, APP_ASSET_KIND } from "../apps/app-kind";
 import type { AssetTarget } from "../assets/asset-target";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
 import type { HeldCallApprovalKind } from "./held-call-kind";
-import type { PublishNarrator } from "../publish-narrative/publish-narrator";
+import {
+  unavailablePublishNarrative,
+  type PublishNarrator
+} from "../publish-narrative/publish-narrator";
 
 // A publish that a guardrail holds waits as a request of its own kind, `app_publish` or
 // `workflow_publish`, which the holders of the kind's `approve` right decide and nobody else.
@@ -224,15 +227,17 @@ async function publishReview(
       : undefined;
   const narrative =
     next && viewer && options.narrator && asset?.id === subject.assetId
-      ? await options.narrator.narrate({
-          kind: subject.kind,
-          name: subject.name,
-          scope: asset.scope,
-          revision: subject.revision,
-          config: next.config,
-          locale: viewer.locale ?? options.defaultLocale ?? "en",
-          access: viewer.access
-        })
+      ? await options.narrator
+          .narrate({
+            kind: subject.kind,
+            name: subject.name,
+            scope: asset.scope,
+            revision: subject.revision,
+            config: next.config,
+            locale: viewer.locale ?? options.defaultLocale ?? "en",
+            access: viewer.access
+          })
+          .catch(() => unavailablePublishNarrative(viewer.locale ?? options.defaultLocale ?? "en"))
       : undefined;
   const calls = reach
     ? await Promise.all(

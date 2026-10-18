@@ -36,6 +36,7 @@ import {
   type AssetTarget
 } from "./asset-target";
 import type { AssetWorkflowOptions } from "../types";
+import { unavailablePublishNarrative } from "../publish-narrative/publish-narrator";
 
 /**
  * Who is told of an agent's pending draft: a holder of `agent.write` on it, and the holder of
@@ -206,15 +207,17 @@ export class AssetReadWorkflow {
         : undefined;
     // The sentence the publish question leads with, for the revision this read returns (PUBQ-1).
     const publishNarrative = locale
-      ? await this.options.operationCalls?.publishNarrator?.narrate({
-          kind: target.kind.kind,
-          name: asset.name,
-          scope: asset.scope,
-          revision: content.contentRevision ?? asset.revision,
-          config: content.config,
-          locale,
-          access: call.access
-        })
+      ? await this.options.operationCalls?.publishNarrator
+          ?.narrate({
+            kind: target.kind.kind,
+            name: asset.name,
+            scope: asset.scope,
+            revision: content.contentRevision ?? asset.revision,
+            config: content.config,
+            locale,
+            access: call.access
+          })
+          .catch(() => unavailablePublishNarrative(locale))
       : undefined;
     const agentStatus =
       target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;

@@ -72,6 +72,8 @@ export interface StepStop {
   outcome: "require_approval" | "block";
   /** The stop depends on a runtime check or input not yet available. */
   checked: boolean;
+  /** Its input or policy check failed or did not finish within the narration budget. */
+  unavailable?: boolean;
 }
 
 /** People and workspaces are named by people: a line break inside one would forge a line. */
@@ -359,10 +361,10 @@ const DE: Copy = {
   stop: ({ step, guardrail, outcome, checked }) =>
     outcome === "block"
       ? checked
-        ? `Der Schritt „${step}“ kann abgelehnt werden: Die Leitplanke „${guardrail}“ blockiert ihn, wenn sie beim Geprüften anschlägt.`
+        ? `Der Schritt „${step}“ kann abgelehnt werden: Die Leitplanke „${guardrail}“ blockiert ihn, wenn ihre Prüfung einen Treffer ergibt.`
         : `Der Schritt „${step}“ wird abgelehnt: Die Leitplanke „${guardrail}“ blockiert ihn.`
       : checked
-        ? `Der Schritt „${step}“ kann angehalten werden: Die Leitplanke „${guardrail}“ verlangt eine Freigabe, wenn sie beim Geprüften anschlägt, und ein veröffentlichter Lauf kann nicht auf sie warten.`
+        ? `Der Schritt „${step}“ kann angehalten werden: Die Leitplanke „${guardrail}“ verlangt eine Freigabe, wenn ihre Prüfung einen Treffer ergibt, und ein veröffentlichter Lauf kann nicht auf sie warten.`
         : `Der Schritt „${step}“ wird angehalten: Die Leitplanke „${guardrail}“ verlangt eine Freigabe, und ein veröffentlichter Lauf kann nicht auf sie warten.`
 };
 
@@ -561,9 +563,13 @@ export function stopWarnings(stops: readonly StepStop[], locale: LocaleCode): st
   return [
     ...new Set(
       stops.map((stop) =>
-        stop.source === undefined
-          ? COPY[locale].stop(stop)
-          : policyStopWarning({ ...stop, source: stop.source }, locale)
+        stop.unavailable
+          ? locale === "de"
+            ? `Der Schritt „${stop.step}“ kann angehalten werden: Die Prüfung seiner Eingaben und Richtlinien konnte nicht abgeschlossen werden, daher kann eine Leitplanke oder Richtlinie ihn beim Lauf noch anhalten.`
+            : `The step “${stop.step}” may stop: checking its input and policies could not finish, so a guardrail or policy may still stop it when it runs.`
+          : stop.source === undefined
+            ? COPY[locale].stop(stop)
+            : policyStopWarning({ ...stop, source: stop.source }, locale)
       )
     )
   ];
