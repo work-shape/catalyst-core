@@ -33,15 +33,14 @@ An App reaches a Connection, a Data Store or a Workflow only through a named act
 
 ## Messages the App sends
 
-| `type`                | Fields                                                                                          | Answered with    |
-| --------------------- | ----------------------------------------------------------------------------------------------- | ---------------- |
-| `ready`               | none                                                                                            | `context`        |
-| `navigate`            | `session`, `path` (a route of the App: one leading `/`, no host, at most 2048 characters)       | nothing          |
-| `resize`              | `session`, `height` (0 to 100000)                                                               | nothing          |
-| `action`              | `session`, `requestId`, `name`, `input` (an object), optional `idempotencyKey`                  | `action_result`  |
-| `storage_write`       | `session`, `requestId`, `mutation` (`set` with string key/value, `remove` with key, or `clear`) | `storage_result` |
-| `workflow_run`        | `session`, `requestId`, `runId`                                                                 | `storage_result` | `session`, `requestId`, `ok` |
-| `workflow_run_result` |
+| `type`          | Fields                                                                                          | Answered with         |
+| --------------- | ----------------------------------------------------------------------------------------------- | --------------------- |
+| `ready`         | none                                                                                            | `context`             |
+| `navigate`      | `session`, `path` (a route of the App: one leading `/`, no host, at most 2048 characters)       | nothing               |
+| `resize`        | `session`, `height` (0 to 100000)                                                               | nothing               |
+| `action`        | `session`, `requestId`, `name`, `input` (an object), optional `idempotencyKey`                  | `action_result`       |
+| `storage_write` | `session`, `requestId`, `mutation` (`set` with string key/value, `remove` with key, or `clear`) | `storage_result`      |
+| `workflow_run`  | `session`, `requestId`, `runId`                                                                 | `workflow_run_result` |
 
 The runtime installs personal storage before App scripts run and supplies its session to storage writes. Every other message after `ready` names the session the interface gave in `context`. A message of another shape, with an unknown key, or naming another session is dropped.
 

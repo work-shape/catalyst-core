@@ -39,7 +39,7 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   // First capability publication: 32 standalone helper command bundles plus shipped skills
   // pack to 5.9 MB (2026-10-16). Keep that existing build shape within a measured budget.
   "artifact-helpers": 6_500_000, // check-limit
-  "chat-ui": 650_000, // check-limit
+  "chat-ui": 660_000, // check-limit: App storage bridge and recoverable view loading
   // Packed site was 1.55 MB.
   docs: 2_000_000, // check-limit
   ui: 500_000, // check-limit

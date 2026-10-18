@@ -23,8 +23,8 @@ export const VIEW_LOAD_TIMEOUT_MS = 30_000;
  */
 export const VIEW_SHELL_READY_GRACE_MS = 2_000;
 
-/** Why a view is not shown: its shell failed, or it did not load in time. */
-type ViewLoadFailure = "failed" | "timed_out";
+/** Why a view is not shown: its shell never said ready, or it did not load in time. */
+type ViewLoadFailure = "shell_unavailable" | "timeout";
 
 /**
  * The frame grows to its reported content height so the view never scrolls
@@ -120,7 +120,7 @@ export function RenderedHtmlDisplay({
     if (shellKey === 0 || !loading || failure) {
       return;
     }
-    const timer = setTimeout(() => setFailure("timed_out"), VIEW_LOAD_TIMEOUT_MS);
+    const timer = setTimeout(() => setFailure("timeout"), VIEW_LOAD_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [shellKey, loading, failure]);
 
@@ -128,7 +128,7 @@ export function RenderedHtmlDisplay({
     if (!shellLoaded || shellReady || failure) {
       return;
     }
-    const timer = setTimeout(() => setFailure("failed"), VIEW_SHELL_READY_GRACE_MS);
+    const timer = setTimeout(() => setFailure("shell_unavailable"), VIEW_SHELL_READY_GRACE_MS);
     return () => clearTimeout(timer);
   }, [shellLoaded, shellReady, failure]);
 
@@ -195,7 +195,7 @@ export function RenderedHtmlDisplay({
           data-testid="view-load-error"
         >
           <LoadError onRetry={startShell}>
-            {failure === "timed_out"
+            {failure === "timeout"
               ? t("displayLoadTimedOut", { seconds: VIEW_LOAD_TIMEOUT_MS / 1000 })
               : t("displayLoadFailed")}
           </LoadError>
