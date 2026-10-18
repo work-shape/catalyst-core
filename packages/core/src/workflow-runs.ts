@@ -398,7 +398,8 @@ export interface WorkflowRunsStore {
   listLinkedStepRuns(ref: WorkflowRunRef): Promise<WorkflowStepRunId[]>;
   /**
    * What a due time of a Workflow's schedule meets: whether a run for it exists, and whether
-   * a run an earlier due time started has not ended.
+   * a run an earlier due time started has not ended. Called inside the admission transaction;
+   * serializes admissions for this instance and Workflow until that transaction ends.
    */
   readScheduleState(input: {
     clientInstanceId: ClientInstanceId;

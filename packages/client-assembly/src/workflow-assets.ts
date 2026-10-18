@@ -529,6 +529,22 @@ export function createWorkflowAssetDefinitions(options: {
       }
       return { revisionId: asset.activeRevisionId, manifest: parsed.manifest };
     },
+    async readScheduleCrons(id) {
+      const asset = await assetOf(id);
+      if (asset?.status !== "active" || asset.publishedConfig === undefined) return [];
+      const parsed = z
+        .object({ manifest: z.object({ steps: z.array(z.unknown()) }) })
+        .safeParse(asset.publishedConfig);
+      const trigger = z
+        .object({ type: z.literal("trigger"), triggers: z.array(z.unknown()) })
+        .safeParse(parsed.data?.manifest.steps[0]);
+      return (trigger.data?.triggers ?? []).flatMap((value) => {
+        const schedule = z
+          .object({ kind: z.literal("schedule"), cron: z.string() })
+          .safeParse(value);
+        return schedule.success ? [schedule.data.cron] : [];
+      });
+    },
     async read(id, configAssets) {
       const asset = await assetOf(id, configAssets);
       const workflow = asset ? publishedWorkflowOf(asset) : undefined;
