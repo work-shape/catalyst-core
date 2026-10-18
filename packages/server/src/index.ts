@@ -31,6 +31,7 @@ import { registerJobRoutes } from "./routes/job-routes";
 import { registerInfrastructureRoutes } from "./routes/infrastructure-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
 import { registerPersonalApiKeyRoutes } from "./routes/personal-api-key-routes";
+import { registerWorkflowPrincipalRightsRoutes } from "./workflows/workflow-principal-rights";
 import { registerAccessRoutes } from "./routes/access-routes";
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
 import { registerApiReferenceRoutes } from "./routes/api-reference-routes";
@@ -280,6 +281,7 @@ export async function createChatServer(
   registerPersonalApiKeyRoutes(route, options);
   registerSuperadminRoutes(route, options);
   registerAccessRoutes(route, options);
+  registerWorkflowPrincipalRightsRoutes(route, options);
   for (const register of extensions.routes ?? []) register(route);
   registerApiReferenceRoutes(route, options);
 

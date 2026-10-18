@@ -7,7 +7,6 @@ import {
   isGrantableAt,
   isLegacyKeyAction,
   isPlatformAction,
-  isPrincipalGrantableAction,
   isSuperadmin,
   listAccessEntries,
   moduleOffError,
@@ -27,7 +26,6 @@ import {
   type OperationAuthorization,
   type OperationExecutionContext,
   type PermissionGrant,
-  type ServicePrincipalRecord,
   type StorePage,
   type UserRecord
 } from "@work-shape/catalyst-core";
@@ -45,11 +43,14 @@ import {
 import { authorizeHeldRightsWithin } from "./held-rights-within";
 import { namespaceLists, type NamespaceListsCommand } from "./namespace-lists";
 import { rightAtScope, scopeAssets } from "./person-rights";
+import { assetRight, type PrincipalRightsOptions } from "./principal-rights";
 import {
-  assetRight,
-  authorizeGivingToPrincipal,
-  type PrincipalRightsOptions
-} from "./principal-rights";
+  checkPrincipalGrant,
+  findAdministrablePrincipal,
+  grantableAsset,
+  kindOfAction,
+  refused
+} from "./principal-grant";
 import { withRightsHeld } from "./rights-held";
 import { READ_RUN_DATA_ACTION, authorizeRunDataGrant } from "./run-data-grant";
 
@@ -251,71 +252,27 @@ export class AccessWorkflow {
   }
 
   /**
-   * The four limits of a service principal's row, each refused by name. Who: asked before the
-   * policy by `authorizeGrant`, and again here. What: a use right of the one list in `core`
-   * that a kind of this instance registers; a right of the list whose kind this instance has
-   * not loaded is refused like one outside the list, so no row waits for a kind to arrive.
-   * Effect: allow. Where: one named asset of the right's kind, so nothing created later is
-   * reachable by a principal that was not given it. And the writer holds the right there: the
-   * rule of no escalation, asked last, of the asset as it is now.
+   * A service principal's row, under the limits `checkPrincipalGrant` names. Who is asked
+   * before the policy by `authorizeGrant`, and again there.
    */
   private async grantToPrincipal(
     actor: AuthenticatedUser,
     context: GrantWriteContext,
     command: GrantCommand
   ): Promise<PermissionGrant> {
-    requireAuthorized(authorizePrincipalHolderWrite(actor, context.access, GRANT_OPERATION));
-    const principal = await this.findPrincipal(command.holderId);
-    if (!principal) {
-      throw new AppError("NOT_FOUND", "Service principal not found", {
-        reason: "unknown_holder"
-      });
-    }
-    const { action } = command;
-    if (!isPrincipalGrantableAction(action)) {
-      throw refused(
-        "action_not_grantable_to_principal",
-        `'${action}' cannot be granted to a service principal: a service principal is granted the use rights of a resource and nothing else`
-      );
-    }
-    const module = this.options.modules.offModuleOf("kind", kindOfAction(action));
-    if (module !== undefined) {
-      throw moduleOffError(module);
-    }
-    const kind = this.options.configAssets.kinds.get(kindOfAction(action));
-    if (!kind || !Object.values(kind.actions).some((right) => right === action)) {
-      throw refused(
-        "action_not_grantable_to_principal",
-        `'${action}' cannot be granted on this instance: no asset kind it has loaded registers the right`
-      );
-    }
-    if (command.effect !== "allow") {
-      throw refused(
-        "effect_not_grantable_to_principal",
-        "A service principal is allowed a right and never denied one: revoke the grant instead"
-      );
-    }
-    if (command.scopeKind !== "asset") {
-      throw refused(
-        "invalid_scope",
-        "A service principal is granted a right on one named asset only"
-      );
-    }
-    const asset = await this.grantableAsset(command);
-    requireAuthorized(
-      await authorizeGivingToPrincipal(
-        this.rightsOptions(),
-        { actor, access: context.access },
-        principal,
-        [assetRight(action, asset)]
-      )
+    const { principal, asset } = await checkPrincipalGrant(
+      this.options,
+      { actor, access: context.access },
+      GRANT_OPERATION,
+      command,
+      () => this.grantableAsset(command)
     );
     // The store refuses the same for a principal deleted after this read.
     return this.options.stores.access.createGrant({
       clientInstanceId: this.options.clientInstanceId,
       holderKind: "service_principal",
       holderId: principal.id,
-      action,
+      action: command.action,
       effect: "allow",
       scopeKind: "asset",
       scopeId: asset.id,
@@ -374,7 +331,7 @@ export class AccessWorkflow {
       // The list does not show the row to this caller, so neither does a refusal.
       if (
         !seesPrincipals(actor, context.access) ||
-        !(await this.findPrincipal(existing.holderId))
+        !(await findAdministrablePrincipal(this.options, existing.holderId))
       ) {
         throw new AppError("NOT_FOUND", "Grant not found");
       }
@@ -632,18 +589,10 @@ export class AccessWorkflow {
 
   /** The active asset of the action's kind an asset grant names. */
   private async grantableAsset(command: GrantCommand): Promise<Omit<GrantScopeAsset, "active">> {
-    if (command.scopeId === undefined || command.namespace !== undefined) {
+    if (command.namespace !== undefined) {
       throw refused("invalid_scope", "An asset grant names an asset id and no Namespace");
     }
-    const asset = await this.options.stores.access.getGrantableAsset({
-      clientInstanceId: this.options.clientInstanceId,
-      assetId: command.scopeId
-    });
-    // The action carries the kind, so a skill action on an agent could never match.
-    if (!asset || asset.kind !== kindOfAction(command.action)) {
-      throw refused("invalid_scope", "The asset is not an active asset of the action's kind");
-    }
-    return asset;
+    return grantableAsset(this.options, command);
   }
 
   private async findHolder(
@@ -669,7 +618,7 @@ export class AccessWorkflow {
     // API access: the rule of the list of grant rows, so this says nothing the list hides.
     access.require(SERVICE_PRINCIPALS_ACTION);
     requireAuthScope(actor, API_ACCESS_READ_SCOPE);
-    const principal = await this.findPrincipal(input.holderId);
+    const principal = await findAdministrablePrincipal(this.options, input.holderId);
     if (!principal) {
       throw new AppError("NOT_FOUND", "Service principal not found", {
         reason: "unknown_holder"
@@ -730,15 +679,6 @@ export class AccessWorkflow {
     return users.find((candidate) => candidate.id === userId);
   }
 
-  private async findPrincipal(
-    servicePrincipalId: string
-  ): Promise<ServicePrincipalRecord | undefined> {
-    const principals = await this.options.stores.apiAccess.listServicePrincipals({
-      clientInstanceId: this.options.clientInstanceId
-    });
-    return principals.find((candidate) => candidate.id === servicePrincipalId && !candidate.owner);
-  }
-
   private async record(
     actor: AuthenticatedUser,
     context: AccessCallContext,
@@ -755,15 +695,6 @@ export class AccessWorkflow {
       metadata
     });
   }
-}
-
-/** The asset kind an action is a right of: `agent` of `agent.read`. */
-function kindOfAction(action: string): string {
-  return action.slice(0, action.indexOf("."));
-}
-
-function refused(reason: string, message: string): AppError {
-  return new AppError("VALIDATION_FAILED", message, { reason });
 }
 
 /**

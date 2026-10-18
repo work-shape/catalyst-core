@@ -5,6 +5,7 @@ import {
   isAuthenticatedServicePrincipal
 } from "@work-shape/catalyst-core";
 import { checkPublishedChildren } from "./workflow-child-assets";
+import { workflowAccountRights } from "./workflow-account-rights";
 import {
   createWorkflowLiveCheck,
   type PublishReach,
@@ -123,7 +124,8 @@ export function createWorkflowAssetKind(
     /** The installed distributions of the release runner. Empty when its manifest is missing. */
     runnerPackages?: readonly WorkflowRunnerPackage[];
     registry?: () =>
-      Pick<import("@work-shape/catalyst-core").OperationRegistry, "resolve"> | undefined;
+      | Pick<import("@work-shape/catalyst-core").OperationRegistry, "resolve" | "resolveMany">
+      | undefined;
     /** The clock of the engine, for a test of due times. */
     now?: () => Date;
     /**
@@ -302,6 +304,13 @@ export function createWorkflowAssetKind(
           : []
       );
     },
+    // What the accounts of a publish need, for the screen that asks it before the publish.
+    principalRights: (workflow) =>
+      workflowAccountRights(
+        options,
+        createWorkflowAssetDefinitions({ clientInstanceId, configAssets: options.configAssets }),
+        workflow
+      ),
     async authorizeLive(input) {
       const config = workflowConfigSchema.parse(input.config);
       const result = parseStoredManifest(config.manifest);

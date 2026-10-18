@@ -1,5 +1,6 @@
 import { listAll, type ApiClient } from "@work-shape/catalyst-api-client";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
+import { principalGrantRequest } from "../../admin/access/principal-grants-model";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import {
   listedOf,
@@ -26,7 +27,7 @@ const FRAME_PAGE_SIZE = 200;
 const FRAME_MAX_PAGES = 10;
 
 /** The part of the client the Workflow screens call. */
-type WorkflowsClient = Pick<ApiClient, "workflows" | "assets">;
+type WorkflowsClient = Pick<ApiClient, "workflows" | "assets" | "permissions">;
 
 function runsSource(client: WorkflowsClient): WorkflowRunsSource {
   return {
@@ -142,6 +143,22 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
       );
     },
     runs: runsSource(client),
+    publishRights: {
+      read: async (workflow, signal) =>
+        client.workflows.principal_rights({ params: { workflow }, signal }),
+      // The ordinary grant write, with every rule it asks; one right at a time.
+      give: async (grant) => {
+        done(
+          await client.permissions.grant({
+            body: principalGrantRequest({
+              principalId: grant.holderId,
+              action: grant.action,
+              assetId: grant.scopeId
+            })
+          })
+        );
+      }
+    },
     // A draft is published and discarded as the draft of any asset is.
     drafts: {
       publish: async (workflow, revision) => {

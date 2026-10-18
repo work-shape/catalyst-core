@@ -40,6 +40,12 @@ export { WorkflowsHostProvider, type WorkflowsHost } from "./workflows-host";
 export type { LiveOnceControl } from "./test-run";
 export { checkStartForm, startFormOf, startRefusalByField } from "./start-form";
 export { DraftChangeDialog } from "./workflow-draft";
+export { RightsLacking } from "./workflow-publish-rights";
+export {
+  giveFailureSentence,
+  workflowPublishRefusal,
+  type WorkflowPublishRightsView
+} from "./workflow-publish-rights-model";
 export { WorkflowPageView } from "./workflow-page";
 export { WorkflowsPageView } from "./workflows-page";
 // The address of the area and its row in the rail, which the same tests hold.

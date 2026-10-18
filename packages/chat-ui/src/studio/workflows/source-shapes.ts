@@ -5,6 +5,10 @@ import type {
   WorkflowStepRunView,
   WorkflowView
 } from "./workflow-views";
+import type {
+  WorkflowPublishRightsView,
+  WorkflowRightGrant
+} from "./workflow-publish-rights-model";
 
 // Where the Workflow screens read from and write to, in the screens' own shapes. The screens
 // name no operation and no type of the API contract: whoever builds a source maps onto these.
@@ -74,6 +78,17 @@ export interface WorkflowsSource {
   runs: WorkflowRunsSource | undefined;
   /** Absent where the source holds no drafts, such as samples. */
   drafts?: WorkflowDraftsSource;
+  /** Absent where the source has no technical accounts, such as samples. */
+  publishRights?: WorkflowPublishRightsSource;
+}
+
+/**
+ * What the technical accounts a publish runs as need (`workflows.principal_rights`), and
+ * giving one of them a right through the ordinary grant write (`permissions.grant`).
+ */
+export interface WorkflowPublishRightsSource {
+  read(workflow: string, signal: AbortSignal): Promise<WorkflowPublishRightsView>;
+  give(grant: WorkflowRightGrant): Promise<void>;
 }
 
 /**

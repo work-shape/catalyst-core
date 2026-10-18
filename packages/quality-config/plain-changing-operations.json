@@ -195,6 +195,7 @@
     "session_tokens.issue": "public",
     "view_runtime.files.get": "public",
     "view_shell.files.get": "public",
+    "workflows.principal_rights": "asset_right",
     "workspaces.access_requests.list": "workspace_role",
     "workspaces.agents.list": "workspace_role",
     "workspaces.deletion_impact.get": "workspace_role",

@@ -25,6 +25,7 @@ import { referenceOperations } from "./reference";
 import { systemOperations } from "./system";
 import { userOperations } from "./users";
 import { workflowOperations } from "./workflows";
+import { workflowPrincipalRightsOperations } from "./workflow-principal-rights";
 
 /** Every product operation of the HTTP API, one file per area. */
 export const apiOperations = {
@@ -45,6 +46,7 @@ export const apiOperations = {
   ...connectionOperations,
   ...guardrailOperations,
   ...workflowOperations,
+  ...workflowPrincipalRightsOperations,
   ...dataStoreOperations,
   ...knowledgeOperations,
   ...userOperations,
@@ -60,6 +62,7 @@ export const apiOperations = {
 export * from "./connections";
 export * from "./guardrails";
 export * from "./workflows";
+export * from "./workflow-principal-rights";
 
 export type ApiOperationName = keyof typeof apiOperations;
 

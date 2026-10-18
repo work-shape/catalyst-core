@@ -13,7 +13,8 @@ import type {
   OperationEffect,
   PlatformStores,
   RegisteredAssetKind,
-  ToolPresentation
+  ToolPresentation,
+  WorkflowAccountRights
 } from "@work-shape/catalyst-core";
 
 /** What a kind's `withinWrite` leaves to do once the transaction ended. */
@@ -175,6 +176,12 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     config: unknown;
   }): Promise<string[]>;
   publishReach?(next: JsonObject, live: JsonObject | undefined): PublishReach;
+  /**
+   * The rights the accounts a publish of the asset's newest revision runs as need, by the
+   * asset's name: its own and each child's. Nothing where no asset has the name. The check of
+   * the publish asks the same list.
+   */
+  principalRights?(name: string): Promise<WorkflowAccountRights[] | undefined>;
   authorizeLive?(input: {
     actor: AuthenticatedIdentity;
     access: ActorAccess;

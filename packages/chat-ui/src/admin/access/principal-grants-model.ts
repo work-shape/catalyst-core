@@ -44,6 +44,8 @@ export type PrincipalGrantFailure =
   | "invalidScope"
   /** A service principal is allowed a right and never denied one. */
   | "effectNotGrantable"
+  /** The writer may not read the resource, so gives no right on it. */
+  | "notVisible"
   | "duplicate"
   | "unknownHolder"
   | "held"
@@ -62,6 +64,8 @@ export function principalGrantFailure(error: unknown): PrincipalGrantFailure {
       return "effectNotGrantable";
     case "invalid_scope":
       return "invalidScope";
+    case "not_visible":
+      return "notVisible";
     default:
       break;
   }

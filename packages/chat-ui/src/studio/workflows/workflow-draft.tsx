@@ -8,6 +8,8 @@ import { useWorkflowDraftWrites } from "./workflow-data";
 import { draftState, editOffered, type WorkflowDraftState } from "./workflow-model";
 import type { WorkflowView } from "./workflow-views";
 import { useWorkflowsHost } from "./workflows-host";
+import { WorkflowPublishRights } from "./workflow-publish-rights";
+import { workflowPublishRefusal } from "./workflow-publish-rights-model";
 
 // The draft of a Workflow on its page: the conversation in which the agent changes it, and the
 // bar that says the draft is not what is published, with the test run, the publish and the
@@ -181,7 +183,8 @@ export function useWorkflowDraft(
         return;
       }
       setError(
-        instanceSentence(failure) ??
+        (change === "publish" ? workflowPublishRefusal(failure, t) : undefined) ??
+          instanceSentence(failure) ??
           t(
             change === "publish" ? "workflows.draft.publishFailed" : "workflows.draft.discardFailed"
           )
@@ -206,6 +209,7 @@ export function useWorkflowDraft(
           revision={draft.revision}
           publishedRevision={draft.publishedRevision}
           {...(draft.publishQuestion ? { question: draft.publishQuestion } : {})}
+          rights={<WorkflowPublishRights workflow={workflow} />}
           loading={busy}
           error={error}
           waits={waits}
@@ -225,6 +229,7 @@ export function DraftChangeDialog({
   revision,
   publishedRevision,
   question = [],
+  rights,
   loading,
   error,
   waits = false,
@@ -238,6 +243,8 @@ export function DraftChangeDialog({
   publishedRevision: number | undefined;
   /** The instance's sentences on what a publish raises, each limit above its default. */
   question?: readonly string[];
+  /** What the technical accounts of the publish lack, and the step that gives it. */
+  rights?: ReactNode;
   loading: boolean;
   error: string | undefined;
   /** The publish was sent and waits for an approver. */
@@ -271,6 +278,7 @@ export function DraftChangeDialog({
           ))}
         </ul>
       ) : null}
+      {publish ? rights : null}
       {error ? <InlineError className="mt-3">{error}</InlineError> : null}
       {waits ? (
         <Banner layout="line" role="status" className="mt-3" data-testid="workflow-publish-waits">

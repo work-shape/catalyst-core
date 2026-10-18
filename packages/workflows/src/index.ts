@@ -16,7 +16,8 @@ export const WORKFLOW_OPERATION_IDS = [
   "workflows.download_dataset",
   "workflows.list_runs",
   "workflows.list_step_runs",
-  "workflows.cancel_run"
+  "workflows.cancel_run",
+  "workflows.principal_rights"
 ] as const;
 
 /**
@@ -143,3 +144,10 @@ export { createDatasetDownload } from "./dataset-download";
 export { WorkflowStepFailure } from "./step-failure";
 
 export { workflowKindIssues } from "./kind-rules";
+
+export {
+  workflowNeededRights,
+  workflowOperationNames,
+  type NeededRightOperation,
+  type WorkflowNeededRightsContext
+} from "./needed-rights";

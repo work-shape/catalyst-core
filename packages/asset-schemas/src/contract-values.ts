@@ -225,6 +225,30 @@ export type AdministeredUserStatus = (typeof ADMINISTERED_USER_STATUSES)[number]
 export const SERVICE_PRINCIPAL_STATUSES = ["active", "disabled"] as const;
 export type ServicePrincipalStatus = (typeof SERVICE_PRINCIPAL_STATUSES)[number];
 
+/**
+ * When the account a Workflow runs as needs a right its definition names. `publish`: the
+ * publish is refused without it. `run`: the step that needs it fails when it runs.
+ */
+export const WORKFLOW_RIGHT_NEEDED_FOR = ["publish", "run"] as const;
+/** The revision of a publish's Workflow the rights are read from: the one published, or a live child. */
+export const WORKFLOW_RIGHTS_REVISIONS = ["draft", "published"] as const;
+/** How the account a Workflow names stands: a principal's status, or no principal of the name. */
+export const WORKFLOW_RUN_ACCOUNT_STATUSES = [...SERVICE_PRINCIPAL_STATUSES, "unknown"] as const;
+/**
+ * Why a reader cannot give an account a right it lacks. `not_grantable`: nobody can give it to
+ * an account here. `not_administrator`: giving needs someone who administers technical
+ * accounts. `not_held`: the reader does not hold it there. `account_unavailable`: the account
+ * is missing or disabled. `asset_unavailable`: no active asset of the name exists.
+ */
+export const WORKFLOW_RIGHT_REFUSALS = [
+  "not_grantable",
+  "not_administrator",
+  "not_held",
+  "account_unavailable",
+  "asset_unavailable",
+  "not_visible"
+] as const;
+
 export const SERVICE_PRINCIPAL_PERMISSIONS = [
   "config_assets.read",
   "config_assets.release"

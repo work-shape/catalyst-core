@@ -32,6 +32,7 @@ import { signIn } from "./sign-in";
 import { skillFiles } from "./skill-files";
 import { subagents } from "./subagents";
 import { tools } from "./tools";
+import { workflowRights } from "./workflow-rights";
 import { workflows } from "./workflows";
 import { workspace } from "./workspace";
 import { combineTranslations } from "./translation-area";
@@ -74,6 +75,7 @@ export const translations = combineTranslations(common)
   .and(skillFiles)
   .and(subagents)
   .and(tools)
+  .and(workflowRights)
   .and(workflows)
   .and(workspace).messages;
 

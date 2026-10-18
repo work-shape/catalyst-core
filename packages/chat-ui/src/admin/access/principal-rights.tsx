@@ -57,6 +57,7 @@ const FAILURE_SENTENCES: Record<PrincipalGrantFailure, TranslationKey> = {
   actionNotGrantable: "apiAccessRightsActionNotGrantable",
   invalidScope: "apiAccessRightsInvalidScope",
   effectNotGrantable: "apiAccessRightsEffectNotGrantable",
+  notVisible: "apiAccessRightsNotVisible",
   duplicate: "apiAccessRightsDuplicate",
   unknownHolder: "apiAccessRightsUnknownHolder",
   held: "apiAccessWaitsForApproval",

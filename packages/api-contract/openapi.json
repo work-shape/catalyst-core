@@ -21376,6 +21376,208 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/workflows/{workflow}/principal-rights": {
+      "get": {
+        "operationId": "workflows.principal_rights",
+        "summary": "List the rights the accounts a publish of a Workflow's newest revision runs as need, whether they hold each, and which ones the caller can give",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workflows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "workflow": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "published"
+                            ]
+                          },
+                          "runAs": {
+                            "type": "string"
+                          },
+                          "account": {
+                            "type": "object",
+                            "properties": {
+                              "label": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "disabled",
+                                  "unknown"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "status"
+                            ]
+                          },
+                          "rights": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "action": {
+                                  "type": "string"
+                                },
+                                "asset": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ]
+                                },
+                                "steps": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "neededFor": {
+                                  "type": "string",
+                                  "enum": [
+                                    "publish",
+                                    "run"
+                                  ]
+                                },
+                                "held": {
+                                  "type": "boolean"
+                                },
+                                "grant": {
+                                  "type": "object",
+                                  "properties": {
+                                    "holderId": {
+                                      "type": "string"
+                                    },
+                                    "scopeId": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "holderId",
+                                    "scopeId"
+                                  ]
+                                },
+                                "refusal": {
+                                  "type": "string",
+                                  "enum": [
+                                    "not_grantable",
+                                    "not_administrator",
+                                    "not_held",
+                                    "account_unavailable",
+                                    "asset_unavailable",
+                                    "not_visible"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "action",
+                                "asset",
+                                "steps",
+                                "neededFor",
+                                "held"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "workflow",
+                          "revision",
+                          "runAs",
+                          "account",
+                          "rights"
+                        ]
+                      }
+                    },
+                    "hiddenWorkflows": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "administers": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "workflows",
+                    "hiddenWorkflows",
+                    "administers"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/workflows/{workflow}/runs": {
       "get": {
         "operationId": "workflows.list_runs",

@@ -89,6 +89,8 @@ export const apiAccess = defineTranslations({
     apiAccessRightsNotHeld: "You do not hold this right here yourself, so you cannot give it.",
     apiAccessRightsNotHeldAnywhere:
       "You do not hold this right on any of these resources yourself, so you cannot give it.",
+    apiAccessRightsNotVisible:
+      "You cannot see this resource, so you cannot give a right on it. Ask an admin.",
     apiAccessRightsNotAdministrable:
       "You may not give rights to service principals. That takes someone who manages service principals and holds the right themselves. Ask them to add this right.",
     apiAccessRightsRemove: "Remove",
@@ -211,6 +213,8 @@ export const apiAccess = defineTranslations({
       "Du hast dieses Recht hier selbst nicht und kannst es deshalb nicht weitergeben.",
     apiAccessRightsNotHeldAnywhere:
       "Du hast dieses Recht auf keiner dieser Ressourcen selbst und kannst es deshalb nicht weitergeben.",
+    apiAccessRightsNotVisible:
+      "Du kannst diese Ressource nicht sehen und deshalb kein Recht darauf geben. Bitte einen Admin darum.",
     apiAccessRightsNotAdministrable:
       "Du darfst Technischen Konten keine Rechte geben. Das kann nur, wer Technische Konten verwaltet und das Recht selbst hat. Bitte so jemanden darum, dieses Recht hinzuzufügen.",
     apiAccessRightsRemove: "Entfernen",
