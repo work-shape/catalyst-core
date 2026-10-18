@@ -313,7 +313,7 @@ export async function applyKnowledgeStoreSchema(
   server: DataStoreServer,
   record: Pick<DataStoreRecord, "location">,
   signal: AbortSignal
-): Promise<DataStoreAppliedMigration[]> {
+): Promise<{ migrations: DataStoreAppliedMigration[]; appliedCount: number }> {
   return server.executor.change(
     {
       ...server.asPlatform(record.location.database),
@@ -337,19 +337,24 @@ export async function applyKnowledgeStoreSchema(
           .parse(await sql.run("select number from catalyst_kb.migrations"))
           .map((row) => row.number)
       );
-      for (const migration of KNOWLEDGE_STORE_MIGRATIONS) {
-        if (applied.has(migration.number)) continue;
+      const pending = KNOWLEDGE_STORE_MIGRATIONS.filter(
+        (migration) => !applied.has(migration.number)
+      );
+      for (const migration of pending) {
         await sql.script(migration.sql);
         await sql.run(
           "insert into catalyst_kb.migrations (number, name) values ($1::pg_catalog.int4, $2::pg_catalog.text)",
           [migration.number, migration.name]
         );
       }
-      return KNOWLEDGE_STORE_MIGRATIONS.map(({ number, name, sql: text }) => ({
-        number,
-        name,
-        sha256: createHash("sha256").update(text).digest("hex")
-      }));
+      return {
+        appliedCount: pending.length,
+        migrations: KNOWLEDGE_STORE_MIGRATIONS.map(({ number, name, sql: text }) => ({
+          number,
+          name,
+          sha256: createHash("sha256").update(text).digest("hex")
+        }))
+      };
     }
   );
 }

@@ -279,6 +279,7 @@ describe("catalyst_kb source migrations", () => {
         "chunks",
         "contents",
         "documents",
+        "field_budgets",
         "index_generations",
         "migrations",
         "source_counts",

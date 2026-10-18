@@ -839,9 +839,9 @@ async function migrateOwnedStore(
       provisioningFailure(error)
     );
   }
-  let applied;
+  let result;
   try {
-    applied = await applyKnowledgeStoreSchema(runtime.server, record, control.signal);
+    result = await applyKnowledgeStoreSchema(runtime.server, record, control.signal);
   } catch (error) {
     const failure = describeDatabaseFailure(error, "Making the tables of the Knowledge Base");
     return failAttempt(runtime, control, job, "data_store.migration_failed", {
@@ -850,6 +850,7 @@ async function migrateOwnedStore(
       message: failure.sentence
     });
   }
+  const { migrations: applied, appliedCount } = result;
   const level = applied.at(-1)?.number ?? 0;
   const done = await writeOutcome(runtime, control, record.id, (current) =>
     Promise.resolve({ ...current, level, migrations: applied })
@@ -860,7 +861,7 @@ async function migrateOwnedStore(
       status: "success",
       subject: done.id,
       correlationId: job.correlationId,
-      metadata: { name: done.name, level, appliedCount: level - record.level }
+      metadata: { name: done.name, level, appliedCount }
     });
   }
 }
