@@ -81,6 +81,9 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
   // dry-evaluates runtime admission without executing a step, calling a model or keeping hits.
   const publishNarrator = createPublishNarrator({
     clientInstanceId,
+    ...(options.config.clientInstance.timeZone === undefined
+      ? {}
+      : { timeZone: options.config.clientInstance.timeZone }),
     stores: options.stores,
     ...(options.configAssets ? { kinds: options.configAssets.kinds } : {}),
     ...(options.guardrails ? { guardrails: options.guardrails } : {}),

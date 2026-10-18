@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { clientInstanceId } from "./support/access-instance";
 import { runSchema, workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
+import { withTestSql } from "./support/test-sql";
 import { required } from "./support/assertions";
 import {
   failingFor,
@@ -149,6 +150,56 @@ describe("Workflow notify steps and grouped failure notices", () => {
     // A later pass / recovered job creates no duplicate for a settled step.
     await worker.runDue();
     expect(await items(t, t.admin.id)).toHaveLength(1);
+  });
+
+  it("keeps a failed draft test out of failure notices, Inbox and mail", async () => {
+    const t = await ready();
+    const manifest = {
+      ...definition("failed-draft-test", []),
+      outputs: {
+        type: "object",
+        required: ["missing"],
+        properties: { missing: { type: "string" } }
+      }
+    };
+    await save(t, manifest);
+    const run = runSchema.parse(
+      (
+        await t.expectOk(t.root.id, "workflows.test", {
+          params: { workflow: manifest.id },
+          payload: { input: {} }
+        })
+      ).json()
+    );
+    const worker = t.worker();
+    expect((await t.finish(run.id, worker)).status).toBe("failed");
+    await worker.runDue();
+    await withTestSql(async (sql) => {
+      expect(
+        await sql`select root_run_id from workflow_failure_notices where root_run_id = ${run.id}`
+      ).toEqual([]);
+      expect(
+        await sql`select id from platform_jobs where kind = 'workflow_run.notify_failure' and subject = ${run.id}`
+      ).toEqual([]);
+      // A job queued by an older worker must also be harmless after this release.
+      await sql`insert into platform_jobs (id, client_instance_id, kind, payload, subject, correlation_id, status, run_after, max_attempts, created_at)
+        select 'legacy-test-notice', client_instance_id, 'workflow_run.notify_failure', jsonb_build_object('rootRunId', id), id, correlation_id, 'queued', now(), 3, now() from workflow_runs where id = ${run.id}`;
+    });
+    await worker.runDue();
+    await withTestSql(async (sql) => {
+      expect(
+        await sql`select root_run_id from workflow_failure_notices where root_run_id = ${run.id}`
+      ).toEqual([]);
+    });
+    expect(await items(t, t.root.id)).toEqual([]);
+    expect(await items(t, t.admin.id)).toEqual([]);
+    expect(
+      await t.instance.stores.noticeMail.dueRecipients({
+        clientInstanceId,
+        now: "2099-01-01T00:00:00.000Z",
+        limit: 100
+      })
+    ).toEqual([]);
   });
 
   it("fails invalid mapped content without echoing it, then notifies the publisher rather than the draft author", async () => {

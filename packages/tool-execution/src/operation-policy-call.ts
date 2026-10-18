@@ -1,5 +1,6 @@
 import {
   POLICY_VALUES,
+  WORKFLOW_ASSET_KIND,
   callConfirmedByCaller,
   type ActorAccess,
   type OperationApproval,
@@ -55,7 +56,7 @@ async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInp
       : [{ workspaceId: call.workspaceId, assetKind: resource?.kind }],
     callerCanConfirm:
       callConfirmedByCaller(call) ||
-      (isAgentAppPublish(context) && context.run?.decision?.mode === "confirmed"),
+      (isAgentPublish(context) && context.run?.decision?.mode === "confirmed"),
     // A step of a run of what is published carries no draft; one of a test run always does.
     publishedRun: call.origin.kind === "workflow" && call.draft === undefined,
     workflowDeleted: call.workflowDeleted === true,
@@ -112,7 +113,7 @@ export async function resolveGuardedPolicy(
 
 /**
  * The person's click precedes an approver's: an unattended CLI call asks in the Inbox;
- * an agent's App publish asks for the audience in its confirmation. Both recheck the
+ * an agent's App or Workflow publish asks for confirmation (and an App's audience). Both recheck the
  * guardrails after that click and wait for an approver where one still asks.
  */
 function confirmsFirst(
@@ -123,12 +124,12 @@ function confirmsFirst(
   return (
     before.next === "await_confirmation" &&
     ((context.call.origin.kind === "cli" && before.deliver === "inbox") ||
-      isAgentAppPublish(context)) &&
+      isAgentPublish(context)) &&
     policy.next === "await_approval"
   );
 }
 
-function isAgentAppPublish(context: OperationPolicyContext): boolean {
+function isAgentPublish(context: OperationPolicyContext): boolean {
   const input = context.call.input;
   return (
     context.call.origin.kind === "agent" &&
@@ -136,7 +137,7 @@ function isAgentAppPublish(context: OperationPolicyContext): boolean {
     typeof input === "object" &&
     input !== null &&
     "kind" in input &&
-    input.kind === "app"
+    (input.kind === "app" || input.kind === WORKFLOW_ASSET_KIND)
   );
 }
 

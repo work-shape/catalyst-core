@@ -6,6 +6,8 @@ import {
   StartDialog,
   StepPanel,
   WorkflowRunPageView,
+  WorkflowsHostProvider,
+  resolveWorkflowRights,
   placedSteps,
   toWorkflow,
   toWorkflowRun,
@@ -13,6 +15,7 @@ import {
   workflowGraph,
   type WorkflowRunRead
 } from "@work-shape/catalyst-chat-ui/workflows";
+import { workflowsContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // What the design review asked of the run page and of a step: a next action on a run that has
@@ -105,6 +108,9 @@ function panel(
     tab?: "what" | "run";
     workflow?: ReturnType<typeof workflowOf>;
     locale?: "en" | "de";
+    /** The label of the Workflow's account, and the reader's instance actions in a host. */
+    account?: string;
+    instanceActions?: readonly string[];
   } = {}
 ): string {
   const workflow = options.workflow ?? workflowOf();
@@ -120,21 +126,37 @@ function panel(
   if (step === undefined || part === undefined) {
     throw new Error(`The Workflow has no step ${stepId}.`);
   }
+  const stepPanel = createElement(StepPanel, {
+    step,
+    ...(options.account === undefined ? {} : { account: options.account }),
+    part,
+    run: {
+      stepRun: held.find((entry) => entry.stepId === stepId),
+      counts: undefined,
+      runDatasets: toWorkflowRun(resource).datasets,
+      now
+    },
+    tab: options.tab ?? "run",
+    onTabChange: noop,
+    entries: null,
+    onClose: noop
+  });
+  const actions = options.instanceActions;
   return render(
-    createElement(StepPanel, {
-      step,
-      part,
-      run: {
-        stepRun: held.find((entry) => entry.stepId === stepId),
-        counts: undefined,
-        runDatasets: toWorkflowRun(resource).datasets,
-        now
-      },
-      tab: options.tab ?? "run",
-      onTabChange: noop,
-      entries: null,
-      onClose: noop
-    }),
+    actions === undefined
+      ? stepPanel
+      : createElement(WorkflowsHostProvider, {
+          value: {
+            rights: resolveWorkflowRights(
+              { ...workflowsContext([]), instanceActions: [...actions] },
+              undefined
+            ),
+            viewerId: "user_1",
+            workspace: undefined,
+            showRoute: noop
+          },
+          children: stepPanel
+        }),
     options.locale
   );
 }
@@ -263,6 +285,50 @@ describe("the panel of a step that failed", () => {
     );
     expect(panel("clients", failed, steps, { locale: "de" })).toContain(
       "Ein Administrator stellt das Konto unter Einstellungen › API-Zugang wieder her oder schaltet es ein, oder du wählst im Workflow ein anderes aktives Konto."
+    );
+  });
+
+  // ACCEPT-2a C7: a refusal names the account and the Connection, and tells an administrator
+  // of technical accounts where to give the right instead of asking an administrator.
+  it("names the account and the Connection of a refused step, and gives an admin the step", () => {
+    const failed = run({ status: "failed", ...ended });
+    const refused = stepRun({
+      id: "sr_clients",
+      stepId: "clients",
+      status: "failed",
+      source: "CRM",
+      error: { code: "FORBIDDEN", message: "x", action: "connection.use" }
+    });
+    const options = { account: "Booking checks" };
+    const admin = { ...options, instanceActions: ["service_principals.manage"] };
+    const member = { ...options, instanceActions: [] };
+    expect(panel("clients", failed, [refused], admin)).toContain(
+      "The workflow may not do this: its account “Booking checks” may not use the Connection “CRM”."
+    );
+    expect(panel("clients", failed, [refused], admin)).toContain(
+      "Under Settings › API access, give the account “Booking checks” the Connection “CRM” to use, then run the workflow again."
+    );
+    expect(panel("clients", failed, [refused], { ...admin, locale: "de" })).toContain(
+      "Der Workflow darf das nicht: Sein Konto „Booking checks“ darf die Verbindung „CRM“ nicht verwenden."
+    );
+    expect(panel("clients", failed, [refused], { ...admin, locale: "de" })).toContain(
+      "Gib dem Konto „Booking checks“ unter Einstellungen › API-Zugang die Verbindung „CRM“ zum Verwenden und starte den Workflow dann erneut."
+    );
+    // Whoever administers no account is still told to ask, and never told to ask by an admin.
+    expect(panel("clients", failed, [refused], member)).toContain(
+      t("workflows.advice.missingRight")
+    );
+    expect(panel("clients", failed, [refused], admin)).not.toContain(
+      t("workflows.advice.missingRight")
+    );
+    // The node of the drawing names the Connection too.
+    const graph = workflowGraph(workflowOf().steps, en, {
+      run: toWorkflowRun(failed),
+      stepRuns: [toWorkflowStepRun(refused)],
+      now
+    });
+    expect(graph.nodes.find((node) => node.id === "clients")?.footer).toBe(
+      "The workflow may not do this: its account may not use the Connection “CRM”."
     );
   });
 

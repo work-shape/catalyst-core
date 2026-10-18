@@ -215,6 +215,7 @@ export function narrator(input: {
   onGuardrailRead?: () => void;
   onModel?: () => void;
   onHit?: () => void;
+  timeZone?: string;
 }) {
   const base = createTestConfig();
   const runner = new GuardrailRunner({
@@ -296,6 +297,7 @@ export function narrator(input: {
       return Promise.resolve(effect ? operationDefinition(operation, effect) : undefined);
     },
     ...(input.policy ? { policy: input.policy } : {}),
+    ...(input.timeZone ? { timeZone: input.timeZone } : {}),
     ...(input.stored === undefined ? { storedData } : { storedData: input.stored })
   });
 }

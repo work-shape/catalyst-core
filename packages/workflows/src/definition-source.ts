@@ -6,7 +6,8 @@ import {
   type ConfigAssetStore,
   type StorePage,
   type WorkflowKind,
-  type WorkflowManifest
+  type WorkflowManifest,
+  type WorkflowTrigger
 } from "@work-shape/catalyst-core";
 import {
   readWorkflowManifest,
@@ -41,9 +42,9 @@ export interface WorkflowDefinitionSource {
     /** Database-backed sources use these readers while a publish holds its transaction. */
     configAssets?: Pick<ConfigAssetStore, "getConfigAsset">
   ): Promise<WorkflowDefinitionRevision | undefined>;
-  /** The published cron texts even when the rest of the definition cannot be run.
+  /** The published schedules and their zones even when another step cannot be run.
    * Database-backed sources keep refused definitions scheduled until repaired or withdrawn. */
-  readScheduleCrons?(id: string): Promise<string[]>;
+  readSchedules?(id: string): Promise<Extract<WorkflowTrigger, { kind: "schedule" }>[]>;
   /** A page of published definitions in byte order of id, after the exclusive id cursor. */
   list(page?: StorePage): Promise<WorkflowDefinitionSummary[]>;
 }

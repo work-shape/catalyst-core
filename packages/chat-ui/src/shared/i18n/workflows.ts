@@ -62,6 +62,12 @@ export const workflows = defineTranslations({
     "workflows.advice.loopEntry": "Open a failed entry to read why, then run the workflow again.",
     "workflows.advice.missingRight":
       "Ask an administrator to give the workflow that right, then run it again.",
+    "workflows.advice.missingRightAdmin":
+      "Under {place}, give the workflow's account this right, then run the workflow again.",
+    "workflows.advice.missingRightAdminAccount":
+      "Under {place}, give the account “{account}” this right, then run the workflow again.",
+    "workflows.advice.connectionUseAdmin":
+      "Under {place}, give the account “{account}” the Connection “{connection}” to use, then run the workflow again.",
     "workflows.advice.needsApproval":
       "Whoever builds the workflow has to change the step, or an administrator the rule that asks for the approval.",
     "workflows.advice.notSupported": "Whoever builds the workflow has to replace the step.",
@@ -111,25 +117,6 @@ export const workflows = defineTranslations({
     "workflows.dataset.writing": "Being written",
     "workflows.description":
       "Work the platform does by itself, step by step: on a schedule or when you start it.",
-    "workflows.draft.ahead": "Draft differs from published",
-    "workflows.draft.aheadBody":
-      "You see the draft here. Runs use the published version until the draft is published.",
-    "workflows.draft.discard": "Discard",
-    "workflows.draft.discardBody":
-      "The draft goes back to the published revision {number}. The discarded revisions are kept.",
-    "workflows.draft.discardFailed": "The draft could not be discarded.",
-    "workflows.draft.discardTitle": "Discard the draft of “{name}”?",
-    "workflows.draft.pending":
-      "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is.",
-    "workflows.draft.publish": "Publish",
-    "workflows.draft.publishBody":
-      "Revision {number} becomes the version that runs, by hand and on its schedule.",
-    "workflows.draft.publishFailed": "The draft could not be published.",
-    "workflows.draft.publishRaises": "Limits this revision raises",
-    "workflows.draft.publishTitle": "Publish “{name}”?",
-    "workflows.draft.unpublished": "Draft · not published",
-    "workflows.draft.unpublishedBody":
-      "This workflow has no published version. It can be started once the draft is published.",
     "workflows.edit.failed": "The conversation could not be started.",
     "workflows.edit.refused": "This workflow is not available to you for editing with the agent.",
     "workflows.edit.withAgent": "Edit with the agent",
@@ -219,6 +206,12 @@ export const workflows = defineTranslations({
     "workflows.reason.missingRight": "The workflow may not do this: it lacks a right.",
     "workflows.reason.missingRightNamed":
       "The workflow may not do this: its account lacks the right “{right}”.",
+    "workflows.reason.missingRightAccount":
+      "The workflow may not do this: its account “{account}” lacks the right “{right}”.",
+    "workflows.reason.connectionUse":
+      "The workflow may not do this: its account may not use the Connection “{connection}”.",
+    "workflows.reason.connectionUseNamed":
+      "The workflow may not do this: its account “{account}” may not use the Connection “{connection}”.",
     "workflows.reason.needsApproval":
       "This step would wait for an approval, which a run cannot do.",
     "workflows.reason.notSupported": "This instance cannot run this kind of step yet.",
@@ -339,6 +332,9 @@ export const workflows = defineTranslations({
     "workflows.schedule.manualOnly": "Started by hand only",
     "workflows.schedule.monthly": "Every month on the {day}, {time}",
     "workflows.schedule.weekly": "Every {weekday}, {time}",
+    "workflows.schedule.yearly": "Every year on {date}, {time}",
+    "workflows.schedule.zone": "{schedule} ({zone})",
+    "workflows.schedule.zoneDefault": "{schedule} (UTC, the default time zone)",
     "workflows.sectionRuns": "Runs",
     "workflows.showMore": "Show more",
     "workflows.start.bodyManual": "It runs once, now.",
@@ -451,6 +447,12 @@ export const workflows = defineTranslations({
       "Öffne einen fehlgeschlagenen Eintrag, um den Grund zu lesen, und starte den Workflow dann erneut.",
     "workflows.advice.missingRight":
       "Bitte einen Administrator, dem Workflow dieses Recht zu geben, und starte ihn dann erneut.",
+    "workflows.advice.missingRightAdmin":
+      "Gib dem Konto des Workflows unter {place} dieses Recht und starte den Workflow dann erneut.",
+    "workflows.advice.missingRightAdminAccount":
+      "Gib dem Konto „{account}“ unter {place} dieses Recht und starte den Workflow dann erneut.",
+    "workflows.advice.connectionUseAdmin":
+      "Gib dem Konto „{account}“ unter {place} die Verbindung „{connection}“ zum Verwenden und starte den Workflow dann erneut.",
     "workflows.advice.needsApproval":
       "Wer den Workflow baut, muss den Schritt ändern, oder ein Administrator die Regel, die die Freigabe verlangt.",
     "workflows.advice.notSupported": "Wer den Workflow baut, muss den Schritt ersetzen.",
@@ -500,25 +502,6 @@ export const workflows = defineTranslations({
     "workflows.dataset.writing": "Wird geschrieben",
     "workflows.description":
       "Arbeit, die die Plattform selbst erledigt, Schritt für Schritt: nach Zeitplan oder wenn du sie startest.",
-    "workflows.draft.ahead": "Entwurf weicht von der veröffentlichten Version ab",
-    "workflows.draft.aheadBody":
-      "Du siehst hier den Entwurf. Läufe nutzen die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
-    "workflows.draft.discard": "Verwerfen",
-    "workflows.draft.discardBody":
-      "Der Entwurf geht auf die veröffentlichte Revision {number} zurück. Die verworfenen Revisionen bleiben erhalten.",
-    "workflows.draft.discardFailed": "Der Entwurf konnte nicht verworfen werden.",
-    "workflows.draft.discardTitle": "Entwurf von „{name}“ verwerfen?",
-    "workflows.draft.pending":
-      "Zur Freigabe gesendet. Ein Instanz-Admin entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
-    "workflows.draft.publish": "Veröffentlichen",
-    "workflows.draft.publishBody":
-      "Revision {number} wird die Version, die läuft, von Hand und nach ihrem Zeitplan.",
-    "workflows.draft.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
-    "workflows.draft.publishRaises": "Grenzen, die diese Revision anhebt",
-    "workflows.draft.publishTitle": "„{name}“ veröffentlichen?",
-    "workflows.draft.unpublished": "Entwurf · nicht veröffentlicht",
-    "workflows.draft.unpublishedBody":
-      "Dieser Workflow hat keine veröffentlichte Version. Er kann gestartet werden, sobald der Entwurf veröffentlicht ist.",
     "workflows.edit.failed": "Die Unterhaltung konnte nicht gestartet werden.",
     "workflows.edit.refused":
       "Dieser Workflow steht dir für die Bearbeitung mit dem Agenten nicht zur Verfügung.",
@@ -612,6 +595,12 @@ export const workflows = defineTranslations({
     "workflows.reason.missingRight": "Der Workflow darf das nicht: Ihm fehlt ein Recht.",
     "workflows.reason.missingRightNamed":
       "Der Workflow darf das nicht: Seinem Konto fehlt das Recht „{right}“.",
+    "workflows.reason.missingRightAccount":
+      "Der Workflow darf das nicht: Seinem Konto „{account}“ fehlt das Recht „{right}“.",
+    "workflows.reason.connectionUse":
+      "Der Workflow darf das nicht: Sein Konto darf die Verbindung „{connection}“ nicht verwenden.",
+    "workflows.reason.connectionUseNamed":
+      "Der Workflow darf das nicht: Sein Konto „{account}“ darf die Verbindung „{connection}“ nicht verwenden.",
     "workflows.reason.needsApproval":
       "Dieser Schritt würde auf eine Freigabe warten, und das kann ein Lauf nicht.",
     "workflows.reason.notSupported":
@@ -736,6 +725,9 @@ export const workflows = defineTranslations({
     "workflows.schedule.manualOnly": "Startet nur von Hand",
     "workflows.schedule.monthly": "Jeden Monat am {day}, {time}",
     "workflows.schedule.weekly": "Jeden {weekday}, {time}",
+    "workflows.schedule.yearly": "Jedes Jahr am {date}, {time}",
+    "workflows.schedule.zone": "{schedule} ({zone})",
+    "workflows.schedule.zoneDefault": "{schedule} (UTC, die Standardzeitzone)",
     "workflows.sectionRuns": "Läufe",
     "workflows.showMore": "Mehr anzeigen",
     "workflows.start.bodyManual": "Er läuft einmal, jetzt.",

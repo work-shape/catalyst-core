@@ -169,6 +169,22 @@ describe("a definition with a schedule trigger", () => {
     });
   });
 
+  it("keeps an explicit IANA schedule zone and refuses invalid zones", () => {
+    const parsed = parseWorkflowManifest(scheduled([{ ...hourly, timeZone: "Europe/Berlin" }]));
+    expect(parsed).toMatchObject({
+      ok: true,
+      manifest: {
+        steps: expect.arrayContaining([
+          expect.objectContaining({
+            triggers: [expect.objectContaining({ timeZone: "Europe/Berlin" })]
+          })
+        ])
+      }
+    });
+    for (const timeZone of ["Germany", "", "Europe/Berlin\u0000", "x".repeat(101)])
+      expect(parseWorkflowManifest(scheduled([{ ...hourly, timeZone }])).ok).toBe(false);
+  });
+
   it("is refused for a cron expression that is none and for what a schedule does not do yet", () => {
     expect(refused([{ kind: "schedule", cron: "every hour" }])).toEqual([
       ["", "steps.start.triggers"]

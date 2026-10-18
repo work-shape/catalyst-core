@@ -35089,6 +35089,12 @@
               },
               "name": {
                 "type": "string"
+              },
+              "timeZone": {
+                "type": "string"
+              },
+              "timeZoneDefaulted": {
+                "type": "boolean"
               }
             },
             "required": [

@@ -22,7 +22,7 @@ export function platformContext(
   assetActions: string[] = []
 ): PlatformContext {
   return {
-    instance: { id: "client", name: "Catalyst" },
+    instance: { id: "client", name: "Catalyst", timeZone: "UTC", timeZoneDefaulted: true },
     release: { version: "1.4.0" },
     kinds: [
       {

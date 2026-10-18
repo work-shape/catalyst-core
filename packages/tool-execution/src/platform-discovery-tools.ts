@@ -33,12 +33,12 @@ export const PLATFORM_ASSET_LIST_MAX = 50;
 export interface PlatformContextRead {
   /** The person the agent acts for; use this id for a request to notify "me". */
   caller?: { id: string; displayLabel: string; email?: string };
-  /** Active shared technical accounts the caller may see. Never invented defaults. */
+  /** Active shared accounts without API keys whose rights the caller may publish. Never invented defaults. */
   workflowPrincipals?: { name: string; displayLabel: string }[];
   /** Name/email matches within the caller's directory rights, or just the caller. */
   people?: { id: string; displayLabel: string; email?: string }[];
   peopleTruncated?: boolean;
-  instance: { name: string };
+  instance: { name: string; timeZone?: string; timeZoneDefaulted?: boolean };
   /** The modules that are on. */
   modules: string[];
   /** The kinds of asset that exist here: those of a module that is off are not among them. */
@@ -109,7 +109,11 @@ const contextOutputSchema = z.object({
     .array(z.object({ id: z.string(), displayLabel: z.string(), email: z.string().optional() }))
     .optional(),
   peopleTruncated: z.boolean().optional(),
-  instance: z.object({ name: z.string() }),
+  instance: z.object({
+    name: z.string(),
+    timeZone: z.string().optional(),
+    timeZoneDefaulted: z.boolean().optional()
+  }),
   modules: z.array(z.string()),
   kinds: z.array(z.object({ kind: z.string(), plural: z.string(), hasDraft: z.boolean() })),
   actions: z.array(z.string()),
@@ -164,7 +168,7 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
         "Read what this instance can do and what the user may do on it: the modules that are on, the kinds of asset that exist (agent, skill, workflow, app, data_store, knowledge_base, connection, as far as they are on), and the user's rights.",
         "'actions' are rights on every asset of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'namespaces' are rights on the assets whose names start with a prefix.",
         "Call it before you say whether something can be built here or whether the user may change it.",
-        "For a new Workflow, choose runAs only from workflowPrincipals: these are active accounts this user may see. If empty, explain that an administrator sets up an account under Settings > API access; never guess a principal name. caller identifies the person you act for: use caller.id to notify 'me', without asking them for an id. Give person to resolve a recipient by name or email within this user's directory rights. An empty result means no known match; ask for a clearer name, never an internal id. If several match, ask which person by name/email."
+        "For a new Workflow, choose runAs only from workflowPrincipals: these are Workflow accounts this user may publish, never integration or release accounts. If exactly one is offered, use it without asking. If empty, explain that a Workflow account without an API key is created under Settings > API access; never guess a principal name. Schedules use instance.timeZone; if timeZoneDefaulted, say that UTC is the instance default. Store the intended IANA timeZone on each schedule trigger; never shift the wall clock into UTC yourself. caller identifies the person you act for: use caller.id to notify 'me', without asking them for an id. Give person to resolve a recipient by name or email within this user's directory rights. An empty result means no known match; ask for a clearer name, never an internal id. If several match, ask which person by name/email."
       ].join(" "),
       inputSchema: z.object({
         person: searchText(200)

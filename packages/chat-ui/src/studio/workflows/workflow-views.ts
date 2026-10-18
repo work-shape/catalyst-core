@@ -94,8 +94,11 @@ export interface WorkflowStepView {
   sourceKind?: "connection" | "data_store";
   /** On an operation step of a Connection: the Connection's `service`, which names its icon. */
   service?: string;
-  /** On a trigger: what may start a run, and the cron expression of its schedule. */
-  starts?: { byHand: boolean; onSchedule: boolean; cron?: string };
+  /**
+   * On a trigger: what may start a run, the cron expression of its schedule, and the zone its
+   * clock time is in, where the schedule names one. Without one it runs in the instance's.
+   */
+  starts?: { byHand: boolean; onSchedule: boolean; cron?: string; timeZone?: string };
   /** On a loop: how many entries run at once, where the definition says more than one. */
   concurrency?: number;
   /** On a `workflow` step: the id of the Workflow it starts. */

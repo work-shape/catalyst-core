@@ -50,7 +50,7 @@ const STEP_REFERENCE: {
     does: "Starts the run. It is always the first step, and a definition has exactly one. Its output is { input, startedAt, trigger, scheduledFor }, where `input` is the run's input, checked against the definition's `inputs`.",
     fields: {
       triggers:
-        'A nonempty list of { kind: manual } (a person or a call starts it), { kind: schedule, cron: "<five fields>" } (a due time in the instance time zone), or { kind: parent } (a workflow step starts it). With parent alone, only another Workflow starts it. Values of missed and overlap other than last and skip are not run yet.'
+        'A nonempty list of { kind: manual } (a person or a call starts it), { kind: schedule, cron: "<five fields>", timeZone: "<IANA zone>" } (a wall-clock time in that zone), or { kind: parent } (a workflow step starts it). With parent alone, only another Workflow starts it. Values of missed and overlap other than last and skip are not run yet.'
     }
   },
   operation: {
@@ -367,6 +367,10 @@ function content(packages: readonly WorkflowRunnerPackage[]): string {
 Read this before you change the definition of a Workflow. It says what a definition holds, what
 the engine of this release runs, and how to save a change safely.
 
+When the person asks to publish, use assets.publish if it is available: it offers the person the publish confirmation and cannot publish without their click. Do not say you cannot publish when that tool is offered. Speak in the person's language: say schedule and draft, not Cron or Draft Revision numbers.
+
+For a schedule, read platform.context instance.timeZone. Write the wall-clock hour the person asks for together with timeZone on the schedule trigger. Use an explicit IANA zone the person names (German time means Europe/Berlin), otherwise the instance zone. When instance.timeZoneDefaulted is true and no other zone was requested, explain that the default is UTC. Never subtract a UTC offset from the hour yourself.
+
 Whether the work is a Workflow at all, or an App or a View: \`references/apps/app-or-workflow.md\`
 in \`platform-docs\`.
 
@@ -427,7 +431,7 @@ ${RULES_REVISION_STEPS.replace(/^/gmu, "  ")}
   the config. Never change it.
 - \`name\`: what a person calls the Workflow. \`description\`: one or two plain sentences, optional.
 - \`runAs\`: the name of the service principal every step acts as. Its rights decide what a step
-  may call. For a new Workflow, call platform.context and choose a name from workflowPrincipals, never an invented name or the placeholder in these examples. If none is offered, explain that an administrator sets up an account under Settings > API access. Do not change it unless the person asks: a publish checks whether its publisher
+  may call. For a new Workflow, call platform.context and choose a name from workflowPrincipals, never an invented name or the placeholder in these examples. If exactly one is offered, use it without asking. If none is offered, explain that a Workflow account without an API key is created under Settings > API access. Never use an integration, CLI or release account. Do not change it unless the person asks: a publish checks whether its publisher
   may let a Workflow act as that principal.
 - \`kind\`: \`process\` unless set. Use \`data\` for a Workflow that fills or processes a Knowledge Base or Data Store. Publishing Knowledge Base \`ingest\`, \`withdraw\`, \`put_processed\` or Data Store \`records.propose\` from a process Workflow is refused with \`process_workflow_write_operation\`. A copied data template keeps \`kind: data\`.
 - \`labels\`: optional mapping of names to text or numbers, as literals such as

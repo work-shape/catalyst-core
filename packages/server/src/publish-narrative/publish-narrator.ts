@@ -96,6 +96,8 @@ export interface PublishNarratorOptions {
   policy?: RunOperationDeps["policy"];
   /** Who sees which stored data (DS-13b). Absent where the stored-data module is off. */
   storedData?: PublishNarrativeStoredData;
+  /** The instance's time zone, for a schedule that names none. Absent: UTC, said as the default. */
+  timeZone?: string;
 }
 
 export interface PublishNarrateInput {
@@ -368,7 +370,12 @@ async function workflowSentence(
     input.config && kind?.readRunsAs ? await kind.readRunsAs(input.config) : facts.runAs;
   return {
     title: oneLine(facts.title),
-    triggers: facts.triggers,
+    // A schedule without a zone of its own runs in the instance's (spec events :203).
+    triggers: facts.triggers.map((trigger) =>
+      trigger.kind === "schedule" && trigger.timeZone === undefined && options.timeZone
+        ? { ...trigger, timeZone: options.timeZone }
+        : trigger
+    ),
     ...(account === undefined ? {} : { account: oneLine(account) }),
     reads: once(reads),
     // A store that a step may change is said once, as changed, and not also as added to.

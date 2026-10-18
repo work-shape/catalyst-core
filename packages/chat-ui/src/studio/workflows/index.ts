@@ -27,6 +27,7 @@ export {
   draftState,
   editOffered,
   failureHappened,
+  instanceTimeZoneOf,
   listedToReader,
   resolveWorkflowRights,
   startOffered,
