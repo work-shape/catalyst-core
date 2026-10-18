@@ -4,6 +4,8 @@ import type {
   JsonObject,
   JsonValue,
   OperationBeforeEvent,
+  OperationAuthorization,
+  OperationAuthorizeContext,
   OperationEffect,
   PolicyValue,
   ToolExecutionErrorCode,
@@ -31,6 +33,14 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> extends Too
   outputSchema?: z.ZodType<TOutput>;
   inputJsonSchema?: JsonObject;
   permission?: ToolPermissionPolicy;
+  /**
+   * Checks the exact parsed call before policy, guardrails and confirmation. May run again
+   * when a held call resumes or for a bound principal; it must have no side effects.
+   */
+  authorize?(
+    input: TInput,
+    context: OperationAuthorizeContext
+  ): OperationAuthorization | Promise<OperationAuthorization>;
   /**
    * A policy value no call from one conversation is looser than, whatever the tool's own mode
    * says: a tool that stands for another operation answers here what that operation's policy

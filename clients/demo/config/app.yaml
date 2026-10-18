@@ -3,6 +3,7 @@ clientInstance:
   id: demo-local
   displayName: Workshape Catalyst Demo
   environment: development
+  timeZone: Europe/Berlin
 auth:
   standalone:
     enabled: true

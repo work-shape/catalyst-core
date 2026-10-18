@@ -127,7 +127,17 @@ export type ModelEmbeddingPurpose = (typeof MODEL_EMBEDDING_PURPOSES)[number];
 
 /** What a model call that no agent run made was for. */
 export type ModelSystemPurpose =
-  "conversation_title" | "guardrail_judge" | "document_extraction" | ModelEmbeddingPurpose;
+  | "conversation_title"
+  | "guardrail_judge"
+  | "document_extraction"
+  | "knowledge_field_extraction"
+  | ModelEmbeddingPurpose;
+
+/** Knowledge Base ingestion records usage but consumes no chat safeguard or spend budget. */
+export const KNOWLEDGE_INGESTION_PURPOSES = [
+  "knowledge_embedding",
+  "knowledge_field_extraction"
+] as const satisfies readonly ModelSystemPurpose[];
 
 /** A model call an agent run made. */
 export interface AgentRunModelAttribution {
@@ -246,7 +256,8 @@ export interface ModelUsagePeriodLimits {
 }
 
 /**
- * What a call is held against. Every call counts on the instance. A call a person made counts
+ * What a chat call is held against. Knowledge Base ingestion is outside these limits.
+ * Every chat call counts on the instance. A call a person made counts
  * on that person (`user`); a call the product made for a person, such as a title or a guardrail
  * check, counts on that person's `system` bucket; a call no person made counts on the shared
  * `system` bucket. The query of a Knowledge Base search is the person's own, as chat is.
@@ -366,7 +377,7 @@ export interface ModelUsageEventStore {
   /**
    * Writes the event of a call nobody admitted, such as usage a tool reports, and adds it to
    * the counters of its day and month and to the sums of its day. Without `counted` the
-   * counters take its tokens and its settled cost.
+   * counters take its tokens and its settled cost. Ingestion updates sums but no chat counters.
    */
   appendModelUsageEvent(
     input: ModelUsageEventRecordInput,
@@ -378,7 +389,8 @@ export interface ModelUsageEventStore {
    * limit still holds afterwards, and writes the event as `pending` with it. Otherwise it
    * changes nothing and names the limit. The day and the month are those of the database
    * clock. It reads no usage event, except once per period and scope to start a counter that
-   * does not exist yet from the events the period already has.
+   * does not exist yet from the events the period already has. Knowledge Base ingestion writes
+   * its event without checking or reserving chat counters.
    */
   admitModelUsageEvent(input: {
     event: ModelUsageEventRecordInput;
@@ -409,6 +421,12 @@ export interface ModelUsageEventStore {
   summarizeModelUsageHistory(input: {
     clientInstanceId: ClientInstanceId;
   }): Promise<ModelUsageHistory>;
+  /** Settled spend for chat budgets, excluding Knowledge Base ingestion, from daily rollups. */
+  summarizeModelUsageBudget(input: {
+    clientInstanceId: ClientInstanceId;
+    todayStart: ISODateString;
+    currentMonthStart: ISODateString;
+  }): Promise<{ dailySpentMicros: number; monthlySpentMicros: number }>;
   /** The sums of the days from `from` on. Reads no usage event. */
   summarizeRecentModelUsage(input: {
     clientInstanceId: ClientInstanceId;

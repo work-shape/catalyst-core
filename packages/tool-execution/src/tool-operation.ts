@@ -149,7 +149,7 @@ export function toolOperation(
       : {}),
     ...(tool.heldInputKeys ? { heldInputKeys: tool.heldInputKeys } : {}),
     action: null,
-    authorize(_input, context) {
+    async authorize(input, context) {
       for (const permissionRef of requiredPermissionRefs) {
         const action = `${PERMISSION_REF_ACTION_PREFIX}${permissionRef}`;
         const decision = context.access.authorize(action);
@@ -157,7 +157,7 @@ export function toolOperation(
           return { allowed: false, action, reason: decision.reason };
         }
       }
-      return { allowed: true };
+      return tool.authorize ? tool.authorize(input, context) : { allowed: true };
     },
     scope: null,
     auth: "user",

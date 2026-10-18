@@ -123,8 +123,8 @@ export function publishApproval(
  * The refusal of a publish that is no person's click, for a kind whose publish an approver's
  * click makes live: a revision of it goes live only on the interface's Publish, the answer to
  * the CLI's question, or the person's Allow of an unattended CLI publish in their Inbox (see
- * `publishPolicyFloor`). An agent's App publish pauses for that person's audience choice and
- * confirmation. Other agent publishes and MCP publishes are refused. Nothing for a person's own call.
+ * `publishPolicyFloor`). An agent's App or Workflow publish pauses for that person's confirmation
+ * (and an App's audience choice). Other agent publishes and MCP publishes are refused. Nothing for a person's own call.
  */
 export function publishFromAPerson(
   target: AssetTarget,
@@ -135,7 +135,8 @@ export function publishFromAPerson(
     approve === undefined ||
     origin.kind === "user" ||
     origin.kind === "cli" ||
-    (target.kind.kind === "app" && origin.kind === "agent")
+    (origin.kind === "agent" &&
+      (target.kind.kind === "app" || target.kind.kind === WORKFLOW_ASSET_KIND))
   )
     return undefined;
   return {

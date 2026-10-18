@@ -84,7 +84,7 @@ export function createRunEnd(options: {
         }
       });
     }
-    if (!run.parentRunId) {
+    if (!run.parentRunId && run.mode !== "test") {
       await tx.jobs.enqueue(
         workflowFailureNoticeJob,
         { rootRunId: run.id },

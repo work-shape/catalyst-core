@@ -13,7 +13,7 @@ import {
 import { useTranslation } from "../../shared/i18n";
 import { FailureBanner } from "./failure-banner";
 import { useLoopEntries, type LoopEntriesRead } from "./workflow-data";
-import { failureHappened } from "./workflow-model";
+import { failureHappened, stepConnection } from "./workflow-model";
 import type {
   WorkflowLoopCounts,
   WorkflowStepRunView,
@@ -229,7 +229,7 @@ function LoopEntryRow({
       ? undefined
       : [
           failedAt === undefined ? undefined : t("workflows.run.atStep", { step: failedAt }),
-          failureHappened(failure, t)
+          failureHappened(failure, t, { connection: stepConnection(failedStep, entry.failed) })
         ]
           .filter((part) => part !== undefined)
           .join(" · ");
@@ -262,7 +262,7 @@ function LoopEntryRow({
       data-child-run={failedChild?.stepRun.childRunId}
     >
       {failure === undefined || failedChild !== undefined ? null : (
-        <FailureBanner failure={failure} />
+        <FailureBanner failure={failure} connection={stepConnection(failedStep, entry.failed)} />
       )}
     </ListRow>
   );

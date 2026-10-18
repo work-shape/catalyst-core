@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createChatServerJobs, generateConversationTitleJob } from "@work-shape/catalyst-server";
 import { createJobWorker } from "@work-shape/catalyst-client-assembly";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
+  ATTACHED_FILE_TITLES,
   asClientInstanceId,
   asConversationId,
   asUserId,
@@ -360,9 +362,22 @@ describe("the title job and a rename by the user", () => {
     // ACCEPT-1c C8: a German conversation started with files was called "2 attached files".
     const titleOf = async (title: string, files: string[]) =>
       (await titledConversation(undefined, undefined, undefined, "de", { title, files })).title;
-    expect(await titleOf("2 angehängte Dateien", ["a.pdf", "b.pdf"])).toBe("Release Notes Summary");
-    expect(await titleOf("Angehängte Datei", ["a.pdf"])).toBe("Release Notes Summary");
-    expect(await titleOf("2 attached files", ["a.pdf", "b.pdf"])).toBe("Release Notes Summary");
+    // The titles come from the chat's dictionary, so a server that drifts from it fails here.
+    for (const locale of ["en", "de"] as const) {
+      const { t } = createTranslationContext(locale);
+      expect(await titleOf(t("conversationAttachedFile"), ["a.pdf"])).toBe("Release Notes Summary");
+      const many = t("conversationAttachedFiles", { count: "3" });
+      expect(await titleOf(many, ["a.pdf", "b.pdf", "c.pdf"])).toBe("Release Notes Summary");
+    }
+    // A server that keeps titles of its own fails once the shared titles change.
+    const shared = { ...ATTACHED_FILE_TITLES.de };
+    try {
+      ATTACHED_FILE_TITLES.de = { one: "Fixture eine Datei", many: "{count} Fixture Dateien" };
+      expect(await titleOf("Fixture eine Datei", ["a.pdf"])).toBe("Release Notes Summary");
+      expect(await titleOf("2 Fixture Dateien", ["a.pdf", "b.pdf"])).toBe("Release Notes Summary");
+    } finally {
+      ATTACHED_FILE_TITLES.de = shared;
+    }
     expect(await titleOf("Meine Belege", ["a.pdf", "b.pdf"])).toBe("Meine Belege");
   });
 

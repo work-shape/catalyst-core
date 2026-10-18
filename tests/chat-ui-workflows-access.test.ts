@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   areaOfRoute,
+  instanceTimeZoneOf,
   railSections,
   resolveWorkflowRights,
   shownRailSections,
@@ -126,6 +127,19 @@ describe("what a reader holds on Workflows, by owner", () => {
       instance: { ...none, read: true },
       workspace: { id: "cw_open", rights: { ...none, read: true, write: true } }
     });
+  });
+
+  // ACCEPT-FIX-6: an older server names no zone; a schedule then names none rather than a guess.
+  it("reads the instance's zone where the instance names one, and nothing from an older server", () => {
+    const current = workflowsContext([]);
+    expect(instanceTimeZoneOf(current)).toEqual({ timeZone: "UTC", defaulted: true });
+    const { id, name } = current.instance;
+    expect(instanceTimeZoneOf({ instance: { id, name } })).toBeUndefined();
+    expect(instanceTimeZoneOf({ instance: { id, name, timeZone: "Europe/Berlin" } })).toEqual({
+      timeZone: "Europe/Berlin",
+      defaulted: false
+    });
+    expect(instanceTimeZoneOf(undefined)).toBeUndefined();
   });
 
   it("holds nothing before the instance has answered", () => {

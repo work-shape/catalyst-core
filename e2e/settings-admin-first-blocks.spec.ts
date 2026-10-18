@@ -208,7 +208,9 @@ test("Usage opens with the month's cost of its budget and the tokens under it, a
         spendBudget: {
           ...usage.spendBudget,
           currency: "EUR",
-          monthlyLimitMicros: monthlyLimit * 1_000_000
+          monthlyLimitMicros: monthlyLimit * 1_000_000,
+          // The budget counts the same planted spend; unknown keeps the budget's spend unknown too.
+          monthlySpentMicros: month === "unknown" ? undefined : spentBy[month] * 1_000_000
         },
         currentMonth: {
           ...usage.currentMonth,

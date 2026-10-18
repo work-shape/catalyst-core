@@ -7,7 +7,8 @@ import {
   type ClientInstanceId,
   type PlatformStores,
   type RegisteredJobHandler,
-  type WorkflowManifest
+  type WorkflowManifest,
+  type WorkflowTrigger
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { createScheduleRepair } from "./schedule-repair";
@@ -37,17 +38,24 @@ export const workflowScheduleJobKind = defineJobKind({
   concurrency: {}
 });
 
-/** The cron expressions of the `schedule` triggers of a definition. None where it has none. */
-function scheduleTexts(manifest: Pick<WorkflowManifest, "steps">): string[] {
+/** The schedules a definition declares, each with its wall-clock time zone. */
+type Schedule = Extract<WorkflowTrigger, { kind: "schedule" }>;
+
+function schedulesOf(manifest: Pick<WorkflowManifest, "steps">): Schedule[] {
   const [trigger] = manifest.steps;
   if (trigger?.type !== "trigger") return [];
   return trigger.triggers.flatMap((candidate) =>
-    candidate.kind === "schedule" ? [candidate.cron] : []
+    candidate.kind === "schedule" ? [candidate] : []
   );
 }
 
-const parsedCrons = (texts: readonly string[]): CronExpression[] =>
-  texts.flatMap((text) => parseCron(text) ?? []);
+const parsedCrons = (schedules: readonly Schedule[]): CronExpression[] =>
+  schedules.flatMap((schedule) => {
+    const cron = parseCron(schedule.cron);
+    return cron && (schedule.timeZone === undefined || isTimeZone(schedule.timeZone))
+      ? [{ ...cron, ...(schedule.timeZone === undefined ? {} : { timeZone: schedule.timeZone }) }]
+      : [];
+  });
 
 const refusalReason = (error: AppError): string => {
   const parsed = z.object({ reason: z.string() }).safeParse(error.details);
@@ -105,7 +113,7 @@ export async function replaceScheduleJob(
 ): Promise<Date | undefined> {
   const { clientInstanceId, workflow, timeZone, now } = input;
   const dueOf = (manifest: Pick<WorkflowManifest, "steps"> | undefined) =>
-    manifest ? nextDueAfter(parsedCrons(scheduleTexts(manifest)), now, timeZone) : undefined;
+    manifest ? nextDueAfter(parsedCrons(schedulesOf(manifest)), now, timeZone) : undefined;
   const before = dueOf(input.previous);
   const next = dueOf(input.published);
   if (before && before.getTime() !== next?.getTime()) {
@@ -186,10 +194,10 @@ export function createScheduleTrigger(options: ScheduleTriggerOptions): Schedule
     queueScheduleJob(tx, clientInstanceId, workflow, due);
 
   async function cadence(workflow: string, result: Awaited<ReturnType<typeof published>>) {
-    if (result.revision) return scheduleTexts(result.revision.manifest);
+    if (result.revision) return schedulesOf(result.revision.manifest);
     // A refused definition is still published. Its trigger is read independently so
     // validation of another step cannot terminate the schedule. Missing assets end it.
-    return result.refused ? ((await definitions.readScheduleCrons?.(workflow)) ?? []) : [];
+    return result.refused ? ((await definitions.readSchedules?.(workflow)) ?? []) : [];
   }
 
   const handler = defineJobHandler({
@@ -198,8 +206,8 @@ export function createScheduleTrigger(options: ScheduleTriggerOptions): Schedule
     async run(job, control) {
       const { workflow, dueAt } = job.payload;
       const result = await published(workflow);
-      const texts = await cadence(workflow, result);
-      const crons = parsedCrons(texts);
+      const schedules = await cadence(workflow, result);
+      const crons = parsedCrons(schedules);
       // Only a missing Workflow or a removed schedule ends the line of jobs.
       if (crons.length === 0) return;
       const moment = firedAt(dueAt);
@@ -244,8 +252,8 @@ export function createScheduleTrigger(options: ScheduleTriggerOptions): Schedule
     async onExhausted(job, tx) {
       const { workflow, dueAt } = job.payload;
       const result = await published(workflow);
-      const texts = await cadence(workflow, result);
-      const crons = parsedCrons(texts);
+      const schedules = await cadence(workflow, result);
+      const crons = parsedCrons(schedules);
       const next = nextDueAfter(crons, firedAt(dueAt), timeZone);
       if (next) await queue(tx, workflow, next);
     }
@@ -265,8 +273,8 @@ export function createScheduleTrigger(options: ScheduleTriggerOptions): Schedule
     workflow: string
   ): Promise<{ workflow: string; dueAt: string } | undefined> {
     const result = await published(workflow);
-    const texts = await cadence(workflow, result);
-    const next = nextDueAfter(parsedCrons(texts), now(), timeZone);
+    const schedules = await cadence(workflow, result);
+    const next = nextDueAfter(parsedCrons(schedules), now(), timeZone);
     if (!next) return undefined;
     await queue(stores, workflow, next);
     return { workflow, dueAt: next.toISOString() };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationThreadSnapshot, RunObservation } from "@work-shape/catalyst-api-client";
+import { agentRunErrorSchema, runObservationSchema } from "@work-shape/catalyst-api-contract";
 import {
   toUiMessages,
   applyRunObservationToControllerState,
@@ -121,6 +122,136 @@ describe("chat UI conversation controller", () => {
         const admin = terminalRunNotice(state.error, de, { seesRateCard: true });
         expect(admin).toContain("Einstellungen › Nutzung");
       }
+    });
+
+    describe("a reached usage limit that the run names", () => {
+      const advice = {
+        en: "Your answer so far is kept. Ask an administrator of this instance to check the usage limits.",
+        de: "Was bisher geantwortet wurde, bleibt erhalten. Bitte einen Administrator dieser Instanz, die Nutzungsgrenzen zu prüfen."
+      };
+      const generic = {
+        en: `A usage limit stopped this reply. ${advice.en}`,
+        de: `Eine Nutzungsgrenze hat diese Antwort gestoppt. ${advice.de}`
+      };
+      const periods = {
+        day: { en: ["daily", "at midnight UTC"], de: ["tägliche", "um Mitternacht UTC"] },
+        month: {
+          en: ["monthly", "at the start of next month (UTC)"],
+          de: ["monatliche", "zu Beginn des nächsten Monats (UTC)"]
+        }
+      } as const;
+      const metrics = {
+        modelCallCount: { en: "model calls", de: "Modellaufrufe" },
+        tokens: { en: "tokens", de: "Tokens" },
+        costMicros: { en: "spending", de: "Ausgaben" }
+      } as const;
+      const scopes = {
+        user: { en: "your own calls", de: "deine eigenen Aufrufe" },
+        system: { en: "the calls the product makes", de: "die Aufrufe des Produkts" },
+        instance: {
+          en: "the calls of everyone on this instance",
+          de: "die Aufrufe aller auf dieser Instanz"
+        }
+      } as const;
+      const serverText = "Daily model token safeguard has been reached <b>raw</b>";
+
+      /** The notices of a refusal as the API delivers it, live and after a reload. */
+      function refusalNotices(usageLimit: unknown) {
+        const raw = {
+          code: "MODEL_USAGE_LIMIT_REACHED",
+          message: serverText,
+          category: "app_error",
+          usageLimit
+        };
+        const observation = runObservationSchema.parse(
+          createObservation({ sequence: 2, type: "run_failed", payload: { error: raw } })
+        );
+        const live = applyRunObservationToControllerState(
+          createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),
+          observation
+        ).state;
+        const reloaded = createControllerStateFromSnapshot(
+          createSnapshot({
+            lastSequence: 2,
+            text: "",
+            runStatus: "failed",
+            error: agentRunErrorSchema.parse(raw)
+          })
+        );
+        return [live, reloaded].map((state) => ({
+          member: notices(state),
+          operator: {
+            en: terminalRunNotice(state.error, en, { seesRateCard: true }),
+            de: terminalRunNotice(state.error, de, { seesRateCard: true })
+          }
+        }));
+      }
+
+      it("says which limit, whose calls and when it resets, for every limit in both languages", () => {
+        for (const period of ["day", "month"] as const) {
+          for (const metric of ["modelCallCount", "tokens", "costMicros"] as const) {
+            for (const scope of ["user", "system", "instance"] as const) {
+              const [p, m, s] = [periods[period], metrics[metric], scopes[scope]];
+              const named = {
+                en: `The ${p.en[0]} limit on ${m.en} stopped this reply. It counts ${s.en} and resets ${p.en[1]}.`,
+                de: `Die ${p.de[0]} Grenze für ${m.de} hat diese Antwort gestoppt. Sie zählt ${s.de} und wird ${p.de[1]} zurückgesetzt.`
+              };
+              for (const { member, operator } of refusalNotices({ period, metric, scope })) {
+                expect(member).toEqual({
+                  en: `${named.en} ${advice.en}`,
+                  de: `${named.de} ${advice.de}`
+                });
+                expect(operator.en).toBe(
+                  `${named.en} Your answer so far is kept. Settings › Usage shows the usage limits and what has been used. Ask the instance operator to review the limits they set.`
+                );
+                expect(operator.de).toContain(`${named.de} Was bisher geantwortet wurde`);
+                expect(operator.de).toContain("Einstellungen › Nutzung");
+              }
+            }
+          }
+        }
+      });
+
+      it("says only that a limit was reached when the details are missing, old or hostile", () => {
+        const unreadable: unknown[] = [
+          undefined,
+          null,
+          "day",
+          42,
+          [],
+          ["day", "tokens", "user"],
+          {},
+          { period: "day", metric: "tokens" },
+          { period: "week", metric: "tokens", scope: "user" },
+          { period: "day", metric: "dollars", scope: "user" },
+          { period: "day", metric: "tokens", scope: "everyone" },
+          { period: "DAY", metric: "TOKENS", scope: "USER" },
+          { period: "__proto__", metric: "constructor", scope: "toString" },
+          { period: "day", metric: "tokens", scope: null },
+          { period: ["day"], metric: "tokens", scope: "user" },
+          { period: "day", metric: { toString: "tokens" }, scope: "user" },
+          { period: "<script>alert(1)</script>", metric: "tokens", scope: "user" }
+        ];
+        for (const usageLimit of unreadable) {
+          for (const { member } of refusalNotices(usageLimit)) expect(member).toEqual(generic);
+        }
+      });
+
+      it("drops what the contract does not know and never shows the server's words", () => {
+        const padded = {
+          period: "month",
+          metric: "costMicros",
+          scope: "instance",
+          used: 987654321,
+          message: "Monthly spend budget of 50 EUR reached"
+        };
+        for (const { member, operator } of refusalNotices(padded)) {
+          for (const notice of [member.en, member.de, operator.en, operator.de]) {
+            expect(notice).not.toMatch(/987654321|EUR|safeguard|<b>|raw/u);
+          }
+          expect(member.en).toContain("The monthly limit on spending stopped this reply.");
+        }
+      });
     });
 
     it("reads a cancellation as stopped, live and after a reload", () => {

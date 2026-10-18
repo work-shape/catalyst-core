@@ -12,6 +12,7 @@ import {
   ACTIVE_AGENT_RUN_STATUSES,
   applyAgentRunObservation,
   type AgentRunProjection as CoreAgentRunProjection,
+  type ModelUsageRefusal,
   type RunObservation as CoreRunObservation
 } from "@work-shape/catalyst-core";
 
@@ -46,6 +47,8 @@ export interface ConversationControllerState {
     code?: string;
     /** The tool a failed run waited on when it was ended for standing still. */
     tool?: string;
+    /** The usage limit that refused a failed run's model call. */
+    usageLimit?: ModelUsageRefusal;
   };
 }
 
@@ -426,7 +429,8 @@ function terminalErrorFromSnapshot(
       message: activeRun.projection.error?.message ?? "Run failed",
       category: activeRun.projection.error?.category,
       code: activeRun.projection.error?.code,
-      tool: activeRun.projection.error?.tool
+      tool: activeRun.projection.error?.tool,
+      usageLimit: activeRun.projection.error?.usageLimit
     };
   }
   if (activeRun.run.status === "cancelled") {
@@ -447,7 +451,8 @@ function terminalError(
       message: observation.payload.error.message,
       category: observation.payload.error.category,
       code: observation.payload.error.code,
-      tool: observation.payload.error.tool
+      tool: observation.payload.error.tool,
+      usageLimit: observation.payload.error.usageLimit
     };
   }
   if (observation.payload.type === "run_cancelled") {

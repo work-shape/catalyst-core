@@ -1,9 +1,11 @@
 import { createTestInstance, getTestExecution } from "./support/test-instance";
 import { ensureTestUser } from "./support/test-store";
 import { describe, expect, it } from "vitest";
+import { usageSummarySchema } from "@work-shape/catalyst-api-contract";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   MODEL_CALL_RESERVED_OUTPUT_TOKENS,
+  KNOWLEDGE_INGESTION_PURPOSES,
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
@@ -43,6 +45,59 @@ const customerRateCard: UsageRateCardConfig = {
 };
 
 describe("model usage governance", () => {
+  it("excludes ingestion from budget spend but keeps its cost in every usage total", async () => {
+    const { governance, clientInstanceId } = await createGovernance({
+      dailySpendLimit: 1,
+      monthlySpendLimit: 2
+    });
+    for (const purpose of KNOWLEDGE_INGESTION_PURPOSES) {
+      await governance.recordModelUsage({
+        ...usageInput(clientInstanceId, {
+          inputTokens: 2_000_000,
+          cachedInputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 2_000_000
+        }),
+        attribution: { kind: "system", purpose }
+      });
+    }
+    const imported = usageSummarySchema.parse(
+      await governance.createSafeSummary({ clientInstanceId })
+    );
+    expect(imported.spendBudget).toMatchObject({ dailySpentMicros: 0, monthlySpentMicros: 0 });
+    for (const total of [imported.today, imported.currentMonth, imported.allTime]) {
+      expect(total.cost.billableCostMicros).toBe(20_000_000);
+    }
+    expect(imported.dailyUsage.at(-1)?.cost.billableCostMicros).toBe(20_000_000);
+    expect(imported.monthlyUsage.at(-1)?.cost.billableCostMicros).toBe(20_000_000);
+    expect(imported.attributedUsage?.map((group) => group.cost.billableCostMicros)).toEqual([
+      10_000_000, 10_000_000
+    ]);
+    expect(imported.recentEvents).toHaveLength(2);
+
+    // Admission still has the full budget after the import. Finish the small reservation,
+    // then record chat usage above the budget to prove the same rollups count it.
+    const admitted = await governance.admitModelCall(admission(clientInstanceId));
+    await governance.settleModelCall(admitted);
+    await governance.recordModelUsage(
+      usageInput(clientInstanceId, {
+        inputTokens: 2_000_000,
+        cachedInputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 2_000_000
+      })
+    );
+    const chatted = await governance.createSafeSummary({ clientInstanceId });
+    expect(chatted.spendBudget).toMatchObject({
+      dailySpentMicros: 10_000_000,
+      monthlySpentMicros: 10_000_000
+    });
+    expect(chatted.today.cost.billableCostMicros).toBe(30_000_000);
+    await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject({
+      message: "Daily model spend budget has been reached for the instance. Resets at midnight UTC."
+    });
+  });
+
   it("prices cached and uncached input separately in EUR", async () => {
     const { governance, clientInstanceId } = await createGovernance();
 
@@ -277,7 +332,7 @@ describe("model usage governance", () => {
     await expect(governance.admitModelCall(admission(clientInstanceId))).resolves.toBeDefined();
     await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "Daily model spend budget has been reached"
+      message: "Daily model spend budget has been reached for the instance. Resets at midnight UTC."
     });
   });
 
@@ -370,7 +425,7 @@ describe("model usage governance", () => {
     expect(summary).not.toHaveProperty("costSafetyMultiplier");
     await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "Daily model spend budget has been reached"
+      message: "Daily model spend budget has been reached for the instance. Resets at midnight UTC."
     });
   });
 
@@ -393,7 +448,8 @@ describe("model usage governance", () => {
     );
     const refusal = {
       code: "FORBIDDEN",
-      message: "Daily model call safeguard has been reached"
+      message:
+        "Daily model call safeguard has been reached for your own calls. Resets at midnight UTC."
     };
 
     const settled = await governance.admitModelCall(admission(clientInstanceId));

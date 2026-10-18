@@ -53,6 +53,7 @@ import {
   isReleaseSync,
   loadReferableAssets,
   loadStoredAssets,
+  assertUpsertPolicyAndMissingRight,
   missingUpsertRightOf,
   type StoredAssets,
   requireInstanceDefaultChange,
@@ -224,7 +225,8 @@ export class AssetWorkflow {
       /** The revision a revert makes the content again: its config is what the write puts. */
       revision?: number;
     },
-    right: "write" | "delete"
+    right: "write" | "delete",
+    beforeConfirmation = false
   ): Promise<OperationAuthorization> {
     const target = await this.target(input);
     const decision =
@@ -245,7 +247,7 @@ export class AssetWorkflow {
       (input.revision === undefined
         ? undefined
         : ((await this.revisionOf(target, input.revision))?.config ?? undefined));
-    const further = await this.furtherRight(access, target, right, config);
+    const further = await this.furtherRight(access, target, right, config, beforeConfirmation);
     if (further.allowed) {
       requirePrecondition(input, input.expectedRevision);
     }
@@ -263,12 +265,14 @@ export class AssetWorkflow {
     access: ActorAccess,
     target: AssetTarget,
     right: "write" | "delete",
-    config?: Record<string, unknown>
+    config?: Record<string, unknown>,
+    beforeConfirmation = false
   ): Promise<OperationAuthorization> {
     const { kind, name } = target;
     if (right === "write" && config !== undefined && kind.representation !== "files") {
       const current = target.asset?.status === "active" ? target.asset.config : undefined;
-      const action = missingUpsertRightOf(access, "put", kind, {
+      const check = beforeConfirmation ? assertUpsertPolicyAndMissingRight : missingUpsertRightOf;
+      const action = check(access, "put", kind, {
         name,
         current,
         next: kind.prepareInteractiveUpsert({ current, next: config }),

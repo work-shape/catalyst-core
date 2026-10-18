@@ -126,7 +126,10 @@ describe("usage admission under concurrent calls", () => {
       safeguards: { modelCallsPerDay: ROOM }
     });
 
-    expectExactlyTheRoom(results, "Daily model call safeguard has been reached");
+    expectExactlyTheRoom(
+      results,
+      "Daily model call safeguard has been reached for product calls. Resets at midnight UTC."
+    );
     await expect(db.store.usage.listModelUsageEvents({ clientInstanceId })).resolves.toHaveLength(
       ROOM
     );
@@ -142,7 +145,10 @@ describe("usage admission under concurrent calls", () => {
       safeguards: { tokensPerDay: ROOM * RESERVED_TOKENS + RESERVED_TOKENS - 1 }
     });
 
-    expectExactlyTheRoom(results, "Daily model token safeguard has been reached");
+    expectExactlyTheRoom(
+      results,
+      "Daily model token safeguard has been reached for product calls. Resets at midnight UTC."
+    );
     expect(await counters(clientInstanceId)).toEqual([
       {
         period_kind: "day",
@@ -169,7 +175,10 @@ describe("usage admission under concurrent calls", () => {
       safeguards: {}
     });
 
-    expectExactlyTheRoom(results, "Monthly model spend budget has been reached");
+    expectExactlyTheRoom(
+      results,
+      "Monthly model spend budget has been reached for the instance. Resets at the start of next month UTC."
+    );
   });
 
   // Fails without the change: a call that failed stayed a row without a whole cost, and every
