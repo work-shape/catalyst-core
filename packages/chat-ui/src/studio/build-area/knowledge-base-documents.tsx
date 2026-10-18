@@ -1,5 +1,5 @@
 import { FileText, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Badge,
   Button,
@@ -30,6 +30,8 @@ import type {
   KnowledgeDocument,
   KnowledgeOpenableFile
 } from "./knowledge-base-source";
+import { KnowledgeUploadSection } from "./knowledge-base-upload";
+import { uploadFormatList, uploadFormats } from "./knowledge-upload-model";
 import { formatFileBytes } from "./skill-form-model";
 
 /** How a format is named on the page. */
@@ -212,6 +214,7 @@ export function KnowledgeDocuments({
         <KnowledgeAddDialog
           source={source}
           knowledgeBase={knowledgeBase}
+          formats={uploadFormats(state.status === "ready" ? state.data.documentFormats : undefined)}
           onClose={() => setAdding(false)}
           onAdded={(count) => {
             setAdding(false);
@@ -330,18 +333,22 @@ const fileKey = (file: Pick<KnowledgeOpenableFile, "conversationId" | "fileId">)
   `${file.conversationId}/${file.fileId}`;
 
 /**
- * Adds files the reader can open: those uploaded in the conversations of their workspace. It
- * says the limits of one add and keeps to them: at most so many files, none over the size
- * limit, and only formats a Knowledge Base reads.
+ * Adds files: uploaded from the reader's device, or those the reader can open in the
+ * conversations of their workspace. It says the limits of one add and keeps to them: at most
+ * so many files, none over the size limit, and only formats the instance reads. Closed
+ * after an upload took files, it reports them as added.
  */
 export function KnowledgeAddDialog({
   source,
   knowledgeBase,
+  formats,
   onClose,
   onAdded
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
+  /** The formats the instance reads, which the upload offers. */
+  formats: readonly string[];
   onClose(): void;
   onAdded(count: number): void;
 }) {
@@ -351,8 +358,12 @@ export function KnowledgeAddDialog({
   const [chosen, setChosen] = useState<ReadonlyMap<string, KnowledgeOpenableFile>>(new Map());
   const [adding, setAdding] = useState(false);
   const [failure, setFailure] = useState<string>();
+  const [uploaded, setUploaded] = useState(0);
+  const countUpload = useCallback(() => setUploaded((count) => count + 1), []);
+  const close = () => (uploaded > 0 ? onAdded(uploaded) : onClose());
   const full = chosen.size >= KNOWLEDGE_ADD_LIMITS.files;
   const size = formatFileBytes(KNOWLEDGE_ADD_LIMITS.bytes, locale);
+  const formatList = uploadFormatList(formats, locale);
   const toggle = (file: KnowledgeOpenableFile, on: boolean) =>
     setChosen((current) => {
       const next = new Map(current);
@@ -369,7 +380,7 @@ export function KnowledgeAddDialog({
     const answer = await source.addFiles(knowledgeBase, [...chosen.values()]);
     setAdding(false);
     if (answer.ok) {
-      onAdded(answer.data.count);
+      onAdded(answer.data.count + uploaded);
       return;
     }
     const known = answer.reason === undefined ? undefined : KNOWLEDGE_ADD_REFUSALS[answer.reason];
@@ -377,7 +388,7 @@ export function KnowledgeAddDialog({
       answer.refused
         ? t("knowledge.addRefused")
         : known
-          ? t(known, { size })
+          ? t(known, { size, formats: formatList })
           : (answer.message ?? t("knowledge.addFailed"))
     );
   };
@@ -387,11 +398,11 @@ export function KnowledgeAddDialog({
       size="md"
       title={t("knowledge.addDocuments")}
       description={t("knowledge.addDescription")}
-      onClose={onClose}
+      onClose={close}
       footer={
         <>
-          <Button variant="outline" onClick={onClose}>
-            {t("cancel")}
+          <Button variant="outline" onClick={close} data-knowledge-add-close="">
+            {uploaded > 0 ? t("close") : t("cancel")}
           </Button>
           <Button
             disabled={chosen.size === 0}
@@ -407,11 +418,19 @@ export function KnowledgeAddDialog({
       }
     >
       <div className="grid gap-3" data-knowledge-add-dialog="">
+        <KnowledgeUploadSection
+          source={source}
+          knowledgeBase={knowledgeBase}
+          formats={formats}
+          onAdded={countUpload}
+        />
+        <span className="text-label">{t("knowledge.conversationFilesTitle")}</span>
         <Field
           label={t("knowledge.addSearch")}
           hint={t("knowledge.addLimits", {
             count: String(KNOWLEDGE_ADD_LIMITS.files),
-            size
+            size,
+            formats: formatList
           })}
         >
           <Input type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
@@ -430,7 +449,7 @@ export function KnowledgeAddDialog({
             ) : (
               <ul aria-label={t("knowledge.addFiles")} className="grid gap-3">
                 {files.map((file) => {
-                  const fit = addableFile(file);
+                  const fit = addableFile(file, formats);
                   const on = chosen.has(fileKey(file));
                   return (
                     <li key={fileKey(file)} data-knowledge-add-file={file.name}>
@@ -439,7 +458,7 @@ export function KnowledgeAddDialog({
                         description={
                           fit.addable
                             ? `${file.conversationTitle} · ${formatFileBytes(file.bytes, locale)}`
-                            : t(fit.reason, { size })
+                            : t(fit.reason, { size, formats: formatList })
                         }
                         checked={on}
                         disabled={!fit.addable || (full && !on)}

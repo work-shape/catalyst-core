@@ -86,6 +86,8 @@ const tableCheckSchema = z.object({ name: z.string(), readable: z.boolean() });
 const stateOutputSchema = z.object({
   dataFlows: workflowDataFlowsSchema.optional(),
   processingWaiting: z.boolean().optional(),
+  /** The formats this instance reads into a Knowledge Base that keeps documents. */
+  documentFormats: z.array(z.string()).optional(),
   /** The id of the Knowledge Base's asset. */
   id: z.string(),
   name: z.string(),
@@ -176,7 +178,8 @@ async function stateOf(
               })
             )
           )
-        ).some(Boolean)
+        ).some(Boolean),
+        documentFormats: [...runtime.documentFormats]
       };
   return {
     ...processing,

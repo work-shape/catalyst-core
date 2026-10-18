@@ -531,6 +531,17 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       })
     };
   }
+  // A file sent with the call lives as long as the call: nothing could carry it out later,
+  // so a call with one that would wait is refused before anything waits for it.
+  if (context.runtime.upload && policy.next === "await_confirmation") {
+    return {
+      ending: await denyRun(context, {
+        kind: "policy",
+        operation: definition.name,
+        reason: "confirmation_required"
+      })
+    };
+  }
   if (policy.next === "await_confirmation") {
     return {
       ending:
@@ -559,6 +570,10 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       reason: "approval_unavailable",
       ...(approvalAskedBy ? { guardrail: approvalAskedBy } : {})
     };
+    // A file sent with the call is not kept for a later approval (see above).
+    if (context.runtime.upload) {
+      return { ending: await denyRun(context, unavailable) };
+    }
     // A call of a draft that "Run live once" sent live does not wait: an approved call is
     // executed from the registry, which holds what is published and no draft, and a test run
     // has nothing that could ask its principal again. The approval gates it by refusing it.

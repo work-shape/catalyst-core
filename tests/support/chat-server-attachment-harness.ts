@@ -17,20 +17,22 @@ export function createMultipartFilePayload(input: {
   fieldName: string;
   filename: string;
   contentType: string;
-  content: string;
+  content: string | Buffer;
 }): { headers: Record<string, string>; payload: Buffer } {
   const boundary = `vivd-test-${Math.random().toString(36).slice(2)}`;
-  const payload = Buffer.from(
-    [
-      `--${boundary}`,
-      `Content-Disposition: form-data; name="${input.fieldName}"; filename="${input.filename}"`,
-      `Content-Type: ${input.contentType}`,
-      "",
-      input.content,
-      `--${boundary}--`,
-      ""
-    ].join("\r\n")
-  );
+  const payload = Buffer.concat([
+    Buffer.from(
+      [
+        `--${boundary}`,
+        `Content-Disposition: form-data; name="${input.fieldName}"; filename="${input.filename}"`,
+        `Content-Type: ${input.contentType}`,
+        "",
+        ""
+      ].join("\r\n")
+    ),
+    Buffer.from(input.content),
+    Buffer.from(`\r\n--${boundary}--\r\n`)
+  ]);
   return {
     headers: {
       "content-type": `multipart/form-data; boundary=${boundary}`,

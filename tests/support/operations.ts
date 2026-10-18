@@ -275,6 +275,31 @@ export const resourceRouteTestOperations = {
     body: z.object({ shelf: z.string() }),
     response: json(z.object({ box: z.string(), shelf: z.string() }))
   }),
+  /** A box that takes a file sent with the call: its input names the file by checksum and size. */
+  testBoxBlueUpload: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "test_box.blue.upload",
+    method: "POST",
+    path: "/api/v1/test/operations/internal/blue-upload",
+    scope: "config_assets:write",
+    requires: ["audit.view"],
+    effect: "changing",
+    body: z.object({ upload: z.object({ sha256: z.string(), bytes: z.number() }) }),
+    response: json(z.object({ text: z.string() }))
+  }),
+  /** The multipart route of the family `test_box.<id>.upload`. */
+  testBoxesUpload: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "test_boxes.upload",
+    method: "POST",
+    path: "/api/v1/test/operations/boxes/:box/upload",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    multipart: true,
+    response: json(z.object({ text: z.string() })),
+    errors: ["NOT_FOUND"]
+  }),
   /** The route of the family `test_box.<id>.read`: it names no right and is in no registry. */
   testBoxesRead: defineRegisteredOperation({
     ...registeredTestOperation,

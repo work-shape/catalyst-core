@@ -6,6 +6,7 @@ import {
   AppError,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_DOCUMENT_FORMATS,
+  KNOWLEDGE_FILE_MAX_BYTES,
   DocumentSourceError,
   KNOWLEDGE_TEXT_FORMATS,
   type ClientInstanceId,
@@ -22,6 +23,7 @@ import {
   createSourceWithdrawalApproval,
   knowledgeModule,
   knowledgeOperationName,
+  uploadFingerprint,
   type KnowledgeBases,
   type KnowledgeEmbedding
 } from "@work-shape/catalyst-data-stores";
@@ -200,6 +202,16 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
     apiOperations["knowledge_bases.add_files"],
     bind("add_files", KNOWLEDGE_BASE_ACTIONS.write)
   );
+  // An upload from the person's device is the same add: the bytes ride the call, and the
+  // input names them by their fingerprint, which the run hashes for its idempotency key.
+  routes.resourceOperation(apiOperations["knowledge_bases.upload_file"], {
+    ...bind("add_files", KNOWLEDGE_BASE_ACTIONS.write),
+    target: ({ knowledgeBase }: { knowledgeBase: string }, upload) => ({
+      operation: knowledgeOperationName(knowledgeBase, "add_files"),
+      input: { upload: upload ? uploadFingerprint(upload) : {} }
+    }),
+    uploadLimitBytes: KNOWLEDGE_FILE_MAX_BYTES
+  });
   routes.resourceOperation(
     apiOperations["knowledge_bases.list_documents"],
     bind("list_documents", KNOWLEDGE_BASE_ACTIONS.use)

@@ -112,6 +112,7 @@ const source: KnowledgeBaseSource = {
   retry: async () => ({ ok: true, data: {} }),
   remove: async () => ({ ok: true, data: {} }),
   addFiles: async () => ({ ok: true, data: { count: 1 } }),
+  uploadFile: async () => ({ ok: true, data: { count: 1 } }),
   useOpenableFiles: () => ready([])
 };
 

@@ -76,7 +76,8 @@ function plantedSource(search: KnowledgeBaseSource["search"]): KnowledgeBaseSour
     useOpenableFiles: () => ready([]),
     retry: unused,
     remove: unused,
-    addFiles: unused
+    addFiles: unused,
+    uploadFile: unused
   };
 }
 

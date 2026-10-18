@@ -132,6 +132,16 @@ export interface OperationCall<TInput = unknown> {
   workflowDeleted?: true;
 }
 
+/** A file sent with a call, staged by the route that received it. `read` reads its bytes. */
+export interface OperationUpload {
+  filename: string;
+  mimeType?: string;
+  byteSize: number;
+  /** The SHA-256 of its bytes, hex: what the call's input names it by. */
+  sha256: string;
+  read(): Promise<Uint8Array>;
+}
+
 /**
  * What only the live call has and no frozen call keeps: how long it may take, who may stop
  * it, the language of its caller and, for a call an Agent Run makes, the hold of that run. A
@@ -146,6 +156,11 @@ export type OperationCallRuntime = Pick<
    * invalid input with this text, after the surface's own check and before anything runs.
    */
   unreadableInput?: { code: string; message: string };
+  /**
+   * The file a person sent with the call itself, as a multipart route receives it. Live only
+   * and never persisted: a call executed later, after an approval, has none.
+   */
+  upload?: OperationUpload;
   /** Workflow dataset capture, before an outcome can retain bulk rows. Never persisted. */
   captureOutput?(output: unknown): Promise<unknown>;
   /** Internal Workflow paging port. Each invocation validates and authorizes fresh input. */

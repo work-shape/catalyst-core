@@ -21,6 +21,7 @@ import {
   type OperationOrigin,
   type OperationRegistry,
   type OperationResource,
+  type OperationUpload,
   type PolicyTarget,
   type PolicyValue,
   type StorePage
@@ -119,6 +120,8 @@ export interface OperationFace {
        * recorded, as for a resource that exists, and a caller who holds it reads `notFound`.
        */
       absent?: { right: string; notFound: string };
+      /** The file the request carried, for the call alone. */
+      upload?: OperationUpload;
     },
     reply: FastifyReply
   ): Promise<unknown>;
@@ -248,7 +251,10 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         absent
           ? { ...deps, registry: { ...registry, resolve: () => Promise.resolve(absent) } }
           : deps,
-        call.locale === undefined ? {} : { locale: call.locale }
+        {
+          ...(call.locale === undefined ? {} : { locale: call.locale }),
+          ...(call.upload ? { upload: call.upload } : {})
+        }
       ).catch((error: unknown) => {
         // A repeated call that cannot be answered still names the run that holds its key.
         const run = isAppError(error) ? runReferenceSchema.safeParse(error.details) : undefined;

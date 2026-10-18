@@ -114,7 +114,8 @@ export const knowledge = defineTranslations({
     "knowledge.documentsTitle": "Documents",
     "knowledge.documentsDescription":
       "Everyone who may use this knowledge base finds every document in it, once the document is searchable.",
-    "knowledge.documentsEmpty": "No documents yet. Add files from your conversations.",
+    "knowledge.documentsEmpty":
+      "No documents yet. Upload files from your computer or add files from your conversations.",
     "knowledge.documentsEmptyReadOnly":
       "No documents yet. Somebody who may change this knowledge base adds them.",
     "knowledge.documentsFailed": "The documents could not be loaded.",
@@ -138,7 +139,7 @@ export const knowledge = defineTranslations({
     "knowledge.removeLabel": "Remove {name}",
     "knowledge.removeTitle": "Remove the document {name}?",
     "knowledge.removeDescription":
-      "Nobody finds it in this knowledge base any more, and its copy is deleted. The file stays in its conversation.",
+      "Nobody finds it in this knowledge base any more, and its copy is deleted. A file added from a conversation stays there.",
     "knowledge.removeFailed": "The document could not be removed.",
     "knowledge.removeSyncedRefused":
       "This document comes from a source and cannot be removed here. Remove it in the source, or narrow what the source brings in.",
@@ -167,19 +168,32 @@ export const knowledge = defineTranslations({
       "This document of {count} pages took too long to convert. Split it into smaller files and retry.",
     "knowledge.addDocuments": "Add documents",
     "knowledge.addDescription":
-      "Choose files uploaded in the conversations of your workspace. The knowledge base keeps its own copy: deleting the conversation leaves the document.",
-    "knowledge.addLimits":
-      "Up to {count} files at once, each up to {size}: PDF, DOCX, TXT or Markdown.",
+      "Upload files from your computer, or choose files uploaded in the conversations of your workspace. The knowledge base keeps its own copy: deleting the conversation leaves the document.",
+    "knowledge.uploadTitle": "Upload from your computer",
+    "knowledge.uploadHint": "{formats}, each up to {size}.",
+    "knowledge.uploadChoose": "Choose files",
+    "knowledge.uploadList": "Uploads",
+    "knowledge.uploadWaiting": "Waiting",
+    "knowledge.uploadUploading": "Uploading",
+    "knowledge.uploadAdded": "Added",
+    "knowledge.uploadFailed": "Not added",
+    "knowledge.uploadRetryLabel": "Upload {name} again",
+    "knowledge.uploadFormatRefused": "Knowledge bases here do not read this format.",
+    "knowledge.uploadFailedGeneric": "The file could not be uploaded.",
+    "knowledge.uploadApprovalRefused":
+      "Adding documents here needs another person's approval, and an upload cannot wait for one. Ask an administrator.",
+    "knowledge.conversationFilesTitle": "From your conversations",
+    "knowledge.addLimits": "Up to {count} files at once, each up to {size}: {formats}.",
     "knowledge.addSearch": "Search files",
     "knowledge.addFiles": "Files",
     "knowledge.addNoFiles":
-      "The conversations of your workspace hold no uploaded files yet. Upload a file in a conversation, then add it here.",
+      "The conversations of your workspace hold no uploaded files yet. Upload files from your computer above.",
     "knowledge.addNoMatch": "No file matches.",
     "knowledge.addFilesFailed": "The files could not be loaded.",
     "knowledge.addChosen": "{count} of {max} chosen",
     "knowledge.addFull": "{max} chosen, the most for one add. Add the rest afterwards.",
     "knowledge.addSubmit": "Add",
-    "knowledge.addFormatRefused": "A knowledge base reads PDF, DOCX, TXT and Markdown only.",
+    "knowledge.addFormatRefused": "Knowledge bases here read {formats} only.",
     "knowledge.addTooLarge": "Larger than {size}, the most a knowledge base takes.",
     "knowledge.addRefusedNotAvailable": "One of the files is no longer available to you.",
     "knowledge.addRefusedTooLarge": "One of the files is larger than {size}.",
@@ -309,7 +323,7 @@ export const knowledge = defineTranslations({
     "knowledge.documentsDescription":
       "Jeder, der diese Wissensbasis nutzen darf, findet jedes Dokument darin, sobald es durchsuchbar ist.",
     "knowledge.documentsEmpty":
-      "Noch keine Dokumente. Füge Dateien aus deinen Unterhaltungen hinzu.",
+      "Noch keine Dokumente. Lade Dateien von deinem Computer hoch oder füge Dateien aus deinen Unterhaltungen hinzu.",
     "knowledge.documentsEmptyReadOnly":
       "Noch keine Dokumente. Jemand, der diese Wissensbasis ändern darf, fügt sie hinzu.",
     "knowledge.documentsFailed": "Die Dokumente konnten nicht geladen werden.",
@@ -333,7 +347,7 @@ export const knowledge = defineTranslations({
     "knowledge.removeLabel": "{name} entfernen",
     "knowledge.removeTitle": "Dokument {name} entfernen?",
     "knowledge.removeDescription":
-      "Niemand findet es danach mehr in dieser Wissensbasis, und ihre Kopie wird gelöscht. Die Datei bleibt in ihrer Unterhaltung.",
+      "Niemand findet es danach mehr in dieser Wissensbasis, und ihre Kopie wird gelöscht. Eine Datei aus einer Unterhaltung bleibt dort.",
     "knowledge.removeFailed": "Das Dokument konnte nicht entfernt werden.",
     "knowledge.removeSyncedRefused":
       "Dieses Dokument kommt aus einer Quelle und lässt sich hier nicht entfernen. Entferne es in der Quelle, oder grenze ein, was die Quelle übernimmt.",
@@ -364,20 +378,33 @@ export const knowledge = defineTranslations({
       "Dieses Dokument mit {count} Seiten hat zu lange zum Umwandeln gebraucht. Teile es in kleinere Dateien und versuche es erneut.",
     "knowledge.addDocuments": "Dokumente hinzufügen",
     "knowledge.addDescription":
-      "Wähle Dateien, die in Unterhaltungen deines Arbeitsbereichs hochgeladen wurden. Die Wissensbasis behält eine eigene Kopie: Wird die Unterhaltung gelöscht, bleibt das Dokument.",
-    "knowledge.addLimits":
-      "Bis zu {count} Dateien auf einmal, jede bis {size}: PDF, DOCX, TXT oder Markdown.",
+      "Lade Dateien von deinem Computer hoch oder wähle Dateien, die in Unterhaltungen deines Arbeitsbereichs hochgeladen wurden. Die Wissensbasis behält eine eigene Kopie: Wird die Unterhaltung gelöscht, bleibt das Dokument.",
+    "knowledge.uploadTitle": "Von deinem Computer hochladen",
+    "knowledge.uploadHint": "{formats}, jede Datei bis {size}.",
+    "knowledge.uploadChoose": "Dateien auswählen",
+    "knowledge.uploadList": "Uploads",
+    "knowledge.uploadWaiting": "Wartet",
+    "knowledge.uploadUploading": "Wird hochgeladen",
+    "knowledge.uploadAdded": "Hinzugefügt",
+    "knowledge.uploadFailed": "Nicht hinzugefügt",
+    "knowledge.uploadRetryLabel": "{name} erneut hochladen",
+    "knowledge.uploadFormatRefused": "Wissensbasen lesen dieses Format hier nicht.",
+    "knowledge.uploadFailedGeneric": "Die Datei konnte nicht hochgeladen werden.",
+    "knowledge.uploadApprovalRefused":
+      "Dokumente hinzuzufügen braucht hier die Freigabe einer anderen Person, und ein Upload kann nicht darauf warten. Frag eine Administratorin oder einen Administrator.",
+    "knowledge.conversationFilesTitle": "Aus deinen Unterhaltungen",
+    "knowledge.addLimits": "Bis zu {count} Dateien auf einmal, jede bis {size}: {formats}.",
     "knowledge.addSearch": "Dateien suchen",
     "knowledge.addFiles": "Dateien",
     "knowledge.addNoFiles":
-      "In den Unterhaltungen deines Arbeitsbereichs gibt es noch keine hochgeladenen Dateien. Lade eine Datei in einer Unterhaltung hoch und füge sie dann hier hinzu.",
+      "In den Unterhaltungen deines Arbeitsbereichs gibt es noch keine hochgeladenen Dateien. Lade oben Dateien von deinem Computer hoch.",
     "knowledge.addNoMatch": "Keine Datei passt.",
     "knowledge.addFilesFailed": "Die Dateien konnten nicht geladen werden.",
     "knowledge.addChosen": "{count} von {max} gewählt",
     "knowledge.addFull":
       "{max} gewählt, mehr gehen auf einmal nicht. Füge die übrigen danach hinzu.",
     "knowledge.addSubmit": "Hinzufügen",
-    "knowledge.addFormatRefused": "Eine Wissensbasis liest nur PDF, DOCX, TXT und Markdown.",
+    "knowledge.addFormatRefused": "Wissensbasen lesen hier nur {formats}.",
     "knowledge.addTooLarge": "Größer als {size}, mehr nimmt eine Wissensbasis nicht.",
     "knowledge.addRefusedNotAvailable": "Eine der Dateien steht dir nicht mehr zur Verfügung.",
     "knowledge.addRefusedTooLarge": "Eine der Dateien ist größer als {size}.",

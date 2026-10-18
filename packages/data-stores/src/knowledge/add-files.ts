@@ -24,6 +24,7 @@ import {
   type OwnedManagedFile,
   type OperationDefinition,
   type OperationExecutionContext,
+  type OperationUpload,
   type OperationResource
 } from "@work-shape/catalyst-core";
 import { knowledgeLimitError } from "./builtin/documents";
@@ -42,6 +43,14 @@ import type { KnowledgeRuntime } from "./runtime";
 // documents' rows go into the Knowledge Base's store; once it is indexed every user of the
 // published Knowledge Base finds them, without a publish (open question 2, option (a)).
 //
+// A person may also send one file from their device with the call (`knowledge_bases.upload_file`):
+// the input then names it by `uploadFingerprint`: the checksum and size of its bytes and a
+// checksum of its name and media type, and the bytes ride the live call (`runtime.upload`),
+// never its input or its run. So the same idempotency key sent again with other bytes, or the
+// same bytes under another name or type, is a reused key, not a replay. No name is recorded. The file takes the same
+// checks, copy, audit and cleanup. A call without the live file, or with other bytes than its
+// input names, is refused; a call with a live file is never held for an approval (run-operation).
+//
 // Sensitive data. The run keeps the input (Conversation and file ids) as a hash and the output
 // (document and file ids, a count and bytes); the audit event `knowledge_base.files_added` holds
 // the Knowledge Base, the file ids, the count and the bytes. Neither holds a file name, because
@@ -59,14 +68,25 @@ function knowledgeObjectKey(assetId: string): string {
 
 const idSchema = z.string().min(1).max(200);
 
-const addFilesInputSchema = z.strictObject({
-  files: z
-    .array(z.strictObject({ conversationId: idSchema, fileId: idSchema }))
-    .min(1)
-    .max(KNOWLEDGE_ADD_FILES_MAX_COUNT, {
-      error: `A call adds at most ${KNOWLEDGE_ADD_FILES_MAX_COUNT} files (KNOWLEDGE_ADD_FILES_MAX_COUNT). Send the rest in another call.`
+const addFilesInputSchema = z.union([
+  z.strictObject({
+    files: z
+      .array(z.strictObject({ conversationId: idSchema, fileId: idSchema }))
+      .min(1)
+      .max(KNOWLEDGE_ADD_FILES_MAX_COUNT, {
+        error: `A call adds at most ${KNOWLEDGE_ADD_FILES_MAX_COUNT} files (KNOWLEDGE_ADD_FILES_MAX_COUNT). Send the rest in another call.`
+      })
+  }),
+  /** The one file the caller sent with the call: `knowledge_bases.upload_file`. */
+  z.strictObject({
+    upload: z.strictObject({
+      sha256: z.string().regex(/^[0-9a-f]{64}$/),
+      bytes: z.number().int().min(0),
+      /** The SHA-256 of the file's name and media type: it tells them apart, never says them. */
+      metadataSha256: z.string().regex(/^[0-9a-f]{64}$/)
     })
-});
+  })
+]);
 
 const addFilesOutputSchema = z.object({
   /** Each document added, with the Managed File the Knowledge Base now owns. In input order. */
@@ -95,6 +115,34 @@ function fileNotAvailable(ref: KnowledgeFileRef): AppError {
   );
 }
 
+/** How the input names a file sent with the call. */
+type UploadInput = { sha256: string; bytes: number; metadataSha256: string };
+
+/**
+ * How the input of `add_files` names a file sent with the call. The route that receives the
+ * file and the operation that takes it both build it here, so the two cannot disagree.
+ */
+export function uploadFingerprint(
+  upload: Pick<OperationUpload, "sha256" | "byteSize" | "filename" | "mimeType">
+): UploadInput {
+  return {
+    sha256: upload.sha256,
+    bytes: upload.byteSize,
+    metadataSha256: createHash("sha256")
+      .update(JSON.stringify([upload.filename, upload.mimeType ?? null]))
+      .digest("hex")
+  };
+}
+
+/** A file the call adds, opened and checked: `label` names it in a refusal, by id, never by name. */
+interface OpenedFile {
+  label: string;
+  file: OpenedKnowledgeFile;
+  format: KnowledgeDocumentFormat;
+  /** The checksum the input names the bytes by, for a file sent with the call. */
+  sha256?: string;
+}
+
 /**
  * Opens every named file and checks it against the limits before any is read or copied, so
  * that a refused call leaves nothing behind.
@@ -104,36 +152,68 @@ async function openAll(
   files: KnowledgeFiles,
   actor: AuthenticatedIdentity,
   refs: readonly KnowledgeFileRef[]
-): Promise<
-  { ref: KnowledgeFileRef; file: OpenedKnowledgeFile; format: KnowledgeDocumentFormat }[]
-> {
+): Promise<OpenedFile[]> {
   const opened = [];
   for (const ref of refs) {
     const file = await files.open(actor, ref);
     if (!file) throw fileNotAvailable(ref);
-    const format = knowledgeDocumentFormatOf(file);
-    if (!format) {
-      throw knowledgeLimitError(
-        "knowledge_file_format_unsupported",
-        `File '${ref.fileId}' is in no format a Knowledge Base takes: PDF, DOCX, TXT or Markdown.`
-      );
-    }
-    if (!runtime.documentFormats.includes(format)) {
-      throw knowledgeLimitError(
-        "knowledge_file_format_unavailable",
-        `File '${ref.fileId}' is a ${format.toUpperCase()} file, and this instance reads no ${format.toUpperCase()}: that needs its document processing. It takes ${runtime.documentFormats.map((each) => each.toUpperCase()).join(", ")}.`
-      );
-    }
-    if (file.byteSize > KNOWLEDGE_FILE_MAX_BYTES) throw tooLarge(ref);
-    opened.push({ ref, file, format });
+    opened.push(checked(runtime, `File '${ref.fileId}'`, file));
   }
   return opened;
 }
 
-function tooLarge(ref: KnowledgeFileRef): AppError {
+/** The file sent with the call, checked as a named one is. */
+function openUpload(
+  runtime: KnowledgeRuntime,
+  context: OperationExecutionContext,
+  named: UploadInput
+): OpenedFile[] {
+  const { upload } = context.runtime;
+  const sent = upload && uploadFingerprint(upload);
+  if (
+    !upload ||
+    !sent ||
+    sent.sha256 !== named.sha256 ||
+    sent.bytes !== named.bytes ||
+    sent.metadataSha256 !== named.metadataSha256
+  ) {
+    throw uploadMissing();
+  }
+  return [{ ...checked(runtime, "The uploaded file", upload), sha256: named.sha256 }];
+}
+
+function uploadMissing(): AppError {
+  return new AppError(
+    "VALIDATION_FAILED",
+    "No file with the checksum and size the input names was sent with this call. Upload a file through the Knowledge Base's uploads route, or name files of a Conversation in 'files'.",
+    { reason: "knowledge_upload_missing" },
+    { exposeMessage: true }
+  );
+}
+
+/** Checks one file's format and size against what this instance's Knowledge Bases take. */
+function checked(runtime: KnowledgeRuntime, label: string, file: OpenedKnowledgeFile): OpenedFile {
+  const format = knowledgeDocumentFormatOf(file);
+  if (!format) {
+    throw knowledgeLimitError(
+      "knowledge_file_format_unsupported",
+      `${label} is in no format a Knowledge Base takes: PDF, DOCX, TXT or Markdown.`
+    );
+  }
+  if (!runtime.documentFormats.includes(format)) {
+    throw knowledgeLimitError(
+      "knowledge_file_format_unavailable",
+      `${label} is a ${format.toUpperCase()} file, and this instance reads no ${format.toUpperCase()}: that needs its document processing. It takes ${runtime.documentFormats.map((each) => each.toUpperCase()).join(", ")}.`
+    );
+  }
+  if (file.byteSize > KNOWLEDGE_FILE_MAX_BYTES) throw tooLarge(label);
+  return { label, file, format };
+}
+
+function tooLarge(label: string): AppError {
   return knowledgeLimitError(
     "knowledge_file_too_large",
-    `File '${ref.fileId}' is larger than a Knowledge Base takes: ${KNOWLEDGE_FILE_MAX_BYTES} bytes (KNOWLEDGE_FILE_MAX_BYTES).`
+    `${label} is larger than a Knowledge Base takes: ${KNOWLEDGE_FILE_MAX_BYTES} bytes (KNOWLEDGE_FILE_MAX_BYTES).`
   );
 }
 
@@ -185,8 +265,8 @@ export function addFilesOperation(
     module: "knowledge",
     timeoutMs: KNOWLEDGE_ADD_FILES_TIMEOUT_MS,
     async execute(input, context) {
-      const { files: refs } = addFilesInputSchema.parse(input);
-      return addFiles(runtime, knowledgeBase, refs, context);
+      const parsed = addFilesInputSchema.parse(input);
+      return addFiles(runtime, knowledgeBase, "files" in parsed ? parsed.files : parsed, context);
     }
   };
 }
@@ -194,7 +274,7 @@ export function addFilesOperation(
 async function addFiles(
   runtime: KnowledgeRuntime,
   knowledgeBase: AddFilesTarget,
-  refs: readonly KnowledgeFileRef[],
+  refs: readonly KnowledgeFileRef[] | { upload: UploadInput },
   context: OperationExecutionContext
 ): Promise<z.infer<typeof addFilesOutputSchema>> {
   const { files } = runtime;
@@ -217,7 +297,10 @@ async function addFiles(
       { exposeMessage: true }
     );
   }
-  const opened = await openAll(runtime, files, context.actor, refs);
+  const opened =
+    "upload" in refs
+      ? openUpload(runtime, context, refs.upload)
+      : await openAll(runtime, files, context.actor, refs);
   // Queued before anything is copied: a process that ends in the middle of the call leaves its
   // copies to this job.
   if (target.backend === "builtin") await enqueueKnowledgeFileCleanup(runtime, target);
@@ -227,11 +310,12 @@ async function addFiles(
   const copies: OwnedManagedFile[] = [];
   let bytesAdded = 0;
   try {
-    for (const { ref, file, format } of opened) {
+    for (const { label, file, format, sha256 } of opened) {
       const bytes = await file.read();
       bytesAdded += bytes.byteLength;
-      if (bytes.byteLength > KNOWLEDGE_FILE_MAX_BYTES) throw tooLarge(ref);
+      if (bytes.byteLength > KNOWLEDGE_FILE_MAX_BYTES) throw tooLarge(label);
       const contentSha256 = createHash("sha256").update(bytes).digest("hex");
+      if (sha256 !== undefined && sha256 !== contentSha256) throw uploadMissing();
       // The row first: an object is never stored without a row that leads to it.
       const copy = await runtime.stores.files.createManagedFile({
         clientInstanceId: runtime.clientInstanceId,

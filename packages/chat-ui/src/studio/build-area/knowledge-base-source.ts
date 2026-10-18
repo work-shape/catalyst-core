@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient
 } from "@tanstack/react-query";
-import type { ApiClient } from "@work-shape/catalyst-api-client";
+import { ApiError, type ApiClient } from "@work-shape/catalyst-api-client";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { instanceSentence, PendingApprovalError, readRefusalDetails } from "./build-refusals";
@@ -104,7 +104,17 @@ export interface KnowledgeChoice {
  */
 type KnowledgeCall<Answer> =
   | { ok: true; data: Answer }
-  | { ok: false; refused: boolean; message: string | undefined; reason?: string };
+  | {
+      ok: false;
+      refused: boolean;
+      message: string | undefined;
+      reason?: string;
+      /**
+       * No answer of the instance arrived, or none it wrote (a proxy's): whether the call ran
+       * is unknown, so a retry sends it under the same idempotency key.
+       */
+      unanswered?: true;
+    };
 
 /**
  * Everything the Knowledge Base page and the agent's Knowledge section read and call beyond
@@ -166,6 +176,15 @@ export interface KnowledgeBaseSource {
   addFiles(
     knowledgeBase: string,
     files: readonly { conversationId: string; fileId: string }[]
+  ): Promise<KnowledgeCall<{ count: number }>>;
+  /**
+   * Uploads one file from the reader's device; the Knowledge Base keeps a copy. A call sent
+   * again under the same `idempotencyKey` is answered by the first, never added twice.
+   */
+  uploadFile(
+    knowledgeBase: string,
+    file: File,
+    idempotencyKey: string
   ): Promise<KnowledgeCall<{ count: number }>>;
   /**
    * A hook: the uploaded files of the conversations in the reader's workspace whose name or
@@ -271,6 +290,18 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
           params: { knowledgeBase },
           body: { files: files.map(({ conversationId, fileId }) => ({ conversationId, fileId })) }
         });
+        if (outcome.status !== "done") throw new PendingApprovalError();
+        await queryClient.invalidateQueries({ queryKey: key("documents", knowledgeBase) });
+        return { count: outcome.output.count };
+      }),
+    uploadFile: (knowledgeBase, file, idempotencyKey) =>
+      called(async () => {
+        const outcome = await client.knowledge_bases.upload_file({
+          params: { knowledgeBase },
+          file,
+          idempotencyKey
+        });
+        // An upload is never held for an approval: the instance refuses one that would wait.
         if (outcome.status !== "done") throw new PendingApprovalError();
         await queryClient.invalidateQueries({ queryKey: key("documents", knowledgeBase) });
         return { count: outcome.output.count };
@@ -405,11 +436,13 @@ async function called<Answer>(call: () => Promise<Answer>): Promise<KnowledgeCal
     return { ok: true, data: await call() };
   } catch (error) {
     const reason = readRefusalDetails(error).reason;
+    const code = apiErrorCode(error);
     return {
       ok: false,
-      refused: apiErrorCode(error) === "FORBIDDEN",
+      refused: code === "FORBIDDEN",
       message: instanceSentence(error),
-      ...(reason === undefined ? {} : { reason })
+      ...(reason === undefined ? {} : { reason }),
+      ...(error instanceof ApiError && code !== undefined ? {} : { unanswered: true as const })
     };
   }
 }

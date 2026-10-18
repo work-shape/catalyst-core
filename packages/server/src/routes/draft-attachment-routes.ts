@@ -1,18 +1,10 @@
-import { createHash } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { Transform } from "node:stream";
-import type { FastifyRequest } from "fastify";
-import { pipeline } from "node:stream/promises";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { AppError, getSubjectUserId, type JsonObject } from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-service";
+import { readMultipartFile, stageMultipartFile } from "../http/multipart-upload";
 import type { Route } from "../http/route";
 import { conversationIdParam, requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
-import type { UploadFileContent } from "../conversations/attachments";
 
 export function registerDraftAttachmentRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
@@ -105,50 +97,4 @@ function listed<Attachment extends { error?: JsonObject | null }>(attachments: A
 
 function attachmentIdParam(params: { attachmentId: string }): string {
   return requirePathParam(params.attachmentId, "Missing attachment id");
-}
-
-async function readMultipartFile(request: FastifyRequest) {
-  try {
-    return await request.file();
-  } catch {
-    // Parser failures describe untrusted bytes, so never expose the parser's message.
-    throw new AppError("BAD_REQUEST", "The multipart upload cannot be read");
-  }
-}
-
-async function stageMultipartFile(stream: NodeJS.ReadableStream): Promise<{
-  content: UploadFileContent;
-  cleanup(): Promise<void>;
-}> {
-  const directory = await mkdtemp(join(tmpdir(), "vivd-catalyst-upload-"));
-  const path = join(directory, "upload");
-  const checksum = createHash("sha256");
-  let byteSize = 0;
-  let header = Buffer.alloc(0);
-  const inspect = new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
-      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      byteSize += bytes.byteLength;
-      checksum.update(bytes);
-      if (header.byteLength < 16) {
-        header = Buffer.concat([header, bytes.subarray(0, 16 - header.byteLength)]);
-      }
-      callback(null, bytes);
-    }
-  });
-  try {
-    await pipeline(stream, inspect, createWriteStream(path));
-  } catch (error) {
-    await rm(directory, { recursive: true, force: true });
-    throw error;
-  }
-  return {
-    content: {
-      byteSize,
-      checksum: checksum.digest("hex"),
-      headerBytes: header,
-      openStream: () => createReadStream(path)
-    },
-    cleanup: () => rm(directory, { recursive: true, force: true })
-  };
 }

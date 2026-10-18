@@ -94,6 +94,14 @@ export { knowledgeBaseKindOn } from "./knowledge-base-kind";
 export { KnowledgeAddDialog, KnowledgeDocuments } from "./knowledge-base-documents";
 export { KnowledgeTestSearch } from "./knowledge-base-test-search";
 export {
+  nextUpload,
+  queueUploads,
+  retryUpload,
+  settleUpload,
+  uploadableFile,
+  uploadFormats
+} from "./knowledge-upload-model";
+export {
   KNOWLEDGE_DOCUMENT_FAILURES,
   knowledgeBaseConfigToForm,
   knowledgeBaseFormToConfig,
