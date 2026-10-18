@@ -185,6 +185,15 @@ describe("Workflow run key migrations (EW-13k)", () => {
         select i.indisvalid as valid from pg_index i join pg_class c on c.oid = i.indexrelid
         where c.relname = 'workflow_runs_active_parent_step_idx'`;
       expect(invalid?.valid).toBe(false);
+      const oldGuards = await sql<{ name: string; valid: boolean }[]>`
+        select c.relname as name, i.indisvalid as valid from pg_index i
+        join pg_class c on c.oid = i.indexrelid
+        where c.relname in ('workflow_runs_run_key_idx', 'workflow_runs_parent_step_idx')
+        order by c.relname`;
+      expect(oldGuards).toEqual([
+        { name: "workflow_runs_parent_step_idx", valid: true },
+        { name: "workflow_runs_run_key_idx", valid: true }
+      ]);
       await probeUniqueness();
       const writesBeforeRecovery = writes;
       await blocker`rollback`;

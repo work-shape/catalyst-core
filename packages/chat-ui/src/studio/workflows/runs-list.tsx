@@ -3,7 +3,7 @@ import { Badge, Button, List, ListRow, SkeletonList } from "@work-shape/catalyst
 import { formatMomentShort } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import type { WorkflowRunList } from "./workflow-data";
-import { runFailedBecause } from "./workflow-model";
+import { doneWithFailedRuns, runFailedBecause } from "./workflow-model";
 import { runsListEntries, type RunGroup, type RunPart } from "./run-groups";
 import type { WorkflowRunView } from "./workflow-views";
 import {
