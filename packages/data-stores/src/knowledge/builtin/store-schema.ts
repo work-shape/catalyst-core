@@ -294,13 +294,9 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
         check (state in ('running','done','failed','superseded')) not valid;
       alter table catalyst_kb.sync_runs validate constraint sync_runs_state_check;`
   },
-  { number: 10, name: "field_extraction_budget", sql: KNOWLEDGE_FIELD_SCHEMA }
+  { number: 10, name: "field_extraction_budget", sql: KNOWLEDGE_FIELD_SCHEMA },
+  { number: 11, name: "record_content_hash_upgrade", sql: RECORD_FIELDS_CONTENT_HASH }
 ];
-
-/** The level the store of a built-in Knowledge Base is at when its tables are this release's. */
-export const KNOWLEDGE_STORE_LEVEL = Math.max(
-  ...KNOWLEDGE_STORE_MIGRATIONS.map((migration) => migration.number)
-);
 
 /** A later applied number never proves that earlier migrations were applied. */
 export function knowledgeStoreNeedsMigration(record: Pick<DataStoreRecord, "migrations">): boolean {
