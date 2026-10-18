@@ -75,6 +75,9 @@ export interface ConversationOffer {
   orientation?: string;
 }
 
+/** The release skill containing this instance's product documentation. */
+export const PLATFORM_DOCS_SKILL_NAME = "platform-docs";
+
 /**
  * A skill that ships with the platform's code. When the API process starts, the release seed
  * stores it as a read-only skill of origin `release`, and a later release replaces it.
