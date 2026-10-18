@@ -1,3 +1,4 @@
+import { FIELD_OUTPUT_MIN_TOKENS } from "./field-budget";
 import {
   confirmKnowledgeProcessing,
   knowledgeProcessingReview,
@@ -195,6 +196,20 @@ export function createKnowledgeBases(input: {
     }),
     async publish(stores, { access, assetId, revision, config, replaced, confirmProcessing }) {
       const definition = knowledgeBaseDefinitionSchema.parse(config);
+      const maxTokens = definition.extraction?.budget.maxTokensPerDocument;
+      if (maxTokens !== undefined && maxTokens < FIELD_OUTPUT_MIN_TOKENS)
+        throw new AppError(
+          "VALIDATION_FAILED",
+          input.defaultLocale === "de"
+            ? `extraction.budget.maxTokensPerDocument: ${maxTokens} ist kleiner als das Minimum ${FIELD_OUTPUT_MIN_TOKENS} für die Extraktion.`
+            : `extraction.budget.maxTokensPerDocument: ${maxTokens} is below the extraction minimum ${FIELD_OUTPUT_MIN_TOKENS}.`,
+          {
+            reason: "knowledge_field_token_reserve",
+            field: "extraction.budget.maxTokensPerDocument",
+            value: maxTokens,
+            minimum: FIELD_OUTPUT_MIN_TOKENS
+          }
+        );
       if (definition.extraction?.budget.perMonth !== undefined) input.assertFieldBudgetPriced?.();
 
       await confirmKnowledgeProcessing(

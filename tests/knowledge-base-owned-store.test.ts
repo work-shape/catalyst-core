@@ -109,6 +109,32 @@ describe("the store a Knowledge Base owns", () => {
       )
     );
 
+  it.each(["en", "de"] as const)(
+    "refuses a token cap below the extraction reserve at publish in %s, and accepts the reserve",
+    async (locale) => {
+      const instance = await start(true, undefined, undefined, undefined, {
+        defaultLocale: locale
+      });
+      const config = (maxTokensPerDocument: number) =>
+        documents({ methods: ["keyword"], extraction: { budget: { maxTokensPerDocument } } });
+      const draft = await put(instance, config(511));
+      expect(draft.statusCode).toBe(200);
+      const refused = await publish(instance, 1);
+      expect(refused.statusCode).toBe(422);
+      const body = refused.json<ErrorBody>();
+      expect(body.error.message).toContain("extraction.budget.maxTokensPerDocument");
+      expect(body.error.message).toContain("511");
+      expect(body.error.message).toContain("512");
+      expect(body.error.message).toContain(
+        locale === "de" ? "kleiner als das Minimum" : "below the extraction minimum"
+      );
+      expect(await ownedRecord(instance)).toBeUndefined();
+      expect((await put(instance, config(512), 1)).statusCode).toBe(200);
+      expect((await publish(instance, 2)).statusCode).toBe(200);
+      await settle(instance);
+    }
+  );
+
   it("is made on publish with the platform's tables and pgvector where the Knowledge Base searches by meaning", async () => {
     const instance = await start(true, undefined, undefined, undefined, { embedding: true });
 
