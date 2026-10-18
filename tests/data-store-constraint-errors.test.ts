@@ -159,6 +159,7 @@ describe("constraint diagnostics through a Data Store operation", () => {
             registry,
             runs: db.store.operationRuns,
             authorizer: { forActor: async () => accessOf(actor) },
+            resolveResource: (resource) => Promise.resolve({ resource }),
             events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },
             audit: new NoopAuditRecorder(),
             policy: {
