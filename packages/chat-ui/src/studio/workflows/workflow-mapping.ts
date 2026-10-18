@@ -116,6 +116,11 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   parentWorkflow?: string;
   /** The run key its start gave the run. */
   runKey?: string;
+  labels?: Readonly<Record<string, string>>;
+  /** On a part of a run that continued as new (EW-CAN). */
+  continuation?: { rootRunId: string; previousRunId?: string; number: number };
+  /** How many step runs the run made. */
+  stepRunCount?: number;
   /** The revision of the definition the run started on. */
   definitionRevisionId?: string;
   error?: ErrorResource;
@@ -264,6 +269,11 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     ...(run.definitionRevisionId === undefined ? {} : { revisionId: run.definitionRevisionId }),
     test: run.mode === "test",
     ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
+    ...(run.continuation === undefined ? {} : { continuation: run.continuation }),
+    ...(run.labels === undefined || Object.keys(run.labels).length === 0
+      ? {}
+      : { labels: run.labels }),
+    ...(run.stepRunCount === undefined ? {} : { stepRuns: run.stepRunCount }),
     empty: run.empty === true && run.status === "done",
     failedDescendantCount: run.failedDescendantCount ?? 0,
     failedItemCount: run.failedItemCount ?? 0,
