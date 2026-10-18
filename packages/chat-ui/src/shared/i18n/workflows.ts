@@ -71,6 +71,8 @@ export const workflows = defineTranslations({
     "workflows.advice.outputInvalid":
       "Running it again ends the same way: whoever builds the workflow has to change what it returns.",
     "workflows.advice.policy": "An administrator can allow it in the policy of the instance.",
+    "workflows.advice.runKeyCycle":
+      "Running it again ends the same way: whoever builds the workflow has to give the started workflow a different key, or stop it from calling back into its own chain.",
     "workflows.advice.stepLimit":
       "Have the workflow work on fewer entries at once, then run it again.",
     "workflows.advice.tooMuchData":
@@ -222,6 +224,10 @@ export const workflows = defineTranslations({
     "workflows.reason.other": "The step failed.",
     "workflows.reason.outputInvalid": "The result does not have the form the workflow promises.",
     "workflows.reason.policy": "The policy of the instance does not allow this step in a workflow.",
+    "workflows.reason.runKeyCycle":
+      "The key for the workflow this step starts is held by a run in its own call chain.",
+    "workflows.reason.runKeyCycleNamed":
+      "The key for Workflow “{workflow}” is held by a run in its own call chain.",
     "workflows.reason.stepLimit": "The run took more steps than a run may and was stopped.",
     "workflows.reason.tooMuchData": "The step had more data than a run may carry.",
     "workflows.run.again": "Run again",
@@ -421,6 +427,8 @@ export const workflows = defineTranslations({
     "workflows.advice.outputInvalid":
       "Ein neuer Lauf endet genauso: Wer den Workflow baut, muss ändern, was er zurückgibt.",
     "workflows.advice.policy": "Ein Administrator kann es in den Richtlinien der Instanz erlauben.",
+    "workflows.advice.runKeyCycle":
+      "Ein neuer Lauf endet genauso: Wer den Workflow baut, muss dem gestarteten Workflow einen anderen Schlüssel geben oder verhindern, dass er in seine eigene Aufrufkette zurückruft.",
     "workflows.advice.stepLimit":
       "Lass den Workflow weniger Einträge auf einmal bearbeiten und starte ihn dann erneut.",
     "workflows.advice.tooMuchData":
@@ -579,6 +587,10 @@ export const workflows = defineTranslations({
     "workflows.reason.outputInvalid": "Das Ergebnis hat nicht die Form, die der Workflow zusagt.",
     "workflows.reason.policy":
       "Die Richtlinien der Instanz erlauben diesen Schritt in einem Workflow nicht.",
+    "workflows.reason.runKeyCycle":
+      "Den Schlüssel für den Workflow, den dieser Schritt startet, hält ein Lauf in seiner eigenen Aufrufkette.",
+    "workflows.reason.runKeyCycleNamed":
+      "Den Schlüssel für den Workflow „{workflow}“ hält ein Lauf in seiner eigenen Aufrufkette.",
     "workflows.reason.stepLimit":
       "Der Lauf hat mehr Schritte gebraucht, als ein Lauf darf, und wurde gestoppt.",
     "workflows.reason.tooMuchData": "Der Schritt hatte mehr Daten, als ein Lauf tragen darf.",

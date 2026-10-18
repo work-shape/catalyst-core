@@ -52,6 +52,7 @@ const FAILURE_REASONS: Readonly<Record<string, WorkflowFailureReason>> = {
   reference_unresolved: "dataMismatch",
   loop_items_not_a_list: "dataMismatch",
   run_key_invalid: "dataMismatch",
+  run_key_cycle: "runKeyCycle",
   output_not_json: "dataMismatch",
   output_invalid: "outputInvalid",
   step_data_too_large: "tooMuchData",
@@ -150,16 +151,32 @@ export interface WorkflowStepRunResource
   datasets?: readonly WorkflowDatasetResource[];
 }
 
+/**
+ * The Workflow a `workflow` step could not start because its run key is held in the step's own
+ * call chain. The engine writes no field for it, only its generated sentence
+ * "The operation 'workflow.<name>.start' failed (run_key_cycle)"; the name is read from that
+ * sentence alone and only where it has a Workflow's name form, so no key or value passes.
+ */
+const RUN_KEY_CYCLE_SENTENCE =
+  /^The operation 'workflow\.([a-z][a-z0-9_-]{0,62})\.start' failed \(run_key_cycle\)$/u;
+
+function cycleWorkflowOf(error: ErrorResource): string | undefined {
+  return error.code === "run_key_cycle"
+    ? RUN_KEY_CYCLE_SENTENCE.exec(error.message)?.[1]
+    : undefined;
+}
+
 function toFailure(error: ErrorResource | undefined) {
-  return error === undefined
-    ? {}
-    : {
-        failure: {
-          reason: FAILURE_REASONS[error.code] ?? "other",
-          detail: error.message,
-          ...(error.action === undefined ? {} : { action: error.action })
-        }
-      };
+  if (error === undefined) return {};
+  const workflow = cycleWorkflowOf(error);
+  return {
+    failure: {
+      reason: FAILURE_REASONS[error.code] ?? "other",
+      detail: error.message,
+      ...(error.action === undefined ? {} : { action: error.action }),
+      ...(workflow === undefined ? {} : { workflow })
+    }
+  };
 }
 
 function toOutput(preview: WorkflowOutputPreview | undefined) {

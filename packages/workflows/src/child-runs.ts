@@ -20,6 +20,7 @@ import type { WorkflowDefinitionSource } from "./definition-source";
 import { runKeyRefusal, type StartWorkflowRunInput } from "./run-open";
 import type { PreparedStart } from "./run-start";
 import type { RunOrigin } from "./scheduled-start";
+import { assertRunLinkIsAcyclic } from "./child-run-links";
 
 /** A start must record its durable run promptly; overdue Operation Runs can be recovered. */
 const WORKFLOW_START_OPERATION_TIMEOUT_MS = 30_000;
@@ -164,6 +165,10 @@ export function createWorkflowStartSource(options: {
         }
         const prepared = await options.prepare(published, inputs);
         const run = await stores.transaction(async (tx) => {
+          // Keyed starts may link existing runs. Serialize their guard reads through the
+          // link write, before either run row lock; disjoint row pairs can close a cycle.
+          // Unkeyed starts only create children, which have no outgoing waits.
+          if (key !== undefined) await tx.workflowRuns.lockRunLinks({ clientInstanceId });
           // The parent lock serializes starts with cancellation and competing attempts.
           const parent = await tx.workflowRuns.lockRun({ clientInstanceId, id: step.runId });
           if (
@@ -214,6 +219,7 @@ export function createWorkflowStartSource(options: {
           // A run of another step or start holds the key: the step links to it and does not
           // own it. The holder is locked, so its end comes after this link and wakes the step.
           if (run && run.parentStepRunId !== step.id) {
+            await assertRunLinkIsAcyclic(tx.workflowRuns, parent, run);
             await tx.workflowRuns.linkStepRun({
               clientInstanceId,
               id: step.id,

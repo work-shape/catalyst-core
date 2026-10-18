@@ -2,8 +2,8 @@ import type { ClientInstanceId, PlatformStores, WorkflowRun } from "@work-shape/
 import { workflowDeadlineJobKind, workflowDeadlineKey } from "./run-deadline";
 
 // Time a run spends waiting counts toward no limit (EW-LIM). A run waits while every open step
-// of it waits for something outside it: an asynchronous operation, or a child that waits as
-// well. A parent whose child works is working, so the parent waits only while the child does.
+// of it waits for something outside it: an asynchronous operation, a run linked by key, or
+// a child that waits as well. A parent whose child works is working, so the parent waits only while the child does.
 // From the moment it waits the run carries `waitingSince`; when a step of it is taken up again
 // its deadline moves later by the time it waited, so the deadline stays one comparison.
 //

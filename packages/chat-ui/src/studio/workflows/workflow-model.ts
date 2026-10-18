@@ -222,9 +222,12 @@ export function runStatePresentation(
  * action the account of the Workflow does not hold.
  */
 export function failureHappened(
-  failure: Pick<WorkflowFailure, "reason" | "action"> & { detail?: string },
+  failure: Pick<WorkflowFailure, "reason" | "action" | "workflow"> & { detail?: string },
   t: (key: TranslationKey, values?: Record<string, string>) => string
 ): string {
+  if (failure.workflow !== undefined && failure.reason === "runKeyCycle") {
+    return t("workflows.reason.runKeyCycleNamed", { workflow: failure.workflow });
+  }
   if (failure.action !== undefined && failure.reason === "missingRight") {
     return t("workflows.reason.missingRightNamed", { right: failure.action });
   }

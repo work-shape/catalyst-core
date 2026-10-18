@@ -21,6 +21,7 @@ export function childWorkflowRuns(
 ): Pick<
   WorkflowRunsStore,
   | "lockDefinitionGraph"
+  | "lockRunLinks"
   | "findRunByOperation"
   | "findChildRun"
   | "listChildRuns"
@@ -31,6 +32,10 @@ export function childWorkflowRuns(
   return {
     async lockDefinitionGraph(input) {
       const key = `workflow-definition-graph:${input.clientInstanceId}`;
+      await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+    },
+    async lockRunLinks(input) {
+      const key = `workflow-run-links:${input.clientInstanceId}`;
       await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
     },
     async findRunByOperation(ref) {

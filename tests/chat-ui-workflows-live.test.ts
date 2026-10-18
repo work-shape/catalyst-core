@@ -497,6 +497,52 @@ describe("what a run says about how it ended", () => {
     ).toContain("lacks the right “connection.use”");
   });
 
+  it("names the Workflow whose run key is held in the step's own call chain, and nothing else", () => {
+    const cycle = {
+      code: "run_key_cycle",
+      message: "The operation 'workflow.open-invoices.start' failed (run_key_cycle)"
+    };
+    const failure = toWorkflowStepRun(
+      stepRun("wfs_cycle", "remind", { stepType: "workflow", status: "failed", error: cycle })
+    ).failure;
+    expect(failure).toMatchObject({ reason: "runKeyCycle", workflow: "open-invoices" });
+    expect(failure && failureHappened(failure, t)).toBe(
+      "The key for Workflow “open-invoices” is held by a run in its own call chain."
+    );
+    expect(failure && failureHappened(failure, de)).toBe(
+      "Den Schlüssel für den Workflow „open-invoices“ hält ein Lauf in seiner eigenen Aufrufkette."
+    );
+    // The run the step failed carries the same sentence.
+    expect(page({ ...run, status: "failed", error: cycle })).toContain(
+      "The key for Workflow “open-invoices” is held by a run in its own call chain."
+    );
+
+    // A sentence of any other form names no Workflow: nothing of it reaches the sentence.
+    for (const message of [
+      "The operation 'workflow.open-invoices.start' failed (run_key_cycle): key=abc",
+      "The operation 'workflow.Open Invoices.start' failed (run_key_cycle)",
+      "The operation 'connection.open-invoices.start' failed (run_key_cycle)",
+      "run key 'secret-key' is held"
+    ]) {
+      const other = toWorkflowRun({
+        ...run,
+        status: "failed",
+        error: { code: "run_key_cycle", message }
+      }).failure;
+      expect(other).toMatchObject({ reason: "runKeyCycle" });
+      expect(other?.workflow).toBeUndefined();
+      expect(other && failureHappened(other, t)).toBe(t("workflows.reason.runKeyCycle"));
+    }
+    // The form alone names no Workflow under another code.
+    expect(
+      toWorkflowRun({
+        ...run,
+        status: "failed",
+        error: { code: "run_key_invalid", message: cycle.message }
+      }).failure?.workflow
+    ).toBeUndefined();
+  });
+
   it("says of a run interrupted in a changing call that the call may have happened and was not repeated", () => {
     const markup = page({
       ...run,

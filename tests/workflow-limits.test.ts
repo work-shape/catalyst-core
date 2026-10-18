@@ -6,7 +6,8 @@ import {
   type OperationDefinition,
   type OperationRunId,
   type OperationSource,
-  type WorkflowManifest
+  type WorkflowManifest,
+  type WorkflowRunId
 } from "@work-shape/catalyst-core";
 import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
@@ -448,12 +449,12 @@ describe("time a run spends waiting", () => {
     });
   };
 
-  const startRun = async (t: WorkflowFixture, workflow: string) =>
+  const startRun = async (t: WorkflowFixture, workflow: string, key?: string) =>
     runSchema.parse(
       (
         await t.expectOk(t.root.id, "workflows.start", {
           params: { workflow },
-          payload: { input: {} }
+          payload: { input: {}, ...(key === undefined ? {} : { key }) }
         })
       ).json()
     );
@@ -544,6 +545,93 @@ describe("time a run spends waiting", () => {
     expect(
       (await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id }))?.waitedMs
     ).toBeGreaterThanOrEqual(3 * DAY);
+  });
+
+  it("excludes a 3-day wait on a run linked by key from duration, including its parent's duration", async () => {
+    const keyed = waiting("synced", "parent", { duration: "1h" });
+    keyed.steps[0] = {
+      id: "start",
+      name: "Start",
+      type: "trigger",
+      triggers: [{ kind: "manual" }, { kind: "parent" }]
+    };
+    const caller = (id: string, workflow: string, key?: string) => ({
+      id,
+      name: id,
+      runAs: "workflow-runner",
+      inputs: { type: "object" },
+      outputs: { type: "object" },
+      limits: { duration: "1h" },
+      steps: [
+        {
+          id: "start",
+          name: "Start",
+          type: "trigger",
+          triggers: [{ kind: "manual" }, { kind: "parent" }]
+        },
+        {
+          id: "child",
+          name: "Child",
+          type: "workflow",
+          workflow,
+          input: {},
+          ...(key === undefined ? {} : { key: [{ value: key }] })
+        },
+        { id: "result", name: "Result", type: "output", input: { child: ref("child", "") } }
+      ]
+    });
+    const { t, clock, started } = await readyWaiting([
+      keyed,
+      caller("linked", "synced", "shared"),
+      caller("outer", "linked")
+    ]);
+    t.state.centralSettings = [
+      ...t.state.centralSettings,
+      { operation: "workflow.linked.start", value: "allow" }
+    ];
+    const holder = await startRun(t, "synced", "shared");
+    const worker = await untilSyncWaits(t, () => Promise.resolve(holder.id));
+    const outer = await startRun(t, "outer");
+    const storedOuter = await t.stores.workflowRuns.readRun({ clientInstanceId, id: outer.id });
+    if (storedOuter === undefined) throw new Error("The outer run was not stored");
+    let linkedId: WorkflowRunId | undefined;
+    for (let pass = 0; pass < 40; pass++) {
+      await worker.runDue();
+      linkedId = (
+        await t.stores.workflowRuns.listChildRuns({ clientInstanceId, id: storedOuter.id })
+      )[0]?.id;
+      if (
+        linkedId &&
+        (await t.stores.workflowRuns.listOpenStepRuns({ clientInstanceId, id: linkedId })).some(
+          (step) => step.linkedRunId === holder.id && step.status === "waiting"
+        )
+      )
+        break;
+    }
+    if (linkedId === undefined) throw new Error("The caller did not start");
+    expect(await t.stores.workflowRuns.listChildRuns({ clientInstanceId, id: linkedId })).toEqual(
+      []
+    );
+    const before = await Promise.all(
+      [holder.id, linkedId, outer.id].map((id) =>
+        t.stores.workflowRuns.readRun({ clientInstanceId, id })
+      )
+    );
+    expect(before.every((run) => run?.waitingSince !== undefined)).toBe(true);
+    clock.offsetMs = 3 * DAY;
+    await endSync(t, started[0]);
+    expect(await t.finish(outer.id, worker)).toMatchObject({ status: "done" });
+    for (const original of before) {
+      if (original === undefined) throw new Error("The run was not stored");
+      const after = await t.stores.workflowRuns.readRun({ clientInstanceId, id: original.id });
+      expect(after).toMatchObject({ status: "done" });
+      expect(after?.waitingSince).toBeUndefined();
+      expect(after?.waitedMs).toBeGreaterThanOrEqual(3 * DAY);
+      expect(Date.parse(after?.deadlineAt ?? "")).toBeGreaterThanOrEqual(
+        Date.parse(original.deadlineAt) + 3 * DAY
+      );
+    }
+    expect(started).toHaveLength(1);
   });
 
   it("still ends a run whose steps work past its duration", async () => {

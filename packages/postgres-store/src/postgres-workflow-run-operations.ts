@@ -1,3 +1,4 @@
+import { runIsWaiting } from "./postgres-workflow-run-waiting";
 import { endWorkflowRun } from "./postgres-workflow-run-end";
 import { childWorkflowRuns } from "./postgres-workflow-child-operations";
 import {
@@ -156,35 +157,6 @@ async function lockWorkflowRun(
   const [row] = await db.select(runColumns).from(workflowRuns).where(runIs(ref)).for("update");
   return row ? mapRun(row) : undefined;
 }
-
-/**
- * Whether every open step run of the run waits for something outside it. A step run that is
- * queued or running is work, and so is a code step whose script runs; a loop's own step run
- * waits for its items, which count by themselves. A `workflow` step waits outside the run
- * only while its child waits as well.
- */
-const runIsWaiting = (ref: Input<"markRunWaiting">) => sql`exists (
-    select 1 from workflow_step_runs waiting
-    where waiting.client_instance_id = ${ref.clientInstanceId}
-      and waiting.run_id = ${ref.id}
-      and waiting.status = 'waiting'
-      and waiting.step_type in ('operation', 'workflow')
-  ) and not exists (
-    select 1 from workflow_step_runs working
-    where working.client_instance_id = ${ref.clientInstanceId}
-      and working.run_id = ${ref.id}
-      and (
-        working.status in ('queued', 'running')
-        or (working.status = 'waiting' and working.step_type not in ('operation', 'workflow', 'loop'))
-        or (working.status = 'waiting' and working.step_type = 'workflow' and not exists (
-          select 1 from workflow_runs child
-          where child.client_instance_id = working.client_instance_id
-            and child.parent_step_run_id = working.id
-            and child.waiting_since is not null
-            and child.status in ('queued', 'running', 'waiting')
-        ))
-      )
-  )`;
 
 async function markWorkflowRunWaiting(
   db: PostgresConnection,

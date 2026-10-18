@@ -322,6 +322,8 @@ export interface WorkflowStepRunEnd {
 export interface WorkflowRunsStore {
   /** Serializes published Workflow edges until the calling transaction commits. */
   lockDefinitionGraph(input: { clientInstanceId: ClientInstanceId }): Promise<void>;
+  /** Serializes keyed wait links per instance until commit; acquire before run row locks. */
+  lockRunLinks(input: { clientInstanceId: ClientInstanceId }): Promise<void>;
   /** A step owns at most one child, including after a crashed start. */
   findRunByOperation(ref: {
     clientInstanceId: ClientInstanceId;

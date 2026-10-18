@@ -4,6 +4,9 @@ import {
   WORKFLOW_RUN_KEY_MAX_LENGTH,
   connectionCallError,
   type JsonValue,
+  type OperationDefinition,
+  type OperationRunId,
+  type OperationSource,
   type PlatformStores,
   type WorkflowManifest
 } from "@work-shape/catalyst-core";
@@ -12,6 +15,7 @@ import { child, children, ref } from "./support/workflow-children";
 import { clientInstanceId } from "./support/access-instance";
 import { publishedDefinitions, runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { readyChildWorkflows } from "./support/workflow-children-instance";
+import { readyWorkflows, stepRunsOf } from "./support/workflow-runs";
 
 // EW-13k: the run key. Among the runs of a Workflow that are open or `done` a key exists once;
 // a start with it starts nothing and answers that run. Spec: Run key; acceptance WF 44.
@@ -40,6 +44,7 @@ const stepRunsSchema = z.object({
       stepId: z.string(),
       status: z.string(),
       linkedRunId: z.string().optional(),
+      error: z.object({ code: z.string() }).optional(),
       outputPreview: z.object({ text: z.string() }).optional()
     })
   )
@@ -151,6 +156,229 @@ function echoing(t: WorkflowFixture, clients: readonly string[] = []) {
   });
   return { failing, calls };
 }
+
+/** Both triggers let the same Workflow be an independent key holder or an owned child. */
+function chain(id: string, target?: string, key?: string) {
+  return {
+    id,
+    name: id,
+    runAs: "workflow-runner",
+    inputs: { type: "object" },
+    outputs: { type: "object" },
+    steps: [
+      {
+        id: "start",
+        name: "Start",
+        type: "trigger",
+        triggers: [{ kind: "manual" }, { kind: "parent" }]
+      },
+      ...(target
+        ? [
+            {
+              id: "call",
+              name: "Call",
+              type: "workflow",
+              workflow: target,
+              input: {},
+              ...(key === undefined ? {} : { key: [{ value: key }] })
+            }
+          ]
+        : []),
+      { id: "result", name: "Result", type: "output", input: {} }
+    ]
+  };
+}
+
+describe("run-key wait cycles", () => {
+  async function allowChain(t: WorkflowFixture, names: string[]) {
+    t.state.centralSettings = [
+      ...t.state.centralSettings,
+      ...names.map((id) => ({ operation: `workflow.${id}.start`, value: "allow" as const }))
+    ];
+  }
+
+  async function refused(t: WorkflowFixture, runId: string, workflow: string) {
+    const run = await t.finish(runId, undefined, 40);
+    expect(run.status).toBe("failed");
+    expect(run.error?.code).toBe("run_key_cycle");
+    const steps = await stepRunsOf(t, runId);
+    expect(steps.find((step) => step.stepId === "call")).toMatchObject({
+      status: "failed",
+      error: {
+        code: "run_key_cycle",
+        message: `The operation 'workflow.${workflow}.start' failed (run_key_cycle)`
+      }
+    });
+    expect((await stepRuns(t, runId)).some((step) => step.linkedRunId !== undefined)).toBe(false);
+    return run;
+  }
+
+  it.each([true, false])(
+    "serializes simultaneous keyed links (owned children: %s), refuses one cycle and frees every key",
+    async (withChildren) => {
+      const definitions = publishedDefinitions();
+      const SYNC = "fixture_sync.start";
+      function gated(id: string, target: string, key: string) {
+        const workflow = chain(id, target, key);
+        return {
+          ...workflow,
+          steps: [
+            ...workflow.steps.slice(0, 1),
+            { id: "sync", name: "Sync", type: "operation", operation: SYNC, input: {} },
+            ...workflow.steps.slice(1)
+          ]
+        };
+      }
+      definitions.publish(gated("cx", "py", "p2"));
+      definitions.publish(gated("cy", "px", "p1"));
+      definitions.publish(withChildren ? chain("px", "cx") : gated("px", "py", "p2"));
+      definitions.publish(withChildren ? chain("py", "cy") : gated("py", "px", "p1"));
+      const t = await ready(definitions);
+      await allowChain(t, ["px", "py", "cx", "cy"]);
+      const started: OperationRunId[] = [];
+      const sync: OperationDefinition = {
+        name: SYNC,
+        effect: "changing",
+        changeClass: "reversible",
+        scope: null,
+        auth: "principal",
+        action: "connection.use",
+        timeoutMs: 60_000,
+        completion: { mode: "async", stillRunning: "Sync running", example: {} },
+        inputSchema: z.object({}),
+        outputSchema: z.object({}),
+        resource: () => undefined,
+        execute(_input, context) {
+          started.push(context.runId);
+          return Promise.resolve({ started: true });
+        }
+      };
+      const source: OperationSource = {
+        resolve: (name) => Promise.resolve(name === SYNC ? sync : undefined),
+        list: () => Promise.resolve({ operations: [sync], truncated: [] })
+      };
+      t.operationCalls.registry.addSource(source);
+      t.state.centralSettings.push({ operation: SYNC, value: "allow" });
+      const px = await startWith(t, "px", "", "p1");
+      const py = await startWith(t, "py", "", "p2");
+      const worker = t.worker();
+      for (let pass = 0; pass < 40 && started.length < 2; pass++) await worker.runDue();
+      expect(started).toHaveLength(2);
+      const callers = withChildren
+        ? [...(await children(t, px.id)), ...(await children(t, py.id))]
+        : [px, py];
+      expect(callers).toHaveLength(2);
+      for (const caller of callers) {
+        expect(
+          (await stepRunsOf(t, caller.id)).find((step) => step.stepId === "sync")
+        ).toMatchObject({ status: "waiting" });
+      }
+      // Release both waits before one worker pass. Both link jobs then run concurrently,
+      // including disjoint caller/holder row pairs in the four-run regression (P4).
+      for (const id of started) {
+        await t.stores.operationRuns.finish({
+          clientInstanceId,
+          id,
+          end: { status: "done", finishedAt: new Date().toISOString(), output: { value: {} } }
+        });
+      }
+      await worker.runDue();
+      for (let pass = 0; pass < 40; pass++) {
+        const calls = (await Promise.all(callers.map((run) => stepRuns(t, run.id))))
+          .flat()
+          .filter((step) => step.stepId === "call");
+        if (
+          calls.length === 2 &&
+          calls.every((step) => step.linkedRunId || step.status === "failed")
+        )
+          break;
+        await worker.runDue();
+      }
+      const calls = (await Promise.all(callers.map((run) => stepRuns(t, run.id))))
+        .flat()
+        .filter((step) => step.stepId === "call");
+      expect(calls.filter((step) => step.linkedRunId)).toHaveLength(1);
+      expect(calls.filter((step) => step.error?.code === "run_key_cycle")).toHaveLength(1);
+      expect(calls.some((step) => step.error?.code === "INTERNAL")).toBe(false);
+      for (const run of withChildren ? [px, py, ...callers] : callers) {
+        expect((await t.finish(run.id, worker, 40)).status).toBe("failed");
+      }
+      expect((await startWith(t, "px", "", "p1")).id).not.toBe(px.id);
+      expect((await startWith(t, "py", "", "p2")).id).not.toBe(py.id);
+    }
+  );
+
+  it("refuses a link to a keyed ancestor after published call direction changes; both runs end and release their keys", async () => {
+    const definitions = publishedDefinitions();
+    definitions.publish(chain("pong"));
+    definitions.publish(chain("ping", "pong", "b"));
+    const t = await ready(definitions);
+    await allowChain(t, ["ping", "pong"]);
+    const ping = await startWith(t, "ping", "private-input", "a");
+    // Published graph is still acyclic; the pinned ping revision calls the new pong.
+    definitions.publish(chain("ping"));
+    definitions.publish(chain("pong", "ping", "a"));
+    expect((await t.finish(ping.id, undefined, 40)).status).toBe("failed");
+    const [pong] = await children(t, ping.id);
+    if (!pong) throw new Error("Missing pong child");
+    await refused(t, pong.id, "ping");
+    expect((await startWith(t, "ping", "", "a")).id).not.toBe(ping.id);
+    expect((await startWith(t, "pong", "", "b")).id).not.toBe(pong.id);
+  });
+
+  it("refuses a draft test run linking to itself under its own key", async () => {
+    const t = await readyWorkflows(
+      (fixture) => {
+        open = fixture;
+      },
+      { definitions: "assets" }
+    );
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    await allowChain(t, ["self"]);
+    const address = { kind: "workflow", name: "self" };
+    const write = await t.expectOk(t.admin.id, "assets.put", {
+      params: address,
+      payload: { config: { name: "self", manifest: chain("self") }, expectedRevision: null }
+    });
+    const { revision } = z.object({ revision: z.number() }).parse(write.json());
+    await t.expectOk(t.root.id, "assets.publish", { params: address, payload: { revision } });
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: address,
+      payload: {
+        config: { name: "self", manifest: chain("self", "self", "private-key") },
+        expectedRevision: revision
+      }
+    });
+    const response = await t.expectOk(t.root.id, "workflows.test", {
+      params: { workflow: "self" },
+      payload: { input: {}, key: "private-key" }
+    });
+    const run = runSchema.parse(response.json());
+    const ended = await refused(t, run.id, "self");
+    expect(JSON.stringify(ended.error)).not.toContain("private-key");
+    expect(await children(t, run.id)).toEqual([]);
+  });
+
+  it("refuses a three-run cycle through an existing linked wait and a child wait, and all three runs end", async () => {
+    const definitions = publishedDefinitions();
+    definitions.publish(chain("alpha", "beta", "b"));
+    definitions.publish(chain("beta", "gamma", "c"));
+    definitions.publish(chain("gamma", "alpha", "a"));
+    const t = await ready(definitions);
+    await allowChain(t, ["alpha", "beta", "gamma"]);
+    const gamma = await startWith(t, "gamma", "", "c");
+    const alpha = await startWith(t, "alpha", "", "a");
+    expect((await t.finish(alpha.id, undefined, 40)).status).toBe("failed");
+    expect((await t.finish(gamma.id, undefined, 40)).status).toBe("failed");
+    const [beta] = await children(t, alpha.id);
+    if (!beta) throw new Error("Missing beta child");
+    await refused(t, beta.id, "gamma");
+    expect((await stepRuns(t, gamma.id)).find((step) => step.stepId === "call")).toMatchObject({
+      linkedRunId: alpha.id,
+      status: "failed"
+    });
+  });
+});
 
 describe("Workflow run keys", () => {
   it("answers the run that holds a key, also once it is done, and gives a failed run's key to a new run on the published revision", async () => {

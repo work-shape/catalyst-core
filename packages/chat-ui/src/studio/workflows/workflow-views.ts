@@ -183,6 +183,8 @@ export type WorkflowFailureReason =
   | "loopEntry"
   | "stepLimit"
   | "durationLimit"
+  /** A `workflow` step's run key is held by a run in its own call chain. */
+  | "runKeyCycle"
   | "other";
 
 export interface WorkflowFailure {
@@ -191,6 +193,8 @@ export interface WorkflowFailure {
   detail: string;
   /** On a missing right: the action the account of the Workflow does not hold. */
   action?: string;
+  /** On a run key held in the call chain: the name of the Workflow the step would start. */
+  workflow?: string;
 }
 
 /** The start of what a run or a step returned, as JSON. */
