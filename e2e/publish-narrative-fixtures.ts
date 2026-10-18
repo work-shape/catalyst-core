@@ -302,6 +302,8 @@ export async function publishQuestionsLeadWithTheSentence(
     const confirmIn = (where: Locator) =>
       where.getByRole("button", { name: /^(?:Publish|Veröffentlichen)$/u });
 
+    let heldSummary: string | undefined;
+
     /** Opens one question on the page as it is loaded, and answers where its sentence stands. */
     const open: Record<Surface, () => Promise<Locator>> = {
       "app-dialog": async () => {
@@ -320,7 +322,19 @@ export async function publishQuestionsLeadWithTheSentence(
       "inbox-item": async () => {
         await page.goto("/inbox");
         const row = page.getByTestId("inbox-row").filter({ hasText: appName });
+        const answer = page.waitForResponse(
+          (response) =>
+            new URL(response.url()).pathname.startsWith("/api/v1/approval-requests/") &&
+            response.request().method() === "GET" &&
+            response.status() === 200
+        );
         await row.getByRole("button").first().click();
+        const held = z
+          .object({ preview: z.object({ review: narrativeSchema }) })
+          .parse(await (await answer).json());
+        heldSummary = held.preview.review.publishNarrative.summary;
+        // An approver sees the publisher's name; the publisher sees "Only me" (SHARE-1).
+        expect(heldSummary).toContain(member.label);
         const review = page.getByTestId("publish-review");
         await expect(review).toBeVisible();
         return review;
@@ -377,13 +391,17 @@ export async function publishQuestionsLeadWithTheSentence(
       await setAccountLocale(page, locale);
       const app = await narrativeOf(page, appRevisionUrl);
       const workflow = await narrativeOf(page, workflowRevisionUrl);
-      // The held publish shows the very sentence the Publish dialog leads with.
+      // Each surface shows its reader's sentence; the held private publish names its publisher.
       sentences[locale] = { "app-dialog": app, "workflow-question": workflow, "inbox-item": app };
       for (const theme of THEMES) {
         for (const surface of ["app-dialog", "workflow-question", "inbox-item"] as const) {
           await page.setViewportSize(DESKTOP);
           await setLook(page, locale, theme);
           const where = await open[surface]();
+          if (surface === "inbox-item") {
+            expect(heldSummary).toBeDefined();
+            sentences[locale][surface] = heldSummary ?? "";
+          }
           await expectLead(where, sentences[locale][surface], locale);
           await expectContent(where, surface);
           for (const width of WIDTHS) {
