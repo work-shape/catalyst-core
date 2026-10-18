@@ -1,4 +1,5 @@
 import type { ApiUser, PlatformContext } from "@work-shape/catalyst-api-client";
+import { forgetWhenSessionEnds } from "./shell-session";
 
 /** The right that reads every agent and skill of the instance. */
 const INSTANCE_READ_PERMISSION = "config_assets.read";
@@ -308,6 +309,17 @@ export function storeLastBuildScope(scope: string): void {
   }
   for (const listener of scopeListeners) listener();
 }
+
+// The owner is a workspace of the person signed in: the next person starts without it.
+forgetWhenSessionEnds(() => {
+  chosenInTab = undefined;
+  try {
+    window.localStorage.removeItem(SCOPE_STORAGE_KEY);
+  } catch {
+    // A browser that refuses storage kept the scope for this tab alone.
+  }
+  for (const listener of scopeListeners) listener();
+});
 
 /** Hears each owner Studio is set to work in. */
 export function subscribeBuildScope(listener: () => void): () => void {

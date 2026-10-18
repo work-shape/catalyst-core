@@ -100,7 +100,7 @@ export {
   acknowledgeRecentlyActiveAssistantRunId,
   isRecentlyActiveAssistantRunId,
   rememberRecentlyActiveAssistantRunId
-} from "../../packages/chat-ui/src/chat/assistant/assistant-message";
+} from "../../packages/chat-ui/src/chat/assistant/recently-active-runs";
 export { AssistantSourcePart } from "../../packages/chat-ui/src/chat/assistant/assistant-source-part";
 export {
   AssistantThread,
@@ -454,3 +454,16 @@ export {
   runsReadable,
   workflowRightsOn
 } from "../../packages/chat-ui/src/studio/workflows/workflow-model";
+
+export {
+  endShellSession,
+  finishSessionChange,
+  personIdIn,
+  sessionMark,
+  sessionStillOn,
+  shellSessionFor,
+  showsWorkspace,
+  subscribeToShellCache,
+  type ShellSession
+} from "../../packages/chat-ui/src/shared/shell-session";
+export { useDraftForNewConnection } from "../../packages/chat-ui/src/studio/build-area/connection-draft";

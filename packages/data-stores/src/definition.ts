@@ -1,5 +1,7 @@
 import {
   AppError,
+  ASSET_ADDRESS_MAX_LENGTH,
+  ASSET_ADDRESS_PATTERN,
   ASSET_OWNER_KINDS,
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_RESERVED_SCHEMA,
@@ -16,8 +18,8 @@ import { z } from "zod";
 // Everything here is checked and bounded before a statement is sent to a database.
 
 /** The id of a store: what `store.yaml` calls `id`. It holds no dot, so an operation name reads. */
-export const DATA_STORE_NAME_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
-export const DATA_STORE_NAME_MAX_LENGTH = 63;
+export const DATA_STORE_NAME_PATTERN = ASSET_ADDRESS_PATTERN;
+export const DATA_STORE_NAME_MAX_LENGTH = ASSET_ADDRESS_MAX_LENGTH;
 export const DATA_STORE_NAME_RULE =
   "lowercase letters and digits in words joined by '-', starting with a letter, at most 63 characters";
 /** How long the name people read may be. */

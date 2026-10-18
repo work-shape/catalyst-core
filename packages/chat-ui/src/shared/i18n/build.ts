@@ -29,7 +29,7 @@ export const build = defineTranslations({
       "The full address will be {id}. It cannot be changed later.",
     "build.addressTaken": "This address is taken. Choose another name or address.",
     "build.addressInvalid":
-      "This address does not work. Use lowercase letters, digits and _, starting with a letter.",
+      "This address does not work. Use lowercase letters and digits in words joined by -, starting with a letter, at most {max} characters.",
     "build.createNamespace": "Namespace",
     "build.createPurpose": "What should it do?",
     "build.createNoNamespace": "No Namespace",
@@ -164,7 +164,7 @@ export const build = defineTranslations({
     "build.addressTaken":
       "Diese Adresse ist vergeben. Wähle einen anderen Namen oder eine andere Adresse.",
     "build.addressInvalid":
-      "Diese Adresse geht so nicht. Nimm Kleinbuchstaben, Ziffern und _, am Anfang einen Buchstaben.",
+      "Diese Adresse geht so nicht. Nimm Kleinbuchstaben und Ziffern in Wörtern, die - verbindet, am Anfang einen Buchstaben, höchstens {max} Zeichen.",
     "build.createNamespace": "Namespace",
     "build.createPurpose": "Was soll er tun?",
     "build.createNoNamespace": "Kein Namespace",

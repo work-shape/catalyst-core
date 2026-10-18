@@ -92,16 +92,3 @@ export function formatUpdated(updatedAt: string, now: Date, locale: LocaleCode):
     unit
   );
 }
-
-/**
- * An id made from the name people read: lowercase words joined by underscores, as far as the
- * name gives any. The reader can change it before the asset is created.
- */
-export function assetIdFromTitle(title: string): string {
-  return title
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/gu, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "_")
-    .replace(/^_+|_+$/gu, "");
-}

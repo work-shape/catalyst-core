@@ -41,6 +41,9 @@ const ARTIFACT_PREVIEW_IMAGE_KINDS = new Set([
 
 const WORKSPACE_SOURCE_EXTENSIONS = new Set([
   "csv",
+  "txt",
+  "md",
+  "markdown",
   "doc",
   "odp",
   "ods",
@@ -55,6 +58,9 @@ const WORKSPACE_SOURCE_EXTENSIONS = new Set([
 ]);
 
 const WORKSPACE_SOURCE_MIME_TYPES = new Map<string, string>([
+  ["text/plain", "txt"],
+  ["text/markdown", "markdown"],
+  ["text/x-markdown", "markdown"],
   ["application/msword", "doc"],
   ["application/rtf", "rtf"],
   ["application/vnd.ms-excel", "xls"],
@@ -70,6 +76,12 @@ const WORKSPACE_SOURCE_MIME_TYPES = new Map<string, string>([
 ]);
 
 export const WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES = [
+  ".txt",
+  ".md",
+  ".markdown",
+  "text/plain",
+  "text/markdown",
+  "text/x-markdown",
   ".csv",
   ".doc",
   ".odt",
@@ -103,6 +115,8 @@ export interface CreateExecutionWorkspaceSourceAttachmentHandlerInput {
   objectStore: ObjectStorage;
   maxFileBytes?: number;
   markDeletedOnDelete: boolean;
+  /** Specialized processing owns a file where one of these handlers accepts it. */
+  capabilityAttachmentHandlers?: readonly Pick<ClientInstanceAttachmentHandler, "acceptsFile">[];
 }
 
 export function createExecutionWorkspaceSourceAttachmentHandler(
@@ -120,7 +134,10 @@ export function createExecutionWorkspaceSourceAttachmentHandler(
     maxFileBytes,
     acceptedFileTypes: WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES,
     acceptsFile(file) {
-      return detectWorkspaceSourceFileFormat(file.filename, file.mimeType) !== undefined;
+      return (
+        detectWorkspaceSourceFileFormat(file.filename, file.mimeType) !== undefined &&
+        !input.capabilityAttachmentHandlers?.some((handler) => handler.acceptsFile(file))
+      );
     },
     listDraftAttachments(conversationId) {
       return service.listDraftAttachments(conversationId);
@@ -245,15 +262,23 @@ export function detectWorkspaceSourceFileFormat(
   filename: string,
   mimeType: string | undefined
 ): string | undefined {
+  const extension = extensionFromFilename(filename);
+  const extensionFormat =
+    extension && WORKSPACE_SOURCE_EXTENSIONS.has(extension)
+      ? extension === "md"
+        ? "markdown"
+        : extension
+      : undefined;
   const normalizedMimeType = mimeType?.split(";", 1)[0]?.trim().toLowerCase();
   const mimeFormat = normalizedMimeType
     ? WORKSPACE_SOURCE_MIME_TYPES.get(normalizedMimeType)
     : undefined;
-  if (mimeFormat) {
-    return mimeFormat;
+  // Browsers can label CSV or Markdown as plain text. Preserve a known extension, and
+  // never let a generic text MIME type admit an unsupported extension such as .py or .bin.
+  if (mimeFormat === "txt" || mimeFormat === "markdown") {
+    return extensionFormat ?? (extension === undefined ? mimeFormat : undefined);
   }
-  const extension = extensionFromFilename(filename);
-  return extension && WORKSPACE_SOURCE_EXTENSIONS.has(extension) ? extension : undefined;
+  return mimeFormat ?? extensionFormat;
 }
 
 function createWorkspaceSourceAttachmentManifest(

@@ -37,10 +37,14 @@ import { MarkdownText } from "../markdown/markdown-text";
 import { DataPart, ToolCallFoldLabel, ToolCallPart } from "../tools/tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
 import { formatWorkHistoryLabel } from "./thread-time";
+import {
+  acknowledgeRecentlyActiveAssistantRunId,
+  isRecentlyActiveAssistantRunId,
+  rememberRecentlyActiveAssistantRunId
+} from "./recently-active-runs";
 import { isWorkspacePromotedSurfacesData } from "../tools/tool-surfaces";
 
 const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();
-const recentlyActiveAssistantRunIds = new Set<string>();
 
 export function ThreadMessage({
   conversationRunning,
@@ -526,28 +530,6 @@ function AssistantWorkGroup({
       </ToolGroupContent>
     </ToolGroupRoot>
   );
-}
-
-export function rememberRecentlyActiveAssistantRunId(runId: string): void {
-  recentlyActiveAssistantRunIds.delete(runId);
-  recentlyActiveAssistantRunIds.add(runId);
-  if (recentlyActiveAssistantRunIds.size <= 20) {
-    return;
-  }
-  const oldestRunId = recentlyActiveAssistantRunIds.values().next().value;
-  if (typeof oldestRunId === "string") {
-    recentlyActiveAssistantRunIds.delete(oldestRunId);
-  }
-}
-
-export function isRecentlyActiveAssistantRunId(runId: string | undefined): boolean {
-  return Boolean(runId && recentlyActiveAssistantRunIds.has(runId));
-}
-
-export function acknowledgeRecentlyActiveAssistantRunId(runId: string | undefined): void {
-  if (runId) {
-    recentlyActiveAssistantRunIds.delete(runId);
-  }
 }
 
 function UserMessage() {

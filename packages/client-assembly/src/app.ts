@@ -361,6 +361,7 @@ export async function createClientInstanceExecutionAssembly(
         files: store.files,
         objectStore: workspaceObjectStore,
         maxFileBytes: config.executionWorkspaces.sourceFiles.maxFileBytes,
+        capabilityAttachmentHandlers,
         markDeletedOnDelete: capabilityAttachmentHandlers.length === 0
       })
     : undefined;

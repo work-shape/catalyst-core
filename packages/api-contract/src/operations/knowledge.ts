@@ -68,6 +68,11 @@ const knowledgeStateResponseSchema = z.object({
   dataFlows: workflowDataFlowsSchema.optional(),
   /** Due ingestion has no reporting worker. Omitted for a structured Knowledge Base. */
   processingWaiting: z.boolean().optional(),
+  /**
+   * The formats this instance reads into a Knowledge Base that keeps documents: `txt` and
+   * `markdown`, with document processing also `pdf` and `docx`. Omitted for a structured one.
+   */
+  documentFormats: z.array(z.string()).optional(),
   /** The id of the Knowledge Base's asset. */
   id: z.string(),
   /** The id operations and routes name the Knowledge Base by. */
@@ -300,6 +305,20 @@ export const knowledgeOperations = {
     scope: "data_store_rows:write",
     effect: "changing",
     body: knowledgeAddFilesRequestSchema,
+    response: json(knowledgeAddFilesResponseSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
+    rateClass: "write"
+  }),
+  "knowledge_bases.upload_file": defineRegisteredOperation({
+    ...BASE,
+    id: "knowledge_bases.upload_file",
+    method: "POST",
+    path: "/api/v1/knowledge-bases/:knowledgeBase/uploads",
+    summary:
+      "Upload one file from the caller's device to a Knowledge Base that keeps documents. It runs as the Knowledge Base's add_files and keeps the file as a copy the Knowledge Base owns",
+    scope: "data_store_rows:write",
+    effect: "changing",
+    multipart: true,
     response: json(knowledgeAddFilesResponseSchema),
     errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
     rateClass: "write"

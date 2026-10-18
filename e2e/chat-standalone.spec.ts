@@ -3151,7 +3151,7 @@ test("Studio opens on a list, and a list and an asset each have an address", asy
   const newSkill = page.getByRole("dialog", { name: "New skill", exact: true });
   await newSkill.getByRole("textbox", { name: /^Title/u }).fill("Workflow review");
   await newSkill.getByRole("button", { name: "Advanced", exact: true }).click();
-  await expect(newSkill.getByRole("textbox", { name: /^Address/u })).toHaveValue("workflow_review");
+  await expect(newSkill.getByRole("textbox", { name: /^Address/u })).toHaveValue("workflow-review");
   await newSkill.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(newSkill).toBeHidden();
   await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
@@ -3293,7 +3293,7 @@ test("superadmin manages config assets with validation and conflict protection",
   test.setTimeout(60_000);
   await signInViaApi(page, superadminUser);
   const researchAgentUrl = `${apiBaseUrl}/api/v1/assets/agent/research_assistant`;
-  const skillUrl = `${apiBaseUrl}/api/v1/assets/skill/config_e2e_skill`;
+  const skillUrl = `${apiBaseUrl}/api/v1/assets/skill/config-e2e-skill`;
   const original = await readAsset(page, researchAgentUrl);
   if (!original) {
     throw new Error("The instance has no agent research_assistant.");
@@ -3373,7 +3373,7 @@ test("superadmin manages config assets with validation and conflict protection",
       .getByRole("list", { name: "Skills" })
       .getByRole("link", { name: /^Config E2E skill/u })
       .click();
-    await expect(page).toHaveURL(/\/build\/skills\/config_e2e_skill$/u);
+    await expect(page).toHaveURL(/\/build\/skills\/config-e2e-skill$/u);
     await expect(form()).toBeVisible();
   };
 
@@ -3420,7 +3420,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await newSkill.getByRole("textbox", { name: /^Title/u }).fill("Config E2E skill");
     await newSkill.getByRole("button", { name: "Advanced", exact: true }).click();
     await expect(newSkill.getByRole("textbox", { name: /^Address/u })).toHaveValue(
-      "config_e2e_skill"
+      "config-e2e-skill"
     );
     await newSkill.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(fieldControl("Title")).toHaveValue("Config E2E skill");
@@ -3428,7 +3428,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await fieldControl("Content").fill("# Verify config assets");
     await form().getByRole("button", { name: "Create skill", exact: true }).click();
     const skillRevision = await expectSaved(skillUrl, undefined);
-    await expect(page).toHaveURL(/\/build\/skills\/config_e2e_skill$/u);
+    await expect(page).toHaveURL(/\/build\/skills\/config-e2e-skill$/u);
     await expect(
       page.getByRole("heading", { name: "Config E2E skill", exact: true })
     ).toBeVisible();
@@ -3464,7 +3464,7 @@ test("superadmin manages config assets with validation and conflict protection",
     };
     page.on("request", recordConfigWrite);
     const deleteSkillDialog = page.getByRole("dialog", {
-      name: "Delete skill 'config_e2e_skill'?",
+      name: "Delete skill 'config-e2e-skill'?",
       exact: true
     });
     await askToDelete();
@@ -3479,11 +3479,11 @@ test("superadmin manages config assets with validation and conflict protection",
 
     await askToDelete();
     await page
-      .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
+      .getByRole("dialog", { name: "Delete skill 'config-e2e-skill'?", exact: true })
       .getByRole("button", { name: "Delete", exact: true })
       .click();
     await expect(
-      page.getByText("Agent 'research_assistant' references missing skill 'config_e2e_skill'", {
+      page.getByText("Agent 'research_assistant' references missing skill 'config-e2e-skill'", {
         exact: true
       })
     ).toBeVisible();
@@ -3497,7 +3497,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await clickSkill();
     await askToDelete();
     await page
-      .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
+      .getByRole("dialog", { name: "Delete skill 'config-e2e-skill'?", exact: true })
       .getByRole("button", { name: "Delete", exact: true })
       .click();
     await expectUnchanged(skillUrl, undefined);

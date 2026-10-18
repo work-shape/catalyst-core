@@ -1,6 +1,7 @@
 import { ArrowLeft, Code, Plug } from "lucide-react";
 import { useRef, useState } from "react";
 import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
+import { CONNECTION_ASSET_KIND, assetAddressFromName } from "@work-shape/catalyst-core";
 import {
   Banner,
   Button,
@@ -12,7 +13,6 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildCreateDialogProps } from "./build-asset-kind";
-import { assetIdFromTitle } from "./build-model";
 import { readBuildRefusal, readRefusalDetails } from "./build-refusals";
 import { addressBlocksCreate, useAddressCheck } from "./name-check";
 import { ConnectionApprovalList, approveLabel, useApprovalChoice } from "./connection-approval";
@@ -143,7 +143,7 @@ export function ConnectionCreateFlow({
       : []),
     ...namespaces
   ];
-  const id = (fields.typedId ?? assetIdFromTitle(fields.title)).trim();
+  const id = (fields.typedId ?? assetAddressFromName(fields.title, CONNECTION_ASSET_KIND)).trim();
   const name = `${fields.prefix}${id}`;
   const title = fields.title.trim();
   const created = memory.current.revision !== undefined;
@@ -737,7 +737,7 @@ function draftedFields(
   const id = namespace ? name.slice(namespace.prefix.length) : name;
   return {
     title,
-    ...(id === assetIdFromTitle(title) ? {} : { typedId: id }),
+    ...(id === assetAddressFromName(title, CONNECTION_ASSET_KIND) ? {} : { typedId: id }),
     prefix,
     form: {
       ...emptyConnectionForm(),

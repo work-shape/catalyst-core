@@ -1,4 +1,5 @@
 import type { ApiClient, RunObservation } from "@work-shape/catalyst-api-client";
+import { forgetWhenSessionEnds } from "../../shared/shell-session";
 import { isTerminalObservation, type RunConnectionTarget } from "./conversation-controller-state";
 
 export interface RunConnectionCompletion {
@@ -109,10 +110,6 @@ export function startRunConnectionManager(
   };
 }
 
-export function clearRunCursors(): void {
-  browserRunCursorStorage.clearCursors();
-}
-
 export function rememberRunCursor(conversationId: string, runId: string, sequence: number): void {
   browserRunCursorStorage.rememberCursor(conversationId, runId, sequence);
 }
@@ -141,6 +138,7 @@ const browserRunCursorStorage: RunCursorStorage = {
     }
   }
 };
+forgetWhenSessionEnds(() => browserRunCursorStorage.clearCursors());
 
 function isAbortLikeError(error: unknown): boolean {
   return (

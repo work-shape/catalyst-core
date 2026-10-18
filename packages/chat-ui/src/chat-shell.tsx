@@ -1,9 +1,17 @@
-import { useCallback, useState } from "react";
+import { useCallback, useLayoutEffect, useState, useSyncExternalStore } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { ThemeMode } from "@work-shape/catalyst-ui/theme";
 import type { ClientLabelOverrides } from "./shared/i18n";
 import { ChatWorkspace } from "./chat-workspace";
 import { createWorkspaceQueryClient } from "./shared/api/workspace-queries";
+import {
+  finishSessionChange,
+  personIdIn,
+  shellSessionFor,
+  showsWorkspace,
+  subscribeToShellCache,
+  type ShellSession
+} from "./shared/shell-session";
 import {
   ToolDisplayActionsProvider,
   ToolDisplayWidgetProvider,
@@ -56,7 +64,7 @@ export function ChatShell({
   onRouteChange,
   ...workspaceProps
 }: ChatShellProps) {
-  const [queryClient] = useState(createWorkspaceQueryClient);
+  const session = useShellSession(workspaceProps.apiBaseUrl);
   // A shell without a host's router keeps its address itself.
   const [localAddress, setLocalAddress] = useState<{ route: WorkspaceRoute; chat?: string }>(
     () => ({ route: defaultWorkspaceRoute() })
@@ -72,17 +80,48 @@ export function ChatShell({
   const resolvedRouteChange = onRouteChange ?? changeLocalAddress;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ToolDisplayActionsProvider>
-        <ToolDisplayWidgetProvider widgets={displayWidgets}>
-          <ChatWorkspace
-            {...workspaceProps}
-            route={resolvedRoute}
-            chat={resolvedChat}
-            onRouteChange={resolvedRouteChange}
-          />
-        </ToolDisplayWidgetProvider>
-      </ToolDisplayActionsProvider>
+    <QueryClientProvider client={session.queryClient}>
+      {showsWorkspace(session) ? (
+        <ToolDisplayActionsProvider key={session.generation}>
+          <ToolDisplayWidgetProvider widgets={displayWidgets}>
+            <ChatWorkspace
+              {...workspaceProps}
+              route={resolvedRoute}
+              chat={resolvedChat}
+              onRouteChange={resolvedRouteChange}
+            />
+          </ToolDisplayWidgetProvider>
+        </ToolDisplayActionsProvider>
+      ) : null}
     </QueryClientProvider>
   );
+}
+
+/**
+ * The cache the shell reads through, and the session it belongs to. A change of the person
+ * signed in starts a new session in two steps: first the workspace of the person before goes,
+ * then the session before ends (its cache and every store outside React cleared) and the
+ * workspace mounts again under the new `generation`, before anything is painted. So the new
+ * workspace never starts from what the person before left.
+ */
+function useShellSession(apiBaseUrl: string): ShellSession {
+  const [session, setSession] = useState<ShellSession>(() => ({
+    queryClient: createWorkspaceQueryClient(),
+    personId: undefined,
+    generation: 0
+  }));
+  const { queryClient } = session;
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeToShellCache(queryClient, listener),
+    [queryClient]
+  );
+  const personId = useSyncExternalStore(subscribe, () => personIdIn(queryClient, apiBaseUrl));
+  const next = shellSessionFor(session, personId, apiBaseUrl, createWorkspaceQueryClient);
+  if (next !== session) setSession(next);
+  // The old workspace has gone; end its session, then mount the new one before paint.
+  useLayoutEffect(() => {
+    const shown = finishSessionChange(session);
+    if (shown !== session) setSession((current) => (current === session ? shown : current));
+  }, [session]);
+  return session;
 }

@@ -215,17 +215,19 @@ export const KNOWLEDGE_ADD_LIMITS = {
 } as const;
 
 /**
- * Whether the Add dialog lets a file be chosen, and the reason it does not: a format no
- * Knowledge Base reads, or a file over the size limit. The call refuses both.
+ * Whether the Add dialog lets a file be chosen, and the reason it does not: a format the
+ * instance does not read (PDF and DOCX need its document processing), or a file over the size
+ * limit. The call refuses both.
  */
 export function addableFile(
-  file: Pick<KnowledgeOpenableFile, "name" | "mimeType" | "bytes">
+  file: Pick<KnowledgeOpenableFile, "name" | "mimeType" | "bytes">,
+  formats: readonly string[]
 ): { addable: true } | { addable: false; reason: TranslationKey } {
   const format = knowledgeDocumentFormatOf({
     filename: file.name,
     ...(file.mimeType ? { mimeType: file.mimeType } : {})
   });
-  if (format === undefined) {
+  if (format === undefined || !formats.includes(format)) {
     return { addable: false, reason: "knowledge.addFormatRefused" };
   }
   if (file.bytes > KNOWLEDGE_ADD_LIMITS.bytes) {

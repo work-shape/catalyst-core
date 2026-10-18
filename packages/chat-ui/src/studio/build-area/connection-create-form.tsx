@@ -1,3 +1,4 @@
+import { CONNECTION_ASSET_KIND, assetAddressFromName } from "@work-shape/catalyst-core";
 import {
   Field,
   FormNotice,
@@ -9,7 +10,6 @@ import {
   type AddressCheck
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
-import { assetIdFromTitle } from "./build-model";
 import type { BuildNamespace } from "../../shared/build-rights";
 import type { ConnectStep, ConnectStepState } from "./connection-connect";
 import {
@@ -90,7 +90,7 @@ export function ConnectionCreateForm({
         onChange={(named) =>
           onChange({ ...fields, title: named.name, typedId: named.typedAddress })
         }
-        derive={assetIdFromTitle}
+        derive={(named) => assetAddressFromName(named, CONNECTION_ASSET_KIND)}
         check={errors.id === undefined ? check : { state: "refused", reason: errors.id }}
         nameLabel={t("connectionCreate.name")}
         addressLabel={t("connectionCreate.id")}

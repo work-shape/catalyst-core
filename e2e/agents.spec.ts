@@ -372,5 +372,5 @@ test("a builder who cancels a new agent stays on the Agents page", async ({
   await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(page.getByRole("heading", { level: 1, name: "Not Yet Stored" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: /^Display name/u })).toHaveValue("Not Yet Stored");
-  expect((await page.request.get(agentPath("not_yet_stored"))).status()).toBe(404);
+  expect((await page.request.get(agentPath("not-yet-stored"))).status()).toBe(404);
 });

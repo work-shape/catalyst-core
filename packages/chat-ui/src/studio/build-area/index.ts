@@ -95,6 +95,14 @@ export { knowledgeBaseKindOn } from "./knowledge-base-kind";
 export { KnowledgeAddDialog, KnowledgeDocuments } from "./knowledge-base-documents";
 export { KnowledgeTestSearch } from "./knowledge-base-test-search";
 export {
+  nextUpload,
+  queueUploads,
+  retryUpload,
+  settleUpload,
+  uploadableFile,
+  uploadFormats
+} from "./knowledge-upload-model";
+export {
   KNOWLEDGE_DOCUMENT_FAILURES,
   knowledgeBaseConfigToForm,
   knowledgeBaseFormToConfig,
@@ -118,7 +126,7 @@ export {
   toolPackages,
   withImpliedTools
 } from "./instance-tools";
-export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";
+export { resolveBuildPlace, visibleBuildKinds } from "./build-model";
 export { addressBlocksCreate, addressCheckOf } from "./name-check";
 export {
   PendingApprovalError,

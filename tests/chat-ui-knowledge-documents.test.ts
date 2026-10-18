@@ -91,6 +91,10 @@ function plantedSource(overrides: Partial<KnowledgeBaseSource> = {}) {
     ok: true,
     data: { count: 1 }
   }));
+  const uploadFile = vi.fn<KnowledgeBaseSource["uploadFile"]>(async () => ({
+    ok: true,
+    data: { count: 1 }
+  }));
   const source: KnowledgeBaseSource = {
     useState: () => ({ status: "loading" }),
     check: unused,
@@ -104,9 +108,15 @@ function plantedSource(overrides: Partial<KnowledgeBaseSource> = {}) {
     retry,
     remove,
     addFiles,
+    uploadFile,
     ...overrides
   };
-  return Object.assign(source, { retried: retry, removed: remove, added: addFiles });
+  return Object.assign(source, {
+    retried: retry,
+    removed: remove,
+    added: addFiles,
+    uploaded: uploadFile
+  });
 }
 
 function show(element: ReturnType<typeof createElement>, locale: "en" | "de" = "en") {
@@ -468,7 +478,7 @@ describe("the Documents section", () => {
     await act(async () => removeButton("vertrag")?.click());
 
     expect(removeDialog()?.textContent).toContain("Remove the document vertrag?");
-    expect(removeDialog()?.textContent).toContain("The file stays in its conversation.");
+    expect(removeDialog()?.textContent).toContain("A file added from a conversation stays there.");
     expect(source.removed).not.toHaveBeenCalled();
     const dialog = removeDialog();
     if (!dialog) throw new Error("no confirmation");
@@ -647,7 +657,7 @@ describe("the Documents section", () => {
       })
     );
     expect(document.body.textContent).toContain(
-      "No documents yet. Add files from your conversations."
+      "No documents yet. Upload files from your computer or add files from your conversations."
     );
 
     show(
@@ -739,11 +749,16 @@ describe("processing that waits for a worker", () => {
 });
 
 describe("the Add dialog", () => {
-  function openDialog(source: KnowledgeBaseSource, locale: "en" | "de" = "en") {
+  function openDialog(
+    source: KnowledgeBaseSource,
+    locale: "en" | "de" = "en",
+    formats: readonly string[] = ["txt", "markdown", "pdf", "docx"]
+  ) {
     show(
       createElement(KnowledgeAddDialog, {
         source,
         knowledgeBase: "objektunterlagen",
+        formats,
         onClose: () => undefined,
         onAdded: () => undefined
       }),
@@ -751,16 +766,56 @@ describe("the Add dialog", () => {
     );
   }
 
-  it("names the limits of one add", () => {
+  it("names the limits of one add, with the formats the instance reads", () => {
     openDialog(plantedSource());
     expect(document.body.textContent).toContain(
-      "Up to 20 files at once, each up to 25 MiB: PDF, DOCX, TXT or Markdown."
+      "Up to 20 files at once, each up to 25 MiB: TXT, Markdown, PDF, and DOCX."
     );
 
     openDialog(plantedSource(), "de");
     expect(document.body.textContent).toContain(
-      "Bis zu 20 Dateien auf einmal, jede bis 25 MiB: PDF, DOCX, TXT oder Markdown."
+      "Bis zu 20 Dateien auf einmal, jede bis 25 MiB: TXT, Markdown, PDF und DOCX."
     );
+
+    // Without document processing, no hint in the dialog promises PDF or DOCX.
+    openDialog(plantedSource(), "en", ["txt", "markdown"]);
+    expect(document.body.textContent).toContain(
+      "Up to 20 files at once, each up to 25 MiB: TXT and Markdown."
+    );
+    expect(document.body.textContent).not.toMatch(/PDF|DOCX/u);
+    openDialog(plantedSource(), "de", ["txt", "markdown"]);
+    expect(document.body.textContent).toContain(
+      "Bis zu 20 Dateien auf einmal, jede bis 25 MiB: TXT und Markdown."
+    );
+    expect(document.body.textContent).not.toMatch(/PDF|DOCX/u);
+  });
+
+  it("lets no PDF or DOCX of a conversation be chosen where the instance reads only text", () => {
+    const files = () =>
+      ready({
+        items: [file("handbuch.md"), file("notiz.txt"), file("expose.pdf"), file("vertrag.docx")]
+      });
+    openDialog(plantedSource({ useOpenableFiles: files }), "en", ["txt", "markdown"]);
+
+    expect(checkbox("handbuch.md").disabled).toBe(false);
+    expect(checkbox("notiz.txt").disabled).toBe(false);
+    for (const name of ["expose.pdf", "vertrag.docx"]) {
+      expect(checkbox(name).disabled).toBe(true);
+      expect(document.querySelector(`[data-knowledge-add-file="${name}"]`)?.textContent).toContain(
+        "Knowledge bases here read TXT and Markdown only."
+      );
+    }
+
+    openDialog(plantedSource({ useOpenableFiles: files }), "de", ["txt", "markdown"]);
+    expect(checkbox("expose.pdf").disabled).toBe(true);
+    expect(document.querySelector('[data-knowledge-add-file="expose.pdf"]')?.textContent).toContain(
+      "Wissensbasen lesen hier nur TXT und Markdown."
+    );
+
+    // With document processing the same files can be chosen.
+    openDialog(plantedSource({ useOpenableFiles: files }));
+    expect(checkbox("expose.pdf").disabled).toBe(false);
+    expect(checkbox("vertrag.docx").disabled).toBe(false);
   });
 
   it("lets no file over 25 MiB and no file in another format be chosen, and says why", () => {
@@ -787,7 +842,7 @@ describe("the Add dialog", () => {
     expect(checkbox("tabelle.xlsx").disabled).toBe(true);
     expect(
       document.querySelector('[data-knowledge-add-file="tabelle.xlsx"]')?.textContent
-    ).toContain("A knowledge base reads PDF, DOCX, TXT and Markdown only.");
+    ).toContain("Knowledge bases here read TXT, Markdown, PDF, and DOCX only.");
   });
 
   it("stops at 20 files and adds exactly the chosen ones", async () => {
@@ -843,7 +898,7 @@ describe("the Add dialog", () => {
   it("says how to get a file into the list when the workspace has none", () => {
     openDialog(plantedSource());
     expect(document.body.textContent).toContain(
-      "Upload a file in a conversation, then add it here."
+      "The conversations of your workspace hold no uploaded files yet. Upload files from your computer above."
     );
   });
 });

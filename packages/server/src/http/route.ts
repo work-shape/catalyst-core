@@ -34,6 +34,7 @@ import {
   type OperationResource,
   type OperationRegistry,
   type OperationScope,
+  type OperationUpload,
   type PolicyTarget,
   type StorePage,
   type RuntimeCallContext
@@ -48,6 +49,7 @@ import {
 } from "../operations/operation-face";
 import type { ResolvedChatServerOptions } from "../types";
 import { resolveRequestLocale } from "../routes/request-context";
+import { stageOperationUpload } from "./multipart-upload";
 import { accountTried, requireWithinLimit } from "./rate-limit";
 
 type RouteServerOptions = Pick<
@@ -177,7 +179,11 @@ export interface ResourceOperationTarget {
  * an agent or of a Workflow step. The descriptor's id is in no policy and in no audit event.
  */
 export interface ResourceOperationBinding<Op extends Operation> {
-  target(input: OperationInput<Op>): ResourceOperationTarget;
+  /**
+   * For a multipart descriptor `upload` is the received file. The input names it by its
+   * checksum and size, so that a key reused for other bytes is refused as a reused key.
+   */
+  target(input: OperationInput<Op>, upload?: OperationUpload): ResourceOperationTarget;
   /**
    * The right of the kind that the verb asks for, such as `data_store.read`. It is asked on
    * the instance where the resource has no such operation, and for nothing else: a caller
@@ -188,6 +194,11 @@ export interface ResourceOperationBinding<Op extends Operation> {
   /** What a caller who holds the right reads when the resource has no such operation. */
   notFound: string;
   bodyLimitBytes?: number;
+  /**
+   * For a multipart descriptor: the most bytes its one file may have. A larger file reaches
+   * the operation cut after one byte more, and the operation refuses it as too large.
+   */
+  uploadLimitBytes?: number;
 }
 
 /**
@@ -453,10 +464,11 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
   function registerResourceOperation(
     operation: Operation,
     binding: {
-      target(input: Record<string, unknown>): ResourceOperationTarget;
+      target(input: Record<string, unknown>, upload?: OperationUpload): ResourceOperationTarget;
       right: string;
       notFound: string;
       bodyLimitBytes?: number;
+      uploadLimitBytes?: number;
     }
   ): void {
     // The descriptor declares what a call of the registry answers, and is not in the registry.
@@ -488,31 +500,44 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
         if (!caller.identity) {
           throw new AppError("INTERNAL", `Operation '${operation.id}' was reached by nobody`);
         }
-        const target = binding.target({
-          ...inputFieldsSchema.parse(body ?? {}),
-          ...inputFieldsSchema.parse(query ?? {}),
-          ...params
-        });
-        const resolved = await face.registry.resolve(target.operation);
-        if (resolved) requireAdmittedAsTheRoute(operation, resolved);
-        // An id that has no such operation takes the same path as one that has: the call
-        // runs under the same name and the right is asked there, so a caller without it
-        // gets the same refusal, with the same recorded run, whichever id it names.
-        return face.answer(
-          operation,
-          {
-            identity: caller.identity,
-            origin: originOf(caller.identity, request),
-            correlationId,
-            input: target.input,
-            idempotencyKey: readIdempotencyKey(request),
-            locale: resolveRequestLocale(options, request),
-            effect: resolved?.effect,
-            runs: target.operation,
-            ...(resolved ? {} : { absent: { right: binding.right, notFound: binding.notFound } })
-          },
-          reply
-        );
+        // A multipart descriptor hands its file to the call as a live upload: staged on disk
+        // while the call runs, removed after it however it ends. The input never holds it.
+        const staged = operation.multipart
+          ? await stageOperationUpload(request, binding.uploadLimitBytes)
+          : undefined;
+        try {
+          const target = binding.target(
+            {
+              ...inputFieldsSchema.parse(body ?? {}),
+              ...inputFieldsSchema.parse(query ?? {}),
+              ...params
+            },
+            staged?.upload
+          );
+          const resolved = await face.registry.resolve(target.operation);
+          if (resolved) requireAdmittedAsTheRoute(operation, resolved);
+          // An id that has no such operation takes the same path as one that has: the call
+          // runs under the same name and the right is asked there, so a caller without it
+          // gets the same refusal, with the same recorded run, whichever id it names.
+          return await face.answer(
+            operation,
+            {
+              identity: caller.identity,
+              origin: originOf(caller.identity, request),
+              correlationId,
+              input: target.input,
+              idempotencyKey: readIdempotencyKey(request),
+              locale: resolveRequestLocale(options, request),
+              effect: resolved?.effect,
+              runs: target.operation,
+              ...(staged ? { upload: staged.upload } : {}),
+              ...(resolved ? {} : { absent: { right: binding.right, notFound: binding.notFound } })
+            },
+            reply
+          );
+        } finally {
+          await staged?.cleanup();
+        }
       }
     });
   }

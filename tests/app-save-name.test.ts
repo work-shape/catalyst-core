@@ -74,6 +74,8 @@ describe("the id of a saved App", () => {
     ["Über_uns", "ueber-uns"],
     ["Café Crème", "cafe-creme"],
     ["???", "app"],
+    // An id starts with a letter, as every address a create dialog makes.
+    ["2026 Bericht", "app-2026-bericht"],
     ["a".repeat(40) + " " + "b".repeat(40), "a".repeat(40) + "-" + "b".repeat(22)]
   ])("is the same for app.save and Save as app of %j", async (name, id) => {
     const sent = await idAppSaveSends(name);
