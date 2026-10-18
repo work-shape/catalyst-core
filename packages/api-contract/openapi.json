@@ -16074,6 +16074,9 @@
                                   "estimatedTokens": {
                                     "type": "number"
                                   },
+                                  "reservedOutputTokens": {
+                                    "type": "number"
+                                  },
                                   "maxTokensPerDocument": {
                                     "type": "number"
                                   }
@@ -16081,6 +16084,7 @@
                                 "required": [
                                   "reason",
                                   "estimatedTokens",
+                                  "reservedOutputTokens",
                                   "maxTokensPerDocument"
                                 ]
                               }

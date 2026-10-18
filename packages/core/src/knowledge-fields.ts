@@ -6,7 +6,7 @@ export interface KnowledgeFieldExtractor {
   currency: string;
   /** Refused only when publishing a monthly field budget; unbudgeted extraction needs no price. */
   assertBudgetPriced?(): void;
-  /** An adapter may provide its tokenizer; otherwise UTF-8 bytes / 3 is used. */
+  /** An adapter may provide its tokenizer; otherwise UTF-8 bytes / 4 is used. */
   countInputTokens?(input: { pages: { page: number; text: string }[]; schema: JsonObject }): number;
   /** Upper bound at admission; billed rates include input and output. */
   reserveCost(tokens: number): number;
@@ -58,4 +58,9 @@ export interface KnowledgeFieldStore {
 /** Why field extraction is paused, without retaining any document payload. */
 export type KnowledgeFieldsPendingReason =
   | { reason: "monthly_budget" }
-  | { reason: "token_budget"; estimatedTokens: number; maxTokensPerDocument: number };
+  | {
+      reason: "token_budget";
+      estimatedTokens: number;
+      reservedOutputTokens: number;
+      maxTokensPerDocument: number;
+    };

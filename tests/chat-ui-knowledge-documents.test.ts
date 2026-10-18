@@ -285,6 +285,7 @@ describe("the Documents section", () => {
         fieldsPendingReason: {
           reason: "token_budget",
           estimatedTokens: 184_250,
+          reservedOutputTokens: 512,
           maxTokensPerDocument: 120_000
         }
       })
@@ -303,7 +304,7 @@ describe("the Documents section", () => {
     expect(row("gross").textContent).toContain("Searchable");
     expect(row("gross").textContent).toContain("Fields pending");
     expect(row("gross").textContent).toContain(
-      "Fields wait: this document needs an estimated 184,250 tokens, more than the limit of 120,000 tokens per document. Raise the limit to fill them in"
+      "Fields wait: this document needs an estimated 184,250 input tokens plus 512 reserved output tokens, exceeding the limit of 120,000 tokens per document. Raise the limit to fill them in"
     );
     expect(row("gross").textContent).not.toContain(budget);
     expect(row("gross").textContent).not.toMatch(/token_budget|maxTokensPerDocument|undefined/);
@@ -315,7 +316,7 @@ describe("the Documents section", () => {
       "Felder werden gefüllt, sobald das Budget zurückgesetzt oder erhöht wird"
     );
     expect(row("gross").textContent).toContain(
-      "Felder warten: Dieses Dokument braucht geschätzt 184.250 Tokens, mehr als die Grenze von 120.000 Tokens je Dokument. Erhöhe die Grenze, damit sie gefüllt werden"
+      "Felder warten: Dieses Dokument braucht geschätzt 184.250 Eingabe-Tokens plus 512 reservierte Ausgabe-Tokens und überschreitet damit die Grenze von 120.000 Tokens je Dokument. Erhöhe die Grenze, damit sie gefüllt werden"
     );
   });
 

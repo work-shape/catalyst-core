@@ -3,6 +3,7 @@ import type {
   ClientInstanceId,
   JsonObject,
   Logger,
+  LocaleCode,
   PlatformStores,
   OperationExecutionContext,
   OperationBatchFailure,
@@ -51,7 +52,7 @@ export interface DataStoreDatasetReader {
 /** What everything that serves Data Stores in one process is built on. */
 export interface DataStoreRuntime {
   /** Instance content locale until Knowledge Bases support a content-language setting. */
-  defaultLocale: string;
+  defaultLocale: LocaleCode;
   clientInstanceId: ClientInstanceId;
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;

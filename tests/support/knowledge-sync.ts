@@ -18,7 +18,8 @@ import {
   type ConnectorContext,
   type DocumentSourceCapability,
   type KnowledgeFiles,
-  type Logger
+  type Logger,
+  type LocaleCode
 } from "@work-shape/catalyst-core";
 import { eventually, required } from "./assertions";
 import { clientInstanceId, useDataStoreInstance } from "./data-store-instance";
@@ -51,7 +52,8 @@ function context(signal: AbortSignal): ConnectorContext {
   };
 }
 
-export function useKnowledgeSync() {
+// Opt in only when a test publishes stores: migration claims otherwise add unrelated transactions.
+export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
   const { start } = useDataStoreInstance();
   const cleanups: (() => Promise<unknown>)[] = [];
   afterEach(async () => {
@@ -64,7 +66,7 @@ export function useKnowledgeSync() {
     withFileRoute = false,
     developmentAuth?: unknown,
     fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor,
-    defaultLocale: "de" | "en" = "de"
+    defaultLocale: LocaleCode = "de"
   ) {
     const logs: unknown[] = [];
     const logger: Logger = {
@@ -268,7 +270,7 @@ export function useKnowledgeSync() {
       stores: instance.stores,
       handlers: [
         ...handlers,
-        ...dataStores.jobHandlers,
+        ...(withDataStoreJobs ? dataStores.jobHandlers : []),
         ...fileJobs.handlers,
         ...(extractor
           ? [

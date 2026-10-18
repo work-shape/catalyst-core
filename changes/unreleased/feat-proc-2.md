@@ -11,3 +11,5 @@ section: Added
 - Monthly-budget publish refuses an unpriced extraction binding, naming the binding and missing `usage.costs.customer.models` row; startup remains available. Token refusals retain their estimate and configured limit for distinct EN/DE recovery copy.
 
 - Field evidence uses the instance content locale consistently in extraction and records, independent of caller language. Estimate input at ceil(UTF-8 bytes / 4) with the default 8000-token budget; accept joined or retained line-end hyphens and German/English month names with four-digit years.
+
+- Reserve max(512, 64 × declared schema fields) output tokens before admission; input estimate plus reserve must fit the unchanged 8000-token default. Token refusal details and EN/DE pending copy name the estimate, output reserve and limit. A line-end hyphen never admits a partial word; inline hyphens remain word boundaries. Data-store migration jobs are opt-in in sync test fixtures.

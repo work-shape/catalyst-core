@@ -24,6 +24,9 @@ const FIELD_EXTRACTION_BASE_TIMEOUT_MS = 60_000;
 const FIELD_EXTRACTION_PER_1000_TOKENS_MS = 15_000;
 // Estimate German and English text without treating UTF-8 bytes as tokens; never truncate evidence.
 const FIELD_INPUT_BYTES_PER_TOKEN = 4;
+// Keep room for values and evidence; documents that cannot fit both pause with the required reserve.
+const FIELD_OUTPUT_MIN_TOKENS = 512;
+const FIELD_OUTPUT_TOKENS_PER_FIELD = 64;
 const answerSchema = z.strictObject({
   date: z.iso.date().nullable().optional(),
   values: z.record(z.string(), z.json()),
@@ -183,15 +186,30 @@ export function extractFieldsOperation(
             JSON.stringify({ pages, schema: format, outputInstructions: format })
           ).byteLength / FIELD_INPUT_BYTES_PER_TOKEN
         );
-      if (inputTokens >= maxTokens) {
+      const properties = schema.properties;
+      const fieldCount =
+        properties !== null && typeof properties === "object" && !Array.isArray(properties)
+          ? Object.keys(properties).length
+          : 0;
+      const reservedOutputTokens = Math.max(
+        FIELD_OUTPUT_MIN_TOKENS,
+        FIELD_OUTPUT_TOKENS_PER_FIELD * fieldCount
+      );
+      if (inputTokens + reservedOutputTokens > maxTokens) {
         // Token refusal is a pause too, without changing the document's search state.
         await store.pause(
           documentId,
-          { reason: "token_budget", estimatedTokens: inputTokens, maxTokensPerDocument: maxTokens },
+          {
+            reason: "token_budget",
+            estimatedTokens: inputTokens,
+            reservedOutputTokens,
+            maxTokensPerDocument: maxTokens
+          },
           signal
         );
         throw failure("knowledge_field_token_budget_reached", {
           estimatedTokens: inputTokens,
+          reservedOutputTokens,
           maxTokensPerDocument: maxTokens
         });
       }
@@ -257,7 +275,6 @@ export function extractFieldsOperation(
         throw failure("knowledge_field_output_invalid");
       }
       if (!parsed.success) throw failure("knowledge_field_output_invalid");
-      const properties = schema.properties;
       const supported =
         properties !== null && typeof properties === "object" && !Array.isArray(properties)
           ? properties

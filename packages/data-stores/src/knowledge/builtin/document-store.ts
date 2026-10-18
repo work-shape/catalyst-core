@@ -145,6 +145,7 @@ const documentRow = z.object({
       z.object({
         reason: z.literal("token_budget"),
         estimatedTokens: z.number(),
+        reservedOutputTokens: z.number(),
         maxTokensPerDocument: z.number()
       })
     ])

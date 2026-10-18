@@ -1,11 +1,17 @@
 import type { JsonValue } from "./json";
 import type { RecordEvidenceResult } from "@work-shape/catalyst-asset-schemas";
 
+// A retained line-end hyphen belongs to the word; an inline hyphen stays a boundary.
+const LINE_END_HYPHEN = "\u2060";
+
 /** Compare retained text and citations without layout or Unicode encoding differences. */
 function normalise(text: string, keepLineHyphen = false): string {
   return text
     .normalize("NFC")
-    .replace(/(\p{L})[-\u00ad][\t ]*\r?\n\s*(?=\p{L})/gu, keepLineHyphen ? "$1-" : "$1")
+    .replace(
+      /(\p{L})[-\u00ad][\t ]*\r?\n\s*(?=\p{L})/gu,
+      keepLineHyphen ? `$1${LINE_END_HYPHEN}` : "$1"
+    )
     .replaceAll("\u00ad", "")
     .replace(/\s+/gu, " ")
     .trim();
@@ -13,8 +19,12 @@ function normalise(text: string, keepLineHyphen = false): string {
 
 function wordsInclude(text: string, value: string): boolean {
   if (!value) return false;
-  const escaped = value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "u").test(text);
+  const escaped = value
+    .replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
+    .replace(/[-\u2060]/gu, "[-\\u2060]");
+  return new RegExp(`(?<![\\p{L}\\p{N}_\\u2060])${escaped}(?![\\p{L}\\p{N}_\\u2060])`, "u").test(
+    text
+  );
 }
 
 function numberFrom(token: string, locale: string): number | undefined {

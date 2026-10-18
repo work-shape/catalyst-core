@@ -25,6 +25,7 @@ import {
   type KnowledgeFiles,
   type KnowledgeQueryEmbedder,
   type Logger,
+  type LocaleCode,
   type OperationSource,
   type PlatformStores,
   type JobRetry,
@@ -115,7 +116,7 @@ export interface KnowledgeBases {
 
 export function createKnowledgeBases(input: {
   /** Instance content locale until Knowledge Bases support a content-language setting. */
-  defaultLocale: string;
+  defaultLocale: LocaleCode;
   clientInstanceId: ClientInstanceId;
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;

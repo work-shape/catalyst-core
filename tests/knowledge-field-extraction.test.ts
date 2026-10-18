@@ -29,6 +29,7 @@ const schema = {
 
 describe("PROC-2 extraction through the public Knowledge Base operation", () => {
   const { setup } = useKnowledgeSync();
+  const { setup: setupWithDataStoreJobs } = useKnowledgeSync({ withDataStoreJobs: true });
   it("check 83: retains and counts ungrounded evidence for review, pauses only fields at the KB budget, and resumes after a raise without retaining payloads", async () => {
     const extract = vi.fn<KnowledgeFieldExtractor["extract"]>(async () => ({
       text: JSON.stringify({
@@ -172,7 +173,7 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
         { value: 120.5, quote: "Invented Wohnfläche 120,5 m²", passes: false }
       ];
       const extract = vi.fn<KnowledgeFieldExtractor["extract"]>();
-      const world = await setup(
+      const world = await setupWithDataStoreJobs(
         undefined,
         undefined,
         false,
@@ -422,6 +423,7 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
           fieldsPendingReason: {
             reason: "token_budget",
             estimatedTokens: expect.any(Number),
+            reservedOutputTokens: 512,
             maxTokensPerDocument: 8000
           }
         }
@@ -431,6 +433,7 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
       error: {
         details: {
           estimatedTokens: expect.any(Number),
+          reservedOutputTokens: 512,
           maxTokensPerDocument: 8000
         }
       }
@@ -443,6 +446,88 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
     expect((await call()).statusCode).toBe(200);
     expect(extract).toHaveBeenCalledTimes(2);
   });
+
+  it.each([
+    { fields: 1, reserve: 512 },
+    { fields: 9, reserve: 576 }
+  ])(
+    "reserves $reserve output tokens for $fields fields before admission at the default limit",
+    async ({ fields, reserve }) => {
+      let estimatedTokens = 8000 - reserve - 1;
+      const extract = vi.fn<KnowledgeFieldExtractor["extract"]>(async () => ({
+        text: '{"values":{},"evidence":[]}',
+        cost: 0
+      }));
+      const world = await setup(undefined, undefined, false, undefined, {
+        currency: "EUR",
+        countInputTokens: () => estimatedTokens,
+        reserveCost: () => 1,
+        extract
+      });
+      world.world.put({
+        folderId: "folder",
+        name: "edge.txt",
+        mime: "text/plain",
+        bytes: new TextEncoder().encode("A document at the admission edge")
+      });
+      await world.drain(await world.sync());
+      const documentId = String(
+        required(
+          (await world.sql`select id from catalyst_kb.documents where withdrawn_at is null`)[0]
+        ).id
+      );
+      const call = () =>
+        world.instance.api.call("knowledge_bases.extract_fields", {
+          params: { knowledgeBase: "sync-test" },
+          payload: {
+            documentId,
+            schema: {
+              type: "object",
+              properties: Object.fromEntries(
+                Array.from({ length: fields }, (_, index) => [`field${index}`, { type: "string" }])
+              )
+            }
+          }
+        });
+      const below = await call();
+      expect(below.statusCode, below.body).toBe(200);
+      expect(extract.mock.calls[0]?.[0].maxTokens).toBe(reserve + 1);
+      estimatedTokens += 1;
+      const exact = await call();
+      expect(exact.statusCode, exact.body).toBe(200);
+      expect(extract.mock.calls[1]?.[0].maxTokens).toBe(reserve);
+      estimatedTokens += 1;
+      const above = await call();
+      expect(above.statusCode, above.body).toBe(409);
+      expect(above.json()).toMatchObject({
+        error: {
+          details: {
+            reason: "knowledge_field_token_budget_reached",
+            estimatedTokens,
+            reservedOutputTokens: reserve,
+            maxTokensPerDocument: 8000
+          }
+        }
+      });
+      expect(extract).toHaveBeenCalledTimes(2);
+      const listing = await world.instance.api.call("knowledge_bases.list_documents", {
+        params: { knowledgeBase: "sync-test" }
+      });
+      expect(listing.json()).toMatchObject({
+        documents: [
+          {
+            fieldsPending: true,
+            fieldsPendingReason: {
+              reason: "token_budget",
+              estimatedTokens,
+              reservedOutputTokens: reserve,
+              maxTokensPerDocument: 8000
+            }
+          }
+        ]
+      });
+    }
+  );
 
   it("releases admission when the document is withdrawn while loading evidence before a provider call", async () => {
     const extract = vi.fn<KnowledgeFieldExtractor["extract"]>();

@@ -47,6 +47,14 @@ describe("PROC-2 evidence boundary", () => {
     expect(recordEvidence(value, value, "Nord-\nSüd").status).toBe("passed");
     expect(recordEvidence(value, "Nord-\nSüd", value).status).toBe("passed");
   });
+  it("keeps a line-end hyphen inside its word, while an inline hyphen remains a boundary", () => {
+    expect(recordEvidence("Wohn", "Wohn", "Wohn-\nfläche").status).toBe("failed");
+    expect(recordEvidence("Wohn", "Wohn-\nfläche", "Wohn-\nfläche").status).toBe("failed");
+    expect(recordEvidence("fläche", "fläche", "Wohn-\nfläche").status).toBe("failed");
+    expect(recordEvidence("fläche", "Wohn-\nfläche", "Wohn-\nfläche").status).toBe("failed");
+    expect(recordEvidence("Wohn", "Wohn", "Wohn-fläche").status).toBe("passed");
+    expect(recordEvidence("Wohn", "Wohn-fläche", "Wohn-fläche").status).toBe("passed");
+  });
   it("never accepts a quoted digit cut out of a larger number on the page", () => {
     expect(recordEvidence("5", "5", "15 Einheiten").status).toBe("failed");
   });

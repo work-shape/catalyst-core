@@ -258,12 +258,13 @@ function DocumentRow({
   // Field extraction paused: the document is searchable, its fields follow.
   const fieldsPending = document.fieldsPending === true && document.state !== "failed";
   const pendingReason = document.fieldsPendingReason;
-  // Too large for the per-document limit: name both numbers. Otherwise the monthly budget,
+  // Too large for the per-document limit: name the input, output reserve and limit. Otherwise the monthly budget,
   // also for an instance that sends no reason.
   const fieldsPendingText =
     pendingReason?.reason === "token_budget"
       ? t("knowledge.fieldsPendingTokenBudget", {
           estimated: numbers.format(pendingReason.estimatedTokens),
+          reserve: numbers.format(pendingReason.reservedOutputTokens),
           limit: numbers.format(pendingReason.maxTokensPerDocument)
         })
       : t("knowledge.fieldsPendingMonthlyBudget");
