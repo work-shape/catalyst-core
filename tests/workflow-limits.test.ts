@@ -87,14 +87,12 @@ describe("limits in workflow.yaml", () => {
     expect(issues({ timeLimit: "1h" })).toEqual([["limits", "invalid"]]);
   });
 
-  it("reads dataset bytes and the paged step's minutes, and refuses a raise of either until datasets and paging run", () => {
+  it("accepts raised paging minutes while dataset-byte raises remain reserved", () => {
     expect(issues({ datasetBytes: 1024 * 1024, pagedStepMinutes: 30 })).toEqual([]);
     expect(issues({ datasetBytes: 3 * 1024 * 1024 * 1024 })).toEqual([
       ["limits.datasetBytes", "not_supported_yet"]
     ]);
-    expect(issues({ pagedStepMinutes: 61 })).toEqual([
-      ["limits.pagedStepMinutes", "not_supported_yet"]
-    ]);
+    expect(issues({ pagedStepMinutes: 61 })).toEqual([]);
   });
 });
 

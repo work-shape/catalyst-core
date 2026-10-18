@@ -1296,9 +1296,15 @@ A Workflow's `limits` in `workflow.yaml` set the bounds of each of its runs: `du
 ```yaml
 workflows:
   limits:
-    duration: 7d          # the default ceiling; `<n>m`, `<n>h` or `<n>d`
+    duration: 7d # the default ceiling; `<n>m`, `<n>h` or `<n>d`
     stepRuns: 1000000
     loopItems: 1000000
+    pagedStepMinutes: 60
+  datasets:
+    pages: 10000
+    pageBytes: 8388608
 ```
 
-`datasetBytes` and `pagedStepMinutes` are read already and are not above their defaults (2 GiB and 60 minutes) yet. The ceiling of `limits.concurrency` is `workflows.stepSlots`.
+A paged reading operation defaults to 60 minutes. Its Workflow may set `limits.pagedStepMinutes` above that default, up to `workflows.limits.pagedStepMinutes`; the publish question names the raise. `workflows.datasets.pages` and `pageBytes` bound the page count and each page's bytes. Connector response bounds still apply: `http_api` accepts at most 2 MiB per response. A reached ceiling fails the step with `dataset_limit` and its name; no consumer receives a partial dataset. Complete pages checkpoint their continuation, and source rate-limit deferrals preserve the page's spent retry attempts.
+
+`datasetBytes` is still not raised above its default of 2 GiB. The ceiling of `limits.concurrency` is `workflows.stepSlots`.

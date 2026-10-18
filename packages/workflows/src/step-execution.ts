@@ -1,7 +1,10 @@
+import type { WorkflowLimitContext } from "./run-limits";
 import { checkDatasetValues, loopFailureRowSchema } from "./dataset-values";
 import { datasetReference } from "./datasets";
 import { workflowValueSchema, datasetReferences } from "./dataset-schema";
 import type { WorkflowDatasets } from "./datasets";
+import { jsonObjectSchema } from "./json";
+import { pagedOperation, resolvedPaging } from "./paged-operation";
 import { operationDatasetCapture } from "./operation-dataset";
 import { childStepOutcome } from "./child-runs";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
@@ -51,7 +54,7 @@ import {
 import {
   WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
   WORKFLOW_STEP_JOB_BACKOFF_MAX_MS,
-  type WorkflowRunLimits
+  WORKFLOW_RUN_LIMITS
 } from "./limits";
 import {
   OperationStepFailure,
@@ -110,7 +113,7 @@ export interface StepExecutorOptions {
   operationCalls: WorkflowOperationCalls;
   /** Where a step of a published run reads whether its Workflow is still published. */
   definitions: Pick<WorkflowDefinitionSource, "read">;
-  limits: WorkflowRunLimits;
+  limits: WorkflowLimitContext;
   datasets?: WorkflowDatasets;
   now(): Date;
   /** Where the script of a code step is read. */
@@ -129,7 +132,8 @@ export interface StepAttempt {
 }
 
 export function createStepExecutor(options: StepExecutorOptions) {
-  const { clientInstanceId, stores, operationCalls, definitions, limits, now } = options;
+  const { clientInstanceId, stores, operationCalls, definitions, now } = options;
+  const limits = options.limits.defaults ?? WORKFLOW_RUN_LIMITS;
 
   /** Fails a step whose value does not fit a schema its definition declares. */
   function fitsSchema(schema: JsonObject, value: JsonValue, code: string, what: string): void {
@@ -350,9 +354,6 @@ export function createStepExecutor(options: StepExecutorOptions) {
           };
         }
         case "operation": {
-          for (const field of ["paginate"] as const) {
-            if (step[field] !== undefined) throw notSupportedFailure(`'${field}' on a step`);
-          }
           const input = await resolveInput(scope, step.input);
           withinStepData(input, "The input of the step");
           if (options.datasets)
@@ -360,7 +361,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
               await options.datasets.reader({ id: ref.$dataset, runId: run.id });
           const caller = await callerOf(run, stepRun);
           const captureOutput =
-            step.dataset && options.datasets
+            !step.paginate && step.dataset && options.datasets
               ? await operationDatasetCapture({
                   datasets: options.datasets,
                   registry: operationCalls.registry,
@@ -372,12 +373,51 @@ export function createStepExecutor(options: StepExecutorOptions) {
                   signal
                 })
               : undefined;
-          if (step.dataset && !captureOutput)
+          if (step.dataset && !options.datasets)
             throw new WorkflowStepFailure(
               "dataset_storage_unavailable",
               "This instance has no files object store"
             );
+          const descriptor = step.paginate
+            ? await operationCalls.registry.resolve(step.operation)
+            : undefined;
+          if (
+            step.paginate &&
+            (!descriptor?.paging ||
+              descriptor.effect !== "reading" ||
+              descriptor.streams ||
+              !step.dataset)
+          )
+            throw new WorkflowStepFailure(
+              "paging_invalid",
+              "paginate needs a reading operation with paging and dataset.at"
+            );
+          const paging =
+            step.paginate && descriptor && options.datasets
+              ? await pagedOperation({
+                  datasets: options.datasets,
+                  operationRuns: operationCalls.deps.runs,
+                  pagedStepMinutes: options.limits.ceilings.pagedStepMinutes,
+                  paging: resolvedPaging(descriptor.paging, step.paginate),
+                  progressTimeoutMs: descriptor.timeoutMs ?? WORKFLOW_STEP_JOB_BACKOFF_MAX_MS,
+                  step,
+                  outputSchema: jsonObjectSchema.parse(descriptor.outputJsonSchema ?? {}),
+                  run,
+                  stepRun,
+                  manifest: attempt.definition,
+                  args: input,
+                  signal,
+                  now,
+                  noteOperationRun: (operationRunId) =>
+                    stores.workflowRuns.noteStepRunOperation({
+                      clientInstanceId,
+                      id: stepRun.id,
+                      operationRunId
+                    })
+                })
+              : undefined;
           const result = await callStepOperation({
+            ...(paging ? { paging } : {}),
             ...(captureOutput ? { captureOutput } : {}),
             calls: operationCalls,
             run,

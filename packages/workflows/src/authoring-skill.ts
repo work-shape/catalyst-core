@@ -61,7 +61,8 @@ const STEP_REFERENCE: {
         "The mapping onto the operation's input: one entry per field of its input schema. See 'Mappings and references'.",
       dataset:
         "Use { at: <dotted path> } to replace an object-row list in the answer with a dataset reference at the same path. Rows are streamed into the files store; the step record holds only the reference. See Datasets.",
-      paginate: "Reserved for EW-13. Leave it out.",
+      paginate:
+        "Use true to take the reading Connection operation's paging, or an object to override its fields. Requires dataset.at. See Datasets.",
       timeout:
         "Only for an operation whose work ends after the call, such as the sync of a Knowledge Base: how long the step waits for it, such as `30m`, `6h` or `3d`; 6h when left out. The wait counts toward no limit of the run. At it the step fails with `operation_still_running` and the work goes on."
     }
@@ -380,7 +381,7 @@ Follow the build rules for data scope in the platform docs: \`references/configu
   - \`concurrency\`: how many steps the Workflow's runs and their children run at once, all
     together; every step slot of the instance when left out. A loop's \`concurrency\` stays
     the bound of that loop.
-  - \`datasetBytes\` and \`pagedStepMinutes\`: not above their defaults yet.
+  - \`datasetBytes\`: not above its default yet. \`pagedStepMinutes\` may be raised within the operator ceiling.
 
   A publish that raises a limit names the raise in its question. Say so to the person.
 
@@ -440,7 +441,9 @@ Workflow inputs and outputs, including child inputs and results, may contain dat
 
 Successful runs release intermediates. Failed runs retain datasets for their resume window; root output datasets default to seven days, or \`retention: { datasets: <days> }\`, bounded by step-data retention. Test roots keep no output datasets. Operator ceilings live under \`workflows.datasets\`; they are settings, not fixed customer limits. A producing step that reaches one fails with \`dataset_limit\` and its name. Deleted or unavailable parts answer \`dataset_expired\`.
 
-Download, Data Store load and streamed query are EW-12b. Paging and collection are EW-13. Do not offer those operations before the instance supports them.
+A reading Connection operation may declare paging by page, offset, cursor or next_link. Use \`paginate: true\` with \`dataset: { at: items }\` to take its paging settings, or override fields with \`paginate: { size: 100 }\`. Other output fields come from the first page. One paged step keeps one Operation Run with counts only. A lost worker resumes at the last complete page. Rows, bytes, pageBytes and pages are operator ceilings under \`workflows.datasets\`. The minute ceiling is \`workflows.limits.pagedStepMinutes\`; the Workflow may set \`limits.pagedStepMinutes\` under it. A limit fails the step, so no consumer gets a partial dataset. A changing source can repeat or skip rows between pages; load with a key removes repeats.
+
+Download, Data Store load and streamed query are EW-12b. Collection is still deferred; do not offer it.
 
 ## What this engine does not run yet
 
@@ -451,7 +454,7 @@ A definition that holds one of these is refused when it is saved, with the code
     .map((type) => `\`${type}\``)
     .join(", ")};
 - \`labels\` and \`onFailure\` on the manifest;
-- \`paginate\` on an operation step and \`collect\` on a loop (EW-13);
+- \`collect\` on a loop (EW-13);
 - datasets in code or agent inputs (EW-14).
 
 Where the person asks for one of them, say that this release does not run it yet, and offer

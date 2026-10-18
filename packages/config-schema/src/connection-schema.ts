@@ -179,16 +179,19 @@ export const connectionNameSchema = z
   .max(CONNECTION_NAME_MAX_LENGTH)
   .regex(CONNECTION_NAME_PATTERN, { message: CONNECTION_NAME_RULE });
 
-/**
- * `paging` and `limits` of an operation are read so that their shape is fixed, and nothing
- * calls by them yet. A definition that names one is refused until the call path holds them:
- * stored and ignored, a limit would be believed and not kept.
- */
+/** Source limits stay refused until EW-13s; paging belongs only to reading calls. */
 function refuseReservedFields(
   operation: { paging?: unknown; limits?: unknown; effect: string; idempotencyKeyHeader?: string },
   context: z.RefinementCtx,
   path: (string | number)[]
 ): void {
+  if (operation.paging !== undefined && operation.effect !== "reading") {
+    context.addIssue({
+      code: "custom",
+      path: [...path, "paging"],
+      message: "Only a reading operation can page"
+    });
+  }
   // A reading call carries no key: it is made again as it is.
   if (operation.idempotencyKeyHeader !== undefined && operation.effect !== "changing") {
     context.addIssue({
@@ -197,7 +200,7 @@ function refuseReservedFields(
       message: "Only a changing operation can name a header for its idempotency key"
     });
   }
-  for (const field of ["paging", "limits"] as const) {
+  for (const field of ["limits"] as const) {
     if (operation[field] !== undefined) {
       context.addIssue({
         code: "custom",

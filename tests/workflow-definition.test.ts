@@ -231,10 +231,6 @@ describe("the definitions a folder holds", () => {
     const cases: [Record<string, unknown>, string][] = [
       [{ steps: [trigger, code, output()] }, "steps[1].type"],
       [
-        { steps: [trigger, { ...operation("rows"), paginate: true }, output()] },
-        "steps[1].paginate"
-      ],
-      [
         { steps: [trigger, loop("each", inner, { collect: ref("inner").ref }), output()] },
         "steps[1].collect"
       ],

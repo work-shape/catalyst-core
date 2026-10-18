@@ -9,6 +9,8 @@ export interface WorkflowDatasetLimits {
   rowBytes: number;
   runBytes: number;
   instanceBytes: number;
+  pageBytes?: number;
+  pages?: number;
 }
 
 export interface WorkflowDatasetPart {
@@ -16,6 +18,8 @@ export interface WorkflowDatasetPart {
   rows: number;
   bytes: number;
   hash: string;
+  /** Position after this complete page. Stored atomically with the part. */
+  checkpoint?: JsonObject;
 }
 
 export interface WorkflowRunDataset {
@@ -64,7 +68,10 @@ export interface WorkflowRunDatasetsStore {
     after?: string;
     limit: number;
   }): Promise<WorkflowRunDataset[]>;
-  /** Reserves before uploading. Retries reuse the same pending part without charging twice. */
+  /**
+   * Reserves before uploading. Page checkpoints may replace an uncommitted reservation;
+   * other writers must replay the same part. Replacement adjusts the reserved bytes once.
+   */
   reservePart(
     input: WorkflowDatasetRef & {
       index: number;
@@ -97,3 +104,10 @@ export interface WorkflowRunDatasetsStore {
   claimWorkflow(input: { clientInstanceId: ClientInstanceId; workflow: string }): Promise<void>;
   markCleaned(ref: WorkflowDatasetRef & { at: string }): Promise<void>;
 }
+
+/** Defaults for operator paging ceilings, shared by release parsing and the engine. */
+export const WORKFLOW_PAGING_DEFAULTS = {
+  pageBytes: 8 * 1024 ** 2,
+  pages: 10_000,
+  pagedStepMinutes: 60
+};

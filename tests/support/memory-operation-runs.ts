@@ -20,6 +20,18 @@ export function createMemoryOperationRunStore(): OperationRunStore & { runs: Ope
   };
   return {
     runs,
+    checkpointReading({ clientInstanceId, id, ...counts }) {
+      const run = find(clientInstanceId, id);
+      if (
+        !run ||
+        run.status !== "running" ||
+        run.effect !== "reading" ||
+        run.origin.kind !== "workflow"
+      )
+        return Promise.resolve(false);
+      replace(run, { output: { value: counts } });
+      return Promise.resolve(true);
+    },
     create(run) {
       const holder =
         run.idempotencyKey === undefined

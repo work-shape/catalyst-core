@@ -10,3 +10,4 @@ export * from "./knowledge-sources";
 export * from "./workflow-datasets";
 export * from "./operation-batch";
 export * from "./knowledge-write";
+export * from "./operation-paging";

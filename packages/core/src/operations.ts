@@ -148,6 +148,26 @@ export type OperationCallRuntime = Pick<
   unreadableInput?: { code: string; message: string };
   /** Workflow dataset capture, before an outcome can retain bulk rows. Never persisted. */
   captureOutput?(output: unknown): Promise<unknown>;
+  /** Internal Workflow paging port. Each invocation validates and authorizes fresh input. */
+  readPages?(
+    page: (
+      input: unknown,
+      nextLink?: string,
+      signal?: AbortSignal,
+      address?: { previous?: string; resolved(address: string): void }
+    ) => Promise<unknown>,
+    runId: OperationRunId
+  ): Promise<unknown>;
+  /** Resume only the recorded reading call of this exact Workflow step. */
+  resumeReadingRunId?: OperationRunId;
+  /** Trusted paging call path only; connectors validate the address against their base. */
+  pageAddress?: string;
+  /** Actual previous page URL, used to resolve a relative continuation. */
+  previousPageAddress?: string;
+  /** Reports the checked URL to the Workflow's durable page checkpoint. */
+  notePageAddress?(address: string): void;
+  /** Aggregate counts only; never page contents or continuation values. */
+  pageCounts?: { pages: number; rows: number; bytes: number };
 };
 
 /**

@@ -22,6 +22,7 @@ import { DEFAULT_LIMITS, agentOrigin, fixture, operationOf } from "./support/con
 
 const REASONS: ConnectionCallReason[] = [
   "connection_unavailable",
+  "connection_disabled",
   "connection_not_configured",
   "secret_unreadable",
   "connection_not_connected",

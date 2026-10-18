@@ -269,6 +269,7 @@ function safeCallError(
 const HEALTH_OF_FAILURE: Partial<Record<ConnectionCallReason, ConnectionHealth>> = {
   upstream_unauthorized: "failed",
   connection_unavailable: "failed",
+  connection_disabled: "failed",
   secret_unreadable: "secret_unreadable",
   connection_not_connected: "needs_configuration",
   connection_needs_reconnect: "failed"
@@ -536,12 +537,12 @@ function callable(
     !connection ||
     connection.assetId !== target.assetId ||
     connection.revision !== target.revision ||
-    !connection.config.enabled ||
     !connection.type ||
     connection.state?.health === "secret_unreadable"
   ) {
     throw connectionCallError("connection_unavailable");
   }
+  if (!connection.config.enabled) throw connectionCallError("connection_disabled");
   const operation = connection.config.operations.find(
     (candidate) => candidate.name === target.operationName
   );
@@ -805,7 +806,16 @@ async function call(
     const attempt = async (refused?: string): Promise<JsonValue> => {
       const connectorContext = await open(refused);
       secret = connectorContext.credentialFor(connectorContext.target)?.secret;
-      const executing = type.execute(target.operationName, jsonInput, connectorContext);
+      const executing = type.execute(target.operationName, jsonInput, {
+        ...connectorContext,
+        ...(context.runtime.pageAddress ? { pageAddress: context.runtime.pageAddress } : {}),
+        ...(context.runtime.previousPageAddress
+          ? { previousPageAddress: context.runtime.previousPageAddress }
+          : {}),
+        ...(context.runtime.notePageAddress
+          ? { notePageAddress: context.runtime.notePageAddress }
+          : {})
+      });
       executing.catch(() => undefined);
       return Promise.race([executing, aborted.promise]);
     };

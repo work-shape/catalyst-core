@@ -384,7 +384,15 @@ async function markOperationRunInterrupted(
       finishedAt: sql`now()`,
       updatedAt: sql`now()`
     })
-    .where(and(identity(input), eq(operationRuns.status, "running")))
+    .where(
+      and(
+        identity(input),
+        eq(operationRuns.status, "running"),
+        input.recoverAfter !== undefined
+          ? sql`${operationRuns.output}->'value'->>'recoverAfter' = ${input.recoverAfter}`
+          : undefined
+      )
+    )
     .returning();
   return row ? mapOperationRun(row) : undefined;
 }
@@ -478,6 +486,22 @@ export function createPostgresOperationRunsStore(
     create: (run) => createOperationRun(db, run),
     recordEnded: (run) => recordEndedOperationRun(db, run),
     finish: (input) => settle(input, (tx) => finishOperationRun(tx, input)),
+    checkpointReading: async ({ clientInstanceId, id, ...counts }) => {
+      const [row] = await db
+        .update(operationRuns)
+        .set({ output: { value: counts }, updatedAt: new Date() })
+        .where(
+          and(
+            eq(operationRuns.clientInstanceId, clientInstanceId),
+            eq(operationRuns.id, id),
+            eq(operationRuns.status, "running"),
+            eq(operationRuns.effect, "reading"),
+            eq(operationRuns.originKind, "workflow")
+          )
+        )
+        .returning({ id: operationRuns.id });
+      return row !== undefined;
+    },
     findByIdempotencyKey: (input) => findOperationRunByIdempotencyKey(db, input),
     get: (input) => getOperationRun(db, input),
     list: (input) => listOperationRuns(db, input),

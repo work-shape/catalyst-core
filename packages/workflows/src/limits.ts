@@ -1,3 +1,5 @@
+import { WORKFLOW_PAGING_DEFAULTS } from "@work-shape/catalyst-core";
+
 // The bounds of one Workflow Run. Those of a run are settings: `limits` in `workflow.yaml`
 // raises or lowers each one, under the ceiling the operator sets in release config
 // (`workflows.limits`), and the constants below are the defaults where the Workflow sets none.
@@ -73,12 +75,11 @@ export {
 export const WORKFLOW_OPERATION_OUTCOME_WAIT_MS = 10 * 60 * 1_000;
 
 /**
- * How many bytes the datasets of a run may hold, and how many minutes a paged step may take.
- * A manifest reads both and may lower them; it may raise neither until datasets and paging
- * run (EW-12, EW-13).
+ * Default dataset bytes, currently lowered only by a manifest. A raise remains reserved.
  */
 export const WORKFLOW_DATASET_MAX_BYTES = 2 * 1_024 * 1_024 * 1_024;
-export const WORKFLOW_PAGED_STEP_MAX_MINUTES = 60;
+/** Default paging duration. The operator ceiling may raise it. */
+export const WORKFLOW_PAGED_STEP_MAX_MINUTES = WORKFLOW_PAGING_DEFAULTS.pagedStepMinutes;
 
 /** The bounds a run is started under unless its Workflow sets others. A test lowers them. */
 export interface WorkflowRunLimits {

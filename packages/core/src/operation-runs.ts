@@ -245,6 +245,18 @@ export interface OperationRunStore {
     attempt?: number;
     end: OperationRunEnd;
   }): Promise<OperationRun | undefined>;
+  /** Counts and recovery timestamps for a paged Workflow read, kept across job deferrals. */
+  checkpointReading(input: {
+    clientInstanceId: ClientInstanceId;
+    id: OperationRunId;
+    pages: number;
+    rows: number;
+    bytes: number;
+    pageAttempts: number;
+    /** Paging deadline and the latest time progress may resume, including a deferred page. */
+    deadlineAt: string;
+    recoverAfter: string;
+  }): Promise<boolean>;
   findByIdempotencyKey(input: {
     clientInstanceId: ClientInstanceId;
     actor: Pick<OperationRunActor, "kind" | "id">;
@@ -337,6 +349,8 @@ export interface OperationRunStore {
   markInterrupted(input: {
     clientInstanceId: ClientInstanceId;
     id: OperationRunId;
+    /** Do not end a paged read whose checkpoint advanced since the sweep read it. */
+    recoverAfter?: string;
   }): Promise<OperationRun | undefined>;
 }
 

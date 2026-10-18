@@ -121,7 +121,7 @@ export function createStepClaim(options: {
       // The first step of a run starts it: the trigger step hands that moment on.
       return {
         run: { ...run, startedAt: run.startedAt ?? finishedAt },
-        stepRun,
+        stepRun: { ...stepRun, startedAt: stepRun.startedAt ?? finishedAt },
         ...(afterCode ? { afterCode } : {}),
         ...(afterOperation ? { afterOperation } : {})
       };

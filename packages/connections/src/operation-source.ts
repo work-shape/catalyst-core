@@ -169,6 +169,7 @@ function definitionOf(
   return {
     name: connectionOperationName(connection.config.name, operation.name),
     effect: operation.effect,
+    ...(operation.paging ? { paging: operation.paging } : {}),
     // A read of a customer's system is recorded, every time.
     ...(operation.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(operation.policy === undefined ? {} : { defaultPolicy: operation.policy }),

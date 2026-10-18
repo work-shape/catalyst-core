@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   AppError,
   approvalExecutionOf,
@@ -74,6 +75,11 @@ const UNKNOWN_OPERATION_TIMEOUT_MS = 60 * 60 * 1000;
  */
 const ENDED_INPUT_CLEANUP_PAGE_SIZE = 25;
 const ENDED_INPUT_CLEANUP_PAGES_PER_TICK = 100;
+
+const pagedProgressSchema = z.object({
+  deadlineAt: z.iso.datetime(),
+  recoverAfter: z.iso.datetime()
+});
 
 export interface OperationRunJobOptions {
   clientInstanceId: ClientInstanceId;
@@ -156,10 +162,21 @@ async function recoverOperationRuns(
     const definition = await options.registry.resolve(run.operation);
     const timeoutMs = definition?.timeoutMs ?? UNKNOWN_OPERATION_TIMEOUT_MS;
     const startedAt = new Date(run.startedAt ?? run.createdAt).getTime();
-    if (now - startedAt <= timeoutMs) continue;
+    const parsed = pagedProgressSchema.safeParse(run.output?.value);
+    const progress =
+      run.origin.kind === "workflow" && run.effect === "reading" && parsed.success
+        ? parsed.data
+        : undefined;
+    // A paged read is one run for many calls. Its checkpoint bounds both its total
+    // duration and a stalled worker; a source deferral can extend only the latter.
+    const recoverAt = progress
+      ? Math.min(Date.parse(progress.deadlineAt), Date.parse(progress.recoverAfter))
+      : startedAt + timeoutMs;
+    if (now <= recoverAt) continue;
     const marked = await options.runs.markInterrupted({
       clientInstanceId: options.clientInstanceId,
-      id: run.id
+      id: run.id,
+      ...(progress ? { recoverAfter: progress.recoverAfter } : {})
     });
     if (marked) interrupted += 1;
   }

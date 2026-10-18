@@ -37,8 +37,7 @@ import {
   WORKFLOW_DATASET_MAX_BYTES,
   WORKFLOW_DEFINITION_MAX_STEPS,
   WORKFLOW_MANIFEST_MAX_BYTES,
-  WORKFLOW_MANIFEST_MAX_NESTING,
-  WORKFLOW_PAGED_STEP_MAX_MINUTES
+  WORKFLOW_MANIFEST_MAX_NESTING
 } from "./limits";
 
 // `workflow.yaml` as a definition the engine runs: its shape, and what must hold between its
@@ -234,14 +233,10 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
   for (const field of ["labels", "onFailure"] as const) {
     if (manifest[field] !== undefined) issues.push(notSupported(field, `'${field}'`));
   }
-  // Read now, and lowered as a Workflow likes: a raise waits for the datasets and the paging
-  // it would allow more of.
-  const { datasetBytes, pagedStepMinutes } = manifest.limits ?? {};
+  // The dataset-byte raise remains reserved; paging minutes use the operator ceiling.
+  const { datasetBytes } = manifest.limits ?? {};
   if (datasetBytes !== undefined && datasetBytes > WORKFLOW_DATASET_MAX_BYTES) {
     issues.push(notSupported("limits.datasetBytes", "datasets above their default size"));
-  }
-  if (pagedStepMinutes !== undefined && pagedStepMinutes > WORKFLOW_PAGED_STEP_MAX_MINUTES) {
-    issues.push(notSupported("limits.pagedStepMinutes", "a paged step above its default minutes"));
   }
   const known: readonly string[] = WORKFLOW_STEP_TYPES;
   const executed: readonly string[] = WORKFLOW_EXECUTED_STEP_TYPES;
@@ -267,10 +262,8 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
         });
       }
       if (step.type === "operation") {
-        for (const field of ["paginate"] as const) {
-          if (step[field] !== undefined)
-            issues.push(notSupported(`${at}.${field}`, `'${field}' (EW-13)`));
-        }
+        if (step.paginate && !step.dataset)
+          issues.push({ path: `${at}.paginate`, message: "paginate needs dataset.at" });
       }
       if (step.type === "agent" && namesDatasetType(step.inputSchema))
         issues.push(notSupported(`${at}.inputSchema`, "a dataset in an agent input (EW-14)"));

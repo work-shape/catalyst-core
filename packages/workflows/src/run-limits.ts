@@ -106,7 +106,7 @@ function entriesOf(limits: WorkflowLimits, context: WorkflowLimitContext): Limit
       asked: limits.pagedStepMinutes,
       text: undefined,
       standard: WORKFLOW_PAGED_STEP_MAX_MINUTES,
-      ceiling: Math.min(ceilings.pagedStepMinutes, WORKFLOW_PAGED_STEP_MAX_MINUTES),
+      ceiling: ceilings.pagedStepMinutes,
       show: count
     }
   ];
@@ -114,8 +114,8 @@ function entriesOf(limits: WorkflowLimits, context: WorkflowLimitContext): Limit
 
 /**
  * What a publish refuses of a Workflow's `limits`: each value above the ceiling of release
- * config, naming the ceiling. Empty for a Workflow within them. `datasetBytes` and
- * `pagedStepMinutes` above their defaults are refused by the definition's parser before.
+ * config, naming the ceiling. Empty for a Workflow within them. `datasetBytes` above its
+ * default is still refused by the definition's parser.
  */
 export function workflowLimitIssues(
   manifest: Pick<WorkflowManifest, "limits">,

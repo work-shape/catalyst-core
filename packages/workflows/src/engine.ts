@@ -202,7 +202,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     stores,
     operationCalls,
     definitions,
-    limits,
+    limits: limitContext,
     now,
     stepFiles,
     ...(datasets ? { datasets } : {}),

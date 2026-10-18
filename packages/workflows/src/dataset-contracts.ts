@@ -4,6 +4,7 @@ import {
   type OperationRegistry,
   type WorkflowManifest
 } from "@work-shape/catalyst-core";
+import { resolvedPaging } from "./paged-operation";
 import type { WorkflowDefinitionSource } from "./definition-source";
 import { indexWorkflowSteps } from "./definition";
 import { jsonObjectSchema } from "./json";
@@ -54,7 +55,34 @@ export async function checkDatasetContracts(
       });
     if (step.type === "operation" && registry) {
       const descriptor = await registry.resolve(step.operation);
-      if (!descriptor) continue;
+      if (!descriptor) {
+        if (step.paginate)
+          throw new AppError("VALIDATION_FAILED", "The paged operation does not exist", {
+            reason: "paging_invalid"
+          });
+        continue;
+      }
+      if (step.paginate) {
+        let validPaging = false;
+        try {
+          resolvedPaging(descriptor.paging, step.paginate);
+          validPaging = true;
+        } catch {
+          /* Refuse below without storing schema errors or input values. */
+        }
+        if (
+          !descriptor.paging ||
+          descriptor.effect !== "reading" ||
+          !step.dataset ||
+          descriptor.streams ||
+          !validPaging
+        )
+          throw new AppError(
+            "VALIDATION_FAILED",
+            "paginate needs a reading operation with paging and dataset.at",
+            { reason: "paging_invalid" }
+          );
+      }
       inputs.set(
         step.id,
         expanded(jsonObjectSchema.parse(descriptor.inputJsonSchema ?? {}), manifest.types)

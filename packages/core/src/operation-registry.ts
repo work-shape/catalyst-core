@@ -211,6 +211,8 @@ interface OperationDefinitionBase<Input, Output> {
    * not paged. Reserved: the slice that brings datasets reads it.
    */
   streams?: true;
+  /** How this accepted reading Connection operation pages. */
+  paging?: import("@work-shape/catalyst-asset-schemas").OperationPaging;
   changeClass?: OperationChangeClass;
   /**
    * Set on a changing operation whose call may be made again under the key of a call that was

@@ -375,6 +375,29 @@ function callAddress(baseUrl: string, operation: ConnectionOperationConfig, inpu
   return addressOf(baseUrl, path, query);
 }
 
+/** A continuation never changes the origin, escapes the base path or carries credentials. */
+function nextPageAddress(baseUrl: string, address: string, previous: URL): URL {
+  try {
+    const base = new URL(baseUrl);
+    const url = new URL(address, previous);
+    const prefix = base.pathname.replace(/\/+$/u, "");
+    if (
+      url.origin !== base.origin ||
+      url.username ||
+      url.password ||
+      url.hash ||
+      (url.pathname !== prefix && !url.pathname.startsWith(`${prefix}/`))
+    )
+      throw connectionCallError("egress_denied");
+    // Encoded separators can be decoded again by a proxy behind the checked origin.
+    if (/%(?:2e|2f|5c|25)/iu.test(url.pathname) || url.pathname.includes("\\"))
+      throw connectionCallError("egress_denied");
+    return url;
+  } catch {
+    throw connectionCallError("egress_denied");
+  }
+}
+
 function testStatusOf(error: unknown): ConnectorTestStatus {
   const reason = connectionCallReasonOf(error);
   if (reason === "upstream_unauthorized") return "unauthorized";
@@ -428,7 +451,14 @@ export function createHttpApiConnectorType(): ConnectorTypeDefinition {
       const settings = settingsOf(context.connection.settings);
       const operation = context.connection.operations.find((entry) => entry.name === name);
       if (!operation) throw connectionCallError("operation_unknown");
-      const url = callAddress(settings.baseUrl, operation, input);
+      const initial = callAddress(settings.baseUrl, operation, input);
+      const previous = context.previousPageAddress
+        ? nextPageAddress(settings.baseUrl, context.previousPageAddress, initial)
+        : initial;
+      const url = context.pageAddress
+        ? nextPageAddress(settings.baseUrl, context.pageAddress, previous)
+        : initial;
+      context.notePageAddress?.(url.href);
       const response = await get(context, settings, url, context.signal);
       const status = response.statusCode ?? 0;
       if (status < 200 || status > 299) {

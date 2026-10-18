@@ -55,6 +55,8 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
     signal?: AbortSignal;
     maxBytes?: number;
     transaction?: PlatformStores;
+    /** Append one whole page; even an empty final page advances the durable position. */
+    page?: JsonObject;
   }): Promise<WorkflowDatasetReference> {
     const stores = input.transaction ?? options.stores;
     const id = datasetId(input.stepRun.id, input.field);
@@ -74,19 +76,20 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
         "The dataset row schema cannot be checked"
       );
     let line = 0,
-      index = 0,
+      index = input.page ? record.parts.length : 0,
       bytes = 0;
     let rows: Buffer[] = [];
     const checkpoint = [...record.parts];
     async function flush() {
-      if (!rows.length) return;
+      if (!rows.length && !input.page) return;
       const body = Buffer.concat(rows, bytes);
       const hash = createHash("sha256").update(body).digest("hex");
       const part = {
         key: `${datasetPrefix(record)}${String(index).padStart(8, "0")}.jsonl.gz`,
         rows: rows.length,
         bytes,
-        hash
+        hash,
+        ...(input.page ? { checkpoint: input.page } : {})
       };
       const kept = checkpoint[index];
       if (kept) {
@@ -158,7 +161,7 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
           `Dataset line ${line} does not fit its row schema${issue ? ` at /${issue.path.join("/")}` : ""}`
         );
       const data = Buffer.from(`${encoded}\n`);
-      if (bytes + data.length > DATASET_PART_BYTES) await flush();
+      if (!input.page && bytes + data.length > DATASET_PART_BYTES) await flush();
       rows.push(data);
       bytes += data.length;
     }
@@ -281,5 +284,8 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
     }
     return { rowSchema: row.rowSchema, rows: rows() };
   }
-  return { write, reader, metadata };
+  async function writing(stepRun: WorkflowStepRun, field: string) {
+    return stores.workflowRunDatasets.get({ clientInstanceId, id: datasetId(stepRun.id, field) });
+  }
+  return { write, reader, metadata, writing, limits };
 }

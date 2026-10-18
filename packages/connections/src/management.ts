@@ -21,6 +21,7 @@ import {
   type ConnectionOperationStatus,
   type ConnectorTestStatus,
   type OperationResource,
+  type OperationPaging,
   type SecretState
 } from "@work-shape/catalyst-core";
 import { connectionCallLimits } from "./call";
@@ -54,6 +55,7 @@ import { createSecretStore, type SecretKeyring } from "./secret-store";
 export const CONNECTION_DESCRIPTION_MAX_CHARS = 4_000;
 
 export interface ConnectionOperationView {
+  paging?: OperationPaging;
   name: string;
   toolName: string;
   effect: ConnectionOperationEffect;
@@ -230,6 +232,7 @@ function operationsOf(connection: StoredConnection): ConnectionOperationView[] {
       toolName: connectionOperationName(connection.config.name, operation.name),
       effect: operation.effect,
       exposure: [...operation.exposure],
+      ...(operation.paging ? { paging: operation.paging } : {}),
       enabled: operation.enabled,
       status: state.status,
       ...(description === undefined

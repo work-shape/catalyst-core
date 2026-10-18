@@ -442,3 +442,41 @@ it.each(["dataset", "run", "workflow"])(
     });
   }
 );
+
+it.each([1, 50])(
+  "replacing an uncommitted page charges only its new bytes (row length %s)",
+  async (length) => {
+    const { objects, run, step, datasets } = await prepared();
+    const put = objects.put.bind(objects);
+    objects.put = async () => {
+      throw new Error("worker stopped before upload");
+    };
+    const page = { pages: 1, next: { page: 2 }, done: false };
+    await expect(
+      datasets.write({ run, stepRun: step, field: "page", rowSchema, rows: rows(1, 10), page })
+    ).rejects.toThrow("worker stopped before upload");
+    objects.put = put;
+    const ref = await datasets.write({
+      run,
+      stepRun: step,
+      field: "page",
+      rowSchema,
+      rows: rows(1, length),
+      page
+    });
+    const record = await datasets.writing(step, "page");
+    expect(record?.pendingPart).toBeUndefined();
+    expect(record?.parts).toHaveLength(1);
+    const expectedBytes = Buffer.byteLength(
+      JSON.stringify({ index: 0, text: "x".repeat(length) }) + "\n"
+    );
+    expect(ref.bytes).toBe(expectedBytes);
+    expect(record?.bytes).toBe(expectedBytes);
+    await withTestSql(async (sql) => {
+      const counters =
+        await sql`select bytes from workflow_dataset_usage where client_instance_id = ${clientInstanceId} and scope in ('instance', ${`run:${run.id}`})`;
+      expect(counters).toHaveLength(2);
+      expect(counters.map((row) => Number(row.bytes))).toEqual([expectedBytes, expectedBytes]);
+    });
+  }
+);

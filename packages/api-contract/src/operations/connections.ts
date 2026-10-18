@@ -9,6 +9,7 @@ import {
   CONNECTION_PROVIDER_REVOCATIONS,
   CONNECTION_SECRET_STATES,
   CONNECTOR_TEST_STATUSES,
+  operationPagingSchema,
   OPERATION_EFFECTS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
@@ -41,6 +42,7 @@ export const connectionSecretStateSchema = z.object({
 });
 
 export const connectionOperationDetailSchema = z.object({
+  paging: operationPagingSchema.optional(),
   name: z.string(),
   /** The name an agent, an App and a Workflow hold: `connection.<name>.<operation>`. */
   toolName: z.string(),

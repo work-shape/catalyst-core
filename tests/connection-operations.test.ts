@@ -379,7 +379,7 @@ describe("a call of a Connection's operation", () => {
 
     const refused = [
       ["connection.crm.write", "CONFLICT", "operation_disabled"],
-      ["connection.off.echo", "CONFLICT", "connection_unavailable"],
+      ["connection.off.echo", "CONFLICT", "connection_disabled"],
       ["connection.typeless.echo", "CONFLICT", "connection_unavailable"],
       ["connection.unreadable.echo", "CONFLICT", "connection_unavailable"]
     ] as const;

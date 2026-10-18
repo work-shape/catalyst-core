@@ -138,6 +138,7 @@ export type ConnectionOperationStatus = (typeof CONNECTION_OPERATION_STATUSES)[n
 export const CONNECTION_CALL_REASONS = {
   /** The Connection is disabled, cannot be reached, or its secret cannot be read. */
   connection_unavailable: "CONFLICT",
+  connection_disabled: "CONFLICT",
   connection_not_configured: "CONFLICT",
   secret_unreadable: "CONFLICT",
   /** The Connection signs in at the outside system, and no sign-in is connected for it. */
@@ -203,6 +204,7 @@ export const CONNECTION_TRANSIENT_CALL_REASONS: ReadonlySet<ConnectionCallReason
 /** What each reason says where the caller adds nothing. No sentence holds a value of a call. */
 const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   connection_unavailable: "the Connection cannot be used now",
+  connection_disabled: "the Connection is disabled",
   connection_not_configured: "the Connection has no usable credential or settings",
   secret_unreadable: "the stored secret of the Connection cannot be read",
   connection_not_connected: "nobody has signed in to the outside system for the Connection",
@@ -290,6 +292,8 @@ const CONNECTION_CALL_SENTENCES: Record<
   ConnectionCallReason,
   (c: string, effect: ConnectionOperationEffect | undefined) => string
 > = {
+  connection_disabled: (c) =>
+    `${c} is switched off. Trying again will not help. An administrator can enable it under ${WHERE}.`,
   connection_unavailable: (c) =>
     `${c} cannot be used right now. Trying again later may work. If it keeps failing, an administrator can check it under ${WHERE}.`,
   connection_not_configured: (c) =>

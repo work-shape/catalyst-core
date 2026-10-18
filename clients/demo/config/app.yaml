@@ -327,7 +327,7 @@ connections:
       - name: list_accounts
         effect: reading
         exposure: [workflow]
-  # REST over the same accounting ledger. Paging declarations follow in EW-13p.
+  # REST over the same accounting ledger.
   sample-accounting-rest:
     connectorType: http_api
     displayName: Sample accounting REST
@@ -343,6 +343,7 @@ connections:
       - name: listClients
         description: List clients before reading their fiscal years. Gateway fields include id, number and name. Use top (1 to 1000, default 100) and skip (from 0); stop at a short page. Results are under items.
         effect: reading
+        paging: { by: offset, param: skip, sizeParam: top, size: 100 }
         exposure: [workflow, agent, bridge]
         method: GET
         path: /datevconnect/master-data/v1/clients
@@ -368,6 +369,7 @@ connections:
       - name: listPostings
         description: Read sample ledger bookings with an Enterprise filter such as client_id eq 1402. Results are under items, ordered by client, ledger month and booking position. page starts at 1; page_size is 1 to 1000 (default 100); stop at a short page. Repeated filter values await array query support in CS-5e.
         effect: reading
+        paging: { by: page, param: page, sizeParam: page_size, size: 1000 }
         exposure: [workflow, agent, bridge]
         method: GET
         path: /api/accounting/postings

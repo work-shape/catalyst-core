@@ -558,6 +558,69 @@ describe("Connection page", () => {
     );
   });
 
+  it("shows how each paged operation pages, in English and in German", () => {
+    const base = connectionDetail().operations;
+    if (!base[0]) throw new Error("Missing fixture operation");
+    const first = base[0];
+    const paged = (locale: LocaleCode) =>
+      renderPage({
+        locale,
+        detail: {
+          operations: [
+            {
+              ...first,
+              name: "list_invoices",
+              paging: { by: "page", param: "page", sizeParam: "per_page", size: 1000 }
+            },
+            {
+              ...first,
+              name: "list_orders",
+              paging: { by: "offset", param: "skip", sizeParam: "top", size: 50, start: 10 }
+            },
+            {
+              ...first,
+              name: "list_contacts",
+              paging: { by: "cursor", param: "after", cursor: "meta.next_cursor" }
+            },
+            {
+              ...first,
+              name: "list_files",
+              paging: { by: "next_link", param: "url", cursor: "links.next" }
+            },
+            { ...first, name: "get_report" }
+          ]
+        }
+      });
+    const line = (markup: string, name: string) =>
+      /<p[^>]*data-connection-paging="([^"]+)"[^>]*>([^<]*)<\/p>/gu
+        .exec(markup.slice(markup.indexOf(`data-connection-paging="${name}"`) - 3))?.[2]
+        ?.replace(/<!-- -->/gu, "");
+
+    const english = paged("en");
+    expect(line(english, "list_invoices")).toBe(
+      "Paged by page number in page, 1,000 per page in per_page"
+    );
+    expect(line(english, "list_orders")).toBe(
+      "Paged by row offset in skip, 50 per page in top, starting at 10"
+    );
+    expect(line(english, "list_contacts")).toBe(
+      "Paged by cursor from meta.next_cursor of each answer, sent as after"
+    );
+    expect(line(english, "list_files")).toBe(
+      "Paged by next address from links.next of each answer, sent as url"
+    );
+    // An operation without paging says nothing of it.
+    expect(english).not.toContain('data-connection-paging="get_report"');
+
+    const german = paged("de");
+    expect(line(german, "list_invoices")).toBe(
+      "Seitenweise nach Seitennummer in page, 1.000 pro Seite in per_page"
+    );
+    expect(line(german, "list_orders")).toBe(
+      "Seitenweise nach Zeilenversatz in skip, 50 pro Seite in top, beginnend bei 10"
+    );
+  });
+
   it("lists the agents that carry its tools, each a link to the agent", () => {
     const markup = renderPage();
     expect(markup).toContain('aria-label="Used by"');

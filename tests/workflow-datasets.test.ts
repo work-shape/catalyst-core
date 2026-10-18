@@ -36,12 +36,7 @@ describe("Workflow datasets", () => {
     paged.steps = paged.steps.map((step) =>
       step.id === "clients" ? { ...step, paginate: true } : step
     );
-    expect(parseWorkflowManifest(paged)).toMatchObject({
-      ok: false,
-      issues: expect.arrayContaining([
-        expect.objectContaining({ message: expect.stringContaining("EW-13") })
-      ])
-    });
+    expect(parseWorkflowManifest(paged)).toMatchObject({ ok: true });
   });
 
   it("stores only a reference, loops over its rows once and removes intermediates at run end", async () => {

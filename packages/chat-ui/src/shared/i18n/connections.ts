@@ -153,6 +153,12 @@ export const connections = defineTranslations({
     "connections.lastTested": "Last tested {time}",
     "connections.missing": "There is no connection with the id {name}.",
     "connections.operationExposure": "Callable by",
+    "connections.paging": "Paged by",
+    "connections.pagingCursor": "cursor from {cursor} of each answer, sent as {param}",
+    "connections.pagingNextLink": "next address from {cursor} of each answer, sent as {param}",
+    "connections.pagingOffset": "row offset in {param}, {size} per page in {sizeParam}",
+    "connections.pagingPage": "page number in {param}, {size} per page in {sizeParam}",
+    "connections.pagingStart": "{text}, starting at {start}",
     "connections.operationsTitle": "Operations",
     "connections.operationsDescription":
       "What this connection can do in the outside system, and who may call it.",
@@ -353,6 +359,13 @@ export const connections = defineTranslations({
     "connections.lastTested": "Zuletzt getestet {time}",
     "connections.missing": "Es gibt keine Verbindung mit der Kennung {name}.",
     "connections.operationExposure": "Aufrufbar durch",
+    "connections.paging": "Seitenweise nach",
+    "connections.pagingCursor": "Cursor aus {cursor} jeder Antwort, gesendet als {param}",
+    "connections.pagingNextLink":
+      "nächster Adresse aus {cursor} jeder Antwort, gesendet als {param}",
+    "connections.pagingOffset": "Zeilenversatz in {param}, {size} pro Seite in {sizeParam}",
+    "connections.pagingPage": "Seitennummer in {param}, {size} pro Seite in {sizeParam}",
+    "connections.pagingStart": "{text}, beginnend bei {start}",
     "connections.operationsTitle": "Operationen",
     "connections.operationsDescription":
       "Was diese Verbindung im externen System tun kann und wer es aufrufen darf.",

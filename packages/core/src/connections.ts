@@ -541,6 +541,12 @@ export interface ConnectionsStore extends ConnectionBindingsStore {
  * the call.
  */
 export interface ConnectorContext {
+  /** Internal paged call address; the connector must keep it under its base and egress grant. */
+  pageAddress?: string;
+  /** Actual previous page URL, used to resolve a relative continuation. */
+  previousPageAddress?: string;
+  /** Reports the checked URL to the Workflow's durable page checkpoint. */
+  notePageAddress?(address: string): void;
   connection: {
     id: string;
     name: string;

@@ -1,6 +1,8 @@
+import { auditForRun, retainedOutput } from "./operation-run-recording";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
+  JobDeferredError,
   OPERATION_DENIAL_REASONS,
   PLATFORM_EVENT_ALLOW,
   connectionCallReasonOf,
@@ -11,7 +13,6 @@ import {
   moduleOffError,
   operationDenialError,
   toErrorEnvelope,
-  unknownToJsonValue,
   type AccessDecision,
   type ActorAccess,
   type AuditRecorder,
@@ -21,7 +22,6 @@ import {
   type CollaborationWorkspaceId,
   type ConversationId,
   type JsonObject,
-  type JsonValue,
   type LiveOnceSwitchStore,
   type Logger,
   type ModuleSnapshot,
@@ -40,7 +40,6 @@ import {
   type OperationRun,
   type OperationRunDecisionReason,
   type OperationRunEnd,
-  type OperationRunId,
   type OperationRunStore,
   type PlatformEventAnswer,
   type PlatformEventContext,
@@ -52,13 +51,6 @@ import {
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { failureLogFields } from "./tool-failure-log";
-
-/**
- * The largest answer of a completed changing call a run keeps for a repeated call. It bounds
- * what one row can hold. A repeated call whose first answer was larger reads 409
- * OUTPUT_NOT_RETAINED.
- */
-const OPERATION_RUN_OUTPUT_MAX_BYTES = 256 * 1024;
 
 /**
  * Files the request another person decides, with the frozen call as its payload. Answers
@@ -533,7 +525,8 @@ export async function executeAdmitted(
   let completed: OperationEnding | undefined;
   let started = false;
   try {
-    if (!begin) await context.emit("operation.started", "after", { status: "success" });
+    if (!begin && !context.runtime.resumeReadingRunId)
+      await context.emit("operation.started", "after", { status: "success" });
     let joinedRunId: OperationExecutionContext["runId"] | undefined;
     const execution: OperationExecutionContext = {
       joinAsyncRun: (id) => {
@@ -612,8 +605,11 @@ export async function executeAdmitted(
       status: "done",
       finishedAt: now().toISOString(),
       // An answer that holds a secret is handed to the caller of this call and kept nowhere.
-      output:
-        definition.effect === "changing" && !definition.secret ? retainedOutput(output) : undefined,
+      output: context.runtime.pageCounts
+        ? retainedOutput(context.runtime.pageCounts)
+        : definition.effect === "changing" && !definition.secret
+          ? retainedOutput(output)
+          : undefined,
       usage: tool?.usage,
       ...(decision
         ? {
@@ -637,6 +633,12 @@ export async function executeAdmitted(
     return completed;
   } catch (error) {
     if (error instanceof OperationNotBegunError) throw error;
+    // A deferred page keeps the one reading Operation Run open for the next leased attempt.
+    if (
+      context.runtime.readPages &&
+      (error instanceof JobDeferredError || context.runtime.signal?.aborted)
+    )
+      throw error;
     if (completed) {
       deps.logger.error(
         {
@@ -785,28 +787,4 @@ function detailsRecord(details: unknown): Record<string, unknown> | undefined {
   return typeof details === "object" && details !== null && !Array.isArray(details)
     ? Object.fromEntries(Object.entries(details))
     : undefined;
-}
-
-/** The answer as the run keeps it, or nothing when it is larger than a run may hold. */
-function retainedOutput(output: unknown): { value: JsonValue } | undefined {
-  const value = unknownToJsonValue(output);
-  return Buffer.byteLength(JSON.stringify(value)) <= OPERATION_RUN_OUTPUT_MAX_BYTES
-    ? { value }
-    : undefined;
-}
-
-/** Audit rows written inside a call name its run and share its correlation id. */
-function auditForRun(
-  audit: AuditRecorder,
-  operationRunId: OperationRunId,
-  correlationId: string
-): AuditRecorder {
-  return {
-    record: (input) =>
-      audit.record({
-        ...input,
-        correlationId,
-        metadata: { ...input.metadata, operationRunId }
-      })
-  };
 }

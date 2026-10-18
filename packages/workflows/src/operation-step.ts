@@ -11,6 +11,7 @@ import {
   type JsonObject,
   type JsonValue,
   type OperationCall,
+  type OperationCallRuntime,
   type OperationDefinition,
   type OperationDenial,
   type OperationDraftContext,
@@ -244,6 +245,7 @@ export async function callStepOperation(input: {
   /** Keeps the id of the Operation Run of the step's call on its step run. */
   noteOperationRun(id: OperationRunId): Promise<void>;
   captureOutput?(output: unknown): Promise<unknown>;
+  paging?: Pick<OperationCallRuntime, "readPages" | "pageCounts" | "resumeReadingRunId">;
 }): Promise<OperationStepResult | OperationStepWait> {
   const { calls, run, stepRun, operation } = input;
   // A save refuses such a step. A definition stored before it did is refused here, by the
@@ -317,6 +319,19 @@ export async function callStepOperation(input: {
     : undefined;
   try {
     outcome = await runOperation(call, deps, {
+      ...input.paging,
+      ...(input.paging?.readPages
+        ? {
+            readPages: async (page, runId) => {
+              try {
+                return await input.paging?.readPages?.(page, runId);
+              } catch (error) {
+                if (error instanceof WorkflowStepFailure) captureFailure = error;
+                throw error;
+              }
+            }
+          }
+        : {}),
       ...(changing ? {} : { signal: input.signal }),
       ...(capture ? { captureOutput: capture } : {})
     });

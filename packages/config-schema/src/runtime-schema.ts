@@ -1,3 +1,4 @@
+import { WORKFLOW_PAGING_DEFAULTS } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { workflowDurationSchema } from "@work-shape/catalyst-core";
 
@@ -119,6 +120,8 @@ export const workflowsConfigSchema = z
     stepSlots: z.number().int().min(1).max(64).default(4),
     datasets: z
       .strictObject({
+        pageBytes: z.number().int().positive().default(WORKFLOW_PAGING_DEFAULTS.pageBytes),
+        pages: z.number().int().positive().default(WORKFLOW_PAGING_DEFAULTS.pages),
         rows: z.number().int().positive().default(5_000_000),
         bytes: z
           .number()
@@ -158,7 +161,11 @@ export const workflowsConfigSchema = z
           .int()
           .positive()
           .default(2 * 1024 * 1024 * 1024),
-        pagedStepMinutes: z.number().int().positive().default(60)
+        pagedStepMinutes: z
+          .number()
+          .int()
+          .positive()
+          .default(WORKFLOW_PAGING_DEFAULTS.pagedStepMinutes)
       })
       .prefault({}),
     codeSteps: z

@@ -133,6 +133,7 @@ function toJsonObject(config: ConnectionConfig): JsonObject {
       ...(operation.idempotencyKeyHeader === undefined
         ? {}
         : { idempotencyKeyHeader: operation.idempotencyKeyHeader }),
+      ...(operation.paging ? { paging: { ...operation.paging } } : {}),
       ...declarationJson(operation)
     })),
     enabled: config.enabled,

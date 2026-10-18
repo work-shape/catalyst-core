@@ -284,7 +284,10 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
         operationCalls,
         stepSlots: config.workflows.stepSlots,
         ...(files
-          ? { datasetObjects: files.objects, datasetLimits: config.workflows.datasets }
+          ? {
+              datasetObjects: files.objects,
+              datasetLimits: config.workflows.datasets
+            }
           : {}),
         ceilings: workflowLimitCeilingsOf(config.workflows),
         ...zone,

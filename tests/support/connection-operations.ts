@@ -221,6 +221,7 @@ export async function fixtureOn<Instance extends AccessInstance>(
   setup: (options: AccessInstanceOptions) => Promise<Instance>,
   options: {
     secret?: string;
+    catalog?: ConnectorOperationDescriptor[];
     /** The events of the call path, such as one whose guardrails run. Audited ones when absent. */
     events?: (stores: AccessInstance["stores"]) => PlatformEventEmitter;
   } = {}
@@ -266,7 +267,11 @@ export async function fixtureOn<Instance extends AccessInstance>(
       return state.limits;
     }
   };
-  const staticType: ConnectorTypeDefinition = { ...base, type: "test", catalog: [echo, write] };
+  const staticType: ConnectorTypeDefinition = {
+    ...base,
+    type: "test",
+    catalog: options.catalog ?? [echo, write]
+  };
   Object.defineProperty(staticType, "limits", { get: () => state.limits });
   const discoveringType: ConnectorTypeDefinition = {
     ...base,

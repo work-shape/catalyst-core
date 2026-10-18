@@ -55,7 +55,7 @@ function issuesOf(config: unknown) {
 describe("the definition of a Connection", () => {
   // Fails while `paging` and `limits` are stored and read by nothing: an operator would
   // believe a limit that no call keeps.
-  it("refuses paging and limits on an operation until the call path holds them", () => {
+  it("accepts reading paging and refuses source limits until EW-13s", () => {
     const base = {
       name: "accounting",
       displayName: "Accounting",
@@ -72,10 +72,6 @@ describe("the definition of a Connection", () => {
         operations: [{ name: "list_postings", effect: "reading", paging, limits }]
       })
     ).toEqual([
-      {
-        path: "operations.0.paging",
-        message: "'paging' on an operation of a Connection is not supported yet (not_supported_yet)"
-      },
       {
         path: "operations.0.limits",
         message: "'limits' on an operation of a Connection is not supported yet (not_supported_yet)"

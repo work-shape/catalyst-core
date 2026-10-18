@@ -18,6 +18,7 @@ import type {
   ModuleSnapshot,
   PlatformEventEmitter,
   PlatformStores,
+  OperationRegistry,
   RegisteredJobHandler,
   ServicePrincipalRecord,
   WorkflowManifest
@@ -218,6 +219,7 @@ export async function workflowFixture(
   options: {
     runnerPackages?: Parameters<typeof createWorkflowAssetKind>[0]["runnerPackages"];
     moduleOn?: boolean;
+    connectorCatalog?: import("@work-shape/catalyst-core").ConnectorOperationDescriptor[];
     datasetObjects?: InstanceWorkflowsParts["datasetObjects"];
     datasetLimits?: InstanceWorkflowsParts["datasetLimits"];
     stepSlots?: number;
@@ -252,6 +254,7 @@ export async function workflowFixture(
   // The kind asks the principals of the instance and their rights, whose stores exist once it
   // is set up.
   let instanceStores: PlatformStores | undefined;
+  let operationRegistry: OperationRegistry | undefined;
   const storesOf = () => {
     if (!instanceStores) throw new Error("The instance is not set up");
     return instanceStores;
@@ -259,6 +262,7 @@ export async function workflowFixture(
   const ceilings = { ...workflowLimitCeilingsOf(), ...options.ceilings };
   const kind = createWorkflowAssetKind({
     clientInstanceId,
+    registry: () => operationRegistry,
     runnerPackages: options.runnerPackages ?? [],
     limits: { ceilings, stepSlots: options.stepSlots ?? 4 },
     configAssets: {
@@ -291,6 +295,7 @@ export async function workflowFixture(
             ...(options.personalKeys ? personalKeyServer(stores) : {})
           };
           if (!server.operationCalls) throw new Error("The instance built no call path");
+          operationRegistry = server.operationCalls.registry;
           modules = resolveInstanceModules(config, []).snapshot;
           instanceStores = stores;
           workflows = createInstanceWorkflows({
@@ -318,7 +323,10 @@ export async function workflowFixture(
           for (const register of workflows?.routes ?? []) register(route);
         }
       }),
-    options.events ? { events: options.events } : {}
+    {
+      ...(options.events ? { events: options.events } : {}),
+      ...(options.connectorCatalog ? { catalog: options.connectorCatalog } : {})
+    }
   );
   const principal = await t.stores.apiAccess.createServicePrincipal({
     clientInstanceId,

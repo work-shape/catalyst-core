@@ -190,18 +190,24 @@ export function createPostgresWorkflowRunDatasetsStore(
           throw expired();
         if (input.index !== row.parts.length)
           throw new AppError("CONFLICT", "The dataset checkpoint changed");
+        // A source may change between pages. Until the checkpoint commits, that page
+        // can be replaced; a nonpaged stream must replay its reserved part exactly.
+        const replacePendingPage =
+          row.pendingPart?.checkpoint !== undefined && input.part.checkpoint !== undefined;
         if (row.pendingPart) {
           if (
-            row.pendingPart.hash !== input.part.hash ||
-            row.pendingPart.bytes !== input.part.bytes
+            !replacePendingPage &&
+            (row.pendingPart.hash !== input.part.hash || row.pendingPart.bytes !== input.part.bytes)
           )
             throw new AppError("CONFLICT", "The dataset retry differs from its checkpoint", {
               reason: "dataset_retry_changed"
             });
-          return;
+          if (!replacePendingPage) return;
         }
+        // Bytes include the reservation; replacing a page charges only its difference.
+        const byteDelta = input.part.bytes - (row.pendingPart?.bytes ?? 0);
         if (row.rowCount + input.part.rows > input.limits.rows) throw limitError("rows");
-        if (row.bytes + input.part.bytes > input.limits.bytes) throw limitError("bytes");
+        if (row.bytes + byteDelta > input.limits.bytes) throw limitError("bytes");
         // Stable order across every writer. Only this very short reservation locks the instance.
         for (const [scope, ceiling, name] of [
           ["instance", input.limits.instanceBytes, "instanceBytes"],
@@ -216,15 +222,15 @@ export function createPostgresWorkflowRunDatasetsStore(
             .from(usage)
             .where(and(eq(usage.clientInstanceId, input.clientInstanceId), eq(usage.scope, scope)))
             .for("update");
-          if (!counter || counter.bytes + input.part.bytes > ceiling) throw limitError(name);
+          if (!counter || counter.bytes + byteDelta > ceiling) throw limitError(name);
           await tx
             .update(usage)
-            .set({ bytes: sql`${usage.bytes} + ${input.part.bytes}` })
+            .set({ bytes: sql`${usage.bytes} + ${byteDelta}` })
             .where(and(eq(usage.clientInstanceId, input.clientInstanceId), eq(usage.scope, scope)));
         }
         await tx
           .update(datasets)
-          .set({ pendingPart: input.part, bytes: row.bytes + input.part.bytes })
+          .set({ pendingPart: input.part, bytes: row.bytes + byteDelta })
           .where(is(input));
       });
     },

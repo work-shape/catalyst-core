@@ -15,6 +15,7 @@ import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { operationTitle } from "./connection-approval-model";
 import { useConnectionWrite } from "./connection-editing";
+import { operationPagingText } from "./connection-paging";
 import {
   withOperationExposure,
   withReviewedOperation,
@@ -167,7 +168,7 @@ export function ConnectionOperations({
   /** What the reader may do to one operation, below it. */
   actions?: (operation: ConnectionOperationDetail) => ReactNode;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   if (operations.length === 0) {
     return <EmptyState layout="inline">{t("connections.operationsEmpty")}</EmptyState>;
   }
@@ -224,6 +225,14 @@ export function ConnectionOperations({
                 </>
               )}
             </div>
+            {operation.paging ? (
+              <p
+                data-connection-paging={operation.name}
+                className="text-caption break-words text-muted-foreground"
+              >
+                {t("connections.paging")} {operationPagingText(operation.paging, t, locale)}
+              </p>
+            ) : null}
             {status.text ? (
               <p className="text-caption text-muted-foreground">
                 {t(status.text)}

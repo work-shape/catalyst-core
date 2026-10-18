@@ -379,22 +379,8 @@ export const workflowLoopOptionsSchema = z.object({
  * `param` of the next call and ends when it is absent, null or empty. `next_link` is `cursor`
  * with an address. Only a reading operation is paged. Spec: Large data and fan-out, Dataset.
  */
-export const operationPagingSchema = z.discriminatedUnion("by", [
-  z.strictObject({
-    by: z.enum(["page", "offset"]),
-    param: z.string().min(1),
-    sizeParam: z.string().min(1),
-    size: z.number().int().min(1),
-    start: z.number().int().min(0).optional()
-  }),
-  z.strictObject({
-    by: z.enum(["cursor", "next_link"]),
-    param: z.string().min(1),
-    cursor: z.string().min(1)
-  })
-]);
-
-export type OperationPaging = z.infer<typeof operationPagingSchema>;
+export { operationPagingSchema } from "@work-shape/catalyst-asset-schemas";
+export type { OperationPaging } from "@work-shape/catalyst-asset-schemas";
 
 /**
  * The limits of an operation toward its outside system, on the entry of an accepted operation
@@ -493,8 +479,8 @@ export function workflowDurationMs(text: string): number {
  * default when left out and never above the ceiling the operator sets in release config.
  * `duration` counts running time: time a run spends waiting counts toward no limit.
  * `concurrency` is how many of the instance's step slots the Workflow's runs and their
- * children take together. `datasetBytes` and `pagedStepMinutes` are read before datasets and
- * paging run, and may not be raised until they do. Spec: Limits a Workflow may raise.
+ * children take together. `pagedStepMinutes` may be raised under the operator's ceiling.
+ * `datasetBytes` still refuses a raise above its default. Spec: Limits a Workflow may raise.
  */
 export const workflowLimitsSchema = z.strictObject({
   duration: workflowDurationSchema.optional(),

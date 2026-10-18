@@ -186,6 +186,8 @@ export {
   localeCodes
 } from "@work-shape/catalyst-asset-schemas";
 
+export { WORKFLOW_PAGING_DEFAULTS } from "./workflow-datasets";
+
 export type {
   WorkflowDatasetLimits,
   WorkflowDatasetPart,

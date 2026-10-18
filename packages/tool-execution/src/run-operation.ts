@@ -92,6 +92,61 @@ export async function runOperation(
   // of the operation's input from a refused input.
   const surface = await authorizeOrigin(call, definition, deps);
   const input = await parseInput(call, definition, runtime, surface);
+  const readPages = runtime.readPages;
+  if (readPages) {
+    if (
+      call.origin.kind !== "workflow" ||
+      definition.effect !== "reading" ||
+      !definition.paging ||
+      definition.completion
+    )
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Only a reading Workflow operation with paging can read pages"
+      );
+    definition = {
+      ...definition,
+      execute: (_input, execution) =>
+        readPages(async (pageInput, nextLink, signal, address) => {
+          const current = await deps.registry.resolve(call.operation);
+          if (!current) throw new AppError("NOT_FOUND", "The paged operation no longer exists");
+          runtime.signal?.throwIfAborted();
+          const parsed = await current.inputSchema.safeParseAsync(pageInput);
+          if (!parsed.success)
+            throw new AppError("VALIDATION_FAILED", "The page input does not fit the operation");
+          const pageCall = { ...call, input: parsed.data };
+          const surface = await authorizeOrigin(pageCall, current, deps);
+          if (!surface.allowed) throw operationDenialError({ kind: "forbidden", ...surface });
+          if (current.effect !== "reading" || !current.paging || current.completion)
+            throw new AppError(
+              "VALIDATION_FAILED",
+              "The operation no longer supports a paged read"
+            );
+          const resource = current.resource(parsed.data);
+          const right = await authorizeRights(
+            { definition: current, call: pageCall, resource },
+            await rightsOf(pageCall, deps)
+          );
+          if (!right.allowed) throw operationDenialError({ kind: "forbidden", ...right });
+          return current.execute(parsed.data, {
+            ...execution,
+            runtime: {
+              ...execution.runtime,
+              ...(nextLink ? { pageAddress: nextLink } : {}),
+              ...(address?.previous ? { previousPageAddress: address.previous } : {}),
+              ...(address ? { notePageAddress: address.resolved } : {}),
+              ...(signal
+                ? {
+                    signal: execution.runtime.signal
+                      ? AbortSignal.any([execution.runtime.signal, signal])
+                      : signal
+                  }
+                : {})
+            }
+          });
+        }, execution.runId)
+    };
+  }
   const idempotencyKey = readIdempotencyKey(call, definition);
   const resource = definition.resource(input);
   const now = deps.now ?? (() => new Date());
@@ -160,7 +215,38 @@ export async function runOperation(
     // Other allowed reads leave none unless the definition records every call; refusals and
     // failures are recorded either way.
     const recorded = call.origin.kind === "agent" || recordsAllowedCalls(definition);
-    const run = recorded ? await deps.runs.create(start) : unrecordedRun(start);
+    let run;
+    if (runtime.resumeReadingRunId) {
+      const held = await deps.runs.get({
+        clientInstanceId: deps.clientInstanceId,
+        id: runtime.resumeReadingRunId
+      });
+      if (
+        !readPages ||
+        !held ||
+        !["running", "done"].includes(held.status) ||
+        !sameCall(held, definition, actor, inputHash) ||
+        held.actor.id !== actor.id ||
+        held.origin.kind !== "workflow" ||
+        call.origin.kind !== "workflow" ||
+        held.origin.workflowRunId !== call.origin.workflowRunId ||
+        held.origin.stepRunId !== call.origin.stepRunId
+      )
+        throw new AppError("CONFLICT", "The paged operation cannot resume this call");
+      if (held.status === "done") {
+        const right = await authorizeRights(
+          { definition, call: frozen, resource },
+          await rightsOf(frozen, deps)
+        );
+        if (!surface.allowed || !right.allowed)
+          throw new AppError("FORBIDDEN", "The paged call is no longer allowed");
+        const output = await readPages(async () => {
+          throw new AppError("CONFLICT", "A completed paged call cannot read another page");
+        }, held.id);
+        return { result: { status: "done", runId: held.id, output }, run: held, replayed: true };
+      }
+      run = held;
+    } else run = recorded ? await deps.runs.create(start) : unrecordedRun(start);
     if (run) {
       const context = createRunContext({
         run,
