@@ -121,6 +121,13 @@ describe("SHARE-1 audience on App availability", () => {
       expect(audienceRead.parse(read.json()).appAudience.selected).toBe(
         audience === "workspace" ? "self" : audience
       );
+      // The Personal Workspace is named after its owner, as the interface names it, never by
+      // the name stored on its row (ACCEPT-FIX-2 C5).
+      const named = z
+        .looseObject({ appAudience: z.looseObject({ workspaceName: z.string() }) })
+        .parse(read.json());
+      expect(named.appAudience.workspaceName).toBe("Admin's workspace");
+      expect(JSON.stringify(read.json())).not.toContain("Personal workspace");
     }
   });
 
