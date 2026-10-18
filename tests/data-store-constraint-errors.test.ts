@@ -14,6 +14,7 @@ const MARKER = "private-row-value-in-trigger-diagnostics";
 
 const cases: { kind: string; code: string; name: string | undefined; row: JsonObject }[] = [
   { kind: "unique", code: "23505", name: "unique_address", row: { adresse: "held" } },
+  { kind: "unique-index", code: "23505", name: "unique_year_index", row: { year: 2000 } },
   { kind: "check", code: "23514", name: "bounded_price", row: { price: -1 } },
   { kind: "not-null", code: "23502", name: "NOT NULL (year)", row: { year: null } },
   { kind: "foreign-key", code: "23503", name: "known_year", row: { year: 1999 } },
@@ -66,6 +67,7 @@ describe("constraint diagnostics through a Data Store operation", () => {
                 period int4range,
                 constraint distinct_period exclude using gist (period with &&)
               );
+              ${kind === "unique-index" ? "create unique index unique_year_index on objekt(year);" : ""}
               insert into objekt values (1, 'held', 2000, 1, '[1,2)');
               create table scratch (id integer);
               insert into scratch values (1);
@@ -101,6 +103,12 @@ describe("constraint diagnostics through a Data Store operation", () => {
         }
       );
       const target = connect(w.record.location.database);
+      if (kind === "unique-index") {
+        expect(
+          await target`select conname from pg_catalog.pg_constraint
+            where conrelid = 'public.objekt'::regclass and conname = 'unique_year_index'`
+        ).toEqual([]);
+      }
       if (ddl) {
         expect(
           await target`select p.prosecdef, r.rolname as owner
