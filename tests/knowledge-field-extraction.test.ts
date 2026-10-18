@@ -103,8 +103,7 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
     expect(failed.statusCode, failed.body).toBe(409);
     const runs =
       await world.platform`select row_to_json(r) as data from operation_runs r where operation='knowledge.sync-test.extract_fields'`;
-    const audit =
-      await world.platform`select row_to_json(a) as data from audit_events a`;
+    const audit = await world.platform`select row_to_json(a) as data from audit_events a`;
     const retained = JSON.stringify({ logs: world.logs, runs, audit, error: failed.json() });
     for (const secret of [marker, "12.500 EUR", "120,5 m²", "12500"])
       expect(retained).not.toContain(secret);

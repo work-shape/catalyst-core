@@ -133,7 +133,8 @@ describe("the store a Knowledge Base owns", () => {
         expect.objectContaining({ number: 6, name: "workflow_sources" }),
         expect.objectContaining({ number: 7, name: "document_processors" }),
         expect.objectContaining({ number: 8, name: "record_content_hash" }),
-        expect.objectContaining({ number: 9, name: "source_superseded" })
+        expect.objectContaining({ number: 9, name: "source_superseded" }),
+        expect.objectContaining({ number: 10, name: "field_extraction_budget" })
       ]
     });
     const { database } = record.location;
@@ -148,6 +149,7 @@ describe("the store a Knowledge Base owns", () => {
       "chunks",
       "contents",
       "documents",
+      "field_budgets",
       "index_generations",
       "migrations",
       "source_counts",
