@@ -1,9 +1,16 @@
 import postgres from "postgres";
 import { describe, expect, it, vi } from "vitest";
 import { runOperation } from "@work-shape/catalyst-tool-execution";
-import { type JsonObject, type AuditEvent } from "@work-shape/catalyst-core";
+import {
+  createPlatformId,
+  NoopAuditRecorder,
+  type JsonObject,
+  type AuditEvent
+} from "@work-shape/catalyst-core";
 import { clientInstanceId, useDataStoreInstance } from "./data-store-instance";
 import { fileTestDatabaseUrl } from "./test-database";
+import { accessOf } from "./access";
+import { required } from "./assertions";
 
 const holidayFiles = [
   { path: "store.yaml", text: "id: findings\nname: Holiday requests\n" },
@@ -13,6 +20,9 @@ const holidayFiles = [
     create table holidays (person text, starts date, ends date, days integer generated always as (ends - starts + 1) stored, primary key (person, starts));
     create table unkeyed (person text, ends date);
     create table typed_keys (id integer primary key, value text);
+    create table loose (id integer unique, value text);
+    create table late (id integer unique deferrable initially deferred);
+    create table defaulted (id integer primary key default 1, value text);
   `
   }
 ];
@@ -56,7 +66,7 @@ export function testDataStoreRowWrites(): void {
       const snapshot = async () => [
         ...(await sql`select person, starts::text, ends::text, days from holidays order by person, starts`)
       ];
-      return { instance, sql, call, snapshot };
+      return { instance, record, actor, sql, call, snapshot };
     }
 
     it("inserts, updates, queries and deletes Alex over HTTP, confirmed by the database", async () => {
@@ -140,7 +150,10 @@ export function testDataStoreRowWrites(): void {
                 verb,
                 input: input([{ person: "Alex" }]),
                 reason: "primary_key_incomplete",
-                word: locale === "de" ? "alle" : "every"
+                word:
+                  locale === "de"
+                    ? "Jeder Schlüssel muss genau die Primärschlüsselspalten angeben, keine davon leer."
+                    : "Each key must give every primary-key column and no other column, with no null value."
               },
               {
                 verb,
@@ -224,6 +237,124 @@ export function testDataStoreRowWrites(): void {
       }
     );
 
+    it.each(["en", "de"] as const)(
+      "explains insert refusals in %s before writing rows",
+      async (locale) => {
+        const { sql, call, snapshot } = await setup();
+        try {
+          const cases: { input: JsonObject; reason: string; en: string; de: string }[] = [
+            {
+              input: { table: "holidays", rows: Array.from({ length: 1001 }, () => alex) },
+              reason: "rows_too_many",
+              en: "One call carries at most 1000 rows",
+              de: "Ein Aufruf umfasst höchstens 1000 Datensätze"
+            },
+            {
+              input: { table: "holidays", rows: [{ ...alex, person: "x".repeat(1_048_577) }] },
+              reason: "rows_too_large",
+              en: "One call carries at most 1 MiB",
+              de: "Ein Aufruf umfasst höchstens 1 MiB"
+            },
+            {
+              input: { table: "holidays", rows: [{}] },
+              reason: "rows_differ",
+              en: "A row names at least one column",
+              de: "Ein Datensatz muss mindestens eine Spalte angeben."
+            },
+            {
+              input: { table: "holidays", rows: [alex, { person: "Blair" }] },
+              reason: "rows_differ",
+              en: "Row 2 names other columns",
+              de: "Datensatz 2 gibt andere Spalten"
+            },
+            {
+              input: { table: "missing", rows: [alex] },
+              reason: "table_unknown",
+              en: "The store has no table",
+              de: "Der Datenspeicher hat keine Tabelle"
+            },
+            {
+              input: { table: "holidays", rows: [{ ...alex, typo: 1 }] },
+              reason: "column_unknown",
+              en: "has no column",
+              de: "hat keine beschreibbare Spalte"
+            },
+            {
+              input: { table: "late", rows: [{ id: 1 }], onConflict: "skip" },
+              reason: "skip_deferrable_key",
+              en: "deferrable unique constraint",
+              de: "aufschiebbare Eindeutigkeitsbedingung"
+            },
+            {
+              input: { table: "defaulted", rows: [{ value: "a" }], onConflict: "skip" },
+              reason: "skip_without_key",
+              en: "needs a unique constraint",
+              de: "benötigt in Tabelle"
+            },
+            {
+              input: { table: "loose", rows: [{ id: null }], onConflict: "skip" },
+              reason: "nullable_key",
+              en: "would be added again",
+              de: "würde bei einem erneuten Aufruf nochmals hinzugefügt"
+            }
+          ];
+          for (const { input, reason, en, de } of cases) {
+            expect(await call("insert", input, locale), reason).toMatchObject({
+              status: "failed",
+              error: {
+                details: { reason },
+                message: expect.stringContaining(locale === "de" ? de : en)
+              }
+            });
+            expect(await snapshot()).toEqual([]);
+          }
+          for (const input of [
+            null,
+            { table: "holidays", rows: "bad" },
+            { table: "holidays", rows: [null] }
+          ]) {
+            await expect(call("insert", input, locale)).rejects.toMatchObject({
+              code: "VALIDATION_FAILED"
+            });
+            expect(await snapshot()).toEqual([]);
+          }
+        } finally {
+          await sql.end();
+        }
+      }
+    );
+
+    it.each(["en", "de"] as const)(
+      "names all refused row writes at the size limit in %s",
+      async (locale) => {
+        const { record, sql, call, snapshot } = await setup();
+        const platform = postgres(await fileTestDatabaseUrl(), { max: 1 });
+        try {
+          await call("insert", { table: "holidays", rows: [alex] });
+          const before = await snapshot();
+          await platform`update data_stores set size_limit_bytes = 1 where id = ${record.id}`;
+          for (const [verb, input] of [
+            ["insert", { table: "holidays", rows: [{ ...alex, person: "Blair" }] }],
+            ["update", { table: "holidays", rows: [{ key, set: { ends: "2026-11-05" } }] }]
+          ] as const) {
+            expect(await call(verb, input, locale)).toMatchObject({
+              status: "failed",
+              error: {
+                details: { reason: "data_store_size_limit" },
+                message: expect.stringContaining(
+                  locale === "de" ? "Es werden keine Datensätze geschrieben" : "No rows are written"
+                )
+              }
+            });
+            expect(await snapshot()).toEqual(before);
+          }
+        } finally {
+          await platform.end();
+          await sql.end();
+        }
+      }
+    );
+
     it("refuses a two-row call with one missing key atomically", async () => {
       const { sql, call, snapshot } = await setup();
       try {
@@ -290,6 +421,43 @@ export function testDataStoreRowWrites(): void {
             (run) => run.operation === "data_store.findings.delete_rows" && run.status === "done"
           )
         ).toBe(true);
+      } finally {
+        await sql.end();
+      }
+    });
+
+    it("the row writer sets its Operation Run id even with a plain audit recorder", async () => {
+      const { instance, actor, sql } = await setup();
+      const audit = new NoopAuditRecorder();
+      vi.spyOn(audit, "record");
+      try {
+        for (const [verb, input] of [
+          ["insert", { table: "holidays", rows: [alex] }],
+          ["update", { table: "holidays", rows: [{ key, set: { ends: "2026-11-05" } }] }],
+          ["delete_rows", { table: "holidays", keys: [key] }]
+        ] as const) {
+          const operation = required(
+            await instance.execution.operationCalls.deps.registry.resolve(
+              `data_store.findings.${verb}`
+            )
+          );
+          const runId = createPlatformId<"OperationRunId">("oprun");
+          await operation.execute(operation.inputSchema.parse(input), {
+            runId,
+            actor,
+            origin: { kind: "user" },
+            correlationId: "raw-row-writer",
+            runtime: {},
+            access: accessOf(actor),
+            audit
+          });
+          expect(audit.record).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              type: "data_store.rows_written",
+              metadata: expect.objectContaining({ table: "holidays", operationRunId: runId })
+            })
+          );
+        }
       } finally {
         await sql.end();
       }
@@ -385,6 +553,16 @@ export function testDataStoreRowWrites(): void {
             expect.objectContaining({ store: "findings", table: "holidays", deleted: 1 })
           ])
         );
+        for (const event of audit.filter((event) => event.type === "data_store.rows_written")) {
+          expect(event.metadata?.operationRunId).toEqual(expect.any(String));
+          expect(runs).toContainEqual(
+            expect.objectContaining({
+              id: event.metadata?.operationRunId,
+              status: "done",
+              output: { value: expect.objectContaining({ table: event.metadata?.table }) }
+            })
+          );
+        }
         expect(JSON.stringify(logs)).not.toContain(marker);
       } finally {
         spies.forEach((spy) => spy.mockRestore());

@@ -55,9 +55,10 @@ describe("records proposals on an assembled instance", () => {
             status: "failed",
             error: {
               details: { reason: "record_managed_table" },
-              message: expect.stringContaining(
-                locale === "de" ? "Records-Prüfung" : "records review"
-              )
+              message:
+                locale === "de"
+                  ? "Diese Tabelle wird aus extrahierten Feldern befüllt. Reiche Korrekturen über die Prüfung der extrahierten Felder ein."
+                  : "This table is managed by records. Submit corrections through the records review."
             }
           });
           expect([...(await sql`select id, amount::integer from findings`)]).toEqual([

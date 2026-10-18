@@ -24,12 +24,14 @@ export function boundRowWrite(rows: readonly JsonObject[], locale?: string): voi
       `Ein Aufruf umfasst höchstens ${DATA_STORE_INSERT_MAX_ROWS} Datensätze. Teile sie auf mehrere Aufrufe auf.`,
       locale
     );
-  if (Buffer.byteLength(JSON.stringify(rows)) > DATA_STORE_INSERT_MAX_BYTES)
-    throw rowWriteRefusal(
-      "rows_too_large",
-      `One call carries at most 1 MiB (${DATA_STORE_INSERT_MAX_BYTES} bytes); send them in several calls.`,
-      `Ein Aufruf umfasst höchstens 1 MiB (${DATA_STORE_INSERT_MAX_BYTES} Bytes). Teile sie auf mehrere Aufrufe auf.`,
-      locale
+  const bytes = Buffer.byteLength(JSON.stringify(rows));
+  if (bytes > DATA_STORE_INSERT_MAX_BYTES)
+    throw new AppError(
+      "VALIDATION_FAILED",
+      locale === "de"
+        ? `Ein Aufruf umfasst höchstens 1 MiB (${DATA_STORE_INSERT_MAX_BYTES} Bytes). Teile sie auf mehrere Aufrufe auf.`
+        : `One call carries at most 1 MiB (${DATA_STORE_INSERT_MAX_BYTES} bytes); send them in several calls.`,
+      { reason: "rows_too_large", cap: "DATA_STORE_INSERT_MAX_BYTES", actual: bytes }
     );
 }
 
@@ -43,7 +45,7 @@ export function refuseRecordManagedTable(
     throw rowWriteRefusal(
       "record_managed_table",
       "This table is managed by records. Submit corrections through the records review.",
-      "Diese Tabelle wird durch Records verwaltet. Reiche Korrekturen über die Records-Prüfung ein.",
+      "Diese Tabelle wird aus extrahierten Feldern befüllt. Reiche Korrekturen über die Prüfung der extrahierten Felder ein.",
       locale
     );
 }

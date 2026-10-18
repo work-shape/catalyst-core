@@ -13,10 +13,12 @@ import { z } from "zod";
 import { catalogTarget, readTables } from "./catalog";
 import { quoteIdentifier } from "./server";
 import { storeSizeBytes } from "./size";
-import { changeWhole, reclaim, storeFull, tableUnknown, type StoreVerb } from "./verbs";
+import { changeWhole, reclaim, storeFull, type StoreVerb } from "./verbs";
 import {
   DATA_STORE_INSERT_MAX_ROWS,
   DATA_STORE_INSERT_MAX_BYTES,
+  boundRowWrite,
+  rowWriteRefusal,
   rowValuesSchema,
   tableNameSchema,
   refuseRecordManagedTable
@@ -24,24 +26,27 @@ import {
 
 const insertInputSchema = z.strictObject({
   table: tableNameSchema,
-  rows: z.array(rowValuesSchema).min(1).max(DATA_STORE_INSERT_MAX_ROWS),
+  rows: z.array(rowValuesSchema).min(1),
   onConflict: dataStoreInsertConflictSchema
 });
 
 /** The columns the rows of one insert name: those of its first row, which every row shares. */
-function sharedColumns(rows: readonly JsonObject[]): string[] {
+function sharedColumns(rows: readonly JsonObject[], locale: string): string[] {
   const columns = Object.keys(rows[0] ?? {});
   const differing = rows.findIndex((row) => {
     const keys = Object.keys(row);
     return keys.length !== columns.length || !columns.every((column) => column in row);
   });
   if (columns.length === 0 || differing !== -1) {
-    throw new AppError(
-      "VALIDATION_FAILED",
+    throw rowWriteRefusal(
+      "rows_differ",
       columns.length === 0
         ? "A row names at least one column"
         : `Row ${differing + 1} names other columns than row 1. All rows of one insert name the same columns; a column that is left out of all of them takes its default.`,
-      { reason: "rows_differ" }
+      columns.length === 0
+        ? "Ein Datensatz muss mindestens eine Spalte angeben."
+        : `Datensatz ${differing + 1} gibt andere Spalten als Datensatz 1 an. Alle Datensätze eines Aufrufs müssen dieselben Spalten angeben. Eine überall ausgelassene Spalte erhält ihren Standardwert.`,
+      locale
     );
   }
   return columns;
@@ -114,13 +119,15 @@ type UniqueIndex = z.infer<typeof uniqueIndexRow>;
 function skipKeys(
   table: CatalogTable,
   given: readonly string[],
-  indexes: readonly UniqueIndex[]
+  indexes: readonly UniqueIndex[],
+  locale: string
 ): UniqueIndex[] {
   if (indexes.some((index) => !index.immediate)) {
-    throw new AppError(
-      "VALIDATION_FAILED",
+    throw rowWriteRefusal(
+      "skip_deferrable_key",
       `The table '${table.name}' has a deferrable unique constraint, on which Postgres skips no row. Make the constraint not deferrable, or leave onConflict out.`,
-      { reason: "skip_deferrable_key" }
+      `Die Tabelle '${table.name}' hat eine aufschiebbare Eindeutigkeitsbedingung. PostgreSQL kann damit keine Datensätze überspringen. Mache die Bedingung nicht aufschiebbar oder lasse onConflict weg.`,
+      locale
     );
   }
   const usable = indexes.filter(
@@ -130,10 +137,11 @@ function skipKeys(
       index.needs.every((column) => given.includes(column))
   );
   if (usable.length === 0) {
-    throw new AppError(
-      "VALIDATION_FAILED",
+    throw rowWriteRefusal(
+      "skip_without_key",
       `'skip' needs a unique constraint of the table '${table.name}' that holds for all rows, is not deferrable, and whose columns every row of the call gives. The table has none. Give the columns of such a key in every row, or leave onConflict out.`,
-      { reason: "skip_without_key" }
+      `'skip' benötigt in Tabelle '${table.name}' eine nicht aufschiebbare Eindeutigkeitsbedingung für alle Datensätze, deren Spalten jeder gesendete Datensatz angibt. Gib die Spalten eines solchen Schlüssels in jedem Datensatz an oder lasse onConflict weg.`,
+      locale
     );
   }
   return usable;
@@ -193,20 +201,20 @@ export const insert: StoreVerb = {
   use: `Adds rows to one table. Use it to record new rows; it changes and removes nothing that is stored. Name the table and send each row as an object of column name to value. All rows of one call name the same columns, and a column that is left out takes its default. "onConflict" says what happens to a row that a unique constraint of the table refuses: "fail", the default, adds no row of the call; "skip" leaves that row out and adds the others, which makes sending the same rows again safe. One call adds at most ${DATA_STORE_INSERT_MAX_ROWS} rows and ${DATA_STORE_INSERT_MAX_BYTES} bytes.`,
   async run({ runtime, store, target, keyed, context }, call) {
     const input = insertInputSchema.parse(call);
-    refuseRecordManagedTable(store, input.table, context?.runtime.locale ?? runtime.defaultLocale);
+    const locale = context?.runtime.locale ?? runtime.defaultLocale;
+    boundRowWrite(input.rows, locale);
+    refuseRecordManagedTable(store, input.table, locale);
     const { record } = store;
-    const columns = sharedColumns(input.rows);
+    const columns = sharedColumns(input.rows, locale);
     const rows = JSON.stringify(input.rows);
-    const bytes = Buffer.byteLength(rows);
-    if (bytes > DATA_STORE_INSERT_MAX_BYTES) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `The rows have ${bytes} bytes. One insert carries at most ${DATA_STORE_INSERT_MAX_BYTES} bytes of rows (DATA_STORE_INSERT_MAX_BYTES); send them in several calls.`,
-        { reason: "rows_too_large", cap: "DATA_STORE_INSERT_MAX_BYTES", actual: bytes }
-      );
-    }
     const [table] = await readTables(runtime.server.executor, target, input.table);
-    if (!table) throw tableUnknown(input.table);
+    if (!table)
+      throw rowWriteRefusal(
+        "table_unknown",
+        `The store has no table '${input.table}'`,
+        `Der Datenspeicher hat keine Tabelle '${input.table}'.`,
+        locale
+      );
     // The names and types that go into the statement are the catalog's, never a caller's text.
     const typeOf = new Map(
       table.columns.flatMap((column) =>
@@ -215,10 +223,11 @@ export const insert: StoreVerb = {
     );
     const unknown = columns.find((column) => !typeOf.has(column));
     if (unknown !== undefined) {
-      throw new AppError(
-        "VALIDATION_FAILED",
+      throw rowWriteRefusal(
+        "column_unknown",
         `The table '${table.name}' has no column '${unknown}' that an insert sets`,
-        { reason: "column_unknown" }
+        `Die Tabelle '${table.name}' hat keine beschreibbare Spalte '${unknown}'.`,
+        locale
       );
     }
     const keys =
@@ -234,7 +243,8 @@ export const insert: StoreVerb = {
                   parameters: [table.name]
                 })
               ).rows
-            )
+            ),
+            locale
           )
         : [];
     const names = columns.map(quoteIdentifier).join(", ");
@@ -249,7 +259,7 @@ export const insert: StoreVerb = {
         returning 1
       )
       select pg_catalog.count(*)::pg_catalog.int4 as count from inserted`;
-    const full = (sizeBytes: number) => storeFull(record, sizeBytes);
+    const full = (sizeBytes: number) => storeFull(record, sizeBytes, locale);
     // The size is the server's own word for the files of the store, read on a connection of
     // the platform's own, which nothing the store runs can have touched. It is read before
     // the rows are written and again once they are: whoever calls and from whichever
@@ -278,7 +288,9 @@ export const insert: StoreVerb = {
               refuse(
                 new AppError(
                   "VALIDATION_FAILED",
-                  `Row ${row} would be added again by a repeated call: its key is empty in every unique constraint of the table '${table.name}' that the call gives the columns of. Set the key in every row, or make the constraint NULLS NOT DISTINCT.`,
+                  locale === "de"
+                    ? `Datensatz ${row} würde bei einem erneuten Aufruf nochmals hinzugefügt: Sein Schlüssel ist in jeder passenden Eindeutigkeitsbedingung der Tabelle '${table.name}' leer. Gib den Schlüssel in jedem Datensatz an oder verwende NULLS NOT DISTINCT für die Bedingung.`
+                    : `Row ${row} would be added again by a repeated call: its key is empty in every unique constraint of the table '${table.name}' that the call gives the columns of. Set the key in every row, or make the constraint NULLS NOT DISTINCT.`,
                   { reason: "nullable_key", row }
                 )
               );

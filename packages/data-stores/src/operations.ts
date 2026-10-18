@@ -310,7 +310,7 @@ async function runVerb(
           status: "success",
           subject: record.id,
           correlationId: context.correlationId,
-          metadata: { store: record.name, ...result }
+          metadata: { store: record.name, ...result, operationRunId: context.runId }
         })
         .catch(() => {
           // The rows committed already: an audit outage cannot be reported as a refused write.

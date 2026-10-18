@@ -82,7 +82,7 @@ function mutation(verb: "update" | "delete_rows"): StoreVerb {
           return refuse(
             "primary_key_incomplete",
             "Each key must give every primary-key column and no other column, with no null value.",
-            "Jeder Schlüssel muss alle Primärschlüsselspalten und keine andere Spalte mit einem Wert ungleich null angeben."
+            "Jeder Schlüssel muss genau die Primärschlüsselspalten angeben, keine davon leer."
           );
         if (primary.some((column) => column.name in set))
           return refuse(
@@ -112,7 +112,7 @@ function mutation(verb: "update" | "delete_rows"): StoreVerb {
         storeSizeBytes(runtime.server, store.record.location.database, target.signal);
       if (verb === "update") {
         const before = await size();
-        if (before >= store.record.sizeLimitBytes) throw storeFull(store.record, before);
+        if (before >= store.record.sizeLimitBytes) throw storeFull(store.record, before, locale);
       }
       // Executor failures sanitize database text. Preserve only our fixed refusal after rollback.
       let refusal: AppError | undefined;
@@ -180,7 +180,7 @@ function mutation(verb: "update" | "delete_rows"): StoreVerb {
             if (verb === "update") {
               const after = await size();
               if (after > store.record.sizeLimitBytes) {
-                refusal = storeFull(store.record, after);
+                refusal = storeFull(store.record, after, locale);
                 throw refusal;
               }
             }
