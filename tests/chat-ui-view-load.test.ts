@@ -113,6 +113,19 @@ describe("a view in a conversation that cannot load", () => {
     expect(view.textContent).not.toContain(en("displayLoading"));
     // The browser's own page for the failed frame is not shown under the error.
     expect(view.querySelector("iframe")).toBeNull();
+
+    // The load limit of the failed shell no longer runs: the failure stays as it is.
+    await advance(VIEW_LOAD_TIMEOUT_MS);
+    expect(loadError(view)?.textContent).toContain(en("displayLoadFailed"));
+    expect(view.textContent).not.toContain(
+      en("displayLoadTimedOut", { seconds: VIEW_LOAD_TIMEOUT_MS / 1000 })
+    );
+    expect(view.textContent).not.toContain(en("displayLoading"));
+
+    await tryAgain(view);
+    expect(loadError(view)).toBeNull();
+    expect(view.textContent).toContain(en("displayLoading"));
+    expect(view.querySelector("iframe")).not.toBeNull();
   });
 
   it("names the limit when the view has not loaded in time, and starts again on Try again", async () => {
