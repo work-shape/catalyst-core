@@ -673,29 +673,34 @@ const AUTH_SCHEME_OAUTH = "oauth";
  * confirmed or approved before a new sign-in would act through an account nobody looked at
  * when it was decided. It fails as stale and the caller asks again (CS-4b3).
  */
-async function refuseStaleHeldCall(
+async function heldSignInCheck(
   deps: ConnectionOperationSourceDeps,
   connection: StoredConnection,
   context: ConnectionCallContext
-): Promise<void> {
+): Promise<{ check: () => Promise<void>; stale: AppError } | undefined> {
   if (connection.config.authScheme !== AUTH_SCHEME_OAUTH || context.runId === undefined) return;
   const run = await deps.stores.operationRuns.get({
     clientInstanceId: deps.clientInstanceId,
     id: context.runId
   });
   if (run?.decision === undefined || run.decision.mode === "direct") return;
-  const binding = await deps.stores.connections.getConnectionBinding({
-    clientInstanceId: deps.clientInstanceId,
-    connectionAssetId: connection.assetId,
-    subject: SHARED_CREDENTIAL_SUBJECT
+  const stale = operationDenialError({
+    kind: "policy",
+    operation: run.operation,
+    reason: "approval_stale"
   });
-  if (binding !== undefined && Date.parse(binding.connectedAt) > Date.parse(run.createdAt)) {
-    throw operationDenialError({
-      kind: "policy",
-      operation: run.operation,
-      reason: "approval_stale"
+  const check = async () => {
+    const binding = await deps.stores.connections.getConnectionBinding({
+      clientInstanceId: deps.clientInstanceId,
+      connectionAssetId: connection.assetId,
+      subject: SHARED_CREDENTIAL_SUBJECT
     });
-  }
+    if (binding !== undefined && Date.parse(binding.connectedAt) > Date.parse(run.createdAt)) {
+      throw stale;
+    }
+  };
+  await check();
+  return { check, stale };
 }
 
 /** The scopes a refusal for `insufficient_scope` names, where they may be repeated. */
@@ -786,7 +791,7 @@ async function call(
     return found;
   };
   const first = await read();
-  await refuseStaleHeldCall(deps, first.connection, context);
+  const heldSignIn = await heldSignInCheck(deps, first.connection, context);
   const jsonInput = toJsonInput(input);
   const limits = connectionCallLimits(first.type);
 
@@ -815,6 +820,7 @@ async function call(
         },
         egress: deps.egress,
         credentials: deps.credentials ?? NO_CREDENTIALS,
+        ...(heldSignIn === undefined ? {} : { checkSignIn: heldSignIn.check }),
         signal: deadline.signal,
         resolvePersonContext: (header, origin) =>
           resolveConnectionPersonContext(deps, connection.assetId, header, origin, context.actor),
@@ -866,6 +872,9 @@ async function call(
         result = await attempt(refusedToken);
       }
     } catch (caught) {
+      // This refusal came from our approval gate, not the connector or provider. Keep its
+      // policy reason without allowing an outside error to bypass credential redaction.
+      if (heldSignIn !== undefined && caught === heldSignIn.stale) throw caught;
       const reason = deadline.signal.aborted ? "upstream_timeout" : connectionCallReasonOf(caught);
       let error = caught;
       if (reason === "connection_needs_reconnect" && lacksScope(caught)) {
