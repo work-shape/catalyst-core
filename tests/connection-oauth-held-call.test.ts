@@ -80,6 +80,7 @@ describe("an approved OAuth call whose sign-in changes while it waits", () => {
           ]),
           credentials: wrapped,
           egress: {
+            admits: (target) => connections.egress.admits(target),
             async check(target) {
               if (pauseAt === "egress") {
                 paused.resolve();
