@@ -55,6 +55,7 @@ import {
   type AppManifestSummary,
   type AppRights
 } from "./app-model";
+import { HeadAgentAction } from "../head-agent-action";
 import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { AppPreview, AppPreviewNotice } from "./app-preview";
 import { AppPublishDataView, AppStoredDataFact } from "./app-publish-data";
@@ -534,27 +535,27 @@ export function AppEditFrame({
             backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
             onBack={onBack}
             secondaryActions={
-              known
-                ? [
-                    ...(editWithAgent.action === undefined ? [] : [editWithAgent.action]),
-                    ...(ahead && publishedRevision !== undefined
-                      ? [{ label: t("apps.discard"), onSelect: () => onDiscard?.() }]
-                      : [])
-                  ]
+              known && ahead && publishedRevision !== undefined
+                ? [{ label: t("apps.discard"), onSelect: () => onDiscard?.() }]
                 : undefined
             }
             tabs={tabs}
             primaryAction={
               known ? (
-                // A live App may be published again for another audience (SHARE-1): the
-                // dialog then waits for a choice that differs from the live one.
-                <Button
-                  disabled={!rights.publish || (!ahead && publishedRevision === undefined)}
-                  aria-describedby={missingRight ? missingRightId : undefined}
-                  onClick={onPublish}
-                >
-                  {t("apps.publish")}
-                </Button>
+                <span className="flex items-center gap-2">
+                  {editWithAgent.action === undefined ? null : (
+                    <HeadAgentAction action={editWithAgent.action} />
+                  )}
+                  {/* A live App may be published again for another audience (SHARE-1): the
+                    dialog then waits for a choice that differs from the live one. */}
+                  <Button
+                    disabled={!rights.publish || (!ahead && publishedRevision === undefined)}
+                    aria-describedby={missingRight ? missingRightId : undefined}
+                    onClick={onPublish}
+                  >
+                    {t("apps.publish")}
+                  </Button>
+                </span>
               ) : undefined
             }
             menu={
