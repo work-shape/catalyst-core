@@ -735,6 +735,7 @@ export interface KnowledgePassageToEmbed {
 export interface KnowledgeDocumentEntry {
   /** Extraction budget paused; indexing and search remain available. */
   fieldsPending?: boolean;
+  fieldsPendingReason?: import("./knowledge-fields").KnowledgeFieldsPendingReason;
   id: string;
   /** The Managed File the Knowledge Base owns that holds the bytes. */
   fileId: string;

@@ -136,6 +136,16 @@ const knowledgeListDocumentsResponseSchema = z.object({
        * The document stays searchable; its fields follow once the budget resets or is raised.
        */
       fieldsPending: z.boolean().optional(),
+      fieldsPendingReason: z
+        .discriminatedUnion("reason", [
+          z.object({ reason: z.literal("monthly_budget") }),
+          z.object({
+            reason: z.literal("token_budget"),
+            estimatedTokens: z.number(),
+            maxTokensPerDocument: z.number()
+          })
+        ])
+        .optional(),
       /**
        * The source the document was synced from. Source withdrawal removes it; a manual
        * remove is refused with `knowledge_synced_document_remove_refused`.

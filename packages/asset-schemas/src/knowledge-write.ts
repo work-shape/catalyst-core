@@ -167,6 +167,7 @@ export const knowledgeExtractFieldsInputSchema = z.strictObject({
 });
 export const knowledgeExtractFieldsOutputSchema = z.strictObject({
   droppedFields: z.number().int().nonnegative().optional(),
+  failedFields: z.number().int().nonnegative().optional(),
   path: z.string(),
   date: z.iso.date().nullable(),
   type: id,

@@ -120,6 +120,7 @@ export function createKnowledgeBases(input: {
   /** Where the described tables are read and the owned stores made. */
   backend: KnowledgeBackend;
   sources?: KnowledgeSources;
+  assertFieldBudgetPriced?(): void;
   documentSourceOffered?(config: unknown): boolean;
   /** The embedding model release config approves for Knowledge Bases (`knowledge`), if any. */
   embedding: KnowledgeEmbedding;
@@ -189,6 +190,9 @@ export function createKnowledgeBases(input: {
       })
     }),
     async publish(stores, { access, assetId, revision, config, replaced, confirmProcessing }) {
+      const definition = knowledgeBaseDefinitionSchema.parse(config);
+      if (definition.extraction?.budget.perMonth !== undefined) input.assertFieldBudgetPriced?.();
+
       await confirmKnowledgeProcessing(
         runtime,
         stores,
@@ -201,7 +205,6 @@ export function createKnowledgeBases(input: {
         },
         input.embedding
       );
-      const definition = knowledgeBaseDefinitionSchema.parse(config);
       const target = knowledgeTargetOf(definition, assetId);
       const before = knowledgeBaseDefinitionSchema.safeParse(replaced);
       const previous = before.success ? knowledgeTargetOf(before.data, assetId) : undefined;

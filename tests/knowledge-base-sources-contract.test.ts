@@ -213,7 +213,7 @@ describe("catalyst_kb source migrations", () => {
         drop function catalyst_kb.source_document_purged();
         drop trigger source_freshness_changed on catalyst_kb.contents;
         drop function catalyst_kb.source_freshness_changed();
-        alter table catalyst_kb.documents drop column source_item_id, drop column fields_pending;
+        alter table catalyst_kb.documents drop column source_item_id, drop column fields_pending, drop column fields_pending_reason;
         drop table catalyst_kb.field_budgets;
         drop table catalyst_kb.source_cursors, catalyst_kb.sync_runs, catalyst_kb.source_items;
         alter table catalyst_kb.contents drop column document_type, drop column processor_revision, drop column processing_key, drop column requested_processing_key;

@@ -1,37 +1,75 @@
 import type { JsonValue } from "./json";
 import type { RecordEvidenceResult } from "@work-shape/catalyst-asset-schemas";
 
-function valueInQuote(value: JsonValue, quote: string): boolean {
+/** Compare retained text and citations without layout or Unicode encoding differences. */
+function normalise(text: string): string {
+  return text
+    .normalize("NFC")
+    .replace(/(\p{L})[-\u00ad][\t ]*\r?\n\s*(?=\p{L})/gu, "$1")
+    .replaceAll("\u00ad", "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function wordsInclude(text: string, value: string): boolean {
+  if (!value) return false;
+  const escaped = value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "u").test(text);
+}
+
+function numberFrom(token: string, locale: string): number | undefined {
+  const german = locale.startsWith("de");
+  const grouping = german ? "\\." : ",";
+  const decimal = german ? "," : "\\.";
+  const syntax = new RegExp(
+    `^[+-]?(?:\\d+|\\d{1,3}(?:${grouping}\\d{3})+)(?:${decimal}\\d+)?$`,
+    "u"
+  );
+  if (!syntax.test(token)) return undefined;
+  return Number(german ? token.replaceAll(".", "").replace(",", ".") : token.replaceAll(",", ""));
+}
+
+function valueInQuote(value: JsonValue, quote: string, locale: string): boolean {
   if (typeof value === "string") {
-    if (!value) return false;
-    const date = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
-    if (date) return quote.includes(value) || quote.includes(`${date[3]}.${date[2]}.${date[1]}`);
-    return quote.includes(value);
+    const text = normalise(value);
+    const date = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(text);
+    if (date) {
+      if (wordsInclude(quote, text)) return true;
+      return [...quote.matchAll(/(?<!\d)(\d{1,2})\.(\d{1,2})\.(\d{4})(?!\d)/gu)].some(
+        ([, day, month, year]) =>
+          year === date[1] && Number(month) === Number(date[2]) && Number(day) === Number(date[3])
+      );
+    }
+    return wordsInclude(quote, text);
   }
   if (typeof value === "number") {
-    // Parse both decimal conventions, including spaces used as grouping separators.
-    return [...quote.matchAll(/[+-]?\d+(?:[.,\s\u00a0]\d+)*/gu)].some(([token]) => {
-      const compact = token.replace(/[\s\u00a0]/gu, "");
-      const forms = [
-        compact,
-        compact.replaceAll(".", "").replace(",", "."),
-        compact.replaceAll(",", "")
-      ];
-      return forms.some((form) => Number(form) === value);
+    // Keep OCR letters inside the token: '35O.OOO' must never become the number 35.
+    return [...quote.matchAll(/(?<![\p{L}\p{N}_.,])[+-]?\d[\p{L}\p{N}.,]*/gu)].some(([raw]) => {
+      const token = raw.replace(/[.,]+$/u, "");
+      const primary = numberFrom(token, locale);
+      if (primary !== undefined) return primary === value;
+      // A separator followed by three digits is locale-ambiguous; never guess the other reading.
+      if (/[.,]\d{3}(?:[.,]|$)/u.test(token)) return false;
+      return numberFrom(token, locale.startsWith("de") ? "en" : "de") === value;
     });
   }
-  if (Array.isArray(value)) return value.every((item) => valueInQuote(item, quote));
-  return quote.includes(JSON.stringify(value));
+  if (Array.isArray(value))
+    return value.length > 0 && value.every((item) => valueInQuote(item, quote, locale));
+  return wordsInclude(quote, JSON.stringify(value));
 }
 
 /** Recheck at the write boundary: a caller cannot claim its own evidence passed. */
 export function recordEvidence(
   value: JsonValue,
   quote: string,
-  page: string | undefined
+  page: string | undefined,
+  locale = "de"
 ): RecordEvidenceResult {
   if (page === undefined) return { status: "failed", reason: "page_not_found" };
-  if (!page.includes(quote)) return { status: "failed", reason: "quote_not_found" };
-  if (!valueInQuote(value, quote)) return { status: "failed", reason: "value_not_parsed" };
+  const normalQuote = normalise(quote);
+  if (!normalQuote || !wordsInclude(normalise(page), normalQuote))
+    return { status: "failed", reason: "quote_not_found" };
+  if (!valueInQuote(value, normalQuote, locale))
+    return { status: "failed", reason: "value_not_parsed" };
   return { status: "passed" };
 }

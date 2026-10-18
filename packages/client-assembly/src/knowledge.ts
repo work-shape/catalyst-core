@@ -223,6 +223,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
   }
   const sourceJobs = earlier.find((assembly) => assembly.knowledgeSourceJobs)?.knowledgeSourceJobs;
   const embedding = knowledgeEmbedding(parts.config);
+  let assertFieldBudgetPriced: (() => void) | undefined;
   const knowledgeBases = createKnowledgeBases({
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
@@ -242,6 +243,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       : KNOWLEDGE_TEXT_FORMATS,
     maxDocuments: parts.config.knowledge.maxDocuments,
     maxPages: parts.config.knowledge.maxPagesPerDocument,
+    assertFieldBudgetPriced: () => assertFieldBudgetPriced?.(),
     logger: parts.logger
   });
   return {
@@ -255,6 +257,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       )
     ],
     start: (runtime) => {
+      assertFieldBudgetPriced = () => runtime.knowledgeFieldExtractor?.assertBudgetPriced?.();
       for (const model of embedding.models ?? []) {
         if (
           !embedding.processingPrices?.some((price) => price.bindingId === model.bindingId) &&

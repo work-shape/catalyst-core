@@ -220,6 +220,13 @@ export function useKnowledgeSync() {
         secrets: { resolve: async () => randomBytes(32).toString("base64") }
       }),
       limits: { sizeLimitBytes: 1024 ** 3, poolMaxConnections: 3 },
+      recordFailures: {
+        write: async (items) => ({
+          $dataset: "proc2-failures",
+          rowCount: items.length,
+          bytes: JSON.stringify(items).length
+        })
+      },
       logger
     });
     cleanups.push(() => dataStores.close());
@@ -227,6 +234,7 @@ export function useKnowledgeSync() {
       vectors: texts.map(() => Array.from({ length: 8 }, () => 0.25))
     }));
     const knowledge = createKnowledgeBases({
+      assertFieldBudgetPriced: () => fieldExtractor?.assertBudgetPriced?.(),
       clientInstanceId,
       stores: instance.stores,
       backend: dataStores.knowledgeBackend,
@@ -256,6 +264,7 @@ export function useKnowledgeSync() {
       stores: instance.stores,
       handlers: [
         ...handlers,
+        ...dataStores.jobHandlers,
         ...fileJobs.handlers,
         ...(extractor
           ? [

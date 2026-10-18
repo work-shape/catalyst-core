@@ -302,6 +302,12 @@ export const KNOWLEDGE_STORE_LEVEL = Math.max(
   ...KNOWLEDGE_STORE_MIGRATIONS.map((migration) => migration.number)
 );
 
+/** A later applied number never proves that earlier migrations were applied. */
+export function knowledgeStoreNeedsMigration(record: Pick<DataStoreRecord, "migrations">): boolean {
+  const applied = new Set(record.migrations.map(({ number }) => number));
+  return KNOWLEDGE_STORE_MIGRATIONS.some(({ number }) => !applied.has(number));
+}
+
 const appliedRow = z.object({ number: z.number().int() });
 
 /**
@@ -313,7 +319,11 @@ export async function applyKnowledgeStoreSchema(
   server: DataStoreServer,
   record: Pick<DataStoreRecord, "location">,
   signal: AbortSignal
-): Promise<{ migrations: DataStoreAppliedMigration[]; appliedCount: number }> {
+): Promise<{
+  migrations: DataStoreAppliedMigration[];
+  appliedCount: number;
+  appliedNumbers: number[];
+}> {
   return server.executor.change(
     {
       ...server.asPlatform(record.location.database),
@@ -339,7 +349,7 @@ export async function applyKnowledgeStoreSchema(
       );
       const pending = KNOWLEDGE_STORE_MIGRATIONS.filter(
         (migration) => !applied.has(migration.number)
-      );
+      ).sort((left, right) => left.number - right.number);
       for (const migration of pending) {
         await sql.script(migration.sql);
         await sql.run(
@@ -349,6 +359,7 @@ export async function applyKnowledgeStoreSchema(
       }
       return {
         appliedCount: pending.length,
+        appliedNumbers: pending.map(({ number }) => number),
         migrations: KNOWLEDGE_STORE_MIGRATIONS.map(({ number, name, sql: text }) => ({
           number,
           name,

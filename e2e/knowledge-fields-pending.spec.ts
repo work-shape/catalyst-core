@@ -6,8 +6,8 @@ import type { Page } from "@playwright/test";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, takeTurn, test } from "./test";
 
-// A document of a Knowledge Base whose fields wait for the extraction budget (PROC-2): it stays
-// searchable and says "Fields pending" with the reason in a sentence. The suite's instance runs
+// Documents of a Knowledge Base whose fields wait (PROC-2): one for the monthly budget, one over
+// the token limit per document. Each stays searchable and says "Fields pending" with its reason. The suite's instance runs
 // without the module `knowledge`, so a second API runs the same instance with it on, on the same
 // database, as modules.spec.ts does with `resources` off. The interface is sent to it, and the
 // list of documents is planted on its way to the page. Pictures go to the test's output folder
@@ -26,16 +26,23 @@ const knowledgeApiUrl = `http://${host}:${knowledgeApiPort}`;
 
 type Locale = "en" | "de";
 
-const WORDS: Record<Locale, { searchable: string; pending: string; reason: string }> = {
+const WORDS: Record<
+  Locale,
+  { searchable: string; pending: string; reason: string; tokenReason: string }
+> = {
   en: {
     searchable: "Searchable",
     pending: "Fields pending",
-    reason: "Fields are filled in once the budget resets or is raised"
+    reason: "Fields are filled in once the budget resets or is raised",
+    tokenReason:
+      "Fields wait: this document needs an estimated 184,250 tokens, more than the limit of 120,000 tokens per document. Raise the limit to fill them in"
   },
   de: {
     searchable: "Durchsuchbar",
     pending: "Felder ausstehend",
-    reason: "Felder werden gefüllt, sobald das Budget zurückgesetzt oder erhöht wird"
+    reason: "Felder werden gefüllt, sobald das Budget zurückgesetzt oder erhöht wird",
+    tokenReason:
+      "Felder warten: Dieses Dokument braucht geschätzt 184.250 Tokens, mehr als die Grenze von 120.000 Tokens je Dokument. Erhöhe die Grenze, damit sie gefüllt werden"
   }
 };
 
@@ -46,7 +53,7 @@ async function signIn(page: Page, api: string): Promise<void> {
   expect(response.ok()).toBe(true);
 }
 
-/** The documents the page is shown: one whose fields wait, one done, one still indexed. */
+/** The documents the page is shown: two whose fields wait, one done, one still indexed. */
 function plantedDocuments() {
   const at = "2026-10-17T09:00:00.000Z";
   const document = (id: string, fileName: string, extra: Record<string, unknown>) => ({
@@ -62,7 +69,20 @@ function plantedDocuments() {
   });
   return {
     documents: [
-      document("doc_paused", "Rechnung 2026-0412.pdf", { state: "indexed", fieldsPending: true }),
+      document("doc_paused", "Rechnung 2026-0412.pdf", {
+        state: "indexed",
+        fieldsPending: true,
+        fieldsPendingReason: { reason: "monthly_budget" }
+      }),
+      document("doc_large", "Rahmenvertrag 2026.pdf", {
+        state: "indexed",
+        fieldsPending: true,
+        fieldsPendingReason: {
+          reason: "token_budget",
+          estimatedTokens: 184_250,
+          maxTokensPerDocument: 120_000
+        }
+      }),
       document("doc_done", "Rechnung 2026-0398.pdf", { state: "indexed", fieldsPending: false }),
       document("doc_new", "Lieferschein 7781.pdf", { state: "pending" })
     ]
@@ -182,6 +202,7 @@ test.describe("a document whose fields wait for the budget", () => {
 
       const section = page.locator("[data-knowledge-documents]");
       const paused = section.locator('[data-knowledge-document="doc_paused"]');
+      const large = section.locator('[data-knowledge-document="doc_large"]');
       for (const locale of ["en", "de"] as const) {
         const words = WORDS[locale];
         for (const theme of ["light", "dark"] as const) {
@@ -207,6 +228,12 @@ test.describe("a document whose fields wait for the budget", () => {
             await expect(paused).toContainText(words.pending);
             await expect(paused).toContainText(words.reason);
             await expect(paused).not.toContainText("fieldsPending");
+            // Over the token limit: both numbers in the locale's format, and what to do.
+            await expect(large).toContainText(words.searchable);
+            await expect(large).toContainText(words.pending);
+            await expect(large).toContainText(words.tokenReason);
+            await expect(large).not.toContainText(words.reason);
+            await expect(large).not.toContainText("token_budget");
             await expect(section.locator('[data-knowledge-document="doc_done"]')).not.toContainText(
               words.pending
             );

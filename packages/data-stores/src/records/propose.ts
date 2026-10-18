@@ -176,7 +176,8 @@ export const recordsPropose: StoreVerb = {
                 const evidence = recordEvidence(
                   field.value,
                   field.quote,
-                  source.pages.find((page) => page.page === field.page)?.text
+                  source.pages.find((page) => page.page === field.page)?.text,
+                  context.runtime.locale
                 );
                 wrote = true;
                 await sql.run(

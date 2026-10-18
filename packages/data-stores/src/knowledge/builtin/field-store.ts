@@ -33,11 +33,11 @@ export function createKnowledgeFieldStore(change: Change): KnowledgeFieldStore {
         return row ? documentRow.parse(row) : undefined;
       }, signal);
     },
-    pause(documentId, signal) {
+    pause(documentId, reason, signal) {
       return change(async (sql) => {
         await sql.run(
-          "update catalyst_kb.documents set fields_pending=true where id=$1::text and withdrawn_at is null",
-          [documentId]
+          "update catalyst_kb.documents set fields_pending=true, fields_pending_reason=$2::jsonb where id=$1::text and withdrawn_at is null",
+          [documentId, JSON.stringify(reason)]
         );
       }, signal);
     },
@@ -65,7 +65,8 @@ export function createKnowledgeFieldStore(change: Change): KnowledgeFieldStore {
             );
         }
         await sql.run(
-          "update catalyst_kb.documents set fields_pending=fields_pending or $2::boolean where id=$1::text and withdrawn_at is null",
+          `update catalyst_kb.documents set fields_pending=fields_pending or $2::boolean,
+          fields_pending_reason=case when $2::boolean then '{"reason":"monthly_budget"}'::jsonb else fields_pending_reason end where id=$1::text and withdrawn_at is null`,
           [input.documentId, rows.length === 0]
         );
         return rows.length > 0;
@@ -78,7 +79,7 @@ export function createKnowledgeFieldStore(change: Change): KnowledgeFieldStore {
           [input.month, input.currency, input.reserved, input.cost]
         );
         const active = await sql.run(
-          "update catalyst_kb.documents set fields_pending=false where id=$1::text and content_sha256=$2::text and withdrawn_at is null returning id",
+          "update catalyst_kb.documents set fields_pending=false, fields_pending_reason=null where id=$1::text and content_sha256=$2::text and withdrawn_at is null returning id",
           [input.documentId, input.contentHash]
         );
         return active.length > 0;

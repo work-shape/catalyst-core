@@ -73,15 +73,7 @@ function createCapabilityModels(input: {
                 outputPerMillionTokens: rate.outputPricePerMillionTokens
               }
             }
-          : !capabilities.priceRequired
-            ? {
-                price: {
-                  currency: card?.currency ?? "USD",
-                  inputPerMillionTokens: 0,
-                  outputPerMillionTokens: 0
-                }
-              }
-            : {}),
+          : {}),
         ...(provider.region ? { region: provider.region } : {}),
         documentInput: capabilities.documentInput,
         structuredOutput: capabilities.structuredOutput

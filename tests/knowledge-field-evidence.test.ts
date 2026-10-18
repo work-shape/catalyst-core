@@ -20,4 +20,33 @@ describe("PROC-2 evidence boundary", () => {
       reason: "page_not_found"
     });
   });
+  it.each([
+    [1205, "Wohnfläche 120,5 m²", "de", "failed"],
+    [15, "1,5 Zimmer", "de", "failed"],
+    [350, "350.000 EUR", "de", "failed"],
+    [35, "35O.OOO", "de", "failed"],
+    ["5", "15 Einheiten", "de", "failed"],
+    [120.5, "Wohnfläche 120,5 m²", "de", "passed"],
+    [350000, "350.000 EUR", "de", "passed"],
+    [350, "350,000 EUR", "en", "failed"],
+    [350000, "350,000 EUR", "en", "passed"],
+    [120.5, "Area 120.5 m²", "de", "passed"],
+    [120.5, "Area 120,5 m²", "en", "passed"],
+    [1205, "Area 12.05 m²", "de", "failed"],
+    ["2026-01-02", "Datum 2.1.2026", "de", "passed"],
+    ["größer", "größer", "de", "passed"]
+  ] as const)("parses %s from %s under %s: %s", (value, quote, locale, status) => {
+    expect(recordEvidence(value, quote, quote, locale).status).toBe(status);
+  });
+  it("never accepts a quoted digit cut out of a larger number on the page", () => {
+    expect(recordEvidence("5", "5", "15 Einheiten").status).toBe("failed");
+  });
+  it("normalises Unicode, whitespace, soft hyphens and words hyphenated at line ends on both sides", () => {
+    expect(
+      recordEvidence("Gebäudefläche", "Gebäudefläche 120,5 m²", "Gebäude-\nfläche  120,5\n m²")
+    ).toEqual({ status: "passed" });
+    expect(
+      recordEvidence("Gebäudefläche", "Gebäude\u00adfläche   120,5 m²", "Gebäudefläche 120,5 m²")
+    ).toEqual({ status: "passed" });
+  });
 });

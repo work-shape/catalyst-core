@@ -199,9 +199,14 @@ receives the published Workflow and the readable Knowledge Bases its operation s
 `knowledge.<id>.extract_fields({ documentId, schema })` reads an active indexed document
 under `knowledge_base.read`. Use it in a data Workflow before `records.propose`; it returns
 `path`, the document's own `date` (or null), its classified `type`, and `fields` keyed by
-name with `{ value, page, quote }`. `droppedFields` counts values whose evidence could not
-be verified; these never enter the returned fields. Evidence is checked again by records
-at its write boundary. A matching quote is a necessary condition, not proof of correctness.
+name with `{ value, page, quote }`. `droppedFields` counts unsupported schema fields.
+`failedFields` counts evidence failures, which stay in the returned fields so
+`records.propose` can recheck and retain them for review as “Nicht belegt”, without
+projecting their values. Quotes and page text are normalized for Unicode NFC, whitespace,
+soft hyphens and words split across lines. Numeric evidence uses the call's document locale
+(`de` by default); the other separator convention is accepted only when unambiguous.
+String evidence matches whole words; German dates accept single-digit days and months.
+Evidence is checked again by records at its write boundary. A matching quote is a necessary condition, not proof of correctness.
 
 The document-processing capability supplies its explicitly approved extraction binding.
 That binding must support structured output and document input and process in `eu` (or
@@ -211,11 +216,14 @@ No prompt, page text, field value or quote is kept in logs, errors, audit or Ope
 Only the owning Knowledge Base's retained text and the caller's returned result contain them.
 
 `extraction.budget.perMonth` optionally limits this Knowledge Base's field extraction in
-the instance usage currency. `maxTokensPerDocument` defaults to 8000 and covers conservative
-input tokens plus the maximum output. A document is never silently truncated. Admission
+the instance usage currency. Publishing a monthly budget requires the extraction binding
+to have a customer rate-card row; an unpriced binding does not prevent startup. `maxTokensPerDocument` defaults to 8000 and covers conservative
+input tokens plus the maximum output. Input tokens are estimated as UTF-8 bytes / 3 plus
+the prompt allowance unless the binding supplies a tokenizer. A document is never silently truncated. Admission
 reserves the maximum call cost in one monthly row before contacting the model; settlement
-returns unused money. A failed or interrupted call conservatively keeps its reservation,
-including a process crash. This can pause earlier than the provider's final invoice. A new
+returns unused money, including when a provider returns invalid output or reports zero cost.
+A content change before the provider call releases the full reservation. Only a call whose
+cost is unknown (including a timeout or process crash) conservatively keeps its reservation. This can pause earlier than the provider's final invoice. A new
 UTC month has its own counter. Raising and publishing the budget permits the next Workflow
 call to continue; the Workflow controls retries and scheduling. A refusal marks the document
 “Fields pending” / “Felder ausstehend”; it remains indexed and searchable. No per-document

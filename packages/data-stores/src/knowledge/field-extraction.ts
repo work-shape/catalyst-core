@@ -19,10 +19,11 @@ import { recordEvidence } from "@work-shape/catalyst-core";
 import type { KnowledgeRuntime } from "./runtime";
 import { knowledgeExtractionBudgetSchema, type KnowledgeBaseDefinition } from "./definition";
 
-// Bounds one outside call; a timed out call leaves only its conservative cost reservation.
-const FIELD_EXTRACTION_TIMEOUT_MS = 120_000;
-// Worst-case UTF-8 tokenization: never truncate a document to make evidence appear complete.
-const FIELD_INPUT_BYTES_PER_TOKEN = 1;
+// A timed out call retains its reservation; larger documents get time proportional to their input.
+const FIELD_EXTRACTION_BASE_TIMEOUT_MS = 60_000;
+const FIELD_EXTRACTION_PER_1000_TOKENS_MS = 15_000;
+// Estimate German and English text without treating UTF-8 bytes as tokens; never truncate evidence.
+const FIELD_INPUT_BYTES_PER_TOKEN = 3;
 // Fixed instructions plus the provider envelope; protects the configured per-document token budget.
 const FIELD_PROMPT_OVERHEAD_TOKENS = 512;
 const answerSchema = z.strictObject({
@@ -37,8 +38,8 @@ const answerSchema = z.strictObject({
   )
 });
 
-function failure(reason: string): AppError {
-  return new AppError("CONFLICT", "Field extraction could not complete", { reason });
+function failure(reason: string, details: JsonObject = {}): AppError {
+  return new AppError("CONFLICT", "Field extraction could not complete", { reason, ...details });
 }
 
 /** Local references keep pointing at the customer's value schema after adding the evidence envelope. */
@@ -147,7 +148,13 @@ export function extractFieldsOperation(
     scope: "data_store_rows:read",
     auth: "principal",
     module: "knowledge",
-    timeoutMs: FIELD_EXTRACTION_TIMEOUT_MS,
+    timeoutMs:
+      FIELD_EXTRACTION_BASE_TIMEOUT_MS +
+      Math.ceil(
+        (target.definition.extraction?.budget.maxTokensPerDocument ??
+          knowledgeExtractionBudgetSchema.parse({}).maxTokensPerDocument) / 1000
+      ) *
+        FIELD_EXTRACTION_PER_1000_TOKENS_MS,
     // A failure can leave a run too. Never retain schema descriptions, quotes or values.
     recordsEveryCall: true,
     secret: true,
@@ -172,6 +179,7 @@ export function extractFieldsOperation(
       ).maxTokensPerDocument;
       const format = answerFormat(schema);
       const inputTokens =
+        extractor.countInputTokens?.({ pages, schema: format }) ??
         Math.ceil(
           new TextEncoder().encode(
             JSON.stringify({ pages, schema: format, outputInstructions: format })
@@ -179,8 +187,15 @@ export function extractFieldsOperation(
         ) + FIELD_PROMPT_OVERHEAD_TOKENS;
       if (inputTokens >= maxTokens) {
         // Token refusal is a pause too, without changing the document's search state.
-        await store.pause(documentId, signal);
-        throw failure("knowledge_field_token_budget_reached");
+        await store.pause(
+          documentId,
+          { reason: "token_budget", estimatedTokens: inputTokens, maxTokensPerDocument: maxTokens },
+          signal
+        );
+        throw failure("knowledge_field_token_budget_reached", {
+          estimatedTokens: inputTokens,
+          maxTokensPerDocument: maxTokens
+        });
       }
       const month = runtime.now().toISOString().slice(0, 7);
       const reserved = extractor.reserveCost(maxTokens);
@@ -198,10 +213,21 @@ export function extractFieldsOperation(
       )
         throw failure("knowledge_field_budget_reached");
       let answer;
+      let called = false;
+      const settle = (cost: number) =>
+        store.settle({
+          documentId,
+          contentHash: doc.contentHash,
+          month,
+          currency: extractor.currency,
+          reserved,
+          cost
+        });
       try {
         // Re-read after loading text and admission: withdrawn/changed evidence never reaches the provider.
         if ((await store.document(documentId, signal))?.contentHash !== doc.contentHash)
           throw failure("knowledge_document_unavailable");
+        called = true;
         answer = await extractor.extract({
           pages,
           schema: format,
@@ -212,23 +238,43 @@ export function extractFieldsOperation(
           deadline: new Date(
             Math.min(
               context.runtime.deadline?.getTime() ?? Infinity,
-              runtime.now().getTime() + FIELD_EXTRACTION_TIMEOUT_MS
+              runtime.now().getTime() +
+                FIELD_EXTRACTION_BASE_TIMEOUT_MS +
+                Math.ceil(inputTokens / 1000) * FIELD_EXTRACTION_PER_1000_TOKENS_MS
             )
           )
         });
       } catch {
+        // Admission can be invalidated before the provider is called: no charge was possible.
+        if (!called) await settle(0);
         throw failure("knowledge_field_extraction_failed");
       }
+      // Account for a reported cost even if parsing or schema validation below fails.
+      const active = await settle(answer.cost);
+      if (!active) throw failure("knowledge_document_unavailable");
       let parsed;
       try {
         parsed = answerSchema.safeParse(JSON.parse(answer.text));
       } catch {
         throw failure("knowledge_field_output_invalid");
       }
-      if (
-        !parsed.success ||
-        (await checker.check(schema, JSON.stringify(parsed.data.values))).length
-      )
+      if (!parsed.success) throw failure("knowledge_field_output_invalid");
+      const properties = schema.properties;
+      const supported =
+        properties !== null && typeof properties === "object" && !Array.isArray(properties)
+          ? properties
+          : undefined;
+      const values = Object.fromEntries(
+        Object.entries(parsed.data.values).filter(
+          ([name]) =>
+            !supported ||
+            schema.patternProperties !== undefined ||
+            (schema.additionalProperties !== undefined && schema.additionalProperties !== false) ||
+            Object.hasOwn(supported, name)
+        )
+      );
+      const droppedFields = Object.keys(parsed.data.values).length - Object.keys(values).length;
+      if ((await checker.check(schema, JSON.stringify(values))).length)
         throw failure("knowledge_field_output_invalid");
       const fields = new Map<string, z.infer<typeof contract.outputSchema>["fields"][string]>();
       const pageText = new Map(pages.map((page) => [page.page, page.text]));
@@ -238,44 +284,35 @@ export function extractFieldsOperation(
         if (existing) existing.push(citation);
         else evidence.set(citation.name, [citation]);
       }
-      let droppedFields = 0;
-      for (const [name, value] of Object.entries(parsed.data.values)) {
+      let failedFields = 0;
+      for (const [name, value] of Object.entries(values)) {
         const citations = evidence.get(name) ?? [];
+        // The frozen value/page/quote shape travels unchanged to records.propose for its recheck.
+        // Missing or duplicate citations get an empty normalized quote, which always fails there.
         const citation = citations.length === 1 ? citations[0] : undefined;
+        const field = { value, page: citation?.page ?? 1, quote: citation?.quote ?? " " };
         if (
-          !citation ||
-          recordEvidence(value, citation.quote, pageText.get(citation.page)).status !== "passed"
-        ) {
-          droppedFields += 1;
-          continue;
-        }
-        fields.set(name, { value, page: citation.page, quote: citation.quote });
+          recordEvidence(value, field.quote, pageText.get(field.page), context.runtime.locale)
+            .status !== "passed"
+        )
+          failedFields += 1;
+        fields.set(name, field);
       }
-      const active = await store.settle(
-        {
-          documentId,
-          contentHash: doc.contentHash,
-          month,
-          currency: extractor.currency,
-          reserved,
-          cost: answer.cost
-        },
-        signal
-      );
-      if (!active) throw failure("knowledge_document_unavailable");
       return {
         path: doc.path,
         date:
           parsed.data.date &&
           pages.some(
             (page) =>
-              recordEvidence(parsed.data.date ?? null, page.text, page.text).status === "passed"
+              recordEvidence(parsed.data.date ?? null, page.text, page.text, context.runtime.locale)
+                .status === "passed"
           )
             ? parsed.data.date
             : null,
         type: doc.type,
         fields: Object.fromEntries(fields),
-        droppedFields
+        droppedFields,
+        failedFields
       };
     }
   };

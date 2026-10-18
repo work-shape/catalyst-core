@@ -16050,6 +16050,42 @@
                           "fieldsPending": {
                             "type": "boolean"
                           },
+                          "fieldsPendingReason": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "reason": {
+                                    "type": "string",
+                                    "const": "monthly_budget"
+                                  }
+                                },
+                                "required": [
+                                  "reason"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "reason": {
+                                    "type": "string",
+                                    "const": "token_budget"
+                                  },
+                                  "estimatedTokens": {
+                                    "type": "number"
+                                  },
+                                  "maxTokensPerDocument": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "reason",
+                                  "estimatedTokens",
+                                  "maxTokensPerDocument"
+                                ]
+                              }
+                            ]
+                          },
                           "sourceId": {
                             "type": "string"
                           },
@@ -16688,6 +16724,11 @@
                   "type": "object",
                   "properties": {
                     "droppedFields": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "failedFields": {
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991

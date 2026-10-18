@@ -139,6 +139,16 @@ const contentRow = z.object({
 
 const documentRow = z.object({
   fields_pending: z.boolean(),
+  fields_pending_reason: z
+    .discriminatedUnion("reason", [
+      z.object({ reason: z.literal("monthly_budget") }),
+      z.object({
+        reason: z.literal("token_budget"),
+        estimatedTokens: z.number(),
+        maxTokensPerDocument: z.number()
+      })
+    ])
+    .nullable(),
   id: z.string(),
   managed_file_id: z.string(),
   file_name: z.string(),
@@ -618,7 +628,7 @@ export function createBuiltinDocumentStore(
           const rows = z.array(documentRow).parse(
             await sql.run(
               `select d.id, d.managed_file_id, d.file_name, d.title, c.format, c.state,
-               c.failure_code, c.page_count, s.source_id, d.fields_pending,
+               c.failure_code, c.page_count, s.source_id, d.fields_pending, d.fields_pending_reason,
                to_char(d.added_at at time zone 'UTC', ${ISO_UTC}) as added_at,
                to_char(c.updated_at at time zone 'UTC', ${ISO_UTC}) as updated_at,
                d.added_at::pg_catalog.text as cursor_at
@@ -735,6 +745,7 @@ function entryOf(row: z.infer<typeof documentRow>): KnowledgeDocumentEntry {
   return {
     id: row.id,
     fieldsPending: row.fields_pending,
+    ...(row.fields_pending_reason ? { fieldsPendingReason: row.fields_pending_reason } : {}),
     fileId: row.managed_file_id,
     fileName: row.file_name,
     title: row.title,
