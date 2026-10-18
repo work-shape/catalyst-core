@@ -1,5 +1,5 @@
 import { configAssetReferencesSchema } from "../configuration";
-import { platformContextSchema } from "../platform";
+import { platformContextSchema, platformDocsQuerySchema, platformDocsSchema } from "../platform";
 import { defineOperation, defineRegisteredOperation, json } from "./define-operation";
 
 export const platformOperations = {
@@ -17,6 +17,21 @@ export const platformOperations = {
     effect: "reading",
     response: json(platformContextSchema),
     errors: [],
+    rateClass: "read"
+  }),
+  "platform.docs.get": defineRegisteredOperation({
+    id: "platform.docs.get",
+    method: "GET",
+    path: "/api/v1/context/docs",
+    summary: "Read this release's product docs index, or a page from that index as Markdown",
+    tag: "Platform",
+    auth: "principal",
+    scope: null,
+    requires: [],
+    effect: "reading",
+    query: platformDocsQuerySchema,
+    response: json(platformDocsSchema),
+    errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
   // A plain operation. It was kept plain when every registered read wrote an Operation Run and

@@ -1,4 +1,4 @@
-import type { ShippedSkill } from "@work-shape/catalyst-core";
+import { PLATFORM_DOCS_SKILL_NAME, type ShippedSkill } from "@work-shape/catalyst-core";
 import generated from "./generated/platform-docs.json" with { type: "json" };
 
 // The product's documentation as a skill: one reference file per page of the platform's docs,
@@ -7,7 +7,7 @@ import generated from "./generated/platform-docs.json" with { type: "json" };
 // what the docs of this release say. It is offered only to an agent that holds the platform's
 // tools, as is the orientation that points to it.
 
-export const PLATFORM_DOCS_SKILL_NAME = "platform-docs";
+export { PLATFORM_DOCS_SKILL_NAME } from "@work-shape/catalyst-core";
 
 /** The sections of the docs, in the order a reader meets them. A new one follows them. */
 const SECTION_HEADINGS: ReadonlyMap<string, string> = new Map([

@@ -439,7 +439,7 @@
     "/api/v1/app-actions": {
       "get": {
         "operationId": "apps.actions.list",
-        "summary": "List the named actions of one App or of every published App the caller reads or uses, with what a call of each would come to for the caller",
+        "summary": "List the actions of one App, or a cursor page of published Apps the caller reads or uses, with call previews. Follow nextCursor until absent to reach every App.",
         "tags": [
           "Apps"
         ],
@@ -456,6 +456,26 @@
           }
         ],
         "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
           {
             "name": "app",
             "in": "query",
@@ -5794,6 +5814,76 @@
           },
           "403": {
             "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/context/docs": {
+      "get": {
+        "operationId": "platform.docs.get",
+        "summary": "Read this release's product docs index, or a page from that index as Markdown",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "sessionToken": []
+          },
+          {
+            "accessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformDocs"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -21735,7 +21825,7 @@
     "/api/v1/workflows": {
       "get": {
         "operationId": "workflows.list",
-        "summary": "List the published Workflows the caller may read or use, each with its latest run and whether it can be started",
+        "summary": "List a cursor page of published Workflows the caller may read or use, with latest runs and start readiness. Follow nextCursor until absent to reach every Workflow.",
         "tags": [
           "Workflows"
         ],
@@ -21756,7 +21846,28 @@
             ]
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "The result",
@@ -21885,6 +21996,9 @@
                           "actions"
                         ]
                       }
+                    },
+                    "nextCursor": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -27757,6 +27871,9 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "nextCursor": {
+            "type": "string"
           }
         },
         "required": [
@@ -34839,6 +34956,83 @@
           "kind",
           "member",
           "actions"
+        ]
+      },
+      "PlatformDocs": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "release": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "version"
+                ]
+              },
+              "pages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "title",
+                    "description"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "release",
+              "pages"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "release": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "version"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "markdown": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "release",
+              "path",
+              "title",
+              "markdown"
+            ]
+          }
         ]
       },
       "PublishAssetRequest": {

@@ -1,5 +1,6 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { AppError } from "@work-shape/catalyst-core";
+import { readPlatformDocs } from "../platform/platform-docs";
 import { configAssetReferences } from "../config-assets/config-asset-service";
 import type { Route } from "../http/route";
 import {
@@ -15,6 +16,11 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
     // Every authenticated caller may ask where it is. What it is told is its own.
     authorize: () => ({ allowed: true }),
     execute: (_input, { access, actor }) => readPlatformContext(options, { access, actor })
+  });
+
+  route.operation(apiOperations["platform.docs.get"], {
+    authorize: () => ({ allowed: true }),
+    execute: (input) => readPlatformDocs(options, input.page)
   });
 
   // What an editor offers for a definition: the models, efforts and tools of this instance.

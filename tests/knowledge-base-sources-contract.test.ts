@@ -120,7 +120,7 @@ describe("catalyst_kb source migrations", () => {
       const platform = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
       try {
         await platform`update platform_jobs set run_after=now()
-          where kind='data_store.upgrade_owned' and client_instance_id=${clientInstanceId}
+          where kind='data_store.upgrade_owned_tick' and client_instance_id=${clientInstanceId}
           and status='queued'`;
       } finally {
         await platform.end();
@@ -173,7 +173,7 @@ describe("catalyst_kb source migrations", () => {
       expect(listed.json()).toMatchObject({
         items: [expect.objectContaining({ id: made.id, status: "provisioning" })]
       });
-      await platform`update platform_jobs set run_after=now() where kind='data_store.upgrade_owned' and client_instance_id=${clientInstanceId} and status='queued'`;
+      await platform`update platform_jobs set run_after=now() where kind='data_store.upgrade_owned_tick' and client_instance_id=${clientInstanceId} and status='queued'`;
       await eventually(async () => {
         await getTestJobs(instance.api).runDue();
         const record = required(await ownedRecord(instance));
@@ -208,7 +208,7 @@ describe("catalyst_kb source migrations", () => {
         clientInstanceId,
         type: "data_store.migrated"
       });
-      await platform`update platform_jobs set run_after=now() where kind='data_store.upgrade_owned' and client_instance_id=${clientInstanceId} and status='queued'`;
+      await platform`update platform_jobs set run_after=now() where kind='data_store.upgrade_owned_tick' and client_instance_id=${clientInstanceId} and status='queued'`;
       await getTestJobs(instance.api).runDue();
       expect(await store`select * from catalyst_kb.migrations order by number`).toEqual(repaired);
       expect(
@@ -243,7 +243,7 @@ describe("catalyst_kb source migrations", () => {
       });
       const platform = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
       try {
-        await platform`update platform_jobs set run_after=now() where kind='data_store.upgrade_owned' and client_instance_id=${clientInstanceId} and status='queued'`;
+        await platform`update platform_jobs set run_after=now() where kind='data_store.upgrade_owned_tick' and client_instance_id=${clientInstanceId} and status='queued'`;
       } finally {
         await platform.end();
       }
@@ -324,7 +324,7 @@ describe("catalyst_kb source migrations", () => {
       const platform = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice: () => undefined });
       try {
         await platform`update platform_jobs set run_after = now()
-          where kind = 'data_store.upgrade_owned' and client_instance_id = ${clientInstanceId}
+          where kind = 'data_store.upgrade_owned_tick' and client_instance_id = ${clientInstanceId}
           and status = 'queued'`;
       } finally {
         await platform.end();

@@ -6,6 +6,7 @@ export function formatAssetHelp(verbs: readonly { usage: string; summary: string
 
 Instance:
   context                   The instance, your rights on it and its asset kinds (platform.context.get)
+  docs [<page>]             This release's product docs index, or one page as Markdown
   kinds                     The asset kinds: their command word, lifecycle and rights
   references                Models, efforts and tools a definition may name (platform.references.get)
   operation show <run-id>    Follow your call to its decision (operations.get_run)

@@ -17,7 +17,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { jsonObjectSchema } from "./json";
-import type { WorkflowDefinitionSource } from "./definition-source";
+import { workflowDefinitionPages, type WorkflowDefinitionSource } from "./definition-source";
 import { runKeyRefusal, type StartWorkflowRunInput } from "./run-open";
 import type { PreparedStart } from "./run-start";
 import type { RunOrigin } from "./scheduled-start";
@@ -238,9 +238,11 @@ export function createWorkflowStartSource(options: {
     resolve,
     async list() {
       const operations = [];
-      for (const workflow of await definitions.list()) {
-        const operation = await resolve(workflowStartOperationName(workflow.id));
-        if (operation) operations.push(operation);
+      for await (const page of workflowDefinitionPages(definitions)) {
+        for (const workflow of page) {
+          const operation = await resolve(workflowStartOperationName(workflow.id));
+          if (operation) operations.push(operation);
+        }
       }
       return { operations, truncated: [] };
     }

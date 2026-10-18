@@ -1,3 +1,4 @@
+import { cliVersionNotice, formatDocs } from "./instance-output";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -705,7 +706,14 @@ const APP_FLAGS = {
 } as const satisfies Record<keyof typeof APP_VERBS, readonly OptionName[]>;
 
 /** The words before the kind that are commands of their own. */
-const INSTANCE_COMMANDS = ["context", "kinds", "references", "operation", "requests"] as const;
+const INSTANCE_COMMANDS = [
+  "context",
+  "kinds",
+  "docs",
+  "references",
+  "operation",
+  "requests"
+] as const;
 
 /** Runs `catalyst <argv>` for every command but `config`. */
 export async function runAssetCommand(
@@ -731,6 +739,21 @@ export async function runAssetCommand(
   };
   const instanceCommand = INSTANCE_COMMANDS.find((command) => command === noun);
   const [verbName = "", name = "", ...extra] = positionals;
+  const knownKind = [
+    "agent",
+    "skill",
+    "guardrail",
+    "app",
+    "workflow",
+    "connection",
+    "data-store",
+    "knowledge-base"
+  ].some((kind) => [kind, `${kind}s`, kind.replace("-", "_")].includes(noun));
+  // A registered kind unknown to this CLI can still use offline help with a kind verb.
+  if (instanceCommand === undefined && !knownKind && VERBS[verbName] === undefined) {
+    writeError(options, `Unknown command '${noun}'.\n\n${assetHelpText}`);
+    return EXIT.usage;
+  }
   if (values.help) {
     writeOutput(options, assetHelpText);
     return EXIT.done;
@@ -745,7 +768,7 @@ export async function runAssetCommand(
         if (verbName !== "show" || name === "" || extra.length > 0) {
           throw new UsageError("Usage: catalyst operation show <run-id>");
         }
-      } else if (positionals.length > 0) {
+      } else if (instanceCommand === "docs" ? positionals.length > 1 : positionals.length > 0) {
         throw new UsageError(`Unexpected argument '${positionals[0]}'.`);
       }
       refuseFlags(
@@ -758,7 +781,12 @@ export async function runAssetCommand(
         instanceCommand
       );
       if (values.withdraw !== undefined) required(values.withdraw, "--withdraw <id>");
-      return await runInstanceCommand(instanceCommand, values, options, name);
+      return await runInstanceCommand(
+        instanceCommand,
+        values,
+        options,
+        instanceCommand === "docs" ? verbName : name
+      );
     }
     if ((noun === "app" || noun === "apps") && isAppVerb(verbName)) {
       refuseFlags(values, [...COMMON_FLAGS, ...APP_FLAGS[verbName]], verbName);
@@ -816,13 +844,25 @@ async function runInstanceCommand(
   if (command === "operation" || command === "requests") {
     return runFollowCommand(api, command, { runId, json, withdraw: values.withdraw }, options);
   }
-  if (command === "references") {
+  if (command === "docs") {
+    const docs = await api.read((client) =>
+      client.platform.docs.get({ query: runId ? { page: runId } : {} })
+    );
+    // A page's Markdown is written byte for byte, without the normal output newline.
+    if (!json && "markdown" in docs)
+      (options.stdout ?? process.stdout.write.bind(process.stdout))(docs.markdown);
+    else out(docs, () => formatDocs(docs));
+  } else if (command === "references") {
     const references = await api.read((client) => client.platform.references.get());
     out(references, () => formatReferences(references));
   } else {
     const context = await api.read((client) => client.platform.context.get());
     if (command === "kinds") out(context.kinds, () => formatKinds(context.kinds));
-    else out(context, () => formatContext(context));
+    else {
+      const notice = cliVersionNotice(context.release.cliVersion);
+      if (notice !== undefined) writeError(options, notice);
+      out(context, () => formatContext(context));
+    }
   }
   return EXIT.done;
 }

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
 import type { DataStoreRecord, DataStoreRecordsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { dataStores } from "./schema";
@@ -81,12 +81,22 @@ export function createPostgresDataStoreRecordsStore(db: PostgresConnection): Dat
         .limit(1);
       return row ? mapRecord(row) : undefined;
     },
-    async listDataStores({ clientInstanceId, limit }) {
+    async listDataStores({ clientInstanceId, limit, after }) {
       const rows = await db
         .select()
         .from(dataStores)
-        .where(eq(dataStores.clientInstanceId, clientInstanceId))
-        .orderBy(asc(dataStores.name))
+        .where(
+          and(
+            eq(dataStores.clientInstanceId, clientInstanceId),
+            after
+              ? or(
+                  gt(dataStores.name, after.name),
+                  and(eq(dataStores.name, after.name), gt(dataStores.id, after.id))
+                )
+              : undefined
+          )
+        )
+        .orderBy(asc(dataStores.name), asc(dataStores.id))
         .limit(limit);
       return rows.map(mapRecord);
     },

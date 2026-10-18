@@ -22,6 +22,7 @@ export {
   type KeyValueProps
 } from "./key-value";
 export { List, ListRow, type ListRowProps, type ListRowSize } from "./list-row";
+export { LoadMore, type LoadMoreProps } from "./load-more";
 export { Pagination, type PaginationLabels, type PaginationProps } from "./pagination";
 export {
   Step,

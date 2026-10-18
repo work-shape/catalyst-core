@@ -12,6 +12,7 @@ import {
   Input,
   List,
   ListRow,
+  LoadMore,
   Spinner
 } from "@work-shape/catalyst-ui";
 import { formatMomentShort } from "../../shared/locale-format";
@@ -183,11 +184,11 @@ export function KnowledgeDocuments({
                 ))}
               </List>
               {more ? (
-                <div>
-                  <Button variant="ghost" size="sm" loading={more.loading} onClick={more.load}>
-                    {t("knowledge.documentsMore")}
-                  </Button>
-                </div>
+                <LoadMore
+                  loading={more.loading}
+                  onLoad={more.load}
+                  label={t("knowledge.documentsMore")}
+                />
               ) : null}
             </>
           )
@@ -441,33 +442,43 @@ export function KnowledgeAddDialog({
           refusedText={t("knowledge.addFilesFailed")}
           rows={4}
         >
-          {(files) =>
+          {({ items: files, more }) =>
             files.length === 0 ? (
               <EmptyState layout="inline">
                 {search.trim() ? t("knowledge.addNoMatch") : t("knowledge.addNoFiles")}
               </EmptyState>
             ) : (
-              <ul aria-label={t("knowledge.addFiles")} className="grid gap-3">
-                {files.map((file) => {
-                  const fit = addableFile(file, formats);
-                  const on = chosen.has(fileKey(file));
-                  return (
-                    <li key={fileKey(file)} data-knowledge-add-file={file.name}>
-                      <Checkbox
-                        label={file.name}
-                        description={
-                          fit.addable
-                            ? `${file.conversationTitle} · ${formatFileBytes(file.bytes, locale)}`
-                            : t(fit.reason, { size, formats: formatList })
-                        }
-                        checked={on}
-                        disabled={!fit.addable || (full && !on)}
-                        onCheckedChange={(next) => toggle(file, next)}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
+              <>
+                <ul aria-label={t("knowledge.addFiles")} className="grid gap-3">
+                  {files.map((file) => {
+                    const fit = addableFile(file, formats);
+                    const on = chosen.has(fileKey(file));
+                    return (
+                      <li key={fileKey(file)} data-knowledge-add-file={file.name}>
+                        <Checkbox
+                          label={file.name}
+                          description={
+                            fit.addable
+                              ? `${file.conversationTitle} · ${formatFileBytes(file.bytes, locale)}`
+                              : t(fit.reason, { size, formats: formatList })
+                          }
+                          checked={on}
+                          disabled={!fit.addable || (full && !on)}
+                          onCheckedChange={(next) => toggle(file, next)}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+                {more ? (
+                  <LoadMore
+                    loading={more.loading}
+                    onLoad={more.load}
+                    label={t("knowledge.documentsMore")}
+                    data-knowledge-add-more=""
+                  />
+                ) : null}
+              </>
             )
           }
         </ReadState>

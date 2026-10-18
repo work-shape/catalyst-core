@@ -113,6 +113,7 @@ function instanceOf(workflows: Record<string, Held>, run?: ReturnType<typeof run
       case "workflows.list":
         return {
           items: Object.entries(workflows)
+            .sort(([a], [b]) => (a < b ? -1 : 1))
             .filter(([, held]) => (held.actions ?? []).length > 0 && held.published !== false)
             .map(([name, held]) => ({
               id: name,
@@ -135,7 +136,9 @@ function instanceOf(workflows: Record<string, Held>, run?: ReturnType<typeof run
         };
       case "assets.list":
         return {
-          items: Object.entries(workflows).map(([name, held]) => assetOf(name, held, false))
+          items: Object.entries(workflows)
+            .sort(([a], [b]) => (a < b ? -1 : 1))
+            .map(([name, held]) => assetOf(name, held, false))
         };
       case "assets.get": {
         const name = params.name ?? "";

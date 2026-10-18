@@ -9,6 +9,7 @@ import { FilterBar } from "../data/filter-bar";
 import { FoldedText } from "../data/folded-text";
 import { KeyValue, KeyValueList, type KeyValueLayout } from "../data/key-value";
 import { List, ListRow, type ListRowSize } from "../data/list-row";
+import { LoadMore } from "../data/load-more";
 import { Pagination } from "../data/pagination";
 import { TimeMarker } from "../data/time-marker";
 import {
@@ -397,6 +398,37 @@ function PaginationSample({ text }: { text: GalleryText }) {
   );
 }
 
+/** How many rows the sample's source hands over per page, and how long a page takes. */
+const LOAD_MORE_SAMPLE_PAGE = 4;
+const LOAD_MORE_SAMPLE_DELAY_MS = 600;
+
+/** A list read a page at a time with no total, as a cursor list is: its foot reads the next. */
+function LoadMoreSample({ text }: { text: GalleryText }) {
+  const [shown, setShown] = useState(LOAD_MORE_SAMPLE_PAGE);
+  const [loading, setLoading] = useState(false);
+  return (
+    <div className="grid gap-2" data-gallery-sample="load-more">
+      <ul className="grid gap-1 text-body">
+        {text.manyAgents.slice(0, shown).map((name) => (
+          <li key={name}>{name}</li>
+        ))}
+      </ul>
+      {shown < text.manyAgents.length ? (
+        <LoadMore
+          loading={loading}
+          onLoad={() => {
+            setLoading(true);
+            setTimeout(() => {
+              setShown((count) => count + LOAD_MORE_SAMPLE_PAGE);
+              setLoading(false);
+            }, LOAD_MORE_SAMPLE_DELAY_MS);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export const dataGallery: GalleryGroup = {
   id: "data",
   entries: [
@@ -493,6 +525,11 @@ export const dataGallery: GalleryGroup = {
       name: "Pagination",
       components: ["Pagination"],
       render: (text) => <PaginationSample text={text} />
+    },
+    {
+      name: "LoadMore",
+      components: ["LoadMore"],
+      render: (text) => <LoadMoreSample text={text} />
     },
     {
       name: "KeyValue",

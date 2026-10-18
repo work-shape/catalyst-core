@@ -156,6 +156,7 @@ describe("every operation of the catalog", () => {
     expect(unscoped.map(({ name }) => name)).toEqual([
       "connections.oauth_complete",
       "platform.context.get",
+      "platform.docs.get",
       "openapi.get",
       "docs.get"
     ]);

@@ -105,15 +105,15 @@ const source: KnowledgeBaseSource = {
   check: async () => ({ ok: true, data: needsAttention }),
   query: async () => ({ ok: false, refused: false, message: undefined }),
   search: async () => ({ ok: false, refused: false, message: undefined }),
-  useDataStores: () => ready([{ name: "findings", title: "Findings store" }]),
+  useDataStores: () => ready({ items: [{ name: "findings", title: "Findings store" }] }),
   useStoreTables: () => ready(["findings", "runs"]),
-  useKnowledgeBases: () => ready([]),
+  useKnowledgeBases: () => ready({ items: [] }),
   useDocuments: () => ready({ documents: [handbookDocument] }),
   retry: async () => ({ ok: true, data: {} }),
   remove: async () => ({ ok: true, data: {} }),
   addFiles: async () => ({ ok: true, data: { count: 1 } }),
   uploadFile: async () => ({ ok: true, data: { count: 1 } }),
-  useOpenableFiles: () => ready([])
+  useOpenableFiles: () => ready({ items: [] })
 };
 
 /**

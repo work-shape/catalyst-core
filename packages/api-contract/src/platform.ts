@@ -101,19 +101,21 @@ export const platformContextSchema = z.object({
   assetActions: z.array(z.string()),
   /**
    * The rights over the instance itself the caller holds that no asset kind carries and no
-   * legacy key names, such as `service_principals.manage`.
+   * legacy key names, narrowed to operations this credential can call, such as
+   * `service_principals.manage`.
    */
   instanceActions: z.array(z.string()),
   /**
    * The use level a personal key can carry, of the rights the caller holds somewhere: on the
    * instance, in a workspace, a Namespace or on one asset. Only the rights of kinds the instance
-   * runs are named. The key screen offers these (CLI-PUBLISH-USE).
+   * runs are named. These are issuance choices for the key screen, not this credential's
+   * rights (CLI-PUBLISH-USE).
    */
   useActions: z.array(z.string()),
   /**
    * The reading, writing and publishing rights a personal key can carry, of the rights the
    * caller holds somewhere, as `useActions`. The key `catalyst setup` asks for starts with
-   * these and the use level ticked.
+   * these and the use level ticked. These are issuance choices, not this credential's rights.
    */
   authoringActions: z.array(z.string()),
   namespaces: z.array(platformContextNamespaceSchema),
@@ -133,3 +135,20 @@ export const platformContextSchema = z.object({
 });
 
 export type PlatformContext = z.infer<typeof platformContextSchema>;
+
+/** The release docs index, or one page exactly as stored in the release skill. */
+export const platformDocsQuerySchema = z.object({ page: z.string().optional() });
+const docsReleaseSchema = z.object({ version: z.string() });
+export const platformDocsSchema = z.union([
+  z.object({
+    release: docsReleaseSchema,
+    pages: z.array(z.object({ path: z.string(), title: z.string(), description: z.string() }))
+  }),
+  z.object({
+    release: docsReleaseSchema,
+    path: z.string(),
+    title: z.string(),
+    markdown: z.string()
+  })
+]);
+export type PlatformDocs = z.infer<typeof platformDocsSchema>;

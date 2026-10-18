@@ -10,7 +10,6 @@ describe("the Apps group of an agent's tools for a holder of use", () => {
     const view = appToolsView(
       {
         status: "ready",
-        truncated: false,
         apps: [
           {
             name: "billing",

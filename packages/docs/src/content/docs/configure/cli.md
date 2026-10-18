@@ -209,3 +209,6 @@ Settings, Connect a local agent installs the CLI version that `PUBLISHED_CLI_VER
 3. Set `PUBLISHED_CLI_VERSION` to that version and commit it.
 4. Deploy that commit.
 5. Only then switch on the module `personalApiKeys` on the instance.
+
+Run `catalyst docs` for this release's product docs index, or `catalyst docs <page>` for a page from it.
+When `catalyst context` finds an older CLI than the published version the instance names, it prints an npm update command on stderr; it leaves stdout unchanged and never updates itself.
