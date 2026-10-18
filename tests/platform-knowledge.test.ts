@@ -160,6 +160,13 @@ describe("the platform's knowledge of an agent", () => {
     expect(offer.toolNames).toEqual(expect.arrayContaining([...PLATFORM_TOOLS, "read_skill"]));
     expect(offer.orientation).toContain("platform.assets.list");
     expect(offer.orientation).toContain("'platform-docs'");
+    // Personal work must not inherit a company's domain prefix (ACCEPT-1c C12).
+    expect(offer.orientation).toContain(
+      "Naming: give a new asset a short name for what it does, with no prefix."
+    );
+    expect(offer.orientation).toContain("A person's own workspace is no name prefix");
+    expect(offer.orientation).toContain("only where the person chose that area for the asset");
+    expect(offer.orientation).not.toMatch(/\bhr-|Personalwesen/u);
     expect(offer.skillNames).toContain("platform-docs");
     expect(offer.skillNames).not.toContain("platform-guide");
 

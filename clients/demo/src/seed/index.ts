@@ -16,5 +16,7 @@ export {
   workspaceAssets,
   type CheckReason
 } from "./company";
+/** All the company brings, for a test that checks every entry of a kind. */
+export * as demoCompany from "./company";
 export { assertLocalDevelopmentHost } from "./adapters/local-network";
 export { seedDemo, type SeedReport } from "./run";

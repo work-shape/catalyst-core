@@ -93,7 +93,9 @@ export async function runInit(args: string[], options: ConfigCommandOptions): Pr
     }
     if (
       manifest !== undefined &&
-      !Object.values(manifest.instances).some((bound) => bound.url === instance.url)
+      !Object.values(manifest.instances).some(
+        (bound) => new URL(bound.url).origin === new URL(instance.url).origin
+      )
     ) {
       err(`${bindingRefusal}\n`);
       return 2;
@@ -124,8 +126,8 @@ export async function runInit(args: string[], options: ConfigCommandOptions): Pr
     if (claude === undefined) {
       await writeFile(claudePath, "@AGENTS.md\n");
       out("Wrote CLAUDE.md.\n");
-    } else
-      out('CLAUDE.md is yours: add "@AGENTS.md" to it if Claude Code should read the block.\n');
+    } else if (claude.includes("@AGENTS.md")) out("Left CLAUDE.md unchanged.\n");
+    else out('CLAUDE.md is yours: add "@AGENTS.md" to it if Claude Code should read the block.\n');
     return 0;
   } catch (error) {
     err(`${error instanceof Error ? error.message : String(error)}\n`);

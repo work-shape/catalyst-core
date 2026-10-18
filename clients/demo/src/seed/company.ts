@@ -87,7 +87,7 @@ export const namespaces: SeedNamespace[] = [
     allowedModelBindingIds: ["primary", "gpt56Luna"],
     registeredBy: "mara"
   },
-  { prefix: "hr-", displayName: "Personal", registeredBy: "mara" },
+  { prefix: "hr-", displayName: "Personalwesen / HR", registeredBy: "mara" },
   { prefix: "sales-", displayName: "Vertrieb / Sales", registeredBy: "jonas" },
   { prefix: "kai-", displayName: "Kai", registeredBy: "mara" }
 ];

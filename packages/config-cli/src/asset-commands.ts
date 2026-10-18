@@ -114,6 +114,7 @@ interface Verb {
     values: Values,
     name: string,
     cwd: string,
+    noun: string,
     folder?: string
   ): (session: Session) => Promise<number>;
 }
@@ -172,12 +173,12 @@ const VERBS: Record<string, Verb> = {
     summary: "Pull one skill as a folder, checking hashes and keeping local edits (assets.get)",
     named: true,
     flags: [],
-    prepare: (_values, name, cwd, folder) => {
+    prepare: (_values, name, cwd, noun, folder) => {
+      if (noun !== "skill" && noun !== "skills")
+        throw new UsageError("'pull' is a command of skills and Apps only.");
       if (!folder) throw new UsageError("Usage: catalyst skill pull <name> <folder>");
       const directory = resolve(cwd, folder);
       return async (session) => {
-        if (session.kind.kind !== "skill")
-          throw new UsageError("'pull' is a command of skills and Apps only.");
         const result = await pullSkill({
           api: session.api,
           instance: session.instance,
@@ -836,7 +837,7 @@ export async function runAssetCommand(
     ) {
       throw new UsageError(`Unexpected argument '${extra[0] ?? name}'.`);
     }
-    const call = verb.prepare(values, name, options.cwd, extra[0]);
+    const call = verb.prepare(values, name, options.cwd, noun, extra[0]);
     const { api, workspace, url } = await openInstance(options);
     const context = await api.read((client) => client.platform.context.get());
     const workspaceId = values.workspace ?? workspace;
@@ -1024,4 +1025,8 @@ function refuseFlags(values: Values, allowed: readonly OptionName[], command: st
 /** A command line this tool cannot run. Nothing was sent. */
 class UsageError extends Error {}
 
-export const assetHelpText = formatAssetHelp(Object.values(VERBS));
+export const assetHelpText = formatAssetHelp(
+  Object.entries(VERBS)
+    .filter(([name]) => name !== "pull")
+    .map(([, verb]) => verb)
+);

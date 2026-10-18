@@ -261,7 +261,7 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       putBeforeEvents: (conversationId, config) =>
         required().putBeforeEvents(conversationId, config),
       listOperations: (context, audience) => required().listOperations(context, audience),
-      readContext: (context) => required().readContext(context),
+      readContext: (context, input) => required().readContext(context, input),
       listAssets: (context, input) => required().listAssets(context, input),
       listFiles: (context, input) => required().listFiles(context, input),
       saveApp: (context, input) => required().saveApp(context, input),

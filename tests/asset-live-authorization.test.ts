@@ -223,8 +223,13 @@ describe("making a revision live that names a service principal", () => {
     expectStatus(response, 422);
     expect(errorSchema.parse(response.json()).error.details).toEqual({
       reason: "run_as_disabled",
-      runAs: "retired"
+      runAs: "retired",
+      principalDisplayLabel: "Retired"
     });
+    expect(errorSchema.parse(response.json()).error.message).toContain(
+      "technical account 'Retired'"
+    );
+    expect(errorSchema.parse(response.json()).error.message).toContain("Settings > API access");
   });
 
   it("refuses a name no principal of the instance has, with the name", async () => {
@@ -235,6 +240,10 @@ describe("making a revision live that names a service principal", () => {
       reason: "run_as_unknown",
       runAs: "nobody"
     });
+    expect(errorSchema.parse(response.json()).error.message).toContain(
+      "technical account 'nobody'"
+    );
+    expect(errorSchema.parse(response.json()).error.message).toContain("Settings > API access");
   });
 
   it("asks the rights of the principal of a caller's key, and never lets a service principal pass", async () => {

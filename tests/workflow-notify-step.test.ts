@@ -52,7 +52,7 @@ async function ready() {
 }
 
 describe("Workflow notify steps and grouped failure notices", () => {
-  it("resolves mapped text and uses the principal, while a draft test addresses only the tester", async () => {
+  it("sends live as the principal, while a draft test simulates the intended recipients without Inbox or mail writes", async () => {
     const t = await ready();
     const manifest = definition("notice-flow", [
       {
@@ -60,7 +60,7 @@ describe("Workflow notify steps and grouped failure notices", () => {
         name: "Notify",
         type: "notify",
         to: { users: [t.admin.id] },
-        channels: ["inbox"],
+        channels: ["inbox", "mail"],
         title: { value: "Private title" },
         text: { ref: { step: "start", path: "input.text" } },
         link: { kind: "run" }
@@ -118,9 +118,33 @@ describe("Workflow notify steps and grouped failure notices", () => {
       ).json()
     );
     expect((await t.finish(test.id, worker)).status).toBe("done");
-    expect(await items(t, t.root.id)).toMatchObject([
-      { summary: "Private title", preview: { text: "Test paragraph" } }
-    ]);
+    expect(await items(t, t.root.id)).toEqual([]);
+    const simulated = required(
+      (await stepRunsOf(t, test.id)).find((step) => step.stepId === "notify")
+    );
+    expect(simulated).toMatchObject({
+      status: "done",
+      effect: "changing",
+      target: "dry_run"
+    });
+    expect(JSON.parse(required(simulated.outputPreview).text)).toEqual({
+      wouldHaveDone: {
+        operation: "notify",
+        input: {
+          to: { users: [t.admin.id] },
+          channels: ["inbox", "mail"],
+          title: "Private title",
+          text: "Test paragraph"
+        }
+      }
+    });
+    expect(
+      await t.instance.stores.noticeMail.dueRecipients({
+        clientInstanceId,
+        now: "2099-01-01T00:00:00.000Z",
+        limit: 100
+      })
+    ).not.toContain(t.root.id);
     expect(await items(t, t.admin.id)).toHaveLength(1);
     // A later pass / recovered job creates no duplicate for a settled step.
     await worker.runDue();

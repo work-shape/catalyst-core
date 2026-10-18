@@ -11,10 +11,12 @@ import type { WorkflowFailure } from "./workflow-views";
 export function FailureBanner({ failure }: { failure: WorkflowFailure }) {
   const { t } = useTranslation();
   const sentences = failureSentences(failure.reason);
+  // Where an administrator changes a Workflow's technical account, for the advice that names it.
+  const place = `${t("nav.settings")} › ${t("settings.apiAccess")}`;
   return (
     <Banner tone="danger" layout="inline">
       <p data-failure-happened="">{failureHappened(failure, t)}</p>
-      <p data-failure-advice="">{t(sentences.advice)}</p>
+      <p data-failure-advice="">{t(sentences.advice, { place })}</p>
       <Disclosure className="mt-1">
         <DisclosureTrigger>{t("workflows.technicalDetails")}</DisclosureTrigger>
         <DisclosureContent>{failure.detail}</DisclosureContent>

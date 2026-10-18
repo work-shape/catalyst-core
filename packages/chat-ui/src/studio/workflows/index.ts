@@ -43,6 +43,7 @@ export { DraftChangeDialog } from "./workflow-draft";
 export { RightsLacking } from "./workflow-publish-rights";
 export {
   giveFailureSentence,
+  workflowAccountRefusal,
   workflowPublishRefusal,
   type WorkflowPublishRightsView
 } from "./workflow-publish-rights-model";
