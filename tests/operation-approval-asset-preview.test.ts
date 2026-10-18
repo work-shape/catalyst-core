@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { operationRunSchema } from "@work-shape/catalyst-api-contract";
+import { getTestJobs } from "./support/test-instance";
+import { clientInstanceId } from "./support/access-instance";
 import type { CentralPolicySetting } from "@work-shape/catalyst-core";
 import { agent, skill } from "./support/access-instance";
 import { setupNamespaceHolder } from "./support/asset-operations";
@@ -45,6 +47,136 @@ async function setup() {
 }
 
 describe("the preview of a held asset save", () => {
+  it("ACCEPT-2b E4: keeps the original skill comparison after approval for requester and approver", async () => {
+    const { t, holding, hold, preview } = await setup();
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "skill", name: "kai-leave" },
+      payload: { config: skill("kai-leave", stored) }
+    });
+    holding("assets.put");
+    const requestId = await hold("assets.put", "skill", "kai-leave", {
+      config: { ...skill("kai-leave", changed), title: "Leave policy" },
+      expectedRevision: 1
+    });
+    const original = (await preview(t.kai.id, requestId)).asset;
+    await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    await getTestJobs(t.instance).runDue();
+    for (const reader of [t.kai.id, t.admin.id]) {
+      const item = (
+        await t.expectOk(reader, "approval_requests.get", { params: { requestId } })
+      ).json();
+      expect(item.applyResult.execution).toBe("done");
+      expect(item.preview.asset).toEqual(original);
+      expect(item.payload.input).toBeUndefined();
+      expect(item.payload.actor.authSource).toBeUndefined();
+    }
+    // Retained before-text is still gated after the request ended, including its payload copy.
+    await t.seedHistoricalGrant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
+    const withheld = (
+      await t.expectOk(t.admin.id, "approval_requests.get", { params: { requestId } })
+    ).json();
+    expect(JSON.stringify(withheld)).not.toContain(OLD_PARAGRAPH);
+    expect(withheld.preview.asset.title).toBe("Leave policy");
+    expect(withheld.preview.asset.beforeWithheld).toBe(true);
+  });
+
+  it("does not claim a later reader lacks access when the filer could not read before-text", async () => {
+    const { t, holding, hold, preview } = await setup();
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "skill", name: "kai-leave" },
+      payload: { config: skill("kai-leave", stored) }
+    });
+    await t.grant(
+      t.kai.id,
+      "skill.read",
+      { assetId: await t.assetId("skill", "kai-leave") },
+      "deny"
+    );
+    holding("assets.put");
+    const requestId = await hold("assets.put", "skill", "kai-leave", {
+      config: skill("kai-leave", changed),
+      expectedRevision: 1
+    });
+    await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    await getTestJobs(t.instance).runDue();
+    expect((await preview(t.admin.id, requestId)).asset.beforeWithheld).toBeUndefined();
+    expect((await preview(t.kai.id, requestId)).asset.beforeWithheld).toBe(true);
+  });
+
+  it("ACCEPT-2b E7: warns about a changed revision before deciding and refuses the stale save", async () => {
+    const { t, holding, hold, preview } = await setup();
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "skill", name: "kai-leave" },
+      payload: { config: skill("kai-leave", stored) }
+    });
+    holding("assets.put");
+    const requestId = await hold("assets.put", "skill", "kai-leave", {
+      config: skill("kai-leave", changed),
+      expectedRevision: 1
+    });
+    expect((await preview(t.admin.id, requestId)).asset.isStale).toBeUndefined();
+    holding();
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "skill", name: "kai-leave" },
+      payload: { config: skill("kai-leave", "A newer policy"), expectedRevision: 1 }
+    });
+    expect((await preview(t.admin.id, requestId)).asset.isStale).toBe(true);
+    const stillPending = await t.stores.approvals.getApprovalRequest({
+      clientInstanceId,
+      requestId
+    });
+    expect(stillPending?.status).toBe("pending");
+    const decided = (
+      await t.expectOk(t.admin.id, "approval_requests.decide", {
+        params: { requestId },
+        payload: { decision: "approve" }
+      })
+    ).json();
+    expect(decided).toMatchObject({
+      status: "superseded",
+      applyResult: { execution: "refused", error: { code: "APPROVAL_STALE" } }
+    });
+    expect((await t.stored("skill", "kai-leave"))?.config?.content).toBe("A newer policy");
+  });
+
+  it("ACCEPT-2b E6: names only visible active people with the approval right", async () => {
+    const { t, holding, hold } = await setup();
+    const workspaceId = await t.sharedWorkspace("Approval team");
+    for (const user of [t.kai, t.lena]) {
+      await t.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: workspaceId,
+        userId: user.id,
+        role: "member"
+      });
+    }
+    holding("assets.put");
+    const requestId = await hold("assets.put", "skill", "kai-leave", {
+      config: skill("kai-leave", changed)
+    });
+    const item = (
+      await t.expectOk(t.kai.id, "approval_requests.get", { params: { requestId } })
+    ).json();
+    expect(item.preview.approverNames).toEqual([t.admin.displayLabel]);
+    expect(item.preview.approverNames).not.toContain(t.root.displayLabel);
+    expect(item.preview.approverNames).not.toContain(t.lena.displayLabel);
+    const approver = (
+      await t.expectOk(t.admin.id, "approval_requests.get", { params: { requestId } })
+    ).json();
+    expect(approver.preview.approverNames).toBeUndefined();
+    await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, status: "disabled" });
+    const withoutApprover = (
+      await t.expectOk(t.kai.id, "approval_requests.get", { params: { requestId } })
+    ).json();
+    expect(withoutApprover.preview.approverNames).toEqual([]);
+  });
+
   it("shows a new skill with its title, its Namespace and its whole text", async () => {
     const { t, holding, hold, preview } = await setup();
     holding("assets.put");
@@ -219,6 +351,14 @@ describe("the preview of a held asset save", () => {
     // Kai may read both and is shown what is stored: the first exists, the second is gone.
     expect((await preview(t.kai.id, collision)).asset).toMatchObject({ isNew: false });
     expect((await preview(t.kai.id, orphaned)).asset).toMatchObject({ isNew: true });
+
+    // A decided preview still uses the frozen call's existence claim for a non-reader, not
+    // what the filer learned from the stored skill.
+    await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId: collision },
+      payload: { decision: "reject" }
+    });
+    expect((await preview(t.admin.id, collision)).asset.isNew).toBe(true);
   });
 
   it("names an asset of another kind and shows no content for it", async () => {

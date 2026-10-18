@@ -59,6 +59,12 @@ export interface ApprovalRequestWorkflowOptions {
    */
   readerLocale?(userId: string, requested: LocaleCode | undefined): Promise<LocaleCode>;
   onDecided?(request: ApprovalRequest): void | Promise<void>;
+  /** A few people this reader can see who currently hold this request's approval right. */
+  approverNames?(
+    user: AuthenticatedUser,
+    handler: ApprovalRequestHandler,
+    request: ApprovalRequest
+  ): Promise<string[]>;
 }
 
 export interface ApprovalRequestView extends ApprovalRequest {
@@ -546,12 +552,24 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       request.addresseeUserId !== undefined
         ? request.addresseeUserId === user.id
         : access.authorize(handler.requiredPermission, resourceOfRequest(handler, request)).allowed;
+    const preview = await handler.preview(handler.validate(request.payload), {
+      ...this.handlerContext(request, context),
+      viewer
+    });
+    if (
+      request.status === "pending" &&
+      request.requestedBy.id === user.id &&
+      !viewer.inList &&
+      request.addresseeUserId === undefined
+    ) {
+      preview.approverNames = (await this.options.approverNames?.(user, handler, request)) ?? [];
+    }
+    // A retained comparison is subject to the same read check in the payload as in the preview.
+    const { asset: _asset, ...payload } = request.payload;
     return {
       ...request,
-      preview: await handler.preview(handler.validate(request.payload), {
-        ...this.handlerContext(request, context),
-        viewer
-      }),
+      payload: { ...payload, ...(preview.asset ? { asset: preview.asset } : {}) },
+      preview,
       // A flag is true only if the route would also accept the caller's token scopes.
       canRevert:
         request.status === "approved" && Boolean(handler.revert) && canDecideWithToken && decides,
@@ -661,7 +679,7 @@ const NARROWER_SCOPES = GRANT_SCOPE_KINDS.filter((scope) => scope !== "instance"
  * The asset a request's right is asked on, where its kind names one. A payload the kind cannot
  * read names none, and the right is asked of the instance.
  */
-function resourceOfRequest(
+export function resourceOfRequest(
   handler: ApprovalRequestHandler,
   request: ApprovalRequest
 ): AccessResource | undefined {

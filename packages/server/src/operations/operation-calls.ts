@@ -12,10 +12,10 @@ import { createAppActionOperationSource } from "../apps/action-source";
 import { guardAppOrigin } from "../apps/app-origin-guard";
 import { createHeldAssetPreviewer } from "../approvals/held-asset-preview";
 import {
-  createOperationApprovalFiler,
   createOperationCallApprovalHandler,
   executeApprovedOperationCall
 } from "../approvals/operation-call-approval-handler";
+import { createOperationApprovalFiler } from "../approvals/operation-approval-filer";
 import { publishApprovalKinds } from "../approvals/publish-approval";
 import { createNoticeHandler } from "../notices/notice-kind";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
@@ -115,6 +115,8 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
         clientInstanceId,
         approvals: options.approvalRequests.store,
         held,
+        authorizer: options.authorizer,
+        ...(handlerOptions.assetPreview ? { assetPreview: handlerOptions.assetPreview } : {}),
         creator: new ApprovalRequestWorkflow({
           ...options.approvalRequests,
           handlers: approvalRequestHandlers,

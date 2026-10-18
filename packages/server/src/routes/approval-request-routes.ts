@@ -1,5 +1,6 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { asUserId } from "@work-shape/catalyst-core";
+import { visibleApproverNames } from "../approvals/visible-approvers";
 import { ApprovalRequestWorkflow } from "../approvals/approval-request-service";
 import type { Route } from "../http/route";
 import { requirePathParam } from "./request-context";
@@ -11,6 +12,8 @@ export function registerApprovalRequestRoutes(route: Route, options: ChatServerO
     ...options.approvalRequests,
     clientInstanceId: options.clientInstanceId,
     auditRecorder: options.auditRecorder,
+    approverNames: (user, handler, request) =>
+      visibleApproverNames(options, user, handler, request),
     // A held publish's review leads with a sentence in the language of who opens it (PUBQ-1).
     readerLocale: async (userId, requested) =>
       (
