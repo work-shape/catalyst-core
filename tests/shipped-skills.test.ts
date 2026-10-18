@@ -484,6 +484,11 @@ it("teaches the App sandbox before sending an agent to the detailed guide", () =
     "form-action 'none'",
     "localStorage",
     "storage.get/set",
+    "draft preview shares",
+    "250 ms",
+    "before its batch is saved",
+    "sessionStorage shim (it throws SecurityError)",
+    "localStorage instanceof Storage is false",
     "Data Stores",
     "Network"
   ])
@@ -491,6 +496,18 @@ it("teaches the App sandbox before sending an agent to the detailed guide", () =
   const guide = platformDocsSkill.resources?.find(
     (resource) => resource.path === "references/apps/build.md"
   );
+  for (const rule of [
+    "draft preview",
+    "shares the same per-person state",
+    "250 ms",
+    "A write is lost if the page closes before its batch is saved",
+    "immediate reload",
+    "sessionStorage",
+    "throws `SecurityError`",
+    "localStorage instanceof Storage",
+    "is false"
+  ])
+    expect(guide?.content).toContain(rule);
   expect(guide?.content).toContain("SecurityError");
   expect(guide?.content).toContain("event.preventDefault()");
   if (typeof guide?.content !== "string") throw new Error("The App guide must be text");

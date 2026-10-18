@@ -211,3 +211,5 @@ export { workflowDataFlowsSchema } from "@work-shape/catalyst-asset-schemas";
 export * from "./data-store-record-withdrawal";
 
 export * from "./operation-execution-stop";
+
+export { personalWorkspaceOwnerName } from "./personal-workspace-name";

@@ -21,7 +21,17 @@ It reads only the current person's state in that App; it never exposes the platf
 storage. The state is stored on the instance, survives reloads and App revisions, and is erased
 with the App or the person's account. Native `getItem`, `setItem`, `removeItem`, `clear`,
 `key`, `length` and property access work. Writes are synchronous in memory and persisted
-asynchronously. A `catalyst-storage-error` event reports a persistence failure.
+in batches about every 250 ms, with the last write to each key winning. A
+`catalyst-storage-error` event reports a persistence failure. A builder's draft preview
+shares the same per-person state with the published App, so trying a draft can change
+that person's preferences in the published App.
+
+There is no `sessionStorage` shim: accessing it throws `SecurityError` in the sandbox.
+The `localStorage` shim is not a native `Storage` object: `localStorage instanceof Storage`
+is false. On `pagehide` and when the document becomes hidden, it tries to flush the batch,
+but this is best effort. A write is lost if the page closes before its batch is saved.
+An immediate reload within the batching window can also lose the write; await kit
+`storage.set` before navigating or reloading when the save must persist.
 
 Prefer the JSON API in kit **1.6.0**, whose save waits for persistence and rejects on failure:
 
