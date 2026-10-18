@@ -1,5 +1,5 @@
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
-import type { TranslationContextValue } from "../../shared/i18n";
+import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import { formatFileBytes } from "./skill-form-model";
 import { apiErrorCode, apiErrorMessage } from "../../shared/workspace-utils";
 
@@ -14,6 +14,13 @@ interface BuildRefusal {
   /** The field the refusal concerns. Without one it shows above the save bar. */
   field?: BuildRefusalField;
   message: string;
+  /**
+   * The instance's own sentence where the page told a refusal in its own words. It is written
+   * for the operator and may name release config, so only an administrator is shown it.
+   */
+  detail?: string;
+  /** The message is the instance's sentence as it came, in the instance's words. */
+  asSent?: true;
 }
 
 /** How a change went. */
@@ -62,7 +69,32 @@ interface RefusalDetails {
   /** The limit a refusal names, and what the write had of it. */
   limit?: number;
   actual?: number;
-  issues: { message: string; path: unknown[] }[];
+  issues: RefusalIssue[];
+}
+
+/** One issue of a refused definition: the instance's sentence, its place and its code. */
+interface RefusalIssue {
+  message: string;
+  path: unknown[];
+  /** The fixed code of the check that found it, where the check names one. */
+  code?: string;
+}
+
+/**
+ * The issues the reader is told in their own language: what happened and who changes it. The
+ * instance's sentence names release config keys, which a builder cannot act on.
+ */
+const ISSUE_SENTENCES: Readonly<Record<string, TranslationKey>> = {
+  egress_denied: "build.refusedEgress",
+  read_only_origin: "build.refusedReadOnlyOrigin"
+};
+
+/** An issue's sentence in the reader's language where its code is known, else the instance's. */
+export function issueRefusal(issue: RefusalIssue, t: Translate): BuildRefusal {
+  const key = issue.code === undefined ? undefined : ISSUE_SENTENCES[issue.code];
+  return key === undefined
+    ? { message: issue.message, asSent: true }
+    : { message: t(key), detail: issue.message };
 }
 
 function field(value: unknown, key: string): unknown {
@@ -151,7 +183,10 @@ export function readRefusalDetails(error: unknown): RefusalDetails {
     issues: (Array.isArray(issues) ? issues : []).flatMap((issue: unknown) => {
       const message = text(issue, "message");
       const path = field(issue, "path");
-      return message ? [{ message, path: Array.isArray(path) ? path : [] }] : [];
+      const code = text(issue, "code");
+      return message
+        ? [{ message, path: Array.isArray(path) ? path : [], ...(code ? { code } : {}) }]
+        : [];
     })
   };
 }
@@ -248,11 +283,16 @@ export function readBuildRefusal(
             typeof segment === "string" ? FIELD_OF_CONFIG_KEY.get(segment) : undefined
           )
           .find((candidate) => candidate !== undefined);
-        return { ...(concerned ? { field: concerned } : {}), message: issue.message };
+        return { ...(concerned ? { field: concerned } : {}), ...issueRefusal(issue, t) };
       })
     };
   }
-  return refused({ message: apiErrorMessage(error, undefined) ?? t("configChangeSaveFailed") });
+  const sentence = apiErrorMessage(error, undefined);
+  return refused(
+    sentence === undefined
+      ? { message: t("configChangeSaveFailed") }
+      : { message: sentence, asSent: true }
+  );
 }
 
 function refused(refusal: BuildRefusal): BuildWriteOutcome {

@@ -8,6 +8,7 @@ import {
   type Conversation,
   type ConversationSubject,
   type JsonObject,
+  type LocaleCode,
   type OperationAuthorization,
   type OperationDefinition,
   type ToolExecutionContext
@@ -185,7 +186,10 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     ) {
       throw subjectUnavailable();
     }
-    const app = { name: row.name, title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}) };
+    const app = {
+      name: row.name,
+      title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}, context.locale)
+    };
     const page = await pageApps.named(conversation.id, input.page);
     const origin = await options.configAssets.store.getConfigAssetPageOrigin({
       clientInstanceId: options.clientInstanceId,
@@ -395,11 +399,19 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     };
   }
 
-  /** The name people read for an asset, as a list shows it: its name where none is told. */
-  function titleOf(kind: string, name: string, config: JsonObject): string {
+  /**
+   * The name people read for an asset, as a list shows it, in the language of the one the run
+   * is for: its name where none is told.
+   */
+  function titleOf(
+    kind: string,
+    name: string,
+    config: JsonObject,
+    locale: LocaleCode | undefined
+  ): string {
     const assetKind = options.configAssets.kinds.kinds.find((each) => each.kind === kind);
     try {
-      return assetKind?.summarize(config).title ?? name;
+      return assetKind?.summarize(config, locale).title ?? name;
     } catch {
       return name;
     }
@@ -501,7 +513,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       created: true,
       kind: named.kind,
       name: named.name,
-      title: titleOf(named.kind, named.name, read.config),
+      title: titleOf(named.kind, named.name, read.config, context.locale),
       ...ownerOf(kind, conversation),
       ...(beside ? { besideSubject: true as const } : {})
     };
@@ -527,7 +539,10 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         await requireOwnTranscript(options, conversation);
       }
       const read = await readAsset(context, conversation, named);
-      const opened = { ...read, title: titleOf(read.kind, read.name, read.config) };
+      const opened = {
+        ...read,
+        title: titleOf(read.kind, read.name, read.config, context.locale)
+      };
       if (!moves) return opened;
       // An asset of the instance becomes the subject only by a person's step: the agent's own
       // open is none, since a document or a tool's answer the agent read can ask for it, and

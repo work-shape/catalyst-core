@@ -11,7 +11,8 @@ import {
   type ModelCallUsage,
   type ModelUsageAttributionGroup,
   type ModelUsageCounted,
-  type ModelUsageCounterLimits,
+  type ModelUsageLimits,
+  type ModelUsagePeriodLimits,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventRecordInput,
@@ -152,6 +153,13 @@ const RESERVED_CHARACTERS_PER_INPUT_TOKEN = 3;
 const USAGE_ABANDONED_AFTER_MS = 6 * 60 * 60 * 1000;
 /** Abandoned calls recovery releases between two looks at whether it was stopped. */
 const USAGE_RECOVERY_BATCH = 200;
+/**
+ * How many times a person's safeguards the calls no person made share, such as the workflow
+ * runs of a service principal. Unattended work of a whole instance fits under it, and a loop
+ * that runs away still stops within the day. A call refused by it ends its run with
+ * `MODEL_USAGE_LIMIT_REACHED`.
+ */
+const UNATTENDED_SAFEGUARD_FACTOR = 10;
 
 /** What a call that reported nothing is settled with. */
 const NOTHING_REPORTED: ModelCallUsage = {
@@ -356,21 +364,34 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     };
   }
 
-  private limits(): { day: ModelUsageCounterLimits; month: ModelUsageCounterLimits } {
+  /**
+   * The spend budgets hold for the instance as a whole. The safeguards hold for each person on
+   * their own, and for the calls of no person together (`ModelUsageLimits`).
+   */
+  private limits(): ModelUsageLimits {
     const { safeguards, budget } = this;
     // A counter holds costs as they are settled. The safety multiplier lowers the limit.
     const spend = (limit: number | undefined): { costMicros?: number } =>
       limit ? { costMicros: Math.floor(toMicros(limit) / (budget.costSafetyMultiplier ?? 1)) } : {};
+    const safeguardsTimes = (factor: number): ModelUsagePeriodLimits => {
+      const { modelCallsPerDay, tokensPerDay, tokensPerMonth } = safeguards;
+      // A valid limit is a safe integer; so is the shared bucket's, however large the limit.
+      const times = (limit: number) => Math.min(limit * factor, Number.MAX_SAFE_INTEGER);
+      return {
+        day: {
+          ...(modelCallsPerDay ? { modelCallCount: times(modelCallsPerDay) } : {}),
+          ...(tokensPerDay ? { tokens: times(tokensPerDay) } : {})
+        },
+        month: tokensPerMonth ? { tokens: times(tokensPerMonth) } : {}
+      };
+    };
     return {
-      day: {
-        ...(safeguards.modelCallsPerDay ? { modelCallCount: safeguards.modelCallsPerDay } : {}),
-        ...(safeguards.tokensPerDay ? { tokens: safeguards.tokensPerDay } : {}),
-        ...spend(budget.dailySpendLimit)
+      instance: {
+        day: spend(budget.dailySpendLimit),
+        month: spend(budget.monthlySpendLimit)
       },
-      month: {
-        ...(safeguards.tokensPerMonth ? { tokens: safeguards.tokensPerMonth } : {}),
-        ...spend(budget.monthlySpendLimit)
-      }
+      person: safeguardsTimes(1),
+      unattended: safeguardsTimes(UNATTENDED_SAFEGUARD_FACTOR)
     };
   }
 
@@ -472,11 +493,13 @@ function countedOf(
 
 function refusalError(refusal: ModelUsageRefusal): ModelUsageLimitReachedError {
   const period = refusal.period === "day" ? "Daily" : "Monthly";
-  if (refusal.metric === "modelCallCount")
-    return new ModelUsageLimitReachedError(`${period} model call safeguard has been reached`);
-  if (refusal.metric === "tokens")
-    return new ModelUsageLimitReachedError(`${period} model token safeguard has been reached`);
-  return new ModelUsageLimitReachedError(`${period} model spend budget has been reached`);
+  const limit =
+    refusal.metric === "modelCallCount"
+      ? "model call safeguard"
+      : refusal.metric === "tokens"
+        ? "model token safeguard"
+        : "model spend budget";
+  return new ModelUsageLimitReachedError(`${period} ${limit} has been reached`, refusal);
 }
 
 /**

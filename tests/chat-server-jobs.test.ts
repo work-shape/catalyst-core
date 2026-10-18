@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createChatServerJobs, generateConversationTitleJob } from "@work-shape/catalyst-server";
 import { createJobWorker } from "@work-shape/catalyst-client-assembly";
-import { asClientInstanceId, asConversationId } from "@work-shape/catalyst-core";
+import {
+  asClientInstanceId,
+  asConversationId,
+  asUserId,
+  type LocaleCode
+} from "@work-shape/catalyst-core";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import {
   createFailingTestLogger,
@@ -203,22 +208,37 @@ describe("the title job and a rename by the user", () => {
     renameDuringGeneration: string | undefined,
     titleBinding?: { id: string; providerId: string; model: string },
     /** Set to fail the model call of the title with this error. */
-    generationFailure?: Error
+    generationFailure?: Error,
+    /** The language the account chose. Left out, the account has none. */
+    locale?: LocaleCode,
+    /** The title the conversation starts with and the files its first message attached. */
+    start: { title: string; files: string[] } = {
+      title: "please summarize the release notes",
+      files: []
+    }
   ) {
     const store = (await createTestInstance()).stores;
     const conversation = await store.createConversationForTesting({
       clientInstanceId: titleInstance,
       createdByUserId: "user-1",
       createdByExternalUserId: "external-user-1",
-      title: "please summarize the release notes",
+      title: start.title,
       retainedUntil: new Date(Date.now() + 30 * DAY_MS).toISOString()
     });
     await store.conversations.appendMessage({
       clientInstanceId: titleInstance,
       conversationId: conversation.id,
       role: "user",
-      text: "please summarize the release notes"
+      text: "please summarize the release notes",
+      ...(start.files.length === 0 ? {} : { metadata: attachedFiles(start.files) })
     });
+    if (locale)
+      await store.users.updateUser({
+        clientInstanceId: titleInstance,
+        userId: asUserId("user-1"),
+        locale
+      });
+    const prompts: string[] = [];
     const options = createRetentionOptions({
       clientInstanceId: titleInstance,
       store,
@@ -227,7 +247,8 @@ describe("the title job and a rename by the user", () => {
         : {}),
       modelProvider: {
         // The job has read the conversation and has not written the title yet.
-        async complete() {
+        async complete(request) {
+          prompts.push(request.messages.map((message) => String(message.content)).join("\n"));
           if (generationFailure) throw generationFailure;
           if (renameDuringGeneration)
             await store.conversations.updateConversationTitle({
@@ -272,6 +293,7 @@ describe("the title job and a rename by the user", () => {
       store,
       conversation,
       title: stored?.title,
+      prompts,
       generatedEvents: audit.filter((event) => event.type === "conversation.title_generated"),
       failedEvents: audit.filter((event) => event.type === "conversation.title_generation_failed")
     };
@@ -323,6 +345,27 @@ describe("the title job and a rename by the user", () => {
     );
   });
 
+  it("asks for the title in the language of the account the conversation belongs to", async () => {
+    // ACCEPT-1c C8: a German account's list showed English titles.
+    // The account keeps its language, so the one without a choice goes first.
+    expect((await titledConversation(undefined)).prompts).toEqual([
+      expect.stringContaining("Write the headline in English.")
+    ]);
+    expect((await titledConversation(undefined, undefined, undefined, "de")).prompts).toEqual([
+      expect.stringContaining("Write the headline in German.")
+    ]);
+  });
+
+  it("replaces the chat's German title for attached files, and keeps one a person wrote", async () => {
+    // ACCEPT-1c C8: a German conversation started with files was called "2 attached files".
+    const titleOf = async (title: string, files: string[]) =>
+      (await titledConversation(undefined, undefined, undefined, "de", { title, files })).title;
+    expect(await titleOf("2 angehängte Dateien", ["a.pdf", "b.pdf"])).toBe("Release Notes Summary");
+    expect(await titleOf("Angehängte Datei", ["a.pdf"])).toBe("Release Notes Summary");
+    expect(await titleOf("2 attached files", ["a.pdf", "b.pdf"])).toBe("Release Notes Summary");
+    expect(await titleOf("Meine Belege", ["a.pdf", "b.pdf"])).toBe("Meine Belege");
+  });
+
   it("keeps a title the user wrote between the job's read and its write", async () => {
     const result = await titledConversation("Mine");
     expect(result.title).toBe("Mine");
@@ -371,4 +414,26 @@ function age(correlationId: string, days: number): Promise<void> {
       update audit_events set created_at = now() - make_interval(days => ${days})
       where correlation_id = ${correlationId}`;
   });
+}
+
+/** The metadata of a first message that attached `files`, as the chat stores it. */
+function attachedFiles(files: string[]) {
+  return {
+    agentRuntime: {
+      version: 1,
+      kind: "user_message",
+      attachmentManifest: {
+        version: 1,
+        attachments: files.map((filename, index) => ({
+          fileId: `file_${index}`,
+          attachmentId: `att_${index}`,
+          filename,
+          mimeType: "application/pdf",
+          byteSize: 1,
+          status: "ready",
+          readable: true
+        }))
+      }
+    }
+  };
 }

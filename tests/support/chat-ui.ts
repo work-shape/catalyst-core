@@ -53,6 +53,7 @@ export {
   settingsGoToTargets,
   visibleSettingsPages
 } from "../../packages/chat-ui/src/admin/settings/catalog";
+export { SettingsArea } from "../../packages/chat-ui/src/admin/settings/settings-area";
 export {
   ApiKeysPage,
   ConnectCodeConfirm
@@ -480,3 +481,4 @@ export {
   readsRecipientPeople,
   WorkflowsHostWithRecipients
 } from "../../packages/chat-ui/src/studio/workflows/workflows-host";
+export { attachedFilesTitle } from "../../packages/chat-ui/src/chat/workspace/workspace-conversation-actions";

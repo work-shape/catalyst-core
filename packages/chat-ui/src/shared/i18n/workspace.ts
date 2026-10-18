@@ -18,6 +18,10 @@ export const workspace = defineTranslations({
       "This model cannot be used at the moment. Choose another model or ask an administrator.",
     runModelNotPricedOperator:
       "This model has no price on the rate card, so its cost cannot be counted against the spend budget. Choose another model until the operator has added the price.",
+    runUsageLimitReached:
+      "A usage limit stopped this reply. Your answer so far is kept. Ask an administrator of this instance to check the usage limits.",
+    runUsageLimitReachedOperator:
+      "A usage limit stopped this reply. Your answer so far is kept. Settings › Usage shows the usage limits and what has been used. Ask the instance operator to review the limits they set.",
     runNotStarted:
       "The reply could not be started because the service is busy or unavailable. Please send your message again.",
     runStopped: "The reply was stopped.",
@@ -54,6 +58,10 @@ export const workspace = defineTranslations({
       "Dieses Modell kann gerade nicht verwendet werden. Wähle ein anderes Modell oder wende dich an einen Administrator.",
     runModelNotPricedOperator:
       "Für dieses Modell steht kein Preis in der Preisliste, deshalb lassen sich seine Kosten nicht auf das Budget anrechnen. Wähle ein anderes Modell, bis der Betreiber den Preis eingetragen hat.",
+    runUsageLimitReached:
+      "Eine Nutzungsgrenze hat diese Antwort gestoppt. Was bisher geantwortet wurde, bleibt erhalten. Bitte einen Administrator dieser Instanz, die Nutzungsgrenzen zu prüfen.",
+    runUsageLimitReachedOperator:
+      "Eine Nutzungsgrenze hat diese Antwort gestoppt. Was bisher geantwortet wurde, bleibt erhalten. Unter Einstellungen › Nutzung siehst du die Nutzungsgrenzen und den Verbrauch. Bitte den Betreiber der Instanz, die Grenzen zu prüfen, die er festgelegt hat.",
     runNotStarted:
       "Die Antwort konnte nicht gestartet werden, weil der Dienst ausgelastet oder nicht erreichbar ist. Bitte sende deine Nachricht erneut.",
     runStopped: "Die Antwort wurde gestoppt.",

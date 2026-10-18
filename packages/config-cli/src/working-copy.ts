@@ -455,7 +455,7 @@ export async function readSkillResources(skillFilePath: string): Promise<SkillRe
   await walkFiles(skillDirectory, skillDirectory, files);
   const resources: SkillResourceConfig[] = [];
   for (const path of files.sort((left, right) => left.localeCompare(right))) {
-    if (path === skillFilePath) {
+    if (path === skillFilePath || path === resolve(skillDirectory, ".catalyst-skill.json")) {
       continue;
     }
     const resourcePath = toRelativePath(skillDirectory, path);

@@ -40,7 +40,12 @@ import { hasDataFlows } from "./data-flows-model";
 import { DataStoreFillers, DataStoreProcessors, DataStoreReaders } from "./data-store-provenance";
 import { ReadState } from "./data-store-read-state";
 import { DataStoreRowsSection } from "./data-store-rows";
-import type { DataStoreSchema, DataStoreSource, DataStoreState } from "./data-store-source";
+import {
+  serverConditionsShown,
+  type DataStoreSchema,
+  type DataStoreSource,
+  type DataStoreState
+} from "./data-store-source";
 
 type DataStoreTable = DataStoreSchema["tables"][number];
 
@@ -90,6 +95,7 @@ function PublishedDataStorePage({
   usePageShown(page, "asset");
   const read = source.useStoreState(asset.name);
   const state = read.status === "ready" ? read.data : undefined;
+  const conditions = state ? serverConditionsShown(source, state) : [];
   const view = state ? DATA_STORE_STATE_VIEWS[dataStoreStateView(state)] : undefined;
   // The rows of a store are reached while it is ready, so its tables are read only then.
   const reachable = state?.status === "ready";
@@ -153,14 +159,14 @@ function PublishedDataStorePage({
       description: t("dataStores.readByDescription"),
       body: <DataStoreReaders {...provenance} />
     },
-    ...(state && state.conditions.length > 0
+    ...(conditions.length > 0
       ? [
           {
             id: "conditions",
             label: t("dataStores.conditionsTitle"),
             description: t("dataStores.conditionsDescription"),
-            count: state.conditions.length,
-            body: <DataStoreConditions conditions={state.conditions} />
+            count: conditions.length,
+            body: <DataStoreConditions conditions={conditions} />
           }
         ]
       : []),
@@ -337,7 +343,10 @@ function DataStoreStatus({
   );
 }
 
-/** What the server leaves open: a few words each, and the server's own sentence on demand. */
+/**
+ * What the server leaves open, for the one who runs it: a step to take each, and the server's
+ * own sentence of how on demand.
+ */
 function DataStoreConditions({ conditions }: { conditions: DataStoreState["conditions"] }) {
   const { t } = useTranslation();
   return (

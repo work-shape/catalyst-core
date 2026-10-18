@@ -3156,11 +3156,11 @@ test("Studio opens on a list, and a list and an asset each have an address", asy
   await expect(newSkill).toBeHidden();
   await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
 
-  // Studio without a kind, and the old Config address, open the list last visited.
+  // Studio without a kind, and the old Config address, open the first useful section.
   await page.goto("/build");
-  await expect(page).toHaveURL(/\/build\/skills$/u);
+  await expect(page).toHaveURL(/\/build\/agents$/u);
   await page.goto("/admin/config");
-  await expect(page).toHaveURL(/\/build\/skills$/u);
+  await expect(page).toHaveURL(/\/build\/agents$/u);
 
   // An address without an asset says so and leads back to the list.
   await page.goto("/build/agents/not_an_agent");
@@ -3842,7 +3842,9 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await expect(page.getByText("Billable today")).toBeVisible();
   await expect(page.getByTestId("daily-usage")).toBeVisible();
   await expect(page.getByTestId("monthly-usage")).toBeVisible();
-  await expect(page.getByText("Configured safeguards")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Safeguards per person", exact: true })
+  ).toBeVisible();
   const configuredSafeguards = page.getByTestId("configured-safeguards");
   await expect(configuredSafeguards).toContainText("500");
   await expect(configuredSafeguards).toContainText("25,000");

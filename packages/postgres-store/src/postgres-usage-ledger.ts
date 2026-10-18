@@ -1,13 +1,12 @@
 import { and, eq, sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   type AdmittedModelCall,
-  type ModelUsageCounterLimits,
   type ModelUsageEvent,
   type ModelUsageEventRecordInput,
   type ModelUsageEventStatus,
   type ModelUsageEventStore,
   type ModelUsageHistory,
-  type ModelUsageRefusal,
+  type ModelUsageLimits,
   type ModelUsageTotals,
   type RecentModelUsage,
   AppError,
@@ -23,6 +22,24 @@ import {
   listModelUsageEvents
 } from "./postgres-audit-usage-operations";
 import {
+  COUNTER_LOCK_ORDER,
+  countedCost,
+  countedTokens,
+  countersOf,
+  dayOf,
+  monthOf,
+  reconcileCounters,
+  refusalOf,
+  scopeIdOf,
+  scopeKindOf,
+  startCounters,
+  THIS_MONTH,
+  TODAY,
+  withinLimits,
+  type CounterScope,
+  type LockedCounter
+} from "./postgres-usage-counters";
+import {
   readModelUsageMaintenance,
   writeModelUsageMaintenance
 } from "./postgres-usage-maintenance";
@@ -31,45 +48,6 @@ type Store = ModelUsageEventStore;
 
 /** How often admission starts missing counters and asks again before it gives up. */
 const COUNTER_START_ATTEMPTS = 3;
-
-// The day and the month of the database clock, in UTC as the windows of the limits are.
-const TODAY = drizzleSql`(now() at time zone 'UTC')::date`;
-const THIS_MONTH = drizzleSql`date_trunc('month', now() at time zone 'UTC')::date`;
-const dayOf = (createdAt: SQL): SQL => drizzleSql`(${createdAt} at time zone 'UTC')::date`;
-const monthOf = (createdAt: SQL): SQL =>
-  drizzleSql`date_trunc('month', ${createdAt} at time zone 'UTC')::date`;
-
-/** The counters of the instance for a day and a month. `c` names the counter table. */
-const instanceCounters = (clientInstanceId: string, day: SQL, month: SQL): SQL => drizzleSql`
-  c.client_instance_id = ${clientInstanceId} and c.scope_kind = 'instance' and c.scope_id = ''
-  and ((c.period_kind = 'day' and c.period_start = ${day})
-    or (c.period_kind = 'month' and c.period_start = ${month}))`;
-
-// What an event holds on its counters. An event written before the counters holds its tokens
-// and its settled cost.
-const countedTokens = (row: SQL): SQL =>
-  drizzleSql`coalesce(${row}.counted_tokens, ${row}.total_tokens)`;
-const countedCost = (row: SQL): SQL => drizzleSql`coalesce(
-  ${row}.counted_cost_micros,
-  case when ${row}.customer_billable_cost->>'status' = 'settled'
-    then (${row}.customer_billable_cost->>'totalCostMicros')::bigint end,
-  0)`;
-
-const within = (
-  limits: ModelUsageCounterLimits,
-  reservation: { tokens: number; costMicros: number }
-): SQL => {
-  const checks: SQL[] = [drizzleSql`true`];
-  if (limits.modelCallCount !== undefined)
-    checks.push(drizzleSql`c.model_call_count + 1 <= ${limits.modelCallCount}::bigint`);
-  if (limits.tokens !== undefined)
-    checks.push(drizzleSql`c.tokens + ${reservation.tokens}::bigint <= ${limits.tokens}::bigint`);
-  if (limits.costMicros !== undefined)
-    checks.push(
-      drizzleSql`c.cost_micros + ${reservation.costMicros}::bigint <= ${limits.costMicros}::bigint`
-    );
-  return drizzleSql.join(checks, drizzleSql` and `);
-};
 
 /**
  * The user and the workspace an event may name: those that exist and are not being deleted.
@@ -101,12 +79,41 @@ function attribution(event: ModelUsageEventRecordInput): SQL {
     )`;
 }
 
+/** A value of the event that leads back to its person: kept only while the person is open. */
+function personalOf(event: ModelUsageEventRecordInput) {
+  return (value: string | undefined, absent: SQL = drizzleSql`null`): SQL =>
+    event.userId === undefined
+      ? drizzleSql`${value ?? null}`
+      : drizzleSql`case when exists (select 1 from attributed_user where open) then ${value ?? null} else ${absent} end`;
+}
+
 /**
- * The insert of an event. It reads `attributed_user` and `attributed_workspace`. An event made
+ * What the row of an event will say that its counter scope is read from (`scopeKindOf`): its
+ * user, its purpose and its correlation id. It reads `attributed_user`. A new event never has
+ * an empty correlation id, which marks an event the deletion of an account has erased: one
+ * that came without one, or whose person may not be named, carries its own id instead.
+ */
+function written(event: ModelUsageEventRecordInput, id: string): SQL {
+  const correlationId = event.correlationId === "" ? id : event.correlationId;
+  return drizzleSql`
+    written as (
+      select (select id from attributed_user where open) as user_id,
+        ${event.purpose ?? null}::text as purpose,
+        ${personalOf(event)(correlationId, drizzleSql`${id}`)}::text as correlation_id
+    ),
+    scope as (
+      select ${scopeKindOf(drizzleSql`written`)} as kind, ${scopeIdOf(drizzleSql`written`)} as id
+      from written
+    )`;
+}
+
+/**
+ * The insert of an event. It reads `attributed_user`, `attributed_workspace` and `written`. An event made
  * for a user keeps what leads back to them, its conversation, run, operation and correlation
  * id, only while that user's row exists and is open. Where the account is being deleted or
  * the row is gone, the deletion has been through the user's events and does not come back
- * for this one, so the event is written without them. A call in a Try conversation is marked
+ * for this one, so the event is written without them and with its own id as its correlation
+ * id (`written`). A call in a Try conversation is marked
  * `preview` from the conversation's link, whatever made it.
  */
 function insertEvent(input: {
@@ -117,10 +124,7 @@ function insertEvent(input: {
   when: SQL;
 }): SQL {
   const { event } = input;
-  const personal = (value: string | undefined, absent: SQL = drizzleSql`null`): SQL =>
-    event.userId === undefined
-      ? drizzleSql`${value ?? null}`
-      : drizzleSql`case when exists (select 1 from attributed_user where open) then ${value ?? null} else ${absent} end`;
+  const personal = personalOf(event);
   return drizzleSql`
     insert into model_usage_events (
       id, client_instance_id, conversation_id, agent_run_id, agent_name, purpose, provider_id,
@@ -142,8 +146,8 @@ function insertEvent(input: {
       ),
       ${event.source},
       ${JSON.stringify(event.customerBillableCost)}::jsonb,
-      (select id from attributed_user where open), (select id from attributed_workspace),
-      ${personal(event.operationRunId)}, ${personal(event.correlationId, drizzleSql`''`)},
+      (select user_id from written), (select id from attributed_workspace),
+      ${personal(event.operationRunId)}, (select correlation_id from written),
       ${input.status}, ${input.counted.tokens}::bigint, ${input.counted.costMicros}::bigint, now()
     where ${input.when}
     returning *`;
@@ -221,18 +225,23 @@ function addToRollups(clientInstanceId: string, changes: SQL): SQL {
 type AdmissionRow = {
   present: boolean;
   admitted: boolean;
-  day_calls: number | null;
-  day_tokens: number | null;
-  day_cost: number | null;
-  month_calls: number | null;
-  month_tokens: number | null;
-  month_cost: number | null;
+  scope_kind: CounterScope["kind"];
+  scope_id: string;
+  counters: LockedCounter[];
+};
+
+/** What a call that nobody admitted is held against: nothing, it is only counted. */
+const NO_LIMITS: ModelUsageLimits = {
+  instance: { day: {}, month: {} },
+  person: { day: {}, month: {} },
+  unattended: { day: {}, month: {} }
 };
 
 /**
- * The statement of admission and of an event nobody admitted. It locks the two counters of the
- * instance in a fixed order, adds to both when both exist and every limit holds, and writes
- * the event with them. The locks are held for this statement alone.
+ * The statement of admission and of an event nobody admitted. It locks the counters of the
+ * instance and of the event's scope in `COUNTER_LOCK_ORDER`, adds to all of them when all
+ * exist and every limit holds, and writes the event with them. The locks are held for this
+ * statement alone.
  */
 async function countAndInsert(
   db: PostgresConnection,
@@ -241,31 +250,35 @@ async function countAndInsert(
     event: ModelUsageEventRecordInput;
     status: ModelUsageEventStatus;
     counted: { tokens: number; costMicros: number };
-    limits: { day: ModelUsageCounterLimits; month: ModelUsageCounterLimits };
+    limits: ModelUsageLimits;
   }
 ): Promise<AdmissionRow> {
   const { event, counted } = input;
-  const counters = instanceCounters(event.clientInstanceId, TODAY, THIS_MONTH);
+  const counters = countersOf(
+    event.clientInstanceId,
+    { kind: drizzleSql`scope.kind`, id: drizzleSql`scope.id` },
+    TODAY,
+    THIS_MONTH
+  );
   const ended = input.status !== "pending";
   const rows = await db.execute<AdmissionRow>(drizzleSql`
     with ${attribution(event)},
+    ${written(event, input.id)},
     locked as (
-      select c.period_kind, c.model_call_count, c.tokens, c.cost_micros,
-        case c.period_kind
-          when 'day' then ${within(input.limits.day, counted)}
-          else ${within(input.limits.month, counted)}
-        end as within
-      from ${modelUsageCounters} c
+      select c.scope_kind, c.scope_id, c.period_kind, c.model_call_count, c.tokens, c.cost_micros,
+        ${withinLimits(input.limits, counted)} as within
+      from ${modelUsageCounters} c, scope
       where ${counters}
         -- The rows of the user and the workspace are locked first: nothing that holds one of
         -- them may keep the counters of the instance waiting.
         and (select count(*) from attributed_user) >= 0
         and (select count(*) from attributed_workspace) >= 0
-      order by c.period_kind
-      for update
+      order by ${COUNTER_LOCK_ORDER}
+      for update of c
     ),
     verdict as (
-      select count(*) = 2 as present, count(*) = 2 and coalesce(bool_and(within), false) as admitted
+      -- The day and the month, of the instance and of the scope.
+      select count(*) = 4 as present, count(*) = 4 and coalesce(bool_and(within), false) as admitted
       from locked
     ),
     counted as (
@@ -273,6 +286,7 @@ async function countAndInsert(
         model_call_count = c.model_call_count + 1,
         tokens = c.tokens + ${counted.tokens}::bigint,
         cost_micros = c.cost_micros + ${counted.costMicros}::bigint
+      from scope
       where ${counters} and (select admitted from verdict)
       returning 1
     ),
@@ -289,52 +303,18 @@ async function countAndInsert(
         : drizzleSql``
     }
     select verdict.present, verdict.admitted,
-      (select model_call_count::float8 from locked where period_kind = 'day') as day_calls,
-      (select tokens::float8 from locked where period_kind = 'day') as day_tokens,
-      (select cost_micros::float8 from locked where period_kind = 'day') as day_cost,
-      (select model_call_count::float8 from locked where period_kind = 'month') as month_calls,
-      (select tokens::float8 from locked where period_kind = 'month') as month_tokens,
-      (select cost_micros::float8 from locked where period_kind = 'month') as month_cost
+      (select kind from scope) as scope_kind, (select id from scope) as scope_id,
+      coalesce((
+        select json_agg(json_build_object(
+          'scope_kind', scope_kind, 'scope_id', scope_id, 'period_kind', period_kind,
+          'model_call_count', model_call_count, 'tokens', tokens, 'cost_micros', cost_micros
+        )) from locked
+      ), '[]'::json) as counters
     from verdict
   `);
   const [row] = rows;
   if (!row) throw new AppError("INTERNAL", "The database returned no admission");
   return row;
-}
-
-/**
- * Starts the counters of the current day and month that do not exist, each from the events its
- * period already has. An event of this release is written by a statement that found both
- * counters, so while one is missing no such event of its period exists, and every process
- * that starts it reads the same events: those of a previous release. The first insert stands
- * and the others change nothing. What a previous release writes after that is found by
- * reconciliation.
- */
-async function startCounters(db: PostgresConnection, clientInstanceId: string): Promise<void> {
-  const e = drizzleSql`e`;
-  await db.execute(drizzleSql`
-    insert into ${modelUsageCounters} (
-      client_instance_id, scope_kind, scope_id, period_kind, period_start,
-      model_call_count, tokens, cost_micros
-    )
-    select ${clientInstanceId}, 'instance', '', period.kind, period.first_day,
-      count(${e}.id), coalesce(sum(${countedTokens(e)}), 0), coalesce(sum(${countedCost(e)}), 0)
-    from (values
-      ('day', ${TODAY}, ${TODAY} + 1),
-      ('month', ${THIS_MONTH}, (${THIS_MONTH} + interval '1 month')::date)
-    ) period(kind, first_day, next_day)
-    left join model_usage_events ${e}
-      on ${e}.client_instance_id = ${clientInstanceId}
-      and ${e}.created_at >= period.first_day::timestamp at time zone 'UTC'
-      and ${e}.created_at < period.next_day::timestamp at time zone 'UTC'
-    where not exists (
-      select 1 from ${modelUsageCounters} c
-      where c.client_instance_id = ${clientInstanceId} and c.scope_kind = 'instance'
-        and c.scope_id = '' and c.period_kind = period.kind and c.period_start = period.first_day
-    )
-    group by period.kind, period.first_day
-    on conflict do nothing
-  `);
 }
 
 async function countedInsert(
@@ -344,7 +324,10 @@ async function countedInsert(
   for (let attempt = 0; attempt < COUNTER_START_ATTEMPTS; attempt += 1) {
     const row = await countAndInsert(db, input);
     if (row.present) return row;
-    await startCounters(db, input.event.clientInstanceId);
+    await startCounters(db, input.event.clientInstanceId, {
+      kind: row.scope_kind,
+      id: row.scope_id
+    });
   }
   throw new AppError("INTERNAL", "The usage counters of the period could not be started");
 }
@@ -362,46 +345,9 @@ async function admitModelUsageEvent(
     limits: input.limits
   });
   if (row.admitted) return { id };
-  return { refused: refusalOf(row, input) };
-}
-
-/** The limit that refused, in the order the limits are named in: the day first, calls first. */
-function refusalOf(
-  row: AdmissionRow,
-  input: Parameters<Store["admitModelUsageEvent"]>[0]
-): ModelUsageRefusal {
-  const { limits, reservation } = input;
-  const over = (held: number | null, added: number, limit: number | undefined): boolean =>
-    limit !== undefined && (held ?? 0) + added > limit;
-  const checks: [ModelUsageRefusal, boolean][] = [
-    [
-      { period: "day", metric: "modelCallCount" },
-      over(row.day_calls, 1, limits.day.modelCallCount)
-    ],
-    [
-      { period: "day", metric: "tokens" },
-      over(row.day_tokens, reservation.tokens, limits.day.tokens)
-    ],
-    [
-      { period: "day", metric: "costMicros" },
-      over(row.day_cost, reservation.costMicros, limits.day.costMicros)
-    ],
-    [
-      { period: "month", metric: "modelCallCount" },
-      over(row.month_calls, 1, limits.month.modelCallCount)
-    ],
-    [
-      { period: "month", metric: "tokens" },
-      over(row.month_tokens, reservation.tokens, limits.month.tokens)
-    ],
-    [
-      { period: "month", metric: "costMicros" },
-      over(row.month_cost, reservation.costMicros, limits.month.costMicros)
-    ]
-  ];
-  const refusal = checks.find(([, reached]) => reached)?.[0];
-  if (!refusal) throw new AppError("INTERNAL", "Admission refused a call within every limit");
-  return refusal;
+  const refused = refusalOf(row.counters, input.limits, input.reservation);
+  if (!refused) throw new AppError("INTERNAL", "Admission refused a call within every limit");
+  return { refused };
 }
 
 async function appendModelUsageEvent(
@@ -420,7 +366,7 @@ async function appendModelUsageEvent(
       tokens: event.totalTokens,
       costMicros: cost.status === "settled" ? cost.totalCostMicros : 0
     },
-    limits: { day: {}, month: {} }
+    limits: NO_LIMITS
   });
   const [row] = await db
     .select()
@@ -435,8 +381,8 @@ async function appendModelUsageEvent(
 }
 
 /**
- * One statement. It locks the event, then the counters of the event's day and month in the
- * order admission locks them, then writes: the event, the difference on the counters, and the
+ * One statement. It locks the event, then the counters of the event's day and month, of the
+ * instance and of the event's scope, in the order admission locks them, then writes: the event, the difference on the counters, and the
  * event's part in the sums of its day. An event that was `abandoned` is in those sums already
  * as a call that used nothing, so that part is taken out again.
  */
@@ -446,8 +392,12 @@ async function settleModelUsageEvent(
 ): Promise<boolean> {
   const { settlement, counted } = input;
   const old = drizzleSql`old`;
-  const counters = instanceCounters(
+  // The counters the event was admitted on: its scope is read from the row as admission wrote
+  // it. An event the deletion has erased since settles on the instance's alone: its person's
+  // counters are gone.
+  const counters = countersOf(
     input.clientInstanceId,
+    { kind: scopeKindOf(old), id: scopeIdOf(old) },
     dayOf(drizzleSql`old.created_at`),
     monthOf(drizzleSql`old.created_at`)
   );
@@ -465,7 +415,7 @@ async function settleModelUsageEvent(
     locked as (
       select 1 from ${modelUsageCounters} c, old
       where ${counters}
-      order by c.period_kind
+      order by ${COUNTER_LOCK_ORDER}
       for update of c
     ),
     settled as (
@@ -680,49 +630,7 @@ async function reconcileLocked(
   input: Parameters<Store["reconcileModelUsage"]>[0]
 ): ReturnType<Store["reconcileModelUsage"]> {
   const e = drizzleSql`e`;
-  // What each counter holds beyond its events. One statement, so one snapshot: a call writes
-  // its event and its counters in one transaction, and the snapshot has both or neither.
-  const drifts = await db.execute<{
-    period_kind: string;
-    period_start: string;
-    calls: number;
-    tokens: number;
-    cost: number;
-  }>(drizzleSql`
-    select c.period_kind, c.period_start::text as period_start,
-      (c.model_call_count - ledger.calls)::float8 as calls,
-      (c.tokens - ledger.tokens)::float8 as tokens,
-      (c.cost_micros - ledger.cost)::float8 as cost
-    from ${modelUsageCounters} c
-    cross join lateral (
-      select count(*) as calls,
-        coalesce(sum(${countedTokens(e)}), 0) as tokens,
-        coalesce(sum(${countedCost(e)}), 0) as cost
-      from model_usage_events ${e}
-      where ${e}.client_instance_id = c.client_instance_id
-        and ${e}.created_at >= c.period_start::timestamp at time zone 'UTC'
-        and ${e}.created_at < (c.period_start
-          + case c.period_kind when 'day' then interval '1 day' else interval '1 month' end
-        )::timestamp at time zone 'UTC'
-    ) ledger
-    where ${instanceCounters(input.clientInstanceId, TODAY, THIS_MONTH)}
-    order by c.period_kind
-  `);
-  let correctedCounters = 0;
-  for (const drift of drifts) {
-    if (drift.calls === 0 && drift.tokens === 0 && drift.cost === 0) continue;
-    // Added, not set: what was admitted or ended since the snapshot stays counted.
-    await db.execute(drizzleSql`
-      update ${modelUsageCounters} set
-        model_call_count = model_call_count - ${drift.calls}::bigint,
-        tokens = tokens - ${drift.tokens}::bigint,
-        cost_micros = cost_micros - ${drift.cost}::bigint
-      where client_instance_id = ${input.clientInstanceId} and scope_kind = 'instance'
-        and scope_id = '' and period_kind = ${drift.period_kind}
-        and period_start = ${drift.period_start}::date
-    `);
-    correctedCounters += 1;
-  }
+  const correctedCounters = await reconcileCounters(db, input.clientInstanceId);
 
   // From the month of yesterday, or of `since` where that is earlier: what a process of the
   // previous release wrote while no reconciliation ran lies after the last one.

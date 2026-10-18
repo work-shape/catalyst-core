@@ -3,7 +3,7 @@ import { Button, EmptyState, FormNotice, SkeletonList } from "@work-shape/cataly
 import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
-import { instanceSentence, PendingApprovalError, type BuildWriteOutcome } from "./build-refusals";
+import { instanceSentence, PendingApprovalError } from "./build-refusals";
 import {
   ConnectionAuthFields,
   ConnectionSecretField,
@@ -21,17 +21,13 @@ import {
   withApprovedOperations,
   withConnectionForm
 } from "./connection-form-model";
+import { connectionRefusalOf, type ConnectionRefusal } from "./connection-refusals";
 import type { ConnectionSource } from "./connection-source";
+import { RefusalNotice } from "./refusal-notice";
 
 // The parts of the Connection page that change a Connection made on the instance: its
 // settings, its key and which tools it accepts. Each part saves on its own, through the
 // frame's save of the definition or through the write of the key, and names what failed.
-
-/** What a refused write says on the page. A conflict is told by the frame's notice instead. */
-function refusalText(outcome: BuildWriteOutcome): string | undefined {
-  if (outcome.ok || outcome.conflict) return undefined;
-  return outcome.refusals.map((refusal) => refusal.message).join(" ");
-}
 
 /**
  * One write of the definition from a part of the page: the frame saves it against the
@@ -40,7 +36,7 @@ function refusalText(outcome: BuildWriteOutcome): string | undefined {
 export function useConnectionWrite(frame: BuildAssetEditorProps, written: () => void) {
   const { t } = useTranslation();
   const [saving, setSaving] = useState<string>();
-  const [failure, setFailure] = useState<string>();
+  const [failure, setFailure] = useState<ConnectionRefusal>();
   return {
     saving,
     failure,
@@ -53,8 +49,15 @@ export function useConnectionWrite(frame: BuildAssetEditorProps, written: () => 
         written();
         return true;
       }
-      const text = refusalText(outcome);
-      if (!outcome.conflict) setFailure(text || t("connections.writeFailed"));
+      // The settings hold the address, which the instance refuses most often.
+      if (!outcome.conflict)
+        setFailure(
+          connectionRefusalOf(
+            outcome,
+            key === "settings" ? "connections.refusedSettings" : "connections.refusedUnknown",
+            t
+          )
+        );
       return false;
     }
   };
@@ -120,7 +123,7 @@ export function ConnectionSettingsEditor({
         onChange={setForm}
         offersOAuth={stored.authScheme === "oauth"}
       />
-      {write.failure ? <FormNotice tone="error">{write.failure}</FormNotice> : null}
+      {write.failure ? <RefusalNotice {...write.failure} /> : null}
       <div className="flex flex-wrap gap-2">
         <Button
           type="submit"
@@ -287,7 +290,7 @@ export function DiscoveredTools({
   return (
     <div className="grid gap-3">
       {body}
-      {write.failure ? <FormNotice tone="error">{write.failure}</FormNotice> : null}
+      {write.failure ? <RefusalNotice {...write.failure} /> : null}
       <div className="grid justify-items-start gap-1">
         <Button variant="outline" size="sm" loading={asking || waiting} onClick={discover}>
           {t("connections.discoverAgain")}
