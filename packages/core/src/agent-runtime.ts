@@ -4,6 +4,7 @@ import {
   LIVE_JOB_STATUSES,
   TOOL_CALL_STATES
 } from "@work-shape/catalyst-asset-schemas";
+import type { ModelUsageRefusal } from "./errors";
 import type { ConversationFollowUp } from "./follow-ups";
 import type { ReasoningEffortConfig } from "./config";
 import type { AppendAssistantMessageInput, ChatMessage, CreateMessageInput } from "./conversation";
@@ -70,6 +71,8 @@ export interface AgentRunError {
    * or output.
    */
   tool?: string;
+  /** The usage limit that refused the run's model call: which one it was, never its counts. */
+  usageLimit?: ModelUsageRefusal;
 }
 
 export interface AgentRunAuthorization {

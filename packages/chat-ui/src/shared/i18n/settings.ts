@@ -102,6 +102,8 @@ export const settings = defineTranslations({
     "settings.usageBudgetBlockedMonth": "New model calls are blocked for the rest of this month.",
     "settings.usageBudgetBlockedToday": "New model calls are blocked for the rest of today.",
     "settings.usageBudgetDaily": "Daily budget",
+    "settings.usageBudgetExcludesKnowledge":
+      "Processing documents for knowledge bases does not count toward the budget.",
     "settings.usageBudgetIncomplete": "Billable cost is incomplete.",
     "settings.usageBudgetLimitReached": "Budget reached",
     "settings.usageBudgetMonthly": "Monthly budget",
@@ -135,6 +137,7 @@ export const settings = defineTranslations({
     "settings.usagePurposeDocumentExtraction": "Document extraction",
     "settings.usagePurposeGuardrailJudge": "Guardrail check",
     "settings.usagePurposeKnowledgeEmbedding": "Knowledge base indexing",
+    "settings.usagePurposeKnowledgeFieldExtraction": "Knowledge base field extraction",
     "settings.usagePurposeKnowledgeQuery": "Knowledge base search",
     "settings.usageRecentEmpty": "No model usage recorded yet.",
     "settings.usageRecentTitle": "Recent model usage",
@@ -346,6 +349,8 @@ export const settings = defineTranslations({
     "settings.usageBudgetBlockedMonth": "Neue Modellaufrufe sind für den Rest des Monats gesperrt.",
     "settings.usageBudgetBlockedToday": "Neue Modellaufrufe sind für den Rest des Tages gesperrt.",
     "settings.usageBudgetDaily": "Tagesbudget",
+    "settings.usageBudgetExcludesKnowledge":
+      "Die Verarbeitung von Dokumenten für Wissensbasen zählt nicht zum Budget.",
     "settings.usageBudgetIncomplete": "Die Kosten sind unvollständig.",
     "settings.usageBudgetLimitReached": "Budget erreicht",
     "settings.usageBudgetMonthly": "Monatsbudget",
@@ -379,6 +384,7 @@ export const settings = defineTranslations({
     "settings.usagePurposeDocumentExtraction": "Dokumentextraktion",
     "settings.usagePurposeGuardrailJudge": "Guardrail-Prüfung",
     "settings.usagePurposeKnowledgeEmbedding": "Indexierung einer Wissensbasis",
+    "settings.usagePurposeKnowledgeFieldExtraction": "Feldextraktion einer Wissensbasis",
     "settings.usagePurposeKnowledgeQuery": "Suche in einer Wissensbasis",
     "settings.usageRecentEmpty": "Noch keine Modellaufrufe erfasst.",
     "settings.usageRecentTitle": "Letzte Modellaufrufe",

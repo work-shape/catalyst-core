@@ -1019,6 +1019,8 @@ describe("client instance app vertical slice", () => {
     const failedEvents = parseSseChunks(
       await drainRunEvents(app, conversation.id, secondMessage.run.id)
     );
+    // The client names the limit and its reset from these, never from the message.
+    const usageLimit = { period: "day", metric: "modelCallCount", scope: "user" };
     expect(failedEvents).toContainEqual(
       expect.objectContaining({
         type: "run_failed",
@@ -1026,11 +1028,23 @@ describe("client instance app vertical slice", () => {
           // The stable code a client words the refusal from, never the message.
           error: expect.objectContaining({
             code: "MODEL_USAGE_LIMIT_REACHED",
-            message: "Daily model call safeguard has been reached"
+            usageLimit,
+            message:
+              "Daily model call safeguard has been reached for your own calls. Resets at midnight UTC."
           })
         })
       })
     );
+    // After a reload the stored run names the same limit, as the client parses the thread.
+    const thread = await app.call("conversations.thread.get", {
+      params: { conversationId: conversation.id }
+    });
+    expect(thread.statusCode, thread.body).toBe(200);
+    const snapshot = apiOperations["conversations.thread.get"].response.schema.parse(thread.json());
+    expect(snapshot.activeRun?.projection.error).toMatchObject({
+      code: "MODEL_USAGE_LIMIT_REACHED",
+      usageLimit
+    });
 
     // The terminal observation may reach the client before its audit write commits.
     await waitUntil(async () => {

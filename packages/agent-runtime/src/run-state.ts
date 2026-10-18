@@ -1,6 +1,6 @@
 import {
   AppError,
-  runFailureCodeOf,
+  runFailureOf,
   type AgentRunFailureCategory,
   type AgentRunId,
   type AgentRunResumeState,
@@ -9,6 +9,7 @@ import {
   type AgentRuntimeObserveOptions,
   type ChatMessage,
   type ISODateString,
+  type ModelUsageRefusal,
   type ToolDecisionRequested
 } from "@work-shape/catalyst-core";
 
@@ -29,6 +30,7 @@ export interface RunFailureError {
   code: string;
   message: string;
   category: AgentRunFailureCategory;
+  usageLimit?: ModelUsageRefusal;
 }
 
 export interface RunStateReasoningSummary {
@@ -39,7 +41,7 @@ export interface RunStateReasoningSummary {
 export function toRunFailureError(error: unknown): RunFailureError {
   const appError = error instanceof AppError ? error : undefined;
   return {
-    code: appError ? runFailureCodeOf(appError) : "INTERNAL",
+    ...(appError ? runFailureOf(appError) : { code: "INTERNAL" }),
     message: appError && appError.code !== "INTERNAL" ? appError.message : "Agent run failed",
     category: categorizeRunFailure(error)
   };
