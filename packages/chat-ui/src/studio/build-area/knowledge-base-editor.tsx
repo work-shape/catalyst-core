@@ -193,7 +193,13 @@ export function KnowledgeBaseEditor({
             />
           )}
           {documents ? null : (
-            <TablesSource source={source} form={form} canWrite={canWrite} update={update} />
+            <TablesSource
+              source={source}
+              owner={frame.owner}
+              form={form}
+              canWrite={canWrite}
+              update={update}
+            />
           )}
           <FieldRefusals messages={refusalsOf(outcome, "source")} />
         </>
@@ -295,11 +301,14 @@ export function KnowledgeBaseEditor({
 /** The Data Store a Knowledge Base of tables reads, and the tables of it that it describes. */
 function TablesSource({
   source,
+  owner,
   form,
   canWrite,
   update
 }: {
   source: KnowledgeBaseSource;
+  /** The workspace that owns the Knowledge Base, absent for one of the instance. */
+  owner: string | undefined;
   form: KnowledgeBaseForm;
   canWrite: boolean;
   update(patch: Partial<KnowledgeBaseForm>): void;
@@ -308,6 +317,7 @@ function TablesSource({
     <>
       <DataStoreChoice
         source={source}
+        owner={owner}
         value={form.dataStore}
         disabled={!canWrite}
         // Another store has other tables: what was described of the first one goes.
@@ -326,21 +336,26 @@ function TablesSource({
   );
 }
 
-/** The Data Store the Knowledge Base reads, chosen from those the reader may read. */
+/**
+ * The Data Store the Knowledge Base reads, chosen from those the reader may read: its own
+ * workspace's and the instance's.
+ */
 function DataStoreChoice({
   source,
+  owner,
   value,
   disabled,
   onChange
 }: {
   source: KnowledgeBaseSource;
+  owner: string | undefined;
   value: string;
   disabled: boolean;
   onChange(dataStore: string): void;
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
-  const read = source.useDataStores(search);
+  const read = source.useDataStores(search, owner);
   const stores = read.status === "ready" ? read.data : [];
   const chosen = stores.find((store) => store.name === value);
   const error =
