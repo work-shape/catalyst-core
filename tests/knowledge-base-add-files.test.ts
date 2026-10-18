@@ -300,6 +300,7 @@ describe("adding files to a Knowledge Base", () => {
       expect(opened.statusCode, opened.body).toBe(200);
       expect(opened.body).toBe(FILE_TEXT);
       expect(opened.headers["content-disposition"]).toMatch(/^inline;/);
+      expect(opened.headers["x-content-type-options"]).toBe("nosniff");
       expect(opened.headers["content-type"]).toBe("text/plain; charset=utf-8");
       expect(opened.headers["cache-control"]).toBe("private, no-store");
     });
