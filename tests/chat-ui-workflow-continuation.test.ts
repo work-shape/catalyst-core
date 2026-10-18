@@ -207,6 +207,11 @@ describe("a run that continued as new in the runs list (check 112)", () => {
     expect(runLinks()).toEqual(["wr_3", "wr_2", "wr_1"]);
   });
 
+  it("shows carried failures on a completed Lauf before its earlier parts load", () => {
+    show(list([toWorkflowRun(part(3, { status: "done", failedItemCount: 1 }))], true));
+    expect(group().textContent).toContain("Done with failures");
+  });
+
   it("says it in German", () => {
     show(list([toWorkflowRun(part3), toWorkflowRun(part2), toWorkflowRun(part1)], false), "de");
     const text = group().textContent ?? "";

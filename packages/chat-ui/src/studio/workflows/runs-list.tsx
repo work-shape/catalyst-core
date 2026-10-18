@@ -383,7 +383,11 @@ function RunGroupRow({
               {t("workflows.run.testBadge")}
             </Badge>
           ) : null}
-          <RunStateBadge status={latest.status} stopping={latest.stopping} />
+          <RunStateBadge
+            status={latest.status}
+            stopping={latest.stopping}
+            withFailedEntries={doneWithFailedRuns(latest)}
+          />
         </>
       }
     >

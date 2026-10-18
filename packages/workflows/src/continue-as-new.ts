@@ -223,7 +223,10 @@ export function createContinuation(options: {
         prepared = undefined;
         error = {
           code: "continuation_invalid",
-          message: "The successor could not open with the carried dataset access"
+          message:
+            caught.code === "FORBIDDEN"
+              ? "The successor could not open with the carried dataset access"
+              : `The successor could not open (${caught.code})`
         };
       }
     }

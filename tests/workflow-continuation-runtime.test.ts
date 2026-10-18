@@ -137,6 +137,24 @@ it.each([5, 7, 20_000])(
       done: 2,
       failed: 1
     });
+    expect(last.failedItemCount).toBe(1);
+    const listed = await t.expectOk(t.root.id, "workflows.list_runs", {
+      params: { workflow: "notify-clients" }
+    });
+    expect(listed.json().items).toContainEqual(
+      expect.objectContaining({
+        id: last.id,
+        status: "done",
+        failedItemCount: 1
+      })
+    );
+    const workflows = await t.expectOk(t.root.id, "workflows.list");
+    expect(workflows.json().items).toContainEqual(
+      expect.objectContaining({
+        id: "notify-clients",
+        lastRun: expect.objectContaining({ id: last.id, failedItemCount: 1 })
+      })
+    );
     expect(writesOf(t)).toHaveLength(3);
     if (budget === 5) expect(runs.length).toBeGreaterThan(1);
   }
@@ -153,6 +171,12 @@ it.each([false, true])(
     const run = parents[0];
     if (!run) throw new Error("Missing parent");
     expect(run.status).toBe("done");
+    const detail = await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: run.id } });
+    expect(detail.json().failedDescendantCount).toBe(failure ? 1 : 0);
+    expect(
+      await t.stores.workflowNotices.failureCount({ clientInstanceId, rootRunId: run.id })
+    ).toBe(failure ? 1 : 0);
+
     expect((await chain(t, "child-can")).map((part) => part.status)).toEqual([
       "continued",
       "continued",
@@ -214,7 +238,10 @@ it("records an opening refusal as continuation_invalid after one write without r
   const runs = await finish(t, "notify-clients");
   expect(expired).toBe(true);
   expect(runs.map((run) => run.status)).toEqual(["continued", "failed"]);
-  expect(runs[1]?.error).toMatchObject({ code: "continuation_invalid" });
+  expect(runs[1]?.error).toEqual({
+    code: "continuation_invalid",
+    message: "The successor could not open (NOT_FOUND)"
+  });
   expect(writesOf(t)).toHaveLength(1);
   const first = runs[0];
   if (!first) throw new Error("Missing first history");

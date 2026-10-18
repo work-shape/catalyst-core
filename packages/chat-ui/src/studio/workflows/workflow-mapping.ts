@@ -132,7 +132,7 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   empty?: boolean;
   /** Runs below it, at any depth, that failed, reached a limit or left failed items. */
   failedDescendantCount?: number;
-  /** Items of its own loops that failed, counted once when the run ended. */
+  /** Failed loop items through this continuation part, counted when the run ended. */
   failedItemCount?: number;
 }
 
@@ -355,7 +355,7 @@ export interface WorkflowSummaryResource {
     startedAt?: string;
     /** Runs below it, at any depth, that failed, reached a limit or left failed items. */
     failedDescendantCount?: number;
-    /** Items of its own loops that failed, counted once when the run ended. */
+    /** Failed loop items through this continuation part, counted when the run ended. */
     failedItemCount?: number;
   };
 }

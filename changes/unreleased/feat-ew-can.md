@@ -15,3 +15,5 @@ section: Added
 - **Continuation runtime:** A child successor inherits dataset access from its predecessor, restricted to its own chain and datasets handed down by its parent. An opening refusal records `continuation_invalid` without retrying a completed write. Loop output counts (`total`, `done`, `failed`) cover the whole Lauf, including child and cursor-page chains. Checkpoint counts use the existing JSON column; migrations are unchanged.
 
 - **Continuation tail reservation:** Oversized items and nested plain loops checkpoint before consuming the enclosing tails, including an item that exactly fills a fresh history. Migrations remain 0116–0118.
+
+- **Continuation failure reporting:** Failed-item rollups include preceding parts so the grouped Lauf and latest-run badges retain earlier failures even when older pages are not loaded. Parent and notice counts count the final part once. Successor opening errors name their AppError code unless dataset access was refused.

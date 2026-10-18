@@ -689,7 +689,7 @@ export interface WorkflowStepRunCall {
 
 /** What a run page needs of a run beside its status. Types; the engine slices fill them. */
 export interface WorkflowRunRecordView {
-  /** Failed loop items captured once at finalization; absent on older runs. */
+  /** Failed loop items across this and preceding continuation parts, captured at finalization; absent on older runs. */
   failedItemCount?: number;
   /** True only for a completed data run whose write steps handled no items. */
   empty?: boolean;

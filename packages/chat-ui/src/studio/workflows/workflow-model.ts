@@ -278,7 +278,7 @@ function stepById(
 }
 
 /**
- * Whether a run that ended `done` left failed items in its own loops, or runs with failures
+ * Whether a run that ended `done` left failed items in this or preceding parts, or runs with failures
  * below it, at any depth. A list reads this: it holds no step runs.
  */
 export function doneWithFailedRuns(
