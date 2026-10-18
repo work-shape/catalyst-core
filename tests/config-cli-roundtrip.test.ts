@@ -606,6 +606,40 @@ describe("catalyst init (ADISC-2 check 32)", () => {
     expect(await readdir(bare.cwd)).not.toEqual(expect.arrayContaining(["AGENTS.md", "CLAUDE.md"]));
   });
 
+  it("keeps an existing AGENTS.md import without asking to add it again", async () => {
+    const f = await fixture([], true);
+    expect(await f.run(init)).toMatchObject({ code: 0 });
+    const claude = "# Our rules\r\n@AGENTS.md\r\nKeep this.\r\n";
+    await writeFile(join(f.cwd, "CLAUDE.md"), claude);
+    expect(await f.run(init)).toMatchObject({
+      code: 0,
+      out: expect.stringContaining("Left CLAUDE.md unchanged.")
+    });
+    expect(await readFile(join(f.cwd, "CLAUDE.md"), "utf8")).toBe(claude);
+    expect(f.calls).toEqual([]);
+  });
+
+  it("matches an existing instance by URL origin with a case-insensitive host", async () => {
+    const f = await fixture([], true);
+    expect(await f.run(["init", "--instance", "https://Chat.Example.com"])).toMatchObject({
+      code: 0
+    });
+    const before = await originals(f.cwd);
+    expect(await f.run(["init", "--instance", "https://chat.example.com:443/"])).toMatchObject({
+      code: 0
+    });
+    expect(await originals(f.cwd)).toEqual(before);
+    for (const instance of [
+      "http://chat.example.com",
+      "https://chat.example.com:444",
+      "https://other.example.com"
+    ]) {
+      expect(await f.run(["init", "--instance", instance])).toMatchObject({ code: 2 });
+      expect(await originals(f.cwd)).toEqual(before);
+    }
+    expect(f.calls).toEqual([]);
+  });
+
   it("preserves every byte outside the block and leaves the person's CLAUDE.md alone", async () => {
     const f = await fixture([], true);
     const above = "# Our rules\r\nKeep this exactly.  \r\n";
