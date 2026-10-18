@@ -1,9 +1,8 @@
-import {
-  AppError,
-  type AssetKindRegistry,
-  type ClientInstanceId,
-  type ConfigAssetStore,
-  type OperationResource
+import type {
+  AssetKindRegistry,
+  ClientInstanceId,
+  ConfigAssetStore,
+  OperationResource
 } from "@work-shape/catalyst-core";
 
 /**
@@ -18,27 +17,31 @@ export async function resolveOperationResource(
     configAssets?: { kinds: Pick<AssetKindRegistry, "get"> };
   },
   resource: OperationResource | undefined
-): Promise<OperationResource | undefined> {
-  if (!resource || (resource.assetId !== undefined && resource.assetId.length > 0)) return resource;
+): Promise<{ resource: OperationResource | undefined; resourceNotFound?: string }> {
+  if (!resource || (resource.assetId !== undefined && resource.assetId.length > 0))
+    return { resource };
   const assetKind = options.configAssets?.kinds.get(resource.kind);
-  if (!assetKind && resource.name === undefined) return resource;
+  if (!assetKind && resource.name === undefined) return { resource };
   const asset = await options.stores.configAssets.getConfigAsset({
     clientInstanceId: options.clientInstanceId,
     kind: resource.kind,
     name: resource.name ?? resource.id
   });
   if (!asset) {
-    if (!assetKind) return resource;
-    throw new AppError(
-      "INTERNAL",
-      `An operation resource of asset kind '${resource.kind}' has no resolvable asset identity`
-    );
+    if (!assetKind) return { resource };
+    return {
+      // No stored owner or identity exists: ask only the kind-level right before saying so.
+      resource: { kind: resource.kind, id: resource.id },
+      resourceNotFound: `Config ${resource.kind} '${resource.name ?? resource.id}' was not found`
+    };
   }
   // The stored owner wins over a caller or builder's incomplete resource.
   const { workspaceId: _workspaceId, ...declared } = resource;
   return {
-    ...declared,
-    assetId: asset.id,
-    ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+    resource: {
+      ...declared,
+      assetId: asset.id,
+      ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+    }
   };
 }

@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import type { Logger } from "@work-shape/catalyst-core";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clientInstanceId,
   setupAccessInstance,
@@ -19,7 +20,10 @@ afterEach(async () => {
 
 async function ready(shape: "name" | "id" | "empty-asset-id") {
   let executed = 0;
+  const error = vi.fn();
+  const logger: Logger = { debug() {}, info() {}, warn() {}, error, child: () => logger };
   const t = await setupAccessInstance({
+    server: () => ({ logger }),
     register(route) {
       route.operation(read, {
         resource: ({ itemId }) => ({
@@ -36,7 +40,7 @@ async function ready(shape: "name" | "id" | "empty-asset-id") {
     }
   });
   open = t;
-  return { t, executed: () => executed };
+  return { t, executed: () => executed, error };
 }
 
 describe("the identity of an asset a declared operation right is checked on", () => {
@@ -76,10 +80,36 @@ describe("the identity of an asset a declared operation right is checked on", ()
     }
   );
 
-  it("fails closed when an asset resource cannot be resolved", async () => {
-    const { t, executed } = await ready("name");
-    const refused = await t.call(t.admin.id, "testRunRead", { params: { itemId: "absent" } });
-    expect(refused.statusCode).toBe(500);
-    expect(executed()).toBe(0);
-  });
+  it.each(["name", "id", "empty-asset-id"] as const)(
+    "checks kind-level rights before revealing an absent %s resource",
+    async (shape) => {
+      const { t, executed, error } = await ready(shape);
+      await t.putAgent(t.admin.id, "existing");
+      for (const language of ["en", "de"]) {
+        const call = (userId: string, itemId: string) =>
+          t.call(userId, "testRunRead", {
+            params: { itemId },
+            headers: { "accept-language": language }
+          });
+        const existing = await call(t.lena.id, "existing");
+        const absent = await call(t.lena.id, "absent");
+        expect(existing.statusCode).toBe(403);
+        expect(absent.statusCode).toBe(403);
+        const { correlationId: _existing, ...existingError } = existing.json().error;
+        const { correlationId: _absent, ...absentError } = absent.json().error;
+        expect(absentError).toEqual(existingError);
+        expect(absentError).toMatchObject({
+          code: "FORBIDDEN",
+          details: { action: "agent.read", reason: "no_grant" }
+        });
+        const allowed = await call(t.admin.id, "absent");
+        expect(allowed.statusCode).toBe(404);
+        expect(allowed.json()).toMatchObject({
+          error: { code: "NOT_FOUND", message: "Config agent 'absent' was not found" }
+        });
+      }
+      expect(executed()).toBe(0);
+      expect(error).not.toHaveBeenCalled();
+    }
+  );
 });

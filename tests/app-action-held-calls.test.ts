@@ -397,6 +397,7 @@ describe("a frame's call when the App changes around it", () => {
 
     // With a limit of one App the first by name is listed and the listing names its limit.
     const limited = await createAppActionOperationSource({
+      resolveResource: t.operationCalls.deps.resolveResource,
       clientInstanceId,
       store: t.stores.configAssets,
       modules: { isEnabled: () => true },

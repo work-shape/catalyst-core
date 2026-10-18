@@ -159,6 +159,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
   // read from the App when it is called, so nothing is read here.
   registry.addSource(
     createAppActionOperationSource({
+      resolveResource: deps.resolveResource,
       clientInstanceId,
       store: options.stores.configAssets,
       modules: options.modules,

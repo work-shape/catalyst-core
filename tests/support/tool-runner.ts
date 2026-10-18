@@ -86,7 +86,7 @@ export function createTestToolRunner(
     const deps: RunOperationDeps = {
       clientInstanceId,
       registry,
-      resolveResource: (resource) => Promise.resolve(resource),
+      resolveResource: (resource) => Promise.resolve({ resource }),
       runs,
       authorizer: options.authorizer ?? createAuthorizer(),
       events: createAuditingEventEmitter(audit),

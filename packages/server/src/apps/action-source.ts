@@ -36,6 +36,7 @@ import {
   type PolicyValue
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import type { RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 import { decide } from "../assets/asset-access";
 import { appActionBinding, type AppActionOwner } from "./action-kinds";
 import { APP_ACTIONS } from "./app-kind";
@@ -78,6 +79,7 @@ export const APP_ACTION_TOOL_DESCRIPTION_MAX_CHARS = 2000;
 
 /** What a definition of an action is built with: where its operation and the policy are read. */
 export interface AppActionEnvironment {
+  resolveResource: RunOperationDeps["resolveResource"];
   /** Resolves the operation an action stands for. */
   registry: Pick<OperationRegistry, "resolve" | "resolveMany">;
   /** Says whether the module that brings an action's operation is on. */
@@ -186,7 +188,7 @@ export async function appActionDefinition(
       if (offModule !== undefined) throw moduleOffError(offModule);
       const own = await host.authorize(context);
       if (!own.allowed || !target) return own;
-      return binding.authorize(target, context, host);
+      return binding.authorize(target, context, host, environment.resolveResource);
     },
     scope: null,
     auth: "user",
@@ -278,6 +280,7 @@ export async function preloadedEnvironment(
   );
   let settings: Promise<readonly CentralPolicySetting[]> | undefined;
   return {
+    resolveResource: environment.resolveResource,
     registry: {
       resolve: (name) => Promise.resolve(targets.get(name)),
       resolveMany: (names) =>

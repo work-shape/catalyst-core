@@ -50,7 +50,7 @@ export async function workflowRightsOf(
       kind: WORKFLOW_ASSET_KIND,
       name: child
     });
-    if (asset?.status === "active") workflowAssets.set(child, { id: asset.id, scope: asset.scope });
+    if (asset) workflowAssets.set(child, { id: asset.id, scope: asset.scope });
   }
   return workflowNeededRights(manifest, { operations, workflowAssets });
 }
