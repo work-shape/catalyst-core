@@ -32,7 +32,8 @@ export {
   type PlatformAssetCalls,
   type PlatformAssetPut,
   type PlatformCallableOperation,
-  type PlatformOperationsAudience
+  type PlatformOperationsAudience,
+  type PlatformOperationsQuery
 } from "./platform-asset-tools";
 export {
   PLATFORM_DISCOVERY_TOOLS,
