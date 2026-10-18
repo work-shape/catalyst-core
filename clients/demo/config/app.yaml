@@ -61,6 +61,11 @@ modules:
   # seed brings one, `accounting-clients` (seed/workflows), which reads `sample-accounting`.
   workflows:
     enabled: true
+  # Data Stores: a Postgres database per store on the demo's own server, which the findings of a
+  # Workflow are loaded into and an App reads with `sql` actions. Its role passwords are kept
+  # under the Secret Store key below.
+  dataStores:
+    enabled: true
   # Personal API keys: a person issues keys that act as themself, narrowed to their scopes, in
   # Settings or by confirming the code `catalyst login` shows.
   personalApiKeys:

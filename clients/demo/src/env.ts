@@ -12,7 +12,8 @@ export function readSampleMcpEnvironment() {
       rateLimitAfter: process.env.SAMPLE_ACCOUNTING_REST_RATE_LIMIT_AFTER,
       rateWindowMs: process.env.SAMPLE_ACCOUNTING_REST_RATE_WINDOW_MS,
       unavailable: process.env.SAMPLE_ACCOUNTING_REST_UNAVAILABLE,
-      unavailableClientId: process.env.SAMPLE_ACCOUNTING_REST_UNAVAILABLE_CLIENT_ID,
+      // Compose passes an unset switch as an empty value, which means off.
+      unavailableClientId: process.env.SAMPLE_ACCOUNTING_REST_UNAVAILABLE_CLIENT_ID || undefined,
       scaleDivisor: process.env.SAMPLE_ACCOUNTING_SCALE_DIVISOR
     }),
     port: process.env.PORT,

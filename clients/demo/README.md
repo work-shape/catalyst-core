@@ -416,9 +416,9 @@ rows; skipping complete months uses their counts. Partial-month filters inspect 
 overlapping months. Every 1,000-row page of the preserved large client's September ledger
 is tested below 1 MiB.
 
-Compose changes are deliberately deferred until KB-ISO-2 lands. These variables are read
-by the sample server already, so standalone runs can use them now. To try the code without
-touching a shared demo stack, from an installed worktree root:
+In `pnpm dev:demo`, set them in `clients/demo/.env`: Compose passes each to the sample server,
+and an unset switch stays off. After a change, `docker compose up -d sample-mcp` restarts the
+sample server alone. To try the code without a demo stack, from an installed worktree root:
 
 ```sh
 pnpm --filter @work-shape/catalyst-demo exec node scripts/ensure-local-secrets.mjs

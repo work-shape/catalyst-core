@@ -347,7 +347,8 @@ describe("the snapshot in a running instance", () => {
       connections: { enabled: true },
       // And the seed brings a Workflow.
       workflows: { enabled: true },
-      dataStores: { enabled: false },
+      // A Workflow loads its findings into a Data Store, which an App reads.
+      dataStores: { enabled: true },
       knowledge: { enabled: false },
       personalApiKeys: { enabled: true }
     });
