@@ -259,6 +259,7 @@ export const unusedOperationRegistry: OperationRegistry = {
   list: unsupported
 };
 export const unusedRunOperationDeps: RunOperationDeps = {
+  resolveResource: unsupported,
   get clientInstanceId() {
     return unsupported();
   },
