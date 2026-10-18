@@ -367,6 +367,14 @@ jobs:
           name: connection-person-context-${{ matrix.shard }}
           path: test-results/**/person-context-*.png
           retention-days: 3
+      - name: Keep field extraction screenshots
+        if: ${{ !cancelled() && hashFiles('test-results/**/knowledge-fields-pending-*.png') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: true
+        with:
+          name: knowledge-fields-pending-${{ matrix.shard }}
+          path: test-results/**/knowledge-fields-pending-*.png
+          retention-days: 3
       - name: Keep App font specimens
         if: ${{ !cancelled() && hashFiles('test-results/**/font-specimens-*-light.png') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

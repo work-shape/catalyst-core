@@ -32,6 +32,7 @@ import {
   type JsonObject,
   type KnowledgeBackend,
   type Logger,
+  type LocaleCode,
   type OperationSource,
   type PlatformStores,
   type RegisteredAssetKind,
@@ -196,6 +197,8 @@ export interface DataStores {
 }
 
 export function createDataStores(input: {
+  /** Instance content locale until Knowledge Bases support a content-language setting. */
+  defaultLocale: LocaleCode;
   clientInstanceId: ClientInstanceId;
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;
@@ -225,6 +228,7 @@ export function createDataStores(input: {
     ...(limits.statement ? { statementLimits: limits.statement } : {})
   });
   const runtime: DataStoreRuntime = {
+    defaultLocale: input.defaultLocale,
     clientInstanceId,
     stores,
     server,

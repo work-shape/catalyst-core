@@ -42,6 +42,13 @@ afterEach(() => {
 });
 
 describe("model gateway", () => {
+  it("forwards the extraction output token cap to admission and the adapter", async () => {
+    const f = fixture({ complete: async () => completion("ok") });
+    const admit = vi.spyOn(f.governance, "admitModelCall");
+    await f.gateway.complete(call({ maxOutputTokens: 700 }));
+    expect(f.requests[0]).toHaveProperty("maxOutputTokens", 700);
+    expect(admit.mock.calls[0]?.[0]).toHaveProperty("request.maxOutputTokens", 700);
+  });
   it("resolves a binding to its provider entry and model, and an entry to its own model", async () => {
     const f = fixture({ complete: async () => completion("ok") });
 

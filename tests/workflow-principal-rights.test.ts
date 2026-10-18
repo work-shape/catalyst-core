@@ -142,6 +142,32 @@ describe("the rights the accounts of a Workflow publish need", () => {
     );
   });
 
+  it("keeps a deny on a deleted child in the rights needed to publish", async () => {
+    const { t, childId } = await chain();
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    await t.stores.access.createGrant({
+      clientInstanceId: t.principal.clientInstanceId,
+      holderKind: "service_principal",
+      holderId: t.principal.id,
+      action: "workflow.use",
+      effect: "deny",
+      scopeKind: "asset",
+      scopeId: childId,
+      grantedBy: t.admin.id
+    });
+    for (const deleted of [false, true]) {
+      if (deleted)
+        await t.expectOk(t.root.id, "assets.delete", {
+          params: { kind: "workflow", name: "child" },
+          payload: { expectedRevision: 1 }
+        });
+      const answer = await rightsOf(t, t.admin.id);
+      expect(answer.workflows.find((entry) => entry.workflow === "parent")?.rights).toEqual([
+        expect.objectContaining({ action: "workflow.use", neededFor: "publish", held: false })
+      ]);
+    }
+  });
+
   it("shows a person who may publish but administers no account what is missing, and they cannot give it", async () => {
     const { t, childId } = await chain();
     for (const action of ["workflow.read", "workflow.write", "workflow.publish"])

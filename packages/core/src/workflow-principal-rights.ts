@@ -25,6 +25,8 @@ export interface WorkflowNeededRightAsset {
   name: string;
   /** The asset's id, where an asset of the name exists. A grant names it. */
   assetId?: string;
+  /** The workspace that owns the asset; absent for an instance-owned asset. */
+  workspaceId?: string;
 }
 
 /**
@@ -45,7 +47,8 @@ export function workflowNeededRightResource(right: WorkflowNeededRight): AccessR
   return {
     kind: right.asset.kind,
     name: right.asset.name,
-    ...(right.asset.assetId === undefined ? {} : { assetId: right.asset.assetId })
+    ...(right.asset.assetId === undefined ? {} : { assetId: right.asset.assetId }),
+    ...(right.asset.workspaceId === undefined ? {} : { workspaceId: right.asset.workspaceId })
   };
 }
 

@@ -142,7 +142,8 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
       | "list_documents"
       | "retry"
       | "remove_documents"
-      | "search",
+      | "search"
+      | "extract_fields",
     right: string
   ) => ({
     target: ({ knowledgeBase, ...input }: { knowledgeBase: string }) => ({
@@ -197,6 +198,10 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
     bind("retry", KNOWLEDGE_BASE_ACTIONS.write)
   );
   routes.resourceOperation(
+    apiOperations["knowledge_bases.extract_fields"],
+    bind("extract_fields", KNOWLEDGE_BASE_ACTIONS.read)
+  );
+  routes.resourceOperation(
     apiOperations["knowledge_bases.search"],
     bind("search", KNOWLEDGE_BASE_ACTIONS.use)
   );
@@ -218,7 +223,9 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
   }
   const sourceJobs = earlier.find((assembly) => assembly.knowledgeSourceJobs)?.knowledgeSourceJobs;
   const embedding = knowledgeEmbedding(parts.config);
+  let assertFieldBudgetPriced: (() => void) | undefined;
   const knowledgeBases = createKnowledgeBases({
+    defaultLocale: parts.config.localization.defaultLocale,
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
     backend,
@@ -237,6 +244,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       : KNOWLEDGE_TEXT_FORMATS,
     maxDocuments: parts.config.knowledge.maxDocuments,
     maxPages: parts.config.knowledge.maxPagesPerDocument,
+    assertFieldBudgetPriced: () => assertFieldBudgetPriced?.(),
     logger: parts.logger
   });
   return {
@@ -245,10 +253,12 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
     operationSources: (runtime) => [
       knowledgeBases.operationSource(
         runtime.files,
-        queryEmbedder(parts.config, parts.clientInstanceId, runtime.modelGateway)
+        queryEmbedder(parts.config, parts.clientInstanceId, runtime.modelGateway),
+        runtime.knowledgeFieldExtractor
       )
     ],
     start: (runtime) => {
+      assertFieldBudgetPriced = () => runtime.knowledgeFieldExtractor?.assertBudgetPriced?.();
       for (const model of embedding.models ?? []) {
         if (
           !embedding.processingPrices?.some((price) => price.bindingId === model.bindingId) &&
