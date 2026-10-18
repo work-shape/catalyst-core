@@ -309,6 +309,11 @@ export const assetWriteResponseSchema = z.object({
 });
 
 export const publishAssetRequestSchema = z.object({
+  /** Confirmation of the Knowledge Base processing count and cost; stale reviews are refused. */
+  confirmProcessing: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/u)
+    .optional(),
   /**
    * The number of the revision that becomes the published one. It is required: a publish
    * never means "whatever the draft is now". Naming an earlier number is the way back.

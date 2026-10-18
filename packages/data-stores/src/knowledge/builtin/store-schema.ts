@@ -269,7 +269,16 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   },
   { number: 4, name: "source_counts", sql: SOURCE_COUNTS },
   { number: 5, name: "source_withdrawal", sql: SOURCE_WITHDRAWAL_SCHEMA },
-  { number: 6, name: "workflow_sources", sql: WORKFLOW_SOURCES }
+  { number: 6, name: "workflow_sources", sql: WORKFLOW_SOURCES },
+  {
+    number: 7,
+    name: "document_processors",
+    sql: `alter table catalyst_kb.contents
+      add column document_type text,
+      add column processor_revision text,
+      add column processing_key text,
+      add column requested_processing_key text;`
+  }
 ];
 
 /** The level the store of a built-in Knowledge Base is at when its tables are this release's. */

@@ -8,7 +8,7 @@ import {
   loadYamlData,
   parseSkillMarkdown
 } from "@work-shape/catalyst-asset-schemas";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, realpath } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { GUARDRAIL_FILE, readGuardrailFolder } from "./guardrail-files";
 import { readSkillResources, walkFiles } from "./working-copy";
@@ -79,7 +79,22 @@ async function readDefinition(path: string): Promise<Record<string, unknown>> {
   if (!isMapping(definition)) {
     throw new Error(`'${file}' holds no definition: its top level is not a mapping.`);
   }
-  return { ...definitionOfShown(definition) };
+  const config = { ...definitionOfShown(definition) };
+  if (Array.isArray(config.documentTypes)) {
+    const base = await realpath(dirname(file));
+    for (const type of config.documentTypes) {
+      if (!isMapping(type) || typeof type.schema !== "string") continue;
+      const schemaPath = await realpath(resolve(base, type.schema));
+      const local = relative(base, schemaPath);
+      if (local === ".." || local.startsWith(`..${sep}`) || resolve(base, local) !== schemaPath)
+        throw new Error("documentTypes[].schema must be inside the Knowledge Base folder");
+      const info = await stat(schemaPath);
+      if (info.size > ASSET_SYNC_ITEM_MAX_BYTES)
+        throw new Error("documentTypes[].schema exceeds the definition byte limit");
+      type.schema = JSON.parse(await readFile(schemaPath, "utf8"));
+    }
+  }
+  return config;
 }
 
 function isMapping(value: unknown): value is Record<string, unknown> {

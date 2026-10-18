@@ -1,3 +1,4 @@
+import { processingContents } from "./processing-store";
 import { visibleSourceHits } from "./source-search-visibility";
 import { z } from "zod";
 import {
@@ -55,6 +56,8 @@ const CHUNK_INSERT_BATCH = 500;
 
 // Bound cross-database file lookups while finding a live original among shared copies.
 const CONTENT_COPY_BATCH = 100;
+// Cost estimates for unindexed content have no passage tokens yet; this is not a token cap.
+const UNINDEXED_ESTIMATED_BYTES_PER_TOKEN = 3;
 
 const contentCopyRow = z.object({
   id: z.string(),
@@ -123,6 +126,11 @@ const contentRow = z.object({
   format: z.enum(KNOWLEDGE_DOCUMENT_FORMATS),
   state: z.enum(KNOWLEDGE_CONTENT_STATES),
   chunking_revision: z.number().int().nullable(),
+  processing_key: z.string().nullable(),
+  requested_processing_key: z.string().nullable(),
+  processor_revision: z.string().nullable(),
+  path: z.string().nullable(),
+  mime: z.string().nullable(),
   file_id: z.string().nullable(),
   title: z.string().nullable(),
   file_name: z.string().nullable()
@@ -203,6 +211,46 @@ export function createBuiltinDocumentStore(
 
   return {
     ...createDocumentRemoval(runtime, target),
+    requestProcessing(input, signal) {
+      return inStore(
+        "Authorizing confirmed processing",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          await sql.run(
+            "update catalyst_kb.contents set requested_processing_key=$2::text where sha256=$1::text",
+            [input.contentSha256, input.processingKey]
+          );
+        }
+      );
+    },
+    processingContents(input, signal) {
+      return inStore(
+        "Reviewing document processing",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          const contents = await processingContents(sql, input);
+          const files = await runtime.stores.files.listOwnedManagedFilesById({
+            clientInstanceId: runtime.clientInstanceId,
+            owner: { kind: "knowledge_base", id: target.assetId },
+            fileIds: contents
+              .filter((content) => content.tokens === 0)
+              .map((content) => content.fileId)
+          });
+          const estimates = new Map<string, number>(
+            files.map((file) => [
+              file.id,
+              Math.ceil(file.byteSize / UNINDEXED_ESTIMATED_BYTES_PER_TOKEN)
+            ])
+          );
+          return contents.map((content) => ({
+            ...content,
+            tokens: content.tokens || estimates.get(content.fileId) || 0
+          }));
+        }
+      );
+    },
     releaseOriginalPage(input, release, signal) {
       return inStore(
         "Releasing synced originals",
@@ -240,12 +288,14 @@ export function createBuiltinDocumentStore(
       return inStore("Reading the content", KNOWLEDGE_DOCUMENTS_TIMEOUT_MS, signal, async (sql) => {
         const [row] = z.array(contentRow).parse(
           await sql.run(
-            `select c.format, c.state, c.chunking_revision,
+            `select c.format, c.state, c.chunking_revision, c.processing_key, c.processor_revision, c.requested_processing_key,
+               (select path from catalyst_kb.source_items where document_id=d.id limit 1) as path,
+               (select mime from catalyst_kb.source_items where document_id=d.id limit 1) as mime,
                exists (select 1 from catalyst_kb.documents s where s.content_sha256=c.sha256 and s.source_item_id is not null and s.withdrawn_at is null) as synced,
                d.managed_file_id as file_id, d.title, d.file_name
              from catalyst_kb.contents c
              left join lateral (
-               select managed_file_id, title, file_name from catalyst_kb.documents
+               select id, managed_file_id, title, file_name from catalyst_kb.documents
                where content_sha256 = c.sha256 and withdrawn_at is null
                order by added_at, id limit 1
              ) d on true
@@ -283,8 +333,8 @@ export function createBuiltinDocumentStore(
           if (copy) {
             document = {
               fileId: copy.managed_file_id,
-              title: copy.title,
-              fileName: copy.file_name
+              title: document.title,
+              fileName: document.fileName
             };
             break;
           }
@@ -298,7 +348,20 @@ export function createBuiltinDocumentStore(
           format: row.format,
           state: row.state,
           ...(row.chunking_revision === null ? {} : { chunkingRevision: row.chunking_revision }),
-          ...(document ? { document } : {})
+          ...(row.processing_key === null ? {} : { processingKey: row.processing_key }),
+          ...(row.requested_processing_key === null
+            ? {}
+            : { requestedProcessingKey: row.requested_processing_key }),
+          ...(row.processor_revision === null ? {} : { processorRevision: row.processor_revision }),
+          ...(document
+            ? {
+                document: {
+                  ...document,
+                  ...(row.path ? { path: row.path } : {}),
+                  ...(row.mime ? { mime: row.mime } : {})
+                }
+              }
+            : {})
         };
       });
     },
@@ -326,14 +389,18 @@ export function createBuiltinDocumentStore(
             `update catalyst_kb.contents
            set state = $5::pg_catalog.text, failure_code = null,
              chunking_revision = $2::pg_catalog.int4, extraction_revision = $3::pg_catalog.int4,
-             page_count = $4::pg_catalog.int4, updated_at = now()
+             page_count = $4::pg_catalog.int4, updated_at = now(),
+             document_type=$6::text, processor_revision=$7::text, processing_key=$8::text, requested_processing_key=null
            where sha256 = $1::pg_catalog.text`,
             [
               input.contentSha256,
               input.chunkingRevision,
               input.extractionRevision,
               input.pageCount,
-              input.complete ? "extracted" : "pending"
+              input.complete ? "extracted" : "pending",
+              input.documentType ?? null,
+              input.processorRevision ?? null,
+              input.processingKey ?? null
             ]
           );
         }

@@ -278,7 +278,7 @@ const VERBS: Record<string, Verb> = {
         if (session.kind.kind === GUARDRAIL_KIND) {
           const proceed = await guardrailDryRunBeforePublish(session, name, revision);
           if (proceed !== undefined) return proceed;
-        } else if (values.confirm !== undefined) {
+        } else if (values.confirm !== undefined && session.kind.kind !== "knowledge_base") {
           throw new UsageError("--confirm answers the dry run of a guardrail's publish.");
         }
         if (session.kind.kind === "knowledge_base") {
@@ -318,7 +318,13 @@ const VERBS: Record<string, Verb> = {
             (client, idempotencyKey) =>
               client.assets.publish({
                 params: { kind: session.kind.kind, name },
-                body: { revision, ...session.scope },
+                body: {
+                  revision,
+                  ...session.scope,
+                  ...(session.kind.kind === "knowledge_base" && values.confirm
+                    ? { confirmProcessing: values.confirm }
+                    : {})
+                },
                 idempotencyKey,
                 ...(unattended ? { unattended } : {})
               }),

@@ -11,6 +11,7 @@ import { defineJobHandler, type RegisteredJobHandler } from "./job-handlers";
 import {
   enqueueKnowledgeIndex,
   KNOWLEDGE_FILE_MAX_BYTES,
+  type KnowledgeBuiltinProcessor,
   KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
   knowledgeExtractedPagesSchema,
   knowledgeExtractJob,
@@ -58,7 +59,8 @@ export const KNOWLEDGE_EXTRACTION_FAILURE_CODES = [
   "knowledge_file_unreadable",
   "knowledge_file_missing",
   "knowledge_extraction_failed",
-  "knowledge_file_too_many_pages"
+  "knowledge_file_too_many_pages",
+  "knowledge_processor_output_invalid"
 ] as const satisfies readonly KnowledgeDocumentFailureCode[];
 
 export type KnowledgeExtractionFailureCode = (typeof KNOWLEDGE_EXTRACTION_FAILURE_CODES)[number];
@@ -86,6 +88,14 @@ export interface KnowledgeExtractor {
    * an older one may differ; it is recorded on the content.
    */
   readonly revision: number;
+  /** Local built-ins return the frozen contract. tables needs the capability's table reader. */
+  process?(input: {
+    bytes: Uint8Array;
+    format: KnowledgeExtractedFormat;
+    processor: KnowledgeBuiltinProcessor;
+    maxPages: number;
+    signal: AbortSignal;
+  }): Promise<KnowledgeProcessorOutput>;
   /**
    * The text of the file by page, numbered from 1 in ascending order. A file without pages
    * answers one page per section. Throws `KnowledgeExtractionError` for a file no attempt
@@ -110,7 +120,9 @@ export const knowledgeExtractionResultSchema = z.discriminatedUnion("status", [
   z.strictObject({
     status: z.literal("extracted"),
     extractionRevision: z.number().int().min(1),
-    pages: knowledgeExtractedPagesSchema.shape.pages
+    pages: knowledgeExtractedPagesSchema.shape.pages,
+    processorRevision: z.string().optional(),
+    output: knowledgeProcessorOutputSchema.optional()
   }),
   z.strictObject({
     status: z.literal("failed"),
@@ -130,6 +142,8 @@ export const knowledgeDocumentFailureCodeSchema = z.enum(KNOWLEDGE_DOCUMENT_FAIL
  */
 export async function runKnowledgeExtraction(input: {
   format: KnowledgeExtractedFormat;
+  processor?: KnowledgeBuiltinProcessor;
+  processorRevision?: string;
   extractor: KnowledgeExtractor;
   /** `knowledge.maxPagesPerDocument`: a file of more pages fails with `knowledge_file_too_many_pages`. */
   maxPages: number;
@@ -143,6 +157,27 @@ export async function runKnowledgeExtraction(input: {
   }
   let extracted: KnowledgeExtractedPages;
   try {
+    if (input.processor === "tables" && !input.extractor.process)
+      return { status: "failed", code: "knowledge_file_format_unsupported" };
+    if (input.extractor.process) {
+      const output = parseKnowledgeProcessorOutput(
+        await input.extractor.process({
+          bytes,
+          format: input.format,
+          processor: input.processor ?? "text",
+          maxPages: input.maxPages,
+          signal: input.signal
+        }),
+        { maxPages: input.maxPages }
+      );
+      return {
+        status: "extracted",
+        extractionRevision: input.extractor.revision,
+        pages: output.pages,
+        output,
+        ...(input.processorRevision ? { processorRevision: input.processorRevision } : {})
+      };
+    }
     extracted = await input.extractor.extract({
       bytes,
       format: input.format,
@@ -153,6 +188,20 @@ export async function runKnowledgeExtraction(input: {
     if (error instanceof KnowledgeExtractionError && !input.signal.aborted) {
       return { status: "failed", code: error.failureCode };
     }
+    if (
+      error instanceof AppError &&
+      (typeof error.details === "object" && error.details !== null && "reason" in error.details
+        ? error.details.reason
+        : undefined) === "knowledge_processor_output_invalid"
+    )
+      return { status: "failed", code: "knowledge_processor_output_invalid" };
+    if (
+      error instanceof AppError &&
+      (typeof error.details === "object" && error.details !== null && "reason" in error.details
+        ? error.details.reason
+        : undefined) === "knowledge_file_too_many_pages"
+    )
+      return { status: "failed", code: "knowledge_file_too_many_pages" };
     throw error;
   }
   const pages = knowledgeExtractedPagesSchema.safeParse(extracted);
@@ -166,7 +215,8 @@ export async function runKnowledgeExtraction(input: {
   return {
     status: "extracted",
     extractionRevision: input.extractor.revision,
-    pages: pages.data.pages
+    pages: pages.data.pages,
+    ...(input.processorRevision ? { processorRevision: input.processorRevision } : {})
   };
 }
 
@@ -252,6 +302,8 @@ export function defineKnowledgeExtractHandler(input: {
       }
       const result = await runKnowledgeExtraction({
         format: payload.format,
+        ...(payload.processor ? { processor: payload.processor } : {}),
+        ...(payload.processorRevision ? { processorRevision: payload.processorRevision } : {}),
         extractor,
         maxPages,
         signal: control.signal,
@@ -389,7 +441,10 @@ export {
 } from "@work-shape/catalyst-asset-schemas";
 
 /** One refusal for a built-in processor or a data Workflow outside the frozen contract. */
-export function parseKnowledgeProcessorOutput(output: unknown): KnowledgeProcessorOutput {
+export function parseKnowledgeProcessorOutput(
+  output: unknown,
+  options?: { maxPages: number }
+): KnowledgeProcessorOutput {
   const result = knowledgeProcessorOutputSchema.safeParse(output);
   if (!result.success) {
     throw new AppError(
@@ -398,5 +453,11 @@ export function parseKnowledgeProcessorOutput(output: unknown): KnowledgeProcess
       { reason: "knowledge_processor_output_invalid" }
     );
   }
+  if (options && result.data.pages.length > options.maxPages)
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "The processor output exceeds knowledge.maxPagesPerDocument",
+      { reason: "knowledge_file_too_many_pages" }
+    );
   return result.data;
 }

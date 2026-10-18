@@ -518,7 +518,8 @@ export const KNOWLEDGE_JOB_KINDS = {
   removeDocuments: "knowledge_base.remove_documents",
   releaseOriginals: "knowledge_base.release_originals",
   deleteOriginals: "knowledge_base.delete_originals",
-  reconcileSources: "knowledge_base.reconcile_sources"
+  reconcileSources: "knowledge_base.reconcile_sources",
+  reprocess: "knowledge_base.reprocess"
 } as const;
 
 /** Chunks and optionally embeds a content in the configured ingestion process. */
@@ -551,9 +552,15 @@ export const KNOWLEDGE_EXTRACTED_FORMATS = [
 
 export type KnowledgeExtractedFormat = (typeof KNOWLEDGE_EXTRACTED_FORMATS)[number];
 
+/** Built-in processor names shared by definitions, jobs and the extractor contract. */
+export const KNOWLEDGE_BUILTIN_PROCESSORS = ["text", "tables"] as const;
+export type KnowledgeBuiltinProcessor = (typeof KNOWLEDGE_BUILTIN_PROCESSORS)[number];
+
 /** What an extract job carries: the ids of an index job and the format to read the bytes as. */
 export const knowledgeExtractJobPayloadSchema = knowledgeContentJobPayloadSchema.extend({
-  format: z.enum(KNOWLEDGE_EXTRACTED_FORMATS)
+  format: z.enum(KNOWLEDGE_EXTRACTED_FORMATS),
+  processor: z.enum(KNOWLEDGE_BUILTIN_PROCESSORS).optional(),
+  processorRevision: z.string().optional()
 });
 
 export type KnowledgeExtractJobPayload = z.infer<typeof knowledgeExtractJobPayloadSchema>;
@@ -661,12 +668,15 @@ export interface KnowledgeContentToIndex {
   state: KnowledgeContentState;
   /** The chunking revision its chunks were written with, once they were. */
   chunkingRevision?: number;
+  processingKey?: string;
+  requestedProcessingKey?: string;
+  processorRevision?: string;
   /**
    * An active document, preferring one whose owned copy is available. A metadata fallback
    * permits retained-text re-indexing when all originals are released; byte readers must
    * still check availability. None when every document is withdrawn.
    */
-  document?: { fileId: string; title: string; fileName: string };
+  document?: { fileId: string; title: string; fileName: string; path?: string; mime?: string };
 }
 
 /** One passage as the index job writes it. Its id is its content, revision and position. */
@@ -761,7 +771,31 @@ export interface KnowledgePurgePage {
  * its operations reach them. Index writes lock one content. Removal shares the documents
  * writer lock with adding files so shared content cannot be adopted while it is purged.
  */
+export interface KnowledgeProcessingContent {
+  contentSha256: string;
+  processingKey?: string;
+  requestedProcessingKey?: string;
+  processorRevision?: string;
+  format: KnowledgeDocumentFormat;
+  documentId: string;
+  fileId: string;
+  name: string;
+  path: string;
+  mime: string;
+  sourceId?: string;
+  tokens: number;
+}
 export interface KnowledgeDocumentStore {
+  /** Authorizes one effective processing revision after publish confirmation, before queuing it. */
+  requestProcessing(
+    input: { contentSha256: string; processingKey: string },
+    signal?: AbortSignal
+  ): Promise<void>;
+  /** A cold publish review/reconciliation walks content metadata in bounded hash order. */
+  processingContents(
+    input: { after: string; limit: number },
+    signal?: AbortSignal
+  ): Promise<KnowledgeProcessingContent[]>;
   /** Withdraws the named documents in one statement. Queues cleanup before commit while
    * holding the documents lock; a rolled-back withdrawal leaves a harmless cleanup job. */
   withdrawDocuments(
@@ -820,6 +854,10 @@ export interface KnowledgeDocumentStore {
       contentSha256: string;
       chunkingRevision: number;
       extractionRevision: number;
+      processingKey?: string;
+      requestedProcessingKey?: string;
+      processorRevision?: string;
+      documentType?: string;
       pageCount: number;
       chunks: readonly KnowledgeChunkInput[];
       complete: boolean;

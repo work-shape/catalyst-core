@@ -1,4 +1,9 @@
-import type { KnowledgeChunkInput, KnowledgeDocumentFormat } from "@work-shape/catalyst-core";
+import type { KnowledgeChunkingStrategy } from "../document-types";
+import type {
+  KnowledgeProcessorOutput,
+  KnowledgeChunkInput,
+  KnowledgeDocumentFormat
+} from "@work-shape/catalyst-core";
 
 // How the built-in backend cuts a document's text into passages, by the defaults of the spec
 // (Indexing settings on the Knowledge Base): Markdown at its headings, a PDF or DOCX by page,
@@ -73,11 +78,34 @@ export function chunkKnowledgeText(input: {
   pages: readonly KnowledgeTextPage[];
   title: string;
   fileName: string;
+  strategy?: KnowledgeChunkingStrategy;
+  output?: KnowledgeProcessorOutput;
 }): KnowledgeChunkInput[] {
-  const sections: Section[] =
-    input.format === "markdown"
-      ? input.pages.flatMap((page) => markdownSections(page))
-      : input.pages.map((page) => ({ ...page }));
+  const strategy = input.strategy ?? (input.format === "markdown" ? "heading" : "page");
+  const groups = input.output?.documents.map((range) =>
+    input.pages.filter(
+      (page) => page.page !== undefined && page.page >= range.pageFrom && page.page <= range.pageTo
+    )
+  ) ?? [input.pages];
+  const sections: Section[] = groups.flatMap((pages) => {
+    if (strategy === "whole")
+      return [
+        {
+          ...(pages[0]?.page === undefined ? {} : { page: pages[0].page }),
+          text: pages.map((page) => page.text).join("\n\n")
+        }
+      ];
+    if (strategy === "heading") return pages.flatMap(markdownSections);
+    if (strategy === "sections" && input.output?.sections?.length)
+      return pages.map((page) => {
+        const section = input.output?.sections?.find(
+          (section) =>
+            page.page !== undefined && page.page >= section.pageFrom && page.page <= section.pageTo
+        );
+        return { ...page, ...(section ? { heading: section.title } : {}) };
+      });
+    return pages.map((page) => ({ ...page }));
+  });
   const chunks: KnowledgeChunkInput[] = [];
   for (const section of sections) {
     const prefix = knowledgeChunkPrefix({
@@ -89,7 +117,9 @@ export function chunkKnowledgeText(input: {
       MIN_BODY_TOKENS,
       KNOWLEDGE_CHUNK_MAX_TOKENS - estimateKnowledgeTokens(prefix)
     );
-    for (const text of pack(section.text, budget)) {
+    for (const text of strategy === "sheet_rows"
+      ? sheetRows(section.text, budget)
+      : pack(section.text, budget)) {
       chunks.push({
         position: chunks.length,
         ...(section.page === undefined ? {} : { page: section.page }),
@@ -100,6 +130,18 @@ export function chunkKnowledgeText(input: {
     }
   }
   return chunks;
+}
+
+/** Keep Markdown table headers with every bounded group of rows. Oversized rows use the same token cap. */
+function sheetRows(text: string, budget: number): string[] {
+  const lines = text.trim().split("\n");
+  const header =
+    lines[0]?.includes("|") && /^\s*\|?[: -]+\|/u.test(lines[1] ?? "")
+      ? lines.splice(0, 2).join("\n")
+      : "";
+  if (!header || estimateKnowledgeTokens(header) >= budget / 2) return pack(text, budget);
+  const rows = pack(lines.join("\n"), budget - estimateKnowledgeTokens(header));
+  return rows.map((rows) => `${header}\n${rows}`);
 }
 
 const HEADING = /^ {0,3}(#{1,6})[ \t]+(.+?)[ \t#]*$/u;

@@ -19,7 +19,7 @@ import {
   type OperationDefinition,
   type OperationResource
 } from "@work-shape/catalyst-core";
-import { discardUnusableKnowledgeExtraction } from "./index-job";
+import { discardUnusableKnowledgeExtraction } from "./index-extraction";
 import type { KnowledgeRuntime } from "./runtime";
 
 // The documents of a Knowledge Base that keeps them, as its page shows and retries them.

@@ -429,7 +429,10 @@ export class AssetDraftWorkflow {
    * one of this asset; naming an earlier one is the way back. The references of that revision
    * are checked against the instance as it is now, as a write's are.
    */
-  async publish(call: AssetCall, input: AssetAddress & { revision: number }) {
+  async publish(
+    call: AssetCall,
+    input: AssetAddress & { revision: number; confirmProcessing?: string }
+  ) {
     const target = await this.host.target(input);
     const { kind, name } = target;
     const right = publishAction(kind);
@@ -471,6 +474,7 @@ export class AssetDraftWorkflow {
             scope: asset.scope,
             revision: moved.revision,
             config,
+            ...(input.confirmProcessing ? { confirmProcessing: input.confirmProcessing } : {}),
             ...(asset.publishedConfig === undefined ? {} : { replaced: asset.publishedConfig }),
             stores
           });

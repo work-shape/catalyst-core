@@ -30,6 +30,7 @@ export interface KnowledgeRuntime {
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */
   maxDocuments: number;
+  maxPages?: number;
   logger: Logger;
   now(): Date;
 }

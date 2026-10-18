@@ -96,7 +96,7 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 6 });
+      expect(record).toMatchObject({ status: "ready", level: 7 });
       return required(record);
     });
   }
@@ -323,6 +323,7 @@ describe("adding files to a Knowledge Base", () => {
         drop function catalyst_kb.source_freshness_changed();
         alter table catalyst_kb.documents drop column source_item_id;
         drop table catalyst_kb.source_cursors, catalyst_kb.sync_runs, catalyst_kb.source_items;
+        alter table catalyst_kb.contents drop column document_type, drop column processor_revision, drop column processing_key, drop column requested_processing_key;
         delete from catalyst_kb.migrations where number >= 2;`)
     );
     await instance.stores.dataStores.putDataStore({
@@ -355,10 +356,10 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(current).toMatchObject({ status: "ready", level: 6 });
+      expect(current).toMatchObject({ status: "ready", level: 7 });
       return required(current);
     });
-    expect(upgraded.migrations.map(({ number }) => number)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(upgraded.migrations.map(({ number }) => number)).toEqual([1, 2, 3, 4, 5, 6, 7]);
 
     const added = await addFiles(instance, [source]);
     expect(added.statusCode, added.body).toBe(200);

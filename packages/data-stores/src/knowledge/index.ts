@@ -1,3 +1,8 @@
+import {
+  confirmKnowledgeProcessing,
+  knowledgeProcessingReview,
+  createKnowledgeReprocessHandler
+} from "./processing-publish";
 import { sourceBoundaryKey } from "./source-boundary";
 import { sourcePolicyJob } from "./builtin/source-policy-job";
 import { knowledgePublishQuestion } from "./publish-question";
@@ -66,6 +71,7 @@ export interface KnowledgeBases {
       revision: number;
       config: unknown;
       replaced: unknown;
+      confirmProcessing?: string;
     }
   ): Promise<void>;
   /**
@@ -120,6 +126,7 @@ export function createKnowledgeBases(input: {
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** `knowledge.maxDocuments` of release config. */
   maxDocuments: number;
+  maxPages?: number;
   logger: Logger;
   now?: () => Date;
 }): KnowledgeBases {
@@ -130,12 +137,29 @@ export function createKnowledgeBases(input: {
     ...(input.sources ? { sources: input.sources } : {}),
     documentFormats: input.documentFormats,
     maxDocuments: input.maxDocuments,
+    ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
     logger: input.logger,
     now: input.now ?? (() => new Date())
   };
   return {
-    publishQuestion: (question) =>
-      knowledgePublishQuestion(input.stores, input.clientInstanceId, question),
+    publishQuestion: async (question) => {
+      const asset = await input.stores.configAssets.getConfigAsset({
+        clientInstanceId: input.clientInstanceId,
+        kind: "knowledge_base",
+        name: knowledgeBaseDefinitionSchema.parse(question.config).name
+      });
+      const review = await knowledgeProcessingReview(
+        runtime,
+        question.config,
+        asset?.publishedConfig,
+        question.assetId,
+        input.embedding
+      );
+      return [
+        ...(await knowledgePublishQuestion(input.stores, input.clientInstanceId, question)),
+        ...(review?.lines ?? [])
+      ];
+    },
     assetKind: defineAssetKind({
       kind: KNOWLEDGE_BASE_ASSET_KIND,
       plural: "knowledge_bases",
@@ -162,7 +186,19 @@ export function createKnowledgeBases(input: {
         description: knowledgeBase.description
       })
     }),
-    async publish(stores, { access, assetId, revision, config, replaced }) {
+    async publish(stores, { access, assetId, revision, config, replaced, confirmProcessing }) {
+      await confirmKnowledgeProcessing(
+        runtime,
+        stores,
+        {
+          assetId,
+          revision,
+          config,
+          replaced,
+          ...(confirmProcessing ? { confirmProcessing } : {})
+        },
+        input.embedding
+      );
       const definition = knowledgeBaseDefinitionSchema.parse(config);
       const target = knowledgeTargetOf(definition, assetId);
       const before = knowledgeBaseDefinitionSchema.safeParse(replaced);
@@ -285,6 +321,7 @@ export function createKnowledgeBases(input: {
           ...removal.handlers,
           ...(files
             ? [
+                createKnowledgeReprocessHandler({ ...runtime, files }),
                 createKnowledgeIndexJobHandler(runtime, {
                   files,
                   auditRecorder,

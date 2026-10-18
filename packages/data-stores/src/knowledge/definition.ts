@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { knowledgeDocumentTypesSchema } from "./document-types";
 import {
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
@@ -141,6 +142,7 @@ const definitionFieldsSchema = z.strictObject({
       message: "A source id is named once"
     })
     .optional(),
+  documentTypes: knowledgeDocumentTypesSchema.optional(),
   records: knowledgeRecordsRefusalSchema,
   indexing: later("indexing", "DS-7, indexing settings"),
   search: later("search", "DS-7, search settings"),
@@ -191,6 +193,11 @@ export const knowledgeBaseDefinitionSchema = definitionFieldsSchema.transform(
       return z.NEVER;
     };
     if (backend) {
+      if (fields.documentTypes?.length)
+        return refuse(
+          "documentTypes",
+          "documentTypes classify documents of the built-in backend only"
+        );
       if (fields.sources?.length) {
         return refuse(
           "sources",
@@ -243,6 +250,8 @@ export function knowledgeTargetOf(
 export interface KnowledgeEmbedding {
   /** The embedding binding a Knowledge Base uses. Without one there is no search by meaning. */
   defaultBinding?: string;
+  /** Customer rate of the default embedding binding, for a publish cost statement. */
+  processingPrices?: { bindingId: string; currency: string; perMillionTokens: number }[];
   /**
    * Every binding of kind `embedding`, the approved list, with the model behind it and the
    * length of its vectors. Left out where the process embeds nothing.

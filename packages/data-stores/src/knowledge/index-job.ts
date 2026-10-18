@@ -1,18 +1,14 @@
+import { isExtracted, pagesOf } from "./index-extraction";
+import { knowledgeProcessingOf, validateKnowledgeProcessingOutput } from "./document-types";
 import {
   AppError,
-  asManagedFileId,
   defineJobHandler,
-  enqueueKnowledgeExtract,
   enqueueKnowledgeIndex,
   isModelUsageLimitReached,
   KNOWLEDGE_BASE_ASSET_KIND,
-  KNOWLEDGE_EXTRACTED_FORMATS,
-  knowledgeExtractionKey,
-  knowledgeExtractionResultSchema,
+  KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
+  type KnowledgeProcessorOutput,
   knowledgeIndexJob,
-  ObjectNotFound,
-  readObjectBytes,
-  storeKnowledgeExtraction,
   type AssetScope,
   type AuditRecorder,
   type BuiltinKnowledgeTarget,
@@ -21,31 +17,25 @@ import {
   type JobControl,
   type KnowledgeContentJobPayload,
   type KnowledgeDocumentFailureCode,
-  type KnowledgeDocumentFormat,
   type KnowledgeDocumentStore,
   type KnowledgeDocumentWaitCode,
   type KnowledgeEmbeddingGeneration,
-  type KnowledgeExtractedFormat,
-  type KnowledgeExtractionResult,
   type KnowledgeFiles,
   type RegisteredJobHandler,
   type SystemModelAttribution
 } from "@work-shape/catalyst-core";
 import {
   chunkKnowledgeText,
-  decodeKnowledgeText,
   estimateKnowledgeTokens,
   KNOWLEDGE_CHUNKING_REVISION,
-  KNOWLEDGE_TEXT_EXTRACTION_REVISION,
-  knowledgeChunkPrefix,
-  normalizeKnowledgeText,
-  type KnowledgeTextPage
+  knowledgeChunkPrefix
 } from "./builtin/chunking";
 import {
   approvedEmbeddingModel,
   knowledgeBaseDefinitionSchema,
   knowledgeTargetOf,
-  type KnowledgeEmbedding
+  type KnowledgeEmbedding,
+  type KnowledgeBaseDefinition
 } from "./definition";
 import type { KnowledgeRuntime } from "./runtime";
 import { releaseSyncedOriginals, enqueueOriginalRelease } from "./original-release";
@@ -153,6 +143,7 @@ interface IndexTarget {
   store: KnowledgeDocumentStore;
   /** Who owns the Knowledge Base: its workspace is the one embedding usage counts against. */
   scope: AssetScope;
+  definition: KnowledgeBaseDefinition;
 }
 
 async function indexTargetOf(
@@ -177,7 +168,7 @@ async function indexTargetOf(
   const target = knowledgeTargetOf(definition.data, knowledgeBaseId);
   if (target.backend !== "builtin") return undefined;
   const store = runtime.backend.documentStore(target);
-  return store && { target, store, scope: asset.scope };
+  return store && { target, store, scope: asset.scope, definition: definition.data };
 }
 
 /**
@@ -253,178 +244,6 @@ function embeddingText(
     ...(passage.heading === undefined ? {} : { heading: passage.heading })
   });
   return prefix.length > 0 ? `${prefix}\n\n${passage.text}` : passage.text;
-}
-
-function isExtracted(format: KnowledgeDocumentFormat): format is KnowledgeExtractedFormat {
-  return KNOWLEDGE_EXTRACTED_FORMATS.some((each) => each === format);
-}
-
-/** The text of a content, a failure that no attempt can help, or a request for extraction. */
-type Pages =
-  | { kind: "pages"; pages: KnowledgeTextPage[]; extractionRevision: number }
-  | { kind: "failed"; code: KnowledgeDocumentFailureCode }
-  | { kind: "requested" };
-
-async function availableCopy(runtime: KnowledgeRuntime, knowledgeBaseId: string, fileId: string) {
-  const copy = await runtime.stores.files.getManagedFile({
-    clientInstanceId: runtime.clientInstanceId,
-    fileId: asManagedFileId(fileId)
-  });
-  if (
-    copy?.owner?.kind !== "knowledge_base" ||
-    copy.owner.id !== knowledgeBaseId ||
-    copy.status !== "available"
-  ) {
-    return undefined;
-  }
-  return copy;
-}
-
-async function readCopy(
-  runtime: KnowledgeRuntime,
-  files: KnowledgeFiles,
-  knowledgeBaseId: string,
-  fileId: string
-): Promise<Uint8Array | undefined> {
-  const copy = await availableCopy(runtime, knowledgeBaseId, fileId);
-  if (!copy) return undefined;
-  try {
-    return await readObjectBytes(files.objects, copy.objectKey);
-  } catch (error) {
-    if (error instanceof ObjectNotFound) return undefined;
-    throw error;
-  }
-}
-
-/** The content an extraction result is stored for. */
-interface ContentKey {
-  knowledgeBaseId: string;
-  contentSha256: string;
-}
-
-async function readExtraction(
-  files: KnowledgeFiles,
-  content: ContentKey
-): Promise<KnowledgeExtractionResult | "invalid" | undefined> {
-  let bytes: Uint8Array;
-  try {
-    bytes = await readObjectBytes(
-      files.objects,
-      knowledgeExtractionKey(content.knowledgeBaseId, content.contentSha256)
-    );
-  } catch (error) {
-    if (error instanceof ObjectNotFound) return undefined;
-    throw error;
-  }
-  try {
-    return knowledgeExtractionResultSchema.parse(JSON.parse(new TextDecoder().decode(bytes)));
-  } catch {
-    return "invalid";
-  }
-}
-
-/**
- * Why a stored extraction result cannot be indexed, or nothing where it can: it holds text. A
- * failure, a result that does not parse and one without text are asked for again on Retry.
- */
-function unusableExtraction(
-  result: KnowledgeExtractionResult | "invalid"
-): KnowledgeDocumentFailureCode | undefined {
-  if (result === "invalid") return "knowledge_extraction_failed";
-  if (result.status === "failed") return result.code;
-  const hasText = result.pages.some((page) => normalizeKnowledgeText(page.text).trim().length > 0);
-  return hasText ? undefined : "knowledge_text_empty";
-}
-
-/**
- * Deletes the stored extraction of a content where it cannot be indexed: what Retry runs
- * before a failed PDF or DOCX is queued again, so it is extracted afresh. A result with text
- * is kept and indexed again without extraction.
- */
-export async function discardUnusableKnowledgeExtraction(
-  files: KnowledgeFiles,
-  content: ContentKey
-): Promise<void> {
-  const result = await readExtraction(files, content);
-  if (result === undefined || unusableExtraction(result) === undefined) return;
-  await files.objects.delete(
-    knowledgeExtractionKey(content.knowledgeBaseId, content.contentSha256)
-  );
-}
-
-async function pagesOf(
-  runtime: KnowledgeRuntime,
-  files: KnowledgeFiles,
-  control: JobControl,
-  payload: KnowledgeContentJobPayload,
-  content: { format: KnowledgeDocumentFormat; fileId: string; synced?: boolean }
-): Promise<Pages> {
-  if (!isExtracted(content.format)) {
-    if (content.synced) {
-      const stored = await readExtraction(files, payload);
-      if (stored !== undefined && stored !== "invalid" && stored.status === "extracted") {
-        return {
-          kind: "pages",
-          pages: stored.pages.map((page) => ({ text: page.text })),
-          extractionRevision: stored.extractionRevision
-        };
-      }
-    }
-    const bytes = await readCopy(runtime, files, payload.knowledgeBaseId, content.fileId);
-    if (!bytes) return { kind: "failed", code: "knowledge_file_missing" };
-    const text = decodeKnowledgeText(bytes);
-    if (text === undefined) return { kind: "failed", code: "knowledge_text_unreadable" };
-    if (content.synced)
-      await storeKnowledgeExtraction(files.objects, payload, {
-        status: "extracted",
-        extractionRevision: KNOWLEDGE_TEXT_EXTRACTION_REVISION,
-        pages: [{ page: 1, text }]
-      });
-    return {
-      kind: "pages",
-      pages: [{ text }],
-      extractionRevision: KNOWLEDGE_TEXT_EXTRACTION_REVISION
-    };
-  }
-  if (!runtime.documentFormats.includes(content.format)) {
-    return { kind: "failed", code: "knowledge_file_format_unavailable" };
-  }
-  const result = await readExtraction(files, payload);
-  const unusable = result === undefined ? undefined : unusableExtraction(result);
-  if (unusable !== undefined) {
-    // Deleted before the content is marked failed: a job that ends between the two finds no
-    // result and asks for the extraction again, and a failed content keeps no result for its
-    // Retry to read.
-    if (!content.synced)
-      await files.objects.delete(
-        knowledgeExtractionKey(payload.knowledgeBaseId, payload.contentSha256)
-      );
-    return { kind: "failed", code: unusable };
-  }
-  if (result !== undefined && result !== "invalid" && result.status === "extracted") {
-    return {
-      kind: "pages",
-      pages: result.pages.map((page) => ({
-        page: page.page,
-        text: normalizeKnowledgeText(page.text)
-      })),
-      extractionRevision: result.extractionRevision
-    };
-  }
-  // Retained extraction needs no original. Without it, never hand a released or
-  // missing copy to the extractor and leave the content waiting for work it cannot do.
-  if (!(await availableCopy(runtime, payload.knowledgeBaseId, content.fileId))) {
-    return { kind: "failed", code: "knowledge_file_missing" };
-  }
-  const { format } = content;
-  await control.transaction((stores) =>
-    enqueueKnowledgeExtract(
-      stores.jobs,
-      { ...payload, fileId: content.fileId, format },
-      { clientInstanceId: runtime.clientInstanceId }
-    )
-  );
-  return { kind: "requested" };
 }
 
 /** The handler of `knowledge_base.index`, for the process that serves the Knowledge Bases. */
@@ -615,6 +434,38 @@ export function createKnowledgeIndexJobHandler(
       // A content no document holds any more is removed with its documents (KB-5e).
       if (!content?.document) return;
       const { document } = content;
+      const processing = knowledgeProcessingOf(found.definition.documentTypes, {
+        name: document.fileName,
+        path: document.path ?? document.fileName,
+        mime:
+          document.mime ??
+          {
+            pdf: "application/pdf",
+            docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            markdown: "text/markdown",
+            txt: "text/plain"
+          }[content.format],
+        format: content.format
+      });
+      const previousKey =
+        content.processingKey ??
+        knowledgeProcessingOf(undefined, {
+          name: document.fileName,
+          path: document.fileName,
+          mime: "",
+          format: content.format
+        }).key;
+      const changed =
+        processing.key !== previousKey ||
+        (content.processorRevision ?? "text@1") !== processing.processorRevision;
+      // A release's processor version alone is no authorization to spend on old content.
+      // Existing queued/retried index jobs wait for the confirmed publish reconciliation.
+      if (
+        changed &&
+        (content.processingKey !== undefined || content.chunkingRevision !== undefined) &&
+        content.requestedProcessingKey !== processing.key
+      )
+        return;
       // A synced copy can join content first indexed from an upload. TXT/Markdown uploads
       // have no extraction object yet: persist their text before releasing the synced copy.
       if (content.synced && content.state === "extracted" && !isExtracted(content.format)) {
@@ -627,19 +478,26 @@ export function createKnowledgeIndexJobHandler(
       }
       const indexContent = async () => {
         // A failure waits for Retry.
-        if (content.state === "failed") return;
+        if (content.state === "failed" && !changed) return;
         const semantic = target.methods.includes("semantic");
-        const chunked = content.chunkingRevision === KNOWLEDGE_CHUNKING_REVISION;
+        const chunked = content.chunkingRevision === KNOWLEDGE_CHUNKING_REVISION && !changed;
         // The skip rule. A Knowledge Base that searches by meaning looks for passages without a
         // vector, which costs no call where there are none.
         if (content.state === "extracted" && chunked && !semantic) return;
         let written: { chunks: number; pages: number } | undefined;
         if (!chunked) {
-          const pages = await pagesOf(runtime, files, control, payload, {
-            format: content.format,
-            synced: content.synced,
-            fileId: document.fileId
-          });
+          const pages = await pagesOf(
+            runtime,
+            files,
+            control,
+            payload,
+            {
+              format: content.format,
+              synced: content.synced,
+              fileId: document.fileId
+            },
+            processing
+          );
           if (pages.kind === "requested") return;
           if (pages.kind === "failed") {
             await store.failContent(
@@ -649,9 +507,43 @@ export function createKnowledgeIndexJobHandler(
             await audit(payload, target, job.correlationId, { code: pages.code });
             return;
           }
+          let output: KnowledgeProcessorOutput;
+          try {
+            const numbered = pages.pages.map((page, index) => ({
+              page: page.page ?? index + 1,
+              text: page.text
+            }));
+            output = validateKnowledgeProcessingOutput(
+              pages.output ?? {
+                documents: [{ pageFrom: numbered[0]?.page, pageTo: numbered.at(-1)?.page }],
+                pages: numbered,
+                fields: {}
+              },
+              processing,
+              runtime.maxPages ?? KNOWLEDGE_MAX_PAGES_PER_DOCUMENT
+            );
+          } catch (error) {
+            if (!(error instanceof AppError)) throw error;
+            const code =
+              (typeof error.details === "object" &&
+              error.details !== null &&
+              "reason" in error.details
+                ? error.details.reason
+                : undefined) === "knowledge_file_too_many_pages"
+                ? "knowledge_file_too_many_pages"
+                : "knowledge_processor_output_invalid";
+            await store.failContent({ contentSha256: payload.contentSha256, code }, signal);
+            await audit(payload, target, job.correlationId, { code });
+            return;
+          }
           const chunks = chunkKnowledgeText({
             format: content.format,
-            pages: pages.pages,
+            pages:
+              content.format === "txt" || content.format === "markdown"
+                ? pages.pages
+                : output.pages,
+            strategy: processing.chunking,
+            ...(content.format === "txt" || content.format === "markdown" ? {} : { output }),
             title: document.title,
             fileName: document.fileName
           });
@@ -668,6 +560,9 @@ export function createKnowledgeIndexJobHandler(
               contentSha256: payload.contentSha256,
               chunkingRevision: KNOWLEDGE_CHUNKING_REVISION,
               extractionRevision: pages.extractionRevision,
+              processingKey: processing.key,
+              processorRevision: processing.processorRevision,
+              documentType: processing.type,
               pageCount: pages.pages.length,
               chunks,
               complete: !semantic

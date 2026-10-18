@@ -36,7 +36,7 @@ export type KnowledgeWorkerPlacement = AgentRunWorkerPlacement;
  * `embedding` with the model behind it, and the default, as both seams are given them.
  */
 export function knowledgeEmbedding(
-  config: Pick<ClientInstanceConfig, "knowledge" | "modelBindings" | "infrastructure">
+  config: Pick<ClientInstanceConfig, "knowledge" | "modelBindings" | "infrastructure" | "usage">
 ): KnowledgeEmbedding {
   const defaultBinding = config.knowledge.defaultEmbeddingBinding;
   const providers = getModelProviderConfigs(config);
@@ -47,7 +47,23 @@ export function knowledgeEmbedding(
       ? [{ bindingId: binding.id, model, dimensions: binding.dimensions }]
       : [];
   });
-  return { ...(defaultBinding === undefined ? {} : { defaultBinding }), models };
+  const card = config.usage.costs.customer;
+  const processingPrices = models.flatMap((model) => {
+    const binding = config.modelBindings.find((binding) => binding.id === model.bindingId);
+    const rate = card?.models.find(
+      (rate) => rate.providerId === binding?.providerId && rate.model === model.model
+    );
+    return rate && card
+      ? [
+          {
+            bindingId: model.bindingId,
+            currency: card.currency,
+            perMillionTokens: rate.uncachedInputPricePerMillionTokens
+          }
+        ]
+      : [];
+  });
+  return { ...(defaultBinding === undefined ? {} : { defaultBinding }), models, processingPrices };
 }
 
 /**
@@ -86,8 +102,15 @@ function workflowAssetKind(knowledgeBases: KnowledgeBases): WorkflowAssetKind {
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
     publishQuestion: (input) => knowledgeBases.publishQuestion(input),
-    onPublish: ({ stores, access, assetId, revision, config, replaced }) =>
-      knowledgeBases.publish(stores, { access, assetId, revision, config, replaced }),
+    onPublish: ({ stores, access, assetId, revision, config, replaced, confirmProcessing }) =>
+      knowledgeBases.publish(stores, {
+        access,
+        assetId,
+        revision,
+        config,
+        replaced,
+        ...(confirmProcessing ? { confirmProcessing } : {})
+      }),
     onRemove: ({ stores, assetId, published }) => knowledgeBases.retire(stores, assetId, published)
   };
 }
@@ -194,6 +217,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
     );
   }
   const sourceJobs = earlier.find((assembly) => assembly.knowledgeSourceJobs)?.knowledgeSourceJobs;
+  const embedding = knowledgeEmbedding(parts.config);
   const knowledgeBases = createKnowledgeBases({
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
@@ -207,11 +231,12 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       );
     },
     sources: earlier.find((assembly) => assembly.knowledgeSources)?.knowledgeSources,
-    embedding: knowledgeEmbedding(parts.config),
+    embedding,
     documentFormats: parts.modules.isEnabled(DOCUMENTS_MODULE)
       ? KNOWLEDGE_DOCUMENT_FORMATS
       : KNOWLEDGE_TEXT_FORMATS,
     maxDocuments: parts.config.knowledge.maxDocuments,
+    maxPages: parts.config.knowledge.maxPagesPerDocument,
     logger: parts.logger
   });
   return {
@@ -224,6 +249,17 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       )
     ],
     start: (runtime) => {
+      for (const model of embedding.models ?? []) {
+        if (
+          !embedding.processingPrices?.some((price) => price.bindingId === model.bindingId) &&
+          !runtime.modelGateway.capabilities({ bindingId: model.bindingId }).priceRequired
+        )
+          (embedding.processingPrices ??= []).push({
+            bindingId: model.bindingId,
+            currency: parts.config.usage.costs.customer?.currency ?? "USD",
+            perMillionTokens: 0
+          });
+      }
       const fileJobs = knowledgeBases.fileJobs(runtime.files, runtime.auditRecorder, (call) =>
         runtime.modelGateway.embed(call)
       );

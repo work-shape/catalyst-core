@@ -314,6 +314,7 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     config: JsonObject;
     /** The config that was published until this publish, where one was. */
     replaced?: JsonObject;
+    confirmProcessing?: string;
     stores: PlatformStores;
   }): Promise<void>;
   /**

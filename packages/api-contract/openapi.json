@@ -33491,6 +33491,10 @@
       "PublishAssetRequest": {
         "type": "object",
         "properties": {
+          "confirmProcessing": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
           "revision": {
             "type": "integer",
             "exclusiveMinimum": 0,

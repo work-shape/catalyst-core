@@ -34,6 +34,7 @@ export interface KnowledgeSources {
     input: KnowledgeRetryInput,
     payload: KnowledgeSyncJobPayload,
     signal: AbortSignal,
-    files: KnowledgeFiles
+    files: KnowledgeFiles,
+    reprocess?: boolean
   ): Promise<number>;
 }

@@ -218,7 +218,7 @@ describe("the extract contract a producer checks", () => {
 describe("indexing the documents of a Knowledge Base", () => {
   const { start } = useDataStoreInstance();
 
-  async function instanceWith(options: { documents?: true } = {}) {
+  async function instanceWith(options: { documents?: true; maxPagesPerDocument?: number } = {}) {
     const attachments = createManagedObjectTestAttachmentCapability();
     const instance = await start(true, undefined, developmentAuth, undefined, {
       attachments: attachments.capability,
@@ -249,7 +249,7 @@ describe("indexing the documents of a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 6 });
+      expect(record).toMatchObject({ status: "ready", level: 7 });
       return required(record);
     });
   }
@@ -693,7 +693,9 @@ describe("indexing the documents of a Knowledge Base", () => {
   });
 
   it("fails a PDF over the page limit with its code before converting it, indexes one at the limit, and Retry after a raised limit indexes it", async () => {
-    const { instance } = await instanceWith({ documents: true });
+    // The API already runs the raised release config while the old extraction worker drains.
+    // Both processing stages therefore accept the raised limit once that worker restarts.
+    const { instance } = await instanceWith({ documents: true, maxPagesPerDocument: 1_000 });
     const objects = createFilesystemObjectStorage(instance.filesRoot);
     // Counts the pages first, as the capability does from the PDF's metadata, and converts
     // only a file within the limit it is given.

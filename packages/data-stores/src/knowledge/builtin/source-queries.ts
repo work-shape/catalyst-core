@@ -14,7 +14,7 @@ import {
   knowledgeSourceKey,
   type KnowledgeFiles
 } from "@work-shape/catalyst-core";
-import { discardUnusableKnowledgeExtraction } from "../index-job";
+import { discardUnusableKnowledgeExtraction } from "../index-extraction";
 import type { DataStoreRuntime } from "../../runtime";
 import { createSourceStore, syncResult } from "./source-store";
 import { enqueueSourceSync, sourceSyncStarted } from "./source-lifecycle";
@@ -239,7 +239,8 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
       input: z.infer<typeof knowledgeRetryInputSchema>,
       payload: KnowledgeSyncJobPayload,
       signal: AbortSignal,
-      files: KnowledgeFiles
+      files: KnowledgeFiles,
+      reprocess = false
     ) {
       let after = "",
         queued = 0;
@@ -250,14 +251,15 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
             .array(z.object({ id: z.string() }))
             .parse(
               await sql.run(
-                `${SELECT} where i.id>$1::text and ${STATE}='failed' and ($2::text is null or i.source_id=$2::text) and ($3::text[] is null or i.id=any($3::text[])) and ($4::text is null or ${FAILURE}=$4::text) and ($5::text[] is null or d.id=any($5::text[])) order by i.id limit $6::int`,
+                `${SELECT} where i.id>$1::text and ($7::boolean or ${STATE}='failed') and i.state<>'withdrawn' and ($2::text is null or i.source_id=$2::text) and ($3::text[] is null or i.id=any($3::text[])) and ($4::text is null or ${FAILURE}=$4::text) and ($5::text[] is null or d.id=any($5::text[])) order by i.id limit $6::int`,
                 [
                   after,
                   payload.sourceId,
                   "sourceItemIds" in input ? input.sourceItemIds : null,
                   "failureCode" in input ? input.failureCode : null,
                   "documentIds" in input ? input.documentIds : null,
-                  RETRY_BATCH_ITEMS
+                  RETRY_BATCH_ITEMS,
+                  reprocess
                 ]
               )
             );
@@ -267,6 +269,11 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
             "select c.sha256 from catalyst_kb.contents c join catalyst_kb.documents d on d.content_sha256=c.sha256 join catalyst_kb.source_items i on i.document_id=d.id where i.id=any($1::text[]) order by c.sha256 for share of c",
             [ids]
           );
+          if (reprocess)
+            await sql.run(
+              "update catalyst_kb.contents set state='pending',failure_code=null where sha256 in (select d.content_sha256 from catalyst_kb.documents d join catalyst_kb.source_items i on i.document_id=d.id where i.id=any($1::text[]))",
+              [ids]
+            );
           const bound = createSourceStore(runtime, id, signal, runtime.stores, sql);
           const run = await bound.start(payload, "full");
           const current = {
