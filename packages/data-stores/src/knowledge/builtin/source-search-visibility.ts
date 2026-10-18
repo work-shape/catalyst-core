@@ -56,7 +56,7 @@ export async function visibleSourceHits(
           !row.parents ||
           // Unknown ancestry is trusted only at the boundary that last listed it.
           // Publishing a different boundary hides it until the queued full pass learns it.
-          (row.parents.length === 0 && row.definition_key !== sourceBoundaryKey(source)) ||
+          (row.parents.length > 0 && row.definition_key !== sourceBoundaryKey(source)) ||
           row.name === null ||
           row.path === null ||
           !withinSource(source, { parents: row.parents, name: row.name, path: row.path })

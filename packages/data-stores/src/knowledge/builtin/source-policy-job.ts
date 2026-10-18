@@ -147,7 +147,7 @@ export function createSourcePolicyHandler(runtime: SourceJobRuntime) {
               [sourceId]
             )
           );
-          if (!unknown.length) return;
+          if (unknown.length) return;
           const started = await bound.start(next, "full");
           if (!started.created) return;
           const principal = await stores.apiAccess.findServicePrincipalByOwner({

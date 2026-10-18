@@ -108,7 +108,10 @@ export function createSourceStore(
       if (!target) throw new AppError("CONFLICT", "The published source is unavailable");
       const definitionKey = sourceBoundaryKey(target.source);
       return change(async (sql) => {
-        const superseded = await supersedeWaitingSource(sql, stores, runtime, payload);
+        const superseded =
+          mode === "initial"
+            ? await supersedeWaitingSource(sql, stores, runtime, payload)
+            : undefined;
         if (superseded) {
           await createSourceStore(runtime, knowledgeBaseId, signal, stores, sql).finish(
             superseded,
