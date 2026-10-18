@@ -55,3 +55,16 @@ function withSortedKeys(value: unknown): unknown {
 export function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(withSortedKeys(left)) === JSON.stringify(withSortedKeys(right));
 }
+
+/** Stable JSON for operation hashes. Numeric-looking keys also stay in lexical order,
+ * preserving the stored hash format; JSON.stringify would reorder those keys numerically. */
+export function canonicalJson(value: JsonValue): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key] ?? null)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}

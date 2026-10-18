@@ -49,7 +49,7 @@ import {
   resolveGuardedPolicy,
   operationWorkspace
 } from "./operation-policy-call";
-import { hashInput } from "@work-shape/catalyst-core";
+import { hashInput } from "./input-hash";
 
 /**
  * How long a call waits for another person's approval before it expires unexecuted. The

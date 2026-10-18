@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   AppError,
-  hashInput,
+  canonicalJson,
+  type JsonValue,
   isJsonObject,
   DECISION_EXPIRED_REASON,
   agentRunJobOptions,
@@ -219,4 +221,9 @@ function notWaiting(expired: boolean): AppError {
         reason: DECISION_EXPIRED_REASON
       })
     : new AppError("CONFLICT", "This call does not wait for a decision any more.");
+}
+
+/** Matches the operation runner's hash of the person's chosen, frozen input. */
+function hashInput(input: JsonValue): string {
+  return createHash("sha256").update(canonicalJson(input)).digest("hex");
 }
