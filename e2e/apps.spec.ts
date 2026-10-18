@@ -13,6 +13,7 @@ import {
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
+import { chooseWorkspaceAudience } from "./app-audience";
 
 /** The address of the draft of the App at `appPath`, outside the App's own addresses. */
 const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/");
@@ -210,6 +211,10 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   // The header of the conversation the App was saved from is no band over the App's head.
   await expect(page.locator("header[data-beside-surface]")).toHaveCount(0);
   const publishDialog = page.getByRole("dialog", { name: `Publish “${appName}”?` });
+  // Others in the workspace use the App below: it is published for the workspace (SHARE-1).
+  await chooseWorkspaceAudience(publishDialog);
+  // The revision sentence stands behind Details since PUBQ-1.
+  await publishDialog.getByRole("button", { name: "Details", exact: true }).click();
   await expect(publishDialog).toContainText(
     "Everyone in Sales team gets revision 1 when they open the app."
   );

@@ -1,6 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 import postgres from "postgres";
 import { z } from "zod";
+import { chooseWorkspaceAudience } from "./app-audience";
 import { apiBaseUrl, shoot, signIn } from "./inbox-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, type PageErrorWatch } from "./test";
@@ -122,24 +123,32 @@ async function publishAndWait(page: Page, workspaceId: string, app: PublishedApp
   await page.goto(`/w/${workspaceId}/app-drafts/${app.id}`);
   const edit = page.getByTestId("app-edit");
   await expect(edit).toContainText("Draft · not published");
+  const dialog = page.getByRole("dialog");
   const publish = async () => {
     await edit.getByRole("button", { name: /^(Publish|Veröffentlichen)$/u }).click();
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: /^(Publish|Veröffentlichen)$/u })
-      .click();
+    // Published for the workspace, as before SHARE-1 asked "For whom?".
+    await chooseWorkspaceAudience(dialog);
+    await dialog.getByRole("button", { name: /^(Publish|Veröffentlichen)$/u }).click();
   };
   await publish();
-  await expect(page.getByRole("dialog")).toBeHidden();
-  await expect(page.getByTestId("app-publish-waits")).toHaveText(
+  // The held publish says so in the dialog it was sent from (SHARE-1), and the live version
+  // stays as it is.
+  await expect(dialog.getByTestId("app-publish-waits")).toHaveText(
     "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is."
   );
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(dialog).toBeHidden();
   await expect(edit).toContainText("Draft · not published");
   await shoot(page, "gr-pub-1-publish-waits", async () => {
     await expect(edit).toBeVisible();
     await publish();
-    await expect(page.getByTestId("app-publish-waits")).toBeVisible();
+    await expect(dialog.getByTestId("app-publish-waits")).toBeVisible();
   });
+  // Taking pictures leaves the last held dialog open; without them nothing is open.
+  if (await dialog.isVisible()) {
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(dialog).toBeHidden();
+  }
 }
 
 /** The revision of the App its users are served, as the admin reads it. */

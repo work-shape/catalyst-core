@@ -18,7 +18,8 @@ export {
   type AppActionsRead,
   type AppPublishDataRead
 } from "./app-data";
-export { AppEditFrame, appDraftIsAhead, PublishDialog } from "./app-edit";
+export { AppEditFrame, appDraftIsAhead, PublishDialog, SharePublishDialog } from "./app-edit";
+export { AppSavedLine } from "./app-saved-line";
 export { AppDeleteDialog, AppDetailsDialog, appLink } from "./app-header";
 export {
   appManifestSummary,

@@ -6,7 +6,7 @@ import {
   readConnectionDraft
 } from "../../studio/build-area/connection-draft";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
-import { standingAssetOpen } from "../conversation/subject-run";
+import { appSavedByCall, standingAssetOpen } from "../conversation/subject-run";
 import { isOpenToolName, readPageSave } from "../../studio/pages/page-save";
 import {
   isWorkspacePromotedArtifactsData,
@@ -182,6 +182,7 @@ function staysVisibleAfterRun(
     isApprovalRequestToolCall(part) ||
     isPageSaveOutcome(parts, index) ||
     isStandingOpen(part) ||
+    isAppSavedLine(part) ||
     isConnectionDraftCard(part) ||
     isSubagentCall(part) ||
     (index > finalTextIndex && isVisibleFinalAssistantPart(part))
@@ -258,6 +259,18 @@ function isStandingOpen(
   );
 }
 
+/** The first save of an App: its line says who can use it now and offers "Share". */
+function isAppSavedLine(
+  part: { type: string; toolName?: string; result?: unknown; isError?: boolean } | undefined
+): boolean {
+  return (
+    part?.type === "tool-call" &&
+    part.toolName !== undefined &&
+    appSavedByCall({ toolName: part.toolName, result: part.result, isError: part.isError }) !==
+      undefined
+  );
+}
+
 export function findFinalAssistantTextPartIndex(
   parts: readonly { type: string; text?: string }[]
 ): number {
@@ -322,6 +335,7 @@ function isStandaloneToolCall(
   if (
     isPageSaveCall(part) ||
     isStandingOpen(part) ||
+    isAppSavedLine(part) ||
     isConnectionDraftCard(part) ||
     isSubagentCall(part)
   ) {

@@ -23,7 +23,8 @@ import { ApprovalRequestCard } from "../approvals/approval-request-card";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
 import { useConnectionToolSubject } from "../assistant/tool-subjects";
 import { AssetOpenedLine } from "../conversation/conversation-subject";
-import { standingAssetOpen } from "../conversation/subject-run";
+import { appSavedByCall, standingAssetOpen } from "../conversation/subject-run";
+import { AppSavedLine } from "../../studio/apps/app-saved-line";
 import { ToolArtifactList } from "../files/artifact-download-card";
 import {
   readSurfacedToolArtifactRefs,
@@ -169,6 +170,12 @@ export function ToolCallPart({
 
   if (isOpenToolName(toolName)) {
     return <PageSaveCard args={args} result={result} failed={state === "failed"} />;
+  }
+
+  // The first save of an App says who can use it now, with "Share" (SHARE-1).
+  const appSaved = appSavedByCall({ toolName, result, isError });
+  if (appSaved) {
+    return <AppSavedLine saved={appSaved} />;
   }
 
   const opened = standingAssetOpen({ toolName, toolCallId, result, isError });

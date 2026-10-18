@@ -158,6 +158,12 @@ export const apps = defineTranslations({
     "apps.previewOf": "App {name}",
     "apps.promptStart": "Build an app for this workspace: ",
     "apps.publish": "Publish",
+    "apps.publishAudience": "For whom?",
+    "apps.publishAudienceInstance": "Whole instance",
+    "apps.publishAudienceSelf": "Only me",
+    "apps.publishBodyInstance":
+      "Everyone on this instance gets revision {number} when they open the app.",
+    "apps.publishBodySelf": "Only you get revision {number} when you open the app.",
     "apps.publishBody": "Everyone in {workspace} gets revision {number} when they open the app.",
     "apps.publishConnections": "Connections it uses",
     "apps.publishDataActionOne": "The action {actions} reads from it.",
@@ -194,6 +200,10 @@ export const apps = defineTranslations({
     "apps.revisionsDescription": "Every saved state of {name}, the newest first.",
     "apps.revisionsEmpty": "No revisions yet.",
     "apps.revisionsFailed": "The revisions could not be loaded.",
+    "apps.savedDraftLine":
+      "Saved to the draft of {title}. You can use it now; others see the change once you share it.",
+    "apps.savedLine": "Saved as the app {title}. You can use it now; others can once you share it.",
+    "apps.savedShare": "Share",
     "apps.save": "Save as app",
     "apps.saveBody":
       "What this preview shows becomes the draft of a new app in {workspace}. Nothing is published yet.",
@@ -382,6 +392,12 @@ export const apps = defineTranslations({
     "apps.previewOf": "App {name}",
     "apps.promptStart": "Baue eine App für diesen Arbeitsbereich: ",
     "apps.publish": "Veröffentlichen",
+    "apps.publishAudience": "Für wen?",
+    "apps.publishAudienceInstance": "Ganze Instanz",
+    "apps.publishAudienceSelf": "Nur für mich",
+    "apps.publishBodyInstance":
+      "Alle auf dieser Instanz bekommen Revision {number}, wenn sie die App öffnen.",
+    "apps.publishBodySelf": "Nur du bekommst Revision {number}, wenn du die App öffnest.",
     "apps.publishBody": "Alle in {workspace} bekommen Revision {number}, wenn sie die App öffnen.",
     "apps.publishConnections": "Verbindungen, die sie nutzt",
     "apps.publishDataActionOne": "Die Aktion {actions} liest daraus.",
@@ -419,6 +435,11 @@ export const apps = defineTranslations({
     "apps.revisionsDescription": "Jeder gespeicherte Stand von {name}, der neueste zuerst.",
     "apps.revisionsEmpty": "Noch keine Revisionen.",
     "apps.revisionsFailed": "Die Revisionen konnten nicht geladen werden.",
+    "apps.savedDraftLine":
+      "Im Entwurf von {title} gespeichert. Du kannst ihn jetzt nutzen; andere sehen die Änderung, sobald du ihn teilst.",
+    "apps.savedLine":
+      "Als App {title} gespeichert. Du kannst sie jetzt nutzen, andere, sobald du sie teilst.",
+    "apps.savedShare": "Teilen",
     "apps.save": "Als App speichern",
     "apps.saveBody":
       "Was diese Vorschau zeigt, wird zum Entwurf einer neuen App in {workspace}. Veröffentlicht wird noch nichts.",

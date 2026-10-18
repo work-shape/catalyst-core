@@ -9,8 +9,19 @@ import { appReadsStoredData } from "./app-model";
 // the KeyValueList of the question that holds them.
 
 /** The lines for one revision of one App, read when the question opens. */
-export function AppPublishData({ app, revision }: { app: string; revision: number }) {
-  return <AppPublishDataView read={useAppPublishData(app, revision)} />;
+export function AppPublishData({
+  app,
+  revision,
+  audienceLabel
+}: {
+  app: string;
+  revision: number;
+  /** Who the question's chosen audience names (SHARE-1), in place of who may use the App now. */
+  audienceLabel?: string | undefined;
+}) {
+  return (
+    <AppPublishDataView read={useAppPublishData(app, revision)} audienceLabel={audienceLabel} />
+  );
 }
 
 /**
@@ -18,7 +29,23 @@ export function AppPublishData({ app, revision }: { app: string; revision: numbe
  * then has nothing to say about it. Statements, parameters and rows are never shown; how many
  * rows the whole store held is said as what it is, the bound and not what the actions select.
  */
-export function AppPublishDataView({ read }: { read: AppPublishDataRead }) {
+export function AppPublishDataView({
+  read,
+  audienceLabel,
+  audiencePending = false
+}: {
+  read: AppPublishDataRead;
+  /**
+   * Who the audience chosen in the question names (SHARE-1). It takes the place of who may use
+   * the App now: the lines say who would see the data after this publish.
+   */
+  audienceLabel?: string | undefined;
+  /**
+   * The answer for a newly chosen audience is on its way: who sees the data waits for it, and
+   * the people of the choice before are never shown under the new one. The stores stay.
+   */
+  audiencePending?: boolean;
+}) {
   const { t } = useTranslation();
   if (read.status === "loading") {
     return (
@@ -47,7 +74,11 @@ export function AppPublishDataView({ read }: { read: AppPublishDataRead }) {
   return (
     <>
       <KeyValue label={t("apps.publishDataAudience")} data-field="data-audience">
-        {data.audience}
+        {audiencePending ? (
+          <SkeletonList rows={1} className="w-full" data-testid="app-publish-audience-pending" />
+        ) : (
+          (audienceLabel ?? data.audience)
+        )}
       </KeyValue>
       <KeyValue label={t("apps.publishDataStores")} data-field="data-stored">
         <div className="grid min-w-0 gap-3" data-testid="app-publish-data">

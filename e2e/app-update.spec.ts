@@ -17,6 +17,7 @@ import {
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
+import { chooseWorkspaceAudience } from "./app-audience";
 
 /** The address of the draft of the App at `appPath`, outside the App's own addresses. */
 const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/");
@@ -167,6 +168,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await expect(edit).toContainText("Draft · not published");
   await edit.getByRole("button", { name: "Publish", exact: true }).click();
   const publishDialog = page.getByRole("dialog", { name: `Publish “${appName}”?` });
+  await chooseWorkspaceAudience(publishDialog);
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishDialog).toBeHidden();
 
@@ -233,6 +235,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   const revisions = page.getByRole("dialog", { name: "Revisions" });
   await revisions.getByRole("button", { name: "Publish this revision" }).first().click();
   const publishSecond = page.getByRole("dialog", { name: `Publish “${appName}”?` });
+  await chooseWorkspaceAudience(publishSecond);
   await publishSecond.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishSecond).toBeHidden();
   expect(await asset()).toMatchObject({ draftRevision: 2, publishedRevision: 2 });
@@ -543,6 +546,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await page.goto(draftPathOf(appPath));
   await edit.getByRole("button", { name: "Publish", exact: true }).click();
   const publishDialog = page.getByRole("dialog", { name: `Publish “${appName}”?` });
+  await chooseWorkspaceAudience(publishDialog);
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishDialog).toBeHidden();
   expect(await asset()).toMatchObject({ draftRevision: 2, publishedRevision: 2 });
