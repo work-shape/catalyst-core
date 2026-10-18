@@ -86,15 +86,14 @@ jobs:
       - name: Build
         run: pnpm build
       # Tar preserves executable modes and hidden build files. Never share node_modules
-      # or restore a build from another commit; every consumer uses this run's artifact.
+      # or restore a build from another commit; every consumer uses this run's build.
       - name: Archive build
         run: find packages clients -mindepth 2 -maxdepth 2 -type d -name dist -print0 | tar --null -T - -czf /tmp/check-build.tgz
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - name: Save this run's build
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
-          name: check-build
           path: /tmp/check-build.tgz
-          compression-level: 0
-          retention-days: 1
+          key: check-build-${{ github.run_id }}-${{ github.sha }}
   static:
     needs: [paths, build]
     if: needs.paths.outputs.code == 'true'
@@ -186,9 +185,11 @@ jobs:
       - name: Keep Vitest durations and selected files
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: true
         with:
           name: vitest-durations-${{ matrix.shard }}
           path: test-results/vitest-durations.json
+          retention-days: 3
       - name: Deployment kit tests (once)
         if: matrix.shard == 1
         run: pnpm test:deployment-kit
@@ -351,29 +352,33 @@ jobs:
       - name: Keep measured durations and selected test list
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: true
         with:
           name: browser-durations-${{ matrix.shard }}
           path: |
             test-results/browser-durations.json
             .tmp/e2e/shard-${{ matrix.shard }}.txt
-          retention-days: 14
+          retention-days: 3
       - name: Keep Connection person-context evidence
         if: ${{ !cancelled() && hashFiles('test-results/**/person-context-*.png') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: true
         with:
           name: connection-person-context-${{ matrix.shard }}
           path: test-results/**/person-context-*.png
-          retention-days: 7
+          retention-days: 3
       - name: Keep App font specimens
         if: ${{ !cancelled() && hashFiles('test-results/**/font-specimens-*-light.png') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: true
         with:
           name: app-font-specimens-${{ matrix.shard }}
           path: test-results/**/font-specimens-*-light.png
-          retention-days: 7
+          retention-days: 3
       - name: Keep traces and the server log of a failed run
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: true
         with:
           name: browser-run-${{ matrix.shard }}
           path: |
