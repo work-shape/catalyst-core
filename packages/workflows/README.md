@@ -38,8 +38,10 @@ Each history starts its trigger and fixed steps on the revision published at tha
 moment. The checkpointed loop resumes its remaining immutable dataset view or inline
 items. Checkpoints are internal values, never included in list/read responses. A
 history admits a complete next item only when its step budget has room, drains items
-already admitted, then commits `continued` and the successor together. New items stop
-at a deadline; admitted items finish their current boundary. No process sleeps while
+already admitted, then commits `continued` and the successor together. Admission always
+keeps the non-loop tails at every enclosing level reserved. An item larger than one
+history runs alone and resumes inside the item at a quiet checkpoint; plain nested
+loops share this reservation and checkpoint rule. New items stop at a deadline; admitted items finish their current boundary. No process sleeps while
 waiting for a successor. Dataset grants transfer before the old history releases them.
 
 The public product contract is `WorkflowRunIdentity.continuation` in catalyst-core and

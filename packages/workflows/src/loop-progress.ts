@@ -1,5 +1,5 @@
 import { checkpointFrame } from "./continuation-checkpoint";
-import { loopItemReservation } from "./loop-reservation";
+import { loopContinuation, loopItemReservation } from "./loop-reservation";
 import { loopFailureRowSchema } from "./dataset-values";
 import { WorkflowStepFailure } from "./step-failure";
 import type {
@@ -25,7 +25,8 @@ export function createLoopProgress(options: {
     tx: PlatformStores,
     run: WorkflowRun,
     step: WorkflowStep,
-    place: StepPlace
+    place: StepPlace,
+    index: WorkflowStepIndex
   ): Promise<boolean>;
   advance(
     tx: PlatformStores,
@@ -111,30 +112,44 @@ export function createLoopProgress(options: {
     let going = progress.running;
     // Reserve whole admitted items and their shared tail before admitting another. Items
     // drain before the checkpoint, so no call is skipped or repeated at a concurrency boundary.
+    const configuration = loop?.type === "loop" ? loopContinuation(index, loop.id) : undefined;
     const reservation =
-      loop?.type === "loop" && loop.continueAsNew
+      loop?.type === "loop" && configuration
         ? await loopItemReservation(tx, run, index, loopRun, loop.steps)
         : { item: 0, tail: 0 };
     const mustContinue = () =>
       loop?.type === "loop" &&
-      loop.continueAsNew &&
+      configuration &&
       started < total &&
       (Date.parse(run.deadlineAt) <= now().getTime() ||
-        started >= (loop.continueAsNew.after ?? Infinity) ||
+        started >= (loop.continueAsNew?.after ?? Infinity) ||
         (run.stepRunCount + (going + 1) * reservation.item + reservation.tail >
           run.limits.stepRuns &&
           // An item larger than a fresh history runs alone and may checkpoint inside it.
-          !(started === 0 && going === 0 && run.stepRunCount < run.limits.stepRuns)));
+          !(
+            started === 0 &&
+            going === 0 &&
+            run.stepRunCount + reservation.tail < run.limits.stepRuns
+          )));
     while (first && started < total && going < width && !mustContinue()) {
       const place = await itemPlace(tx, index, loopRun, first, started);
       // The run ended at its limit of step runs: no further item starts.
-      if (!(await beginStep(tx, run, first, place))) return;
+      if (!(await beginStep(tx, run, first, place, index))) return;
       started += 1;
       going += 1;
     }
     if (going > 0) return;
-    if (mustContinue() && loop?.type === "loop") {
-      if (await options.continueRun(tx, run, loopRun, loop, started)) return;
+    if (mustContinue() && loop?.type === "loop" && configuration) {
+      if (
+        await options.continueRun(
+          tx,
+          run,
+          loopRun,
+          { ...loop, continueAsNew: configuration },
+          started
+        )
+      )
+        return;
       await options.failLoop(tx, run, loopRun, {
         code: "continuation_no_progress",
         message: "The run budget cannot complete one loop item"

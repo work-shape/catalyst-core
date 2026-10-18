@@ -351,12 +351,18 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       // The next step of the same list stands beside this one: same block, same item.
       const prefix = stepRun.key.slice(0, stepRun.key.length - stepRun.stepId.length);
       const { containerStepRunId, branch, iteration } = stepRun;
-      await beginStep(tx, run, next, {
-        key: `${prefix}${next.id}`,
-        ...(containerStepRunId === undefined ? {} : { containerStepRunId }),
-        ...(branch === undefined ? {} : { branch }),
-        ...(iteration === undefined ? {} : { iteration })
-      });
+      await beginStep(
+        tx,
+        run,
+        next,
+        {
+          key: `${prefix}${next.id}`,
+          ...(containerStepRunId === undefined ? {} : { containerStepRunId }),
+          ...(branch === undefined ? {} : { branch }),
+          ...(iteration === undefined ? {} : { iteration })
+        },
+        index
+      );
       return;
     }
     if (stepRun.containerStepRunId === undefined) return;

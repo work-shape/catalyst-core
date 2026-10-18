@@ -6,7 +6,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import { publishedDefinitions, type WorkflowFixture } from "./support/workflow-instance";
-import { notifyClients, readyWorkflows, start, writesOf } from "./support/workflow-runs";
+import {
+  notifyClients,
+  readyWorkflows,
+  start,
+  stepRunsOf,
+  writesOf
+} from "./support/workflow-runs";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 
 let open: WorkflowFixture | undefined;
@@ -70,7 +76,8 @@ async function finishChain(t: WorkflowFixture) {
   for (let pass = 0; pass < 100; pass++) {
     await worker.runDue();
     const chain = await runs(t);
-    if (chain.some((run) => run.status === "done" || run.status === "failed")) return chain;
+    if (chain.some((run) => ["done", "failed", "limit_reached", "cancelled"].includes(run.status)))
+      return chain;
   }
   throw new Error(`The continuation chain did not end: ${JSON.stringify(await runs(t))}`);
 }
@@ -94,17 +101,24 @@ async function readyPublished(manifest: unknown) {
   return t;
 }
 
-// Three item writes need six steps before the output, or eighteen when nested.
-// Reserve the output even on a page whose last item cannot be known in advance.
-it.each([
-  ...[5, 6, 7].map((budget) => ({ nested: false, concurrency: 1, budget })),
-  ...[1, 3].flatMap((concurrency) =>
-    [17, 18, 19].map((budget) => ({ nested: true, concurrency, budget }))
+// Scan every budget from each publish floor through floor + 13, including exact fills.
+it.each(
+  [false, true].flatMap((nested) =>
+    [1, 3].flatMap((concurrency) =>
+      Array.from({ length: 14 }, (_, offset) => ({
+        nested,
+        concurrency,
+        budget: (nested ? 7 : 5) + offset
+      }))
+    )
   )
-])(
+)(
   "reserves the final tail at nested=$nested concurrency=$concurrency budget=$budget",
   async ({ nested, concurrency, budget }) => {
     const manifest = definition();
+    manifest.steps = manifest.steps.map((step) =>
+      step.id === "each_client" ? { ...step, concurrency } : step
+    );
     if (nested)
       manifest.steps = manifest.steps.map((step) =>
         step.id === "each_client"
@@ -153,19 +167,19 @@ it.each([
     const chain = (await finishChain(t)).sort(
       (a, b) => (a.continuation?.number ?? 1) - (b.continuation?.number ?? 1)
     );
-    expect(chain.map((run) => run.status)).toEqual(
-      budget === (nested ? 19 : 7)
-        ? ["done"]
-        : !nested && budget === 5
-          ? ["continued", "continued", "done"]
-          : ["continued", "done"]
-    );
+    expect(chain.at(-1)?.status).toBe("done");
+    expect(chain.slice(0, -1).every((run) => run.status === "continued")).toBe(true);
+    const tails = (await Promise.all(chain.map((run) => stepRunsOf(t, run.id))))
+      .flat()
+      .filter((step) => step.stepId === "result");
+    expect(tails).toHaveLength(1);
+    expect(tails[0]?.status).toBe("done");
     expect(chain.every((run) => run.stepRunCount <= budget)).toBe(true);
     const last = chain.at(-1);
     if (!last) throw new Error("Missing final history");
-    expect(
-      await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: last.id })
-    ).toMatchObject({ value: { failed: 0 } });
+    expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: last.id })).toEqual({
+      value: { sent: 3, failed: 0 }
+    });
     expect(writesOf(t)).toHaveLength(nested ? 12 : 3);
     expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(nested ? 12 : 3);
     for (const run of chain)
@@ -221,7 +235,7 @@ it("reserves the inner tail, the rest of the outer item and the outer tail", asy
   expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(15);
 });
 
-it("drains concurrent children of an oversized item before checkpointing a quiet frontier", async () => {
+it("reserves the tail while admitting concurrent children of an oversized item", async () => {
   const manifest = definition();
   const t = await readyPublished({
     ...manifest,
@@ -274,11 +288,11 @@ it("drains concurrent children of an oversized item before checkpointing a quiet
   });
   const chain = await finishChain(t);
   expect(chain.every((run) => run.status === "continued" || run.status === "done")).toBe(true);
-  // All three first steps are admitted together (seven steps including the containers).
-  // Their second steps cross the budget while siblings are unfinished: quiet is false.
-  expect(chain.find((run) => run.status === "continued")?.stepRunCount).toBe(10);
-  // The one oversized outer item has three concurrent children, each writing twice.
-  expect(chain.map((run) => run.status).sort()).toEqual(["continued", "done"]);
+  // Nested plain loops inherit the outer continuation: admit only children whose whole
+  // body fits before its tail, then checkpoint instead of draining beyond the budget.
+  expect(chain.every((run) => run.stepRunCount <= 8)).toBe(true);
+  expect(chain.some((run) => run.status === "continued")).toBe(true);
+  expect(chain.some((run) => run.status === "done")).toBe(true);
   expect(writesOf(t)).toHaveLength(6);
   expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(6);
 });

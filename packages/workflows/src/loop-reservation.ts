@@ -9,6 +9,17 @@ import { workflowLoopTailSteps, type WorkflowStepIndex } from "./definition";
 import { resolveReference } from "./references";
 import { WorkflowStepFailure } from "./step-failure";
 
+/** Plain nested loops share their continuing ancestor's quiet checkpoints and tail budget. */
+export function loopContinuation(index: WorkflowStepIndex, loopId: string) {
+  let current = index.get(loopId);
+  while (current) {
+    if (current.step.type === "loop" && current.step.continueAsNew)
+      return current.step.continueAsNew;
+    current = current.sequence.loop ? index.get(current.sequence.loop) : undefined;
+  }
+  return undefined;
+}
+
 /** An upper bound for a whole item, including every nested iteration, not just its block. */
 export async function loopItemReservation(
   tx: PlatformStores,

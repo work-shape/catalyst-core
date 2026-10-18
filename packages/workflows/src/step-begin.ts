@@ -9,8 +9,9 @@ import {
   type WorkflowStepRunPlacement,
   type WorkflowRunError
 } from "@work-shape/catalyst-core";
-import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
+import { workflowLoopTailSteps, type WorkflowStepIndex } from "./definition";
 import { stepJobConcurrency, workflowStepJobKind } from "./step-job";
+import { loopContinuation } from "./loop-reservation";
 import { checkpointFrame } from "./continuation-checkpoint";
 import type { createContinuation } from "./continue-as-new";
 type StepPlace = WorkflowStepRunPlacement & { key: string };
@@ -37,21 +38,21 @@ export function createStepBeginning(options: {
     tx: PlatformStores,
     run: WorkflowRun,
     step: WorkflowStep,
-    place: StepPlace
+    place: StepPlace,
+    index: WorkflowStepIndex = new Map()
   ): Promise<boolean> {
-    if (run.stepRunCount >= run.limits.stepRuns) {
-      if (place.containerStepRunId !== undefined) {
-        const definition = await tx.workflowRuns.readRunDefinition({
-          clientInstanceId,
-          id: run.id
-        });
-        const index = indexWorkflowSteps(definition ?? { steps: [] });
-        const loopRun = await tx.workflowRuns.getStepRun({
-          clientInstanceId,
-          id: place.containerStepRunId
-        });
-        const loop = loopRun ? index.get(loopRun.stepId)?.step : undefined;
-        let parent = loopRun;
+    const loopId = index.get(step.id)?.sequence.loop;
+    const loop = loopId ? index.get(loopId)?.step : undefined;
+    const configuration = loopId ? loopContinuation(index, loopId) : undefined;
+    // Oversized items may split inside a plain nested loop, before spending any tail slot.
+    const tail = configuration && loopId ? workflowLoopTailSteps(index, loopId) : 0;
+    if (run.stepRunCount + tail >= run.limits.stepRuns) {
+      const loopRun =
+        place.containerStepRunId === undefined
+          ? undefined
+          : await tx.workflowRuns.getStepRun({ clientInstanceId, id: place.containerStepRunId });
+      if (loopRun) {
+        let parent: WorkflowStepRun | undefined = loopRun;
         let quiet = true;
         let childIndex = place.iteration?.index ?? 0;
         // A single frontier cannot represent unfinished siblings or later completed items.
@@ -72,20 +73,9 @@ export function createStepBeginning(options: {
               })
             : undefined;
         }
-        parent = loopRun;
-        let configuration = loop?.type === "loop" ? loop.continueAsNew : undefined;
-        while (!configuration && parent?.containerStepRunId) {
-          parent = await tx.workflowRuns.getStepRun({
-            clientInstanceId,
-            id: parent.containerStepRunId
-          });
-          const ancestor = parent ? index.get(parent.stepId)?.step : undefined;
-          if (ancestor?.type === "loop") configuration = ancestor.continueAsNew;
-        }
         if (
           quiet &&
           configuration &&
-          loopRun &&
           loop?.type === "loop" &&
           (await options.continueRun(
             tx,
@@ -142,11 +132,7 @@ export function createStepBeginning(options: {
             finishedAt: now().toISOString(),
             output
           });
-          const definition = await tx.workflowRuns.readRunDefinition({
-            clientInstanceId,
-            id: run.id
-          });
-          await options.advance(tx, run, indexWorkflowSteps(definition ?? { steps: [] }), stepRun);
+          await options.advance(tx, run, index, stepRun);
           return true;
         }
       }
