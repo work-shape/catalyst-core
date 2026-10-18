@@ -808,17 +808,31 @@
       "breakpoints": true
     },
     {
+      "idx": 115,
+      "version": "7",
+      "when": 1792303101295,
+      "tag": "0115_workflow_failure_counts",
+      "breakpoints": true
+    },
+    {
       "idx": 116,
       "version": "7",
-      "when": 1792299454221,
+      "when": 1792309525957,
       "tag": "0116_workflow_continue_as_new",
       "breakpoints": true
     },
     {
       "idx": 117,
       "version": "7",
-      "when": 1792299593188,
-      "tag": "0117_workflow_continuation_indexes",
+      "when": 1792309543045,
+      "tag": "0117_workflow_continuation_validate",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1792309543969,
+      "tag": "0118_workflow_continuation_indexes",
       "breakpoints": true
     }
   ]

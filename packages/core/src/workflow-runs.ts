@@ -40,7 +40,7 @@ export { WORKFLOW_ENDED_STATUSES } from "@work-shape/catalyst-asset-schemas";
 
 /**
  * The ends of a run that give its run key up: a start with the key after one of them is a new
- * run. A run that is open or `done` holds its key (`workflow_runs_run_key_idx`).
+ * run. A run that is open or `done` holds its key (`workflow_runs_active_run_key_idx`).
  */
 export const WORKFLOW_KEY_RELEASING_STATUSES = [
   "failed",

@@ -1,6 +1,6 @@
 {
-  "id": "126dad16-5cf0-4112-96ae-7262523994fe",
-  "prevId": "1561fa0c-a149-4539-8904-79b3625e0411",
+  "id": "1d74f5c1-f9ad-4fc8-83e1-6b6bce49a9c1",
+  "prevId": "9818046e-8ab4-4613-b762-74167b0d2d57",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -470,6 +470,12 @@
         "model_preference": {
           "name": "model_preference",
           "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "locale": {
+          "name": "locale",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -9389,6 +9395,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "failed_item_count": {
+          "name": "failed_item_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "step_run_count": {
           "name": "step_run_count",
           "type": "integer",
@@ -9511,8 +9523,8 @@
           "method": "btree",
           "with": {}
         },
-        "workflow_runs_parent_step_idx": {
-          "name": "workflow_runs_parent_step_idx",
+        "workflow_runs_active_parent_step_idx": {
+          "name": "workflow_runs_active_parent_step_idx",
           "columns": [
             {
               "expression": "client_instance_id",
@@ -9529,6 +9541,28 @@
           ],
           "isUnique": true,
           "where": "\"workflow_runs\".\"status\" <> 'continued'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "workflow_runs_failures_idx": {
+          "name": "workflow_runs_failures_idx",
+          "columns": [
+            {
+              "expression": "client_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "root_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"workflow_runs\".\"status\" in ('failed', 'limit_reached') or \"workflow_runs\".\"failed_item_count\" > 0",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -9615,8 +9649,8 @@
           "method": "btree",
           "with": {}
         },
-        "workflow_runs_run_key_idx": {
-          "name": "workflow_runs_run_key_idx",
+        "workflow_runs_active_run_key_idx": {
+          "name": "workflow_runs_active_run_key_idx",
           "columns": [
             {
               "expression": "client_instance_id",

@@ -112,7 +112,7 @@ export const workflowRuns = pgTable(
   },
   (table) => [
     uniqueIndex("workflow_runs_operation_idx").on(table.clientInstanceId, table.operationRunId),
-    uniqueIndex("workflow_runs_parent_step_idx")
+    uniqueIndex("workflow_runs_active_parent_step_idx")
       .on(table.clientInstanceId, table.parentStepRunId)
       .where(sql`${table.status} <> 'continued'`),
     // API projections visit only failure-bearing runs in the requested trees.
@@ -148,7 +148,7 @@ export const workflowRuns = pgTable(
     // A run key exists once per Workflow and mode among the runs that are open or `done`: a
     // start that meets it starts nothing and is answered that run. A run that ended `failed`,
     // `cancelled` or `limit_reached` leaves the index and so gives its key up.
-    uniqueIndex("workflow_runs_run_key_idx")
+    uniqueIndex("workflow_runs_active_run_key_idx")
       .on(table.clientInstanceId, table.workflow, table.mode, table.runKey)
       .where(
         sql`${table.runKey} is not null and ${table.status} not in ('failed', 'cancelled', 'limit_reached', 'continued')`

@@ -48,7 +48,7 @@ async function lockWorkflowRunByKey(
   db: PostgresConnection,
   input: Input<"lockRunByKey">
 ): Promise<WorkflowRun | undefined> {
-  // The predicate of `workflow_runs_run_key_idx`: the run that holds the key, read again
+  // The predicate of `workflow_runs_active_run_key_idx`: the run that holds the key, read again
   // behind its lock, so one that ended `failed` while this waited is no longer it.
   const [row] = await db
     .select(runColumns)
