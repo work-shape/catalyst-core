@@ -46,6 +46,7 @@ const PHONE = { width: 390, height: 844 };
 const SHORT_PHONE = { width: 390, height: 640 };
 const PUBLISH = /^(?:Publish|Veröffentlichen)$/u;
 const ALLOW = /^(?:Allow|Erlauben)$/u;
+const CANCEL = /^(?:Cancel|Abbrechen)$/u;
 const SIZES = [DESKTOP, PHONE] as const;
 
 const databaseUrl =
@@ -434,7 +435,7 @@ export async function shareAsksForWhom(
     await expect(question).toBeAttached();
     await picture(page, testInfo, "dialog-scrolled-en-light-390x640");
     await page.setViewportSize(DESKTOP);
-    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await dialog.getByRole("button", { name: CANCEL }).click();
     await expect(dialog).toBeHidden();
 
     // A builder who may publish in this workspace and not on the instance is offered no whole
@@ -550,7 +551,7 @@ export async function shareAsksForWhom(
       question.getByRole("radio", { name: "Whole instance", exact: true })
     ).toBeChecked();
     await expect(dialog.getByTestId("app-publish-audience-change")).toHaveCount(0);
-    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await dialog.getByRole("button", { name: CANCEL }).click();
     await expect(dialog).toBeHidden();
     const audienceOnly = await eachLook(
       page,
@@ -571,7 +572,7 @@ export async function shareAsksForWhom(
       (locale, theme, width) => picture(page, testInfo, `audience-only-${locale}-${theme}-${width}`)
     );
     expect(audienceOnly).toBe(8);
-    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await dialog.getByRole("button", { name: CANCEL }).click();
     await expect(dialog).toBeHidden();
 
     // Narrowing: the member may publish in this workspace only. On the instance-wide App the
@@ -610,7 +611,7 @@ export async function shareAsksForWhom(
           picture(memberPage, testInfo, `narrowing-${locale}-${theme}-${width}`)
       );
       expect(narrowing).toBe(8);
-      await memberDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await memberDialog.getByRole("button", { name: CANCEL }).click();
       await expect(memberDialog).toBeHidden();
     } else {
       testInfo.annotations.push({
@@ -691,7 +692,7 @@ export async function shareAsksForWhom(
     await expect(dialog.getByRole("radio", { name: "Whole instance", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: PUBLISH })).toBeEnabled();
     await picture(page, testInfo, "save-line-share-dialog-en-light-1280");
-    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await dialog.getByRole("button", { name: CANCEL }).click();
     await expect(dialog).toBeHidden();
 
     // The agent asks to publish the App for the whole instance. Its confirmation asks the person

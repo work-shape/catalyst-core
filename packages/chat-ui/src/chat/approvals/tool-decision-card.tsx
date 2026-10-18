@@ -214,6 +214,13 @@ export function ToolDecisionCardView({
     (row) => ask === undefined || row.key !== "audience"
   );
 
+  const inputs = (
+    <CallInputs
+      call={{ inputs: rows, inputFieldCount: rows.length, inputRemoved: false }}
+      hiddenFields={0}
+    />
+  );
+
   function deny(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     const trimmed = reason.trim();
@@ -251,13 +258,13 @@ export function ToolDecisionCardView({
         </Banner>
       ) : null}
       {ask && !outcome ? ask.node : null}
-      <CallInputs
-        call={{ inputs: rows, inputFieldCount: rows.length, inputRemoved: false }}
-        hiddenFields={0}
-      />
+      {/* A call that asks its own question, as an App publish asks "For whom?", says in that
+          question what it does: its raw inputs are technical details then. */}
+      {ask ? null : inputs}
       <Disclosure data-testid="tool-decision-details">
         <DisclosureTrigger>{t("operations.callDetails")}</DisclosureTrigger>
         <DisclosureContent>
+          {ask ? <div className="pt-1">{inputs}</div> : null}
           <KeyValueList className="pt-1">
             <KeyValue label={t("operations.operation")} data-field="operation">
               <span className="font-mono text-code wrap-anywhere">{decision.operationId}</span>

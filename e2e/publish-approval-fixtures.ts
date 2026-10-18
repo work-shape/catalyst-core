@@ -136,7 +136,10 @@ async function publishAndWait(page: Page, workspaceId: string, app: PublishedApp
   await expect(dialog.getByTestId("app-publish-waits")).toHaveText(
     "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is."
   );
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Close", exact: true })
+    .filter({ hasText: "Close" })
+    .click();
   await expect(dialog).toBeHidden();
   await expect(edit).toContainText("Draft · not published");
   await shoot(page, "gr-pub-1-publish-waits", async () => {
@@ -146,7 +149,10 @@ async function publishAndWait(page: Page, workspaceId: string, app: PublishedApp
   });
   // Taking pictures leaves the last held dialog open; without them nothing is open.
   if (await dialog.isVisible()) {
-    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await dialog
+      .getByRole("button", { name: "Close", exact: true })
+      .filter({ hasText: "Close" })
+      .click();
     await expect(dialog).toBeHidden();
   }
 }

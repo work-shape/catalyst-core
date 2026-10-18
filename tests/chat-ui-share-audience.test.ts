@@ -5,6 +5,8 @@ import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   appManifestSummary,
   appPublishCall,
+  appPublishConfirmationReady,
+  AppPublishConfirmationView,
   appPublishDataRead,
   appPublishMaySend,
   AppSavedLine,
@@ -574,9 +576,39 @@ describe("SHARE-1 fix round: the agent's App publish asks “For whom?” before
   const allow = (markup: string) =>
     markup.match(/<button[^>]*>(?:(?!<\/button>).)*Allow<\/button>/u)?.[0] ?? "";
 
-  it("shows the question before the call's inputs and holds Allow until it is answered", () => {
+  it("asks the question before Allow and folds the raw inputs under Details", () => {
     const markup = card(false);
-    expect(at(markup, 'data-testid="question"')).toBeLessThan(at(markup, 'data-input-key="kind"'));
+    // The question, then Details, then Allow: no input box between the question and Allow.
+    expect(at(markup, 'data-testid="question"')).toBeLessThan(
+      at(markup, 'data-testid="tool-decision-details"')
+    );
+    expect(at(markup, 'data-testid="tool-decision-details"')).toBeLessThan(at(markup, ">Allow<"));
+    for (const key of ["kind", "name", "revision"]) {
+      expect(markup).not.toContain(`data-input-key="${key}"`);
+    }
+    // Another tool's confirmation, without a question, still lists its inputs at once.
+    const plain = render(
+      createElement(ToolDecisionCardView, {
+        decision: {
+          toolCallId: "call_2",
+          operationRunId: "oprun_2",
+          operationId: "connections.crm.create_offer",
+          mode: "confirm",
+          inputPreview: { customer: "Müller GmbH" },
+          expiresAt: "2026-10-18T18:30:00Z"
+        },
+        title: "Create an offer",
+        toolName: "connection.crm.create_offer",
+        answer: idle
+      })
+    );
+    expect(at(plain, 'data-input-key="customer"')).toBeLessThan(
+      at(plain, 'data-testid="tool-decision-details"')
+    );
+  });
+
+  it("holds Allow until the question is answered", () => {
+    const markup = card(false);
     expect(allow(markup)).toContain('disabled=""');
     expect(allow(card(true))).not.toContain('disabled=""');
     // The agent's suggestion is not listed as the input: the person's answer is.
@@ -587,5 +619,103 @@ describe("SHARE-1 fix round: the agent's App publish asks “For whom?” before
     expect(card(true, { decided: { decision: "confirm", audience: "workspace" } })).not.toContain(
       'data-testid="question"'
     );
+  });
+});
+
+describe("check 80 on the agent's App publish: the chosen audience's data lines", () => {
+  const live = ready("Findings opens for everyone in Kai Spezis.");
+  const withHolders = storedDataOf(
+    storedSources({
+      workspace: { title: "Kai Spezis", members: 14 },
+      holders: [{ kind: "user", name: "usr_anna", title: "Anna Berg" }],
+      hiddenHolders: 0
+    })
+  );
+  const view = (input: {
+    offer: ReturnType<typeof offer>;
+    selected?: Audience;
+    narrative?: PublishNarrativeRead;
+    storedData?: Parameters<typeof AppPublishConfirmationView>[0]["storedData"];
+    locale?: "en" | "de";
+  }) =>
+    render(
+      createElement(AppPublishConfirmationView, {
+        offer: input.offer,
+        selected: input.selected ?? input.offer.selected,
+        workspaceName: "Kai Spezis",
+        narrative: input.narrative ?? live,
+        storedData: input.storedData,
+        disabled: false,
+        onChange: noop
+      }),
+      input.locale ?? "en"
+    );
+
+  it("names the chosen people, the App's other right holders and the instance admins", () => {
+    const cell = audienceCell(
+      view({
+        offer: offer("workspace", undefined, "Everyone in Kai Spezis", { people: 14 }),
+        storedData: withHolders
+      })
+    );
+    expect(cell).toContain("Everyone in Kai Spezis (14 people)");
+    expect(cell).toContain("Also by a right on the app: Anna Berg");
+    expect(cell).toContain("Instance admins also have access.");
+    const german = audienceCell(
+      view({
+        offer: offer("self", undefined, "Nur für mich", { people: 1 }),
+        storedData: storedDataOf(storedSources(), "de"),
+        locale: "de"
+      })
+    );
+    expect(german).toContain("Nur für mich");
+    expect(german).not.toContain("(1 Person)");
+    expect(german).toContain("Instanz-Admins haben ebenfalls Zugriff.");
+  });
+
+  it("never names the people of the choice before while the new choice's answer loads", () => {
+    const markup = view({
+      offer: offer("instance", undefined, "Everyone in the instance", { people: 40 }),
+      selected: "self",
+      narrative: { status: "loading" },
+      storedData: withHolders
+    });
+    const cell = audienceCell(markup);
+    expect(cell).toContain('data-testid="app-publish-audience-pending"');
+    expect(cell).not.toContain("Everyone in the instance");
+    expect(markup).toContain('data-data-store="kunden"');
+  });
+
+  it("shows no data lines for a revision that reads no stored data", () => {
+    const markup = view({ offer: offer("workspace") });
+    expect(markup).not.toContain('data-field="data-audience"');
+    expect(markup).toContain("Findings opens for everyone in Kai Spezis.");
+  });
+
+  it("holds Allow while the sentence or the required data lines load or failed", () => {
+    const chosen = offer("workspace");
+    const base = {
+      offer: chosen,
+      selected: "workspace" as const,
+      narrative: live,
+      readsStoredData: true,
+      storedData: withHolders
+    };
+    expect(appPublishConfirmationReady(base)).toBe(true);
+    expect(appPublishConfirmationReady({ ...base, storedData: { status: "loading" } })).toBe(false);
+    expect(
+      appPublishConfirmationReady({ ...base, storedData: { status: "failed", retry: noop } })
+    ).toBe(false);
+    expect(appPublishConfirmationReady({ ...base, narrative: { status: "loading" } })).toBe(false);
+    expect(appPublishConfirmationReady({ ...base, selected: "self" })).toBe(false);
+    expect(appPublishConfirmationReady({ ...base, readsStoredData: undefined })).toBe(false);
+    // A plain App needs no data lines: the never-asked read does not hold it.
+    expect(
+      appPublishConfirmationReady({
+        ...base,
+        readsStoredData: false,
+        storedData: { status: "loading" }
+      })
+    ).toBe(true);
   });
 });

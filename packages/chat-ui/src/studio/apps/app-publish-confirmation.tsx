@@ -1,8 +1,19 @@
 import { useState, type ReactNode } from "react";
 import { appAudienceSchema } from "@work-shape/catalyst-api-client";
-import { SkeletonList } from "@work-shape/catalyst-ui";
-import { narrativeHolds, PublishNarrativeReadLead } from "../../shared/publish-narrative";
-import { useAppPublishNarrative, type AppAudience } from "./app-data";
+import { KeyValueList, SkeletonList } from "@work-shape/catalyst-ui";
+import {
+  narrativeHolds,
+  PublishNarrativeReadLead,
+  type PublishNarrativeRead
+} from "../../shared/publish-narrative";
+import {
+  useAppPublishData,
+  useAppPublishNarrative,
+  type AppAudience,
+  type AppAudienceOffer,
+  type AppPublishDataRead
+} from "./app-data";
+import { AppPublishDataView } from "./app-publish-data";
 import { AppAudienceChange, AppAudienceQuestion } from "./app-publish-question";
 import { useAppsHost } from "./apps-host";
 
@@ -54,10 +65,81 @@ export interface AppPublishConfirmationAsk {
 }
 
 /**
+ * Whether Allow may be clicked: the answer for the audience shown is in, with its sentence, and
+ * where the revision reads stored data, the lines on who sees it. A failed read holds it too.
+ */
+export function appPublishConfirmationReady(input: {
+  offer: AppAudienceOffer | undefined;
+  selected: AppAudience | undefined;
+  narrative: PublishNarrativeRead;
+  readsStoredData: boolean | undefined;
+  storedData: AppPublishDataRead;
+}): boolean {
+  if (input.offer === undefined || input.offer.selected !== input.selected) return false;
+  if (narrativeHolds(input.narrative) || input.readsStoredData === undefined) return false;
+  return !input.readsStoredData || input.storedData.status === "ready";
+}
+
+/**
+ * The question as the card shows it: "For whom?", who has it now where that changes, the
+ * instance's sentence and, where the revision reads stored data, who sees it under the choice
+ * shown, the same lines as the Publish dialog's.
+ */
+export function AppPublishConfirmationView({
+  offer,
+  selected,
+  workspaceName,
+  narrative,
+  storedData,
+  disabled,
+  onChange
+}: {
+  offer: AppAudienceOffer | undefined;
+  selected: AppAudience | undefined;
+  workspaceName: string;
+  narrative: PublishNarrativeRead;
+  /** The lines on stored data. Absent where the revision reads none. */
+  storedData: AppPublishDataRead | undefined;
+  disabled: boolean;
+  onChange(audience: AppAudience): void;
+}) {
+  // The offer names the people of the audience it was read for; for another choice it waits.
+  const audienceLabel = offer && offer.selected === selected ? offer.label : undefined;
+  return (
+    <div className="grid min-w-0 gap-3" data-testid="app-publish-confirmation">
+      {offer && selected !== undefined ? (
+        <AppAudienceQuestion
+          offer={offer}
+          selected={selected}
+          workspaceName={offer.workspaceName ?? workspaceName}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      ) : (
+        <SkeletonList rows={2} className="w-full" />
+      )}
+      <AppAudienceChange offer={offer} selected={selected} />
+      <PublishNarrativeReadLead read={narrative} />
+      {storedData ? (
+        <KeyValueList>
+          <AppPublishDataView
+            read={storedData}
+            audienceLabel={audienceLabel}
+            audiencePeople={selected === "self" ? undefined : offer?.people}
+            audiencePending={offer !== undefined && audienceLabel === undefined}
+          />
+        </KeyValueList>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * Reads the question for an agent's App publish. The first read asks what the instance proposes
  * and which choices it offers this person; where the agent's suggestion is among them, it is
  * chosen and read next. A suggestion the person may not make is never read: the instance's own
- * proposal stays.
+ * proposal stays. Who sees which stored data is read only for a revision with a reading `sql`
+ * action, so a plain App confirms on an instance without Data Stores.
  */
 export function useAppPublishConfirmation(
   call: AppPublishCall,
@@ -79,28 +161,28 @@ export function useAppPublishConfirmation(
       setRead(call.suggested);
     }
   }
+  const readsStoredData = question.readsStoredData;
+  const storedData = useAppPublishData(call.app, call.revision, readsStoredData === true);
   const selected = settled ? (read ?? offer?.selected) : undefined;
-  const ready =
-    offer !== undefined && offer.selected === selected && !narrativeHolds(question.narrative);
   return {
     audience: selected,
-    ready,
+    ready: appPublishConfirmationReady({
+      offer,
+      selected,
+      narrative: question.narrative,
+      readsStoredData,
+      storedData
+    }),
     node: (
-      <div className="grid min-w-0 gap-3" data-testid="app-publish-confirmation">
-        {offer && selected !== undefined ? (
-          <AppAudienceQuestion
-            offer={offer}
-            selected={selected}
-            workspaceName={offer.workspaceName ?? host?.workspace?.name ?? ""}
-            disabled={disabled}
-            onChange={setRead}
-          />
-        ) : (
-          <SkeletonList rows={2} className="w-full" />
-        )}
-        <AppAudienceChange offer={offer} selected={selected} />
-        <PublishNarrativeReadLead read={question.narrative} />
-      </div>
+      <AppPublishConfirmationView
+        offer={offer}
+        selected={selected}
+        workspaceName={host?.workspace?.name ?? ""}
+        narrative={question.narrative}
+        storedData={readsStoredData ? storedData : undefined}
+        disabled={disabled}
+        onChange={setRead}
+      />
     )
   };
 }

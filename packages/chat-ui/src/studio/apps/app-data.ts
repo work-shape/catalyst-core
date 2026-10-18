@@ -32,7 +32,7 @@ import {
   type AppPublishData
 } from "../build-area/data-store-provenance-model";
 import { keepPageAddress, retryUnlessGone, type PageAddressState } from "../pages/page-address";
-import { appPreviewProblem, type AppPreviewProblem } from "./app-model";
+import { appPreviewProblem, appReadsStoredData, type AppPreviewProblem } from "./app-model";
 
 /** The session the Apps are read with: the one the workspace shell holds. */
 const APP_AUTH_SCOPE = "standalone";
@@ -217,12 +217,18 @@ export function appPublishDataRead(
  * older revision each name what that revision reads, never what is live now. One request per
  * App and revision while the question is open.
  */
-export function useAppPublishData(app: string, revision: number): AppPublishDataRead {
+export function useAppPublishData(
+  app: string,
+  revision: number,
+  /** False where the revision reads no stored data: nothing is asked. */
+  enabled = true
+): AppPublishDataRead {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const { locale, t } = useTranslation();
   const query = useQuery({
     queryKey: appPublishDataKey(apiBaseUrl, app, revision),
     queryFn: ({ signal }) => client.data_stores.app_sources({ query: { app, revision }, signal }),
+    enabled,
     retry: retryUnlessGone
   });
   return appPublishDataRead(
@@ -259,6 +265,11 @@ export interface AppPublishQuestionRead {
   narrative: PublishNarrativeRead;
   /** Absent while the first answer loads, and from an instance that offers no choice. */
   audience: AppAudienceOffer | undefined;
+  /**
+   * The revision has a reading `sql` action, so the question names who sees which stored data.
+   * Absent until the first answer arrived.
+   */
+  readsStoredData?: boolean;
 }
 
 /** The offer an answer holds, read whole or not at all. */
@@ -311,7 +322,8 @@ export function useAppPublishNarrative(
       });
       return {
         narrative: parsePublishNarrative(asset.publishNarrative),
-        audience: appAudienceOffer(asset.appAudience)
+        audience: appAudienceOffer(asset.appAudience),
+        readsStoredData: appReadsStoredData(asset.config)
       };
     },
     placeholderData: keepPreviousData,
@@ -320,16 +332,19 @@ export function useAppPublishNarrative(
   });
   const retry = () => void query.refetch().catch(() => undefined);
   const offer = query.data?.audience;
+  // The config is the revision's whatever the audience, so the last answer's flag holds.
+  const reads = query.data === undefined ? {} : { readsStoredData: query.data.readsStoredData };
   if (query.isError) {
-    return { narrative: { status: "failed", reason: "read", retry }, audience: offer };
+    return { narrative: { status: "failed", reason: "read", retry }, audience: offer, ...reads };
   }
   if (query.data === undefined || query.isPlaceholderData) {
-    return { narrative: { status: "loading" }, audience: offer };
+    return { narrative: { status: "loading" }, audience: offer, ...reads };
   }
   const narrative = narrativeReadOf(query.data.narrative);
   return {
     narrative: narrative.status === "failed" ? { ...narrative, retry } : narrative,
-    audience: offer
+    audience: offer,
+    ...reads
   };
 }
 

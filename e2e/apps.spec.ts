@@ -227,8 +227,12 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   }
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishDialog).toBeHidden();
-  // Nothing is ahead of what is published now.
-  await expect(publish).toBeDisabled();
+  // The live revision can still be shared with a different audience.
+  await expect(publish).toBeEnabled();
+  await publish.click();
+  await expect(publishDialog).toBeVisible();
+  await expect(publishDialog.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+  await publishDialog.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // A second member of the workspace opens the App across the full width.
   // The member holds the use right alone, through membership: the list shows the published App
