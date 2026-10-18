@@ -141,6 +141,7 @@ export function createCallPath(input: {
   const deps: RunOperationDeps = {
     clientInstanceId,
     registry,
+    resolveResource: (resource) => Promise.resolve({ resource }),
     runs,
     authorizer: createAuthorizer(),
     events: createAuditingEventEmitter(audit),

@@ -85,6 +85,12 @@ export interface OperationApprovalRequests {
 export interface RunOperationDeps {
   clientInstanceId: ClientInstanceId;
   registry: OperationRegistry;
+  /** Resolves a named-right resource to its retained asset identity and owner before authorization. */
+  resolveResource(resource: OperationResource | undefined): Promise<{
+    resource: OperationResource | undefined;
+    /** Answered only after the caller holds the kind-level right. */
+    resourceNotFound?: string;
+  }>;
   runs: OperationRunStore;
   authorizer: Authorizer;
   events: PlatformEventEmitter;
@@ -188,6 +194,7 @@ export interface RunContext {
   definition: OperationDefinition;
   call: OperationCall;
   resource: OperationResource | undefined;
+  resourceNotFound?: string;
   deps: RunOperationDeps;
   runtime: OperationCallRuntime;
   /**
@@ -244,7 +251,14 @@ export function unrecordedRun(start: NewOperationRun): OperationRun {
 export function createRunContext(
   input: Pick<
     RunContext,
-    "run" | "definition" | "call" | "resource" | "deps" | "runtime" | "repeated"
+    | "run"
+    | "definition"
+    | "call"
+    | "resource"
+    | "resourceNotFound"
+    | "deps"
+    | "runtime"
+    | "repeated"
   > & {
     /** What the run is written from later, for a call that has left none yet. */
     unrecordedStart?: NewOperationRun;
@@ -349,12 +363,15 @@ export async function authorizeOrigin(
 
 /** Asks the actor's right: the one the operation names, or the operation's own check. */
 export async function authorizeActor(
-  context: Pick<RunContext, "definition" | "call" | "resource">,
+  context: Pick<RunContext, "definition" | "call" | "resource" | "resourceNotFound">,
   access: ActorAccess
 ): Promise<OperationAuthorization> {
   const { definition, call, resource } = context;
   if (definition.action !== null) {
-    return namedRight(access.authorize(definition.action, resource), definition.action);
+    const decision = namedRight(access.authorize(definition.action, resource), definition.action);
+    if (decision.allowed && context.resourceNotFound)
+      throw new AppError("NOT_FOUND", context.resourceNotFound);
+    return decision;
   }
   return definition.authorize(call.input, {
     actor: call.actor,

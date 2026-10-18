@@ -36,6 +36,7 @@ import {
   type PolicyValue
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import type { RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 import { decide } from "../assets/asset-access";
 import { appActionBinding, type AppActionOwner } from "./action-kinds";
 import { APP_ACTIONS } from "./app-kind";
@@ -78,6 +79,7 @@ export const APP_ACTION_TOOL_DESCRIPTION_MAX_CHARS = 2000;
 
 /** What a definition of an action is built with: where its operation and the policy are read. */
 export interface AppActionEnvironment {
+  resolveResource: RunOperationDeps["resolveResource"];
   /** Resolves the operation an action stands for. */
   registry: Pick<OperationRegistry, "resolve" | "resolveMany">;
   /** Says whether the module that brings an action's operation is on. */
@@ -186,7 +188,7 @@ export async function appActionDefinition(
       if (offModule !== undefined) throw moduleOffError(offModule);
       const own = await host.authorize(context);
       if (!own.allowed || !target) return own;
-      return binding.authorize(target, context, host);
+      return binding.authorize(target, context, host, environment.resolveResource);
     },
     scope: null,
     auth: "user",
@@ -278,6 +280,7 @@ export async function preloadedEnvironment(
   );
   let settings: Promise<readonly CentralPolicySetting[]> | undefined;
   return {
+    resolveResource: environment.resolveResource,
     registry: {
       resolve: (name) => Promise.resolve(targets.get(name)),
       resolveMany: (names) =>
@@ -450,15 +453,28 @@ function publishedApp(asset: ConfigAssetRecord | undefined): PublishedApp | unde
 export function createAppActionOperationSource(deps: AppActionSourceDeps): OperationSource {
   const { clientInstanceId, store } = deps;
   return {
-    async resolve(name) {
+    async resolve(name, stores) {
       const parsed = parseAppActionOperationName(name);
       if (!parsed || !deps.modules.isEnabled(APPS_MODULE)) return undefined;
       const app = publishedApp(
-        await store.getConfigAsset({ clientInstanceId, kind: APP_ASSET_KIND, name: parsed.app })
+        await (stores?.configAssets ?? store).getConfigAsset({
+          clientInstanceId,
+          kind: APP_ASSET_KIND,
+          name: parsed.app
+        })
       );
       const action = app?.actions.find((candidate) => candidate.name === parsed.action);
       if (!app || !action) return undefined;
-      return (await appActionDefinition(deps, app.host, action)).definition;
+      const environment = stores
+        ? {
+            ...deps,
+            registry: {
+              resolve: (name: string) => deps.registry.resolve(name, stores),
+              resolveMany: (names: readonly string[]) => deps.registry.resolveMany(names, stores)
+            }
+          }
+        : deps;
+      return (await appActionDefinition(environment, app.host, action)).definition;
     },
     async list() {
       if (!deps.modules.isEnabled(APPS_MODULE)) return { operations: [], truncated: [] };

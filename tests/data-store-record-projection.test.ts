@@ -356,6 +356,7 @@ describe("REC-1a records projection through the public operation source", () => 
             {
               clientInstanceId: w.clientInstanceId,
               registry,
+              resolveResource: (resource) => Promise.resolve({ resource }),
               runs: db.store.operationRuns,
               authorizer: { forActor: async () => accessOf(actor) },
               events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },

@@ -30,6 +30,7 @@ import {
 import { z } from "zod";
 import { ensureCallRecords, keyedCall, readRecordedCall } from "./calls";
 import { catalogTarget, readTables, rowsOf } from "./catalog";
+import { validateConstraintNames } from "./constraint-errors";
 import { dataStoreDefinitionSchema } from "./definition";
 import { databaseFailureError } from "./failures";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
@@ -558,12 +559,20 @@ async function runVerb(
     // Let the verb refuse direct proposals before role repair or call-record DDL touches the store.
     if (verb.verb === "records.propose" && context.origin.kind !== "workflow")
       return await verb.run(
-        { runtime, store, target: runtime.server.asRole(record, "app"), context },
+        {
+          runtime,
+          store,
+          target: runtime.server.asRole(record, "app", runtime.stores.connections),
+          context
+        },
         input
       );
     // The app role as the platform gave it, before anything runs as that role.
     return await asStoreRole(runtime, record, signal, async () => {
-      const target = { ...runtime.server.asRole(record, "app"), ...(signal ? { signal } : {}) };
+      const target = {
+        ...runtime.server.asRole(record, "app", runtime.stores.connections),
+        ...(signal ? { signal } : {})
+      };
       if (keyed || verb.verb === "load" || verb.verb === "records.propose")
         await ensureCallRecords(runtime, record, signal);
       if (verb.verb === "load" && runtime.datasets?.authorize)
@@ -586,7 +595,14 @@ async function runVerb(
       cause instanceof AppError
         ? cause
         : databaseFailureError(
-            cause,
+            await validateConstraintNames(
+              runtime.server.executor,
+              {
+                ...runtime.server.asPlatform(record.location.database),
+                ...(signal ? { signal } : {})
+              },
+              cause
+            ),
             `The ${verb.effect === "changing" ? verb.verb : "query"}`,
             context.runtime.locale
           );
@@ -699,24 +715,25 @@ function readOperation(
  */
 export function createDataStoreOperationSource(runtime: DataStoreRuntime): OperationSource {
   return {
-    async resolve(name) {
+    async resolve(name, stores = runtime.stores) {
+      const lookup = { clientInstanceId: runtime.clientInstanceId, stores };
       const split = splitOperationName(name);
       if (split?.part === DATA_STORE_STATE_VERB) {
         // The state of a store is answered from its record, whether its database is there or not.
-        const store = await readStore(runtime, split.store);
+        const store = await readStore(lookup, split.store);
         return store && stateOperation(store, DATA_STORES_MODULE);
       }
       if (split?.part === DATA_STORE_USED_BY_PART) {
-        const store = await readStore(runtime, split.store);
+        const store = await readStore(lookup, split.store);
         return store && usedByOperation(runtime, store, DATA_STORES_MODULE);
       }
       const read = split && READS.find((candidate) => candidate.part === split.part);
       if (read) {
-        const store = await readStore(runtime, split.store);
+        const store = await readStore(lookup, split.store);
         return store && readOperation(runtime, store, read);
       }
       const parsed = parseOperationName(name);
-      const store = parsed && (await readStore(runtime, parsed.store));
+      const store = parsed && (await readStore(lookup, parsed.store));
       return store ? operationOf(runtime, store, parsed.verb) : undefined;
     },
     async list(scope) {

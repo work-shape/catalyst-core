@@ -142,6 +142,17 @@ export function createWorkflowAssetKind(
     const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
     return parsed.ok ? parsed.manifest : undefined;
   };
+  // The publish already owns a platform connection. Bind every sourced operation read,
+  // including nested resolution by an App action, to its transaction's readers.
+  const registryFor = (stores: PlatformStores) => {
+    const registry = options.registry?.();
+    return (
+      registry && {
+        resolve: (name: string) => registry.resolve(name, stores),
+        resolveMany: (names: readonly string[]) => registry.resolveMany(names, stores)
+      }
+    );
+  };
   async function reschedule(
     stores: PlatformStores,
     previous: JsonObject | undefined,
@@ -247,7 +258,7 @@ export function createWorkflowAssetKind(
       await checkDatasetContracts(
         result.manifest,
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets }),
-        options.registry?.()
+        registryFor(stores)
       );
       await checkChildCycles(
         result.manifest,
@@ -283,7 +294,7 @@ export function createWorkflowAssetKind(
       await checkChildContracts(
         result.manifest,
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets }),
-        options.registry?.()
+        registryFor(stores)
       );
     },
     validationWarnings: async ({ definition, stores }) => {
@@ -466,7 +477,7 @@ export function createWorkflowAssetDefinitions(options: {
 }): WorkflowDefinitionSource & {
   /** Every published Workflow in one read, those this engine refuses among them. */
   published(): Promise<PublishedWorkflow[]>;
-  /** The id of the asset of this name, a draft included: what a right on it is decided on. */
+  /** The retained asset id, including drafts and deleted assets: what rights are decided on. */
   assetIdOf(id: string): Promise<string | undefined>;
   /**
    * The draft of the Workflow of this id, which a test run runs: the asset's newest revision,
@@ -484,16 +495,17 @@ export function createWorkflowAssetDefinitions(options: {
         limit: WORKFLOW_LIST_MAX
       })
     ).flatMap((asset) => publishedWorkflowOf(asset) ?? []);
-  const assetOf = (id: string) =>
+  const assetOf = (id: string, reader: Pick<ConfigAssetStore, "getConfigAsset"> = configAssets) =>
     // An id that is no name of the kind is no asset, and is not asked of the store.
     WORKFLOW_NAME_PATTERN.test(id)
-      ? configAssets.getConfigAsset({ clientInstanceId, kind: WORKFLOW_ASSET_KIND, name: id })
+      ? reader.getConfigAsset({ clientInstanceId, kind: WORKFLOW_ASSET_KIND, name: id })
       : Promise.resolve(undefined);
   return {
     published,
     async assetIdOf(id) {
       const asset = await assetOf(id);
-      return asset?.status === "active" ? asset.id : undefined;
+      // Deletion retains the row and its grants; retained runs keep the same deny boundary.
+      return asset?.id;
     },
     async draft(id) {
       const asset = await assetOf(id);
@@ -510,8 +522,8 @@ export function createWorkflowAssetDefinitions(options: {
       }
       return { revisionId: asset.activeRevisionId, manifest: parsed.manifest };
     },
-    async read(id) {
-      const asset = await assetOf(id);
+    async read(id, configAssets) {
+      const asset = await assetOf(id, configAssets);
       const workflow = asset ? publishedWorkflowOf(asset) : undefined;
       if (!workflow) return undefined;
       if (!workflow.definition.ok) throw workflowDefinitionRefusal(id, workflow.definition.issues);

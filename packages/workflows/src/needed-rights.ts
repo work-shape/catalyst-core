@@ -6,6 +6,7 @@ import {
   DATA_STORE_OPERATION_RIGHTS,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  type AssetScope,
   type JsonValue,
   type OperationDefinition,
   type WorkflowInputMapping,
@@ -22,8 +23,8 @@ export type NeededRightOperation = Pick<OperationDefinition, "action" | "resourc
 export interface WorkflowNeededRightsContext {
   /** The operations the definition names that exist, by name (`workflowOperationNames`). */
   operations: ReadonlyMap<string, NeededRightOperation>;
-  /** The asset id of each child Workflow that has an asset, by its id. */
-  workflowAssets: ReadonlyMap<string, string>;
+  /** The identity and owner of each child Workflow that has an asset, by its name. */
+  workflowAssets: ReadonlyMap<string, { id: string; scope: AssetScope }>;
 }
 
 /**
@@ -83,13 +84,14 @@ export function workflowNeededRights(
   let agentStep: string | undefined;
   for (const { step } of indexWorkflowSteps(manifest).values()) {
     if (step.type === "workflow") {
-      const assetId = context.workflowAssets.get(step.workflow);
+      const asset = context.workflowAssets.get(step.workflow);
       add(
         WORKFLOW_ACTIONS.use,
         {
           kind: WORKFLOW_ASSET_KIND,
           name: step.workflow,
-          ...(assetId === undefined ? {} : { assetId })
+          ...(asset === undefined ? {} : { assetId: asset.id }),
+          ...(asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
         },
         step.id,
         "publish"
@@ -114,7 +116,8 @@ function operationRights(
   const asset = {
     kind: resource.kind,
     name: resource.name,
-    ...(resource.assetId === undefined ? {} : { assetId: resource.assetId })
+    ...(resource.assetId === undefined ? {} : { assetId: resource.assetId }),
+    ...(resource.workspaceId === undefined ? {} : { workspaceId: resource.workspaceId })
   };
   if (operation.action !== null) return [{ action: operation.action, asset }];
   // An operation with a check of its own: the two the product has that ask a right on what

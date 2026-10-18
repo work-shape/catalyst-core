@@ -102,6 +102,7 @@ type TestExecutionInput = CapabilitiesOptional<
   Parameters<typeof createClientInstanceExecutionAssembly>[0]
 >;
 type TestPostgresOptions = {
+  poolSize?: Parameters<typeof createPostgresStores>[0]["poolSize"];
   logger?: Parameters<typeof createPostgresStores>[0]["logger"];
   applicationName?: string;
   fixtureFile?: string;
@@ -311,6 +312,7 @@ async function createConfiguredInstance(
       url.searchParams.set("application_name", input.postgres.applicationName);
     const stores = await createPostgresStores({
       logger: input.postgres.logger,
+      ...(input.postgres.poolSize === undefined ? {} : { poolSize: input.postgres.poolSize }),
       ...(input.postgres.onStatement ? { onStatement: input.postgres.onStatement } : {}),
       databaseUrl: url.toString()
     });
