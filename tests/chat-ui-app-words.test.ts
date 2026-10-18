@@ -92,3 +92,14 @@ describe("the words of Apps, the preview and saving", () => {
     expect(de.get("apps.empty")).not.toMatch(/\balle\b/u);
   });
 });
+
+// ACCEPT-FIX-5: the worker status and document failure must use Studio's product term too.
+it("uses Wissensbasis/Wissensbasen in all German Knowledge Base messages", () => {
+  for (const file of ["knowledge.ts", "administration.ts"]) {
+    const german = messages(file).de;
+    expect([...german.values()].filter((text) => text.includes("Wissensdatenbank"))).toEqual([]);
+  }
+  expect(messages("administration.ts").de.get("infrastructure.workerKnowledge")).toBe(
+    "Dienst für Wissensbasen"
+  );
+});

@@ -705,7 +705,7 @@ describe("processing that waits for a worker", () => {
     );
     show(createElement(KnowledgeDocuments, props), "de");
     expect(notice()?.textContent).toBe(
-      "Verarbeitung wartet: Der Dienst für Wissensdatenbanken meldet sich nicht."
+      "Verarbeitung wartet: Der Dienst für Wissensbasen meldet sich nicht."
     );
   });
 

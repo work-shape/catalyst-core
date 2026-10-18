@@ -99,6 +99,37 @@ An asset made while you work in a Shared Workspace belongs to that workspace, an
 
 **Continue** opens the page of the new asset. Nothing is stored until you press **Create agent** or **Create skill** there.
 
+## Building from chat
+
+The Build Agent reports only actions confirmed by successful tool results. A table in chat,
+an HTML preview, generated SQL or a saved migration does not prove a record was inserted,
+changed or found. A draft is not published, a simulated test is not a live write, and a call
+waiting for Allow has saved nothing.
+
+An agent has no direct tool on a Data Store's rows. For real records, build an App or Workflow
+that writes records, publish it and use it. The Data Store page under **Studio > Data stores**
+(German: **Studio > Datenspeicher**) shows the store and its rows. Migrations define the schema;
+they must not stand in for interactive row inserts or updates. A structured Knowledge Base
+may read described tables with `knowledge.query` where that tool is available.
+
+Creating an agent or skill from chat is live at once and requires confirmation of the exact
+call. Existing agents save a shared draft that a person publishes; existing skills are changed
+on their page or through a skill change request. The save's `workspaceId` is the actual owner,
+not a name prefix such as `hr-`. Without a workspace id the owner is the instance. To build in
+another workspace, switch to it before starting its Build conversation.
+
+A newly created agent is available nowhere. Open **Studio > Agents > the agent > Available in >
+Selected workspaces**, choose the requested shared workspace, then **Save changes**. In German:
+**Studio > Agenten > the agent > Verfügbar in > Ausgewählte Arbeitsbereiche**, choose the workspace,
+then **Änderungen speichern**. **Personal workspaces** includes every person's personal workspace;
+it is not a selector for one person's workspace. An agent editor must perform this step if you
+lack the right. Changes to an existing agent's draft also need **Publish** (**Veröffentlichen**).
+
+For orientation, point to the places enabled for the person: **Workflows**, **Apps**, **Inbox**
+(**Eingang**), and Studio's **Agents**, **Skills**, **Connections** (**Verbindungen**),
+**Data stores** (**Datenspeicher**) and **Knowledge Bases** (**Wissensbasen**). On an agent page,
+**Knowledge** (**Wissen**) selects its Knowledge Bases. A Knowledge Base is a **Wissensbasis**, plural **Wissensbasen**.
+
 ## Edit
 
 An asset page has sections, and an index of them beside the content or above it on a narrow window. The save bar appears with the first change. It counts the changed fields and offers **Discard**.

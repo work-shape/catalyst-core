@@ -331,7 +331,7 @@ export const knowledge = defineTranslations({
     "knowledge.documentsMore": "Mehr zeigen",
     "knowledge.documentPending": "Wird indexiert",
     "knowledge.processingWaiting":
-      "Verarbeitung wartet: Der Dienst für Wissensdatenbanken meldet sich nicht.",
+      "Verarbeitung wartet: Der Dienst für Wissensbasen meldet sich nicht.",
     "knowledge.documentIndexed": "Durchsuchbar",
     "knowledge.documentFailed": "Fehlgeschlagen",
     "knowledge.originalReleased": "Original liegt in der Quelle",

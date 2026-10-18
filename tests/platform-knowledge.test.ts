@@ -82,6 +82,66 @@ async function offerFor(agentToolNames: string[], subject?: { kind: string; name
 }
 
 describe("the platform's knowledge of an agent", () => {
+  // ACCEPT-FIX-5: no shipped-agent eval harness exists; pin the instructions actually offered.
+  it.each([
+    [
+      "record honesty",
+      [
+        "successful tool result proves that exact action and target",
+        "hand-written table",
+        "no direct tool to insert, change or query",
+        "App or Workflow that writes records",
+        "never use a migration",
+        "Pending confirmation means nothing has been saved"
+      ]
+    ],
+    [
+      "actual owner",
+      [
+        "report the workspaceId returned by the save",
+        "hr- is not an owner",
+        "must switch to that workspace"
+      ]
+    ],
+    [
+      "availability handoff",
+      [
+        "Studio > Agents > the saved agent > Available in > Selected workspaces",
+        "Studio > Agenten",
+        "Änderungen speichern",
+        "Never claim availability before that save",
+        "Personal workspaces for all personal workspaces",
+        "Publish (Veröffentlichen)"
+      ]
+    ],
+    [
+      "navigation and terminology",
+      [
+        "Workflows and Apps in the main navigation",
+        "Inbox (Eingang)",
+        "Studio > Knowledge Bases (Studio > Wissensbasen)",
+        "Knowledge (Wissen)",
+        "Studio > Agenten / Skills / Verbindungen / Datenspeicher",
+        "Knowledge Base is Wissensbasis in German, plural Wissensbasen"
+      ]
+    ]
+  ])("ships %s in the offered orientation and guide", async (_name, rules) => {
+    const offer = await offerFor(PLATFORM_TOOLS);
+    for (const rule of rules) expect(offer.orientation).toContain(rule);
+    const guide =
+      platformDocsSkill.resources?.find((page) => page.path === "references/configure/build.md")
+        ?.content ?? "";
+    expect(guide).toContain(
+      "The Build Agent reports only actions confirmed by successful tool results"
+    );
+    expect(guide).toContain("An agent has no direct tool on a Data Store's rows");
+    expect(guide).toContain("The save's `workspaceId` is the actual owner");
+    expect(guide).toContain("A newly created agent is available nowhere");
+    expect(guide).toContain("**Wissen**");
+    expect(guide).toContain("**Wissensbasis**, plural **Wissensbasen**");
+    expect(offer.orientation).not.toContain("Wissensdatenbank");
+  });
+
   it("is none of the tools, the orientation or the docs for an agent that lists no platform tool, also about a Workflow", async () => {
     for (const subject of [undefined, { kind: "workflow", name: "month-end" }]) {
       const offer = await offerFor(["read_skill", "show_view"], subject);
