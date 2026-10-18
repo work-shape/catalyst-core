@@ -1125,6 +1125,7 @@ An operation of `http_api` takes, beside `name`, `effect` and `exposure`:
   Input `{"filter":["client_id eq 1234","fiscal_year gte 20260101"],"page":1,"page_size":100}` sends two `filter` keys, `filter=client_id+eq+1234&filter=fiscal_year+gte+20260101`, alongside `page=1` and `page_size=100`. The order of different keys is not guaranteed: Postgres reorders the saved query declaration. Within an array, order, duplicates and empty strings are preserved. Values are encoded individually, so `&`, `=` and `#` remain part of their value. An empty array or an omitted optional parameter sends no key. The connector also omits null query parameters, but normal calls must satisfy the declared schema.
 
   There is no fixed value-count cap; a declared `maxItems` is preserved in the input schema. The final encoded request URL, including the base address, path and all query values, may be at most **8,000 bytes** (`HTTP_API_REQUEST_URL_MAX_BYTES`). A longer URL fails as `input_invalid` before any request, naming the 8,000-byte limit; a single long scalar counts too. Normal calls with values outside the declared schema fail at schema validation, before reaching the connector. The connector's defensive checks refuse objects, nested arrays and null array items as `input_invalid` when called directly. Array item schemas must name one scalar type; objects, nested arrays and missing item types are refused at save and by the agent's draft tool.
+
 - `description`, what the operation reads and when to call it, which an agent reads, and optionally `title`, its name in words.
 
 A caller fills the declared parameters and nothing else: never the host, the method, a header or the key. A path parameter is percent-encoded and may not be empty, hold a `/`, or be `.` or `..`. Normal calls reject undeclared keys at schema validation; the connector also refuses them as `input_invalid` before anything is sent. No redirect is followed. The answer must be JSON of at most 2 MiB; a list is answered as `{ items: [...] }`, so every result is an object. An answer that is not JSON or too large fails as `output_invalid`, and one that holds the key as `output_rejected`.
@@ -1291,6 +1292,22 @@ concurrency is the smaller of the two settings. The startup sandbox memory check
 multiplies that effective count by `workflows.codeSteps.memoryBytes`, alongside
 workspace commands and Page builds. Raise `stepSlots` (and any explicitly lower code slot setting) to run more code
 sandboxes concurrently; the host must have enough memory for them.
+
+A code step that reads or writes datasets gets two directories on the command worker's disk:
+its input datasets as read-only files of JSON Lines under `/work/in`, and `/work/out`, where the
+script writes the datasets it returns. `workflows.codeSteps.diskBytes` bounds both together, the
+input files and what the script writes: **2 GiB** unless set. A dataset the input names twice is
+written once. Input that would pass the bound is not written, and a script that writes past it
+is stopped; either way the step fails with `code_disk_limit`. The setting is disk, not memory,
+so the startup memory check has no term for it; the worker's temporary directory
+(`WORKSPACE_COMMAND_TEMP_ROOT`) must hold `diskBytes` for each code step that runs at once. The command worker reads and writes the datasets in the
+`files` object store, so its process needs `infrastructure.objectStorage.files` as the API's.
+
+```yaml
+workflows:
+  codeSteps:
+    diskBytes: 4294967296 # 4 GiB
+```
 
 A Workflow may use every step slot at once, across its runs and their child runs together. A Workflow that should leave room for others sets a lower share with `limits.concurrency` in `workflow.yaml`, up to `stepSlots`. A loop's own `concurrency` still bounds that loop.
 

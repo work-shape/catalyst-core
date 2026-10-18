@@ -364,6 +364,7 @@ Follow the build rules for data scope in the platform docs: \`references/configu
 
 - Write the Mandant key on every copied row and keep it in aggregates and run history.
 - Design per-Mandant work as child runs keyed by the Mandant and the period, such as \`key: ["2026-09", <the Mandant's number>]\`. Starting the parent again for that period then runs only the children that did not end done. Do not replace them with an unkeyed cross-Mandant run.
+- When a rule of the check changes, put the rules revision in the child's key, such as \`key: ["2026-09", "rules-4", <the Mandant's number>]\`. A start by the old key answers the children that are done with what they found under the old rules.
 - Say who a Workflow is for when it serves only part of the firm. Everyone in that audience must be allowed to see every Mandant the shared source credential can read.
 
 ## What a manifest is
@@ -448,7 +449,22 @@ Declare a dataset field as \`{ type: dataset, row: <JSON Schema of one object ro
 
 A loop may read a dataset as \`items\`, under the loop's item limit. With \`onItemFailure: continue\`, it returns counts and a \`failures\` dataset of index, optional label and error code. A loop does not return its item results inline. Keep bulk processing in operations rather than making a step run per data row.
 
-Workflow inputs and outputs, including child inputs and results, may contain dataset references. A run reads only datasets it wrote, received as input or got from a child. A person passing a dataset into a root run needs \`workflow.read_run_data\` on its source Workflow. Dataset rows are never a code or agent input in this release (EW-14).
+Workflow inputs and outputs, including child inputs and results, may contain dataset references. A run reads only datasets it wrote, received as input or got from a child. A person passing a dataset into a root run needs \`workflow.read_run_data\` on its source Workflow. Dataset rows never reach an \`agent\` step in this release (EW-14b).
+
+A \`code\` step reads and writes datasets as files; its container still has no network. A dataset in its \`inputSchema\` reaches the script as \`{ "path": "/work/in/<field>.jsonl", "rowCount": <n> }\`: a read-only file of JSON Lines, one row per line. Read it line by line and never load it whole. To write a dataset, declare it in \`outputSchema\` as \`{ type: dataset, row: ... }\`, write one JSON object per line to a file directly in \`/work/out/\` and name that file in the result as \`{ "path": "/work/out/findings.jsonl" }\`. Write findings that way, not as a list in the result, which stays small:
+
+\`\`\`python
+import json
+data = json.load(open("input.json"))
+with open(data["postings"]["path"]) as rows, open("/work/out/findings.jsonl", "w") as out:
+    for line in rows:
+        posting = json.loads(line)
+        if posting["amount"] < 0:
+            out.write(json.dumps({"client_id": posting["client_id"], "rule": "negative"}) + "\\n")
+json.dump({"findings": {"path": "/work/out/findings.jsonl"}}, open("output.json", "w"))
+\`\`\`
+
+After the script ended, every line of a named file is checked against the row schema while it is stored. A line that is no JSON object of that schema fails the step with \`dataset_row_invalid\` and its line number, never its content. A path that is not one file directly in \`/work/out/\` fails with \`${WORKFLOW_CODE_ERRORS.datasetPathInvalid}\`; a link, a pipe, a folder or a missing file with \`${WORKFLOW_CODE_ERRORS.datasetFileInvalid}\`. The input files and what a script writes to \`/work/out/\` are bounded together by the release setting \`workflows.codeSteps.diskBytes\`, 2 GiB unless set; past it the step fails with \`${WORKFLOW_CODE_ERRORS.diskLimit}\`. A dataset the input names twice is one file.
 
 Successful runs release intermediates. Failed runs retain datasets for their resume window; root output datasets default to seven days, or \`retention: { datasets: <days> }\`, bounded by step-data retention. Test roots keep no output datasets. Operator ceilings live under \`workflows.datasets\`; they are settings, not fixed customer limits. A producing step that reaches one fails with \`dataset_limit\` and its name. Deleted or unavailable parts answer \`dataset_expired\`.
 
@@ -468,7 +484,7 @@ A definition that holds one of these is refused when it is saved, with the code
     .join(", ")};
 - \`labels\` and \`onFailure\` on the manifest;
 - \`collect\` on a loop (EW-13);
-- datasets in code or agent inputs (EW-14).
+- datasets in agent inputs (EW-14b).
 
 Where the person asks for one of them, say that this release does not run it yet, and offer
 what does: a loop for a list, a changing operation to keep what an item produces, one

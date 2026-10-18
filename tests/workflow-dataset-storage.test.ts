@@ -223,8 +223,28 @@ describe("dataset persistence on real Postgres", () => {
       restricted.write({ run, stepRun: step, field: "invalid", rowSchema, rows: invalid() })
     ).rejects.toMatchObject({
       code: "dataset_row_invalid",
-      message: "Dataset line 1 does not fit its row schema at /index"
+      message: "Dataset line 1 does not fit its row schema at field 1"
     });
+    // A row's keys may be data too: the error names the place of a field, never its key.
+    const open = {
+      type: "object",
+      additionalProperties: { type: "array", items: { type: "integer" } }
+    };
+    async function* dynamic() {
+      yield { counts: [1, 2], EW14A_PRIVATE_KEY_47f9c: [3, "PRIVATE_VALUE"] };
+    }
+    const dynamicError = await restricted
+      .write({ run, stepRun: step, field: "dynamic", rowSchema: open, rows: dynamic() })
+      .then(
+        () => undefined,
+        (error: unknown) => error
+      );
+    expect(dynamicError).toMatchObject({
+      code: "dataset_row_invalid",
+      message: "Dataset line 1 does not fit its row schema at field 2, item 2"
+    });
+    expect(JSON.stringify(dynamicError)).not.toMatch(/EW14A_PRIVATE_KEY|PRIVATE_VALUE/u);
+    expect(String(dynamicError)).not.toMatch(/EW14A_PRIVATE_KEY|PRIVATE_VALUE/u);
     const ref = await restricted.write({
       run,
       stepRun: step,

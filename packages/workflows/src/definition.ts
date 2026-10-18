@@ -296,17 +296,6 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
       }
       if (step.type === "agent" && namesDatasetType(step.inputSchema))
         issues.push(notSupported(`${at}.inputSchema`, "a dataset in an agent input (EW-14)"));
-      if (step.type === "code") {
-        // A code step is handed JSON and returns JSON. Datasets come with the slice that
-        // keeps them, and a script is not handed one before.
-        for (const field of ["inputSchema", "outputSchema"] as const) {
-          if (namesDatasetType(step[field])) {
-            issues.push(
-              notSupported(`${at}.${field}`, "a dataset in the schema of a code step (EW-14)")
-            );
-          }
-        }
-      }
       if (step.type === "loop") {
         // Collection is the paging slice, separate from the loop's failures dataset.
         if (step.collect !== undefined)

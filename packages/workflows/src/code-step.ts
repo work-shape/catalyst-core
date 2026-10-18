@@ -67,8 +67,20 @@ export const WORKFLOW_CODE_ERRORS = {
   /** The step files of a revision are larger together than a revision may hold. */
   filesTooLarge: "code_files_too_large",
   /** The instance runs no sandbox, or every attempt to start the container failed. */
-  runnerUnavailable: "code_runner_unavailable"
+  runnerUnavailable: "code_runner_unavailable",
+  /**
+   * The result names a dataset by a path that is not one file directly in the output
+   * directory, or holds a value at a dataset's place that is no `{ path }`.
+   */
+  datasetPathInvalid: "code_dataset_path_invalid",
+  /** The file a result names is no regular file: missing, a link, a pipe or a directory. */
+  datasetFileInvalid: "code_dataset_file_invalid",
+  /** The script wrote more to its output directory than one code step may. */
+  diskLimit: "code_disk_limit"
 } as const;
+
+/** How much a code step may write to its output directory unless release config sets it. */
+export const WORKFLOW_CODE_DISK_BYTES = 2 * 1_024 ** 3;
 
 const FILE_PATH = /^[A-Za-z0-9_][A-Za-z0-9_.-]*(?:\/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$/u;
 

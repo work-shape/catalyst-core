@@ -77,14 +77,16 @@ function check(input: {
 }
 
 describe("the defaults of a code step's sandbox", () => {
-  it("are 512 MiB, half a core, 64 processes, 60 seconds and four at once", () => {
+  it("are 512 MiB, half a core, 64 processes, 60 seconds, four at once and 2 GiB of disk", () => {
     expect(config({}).workflows.codeSteps).toEqual({
       slots: 4,
       memoryBytes: 512 * MIB,
       cpuCount: 0.5,
       pidsLimit: 64,
       timeoutSeconds: 60,
-      scratchBytes: 64 * MIB
+      scratchBytes: 64 * MIB,
+      // The output directory is the worker's disk and no memory: no term of the memory check.
+      diskBytes: 2048 * MIB
     });
   });
 

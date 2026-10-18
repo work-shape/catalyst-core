@@ -194,7 +194,18 @@ export const workflowsConfigSchema = z
           .number()
           .int()
           .min(4 * 1024 * 1024)
-          .default(64 * 1024 * 1024)
+          .default(64 * 1024 * 1024),
+        /**
+         * How much of the command worker's disk, not memory, one code step may take: the files
+         * of its input datasets under `/work/in` and what its script writes to `/work/out`,
+         * together. Input past it is not written; a script that writes past it is stopped.
+         * Either way the step fails with `code_disk_limit`.
+         */
+        diskBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(2 * 1024 ** 3)
       })
       .prefault({})
       .refine((codeSteps) => codeSteps.scratchBytes * 2 <= codeSteps.memoryBytes, {

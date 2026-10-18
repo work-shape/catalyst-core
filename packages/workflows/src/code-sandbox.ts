@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
+  JsonObject,
   WorkflowCodeOutcome,
   WorkflowStagedCode,
   WorkflowStepRunLog
@@ -9,10 +10,24 @@ import type {
 import {
   SANDBOX_SOURCE_DIRECTORY,
   type SandboxCommandLimits,
+  type SandboxDataDirectories,
   type WorkspaceCommandProcessExecutor
 } from "@work-shape/catalyst-tool-execution";
-import { WORKFLOW_CODE_ERRORS, WORKFLOW_CODE_LOG_MAX_BYTES, codeLanguageOf } from "./code-step";
-import { jsonValueSchema } from "./json";
+import {
+  directoryBytes,
+  removeScriptDirectory,
+  storeOutputDatasets,
+  writeInputDatasets,
+  type CodeStepDatasets
+} from "./code-datasets";
+import {
+  WORKFLOW_CODE_DISK_BYTES,
+  WORKFLOW_CODE_ERRORS,
+  WORKFLOW_CODE_LOG_MAX_BYTES,
+  codeLanguageOf
+} from "./code-step";
+import { holdsDatasetReference, jsonValueSchema } from "./json";
+import { WorkflowStepFailure } from "./step-failure";
 
 // One code step is one command in the sandbox the instance runs agent commands in: a
 // container without a network, with a read-only root, without capabilities and without a
@@ -20,10 +35,16 @@ import { jsonValueSchema } from "./json";
 // directory of its own, which the container is handed read-only. The script works in a
 // directory in memory of a stated size, so nothing it writes reaches the worker's disk.
 //
-// The worker never opens what a script left behind. The command that runs the script also
-// reads its result, inside the container and within the script's time limit, and prints it
-// after the script's own output: a pipe, a link or a file without end that a script leaves
-// in place of its result is the container's to deal with, and ends with it.
+// The worker never opens what a script left behind in its working directory. The command
+// that runs the script also reads its result, inside the container and within the script's
+// time limit, and prints it after the script's own output: a pipe, a link or a file without
+// end that a script leaves in place of its result is the container's to deal with, and ends
+// with it.
+//
+// A step with datasets is the one exception (`code-datasets.ts`). Its script reads the
+// datasets of its input as files in a read-only directory and writes its own datasets as files
+// to an output directory on the worker's disk, of a bounded size. The worker reads the files
+// the result names from there: regular files directly in the directory, no link followed.
 
 const INPUT_FILE = "input.json";
 /** The file a script writes its result to. A script that writes none prints its result. */
@@ -41,7 +62,12 @@ export interface CodeSandboxOptions {
   limits: SandboxCommandLimits;
   /** How large a result may be, as JSON in UTF-8: what every step output may be. */
   outputMaxBytes: number;
+  /** How much a script may write to its output directory, and so how large a dataset it writes. */
+  diskBytes?: number;
 }
+
+/** How often the worker measures what a running script has written to its output directory. */
+const DISK_CHECK_MS = 500;
 
 /** How one run of a script ended. `stopped` and `notStarted` are no outcome of the step. */
 export type CodeSandboxResult =
@@ -78,10 +104,16 @@ function scriptCommand(input: {
   script: string;
   mark: string;
   maxBytes: number;
+  /** Where the script writes files on the worker's disk: no file of it may grow past this. */
+  diskBytes?: number;
 }): string {
   const { interpreter, script, mark } = input;
   const most = String(input.maxBytes + 1);
   return [
+    // A file the script writes ends one block past the bound, so the worker sees it is over.
+    ...(input.diskBytes === undefined
+      ? []
+      : [`ulimit -f ${String(Math.floor(input.diskBytes / 1024) + 1)} || exit 125`]),
     // Only where the sandbox handed the files in beside the working directory: a sandbox
     // that runs the command in the worker's own directory has them there already.
     `if [ ! -e ${script} ] && [ -f ${SANDBOX_SOURCE_DIRECTORY}/${script} ]; then cp ${SANDBOX_SOURCE_DIRECTORY}/${script} ${SANDBOX_SOURCE_DIRECTORY}/${INPUT_FILE} . || exit 125; fi`,
@@ -93,8 +125,15 @@ function scriptCommand(input: {
 }
 
 /** Runs scripts of code steps in the sandbox. The function never rejects for what a script did. */
+/** The bytes in a step's input and output directories together, measured up to `bound`. */
+async function stepBytes(data: SandboxDataDirectories, bound: number): Promise<number> {
+  const input = await directoryBytes(data.input, bound);
+  return input > bound ? input : input + (await directoryBytes(data.output, bound - input));
+}
+
 export function createCodeSandbox(options: CodeSandboxOptions) {
   const { sandbox, tempRoot, limits, outputMaxBytes } = options;
+  const diskBytes = options.diskBytes ?? WORKFLOW_CODE_DISK_BYTES;
   const active = new Set<string>();
 
   /**
@@ -112,7 +151,7 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       if (active.has(directory)) continue;
       try {
         if ((await lstat(directory)).mtimeMs <= cutoff) {
-          await rm(directory, { recursive: true, force: true });
+          await removeScriptDirectory(directory);
           directories += 1;
         }
       } catch {
@@ -130,8 +169,11 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
     id: string;
     staged: WorkflowStagedCode;
     signal: AbortSignal;
+    /** Where the datasets of the step are read and stored. Missing where there is no store. */
+    datasets?: CodeStepDatasets;
   }): Promise<CodeSandboxResult> {
     const { staged, signal } = input;
+    const usesDatasets = staged.datasets !== undefined || holdsDatasetReference(staged.input);
     if (signal.aborted) return { kind: "stopped" };
     const language = codeLanguageOf(staged.file);
     if (!language) {
@@ -144,47 +186,128 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
         log: { stdout: "", stderr: "", truncated: false }
       };
     }
+    const noLog: WorkflowStepRunLog = { stdout: "", stderr: "", truncated: false };
+    if (usesDatasets && !input.datasets) {
+      return {
+        kind: "ended",
+        outcome: failed("dataset_storage_unavailable", "This instance has no files object store"),
+        log: noLog
+      };
+    }
     await mkdir(tempRoot, { recursive: true });
     const root = await mkdtemp(join(tempRoot, DIRECTORY_PREFIX));
     active.add(root);
+    // Ends the container with the attempt, and where the script writes past the bound.
+    const stop = new AbortController();
+    const stopped = () => stop.abort(signal.reason);
+    signal.addEventListener("abort", stopped, { once: true });
+    let overBound = false;
     try {
       // The directory the sandbox is handed lies inside the one made above, which no other
       // user of the host can enter. It holds the script and the input, and nothing else.
       const directory = join(root, "run");
       await mkdir(directory);
+      // The datasets of the input in one directory, and one the script writes its own to.
+      const data: SandboxDataDirectories | undefined = usesDatasets
+        ? { input: join(root, "in"), output: join(root, "out") }
+        : undefined;
+      let seen: SandboxDataDirectories | undefined;
+      let stagedInput: JsonObject = staged.input;
+      // The bytes of disk the step may take: its input files and what the script writes.
+      let room = diskBytes;
+      if (data && input.datasets) {
+        await mkdir(data.input);
+        await mkdir(data.output);
+        // A sandbox without paths of its own runs the script where the worker's paths reach,
+        // and the script sees them resolved, as its working directory is.
+        seen = sandbox.dataPaths ?? {
+          input: await realpath(data.input),
+          output: await realpath(data.output)
+        };
+        try {
+          const written = await writeInputDatasets({
+            value: staged.input,
+            directory: data.input,
+            seenAs: seen.input,
+            bound: diskBytes,
+            datasets: input.datasets,
+            signal: stop.signal
+          });
+          stagedInput = written.value;
+          room = diskBytes - written.bytes;
+        } catch (error) {
+          if (signal.aborted) return { kind: "stopped" };
+          if (!(error instanceof WorkflowStepFailure)) throw error;
+          return {
+            kind: "ended",
+            outcome: { kind: "failed", error: error.toRunError() },
+            log: noLog
+          };
+        }
+      }
       const script = `step.${staged.file.split(".").at(-1) ?? ""}`;
       await writeFile(join(directory, script), staged.source, { flag: "wx" });
-      await writeFile(join(directory, INPUT_FILE), JSON.stringify(staged.input), { flag: "wx" });
+      await writeFile(join(directory, INPUT_FILE), JSON.stringify(stagedInput), { flag: "wx" });
       const mark = `catalyst-result-${randomUUID()}`;
-      const result = await sandbox.execute({
-        command: {
-          id: `${COMMAND_ID_PREFIX}${input.id}`,
-          command: scriptCommand({
-            interpreter: language.command,
-            script,
-            mark,
-            maxBytes: outputMaxBytes
-          }),
-          limits: {
-            timeoutSeconds: staged.timeoutSeconds,
-            // What the command lets through at most: the script's output and its result,
-            // each one byte longer than a result may be, and the line between them.
-            maxStdoutBytes: 2 * (outputMaxBytes + 1) + mark.length + 2,
-            maxStderrBytes: WORKFLOW_CODE_LOG_MAX_BYTES + 1
+      // The step's data on disk is measured while the script runs: its input files and
+      // what the script writes. A script that takes it past the bound is stopped: the worker's
+      // disk is no script's to fill.
+      let running = true;
+      let wake: (() => void) | undefined;
+      const watch = async (): Promise<void> => {
+        while (data && running && !stop.signal.aborted) {
+          await new Promise<void>((resolve) => {
+            wake = resolve;
+            setTimeout(resolve, DISK_CHECK_MS);
+          });
+          if (!running) return;
+          const over = await stepBytes(data, diskBytes).then(
+            (bytes) => bytes > diskBytes,
+            () => true
+          );
+          if (over && running) {
+            overBound = true;
+            stop.abort(new Error("The script wrote past the bound of its output directory"));
           }
-        },
-        sandboxLimits: limits,
-        workspaceDirectory: directory,
-        workspaceCwd: ".",
-        cwd: directory,
-        tempDirectory: join(root, "tmp"),
-        // Nothing of the worker's environment: the sandbox adds a path and a home of its own.
-        env: {},
-        signal
-      });
-      if (result.cancelled) return { kind: "stopped" };
+        }
+      };
+      const watching = watch().catch(() => undefined);
+      const result = await sandbox
+        .execute({
+          command: {
+            id: `${COMMAND_ID_PREFIX}${input.id}`,
+            command: scriptCommand({
+              interpreter: language.command,
+              script,
+              mark,
+              maxBytes: outputMaxBytes,
+              ...(data ? { diskBytes: room } : {})
+            }),
+            limits: {
+              timeoutSeconds: staged.timeoutSeconds,
+              // What the command lets through at most: the script's output and its result,
+              // each one byte longer than a result may be, and the line between them.
+              maxStdoutBytes: 2 * (outputMaxBytes + 1) + mark.length + 2,
+              maxStderrBytes: WORKFLOW_CODE_LOG_MAX_BYTES + 1
+            }
+          },
+          sandboxLimits: limits,
+          workspaceDirectory: directory,
+          workspaceCwd: ".",
+          cwd: directory,
+          tempDirectory: join(root, "tmp"),
+          ...(data ? { dataDirectories: data } : {}),
+          // Nothing of the worker's environment: the sandbox adds a path and a home of its own.
+          env: {},
+          signal: stop.signal
+        })
+        .finally(() => {
+          running = false;
+          wake?.();
+        });
+      await watching;
+      if (result.cancelled && !overBound) return { kind: "stopped" };
       if (result.spawnError) return { kind: "notStarted", reason: result.spawnError.message };
-
       // What the script printed, and after the line of this run what it left as its result.
       const at = result.stdoutPreview.indexOf(`\n${mark}\n`);
       const printedText = at === -1 ? result.stdoutPreview : result.stdoutPreview.slice(0, at);
@@ -214,6 +337,19 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
         outcome,
         log: { ...log, stdout: cut(printedText).text }
       });
+      // Over the bound, however the script ended: stopped by the watch, ended by its file
+      // limit, or done just after it wrote the last byte too many.
+      if (
+        data &&
+        (overBound || (await stepBytes(data, diskBytes).catch(() => Infinity)) > diskBytes)
+      ) {
+        return unfinished(
+          failed(
+            WORKFLOW_CODE_ERRORS.diskLimit,
+            `The step's input datasets and what its script wrote take more than ${String(diskBytes)} bytes of disk`
+          )
+        );
+      }
       if (result.timeoutKind) {
         return unfinished(
           failed(
@@ -257,18 +393,39 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
           )
         );
       }
+      let json;
       try {
         // What a script wrote is read as data: text that is no JSON, and JSON nested deeper
         // than it can be read, are both a result that is none.
-        const json = jsonValueSchema.parse(JSON.parse(text));
-        return ended({ kind: "output", value: json });
+        json = jsonValueSchema.parse(JSON.parse(text));
       } catch {
         return ended(failed(WORKFLOW_CODE_ERRORS.notJson, "The result of the script is not JSON"));
       }
+      if (!data || !seen || !input.datasets || !staged.datasets) {
+        return ended({ kind: "output", value: json });
+      }
+      try {
+        const value = await storeOutputDatasets({
+          value: json,
+          schema: staged.datasets.outputSchema,
+          directory: data.output,
+          seenAs: seen.output,
+          bound: room,
+          ...(staged.datasets.maxBytes === undefined ? {} : { maxBytes: staged.datasets.maxBytes }),
+          datasets: input.datasets,
+          signal: stop.signal
+        });
+        return ended({ kind: "output", value });
+      } catch (error) {
+        if (signal.aborted) return { kind: "stopped" };
+        if (!(error instanceof WorkflowStepFailure)) throw error;
+        return ended({ kind: "failed", error: error.toRunError() });
+      }
     } finally {
+      signal.removeEventListener("abort", stopped);
       active.delete(root);
       // A directory that cannot be removed now is removed by a later sweep.
-      await rm(root, { recursive: true, force: true }).catch(() => undefined);
+      await removeScriptDirectory(root).catch(() => undefined);
     }
   }
 

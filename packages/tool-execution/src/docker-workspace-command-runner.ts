@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   DEFAULT_WORKSPACE_COMMAND_SHELL,
   DEFAULT_WORKSPACE_COMMAND_PATH,
+  SANDBOX_DATA_DIRECTORIES,
   SANDBOX_SOURCE_DIRECTORY,
   runSpawnedProcess,
   type ProcessResult,
@@ -127,6 +128,7 @@ export interface DockerRunInvocation {
 }
 
 export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandProcessExecutor {
+  readonly dataPaths = SANDBOX_DATA_DIRECTORIES;
   private readonly options: Required<
     Pick<
       DockerWorkspaceCommandProcessExecutorOptions,
@@ -178,6 +180,14 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
       try {
         // The worker filled the directory as root. The command must be able to write there.
         await giveDirectoryTo(input.workspaceDirectory, this.options.runnerUser);
+        // The output directory is empty, and the command writes it. Its input stays root's.
+        if (input.sandboxLimits && input.dataDirectories) {
+          await lchown(
+            input.dataDirectories.output,
+            this.options.runnerUser.uid,
+            this.options.runnerUser.gid
+          );
+        }
       } catch (error) {
         // The command does not start as root instead.
         return {
@@ -312,6 +322,17 @@ export function createDockerRunInvocation(
           "--tmpfs",
           `/workspace:rw,nosuid,nodev,size=${String(scratch)},uid=${user.uid},gid=${user.gid}`
         ]),
+    // Only a command with limits of its own is handed data directories: what its worker wrote
+    // for it, read-only, and one directory on the worker's disk that it writes. The worker
+    // bounds what is written there and reads it back without following a link.
+    ...(own && input.dataDirectories
+      ? [
+          "--mount",
+          `type=bind,source=${input.dataDirectories.input},target=${SANDBOX_DATA_DIRECTORIES.input},readonly`,
+          "--mount",
+          `type=bind,source=${input.dataDirectories.output},target=${SANDBOX_DATA_DIRECTORIES.output}`
+        ]
+      : []),
     "--workdir",
     containerWorkspaceCwd(input.workspaceCwd)
   ];

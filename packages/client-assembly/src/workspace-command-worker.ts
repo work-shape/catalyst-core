@@ -23,6 +23,7 @@ import {
   createSandbox,
   createSandboxCheckJobs,
   createWorkspacesStore,
+  createFilesStore,
   FILES_STORE_PATH,
   SANDBOX_PATH,
   WORKSPACE_STORE_PATH
@@ -97,6 +98,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
   if (buildsPages) {
     requireFilesStore(config);
   }
+  const hasFilesStore = config.infrastructure.objectStorage.files !== undefined;
   // Before anything is opened: a host that cannot hold its sandboxes is a config to correct.
   // A resolve-only run is the release gate on a build machine, whose memory says nothing about
   // the host's, so it leaves this check to the start on the host and says so on stderr, which
@@ -114,7 +116,12 @@ export async function createClientInstanceWorkspaceCommandWorker(
     logger,
     secrets: input.secrets,
     // With the `apps` module on this worker also stores the Pages it builds.
-    uses: [WORKSPACE_STORE_PATH, SANDBOX_PATH, ...(buildsPages ? [FILES_STORE_PATH] : [])]
+    // So do the code steps of Workflows, which read and write datasets there.
+    uses: [
+      WORKSPACE_STORE_PATH,
+      SANDBOX_PATH,
+      ...(buildsPages || (runsCodeSteps && hasFilesStore) ? [FILES_STORE_PATH] : [])
+    ]
   });
   const store = await createPlatformStore({
     secrets: infrastructure.secrets,
@@ -190,6 +197,16 @@ export async function createClientInstanceWorkspaceCommandWorker(
         tempRoot: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
         slots: Math.min(codeSteps.slots, config.workflows.stepSlots),
         timeoutSeconds: codeSteps.timeoutSeconds,
+        diskBytes: codeSteps.diskBytes,
+        // The datasets of a code step's input and output, in the instance's `files` store.
+        ...(hasFilesStore
+          ? {
+              datasets: {
+                objects: await createFilesStore(config, infrastructure.context),
+                limits: config.workflows.datasets
+              }
+            }
+          : {}),
         limits: {
           cpuCount: codeSteps.cpuCount,
           memoryBytes: codeSteps.memoryBytes,

@@ -50,6 +50,13 @@ export {
 } from "./runner-packages";
 export { createCodeSandbox } from "./code-sandbox";
 export {
+  openOutputFile,
+  outputFileRows,
+  storeOutputDatasets,
+  type CodeStepDatasets
+} from "./code-datasets";
+export {
+  WORKFLOW_CODE_DISK_BYTES,
   WORKFLOW_CODE_ERRORS,
   WORKFLOW_CODE_FILE_MAX_BYTES,
   WORKFLOW_CODE_LANGUAGES,

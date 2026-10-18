@@ -2,15 +2,19 @@ import {
   defineJobHandler,
   type ClientInstanceId,
   type JobSchedule,
+  type ObjectStorage,
   type PlatformStores,
   type RegisteredJobHandler,
   type WorkflowCodeOutcome,
+  type WorkflowDatasetLimits,
   type WorkflowStepRunLog,
   type WorkflowStepRunRef
 } from "@work-shape/catalyst-core";
 import type { WorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
+import type { CodeStepDatasets } from "./code-datasets";
 import { createCodeSandbox, type CodeSandboxOptions } from "./code-sandbox";
 import { WORKFLOW_CODE_ERRORS } from "./code-step";
+import { createWorkflowDatasets } from "./datasets";
 import { WORKFLOW_STEP_DATA_MAX_BYTES } from "./limits";
 import {
   codeStepContinuationKey,
@@ -38,6 +42,13 @@ export interface CodeStepJobsOptions {
   limits: CodeSandboxOptions["limits"];
   /** The longest a script may run. What a killed worker left is older than twice that. */
   timeoutSeconds: number;
+  /**
+   * The `files` object store and the dataset limits of release config. Without them a step
+   * whose input or output holds a dataset fails with `dataset_storage_unavailable`.
+   */
+  datasets?: { objects: ObjectStorage; limits: WorkflowDatasetLimits };
+  /** How much one script may write to its output directory on this worker's disk. */
+  diskBytes?: number;
   /** For a test: in place of a second. */
   cancelCheckMs?: number;
   /** For a test: in place of twice the time limit and a minute. */
@@ -60,8 +71,37 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): CodeStepJobs {
     sandbox: options.sandbox,
     tempRoot: options.tempRoot,
     limits: options.limits,
-    outputMaxBytes: WORKFLOW_STEP_DATA_MAX_BYTES
+    outputMaxBytes: WORKFLOW_STEP_DATA_MAX_BYTES,
+    ...(options.diskBytes === undefined ? {} : { diskBytes: options.diskBytes })
   });
+  const datasets = options.datasets
+    ? createWorkflowDatasets({
+        clientInstanceId,
+        stores,
+        objects: options.datasets.objects,
+        limits: options.datasets.limits
+      })
+    : undefined;
+
+  /**
+   * What the script of one step run reads and writes datasets with: as its run, so it reads
+   * only the datasets its run may read, and writes them as datasets of its step run.
+   */
+  async function datasetsOf(ref: WorkflowStepRunRef): Promise<CodeStepDatasets | undefined> {
+    if (!datasets || !options.datasets) return undefined;
+    const stepRun = await stores.workflowRuns.getStepRun(ref);
+    const run = stepRun
+      ? await stores.workflowRuns.readRun({ clientInstanceId, id: stepRun.runId })
+      : undefined;
+    if (!stepRun || !run) return undefined;
+    return {
+      rowBytes: options.datasets.limits.rowBytes,
+      async rows(id) {
+        return (await datasets.reader({ id, runId: run.id })).rows;
+      },
+      store: (input) => datasets.write({ run, stepRun, ...input })
+    };
+  }
 
   /** Keeps how the script ended and hands the step back to the engine, in one transaction. */
   async function hand(
@@ -123,9 +163,15 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): CodeStepJobs {
         };
         // It ends by itself at its next look after the script has ended.
         watch().catch(() => undefined);
+        const io = await datasetsOf(ref);
         let result;
         try {
-          result = await run({ id: ref.id, staged, signal: stop.signal });
+          result = await run({
+            id: ref.id,
+            staged,
+            signal: stop.signal,
+            ...(io ? { datasets: io } : {})
+          });
         } finally {
           over = true;
           control.signal.removeEventListener("abort", stopped);

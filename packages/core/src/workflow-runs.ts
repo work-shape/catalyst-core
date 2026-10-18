@@ -268,8 +268,15 @@ export interface WorkflowStagedCode {
   /** The path of the script in the Workflow's step files folder. */
   file: string;
   source: string;
+  /** The mapped input. A dataset in it is its reference; the worker hands the script a file. */
   input: JsonObject;
   timeoutSeconds: number;
+  /**
+   * Present where the step's output names a dataset: the output schema with the row schema of
+   * every dataset written out, and the Workflow's `limits.datasetBytes` where it set one. The
+   * worker stores each file the script names there against its row schema.
+   */
+  datasets?: { outputSchema: JsonObject; maxBytes?: number };
 }
 
 /** How the script of a code step ended, before the engine has checked what it returned. */

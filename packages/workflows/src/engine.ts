@@ -602,7 +602,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       // A code step whose script has ended is finished from what the script left; every
       // other step, and a code step before its script ran, is executed.
       const end = claimed.afterCode
-        ? executor.finishCode(attempt, claimed.afterCode)
+        ? await executor.finishCode(attempt, claimed.afterCode)
         : claimed.afterOperation
           ? await executor.finishOperation(
               claimed.afterOperation.waited,

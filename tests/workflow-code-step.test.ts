@@ -182,14 +182,12 @@ describe("the definition of a code step", () => {
     }
   });
 
-  it("is refused with not_supported_yet where it names a dataset as its input or its output", () => {
+  it("is accepted where it names a dataset as its input or its output (EW-14a)", () => {
     const dataset = { type: "dataset", row: { type: "object" } };
-    expect(issues({ inputSchema: { type: "object", properties: { rows: dataset } } })).toEqual([
-      ["not_supported_yet", "steps[1].inputSchema"]
-    ]);
-    expect(issues({ outputSchema: dataset })).toEqual([
-      ["not_supported_yet", "steps[1].outputSchema"]
-    ]);
+    expect(issues({ inputSchema: { type: "object", properties: { rows: dataset } } })).toEqual([]);
+    expect(issues({ outputSchema: { type: "object", properties: { findings: dataset } } })).toEqual(
+      []
+    );
   });
 });
 

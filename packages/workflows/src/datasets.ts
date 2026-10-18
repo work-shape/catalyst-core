@@ -9,6 +9,7 @@ import {
   type ActorAccess,
   type ClientInstanceId,
   type JsonObject,
+  type JsonValue,
   type ObjectStorage,
   type PlatformStores,
   type WorkflowDatasetLimits,
@@ -41,6 +42,30 @@ export const datasetReference = (row: WorkflowRunDataset): WorkflowDatasetRefere
 });
 function datasetExpired(): WorkflowStepFailure {
   return new WorkflowStepFailure("dataset_expired", "The dataset has expired");
+}
+
+/**
+ * Where in a row a schema issue lies, by position only: the place of each field among the
+ * fields of its object and the place of each item in its list, counted from 1. A row's keys
+ * may be data as much as its values, so an error that is stored names neither.
+ */
+function rowPosition(row: JsonValue, path: readonly string[]): string {
+  const places: string[] = [];
+  let at: JsonValue | undefined = row;
+  for (const segment of path) {
+    if (Array.isArray(at)) {
+      const index = Number(segment);
+      if (!Number.isInteger(index)) break;
+      places.push(`item ${String(index + 1)}`);
+      at = at[index];
+    } else if (at !== null && typeof at === "object") {
+      const index = Object.keys(at).indexOf(segment);
+      if (index === -1) break;
+      places.push(`field ${String(index + 1)}`);
+      at = at[segment];
+    } else break;
+  }
+  return places.length ? ` at ${places.join(", ")}` : "";
 }
 
 /** The only transport of dataset rows. Buffers at most a part and one row, never a dataset. */
@@ -158,7 +183,7 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
       if (!row.success || issue)
         throw new WorkflowStepFailure(
           "dataset_row_invalid",
-          `Dataset line ${line} does not fit its row schema${issue ? ` at /${issue.path.join("/")}` : ""}`
+          `Dataset line ${line} does not fit its row schema${issue && row.success ? rowPosition(row.data, issue.path) : ""}`
         );
       const data = Buffer.from(`${encoded}\n`);
       if (!input.page && bytes + data.length > DATASET_PART_BYTES) await flush();

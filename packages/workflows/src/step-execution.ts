@@ -6,6 +6,7 @@ import type { WorkflowDatasets } from "./datasets";
 import { jsonObjectSchema } from "./json";
 import { pagedOperation, resolvedPaging } from "./paged-operation";
 import { operationDatasetCapture } from "./operation-dataset";
+import { codeOutputDatasetSchema } from "./code-datasets";
 import { childStepOutcome } from "./child-runs";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
@@ -159,24 +160,31 @@ export function createStepExecutor(options: StepExecutorOptions) {
     attempt: StepAttempt,
     step: Extract<WorkflowStep, { type: "code" }>
   ): Promise<StepEnd> {
-    const { run, stepRun, index } = attempt;
-    if (namesDatasetType(step.inputSchema) || namesDatasetType(step.outputSchema)) {
-      throw notSupportedFailure("a dataset as the input or the output of a code step");
-    }
+    const { run, stepRun, index, definition } = attempt;
     const input = await resolveInput(
       { store: stores.workflowRuns, index, run, stepRun },
       step.input
     );
     withinStepData(input, "The input of the step");
-    if (holdsDatasetReference(input)) {
-      throw notSupportedFailure("a dataset as the input of a code step");
-    }
     fitsSchema(
-      step.inputSchema,
+      workflowValueSchema(step.inputSchema, definition.types),
       input,
       WORKFLOW_CODE_ERRORS.inputInvalid,
       "The input does not fit the step's inputSchema"
     );
+    // A dataset reaches the script as a file the command worker writes. Here the run's right
+    // to each one is asked, and whether its rows fit the step's: the worker asks again.
+    const writesDatasets = namesDatasetType(step.outputSchema);
+    if (holdsDatasetReference(input) || writesDatasets) {
+      if (!options.datasets)
+        throw new WorkflowStepFailure(
+          "dataset_storage_unavailable",
+          "This instance has no files object store"
+        );
+      for (const ref of datasetReferences(input))
+        await options.datasets.reader({ id: ref.$dataset, runId: run.id });
+      await checkDatasetValues(input, step.inputSchema, definition, run.id, options.datasets);
+    }
     if (!options.codeRunner) {
       throw new WorkflowStepFailure(
         WORKFLOW_CODE_ERRORS.runnerUnavailable,
@@ -198,7 +206,17 @@ export function createStepExecutor(options: StepExecutorOptions) {
         file: step.file,
         source: read.source,
         input,
-        timeoutSeconds: options.codeRunner.timeoutSeconds
+        timeoutSeconds: options.codeRunner.timeoutSeconds,
+        ...(writesDatasets
+          ? {
+              datasets: {
+                outputSchema: codeOutputDatasetSchema(step.outputSchema, definition.types),
+                ...(definition.limits?.datasetBytes === undefined
+                  ? {}
+                  : { maxBytes: definition.limits.datasetBytes })
+              }
+            }
+          : {})
       }
     };
   }
@@ -207,7 +225,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
    * How a code step ends once its script has: with the result where it fits the schema the
    * step declares and the size every step output may have, and failed otherwise.
    */
-  function finishCode(attempt: StepAttempt, outcome: WorkflowCodeOutcome): StepEnd {
+  async function finishCode(attempt: StepAttempt, outcome: WorkflowCodeOutcome): Promise<StepEnd> {
     const step = attempt.index.get(attempt.stepRun.stepId)?.step;
     const call: WorkflowStepRunCall = { effect: WORKFLOW_CODE_STEP_EFFECT };
     if (outcome.kind === "failed") {
@@ -217,11 +235,20 @@ export function createStepExecutor(options: StepExecutorOptions) {
       withinStepData(outcome.value, "The result of the script");
       if (step?.type === "code") {
         fitsSchema(
-          step.outputSchema,
+          workflowValueSchema(step.outputSchema, attempt.definition.types),
           outcome.value,
           WORKFLOW_CODE_ERRORS.outputInvalid,
           "The result does not fit the step's outputSchema"
         );
+      }
+      // The worker put in each dataset it stored for this step run, and no other.
+      for (const ref of datasetReferences(outcome.value)) {
+        const row = await stores.workflowRunDatasets.get({ clientInstanceId, id: ref.$dataset });
+        if (row?.stepRunId !== attempt.stepRun.id || row.runId !== attempt.run.id)
+          throw new WorkflowStepFailure(
+            WORKFLOW_CODE_ERRORS.outputInvalid,
+            "The result names a dataset this step did not write"
+          );
       }
     } catch (error) {
       if (isAppError(error) && error.code === "FORBIDDEN")

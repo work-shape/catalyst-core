@@ -41,10 +41,30 @@ export interface SandboxCommandLimits {
 /** Where a command with a scratch directory finds the directory its worker filled. */
 export const SANDBOX_SOURCE_DIRECTORY = "/code";
 
+/**
+ * Where a sandbox of its own hands in the data directories of a command: the files its worker
+ * wrote for it, read-only, and the directory on the worker's disk it writes files to.
+ */
+export const SANDBOX_DATA_DIRECTORIES = { input: "/work/in", output: "/work/out" } as const;
+
+/** Two directories of the worker, beside the workspace directory. */
+export interface SandboxDataDirectories {
+  /** What the worker wrote for the command. Read-only for the command. */
+  input: string;
+  /** Empty when the command starts. The command writes its files there, on the worker's disk. */
+  output: string;
+}
+
 export interface WorkspaceCommandProcessInput {
   command: SandboxCommand;
   /** In place of the sandbox's own CPU, memory and process limits. */
   sandboxLimits?: SandboxCommandLimits;
+  /**
+   * Data directories for a command with limits of its own. A sandbox that has `dataPaths`
+   * hands them in at those paths; one without runs the command where it reaches the worker's
+   * own paths.
+   */
+  dataDirectories?: SandboxDataDirectories;
   workspaceDirectory: string;
   workspaceCwd: string;
   cwd: string;
@@ -75,6 +95,11 @@ export interface ProcessResult {
 }
 
 export interface WorkspaceCommandProcessExecutor {
+  /**
+   * Where the command sees `dataDirectories`. Missing for a sandbox that runs the command as a
+   * process of its worker: the command then sees the worker's own paths.
+   */
+  readonly dataPaths?: SandboxDataDirectories;
   execute(input: WorkspaceCommandProcessInput): Promise<ProcessResult>;
   /**
    * Removes what commands left running whose id starts with `idPrefix` and that were started
