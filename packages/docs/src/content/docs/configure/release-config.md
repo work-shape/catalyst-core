@@ -74,8 +74,8 @@ usage:
     dailySpendLimit: 50
     monthlySpendLimit: 400
     costSafetyMultiplier: 1.3
-  # Per person. Left out, each takes its default: 20,000 calls and 500 million tokens a day,
-  # 10 billion tokens a month.
+  # Per person. Left out, each takes its default: 20,000 calls and 200 million tokens a day,
+  # 4 billion tokens a month.
   safeguards:
     modelCallsPerDay: 20000
   costs:

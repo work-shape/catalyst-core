@@ -125,9 +125,9 @@ describe("Usage opens with the month's single answer (UXA-5)", () => {
     }
   );
 
-  it("says once, under the daily budget, that only today's cost is not known", async () => {
+  it("says once, under the daily budget, that only today's budget spend is not known", async () => {
     const usage = createUsageSummary();
-    delete usage.today.cost.billableCostMicros;
+    delete usage.spendBudget.dailySpentMicros;
     const mounted = await mountUsagePage(Response.json(usage), "en");
     try {
       const card = await monthCard(mounted, "This month");
@@ -155,7 +155,11 @@ describe("Usage opens with the month's single answer (UXA-5)", () => {
   // The block on new model calls stood in the budget card, which the month's card replaces.
   it("says in the month's card that the budget is reached and new calls are blocked", async () => {
     const usage = createUsageSummary();
-    usage.spendBudget = { currency: "EUR", monthlyLimitMicros: 400_000_000 };
+    usage.spendBudget = {
+      currency: "EUR",
+      monthlyLimitMicros: 400_000_000,
+      monthlySpentMicros: 450_000_000
+    };
     usage.currentMonth.cost = { ...usage.currentMonth.cost, billableCostMicros: 450_000_000 };
     const mounted = await mountUsagePage(Response.json(usage), "en");
     try {
@@ -176,12 +180,126 @@ describe("Usage opens with the month's single answer (UXA-5)", () => {
   // The badge said "Limit reached" and "Limit erreicht" of a budget.
   it("says in German that the budget is reached", async () => {
     const usage = createUsageSummary();
+    usage.spendBudget.monthlySpentMicros = 450_000_000;
     usage.currentMonth.cost = { ...usage.currentMonth.cost, billableCostMicros: 450_000_000 };
     const mounted = await mountUsagePage(Response.json(usage), "de");
     try {
       const card = await monthCard(mounted, "Dieser Monat");
       expect(card.textContent).toContain("Budget erreicht");
       expect(card.textContent).not.toContain("Limit");
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  // Knowledge base ingestion counted against the budgets and blocked chat it never reaches.
+  it.each([
+    {
+      locale: "en" as const,
+      title: "This month",
+      total: "€900.00",
+      monthSpent: "€0.00 of €400.00",
+      daySpent: "€0.00 of €50.00",
+      remaining: ["€400.00 remaining this month.", "€50.00 remaining today."],
+      scope: "Processing documents for knowledge bases does not count toward the budget.",
+      blocked: /blocked|Budget reached/u
+    },
+    {
+      locale: "de" as const,
+      title: "Dieser Monat",
+      total: "900,00\u00a0€",
+      monthSpent: "0,00\u00a0€ von 400,00\u00a0€",
+      daySpent: "0,00\u00a0€ von 50,00\u00a0€",
+      remaining: ["Diesen Monat noch 400,00\u00a0€ übrig.", "Heute noch 50,00\u00a0€ übrig."],
+      scope: "Die Verarbeitung von Dokumenten für Wissensbasen zählt nicht zum Budget.",
+      blocked: /gesperrt|Budget erreicht/u
+    }
+  ])(
+    "counts no knowledge base ingestion against the budgets, and still says the month's total ($locale)",
+    async ({ locale, title, total, monthSpent, daySpent, remaining, scope, blocked }) => {
+      const usage = createUsageSummary();
+      usage.currentMonth.cost = { ...usage.currentMonth.cost, billableCostMicros: 900_000_000 };
+      usage.today.cost = { ...usage.today.cost, billableCostMicros: 60_000_000 };
+      usage.spendBudget = { ...usage.spendBudget, dailySpentMicros: 0, monthlySpentMicros: 0 };
+      const mounted = await mountUsagePage(Response.json(usage), locale);
+      try {
+        const card = await monthCard(mounted, title);
+        expect(cost(card)).toBe(total);
+        expect(card.textContent).toContain(monthSpent);
+        expect(card.textContent).toContain(daySpent);
+        for (const amount of remaining) {
+          expect(card.textContent).toContain(amount);
+        }
+        expect(required(card.querySelector('[data-testid="usage-budget-scope"]')).textContent).toBe(
+          scope
+        );
+        expect(card.textContent).not.toMatch(blocked);
+        const bars = [...card.querySelectorAll('[role="progressbar"]')];
+        expect(bars.map((bar) => bar.getAttribute("aria-valuenow"))).toEqual(["0", "0"]);
+      } finally {
+        await mounted.unmount();
+      }
+    }
+  );
+
+  it.each([
+    {
+      locale: "en" as const,
+      title: "This month",
+      said: "€450.00 of €400.00",
+      blocked: [
+        "New model calls are blocked for the rest of this month.",
+        "New model calls are blocked for the rest of today."
+      ]
+    },
+    {
+      locale: "de" as const,
+      title: "Dieser Monat",
+      said: "450,00\u00a0€ von 400,00\u00a0€",
+      blocked: [
+        "Neue Modellaufrufe sind für den Rest des Monats gesperrt.",
+        "Neue Modellaufrufe sind für den Rest des Tages gesperrt."
+      ]
+    }
+  ])(
+    "blocks new calls once chat spend passes both budgets ($locale)",
+    async ({ locale, title, said, blocked }) => {
+      const usage = createUsageSummary();
+      usage.currentMonth.cost = { ...usage.currentMonth.cost, billableCostMicros: 450_000_000 };
+      usage.today.cost = { ...usage.today.cost, billableCostMicros: 60_000_000 };
+      usage.spendBudget = {
+        ...usage.spendBudget,
+        dailySpentMicros: 60_000_000,
+        monthlySpentMicros: 450_000_000
+      };
+      const mounted = await mountUsagePage(Response.json(usage), locale);
+      try {
+        const card = await monthCard(mounted, title);
+        expect(cost(card)).toBe(said);
+        for (const sentence of blocked) {
+          expect(card.textContent).toContain(sentence);
+        }
+        expect(card.querySelector('[data-testid="usage-budget-scope"]')).toBeNull();
+      } finally {
+        await mounted.unmount();
+      }
+    }
+  );
+
+  // A server older than the budget spend fields: its totals include ingestion, so no bar reads them.
+  it("says the budget spend is unknown where the server does not report it", async () => {
+    const usage = createUsageSummary();
+    usage.currentMonth.cost = { ...usage.currentMonth.cost, billableCostMicros: 900_000_000 };
+    usage.today.cost = { ...usage.today.cost, billableCostMicros: 60_000_000 };
+    delete usage.spendBudget.dailySpentMicros;
+    delete usage.spendBudget.monthlySpentMicros;
+    const mounted = await mountUsagePage(Response.json(usage), "en");
+    try {
+      const card = await monthCard(mounted, "This month");
+      expect(cost(card)).toBe("€900.00");
+      expect(card.textContent?.split("Billable cost is incomplete.")).toHaveLength(3);
+      expect(card.querySelector('[role="progressbar"]')).toBeNull();
+      expect(card.textContent).not.toMatch(/blocked|Budget reached/u);
     } finally {
       await mounted.unmount();
     }
@@ -455,6 +573,33 @@ describe("usage spend budget progress", () => {
     expect(recent).toContain(">EU</span>");
     expect(recent).toContain(">800 from cache</span>");
   });
+
+  // Fails without the change: a knowledge base field extraction call showed the agent name.
+  it("names a knowledge base field extraction call by its purpose, in English and German", () => {
+    const usage = createUsageSummary();
+    usage.recentEvents = [
+      {
+        ...createEvent("usage_fields", "settled"),
+        agentName: "stored-agent",
+        purpose: "knowledge_field_extraction"
+      }
+    ];
+
+    const english = renderToStaticMarkup(createElement(UsageView, { usage }));
+    const german = renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale: "de",
+        children: createElement(UsageView, { usage })
+      })
+    );
+
+    expect(english).toContain("Knowledge base field extraction");
+    expect(german).toContain("Feldextraktion einer Wissensbasis");
+    for (const markup of [english, german]) {
+      expect(markup).not.toContain("stored-agent");
+      expect(markup).not.toContain("knowledge_field_extraction");
+    }
+  });
 });
 
 function createEvent(
@@ -488,7 +633,9 @@ function createUsageSummary(): UsageSummary {
     spendBudget: {
       currency: "EUR",
       dailyLimitMicros: 50_000_000,
-      monthlyLimitMicros: 400_000_000
+      monthlyLimitMicros: 400_000_000,
+      dailySpentMicros: 10_000_000,
+      monthlySpentMicros: 100_000_000
     },
     safeguards: {
       modelCallsPerDay: 1000

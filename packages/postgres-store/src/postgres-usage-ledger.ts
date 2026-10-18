@@ -10,6 +10,7 @@ import {
   type ModelUsageTotals,
   type RecentModelUsage,
   AppError,
+  KNOWLEDGE_INGESTION_PURPOSES,
   createPlatformId
 } from "@work-shape/catalyst-core";
 import { type PostgresConnection } from "./postgres-database";
@@ -256,11 +257,19 @@ async function countAndInsert(
   const { event, counted } = input;
   const counters = countersOf(
     event.clientInstanceId,
-    { kind: drizzleSql`scope.kind`, id: drizzleSql`scope.id` },
+    {
+      kind: drizzleSql`scope.kind`,
+      id: drizzleSql`scope.id`,
+      purpose: drizzleSql`${event.purpose ?? null}::text`
+    },
     TODAY,
     THIS_MONTH
   );
   const ended = input.status !== "pending";
+  // KB-ISO: ingestion is recorded and rolled up, but reserves no chat counters.
+  const expectedCounters = KNOWLEDGE_INGESTION_PURPOSES.some((purpose) => purpose === event.purpose)
+    ? 0
+    : 4;
   const rows = await db.execute<AdmissionRow>(drizzleSql`
     with ${attribution(event)},
     ${written(event, input.id)},
@@ -278,7 +287,8 @@ async function countAndInsert(
     ),
     verdict as (
       -- The day and the month, of the instance and of the scope.
-      select count(*) = 4 as present, count(*) = 4 and coalesce(bool_and(within), false) as admitted
+      select count(*) = ${expectedCounters} as present,
+        count(*) = ${expectedCounters} and coalesce(bool_and(within), true) as admitted
       from locked
     ),
     counted as (
@@ -397,7 +407,7 @@ async function settleModelUsageEvent(
   // counters are gone.
   const counters = countersOf(
     input.clientInstanceId,
-    { kind: scopeKindOf(old), id: scopeIdOf(old) },
+    { kind: scopeKindOf(old), id: scopeIdOf(old), purpose: drizzleSql`old.purpose` },
     dayOf(drizzleSql`old.created_at`),
     monthOf(drizzleSql`old.created_at`)
   );
@@ -556,6 +566,31 @@ async function summarizeModelUsageHistory(
   };
 }
 
+/** Budget spend uses the same purposes as admission; history still includes every purpose. */
+async function summarizeModelUsageBudget(
+  db: PostgresConnection,
+  input: Parameters<Store["summarizeModelUsageBudget"]>[0]
+): ReturnType<Store["summarizeModelUsageBudget"]> {
+  const cost = drizzleSql`uncached_input_cost_micros + cached_input_cost_micros
+    + output_cost_micros + web_search_cost_micros`;
+  const today = drizzleSql`(${input.todayStart}::timestamptz at time zone 'UTC')::date`;
+  const rows = await db.execute<{ daily: number; monthly: number }>(drizzleSql`
+    select coalesce(sum(${cost}) filter (where day = ${today}), 0)::float8 as daily,
+      coalesce(sum(${cost}), 0)::float8 as monthly
+    from ${modelUsageDailyRollups}
+    where client_instance_id = ${input.clientInstanceId}
+      and day >= (${input.currentMonthStart}::timestamptz at time zone 'UTC')::date
+      and day <= ${today}
+      and purpose not in (${drizzleSql.join(
+        KNOWLEDGE_INGESTION_PURPOSES.map((purpose) => drizzleSql`${purpose}`),
+        drizzleSql`, `
+      )})
+  `);
+  const row = rows[0];
+  if (!row) throw new AppError("INTERNAL", "The database returned no budget spend");
+  return { dailySpentMicros: row.daily, monthlySpentMicros: row.monthly };
+}
+
 type RecentRow = TotalsRow & {
   date: string;
   model: string | null;
@@ -696,6 +731,7 @@ export function createPostgresUsageStore(db: PostgresConnection): ModelUsageEven
     settleModelUsageEvent: (input) => settleModelUsageEvent(db, input),
     listPendingModelUsageEvents: (input) => listPendingModelUsageEvents(db, input),
     summarizeModelUsageHistory: (input) => summarizeModelUsageHistory(db, input),
+    summarizeModelUsageBudget: (input) => summarizeModelUsageBudget(db, input),
     summarizeRecentModelUsage: (input) => summarizeRecentModelUsage(db, input),
     reconcileModelUsage: (input) => reconcileModelUsage(db, input),
     readModelUsageMaintenance: (input) => readModelUsageMaintenance(db, input),

@@ -26515,6 +26515,39 @@
           },
           "tool": {
             "type": "string"
+          },
+          "usageLimit": {
+            "type": "object",
+            "properties": {
+              "period": {
+                "type": "string",
+                "enum": [
+                  "day",
+                  "month"
+                ]
+              },
+              "metric": {
+                "type": "string",
+                "enum": [
+                  "modelCallCount",
+                  "tokens",
+                  "costMicros"
+                ]
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "instance",
+                  "user",
+                  "system"
+                ]
+              }
+            },
+            "required": [
+              "period",
+              "metric",
+              "scope"
+            ]
           }
         },
         "required": [
@@ -37305,6 +37338,16 @@
       "UsageSpendBudget": {
         "type": "object",
         "properties": {
+          "dailySpentMicros": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "monthlySpentMicros": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "currency": {
             "type": "string"
           },
