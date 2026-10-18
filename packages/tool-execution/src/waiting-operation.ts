@@ -601,18 +601,7 @@ async function executeWaitingCall(
       notBegun = await readApprovedOperationEnd(context.run.id, deps);
       throw new OperationNotBegunError();
     }
-    if (signal?.aborted) {
-      // The stop came while the run was being taken. Nothing is dispatched after a stop, and
-      // the run that is marked as started cannot be taken a second time.
-      const interrupted = await deps.runs.markInterrupted({
-        clientInstanceId: deps.clientInstanceId,
-        id: taken.id
-      });
-      notBegun = interrupted
-        ? { execution: "interrupted", run: interrupted, error: INTERRUPTED_RUN_ERROR }
-        : await readApprovedOperationEnd(taken.id, deps);
-      throw new OperationNotBegunError();
-    }
+    // Dispatch rechecks the signal after this await; a stop here is still unexecuted.
   };
   try {
     const first = await executeAdmitted(context, access, undefined, begin);

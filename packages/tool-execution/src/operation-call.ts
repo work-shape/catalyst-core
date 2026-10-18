@@ -18,10 +18,12 @@ export class OperationNotBegunError extends Error {
   }
 }
 
+type OperationCallStop = "timeout" | "aborted";
+
 /** A deadline or caller stop, distinguished from an implementation's own error. */
 export class OperationCallStoppedError extends Error {
   constructor(
-    readonly kind: "timeout" | "aborted",
+    readonly kind: OperationCallStop,
     readonly reason: unknown
   ) {
     super("The operation call was stopped");
@@ -41,27 +43,39 @@ export function startOperationCall(
   startedAt?: string
 ) {
   const { signal, deadline } = execution.runtime;
+  const operationUntil = Date.parse(startedAt ?? now.toISOString()) + definition.timeoutMs;
+  const callerFirst = deadline !== undefined && deadline.getTime() < operationUntil;
+  const until = callerFirst ? deadline.getTime() : operationUntil;
+  const german = execution.runtime.locale === "de";
+  const limit = callerFirst
+    ? `runtime.deadline (${deadline.toISOString()})`
+    : `definition.timeoutMs (${definition.timeoutMs} ms)`;
+  const timeout = () =>
+    new AppError(
+      "TIMEOUT",
+      german
+        ? `'${definition.name}' hat die Grenze ${limit} erreicht`
+        : `'${definition.name}' reached the limit ${limit}`,
+      undefined,
+      { exposeMessage: true }
+    );
+  // Check at dispatch, after admission's awaits. An expired call must never reach execute.
+  if (signal?.aborted) {
+    throw new AppError(
+      "CONFLICT",
+      german
+        ? `'${definition.name}' wurde wegen des abgebrochenen runtime.signal nicht aufgerufen. Nichts wurde ausgeführt.`
+        : `'${definition.name}' was not called because runtime.signal was aborted. Nothing ran.`
+    );
+  }
+  if (!execution.runtime.readPages && until <= now.getTime()) throw timeout();
   const stop = new AbortController();
-  const until = Math.min(
-    Date.parse(startedAt ?? now.toISOString()) + definition.timeoutMs,
-    deadline?.getTime() ?? Infinity
-  );
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let cut: (cause: "timeout" | "aborted") => void = () => undefined;
+  let cut: (cause: OperationCallStop) => void = () => undefined;
   const stopped = new Promise<never>((_resolve, reject) => {
     cut = (cause) =>
       reject(
-        new OperationCallStoppedError(
-          cause,
-          cause === "aborted"
-            ? signal?.reason
-            : new AppError(
-                "TIMEOUT",
-                `'${definition.name}' did not end within its ${definition.timeoutMs / 1000} seconds`,
-                undefined,
-                { exposeMessage: true }
-              )
-        )
+        new OperationCallStoppedError(cause, cause === "aborted" ? signal?.reason : timeout())
       );
   });
   const onAbort = () => cut("aborted");
@@ -72,7 +86,6 @@ export function startOperationCall(
     timer = setTimeout(() => cut("timeout"), Math.max(0, until - now.getTime()));
   let answer: Promise<unknown>;
   try {
-    if (signal?.aborted) throw new OperationCallStoppedError("aborted", signal.reason);
     answer = Promise.resolve(
       definition.execute(input, {
         ...execution,

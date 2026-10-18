@@ -1,3 +1,4 @@
+import { recordedResult } from "./operation-recorded-result";
 import { auditForRun, retainedOutput } from "./operation-run-recording";
 import {
   AGENT_TOOL_ACTION_PREFIX,
@@ -50,6 +51,7 @@ import {
   type ToolExecutionResult
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import { toolOutput, shownBesideOutput, toolAuditFields } from "./tool-results";
 import { failureLogFields } from "./tool-failure-log";
 import {
   OperationCallStoppedError,
@@ -204,7 +206,7 @@ export interface RunContext {
    * completes. Before-events are never held: a guardrail is asked for every call.
    */
   unrecorded?: { start: NewOperationRun; heldAfterEvents: (() => Promise<unknown>)[] };
-  /** Set once a later call took the run over: this call emits no further event of it. */
+  /** Set once another writer ended or took over the run: this call emits no further event. */
   overtaken?: boolean;
   publishedWouldAsk?: "approval";
   /**
@@ -402,7 +404,21 @@ export async function endRun(context: RunContext, ended: OperationRunEnd): Promi
     { operationRunId: run.id, operation: definition.name, status: ended.status },
     "Operation run was no longer running when its call ended"
   );
-  return run;
+  context.overtaken = true;
+  if (!current) throw new AppError("INTERNAL", "The operation run is unavailable");
+  return current;
+}
+
+/** Answers from the winning writer, as a retry of the same call would. */
+function storedEnding(context: RunContext, run: OperationRun): OperationEnding {
+  return {
+    result: recordedResult(
+      run,
+      context.definition,
+      context.definition.inputWithoutSecrets?.(context.call.input) !== undefined
+    ),
+    run
+  };
 }
 
 /**
@@ -471,6 +487,7 @@ export async function denyRun(
 ): Promise<OperationEnding> {
   const end = deniedEnd(context, denial);
   const denied = await endRun(context, end);
+  if (context.overtaken) return storedEnding(context, denied);
   await context.emit("operation.denied", "after", { status: "denied", reason: end.error.code });
   return { result: { status: "denied", runId: context.run.id, reason: denial }, run: denied };
 }
@@ -518,7 +535,6 @@ export async function executeAdmitted(
       ...(context.beforeEvents ? { beforeEvents: context.beforeEvents } : {})
     };
     await begin?.();
-    started = true;
     executing = startOperationCall(
       definition,
       call.input,
@@ -526,6 +542,7 @@ export async function executeAdmitted(
       now(),
       begin ? undefined : run.startedAt
     );
+    started = true;
     // With `begin` the call is said to have started once it has: nothing may be awaited before.
     if (begin)
       await executing.wait(context.emit("operation.started", "after", { status: "success" }));
@@ -538,11 +555,12 @@ export async function executeAdmitted(
         });
         if (!joined || joined.operation !== definition.name)
           throw new AppError("INTERNAL", "The joined operation run is unavailable");
-        await endRun(context, {
+        const ended = await endRun(context, {
           status: "done",
           finishedAt: now().toISOString(),
           resultRef: `operation_run:${joinedRunId}`
         });
+        if (context.overtaken) return storedEnding(context, ended);
         await context.emit("operation.completed", "after", { status: "success" });
         const result: OperationResult =
           joined.status === "done"
@@ -603,6 +621,7 @@ export async function executeAdmitted(
           }
         : {})
     });
+    if (context.overtaken) return storedEnding(context, done);
     completed = { ...completed, run: done };
     await context.emit("operation.completed", "after", {
       status: "success",
@@ -613,6 +632,7 @@ export async function executeAdmitted(
     if (definition.events?.after) await context.emit(definition.events.after, "after");
     return completed;
   } catch (error) {
+    if (context.overtaken) throw error;
     if (error instanceof OperationNotBegunError) throw error;
     if (error instanceof OperationCallStoppedError) {
       try {
@@ -624,6 +644,7 @@ export async function executeAdmitted(
             finishedAt: now().toISOString(),
             error: INTERRUPTED_RUN_ERROR
           });
+          if (context.overtaken) return storedEnding(context, interrupted);
           return {
             result: { status: "failed", runId: run.id, error: INTERRUPTED_RUN_ERROR },
             run: interrupted
@@ -688,44 +709,13 @@ async function endToolFailure(
     finishedAt: now().toISOString(),
     error
   });
+  if (context.overtaken) return storedEnding(context, failed);
   await context.emit("operation.failed", "after", {
     status: "failed",
     reason: error.code,
     ...toolAuditFields(result)
   });
   return { result: { status: "failed", runId: run.id, error }, run: failed, toolResult: result };
-}
-
-function toolOutput(result: ToolExecutionResult): unknown {
-  return result.status === "success" ? result.output : undefined;
-}
-
-function shownBesideOutput(
-  result: Extract<ToolExecutionResult, { status: "success" }>
-): Pick<
-  Extract<OperationResult, { status: "done" }>,
-  "display" | "structuredResult" | "artifacts"
-> {
-  return {
-    ...(result.display ? { display: result.display } : {}),
-    ...(result.structuredResult ? { structuredResult: result.structuredResult } : {}),
-    ...(result.artifacts ? { artifacts: result.artifacts } : {})
-  };
-}
-
-/** What a tool says about itself for the audit log: names and counts, never content. */
-function toolAuditFields(result: ToolExecutionResult): JsonObject {
-  const summary = result.auditSummary;
-  return {
-    resultStatus: result.status,
-    ...(summary
-      ? {
-          auditAction: summary.action,
-          ...(summary.subject ? { auditSubject: summary.subject } : {}),
-          ...(summary.metadata ? { auditMetadata: summary.metadata } : {})
-        }
-      : {})
-  };
 }
 
 export async function failRun(
@@ -761,6 +751,7 @@ export async function failRun(
       ...(unexecuted ? { unexecuted } : {})
     }
   });
+  if (context.overtaken) return storedEnding(context, failed);
   await context.emit("operation.failed", "after", { status: "failed", reason: safe.code });
   // The envelope drops the details of a 5xx, a timeout among them. The fixed reason stays.
   const retry = z
