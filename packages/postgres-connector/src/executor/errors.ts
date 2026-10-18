@@ -38,13 +38,27 @@ export class PostgresExecutorError extends Error {
   /** The SQLSTATE the database answered with, when it answered. */
   readonly sqlState: string | undefined;
 
-  constructor(kind: FixedSentenceKind, sqlState?: string);
+  /** Object names reported for a constraint violation; never the database's detail or message. */
+  readonly constraint: { name?: string; table?: string; column?: string } | undefined;
+
+  constructor(
+    kind: FixedSentenceKind,
+    sqlState?: string,
+    constraint?: { name?: string; table?: string; column?: string }
+  );
   constructor(kind: "query_rejected", message: string, sqlState?: string);
-  constructor(kind: PostgresExecutorErrorKind, second?: string, third?: string) {
+  constructor(
+    kind: PostgresExecutorErrorKind,
+    second?: string,
+    third?: string | { name?: string; table?: string; column?: string }
+  ) {
     super(kind === "query_rejected" ? second : FIXED_SENTENCES[kind]);
     this.name = "PostgresExecutorError";
     this.kind = kind;
-    this.sqlState = kind === "query_rejected" ? third : second;
+    this.sqlState =
+      kind === "query_rejected" ? (typeof third === "string" ? third : undefined) : second;
+    this.constraint =
+      kind !== "query_rejected" && typeof third === "object" ? { ...third } : undefined;
   }
 }
 
@@ -66,8 +80,8 @@ const UNREACHABLE_CODES = new Set([
 
 /**
  * Turns whatever a call failed with into an executor error. A driver error is read for its
- * code alone, because its text can quote a connection target or a row value, and the driver
- * hangs the query text and the parameters on the errors it passes through. So even an
+ * code and constraint object names alone. Its text can quote a connection target or a row
+ * value, and the driver hangs query text and parameters on the errors it passes through. So even an
  * executor error is rebuilt and never handed on as the object the driver touched.
  *
  * The server's message is passed on for class 42 only, and only when `fromCallerStatement`
@@ -81,7 +95,7 @@ export function toPostgresExecutorError(
   if (error instanceof PostgresExecutorError) {
     return error.kind === "query_rejected"
       ? new PostgresExecutorError("query_rejected", error.message, error.sqlState)
-      : new PostgresExecutorError(error.kind, error.sqlState);
+      : new PostgresExecutorError(error.kind, error.sqlState, error.constraint);
   }
   const code = stringField(error, "code");
   if (code === undefined) return new PostgresExecutorError("failed");
@@ -96,7 +110,16 @@ export function toPostgresExecutorError(
   if (code.startsWith("28") && fromCallerStatement) {
     return new PostgresExecutorError("failed", code);
   }
-  return new PostgresExecutorError(kindOfSqlState(code), code);
+  // These protocol fields identify schema objects. Detail, message, where and the driver
+  // object itself may hold row values and must never leave this adapter.
+  const constraint = code.startsWith("23")
+    ? {
+        name: stringField(error, "constraint_name"),
+        table: stringField(error, "table_name"),
+        column: stringField(error, "column_name")
+      }
+    : undefined;
+  return new PostgresExecutorError(kindOfSqlState(code), code, constraint);
 }
 
 function kindOfSqlState(code: string): FixedSentenceKind {

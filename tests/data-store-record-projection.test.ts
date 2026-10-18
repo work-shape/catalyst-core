@@ -1,11 +1,15 @@
+import { inspect } from "node:util";
 import { describe, expect, it } from "vitest";
 import {
   createPlatformId,
+  createOperationRegistry,
+  StoreBackedAuditRecorder,
   NoopAuditRecorder,
   type AuthenticatedUser,
   type JsonObject,
   type OperationBatchFailure
 } from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { manifest, refusal, useDataStoreWorld } from "./support/data-store-world";
 import { accessOf } from "./support/access";
 import { required } from "./support/assertions";
@@ -269,6 +273,141 @@ describe("REC-1a records projection through the public operation source", () => 
     ]);
     expect(await w.target`select count(*)::int as n from objekt`).toEqual([{ n: 0 }]);
   });
+  it.each([
+    { kind: "unique", constraint: "unique_address", code: "23505" },
+    { kind: "check", constraint: "bounded_price", code: "23514" },
+    { kind: "not-null", constraint: "NOT NULL (baujahr)", code: "23502" },
+    { kind: "foreign-key", constraint: "known_year", code: "23503" }
+  ])(
+    "names the $kind constraint for load and records in EN/DE, rolls back and keeps values out of errors, logs and Operation Runs",
+    async ({ kind, constraint, code }) => {
+      const marker = "row-value-must-stay-private";
+      let rows: JsonObject[] = [];
+      const w = await world(
+        `constraint-${kind}`,
+        [
+          records(),
+          {
+            path: "migrations/0001_objects.sql",
+            text: `create table years (year integer primary key);
+        insert into years values (2000);
+        create table objekt (
+          objekt_nr integer primary key,
+          adresse text constraint unique_address unique,
+          baujahr integer not null constraint known_year references years(year),
+          kaufpreis numeric constraint bounded_price check(kaufpreis < 1000),
+          wohnflaeche numeric
+        );
+        insert into objekt values (7, '${kind === "unique" ? marker : "existing"}', 2000, 1, null);`
+          }
+        ],
+        undefined,
+        {
+          async *read() {
+            yield rows;
+          }
+        }
+      );
+      const before = await w.target`select * from objekt order by objekt_nr`;
+      const values: JsonObject = {
+        adresse: marker,
+        ...(kind === "not-null" ? {} : { baujahr: kind === "foreign-key" ? 1999 : 2000 }),
+        kaufpreis: kind === "check" ? 123456789 : 100
+      };
+      const good = await w.item("ca", "kaufvertrag", {
+        adresse: "good",
+        baujahr: 2000,
+        kaufpreis: 100
+      });
+      const bad = await w.item("cb", "kaufvertrag", values, "2026-10-18", "/Objekte/1403/file.pdf");
+      rows = [
+        { objekt_nr: 1402, adresse: "good", baujahr: 2000, kaufpreis: 100 },
+        { objekt_nr: 1403, baujahr: null, ...values }
+      ];
+      const registry = createOperationRegistry();
+      registry.addSource(w.dataStores.operationSource);
+      const actor = actorOf(w.clientInstanceId);
+      for (const verb of ["load", "records.propose"] as const) {
+        for (const locale of ["en", "de"] as const) {
+          const outcome = await runOperation(
+            {
+              operation: `data_store.findings.${verb}`,
+              effect: "changing",
+              input:
+                verb === "load"
+                  ? {
+                      table: "objekt",
+                      dataset: {
+                        $dataset: "constraint-rows",
+                        rowCount: rows.length,
+                        bytes: JSON.stringify(rows).length
+                      }
+                    }
+                  : { table: "objekt", items: [good, bad] },
+              actor,
+              origin: {
+                kind: "workflow",
+                workflowRunId: "constraint-run",
+                stepRunId: `${verb}-${locale}`
+              },
+              idempotencyKey: `constraint-${verb}-${locale}`,
+              correlationId: "constraint-test"
+            },
+            {
+              clientInstanceId: w.clientInstanceId,
+              registry,
+              runs: db.store.operationRuns,
+              authorizer: { forActor: async () => accessOf(actor) },
+              events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },
+              audit: new StoreBackedAuditRecorder({
+                clientInstanceId: w.clientInstanceId,
+                store: db.store.audit
+              }),
+              policy: {
+                instanceDefaults: { reading: "allow", changing: "allow" },
+                centralSettings: () => []
+              },
+              logger: w.logger
+            },
+            { locale }
+          );
+          expect(outcome.result).toMatchObject({
+            status: "failed",
+            error: {
+              code: "VALIDATION_FAILED",
+              details: { sqlState: code },
+              message: expect.stringContaining(constraint)
+            }
+          });
+          if (outcome.result.status !== "failed") throw new Error("Expected constraint refusal");
+          expect(outcome.result.error.message).toContain("objekt");
+          expect(outcome.result.error.message).toContain(
+            locale === "de" ? "verletzt die Einschränkung" : "violates constraint"
+          );
+          const stored = await db.store.operationRuns.get({
+            clientInstanceId: w.clientInstanceId,
+            id: outcome.run.id
+          });
+          expect(stored).toMatchObject({
+            status: "failed",
+            error: { message: expect.stringContaining(constraint) }
+          });
+          const exposed = inspect(
+            { result: outcome.result, run: stored, logs: w.logged },
+            { depth: null }
+          );
+          expect(exposed).not.toContain(marker);
+          expect(exposed).not.toContain("123456789");
+          expect(await w.target`select * from objekt order by objekt_nr`).toEqual(before);
+          expect(await w.target`select count(*)::int as n from catalyst.record_fields`).toEqual([
+            { n: 0 }
+          ]);
+          expect(await w.target`select count(*)::int as n from catalyst.loads`).toEqual([{ n: 0 }]);
+        }
+      }
+    }
+  );
+
   it("replays a Workflow step without a call key, including its original failures reference", async () => {
     const w = await world("step-replay");
     const item = await w.item("a4", "kaufvertrag", { kaufpreis: 100 });

@@ -585,7 +585,11 @@ async function runVerb(
     const failure =
       cause instanceof AppError
         ? cause
-        : databaseFailureError(cause, `The ${verb.effect === "changing" ? verb.verb : "query"}`);
+        : databaseFailureError(
+            cause,
+            `The ${verb.effect === "changing" ? verb.verb : "query"}`,
+            context.runtime.locale
+          );
     // Everything a changing verb does to a store is one transaction. Whatever fails before
     // that transaction is being kept leaves nothing of the call, so the call path may run the
     // same call again under its key: a step that is tried again adds its rows once the cause

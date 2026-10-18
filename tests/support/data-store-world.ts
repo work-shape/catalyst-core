@@ -28,14 +28,6 @@ import { usePostgresSuite } from "./postgres-suite";
 // published as the asset workflow publishes it, its jobs run on a worker of the test, and its
 // operations are executed as the call path executes them once the caller's right is known.
 
-const silent: Logger = {
-  debug() {},
-  info() {},
-  warn() {},
-  error() {},
-  child: () => silent
-};
-
 export type StoreFile = { path: string; text: string };
 
 /** Where a load reads the rows of a dataset from, as the Data Stores of a test are given it. */
@@ -148,6 +140,17 @@ export function useDataStoreWorld(prefix: string) {
     recordFailures?: Parameters<typeof createDataStores>[0]["recordFailures"]
   ) {
     const clientInstanceId = db.clientInstance(label);
+    const logged: unknown[] = [];
+    const record: Logger["error"] = (fields, message) => {
+      logged.push({ fields, message });
+    };
+    const logger: Logger = {
+      debug: record,
+      info: record,
+      warn: record,
+      error: record,
+      child: () => logger
+    };
     const key = randomBytes(32).toString("base64");
     const dataStores = createDataStores({
       clientInstanceId,
@@ -160,11 +163,11 @@ export function useDataStoreWorld(prefix: string) {
       limits: { sizeLimitBytes: 5 * 1024 ** 3, poolMaxConnections: 5, ...limits },
       ...(datasets ? { datasets } : {}),
       ...(recordFailures ? { recordFailures } : {}),
-      logger: silent
+      logger
     });
     opened.push(dataStores);
     const worker = jobs.worker(db.store, clientInstanceId, [...dataStores.jobHandlers]);
-    return { clientInstanceId, dataStores, worker };
+    return { clientInstanceId, dataStores, worker, logger, logged };
   }
 
   type World = Awaited<ReturnType<typeof setup>>;

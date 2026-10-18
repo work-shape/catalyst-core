@@ -75,15 +75,27 @@ export function describeDatabaseFailure(error: unknown, subject: string): Databa
 }
 
 /** The failure of a store's database as the error of an operation. */
-export function databaseFailureError(error: unknown, subject: string): AppError {
+export function databaseFailureError(error: unknown, subject: string, locale?: string): AppError {
   const failure = describeDatabaseFailure(error, subject);
   return new AppError(
     failure.code,
-    failure.sentence,
+    constraintSentence(error, subject, locale) ?? failure.sentence,
     // An answer of status 500 carries no details.
     failure.sqlState === undefined || failure.code === "INTERNAL"
       ? undefined
       : { sqlState: failure.sqlState },
     { exposeMessage: true }
   );
+}
+
+/** PostgreSQL 17 reports NOT NULL by column; it supplies no constraint_name for it. */
+function constraintSentence(error: unknown, subject: string, locale?: string): string | undefined {
+  if (!(error instanceof PostgresExecutorError) || !error.sqlState?.startsWith("23"))
+    return undefined;
+  const { name, table, column } = error.constraint ?? {};
+  if (!table || (!name && !(error.sqlState === "23502" && column))) return undefined;
+  const constraint = name ? `'${name}'` : `NOT NULL (${column})`;
+  return locale === "de"
+    ? `Der Datenbankaufruf verletzt die Einschränkung ${constraint} der Tabelle '${table}' (SQLSTATE ${error.sqlState}).`
+    : `${subject} violates constraint ${constraint} on table '${table}' (SQLSTATE ${error.sqlState}).`;
 }

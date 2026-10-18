@@ -313,7 +313,7 @@ describe("a Data Store on Postgres", () => {
     // Left out, a conflict refuses the whole call and adds no row of it.
     expect(await refusal(call(world, "insert", rerun))).toMatchObject({
       code: "VALIDATION_FAILED",
-      message: "The insert would store a value twice that must be unique (SQLSTATE 23505)."
+      message: "The insert violates constraint 'one_finding' on table 'findings' (SQLSTATE 23505)."
     });
     expect(await refusal(call(world, "insert", { ...rerun, onConflict: "fail" }))).toMatchObject({
       details: { sqlState: "23505" }
@@ -559,7 +559,8 @@ describe("a Data Store on Postgres", () => {
 
     expect(check).toEqual({
       code: "VALIDATION_FAILED",
-      message: "The insert breaks a check of its table (SQLSTATE 23514).",
+      message:
+        "The insert violates constraint 'findings_severity_check' on table 'findings' (SQLSTATE 23514).",
       details: { sqlState: "23514" }
     });
     expect(type.message).toBe(
