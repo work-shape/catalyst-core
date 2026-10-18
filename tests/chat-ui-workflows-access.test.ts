@@ -9,6 +9,7 @@ import {
   workspaceRouteFromPath,
   workspaceRoutePath
 } from "@work-shape/catalyst-chat-ui/workflows";
+import { workflowsContext } from "./chat-ui-build-fixtures";
 
 // Who is shown the Workflows area: its row in the rail and its addresses. One function
 // decides both, from the module's switch and the rights the instance names. Every test here
@@ -105,30 +106,32 @@ describe("who is shown the Workflows area", () => {
   });
 });
 
-describe("what a reader holds on Workflows as a whole", () => {
-  it("names reading and writing, and leaves the start to each Workflow's entry of the list", () => {
-    expect(resolveWorkflowRights(reader)).toEqual({ read: true, write: false, publish: false });
-    expect(resolveWorkflowRights({ actions: [], assetActions: ["workflow.read"] })).toEqual({
-      read: true,
-      write: false,
-      publish: false
+describe("what a reader holds on Workflows, by owner", () => {
+  const none = { read: false, write: false, publish: false, delete: false };
+
+  it("names the instance's own Workflows by what the instance names on its own assets", () => {
+    const context = workflowsContext(["workflow.read", "workflow.publish"], {}, ["workflow.write"]);
+    // A right on one single Workflow is that Workflow's to say, never a right on all of them.
+    expect(resolveWorkflowRights(context, undefined)).toEqual({
+      instance: { read: true, write: false, publish: true, delete: false }
     });
-    expect(
-      resolveWorkflowRights({ actions: ["workflow.read", "workflow.write"], assetActions: [] })
-    ).toEqual({ read: true, write: true, publish: false });
   });
 
-  it("names publishing apart from writing", () => {
-    expect(
-      resolveWorkflowRights({ actions: ["workflow.read", "workflow.publish"], assetActions: [] })
-    ).toEqual({ read: true, write: false, publish: true });
+  it("names the open workspace's own Workflows by that workspace's actions alone", () => {
+    const context = workflowsContext(["workflow.read"], {
+      cw_open: ["workflow.read", "workflow.write"],
+      cw_other: ["workflow.write", "workflow.publish", "workflow.delete"]
+    });
+    expect(resolveWorkflowRights(context, "cw_open")).toEqual({
+      instance: { ...none, read: true },
+      workspace: { id: "cw_open", rights: { ...none, read: true, write: true } }
+    });
   });
 
   it("holds nothing before the instance has answered", () => {
-    expect(resolveWorkflowRights(undefined)).toEqual({
-      read: false,
-      write: false,
-      publish: false
+    expect(resolveWorkflowRights(undefined, "cw_open")).toEqual({
+      instance: none,
+      workspace: { id: "cw_open", rights: none }
     });
   });
 });

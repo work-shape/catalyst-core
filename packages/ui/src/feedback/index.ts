@@ -2,6 +2,7 @@ export { Banner, type BannerLayout, type BannerProps, type BannerTone } from "./
 export { EmptyState, type EmptyStateLayout, type EmptyStateProps } from "./empty-state";
 export { FormNotice, type FormNoticeProps, type FormNoticeTone } from "./form-notice";
 export { InlineError } from "./inline-error";
+export { LoadError, type LoadErrorProps } from "./load-error";
 export { NotFound, type NotFoundProps } from "./not-found";
 export {
   Progress,

@@ -1,12 +1,5 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
-import {
-  Badge,
-  Button,
-  InlineError,
-  PageHeaderBack,
-  Skeleton,
-  Spinner
-} from "@work-shape/catalyst-ui";
+import { Badge, PageHeaderBack, Skeleton, Spinner } from "@work-shape/catalyst-ui";
 import { opensHere } from "../apps/app-header";
 import { formatElapsed } from "../../shared/locale-format";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
@@ -115,19 +108,6 @@ export function TitlePlaceholder({ children }: { children: string }) {
       <Skeleton className="w-48" />
       <span className="sr-only">{children}</span>
     </>
-  );
-}
-
-/** A read that failed, with the way to ask again. */
-export function LoadError({ children, onRetry }: { children: ReactNode; onRetry(): void }) {
-  const { t } = useTranslation();
-  return (
-    <InlineError className="flex flex-wrap items-center justify-between gap-2">
-      <span>{children}</span>
-      <Button variant="outline" size="sm" onClick={onRetry}>
-        {t("tryAgain")}
-      </Button>
-    </InlineError>
   );
 }
 

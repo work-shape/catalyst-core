@@ -1,4 +1,4 @@
-import { Banner, Breadcrumb, Button, NotFound } from "@work-shape/catalyst-ui";
+import { Banner, Breadcrumb, Button, LoadError, NotFound } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import { useStartRun } from "./start-run";
@@ -20,9 +20,9 @@ import {
 } from "./workflow-draft";
 import { WorkflowHead } from "./workflow-head";
 import { useTestRun } from "./test-run";
-import { startOffered } from "./workflow-model";
+import { runsReadable, startOffered } from "./workflow-model";
 import type { WorkflowStartIssue, WorkflowStepView } from "./workflow-views";
-import { LoadError, WorkflowsFrame, routeLink, type OpenRoute } from "./workflows-frame";
+import { WorkflowsFrame, routeLink, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
 const PROBLEM_SENTENCES: Readonly<Record<WorkflowReadProblem, TranslationKey>> = {
@@ -79,6 +79,7 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
         read={read}
         trail={before.map((id, depth) => ({ id, name: names[depth], route: routeAt(depth) }))}
         runsAvailable={runsAvailable}
+        runsReadable={runsReadable(host.rights, read.workflow)}
         edit={edit}
         draft={
           draft.bar === undefined || test === undefined
@@ -113,6 +114,7 @@ export function WorkflowPageView({
   read,
   trail = [],
   runsAvailable,
+  runsReadable: readsRuns = true,
   edit,
   draft,
   onOpenChild,
@@ -127,6 +129,8 @@ export function WorkflowPageView({
   trail?: readonly WorkflowTrailEntry[];
   /** The instance runs Workflows: there is a start and a list of runs. */
   runsAvailable: boolean;
+  /** The reader may read the Workflow's runs: its Runs tab stands. Starting it is apart. */
+  runsReadable?: boolean;
   /** "Edit with the agent", for a reader who may write the Workflow. */
   edit?: WorkflowEdit;
   /** The bar of the draft, where the draft is not the published revision. */
@@ -176,7 +180,7 @@ export function WorkflowPageView({
         workflowId={workflowId}
         workflow={workflow}
         tab="workflow"
-        runsAvailable={runsAvailable}
+        runsShown={runsAvailable && readsRuns}
         canStart={canStart}
         startOff={startOff}
         edit={edit}

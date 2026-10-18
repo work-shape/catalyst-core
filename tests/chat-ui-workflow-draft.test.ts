@@ -74,19 +74,23 @@ describe("how the draft of a Workflow stands beside what is published", () => {
 });
 
 describe("who is offered to edit a Workflow with the agent", () => {
+  const writes = (write: boolean) => ({
+    instance: { read: true, write, publish: false, delete: false }
+  });
+
   it("offers it to a reader who may write Workflows and is shown the draft", () => {
-    expect(editOffered({ write: true }, ahead)).toBe(true);
-    expect(editOffered({ write: true }, level)).toBe(true);
-    expect(editOffered({ write: true }, unpublished)).toBe(true);
+    expect(editOffered(writes(true), ahead)).toBe(true);
+    expect(editOffered(writes(true), level)).toBe(true);
+    expect(editOffered(writes(true), unpublished)).toBe(true);
   });
 
   it("offers it to nobody without the right to write Workflows", () => {
-    expect(editOffered({ write: false }, ahead)).toBe(false);
+    expect(editOffered(writes(false), ahead)).toBe(false);
   });
 
   it("offers it nowhere the instance named no draft, and not before the record arrived", () => {
-    expect(editOffered({ write: true }, publishedView)).toBe(false);
-    expect(editOffered({ write: true }, undefined)).toBe(false);
+    expect(editOffered(writes(true), publishedView)).toBe(false);
+    expect(editOffered(writes(true), undefined)).toBe(false);
   });
 });
 
