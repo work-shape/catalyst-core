@@ -1,4 +1,4 @@
-import { KNOWLEDGE_DOCUMENT_FORMATS, type KnowledgeDocumentFormat } from "./knowledge-formats";
+import type { KnowledgeDocumentFormat } from "./knowledge-formats";
 import type { AgentConfig } from "@work-shape/catalyst-asset-schemas";
 
 export type {
