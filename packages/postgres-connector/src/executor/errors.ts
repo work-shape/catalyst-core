@@ -38,7 +38,7 @@ export class PostgresExecutorError extends Error {
   /** The SQLSTATE the database answered with, when it answered. */
   readonly sqlState: string | undefined;
 
-  /** Object names from a database constraint check; never fields supplied by PL/pgSQL RAISE. */
+  /** Candidate object names from a database check; Data Stores verify them after rollback. */
   readonly constraint: { name?: string; table?: string; column?: string } | undefined;
 
   constructor(
@@ -114,6 +114,10 @@ export function toPostgresExecutorError(
   // retain names when the server identifies a routine other than exec_stmt_raise. A real
   // violation inside a trigger still reports the constraint checker, not the trigger.
   // Missing routine metadata cannot establish that the names came from a check.
+  // Data Stores also verify these names in the catalog after rollback: a trigger can create
+  // a value-named object and break it. Accepted residual: a schema author can still choose
+  // which existing constraint to break based on a value, leaking one choice at a time;
+  // that author already controls the store's schema by design.
   const routine = stringField(error, "routine");
   const constraint =
     code.startsWith("23") && routine && routine !== "exec_stmt_raise"

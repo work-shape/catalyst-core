@@ -30,6 +30,7 @@ import {
 import { z } from "zod";
 import { ensureCallRecords, keyedCall, readRecordedCall } from "./calls";
 import { catalogTarget, readTables, rowsOf } from "./catalog";
+import { validateConstraintNames } from "./constraint-errors";
 import { dataStoreDefinitionSchema } from "./definition";
 import { databaseFailureError } from "./failures";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
@@ -586,7 +587,14 @@ async function runVerb(
       cause instanceof AppError
         ? cause
         : databaseFailureError(
-            cause,
+            await validateConstraintNames(
+              runtime.server.executor,
+              {
+                ...runtime.server.asPlatform(record.location.database),
+                ...(signal ? { signal } : {})
+              },
+              cause
+            ),
             `The ${verb.effect === "changing" ? verb.verb : "query"}`,
             context.runtime.locale
           );
