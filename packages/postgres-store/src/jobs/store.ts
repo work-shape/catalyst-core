@@ -1,3 +1,4 @@
+import { enqueueDueWakes } from "./wakes";
 import {
   AppError,
   FAILED_JOB_STATUSES,
@@ -21,7 +22,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { and, asc, eq, gt, inArray, lt, lte, not, sql } from "drizzle-orm";
 import type { PostgresConnection } from "../postgres-database";
-import { jobWorkerReports, platformJobs } from "../schema/jobs";
+import { jobWakes, jobWorkerReports, platformJobs } from "../schema/jobs";
 import { productUsers } from "../schema/users";
 import { collaborationWorkspaces } from "../schema/workspaces";
 import { listJobOverview, retryJob, summarizeJobsByKind } from "./admin-queries";
@@ -75,12 +76,41 @@ export function notifyJobsEnqueued(connection: PostgresConnection): void {
 /** `enqueued` is called for every job this store inserts, before its transaction commits. */
 export function createPostgresJobsStore(db: PostgresConnection, enqueued: () => void): JobsStore {
   const store: JobsStore = {
+    async runAgainAfter(kind, payload, options) {
+      await db
+        .insert(jobWakes)
+        .values({
+          clientInstanceId: options.clientInstanceId,
+          kind: kind.kind,
+          dedupeKey: options.dedupeKey,
+          payload: kind.payloadSchema.parse(payload),
+          runAfter: options.runAfter,
+          subject: options.subject ?? null,
+          concurrencyKey: options.concurrencyKey ?? null,
+          concurrencyLimit: options.concurrencyLimit ?? null,
+          correlationId: options.correlationId ?? createPlatformId("corr")
+        })
+        .onConflictDoUpdate({
+          target: [jobWakes.clientInstanceId, jobWakes.kind, jobWakes.dedupeKey],
+          set: { runAfter: sql`least(${jobWakes.runAfter}, excluded.run_after)` }
+        });
+      enqueued();
+    },
     async enqueue(kind, payload, options) {
       const job = await enqueueJob(db, kind, payload, options);
       enqueued();
       return job;
     },
     async withdraw(kind, options) {
+      await db
+        .delete(jobWakes)
+        .where(
+          and(
+            eq(jobWakes.clientInstanceId, options.clientInstanceId),
+            eq(jobWakes.kind, kind.kind),
+            eq(jobWakes.dedupeKey, options.dedupeKey)
+          )
+        );
       await db
         .delete(platformJobs)
         .where(
@@ -426,7 +456,17 @@ export async function listKindsWithWork(
         )`
       )
     );
-  return new Set(rows.map((row) => row.kind));
+  const wakes = await db
+    .selectDistinct({ kind: jobWakes.kind })
+    .from(jobWakes)
+    .where(
+      and(
+        eq(jobWakes.clientInstanceId, input.clientInstanceId),
+        inArray(jobWakes.kind, [...input.kinds]),
+        lte(jobWakes.runAfter, sql`now()`)
+      )
+    );
+  return new Set([...rows, ...wakes].map((row) => row.kind));
 }
 
 /**
@@ -449,6 +489,9 @@ export async function claimJobs(
   return db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`platform_jobs:${clientInstanceId}:${kind.kind}`}, 0))`
+    );
+    await enqueueDueWakes(tx, clientInstanceId, kind, (kind, payload, options) =>
+      enqueueJob(tx, kind, payload, options)
     );
     // Recovery counts the attempt: the job waits out its backoff like after a failure.
     await tx

@@ -85,6 +85,7 @@ export const unusedWorkflowRunDatasetsStore: WorkflowRunDatasetsStore = {
   markCleaned: unsupported
 };
 export const unusedJobsStore: JobsStore = {
+  runAgainAfter: unsupported,
   enqueue: unsupported,
   withdraw: unsupported,
   readWorkerReport: unsupported,
