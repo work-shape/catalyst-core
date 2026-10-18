@@ -358,8 +358,8 @@ export const load: StoreVerb = {
           throw new AppError(
             "CONFLICT",
             de
-              ? "Der Ladevorgang geriet mit einem gleichzeitigen Ladevorgang derselben Zeilen in Konflikt. Es wurde nichts geladen; ein erneuter Versuch ist sicher."
-              : "The load ran into a concurrent load of the same rows. Nothing was loaded; safe to retry.",
+              ? "Der Ladevorgang geriet mit einem gleichzeitigen Schreibvorgang auf dieselben Zeilen in Konflikt. Es wurde nichts geladen; ein erneuter Versuch ist sicher."
+              : "The load ran into a concurrent write to the same rows. Nothing was loaded; safe to retry.",
             { reason: "load_concurrent_rows", sqlState: "40P01" }
           );
         }

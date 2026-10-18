@@ -431,7 +431,7 @@ describe("a load into a Data Store", () => {
                   details: { reason: "load_replace_timeout", timeoutMs },
                   message: expect.stringContaining(`limits.timeoutMs (${timeoutMs} ms`)
                 }
-              : { code: "TIMEOUT" }
+              : { code: "TIMEOUT", details: { sqlState: "57014" } }
           );
           if (phase === "table")
             expect(error.message).toContain(
@@ -493,6 +493,13 @@ describe("a load into a Data Store", () => {
         code: "CONFLICT",
         changedNothing: true,
         details: { reason: "load_concurrent_rows", sqlState: "40P01" },
+        message: expect.stringContaining(
+          locale === "de"
+            ? "gleichzeitigen Schreibvorgang auf dieselben Zeilen"
+            : "concurrent write to the same rows"
+        )
+      });
+      expect(failed.reason).toMatchObject({
         message: expect.stringContaining(
           locale === "de" ? "erneuter Versuch ist sicher" : "safe to retry"
         )
