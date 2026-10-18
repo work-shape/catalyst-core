@@ -212,3 +212,23 @@ Settings, Connect a local agent installs the CLI version that `PUBLISHED_CLI_VER
 
 Run `catalyst docs` for this release's product docs index, or `catalyst docs <page>` for a page from it.
 When `catalyst context` finds an older CLI than the published version the instance names, it prints an npm update command on stderr; it leaves stdout unchanged and never updates itself.
+
+## Pull a skill for a local agent
+
+When you want to use one of the instance's skills locally, pull its entire folder:
+
+```sh
+catalyst skill pull <name> .claude/skills/<name>
+# For Codex:
+catalyst skill pull <name> .agents/skills/<name>
+```
+
+The CLI writes every file byte for byte and checks its SHA-256. Pulling again refreshes a clean earlier pull; foreign folders, links and local changes are refused. A failed pull keeps the target unchanged. Scripts are written with mode 0644 and nothing is run or installed. Read scripts before running them: they may assume Catalyst's sandbox. `skill put --from` leaves out the local `.catalyst-skill.json` baseline.
+
+## Initialize a working copy
+
+```sh
+catalyst init --instance <url> --dir <root>
+```
+
+This offline command needs no key. It creates `catalyst.yaml` bound to the instance, adds or updates a marked Catalyst block in `AGENTS.md`, and writes `@AGENTS.md` to `CLAUDE.md` where that file is absent. Existing prose outside the block and an existing `CLAUDE.md` stay unchanged. A different instance binding is refused with exit code 2. It installs no skills, hooks or tool settings. Run `catalyst context --json`, then pull, edit, validate, diff and push.

@@ -32,6 +32,10 @@ catalyst references --json
 
 The kind is the first word: `agent`, `skill`, `guardrail`, `app`, `workflow`, `data-store` or any other kind `catalyst kinds` lists. Add `--workspace <id>` for the assets one workspace owns, and `--json` for the instance's answer as it came.
 
+## Use a skill of the instance here
+
+Only when the person asks to use a skill locally, run `catalyst skill pull <name> .claude/skills/<name>` for Claude Code or `catalyst skill pull <name> .agents/skills/<name>` for Codex. Pulling again refreshes the folder and refuses local edits. Its scripts may assume Catalyst's sandbox, so read them before running them.
+
 ## Change one asset
 
 1. Read it with `show` and note its revision.
@@ -45,7 +49,7 @@ An App publish first asks who may use it: only its builder, its owning workspace
 
 ## A working copy of agents, skills and guardrails
 
-A folder with a `catalyst.yaml` is a working copy. Work in this order:
+In a new folder, first run `catalyst init --instance <url>`. A folder with a `catalyst.yaml` is a working copy. Work in this order:
 
 1. `catalyst config pull` before you edit, and again before every push.
 2. Edit the files.

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -105,14 +105,16 @@ function remote(kind: string, config: AgentConfig | SkillConfig): Asset & AssetS
   };
 }
 async function fixture(
-  assets: Array<Asset & AssetSummary> = [remote("agent", agent), remote("skill", skill)]
+  assets: Array<Asset & AssetSummary> = [remote("agent", agent), remote("skill", skill)],
+  initialize = false
 ) {
   const cwd = await mkdtemp(join(tmpdir(), "cfg-rt-"));
   directories.push(cwd);
-  await writeFile(
-    join(cwd, "catalyst.yaml"),
-    "instances:\n  local:\n    url: https://catalyst.test\ndefaultInstance: local\nagents: [agents/*.agent.yaml]\nskills: [skills/*/SKILL.md]\nguardrails: [guardrails/*/guardrail.yaml]\n"
-  );
+  if (!initialize)
+    await writeFile(
+      join(cwd, "catalyst.yaml"),
+      "instances:\n  local:\n    url: https://catalyst.test\ndefaultInstance: local\nagents: [agents/*.agent.yaml]\nskills: [skills/*/SKILL.md]\nguardrails: [guardrails/*/guardrail.yaml]\n"
+    );
   const calls: Array<{ operation: string; body: unknown }> = [];
   const state = { invalidGuardrail: false, rejectRead: false, changedPointer: false };
   const fetchImpl: typeof fetch = async (input, init) => {
@@ -547,4 +549,102 @@ describe("asset pointer preconditions", () => {
       expect(f.calls.filter((c) => c.operation.startsWith("assets.set_"))).toHaveLength(1);
     });
   }
+});
+
+// Platform Access check 32: guidance stays local through the complete working-copy cycle.
+describe("catalyst init (ADISC-2 check 32)", () => {
+  const init = ["init", "--instance", "https://catalyst.test///"];
+  const originals = async (cwd: string) =>
+    Promise.all(
+      ["catalyst.yaml", "AGENTS.md", "CLAUDE.md"].map((name) => readFile(join(cwd, name), "utf8"))
+    );
+
+  it("initializes offline, is byte-idempotent, and runs context, pull, edit, validate, diff and push", async () => {
+    const f = await fixture([remote("skill", skill)], true);
+    expect(await f.run(init)).toMatchObject({ code: 0 });
+    expect(f.calls).toEqual([]);
+    expect((await readdir(f.cwd)).sort()).toEqual(["AGENTS.md", "CLAUDE.md", "catalyst.yaml"]);
+    const before = await originals(f.cwd);
+    expect(await readManifest(f.cwd)).toEqual({
+      instances: { "catalyst.test": { url: "https://catalyst.test" } },
+      defaultInstance: "catalyst.test",
+      agents: ["agents/*.agent.yaml"],
+      skills: ["skills/*/SKILL.md"]
+    });
+    expect(before[2]).toBe("@AGENTS.md\n");
+    expect(await f.run(init)).toMatchObject({ code: 0 });
+    expect(await originals(f.cwd)).toEqual(before);
+    expect(await f.run(["init", "--instance", "catalyst.test"])).toMatchObject({ code: 0 });
+    expect(await f.run(["init", "--instance", "https://other.test"])).toMatchObject({
+      code: 2,
+      err: expect.stringContaining("catalyst.test")
+    });
+    expect(await f.run(["context", "--json"])).toMatchObject({ code: 0 });
+    await f.pull();
+    expect(await originals(f.cwd)).toEqual(before);
+    await writeFile(
+      join(f.cwd, "skills/guide/SKILL.md"),
+      serializeSkillMarkdown({ ...skill, content: "Edited." })
+    );
+    for (const command of ["validate", "diff", "push"]) {
+      const result = await f.run(["config", command]);
+      expect(result, JSON.stringify({ command, result })).toMatchObject({
+        code: command === "diff" ? 1 : 0
+      });
+    }
+    const sent = f.calls.filter((call) =>
+      ["assets.sync", "assets.sync_check"].includes(call.operation)
+    );
+    expect(sent.some((call) => call.operation === "assets.sync")).toBe(true);
+    expect(JSON.stringify(sent)).not.toMatch(/AGENTS\.md|CLAUDE\.md|catalyst\.yaml/u);
+    expect(await originals(f.cwd)).toEqual(before);
+    // Only the manifest binds the URL; agent guidance has no key or address.
+    for (const text of before.slice(1)) expect(text).not.toMatch(/test-cli-key|http/u);
+    for (const text of before) expect(text).not.toContain("test-cli-key");
+    const bare = await fixture([remote("skill", skill)]);
+    await bare.pull();
+    expect(await readdir(bare.cwd)).not.toEqual(expect.arrayContaining(["AGENTS.md", "CLAUDE.md"]));
+  });
+
+  it("preserves every byte outside the block and leaves the person's CLAUDE.md alone", async () => {
+    const f = await fixture([], true);
+    const above = "# Our rules\r\nKeep this exactly.  \r\n";
+    const below = "\r\nWords below.  \r\n";
+    const claude = "Our Claude instructions\r\n";
+    await writeFile(
+      join(f.cwd, "AGENTS.md"),
+      above + "<!-- catalyst:begin -->old block<!-- catalyst:end -->" + below
+    );
+    await writeFile(join(f.cwd, "CLAUDE.md"), claude);
+    expect(await f.run(init)).toMatchObject({
+      code: 0,
+      out: expect.stringContaining('CLAUDE.md is yours: add "@AGENTS.md"')
+    });
+    const text = await readFile(join(f.cwd, "AGENTS.md"), "utf8");
+    expect(text.slice(0, text.indexOf("<!-- catalyst:begin -->"))).toBe(above);
+    expect(text.slice(text.indexOf("<!-- catalyst:end -->") + "<!-- catalyst:end -->".length)).toBe(
+      below
+    );
+    expect(await readFile(join(f.cwd, "CLAUDE.md"), "utf8")).toBe(claude);
+    const unmarked = above + below;
+    await writeFile(join(f.cwd, "AGENTS.md"), unmarked);
+    expect(await f.run(init)).toMatchObject({ code: 0 });
+    expect(await readFile(join(f.cwd, "AGENTS.md"), "utf8")).toBe(
+      unmarked + "\n" + text.slice(above.length, text.length - below.length) + "\n"
+    );
+  });
+
+  it.each([
+    "<!-- catalyst:begin -->",
+    "<!-- catalyst:end -->",
+    "<!-- catalyst:begin --><!-- catalyst:begin --><!-- catalyst:end -->",
+    "<!-- catalyst:end --><!-- catalyst:begin -->"
+  ])("refuses malformed markers without writing: %s", async (text) => {
+    const f = await fixture([], true);
+    await writeFile(join(f.cwd, "AGENTS.md"), text);
+    expect(await f.run(init)).toMatchObject({ code: 1, err: expect.stringContaining("markers") });
+    expect(await readdir(f.cwd)).toEqual(["AGENTS.md"]);
+    expect(await readFile(join(f.cwd, "AGENTS.md"), "utf8")).toBe(text);
+    expect(f.calls).toEqual([]);
+  });
 });
