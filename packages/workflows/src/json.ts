@@ -89,3 +89,27 @@ export function namesDatasetType(schema: JsonValue): boolean {
   if (Array.isArray(schema)) return schema.some(namesDatasetType);
   return schema.type === WORKFLOW_DATASET_TYPE || Object.values(schema).some(namesDatasetType);
 }
+
+/**
+ * Where in a row a schema issue lies, by position only: the place of each field among the
+ * fields of its object and the place of each item in its list, counted from 1. A row's keys
+ * may be data as much as its values, so an error that is stored names neither.
+ */
+export function valuePosition(row: JsonValue, path: readonly string[]): string {
+  const places: string[] = [];
+  let at: JsonValue | undefined = row;
+  for (const segment of path) {
+    if (Array.isArray(at)) {
+      const index = Number(segment);
+      if (!Number.isInteger(index)) break;
+      places.push(`item ${String(index + 1)}`);
+      at = at[index];
+    } else if (at !== null && typeof at === "object") {
+      const index = Object.keys(at).indexOf(segment);
+      if (index === -1) break;
+      places.push(`field ${String(index + 1)}`);
+      at = at[segment];
+    } else break;
+  }
+  return places.length ? ` at ${places.join(", ")}` : "";
+}

@@ -1,3 +1,4 @@
+import { WORKFLOW_RETENTION_VERSION } from "../workflow-retention-version";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -54,7 +55,7 @@ export const workflowRuns = pgTable(
     trigger: text("trigger").$type<WorkflowTriggerKind>().notNull(),
     status: text("status").$type<WorkflowRunStatus>().notNull(),
     empty: boolean("empty").notNull().default(false),
-    definition: jsonb("definition").$type<WorkflowManifest>().notNull(),
+    definition: jsonb("definition").$type<WorkflowManifest>(),
     input: jsonb("input").$type<JsonObject>().notNull(),
     checkpoint:
       jsonb("checkpoint").$type<import("@work-shape/catalyst-core").NewWorkflowRun["checkpoint"]>(),
@@ -108,7 +109,9 @@ export const workflowRuns = pgTable(
       number: number;
     }>(),
     // When the run's values and those of its step runs were removed. Null while it has them.
-    dataPrunedAt: timestamp("data_pruned_at", { withTimezone: true })
+    dataPrunedAt: timestamp("data_pruned_at", { withTimezone: true }),
+    // Version of the retention owner that cleared this run. Older marked rows need repair.
+    dataPruneVersion: integer("data_prune_version").notNull().default(0)
   },
   (table) => [
     uniqueIndex("workflow_runs_operation_idx").on(table.clientInstanceId, table.operationRunId),
@@ -153,7 +156,18 @@ export const workflowRuns = pgTable(
       .where(
         sql`${table.runKey} is not null and ${table.status} not in ('failed', 'cancelled', 'limit_reached', 'continued')`
       ),
-    // The ended runs that still have their values, oldest first: what the prune job asks for.
+    // Expiry and repair each have an indexed range, including an empty final pass.
+    index("workflow_runs_retention_idx")
+      .on(table.clientInstanceId, table.finishedAt, table.id)
+      .where(
+        sql`${table.dataPruneVersion} < ${sql.raw(String(WORKFLOW_RETENTION_VERSION))} and ${table.dataPrunedAt} is null and ${table.finishedAt} is not null`
+      ),
+    index("workflow_runs_retention_repair_idx")
+      .on(table.clientInstanceId, table.finishedAt, table.id)
+      .where(
+        sql`${table.dataPruneVersion} < ${sql.raw(String(WORKFLOW_RETENTION_VERSION))} and ${table.dataPrunedAt} is not null and ${table.finishedAt} is not null`
+      ),
+    // Kept for the previous release while its workers drain.
     index("workflow_runs_data_prune_idx")
       .on(table.clientInstanceId, table.finishedAt)
       .where(sql`${table.dataPrunedAt} is null and ${table.finishedAt} is not null`)

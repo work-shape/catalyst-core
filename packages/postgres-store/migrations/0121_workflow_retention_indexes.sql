@@ -1,0 +1,3 @@
+-- Retain the previous release's prune index while its workers drain.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "workflow_runs_retention_idx" ON "workflow_runs" USING btree ("client_instance_id","finished_at","id") WHERE "workflow_runs"."data_prune_version" < 1 and "workflow_runs"."data_pruned_at" is null and "workflow_runs"."finished_at" is not null;--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "workflow_runs_retention_repair_idx" ON "workflow_runs" USING btree ("client_instance_id","finished_at","id") WHERE "workflow_runs"."data_prune_version" < 1 and "workflow_runs"."data_pruned_at" is not null and "workflow_runs"."finished_at" is not null;

@@ -1,3 +1,4 @@
+import { valuePosition } from "./json";
 import { checkpointFrame } from "./continuation-checkpoint";
 import type { WorkflowLimitContext } from "./run-limits";
 import { checkDatasetValues, loopFailureRowSchema } from "./dataset-values";
@@ -148,7 +149,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
     throw new WorkflowStepFailure(
       code,
       issue
-        ? `${what} at '/${issue.path.join("/")}': ${issue.message}`
+        ? `${what}${valuePosition(value, issue.path)}: ${issue.message}`
         : `${what}: the schema cannot be checked`
     );
   }
@@ -590,7 +591,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
             throw new WorkflowStepFailure(
               "output_invalid",
               issue
-                ? `The result does not fit the Workflow's outputs at '/${issue.path.join("/")}': ${issue.message}`
+                ? `The result does not fit the Workflow's outputs${valuePosition(output, issue.path)}: ${issue.message}`
                 : "The Workflow's outputs are a schema that cannot be checked"
             );
           }
