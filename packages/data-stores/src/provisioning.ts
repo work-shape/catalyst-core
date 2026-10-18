@@ -2,7 +2,11 @@ import { RECORD_FIELDS_SCHEMA } from "./records/schema";
 import { callRecordsSetup } from "./calls";
 import { z } from "zod";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
-import type { DataStoreCondition, DataStoreRecord } from "@work-shape/catalyst-core";
+import type {
+  ConnectionsStore,
+  DataStoreCondition,
+  DataStoreRecord
+} from "@work-shape/catalyst-core";
 import type { DataStoreRole } from "./credentials";
 import { platformIsSuperuser, writeStoreRoles } from "./roles";
 import { quoteIdentifier, type DataStoreServer } from "./server";
@@ -190,6 +194,7 @@ export async function provisionDataStore(
   server: DataStoreServer,
   record: StoreDatabase,
   passwords: Record<DataStoreRole, string>,
+  secretRows: ConnectionsStore,
   signal: AbortSignal
 ): Promise<void> {
   const database = quoteIdentifier(record.location.database);
@@ -234,13 +239,15 @@ export async function provisionDataStore(
 
   // Default privileges belong to the role that creates: the migration role says itself that
   // what it makes in `public` from now on is the app role's to read and write.
-  await server.executor.change({ ...server.asRole(record, "migration"), ...step }, (sql) =>
-    sql.script(
-      `alter default privileges in schema public
+  await server.executor.change(
+    { ...server.asRole(record, "migration", secretRows), ...step },
+    (sql) =>
+      sql.script(
+        `alter default privileges in schema public
          grant select, insert, update, delete on tables to ${app};
        alter default privileges in schema public
          grant usage, select on sequences to ${app};`
-    )
+      )
   );
 }
 

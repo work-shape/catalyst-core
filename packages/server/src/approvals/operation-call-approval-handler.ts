@@ -503,7 +503,11 @@ async function runFrozenCall(
   if (payload.mode === "confirmation") {
     // The person confirmed their own call in the Inbox. An agent's call is executed as
     // confirmed; a direct call is asked again as the person's own click (OP-4b).
-    const confirmedOptions = { ...(signal ? { signal } : {}), ...(runtime ? { runtime } : {}) };
+    const confirmedOptions = {
+      requestId: request.id,
+      ...(signal ? { signal } : {}),
+      ...(runtime ? { runtime } : {})
+    };
     return run.origin.kind === "agent"
       ? executeConfirmedOperation(waiting, deps, confirmedOptions)
       : executeInboxConfirmedOperation(waiting, deps, confirmedOptions);
