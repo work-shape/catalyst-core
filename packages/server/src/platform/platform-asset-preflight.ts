@@ -22,7 +22,7 @@ export async function authorizePlatformAssetPut(
     config: input.config,
     expectedRevision: input.expectedRevision ?? null
   };
-  const decision = await workflow.authorizeRevisionWrite(context.access, write, "write");
+  const decision = await workflow.authorizeRevisionWrite(context.access, write, "write", true);
   if (!decision.allowed)
     return decision.action === "agent_models.manage"
       ? {
