@@ -214,8 +214,8 @@ export class UserAdministrationWorkflow {
             userId: command.userId,
             superadminOnly: true
           });
-          const existing = await held.getUserOrThrow(command.userId);
-          await requireActiveSuperadminRemains(held.options, existing, "deleted");
+          // The mark refuses to delete the last active superadmin.
+          await held.getUserOrThrow(command.userId);
           return mark(held.options.stores);
         })
     );

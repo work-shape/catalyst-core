@@ -40,6 +40,20 @@ import {
 /** The right every role write asks for, on the instance. */
 const MANAGE_ACTION = "users.manage";
 
+/**
+ * What a role holds beyond what a person can be granted: `app.use` on one App or on the Apps
+ * of one workspace. A person holds it through membership of the App's workspace; a role, such
+ * as one that uses two Apps of the accounting team, gives it to its holders without one.
+ */
+const ROLE_ONLY_SCOPES: Readonly<Record<string, readonly RoleGrant["scopeKind"][]>> = {
+  "app.use": ["workspace", "asset"]
+};
+
+function isRoleGrantableAt(action: string, scopeKind: RoleGrant["scopeKind"]): boolean {
+  if (ROLE_ONLY_SCOPES[action]?.includes(scopeKind)) return true;
+  return isGrantableAction(action) && isGrantableAt(action, scopeKind);
+}
+
 /** What a role write takes from its Operation Run. */
 type RoleWriteContext = Pick<
   OperationExecutionContext,
@@ -289,7 +303,8 @@ export class RoleWorkflow {
   /**
    * Each grant names a known action other than `assets.release`, which no role holds, at a scope
    * it can be held at: any action on the whole instance, and on one workspace or one asset the
-   * actions a person can be granted there, on a Shared Workspace or an active asset of its kind.
+   * actions a person can be granted there and `app.use`, on a Shared Workspace or an active
+   * asset of its kind.
    */
   private async validGrants(grants: readonly RoleGrant[]): Promise<RoleGrant[]> {
     const seen = new Set<string>();
@@ -308,7 +323,7 @@ export class RoleWorkflow {
         if (scopeId !== undefined)
           throw refused("invalid_scope", "An instance-wide grant names no scope id");
       } else {
-        if (!isGrantableAction(action) || !isGrantableAt(action, scopeKind)) {
+        if (!isRoleGrantableAt(action, scopeKind)) {
           throw refused(
             "invalid_scope",
             `'${action}' cannot be held at the scope kind '${scopeKind}'`

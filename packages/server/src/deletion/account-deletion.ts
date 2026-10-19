@@ -20,6 +20,7 @@ import {
   type DeletionTransaction
 } from "./subject-deletion";
 import { endHeldOperationCalls } from "../approvals/operation-call-approval-handler";
+import { requireActiveSuperadminRemains } from "../users/last-superadmin";
 import type { ChatServerOptions } from "../types";
 import { cleanupProductUserData, requireNoSoleOwnedSharedWorkspace } from "./user-deletion";
 
@@ -35,8 +36,8 @@ interface AccountDeletion {
 
 /**
  * Accepts the deletion of an account. It refuses, in the transaction of the mark and before
- * the mark, while the user is the last active owner of a Shared Workspace. From the mark on
- * the user is closed.
+ * the mark, while the user is the last active superadmin or the last active owner of a Shared
+ * Workspace. From the mark on the user is closed.
  */
 export async function requestAccountDeletion(
   options: ChatServerOptions,
@@ -55,7 +56,8 @@ export async function requestAccountDeletion(
     ...(transaction === undefined ? {} : { transaction }),
     async mark(stores) {
       // Self-deletion takes the same order as administrator admission: access, user, then
-      // the workspaces whose last active owner must remain. Cleanup runs after this commits.
+      // the workspaces whose last active owner must remain and the last active superadmin.
+      // Cleanup runs after this commits.
       await stores.access.lockRights({
         clientInstanceId: options.clientInstanceId,
         userId: input.userId
@@ -66,6 +68,10 @@ export async function requestAccountDeletion(
       });
       if (user?.status !== "deleting") {
         await requireNoSoleOwnedSharedWorkspace(stores, options, input.userId);
+        if (user) {
+          const remains = { clientInstanceId: options.clientInstanceId, stores };
+          await requireActiveSuperadminRemains(remains, user, "deleted");
+        }
       }
       const marked = await stores.users.markUserDeletionRequested({
         clientInstanceId: options.clientInstanceId,

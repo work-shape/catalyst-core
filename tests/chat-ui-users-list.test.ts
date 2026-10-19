@@ -2,7 +2,13 @@ import { createElement } from "react";
 import type { AdministeredUser } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
 import { UserAdministrationPanel } from "@work-shape/catalyst-chat-ui/control-plane";
-import { filterUsers, userDisplayStatus, userStatusFilterOf } from "./support/chat-ui";
+import {
+  filterUsers,
+  formToUpdateInput,
+  userDisplayStatus,
+  userStatusFilterOf,
+  userToForm
+} from "./support/chat-ui";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // Instance > Users (UXA-5a): the name keeps its room while the other columns fold, sign-in
@@ -146,5 +152,19 @@ describe("Instance > Users", () => {
     expect(markup).toContain('aria-label="Select visible users"');
     expect(markup).toContain('aria-label="Select Mara Oyelaran"');
     expect(markup).not.toMatch(/>active</u);
+  });
+});
+
+describe("saving the profile", () => {
+  it("keeps the roles the form does not edit, a custom role among them", () => {
+    const held = user({ roles: ["user", "role_buchhaltung"] });
+    const form = { ...userToForm(held), displayLabel: "Anne" };
+
+    expect(formToUpdateInput(form, held).roles).toEqual(["user", "role_buchhaltung"]);
+    expect(formToUpdateInput({ ...form, accessLevel: "admin" }, held).roles).toEqual([
+      "user",
+      "admin",
+      "role_buchhaltung"
+    ]);
   });
 });

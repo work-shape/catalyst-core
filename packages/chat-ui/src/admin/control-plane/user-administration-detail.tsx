@@ -174,7 +174,7 @@ function ProfileCard({
     event.preventDefault();
     setNotice(undefined);
     try {
-      await onUpdateUser(user.id, formToUpdateInput(form));
+      await onUpdateUser(user.id, formToUpdateInput(form, user));
       setNotice({ kind: "success", text: t("settings.userChangesSaved") });
     } catch (error) {
       setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });

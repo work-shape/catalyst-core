@@ -9,6 +9,7 @@ import {
   LEGACY_PERMISSION_ACTIONS,
   PERMISSIONS,
   ROLE_DEFAULT_ACTIONS,
+  isBuiltInRole,
   type BuiltInRole,
   type Permission
 } from "@work-shape/catalyst-core";
@@ -205,11 +206,21 @@ export function formToCreateInput(form: CreateUserFormState): CreateAdministered
   };
 }
 
-export function formToUpdateInput(form: UserFormState): UpdateAdministeredUserRequest {
+/**
+ * The profile form edits the built-in role only. Every other role the user holds, a custom role
+ * among them, is sent back as it is, so saving the profile never takes one away.
+ */
+export function formToUpdateInput(
+  form: UserFormState,
+  user: Pick<AdministeredUser, "roles">
+): UpdateAdministeredUserRequest {
   return {
     displayLabel: form.displayLabel.trim(),
     email: form.email.trim() ? form.email.trim() : null,
-    roles: accessLevelToRoles(form.accessLevel),
+    roles: [
+      ...accessLevelToRoles(form.accessLevel),
+      ...user.roles.filter((role) => !isBuiltInRole(role))
+    ],
     permissionRefs: parseList(form.permissionRefs),
     status: form.status
   };

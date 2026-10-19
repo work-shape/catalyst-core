@@ -13,6 +13,7 @@ import {
   setupAccessInstance,
   type AccessInstance
 } from "./support/access-instance";
+import { appFiles, expectStatus, setupAppInstance } from "./support/app-instance";
 import { setupPersonalKeyInstance } from "./support/personal-api-keys";
 import { createTestFetch } from "./support/test-instance";
 import { fileTestDatabaseUrl } from "./support/test-database";
@@ -295,6 +296,63 @@ describe("custom roles", () => {
     ]);
   });
 
+  it("gives the use of two Apps to a holder outside their workspace", async () => {
+    const t = await setupAppInstance();
+    instances.push(t);
+    const apps: string[] = [];
+    for (const name of ["ledger", "invoices"]) {
+      expectStatus(await t.putApp(t.admin.id, name, appFiles(name, { name })), 200);
+      const listed = await t.listed(name);
+      expectStatus(await t.publish(t.admin.id, name, listed.draftRevision ?? listed.revision), 200);
+      apps.push(await t.assetId("app", name));
+    }
+    const created = roleSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "roles.create", {
+          payload: {
+            name: "Buchhaltung",
+            grants: apps.map((scopeId) => ({ action: "app.use", scopeKind: "asset", scopeId }))
+          }
+        })
+      ).json()
+    );
+    // `lena` is no member of the Apps' workspace: the role is where her use comes from.
+    await t.expectOk(t.admin.id, "users.update", {
+      params: { userId: t.lena.id },
+      payload: { roles: ["user", created.id] }
+    });
+    const effective = effectiveSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "permissions.effective", {
+          query: { holderKind: "user", holderId: t.lena.id }
+        })
+      ).json()
+    );
+    expect(
+      effective.items
+        .filter((entry) => entry.source === "role")
+        .map((entry) => [entry.action, entry.roleId])
+    ).toEqual([
+      ["app.use", created.id],
+      ["app.use", created.id]
+    ]);
+    // An App's use is on an App: an asset of another kind is no scope for it.
+    await t.putAgent(t.admin.id, "helper");
+    await t.expectRefused(
+      t.admin.id,
+      "roles.create",
+      {
+        payload: {
+          name: "Wrong kind",
+          grants: [
+            { action: "app.use", scopeKind: "asset", scopeId: await t.assetId("agent", "helper") }
+          ]
+        }
+      },
+      { status: 422, code: "VALIDATION_FAILED", details: { reason: "invalid_scope" } }
+    );
+  });
+
   it("keeps role rows off the grant operations: a role is changed on the role", async () => {
     const t = await setup();
     const created = roleSchema.parse(
@@ -353,6 +411,78 @@ describe("custom roles", () => {
       { payload: { name: "Admin", grants: [] } },
       { status: 409, code: "CONFLICT", details: { reason: "role_name_taken" } }
     );
+  });
+});
+
+describe("a role that denies", () => {
+  const deniesUsage = async (t: AccessInstance) =>
+    roleSchema.parse(
+      (
+        await t.expectOk(t.root.id, "roles.create", {
+          payload: {
+            name: "No usage",
+            grants: [{ action: "usage.view", effect: "deny", scopeKind: "instance" }]
+          }
+        })
+      ).json()
+    );
+
+  it("is never lifted by its holder", async () => {
+    const t = await setup();
+    const manager = await t.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Manager",
+      roles: ["user"],
+      permissions: ["users.manage", "usage.view"]
+    });
+    const denied = await deniesUsage(t);
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: manager.id },
+      payload: { roles: ["user", denied.id] }
+    });
+    await t.expectRefused(manager.id, "usage.get_summary", {}, t.forbidden("usage.view", "denied"));
+
+    await t.expectRefused(
+      manager.id,
+      "users.update",
+      { params: { userId: manager.id }, payload: { roles: ["user"] } },
+      {
+        status: 403,
+        code: "FORBIDDEN",
+        details: { action: "users.update", reason: "holder_not_administrable" }
+      }
+    );
+    await t.expectRefused(manager.id, "usage.get_summary", {}, t.forbidden("usage.view", "denied"));
+  });
+
+  it("is lifted only by a holder of what the removal gives back", async () => {
+    const t = await setup();
+    const manager = await t.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Manager",
+      roles: ["user"],
+      permissions: ["users.manage"]
+    });
+    const denied = await deniesUsage(t);
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: t.kai.id },
+      payload: { roles: ["user", denied.id] }
+    });
+
+    await t.expectRefused(
+      manager.id,
+      "users.update",
+      { params: { userId: t.kai.id }, payload: { roles: ["user"] } },
+      t.forbidden("usage.view", "no_grant")
+    );
+    expect((await t.stores.users.getUser({ clientInstanceId, userId: t.kai.id }))?.roles).toEqual([
+      "user",
+      denied.id
+    ]);
+    await t.expectOk(t.admin.id, "users.update", {
+      params: { userId: t.kai.id },
+      payload: { roles: ["user"] }
+    });
   });
 });
 
@@ -439,6 +569,30 @@ describe("the last superadmin", () => {
       params: { userId: t.root.id },
       payload: { roles: ["user", "admin"] }
     });
+  });
+
+  it("never deletes their own account", async () => {
+    const t = await setup();
+    await t.expectRefused(
+      t.root.id,
+      "me.delete",
+      {},
+      {
+        status: 422,
+        code: "VALIDATION_FAILED",
+        details: { reason: "last_superadmin" }
+      }
+    );
+    expect((await t.stores.users.getUser({ clientInstanceId, userId: t.root.id }))?.status).toBe(
+      "active"
+    );
+    // With a second one, either may go.
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: t.admin.id },
+      payload: { roles: ["user", "admin", "superadmin"] }
+    });
+    const deleted = await t.call(t.root.id, "me.delete");
+    expect(deleted.statusCode, JSON.stringify(deleted.json())).toBeLessThan(300);
   });
 
   it("is never demoted through the CLI", async () => {

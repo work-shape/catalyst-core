@@ -36,12 +36,14 @@ export {
 export {
   authSourceLabel,
   filterUsers,
+  formToUpdateInput,
   setUserPermission,
   USER_PERMISSIONS,
   userDisplayStatus,
   userPermissionCopy,
   userPermissionStates,
-  userStatusFilterOf
+  userStatusFilterOf,
+  userToForm
 } from "../../packages/chat-ui/src/admin/control-plane/user-administration-model";
 export { UserPermissionOverview } from "../../packages/chat-ui/src/admin/control-plane/user-permission-overview";
 export { UserPermissionsCard } from "../../packages/chat-ui/src/admin/control-plane/user-permissions-card";

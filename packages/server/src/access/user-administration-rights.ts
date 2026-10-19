@@ -163,7 +163,8 @@ async function userAdministrationRule(
       allowed: false,
       action: operationId,
       reason: "holder_not_administrable",
-      message: "Nobody gives themselves a role or a right: another holder of it gives it"
+      message:
+        "Nobody gives themselves a role or a right, or lifts a deny of their own: another holder of it does"
     };
   }
   const rights = { clientInstanceId: options.clientInstanceId, access: options.stores.access };
@@ -182,12 +183,13 @@ async function userAdministrationRule(
 }
 
 /**
- * What a call gives: each role it adds, as the rights the role holds now, each at its scope;
- * each legacy key it adds or whose revocation it removes; and each reference of a tool it
- * adds, as the action `ref:<reference>`, which only a holder of the reference holds. Removing
- * a role, a key or a reference, or adding a revocation, takes away and gives nothing. An entry
- * that is no key, the release key, which a person never carries, and a role the instance does
- * not have are left to the operation, which refuses them by name.
+ * What a call gives: each role it adds, as the rights the role allows now, each at its scope;
+ * each role it removes that denies, as the rights its denies withheld, since the removal gives
+ * them back; each legacy key it adds or whose revocation it removes; and each reference of a
+ * tool it adds, as the action `ref:<reference>`, which only a holder of the reference holds.
+ * Removing a role that denies nothing, a key or a reference, or adding a revocation, takes away
+ * and gives nothing. An entry that is no key, the release key, which a person never carries,
+ * and a role the instance does not have are left to the operation, which refuses them by name.
  */
 async function rightsGiven(
   options: RoleRightsOptions,
@@ -202,6 +204,11 @@ async function rightsGiven(
     const grants = (await currentRoleGrants(options, role)) ?? [];
     const allows = grants.filter((grant) => grant.effect === "allow");
     roleRights.push(...(await rightsOfGrants(options, allows)));
+  }
+  for (const role of removedRoles(target, call)) {
+    const grants = (await currentRoleGrants(options, role)) ?? [];
+    const denies = grants.filter((grant) => grant.effect === "deny");
+    roleRights.push(...(await rightsOfGrants(options, denies)));
   }
   const existing = target?.permissions ?? [];
   const keys = changedPermissionEntries(call.permissions, existing)
@@ -221,6 +228,11 @@ function addedRoles(target: Pick<UserRecord, "roles"> | undefined, call: UserRig
   return (call.roles ?? []).filter((role) => !target?.roles.includes(role));
 }
 
+function removedRoles(target: Pick<UserRecord, "roles"> | undefined, call: UserRightsChange) {
+  if (call.roles === undefined) return [];
+  return (target?.roles ?? []).filter((role) => !call.roles?.includes(role));
+}
+
 /**
  * Only a superadmin gives or takes a role that carries a right only a superadmin hands out
  * (`SUPERADMIN_GRANTED_ACTIONS`), as it is now. The sentence a refused caller reads, or nothing.
@@ -232,8 +244,7 @@ async function superadminRoleRuleAgainst(
   call: UserRightsChange
 ): Promise<string | undefined> {
   if (isSuperadminActor(actor) || call.roles === undefined) return undefined;
-  const removed = (target?.roles ?? []).filter((role) => !call.roles?.includes(role));
-  for (const role of [...addedRoles(target, call), ...removed]) {
+  for (const role of [...addedRoles(target, call), ...removedRoles(target, call)]) {
     const grants = await currentRoleGrants(options, role);
     if (grants && carriesSuperadminGrantedAction(grants)) {
       return `Only a superadmin may give or take the role '${role}', which carries a right only a superadmin hands out`;
