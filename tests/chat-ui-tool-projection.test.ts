@@ -774,6 +774,12 @@ describe("chat UI message history projection", () => {
     expect(step("structured_data.read", "de")).toBe("Faktenblatt lesen");
     expect(step("structured_result.read", "de")).toBe("Früheres Ergebnis öffnen");
 
+    // A Data Store's reading steps are named in the person's language, never "Describe".
+    expect(step("data_store.fristen.describe", "de")).toBe("Spalten des Data Stores lesen");
+    expect(step("data_store.fristen.query", "de")).toBe("Datensätze lesen");
+    expect(step("data_store.fristen.preview_rows", "de")).toBe("Datensätze ansehen");
+    expect(step("data_store.fristen.describe", "en")).toBe("Read the data store's columns");
+
     expect(
       readToolDisplayProjection({
         args: {},

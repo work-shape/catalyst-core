@@ -195,12 +195,18 @@ function readTranslatedToolTitle(toolName: string, locale: LocaleCode): string |
  */
 const OPERATION_TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
   en: {
+    "data_store.describe": "Read the data store's columns",
+    "data_store.query": "Read rows",
+    "data_store.preview_rows": "Preview rows",
     "data_store.insert": "Add rows",
     "data_store.update": "Change rows",
     "data_store.delete_rows": "Delete rows",
     "knowledge.add_files": "Add files to the Knowledge Base"
   },
   de: {
+    "data_store.describe": "Spalten des Data Stores lesen",
+    "data_store.query": "Datensätze lesen",
+    "data_store.preview_rows": "Datensätze ansehen",
     "data_store.insert": "Datensätze hinzufügen",
     "data_store.update": "Datensätze ändern",
     "data_store.delete_rows": "Datensätze löschen",
