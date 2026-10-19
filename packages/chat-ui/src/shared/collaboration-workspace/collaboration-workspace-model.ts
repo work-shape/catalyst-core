@@ -151,11 +151,16 @@ export function useCollaborationWorkspaceModel(
     client,
     enabled: isAuthenticated && enabled
   });
+  // A sign-in as another person elsewhere in this browser can bring that person's list back
+  // before `/me` names them and the shell starts their session. Until then the list belongs to
+  // the session after: acting on it here would read the routed workspace of the person before
+  // as a closed link, and send them to the next person's workspace.
+  const listedForAnother = listsAnotherPerson(collaborationWorkspacesQuery.data, userId);
   const collaborationWorkspaces = useMemo(
-    () => collaborationWorkspacesQuery.data ?? [],
-    [collaborationWorkspacesQuery.data]
+    () => (listedForAnother ? [] : (collaborationWorkspacesQuery.data ?? [])),
+    [collaborationWorkspacesQuery.data, listedForAnother]
   );
-  const collaborationWorkspacesLoaded = collaborationWorkspacesQuery.isSuccess;
+  const collaborationWorkspacesLoaded = collaborationWorkspacesQuery.isSuccess && !listedForAnother;
   const closedLinkAdministrators = useClosedWorkspaceLinkQuery({
     apiBaseUrl,
     authScope,
@@ -358,7 +363,8 @@ export function useCollaborationWorkspaceModel(
     activeCollaborationWorkspaceId,
     activeCollaborationWorkspace,
     personalCollaborationWorkspaceId,
-    loading: collaborationWorkspacesQuery.isPending && isAuthenticated && enabled,
+    loading:
+      (collaborationWorkspacesQuery.isPending || listedForAnother) && isAuthenticated && enabled,
     loadFailed: Boolean(collaborationWorkspacesQuery.error),
     dialog,
     canMoveConversation: enabled && collaborationWorkspaces.length > 1,
@@ -378,6 +384,21 @@ export function useCollaborationWorkspaceModel(
         : undefined,
     dismissClosedLink: () => setClosedLinkWorkspaceId(undefined)
   };
+}
+
+/**
+ * Whether `listed` is not known to be the list of `userId`. The read of a person's list creates
+ * their Personal Workspace when it is missing, so every list read for them holds it; a list
+ * without it was read for somebody else, as before that person's first visit.
+ */
+function listsAnotherPerson(
+  listed: readonly CollaborationWorkspaceWithRole[] | undefined,
+  userId: string | undefined
+): boolean {
+  if (listed === undefined || userId === undefined) return false;
+  return !listed.some(
+    (workspace) => workspace.kind === "personal" && workspace.personalUserId === userId
+  );
 }
 
 function isPageOutsideCollaborationWorkspace(route: WorkspaceRoute): boolean {

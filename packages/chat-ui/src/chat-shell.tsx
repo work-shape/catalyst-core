@@ -64,7 +64,6 @@ export function ChatShell({
   onRouteChange,
   ...workspaceProps
 }: ChatShellProps) {
-  const session = useShellSession(workspaceProps.apiBaseUrl);
   // A shell without a host's router keeps its address itself.
   const [localAddress, setLocalAddress] = useState<{ route: WorkspaceRoute; chat?: string }>(
     () => ({ route: defaultWorkspaceRoute() })
@@ -78,6 +77,12 @@ export function ChatShell({
     []
   );
   const resolvedRouteChange = onRouteChange ?? changeLocalAddress;
+  const session = useShellSession(
+    workspaceProps.apiBaseUrl,
+    resolvedRoute,
+    resolvedChat,
+    resolvedRouteChange
+  );
 
   return (
     <QueryClientProvider client={session.queryClient}>
@@ -104,7 +109,12 @@ export function ChatShell({
  * workspace mounts again under the new `generation`, before anything is painted. So the new
  * workspace never starts from what the person before left.
  */
-function useShellSession(apiBaseUrl: string): ShellSession {
+function useShellSession(
+  apiBaseUrl: string,
+  route: WorkspaceRoute,
+  chat: string | undefined,
+  changeRoute: (route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions) => void
+): ShellSession {
   const [session, setSession] = useState<ShellSession>(() => ({
     queryClient: createWorkspaceQueryClient(),
     personId: undefined,
@@ -120,8 +130,8 @@ function useShellSession(apiBaseUrl: string): ShellSession {
   if (next !== session) setSession(next);
   // The old workspace has gone; end its session, then mount the new one before paint.
   useLayoutEffect(() => {
-    const shown = finishSessionChange(session);
+    const shown = finishSessionChange(session, { route, chat, changeRoute });
     if (shown !== session) setSession((current) => (current === session ? shown : current));
-  }, [session]);
+  }, [session, route.kind, chat, changeRoute]);
   return session;
 }

@@ -1,3 +1,4 @@
+import { agentDependencyWarnings } from "./agent-dependency-availability";
 import { agentDraftAuthor } from "./agent-drafts";
 import {
   AppError,
@@ -521,6 +522,19 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
       await clearLiveOnceSwitches(options, call, entry.kind, entry.name, id);
     }
   }
+  const dependencyWarnings = [];
+  for (const entry of ready) {
+    if (entry.kind.kind !== "agent" || entry.item.type !== "put" || entry.absent) continue;
+    const availability = await options.configAssets.store.listAgentAvailability({
+      clientInstanceId: options.clientInstanceId,
+      agentName: entry.name
+    });
+    const wanted = availability.get(entry.name);
+    if (wanted)
+      dependencyWarnings.push(
+        ...(await agentDependencyWarnings(options, call, entry.item.config, wanted))
+      );
+  }
   return {
     version: result.version,
     items,
@@ -528,7 +542,7 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
       options,
       ready.filter((entry) => !entry.absent)
     )),
-    warnings: checked.warnings
+    warnings: [...checked.warnings, ...dependencyWarnings]
   };
 }
 

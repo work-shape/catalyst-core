@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   AppError,
+  WAITING_OPERATION_RUN_STATUSES,
   approvalExecutionOf,
   asUserId,
   defineJobHandler,
@@ -234,14 +235,15 @@ async function recordAbandonedOperationCall(
  *
  * A request that is still open, or approved and not executed, is ended here where its call
  * can never run: the run no longer exists, because its conversation was deleted while
- * somebody decided on the request, or the person who made the call is gone. Such a request
- * has no run the expiry could find, so nothing else would end it.
+ * somebody decided on the request, its run already ended, or its requester is gone. This
+ * also repairs expiry ticks cut off before their request settlement.
  */
-async function removeEndedOperationCallInput(
+export async function removeEndedOperationCallInput(
   options: OperationRunJobOptions,
   approvals: ApprovalRequestStore,
   logger: Logger,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  endedRunsOnly = false
 ): Promise<number> {
   const { clientInstanceId } = options;
   let removed = 0;
@@ -252,6 +254,7 @@ async function removeEndedOperationCallInput(
       clientInstanceId,
       kinds: HELD_CALL_APPROVAL_KINDS,
       payloadKey: "input",
+      ...(endedRunsOnly ? { endedRunOnly: true as const } : {}),
       page: { limit: ENDED_INPUT_CLEANUP_PAGE_SIZE, ...(after ? { after } : {}) }
     });
     for (const request of requests) {
@@ -305,7 +308,11 @@ async function endOrphanedOperationCall(
     run !== undefined &&
     options.calls !== undefined &&
     (requester === undefined || requester.status === "deleting");
-  if (run && !requesterGone) return false;
+  const runEnded =
+    run !== undefined &&
+    run.status !== "running" &&
+    !WAITING_OPERATION_RUN_STATUSES.some((status) => status === run.status);
+  if (run && !runEnded && !requesterGone) return false;
   if (request.status === "approved") {
     // The job of an approved call refuses a requester who is gone itself.
     if (run) return false;
@@ -321,6 +328,16 @@ async function endOrphanedOperationCall(
       requestId: request.id,
       resolve: async (pending, stores) => {
         const waiting = await stores.operationRuns.get({ clientInstanceId, id: runId });
+        if (
+          waiting &&
+          waiting.status !== "running" &&
+          !WAITING_OPERATION_RUN_STATUSES.some((status) => status === waiting.status)
+        ) {
+          return endedOperationCallOutcome(pending, {
+            execution: waiting.status === "expired" ? "expired" : "refused",
+            ...(waiting.error ? { error: waiting.error } : {})
+          });
+        }
         if (waiting) {
           await refuseWaitingOperation(
             waiting.id,

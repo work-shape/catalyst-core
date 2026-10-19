@@ -255,3 +255,20 @@ export async function makeAgentDependenciesAvailable(
     });
   }
 }
+
+/** Missing dependencies stay visible in the agent's publish review; unattended writes only warn. */
+export async function agentDependencyWarnings(
+  options: AssetWorkflowOptions,
+  call: AssetCall,
+  config: unknown,
+  wanted: AgentAvailability
+) {
+  const missing = await missingDependencies(options, call, config, wanted);
+  const german = (call.runtime?.locale ?? options.config.localization.defaultLocale) === "de";
+  return missing.map(({ summary }) => ({
+    code: "agent_dependency_unavailable",
+    message: german
+      ? `'${summary.displayName}' ist nicht überall verfügbar, wo dieser Agent angeboten wird. Prüfe die Abhängigkeiten vor dem Veröffentlichen.`
+      : `'${summary.displayName}' is not available everywhere this agent is offered. Review its dependencies before publishing.`
+  }));
+}

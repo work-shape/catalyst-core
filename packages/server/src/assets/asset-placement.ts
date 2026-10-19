@@ -13,7 +13,10 @@ import {
   type JsonObject,
   type OperationAuthorization
 } from "@work-shape/catalyst-core";
-import { makeAgentDependenciesAvailable } from "./agent-dependency-availability";
+import {
+  makeAgentDependenciesAvailable,
+  agentDependencyWarnings
+} from "./agent-dependency-availability";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
 import { accessResource, decide, transactionalAssetCall, type AssetCall } from "./asset-access";
 import { validateAssetSet, withDefaultAgentName } from "./asset-set";
@@ -239,6 +242,7 @@ export async function initialAgentPlacement(
     name: string;
     creates: boolean;
     setsDefault: boolean;
+    config: unknown;
     availableIn?: AvailableIn;
     /** The workspace that owns the agent, which it is made in unless the write names one. */
     madeIn?: string;
@@ -267,7 +271,14 @@ export async function initialAgentPlacement(
     return { warnings: [] };
   }
   if (input.setsDefault) {
-    return { initialAgentAvailability: "all", warnings: [] };
+    return {
+      initialAgentAvailability: "all",
+      warnings: await agentDependencyWarnings(options, call, input.config, {
+        mode: "all",
+        personalWorkspaces: false,
+        collaborationWorkspaceIds: []
+      })
+    };
   }
   if (input.availableIn === "nowhere") {
     return { initialAgentAvailability: "hidden", warnings: [] };
@@ -275,7 +286,14 @@ export async function initialAgentPlacement(
   if (input.availableIn === "all") {
     // Asked without a resource, so only an entry at instance scope answers.
     call.access.require(kind.actions.write);
-    return { initialAgentAvailability: "all", warnings: [] };
+    return {
+      initialAgentAvailability: "all",
+      warnings: await agentDependencyWarnings(options, call, input.config, {
+        mode: "all",
+        personalWorkspaces: false,
+        collaborationWorkspaceIds: []
+      })
+    };
   }
   const named = input.availableIn?.workspaceId;
   if (named !== undefined && input.madeIn !== undefined && named !== input.madeIn) {

@@ -103,7 +103,7 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "Chromium's own log line: these tests open a workspace that does not exist or was just " +
       "deleted, the instance answers 404 and the page falls back, which they assert.",
     matches: requestAnswered(404),
-    path: /^\/api\/v1\/(?:conversations|workspaces\/cw_not_a_workspace\/agents)$/u,
+    path: /^\/api\/v1\/(?:conversations|workspaces\/cw_not_a_workspace(?:\/agents)?)$/u,
     tests: [
       "collaboration workspaces scope navigation, settings, and discovery",
       "collaboration workspace settings delete a workspace and fall back to personal"
@@ -550,9 +550,9 @@ const allowedPageErrors: readonly AllowedPageError[] = [
   {
     name: "session-change-foreign-reads",
     reason:
-      "After B signs in, in-flight reads of A's workspace and conversations are correctly refused, and the closed-link notice asks who administers A's workspace (404 with no names). The tests assert no A state is shown to B.",
+      "Reads already in flight before the tab learns of B can be refused. After the session changes, the tests assert no A state or closed-link workspace read reaches B.",
     matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(404).source}`, "u"),
-    path: /^\/api\/v1\/(?:conversations(?:\/[^/]+\/(?:thread|draft-attachments|resources|runs|subagents))?|workspaces\/[^/]+(?:\/agents)?)$/u,
+    path: /^\/api\/v1\/(?:conversations(?:\/[^/]+\/(?:thread|draft-attachments|resources|runs|subagents))?|workspaces\/[^/]+\/agents)$/u,
     tests: SESSION_CHANGE_TESTS
   },
   {

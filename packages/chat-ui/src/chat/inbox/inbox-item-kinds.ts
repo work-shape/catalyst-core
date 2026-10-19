@@ -173,8 +173,8 @@ const staleDecisions: InboxDecisionEntries = [
 ];
 
 function operationCallDecisions(item: ApprovalRequestView): InboxDecisionEntries {
-  if (isInboxConfirmation(item)) return confirmationDecisions;
-  return savedSkill(item)?.isStale ? staleDecisions : approvalDecisions;
+  if (parseOperationCallPreview(item.preview)?.asset?.isStale) return staleDecisions;
+  return isInboxConfirmation(item) ? confirmationDecisions : approvalDecisions;
 }
 
 /**

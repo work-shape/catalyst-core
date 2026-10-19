@@ -151,15 +151,17 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
       return { ...retained, ...named };
     }
     const isNew = stored === undefined;
+    const staleness =
+      expectedRevision !== undefined && (stored?.revision ?? null) !== expectedRevision
+        ? { isStale: true }
+        : {};
     const next = kind.kind === SKILL_KIND ? skillConfigSchema.safeParse(config) : undefined;
-    if (!next?.success) return { ...named, isNew };
+    if (!next?.success) return { ...named, isNew, ...staleness };
     const preview: HeldAssetPreview = {
       ...named,
       isNew,
       description: next.data.description,
-      ...(expectedRevision !== undefined && (stored?.revision ?? null) !== expectedRevision
-        ? { isStale: true }
-        : {})
+      ...staleness
     };
     if (isNew) {
       return { ...preview, content: createSkillRevisionPreview(undefined, next.data) };

@@ -40,7 +40,11 @@ import {
   sweepConnectionSetupSessionsSchedule
 } from "./jobs/job-kinds";
 import { createOperationCalls } from "./operations/operation-calls";
-import { createOperationRunJobs } from "./operations/operation-run-jobs";
+import { HELD_CALL_APPROVAL_KINDS } from "./approvals/operation-call-approval-handler";
+import {
+  createOperationRunJobs,
+  removeEndedOperationCallInput
+} from "./operations/operation-run-jobs";
 import { ConversationRetentionWorkflow } from "./deletion/retention";
 import { deletionActor } from "./deletion/subject-deletion";
 import type { ChatServerOptions, ConversationRetentionOptions } from "./types";
@@ -156,6 +160,24 @@ export function createChatServerJobs(
         // The runs no conversation caused are kept as long as the audit events of their calls.
         // A run a conversation caused goes with that conversation. Decided Inbox requests
         // are deleted in the same transaction as their runs.
+        // Repair a tick cut off after ending a run, before pending requests can block pruning.
+        await removeEndedOperationCallInput(
+          operationRunJobOptions,
+          options.stores.approvals,
+          control.logger,
+          control.signal,
+          // Live pending calls cannot consume the bounded repair scan.
+          true
+        );
+        for (let batch = 0; batch < OPERATION_RUN_PRUNE_BATCHES_PER_TICK; batch++) {
+          if (control.signal.aborted) break;
+          const deleted = await options.stores.operationRuns.deleteOrphanedRequests({
+            clientInstanceId: options.clientInstanceId,
+            kinds: HELD_CALL_APPROVAL_KINDS,
+            limit: OPERATION_RUN_PRUNE_BATCH_SIZE
+          });
+          if (deleted < OPERATION_RUN_PRUNE_BATCH_SIZE) break;
+        }
         let operationRunsDeletedCount = 0;
         for (let batch = 0; batch < OPERATION_RUN_PRUNE_BATCHES_PER_TICK; batch++) {
           const deleted = await options.stores.operationRuns.deleteWithoutConversationOlderThan({
@@ -287,7 +309,7 @@ export function createChatServerJobs(
       ...options,
       authorizer: options.authorizer ?? createAuthorizer(options.stores.access)
     });
-  const operationRuns = createOperationRunJobs({
+  const operationRunJobOptions = {
     clientInstanceId: options.clientInstanceId,
     runs: options.stores.operationRuns,
     registry: operationCalls.registry,
@@ -297,7 +319,8 @@ export function createChatServerJobs(
       ? { deps: () => operationCalls.deps, users: options.stores.users }
       : undefined,
     now
-  });
+  };
+  const operationRuns = createOperationRunJobs(operationRunJobOptions);
   handlers.push(...operationRuns.handlers);
   schedules.push(...operationRuns.schedules);
 
@@ -349,8 +372,8 @@ export function createChatServerJobs(
 }
 
 const DEFAULT_WORKSPACE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
-// Operation Runs one statement of the daily prune deletes, and statements per tick: at most
-// 100,000 a day inside the lease of the tick. A backlog beyond that goes the next day.
+// Runs or settled orphan requests one statement deletes, and statements per daily tick:
+// at most 100,000 of each inside the lease. A larger backlog goes the next day.
 const OPERATION_RUN_PRUNE_BATCH_SIZE = 5000;
 const OPERATION_RUN_PRUNE_BATCHES_PER_TICK = 20;
 // Deletions of accounts or of workspaces this process runs at once, per kind.

@@ -154,6 +154,32 @@ describe("the preview of a held asset save", () => {
     expect((await preview(t.kai.id, requestId)).asset.beforeWithheld).toBe(true);
   });
 
+  it("marks a held non-Skill creation stale when its expected revision changes (LOWS-D)", async () => {
+    const { t, holding, hold, preview } = await setup();
+    holding("assets.put");
+    const requestId = await hold("assets.put", "agent", "kai-new", {
+      config: agent("kai-new"),
+      expectedRevision: null
+    });
+    expect((await preview(t.admin.id, requestId)).asset.isStale).toBeUndefined();
+    holding();
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "agent", name: "kai-new" },
+      payload: { config: agent("kai-new"), expectedRevision: null }
+    });
+    expect((await preview(t.admin.id, requestId)).asset.isStale).toBe(true);
+    // Non-readers learn nothing about the stored revision.
+    await t.grant(
+      t.admin.id,
+      "agent.read",
+      { assetId: await t.assetId("agent", "kai-new") },
+      "deny"
+    );
+    const withheld = (await preview(t.admin.id, requestId)).asset;
+    expect(withheld.isStale).toBeUndefined();
+    expect(withheld.beforeWithheld).toBe(true);
+  });
+
   it("ACCEPT-2b E7: warns about a changed revision before deciding and refuses the stale save", async () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {

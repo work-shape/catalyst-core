@@ -185,6 +185,8 @@ export interface ApprovalRequestListFilter {
   conversationId?: ConversationId;
   /** Only the requests whose payload has this top-level key. */
   payloadKey?: string;
+  /** Retention repair: only requests whose run exists and has ended. */
+  endedRunOnly?: true;
   /** Only the requests whose payload's `subject` holds these fields with these values. */
   subjectContains?: JsonObject;
   /**

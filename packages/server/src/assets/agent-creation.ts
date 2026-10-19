@@ -1,4 +1,8 @@
-import { AppError, type AgentAvailability } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  asCollaborationWorkspaceId,
+  type AgentAvailability
+} from "@work-shape/catalyst-core";
 import { configValuesEqual } from "../asset-kinds/shared";
 import type { AssetWorkflowOptions } from "../types";
 import { transactionalAssetCall, type AssetCall } from "./asset-access";
@@ -40,29 +44,30 @@ export async function createAgentWithDependencies<T>(
         "Set an existing agent's dependency availability when saving availability or publishing"
       );
     const called = transactionalAssetCall(call, options.clientInstanceId, stores.audit);
-    const result = await create(within, called);
-    const availability = await stores.configAssets.listAgentAvailability({
-      clientInstanceId: options.clientInstanceId,
-      agentName: input.name
-    });
     if (input.expectedAvailability === undefined)
       throw new AppError(
         "PRECONDITION_REQUIRED",
         "Review the new agent's workspace availability before making its dependencies available",
         { reason: "dependency_availability_review_required" }
       );
+    await makeAgentDependenciesAvailable(within, called, input.config, {
+      ...input.expectedAvailability,
+      collaborationWorkspaceIds: input.expectedAvailability.collaborationWorkspaceIds.map(
+        asCollaborationWorkspaceId
+      )
+    });
+    // Widen first inside this transaction so the create's warnings reflect the consent.
+    const result = await create(within, called);
+    const availability = await stores.configAssets.listAgentAvailability({
+      clientInstanceId: options.clientInstanceId,
+      agentName: input.name
+    });
     if (!configValuesEqual(availability.get(input.name), input.expectedAvailability))
       throw new AppError(
         "CONFLICT",
         "The new agent's workspace availability differs from the review. Review it again before creating the agent",
         { reason: "dependency_availability_changed" }
       );
-    await makeAgentDependenciesAvailable(
-      within,
-      called,
-      input.config,
-      availability.get(input.name)
-    );
     return result;
   });
 }

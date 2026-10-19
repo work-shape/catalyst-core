@@ -365,10 +365,8 @@ async function deleteOperationRunsOfConversations(
   return deleteOperationRunsAndRequests(
     db,
     input.clientInstanceId,
-    and(
-      eq(operationRuns.clientInstanceId, input.clientInstanceId),
-      inArray(operationRuns.conversationId, [...input.conversationIds])
-    )
+    sql`${operationRuns.clientInstanceId} = ${input.clientInstanceId}
+      and ${inArray(operationRuns.conversationId, [...input.conversationIds])}`
   );
 }
 
@@ -403,17 +401,15 @@ async function deleteOperationRunsWithoutConversationOlderThan(
 async function deleteOperationRunsAndRequests(
   db: PostgresConnection,
   clientInstanceId: ClientInstanceId,
-  filter: SQL | undefined
+  filter: SQL
 ): Promise<number> {
   // A settlement can lag the end of its run. Keep both for the next cleanup pass.
-  const removed = db
-    .$with("removed_runs")
-    .as(
-      db
-        .delete(operationRuns)
-        .where(and(filter, NO_PENDING_REQUEST))
-        .returning({ id: operationRuns.id })
-    );
+  const removed = db.$with("removed_runs").as(
+    db
+      .delete(operationRuns)
+      .where(and(eq(operationRuns.clientInstanceId, clientInstanceId), filter, NO_PENDING_REQUEST))
+      .returning({ id: operationRuns.id })
+  );
   const requests = db.$with("removed_requests").as(
     db
       .delete(approvalRequests)
@@ -434,6 +430,41 @@ async function deleteOperationRunsAndRequests(
     .select({ count: sql<number>`count(*)::int` })
     .from(removed);
   return row?.count ?? 0;
+}
+
+/** Old releases and a conversation-deletion race can leave requests without their run. */
+async function deleteOrphanedRequests(
+  db: PostgresConnection,
+  input: Input<"deleteOrphanedRequests">
+): Promise<number> {
+  const orphaned = db
+    .select({ id: approvalRequests.id })
+    .from(approvalRequests)
+    .where(
+      and(
+        eq(approvalRequests.clientInstanceId, input.clientInstanceId),
+        inArray(approvalRequests.kind, [...input.kinds]),
+        ne(approvalRequests.status, "pending"),
+        sql`not (${approvalRequests.status} = 'approved' and
+      coalesce(${approvalRequests.applyResult}->>'execution', '') = 'queued')`,
+        sql`${approvalRequests.payload}->>'runId' is not null`,
+        sql`not exists (select 1 from ${operationRuns}
+      where ${operationRuns.clientInstanceId} = ${approvalRequests.clientInstanceId}
+        and ${operationRuns.id} = ${approvalRequests.payload}->>'runId')`
+      )
+    )
+    .orderBy(asc(approvalRequests.createdAt), asc(approvalRequests.id))
+    .limit(input.limit);
+  const rows = await db
+    .delete(approvalRequests)
+    .where(
+      and(
+        eq(approvalRequests.clientInstanceId, input.clientInstanceId),
+        inArray(approvalRequests.id, orphaned)
+      )
+    )
+    .returning({ id: approvalRequests.id });
+  return rows.length;
 }
 
 async function markOperationRunInterrupted(
@@ -649,6 +680,7 @@ export function createPostgresOperationRunsStore(
     deleteOfConversations: (input) => deleteOperationRunsOfConversations(db, input),
     deleteWithoutConversationOlderThan: (input) =>
       deleteOperationRunsWithoutConversationOlderThan(db, input),
+    deleteOrphanedRequests: (input) => deleteOrphanedRequests(db, input),
     markInterrupted: (input) => settle(input, (tx) => markOperationRunInterrupted(tx, input))
   };
 }

@@ -12,6 +12,7 @@ import { CONDITION_WAIT_MS } from "./support/assertions";
 import {
   ClosedWorkspaceLinkBanner,
   useCollaborationWorkspaceModel,
+  workspaceQueryKeys,
   type CollaborationWorkspaceModelInput
 } from "./support/chat-ui";
 
@@ -27,13 +28,18 @@ const linkedWorkspacePath = apiOperations["workspaces.get"].path.replace(
   "cw_nordlicht"
 );
 
+const ensurePersonalPath = apiOperations["workspaces.ensure_personal"].path;
+
 async function openLink(
   memberships: ReturnType<typeof sharedWorkspace>[],
   /** The owners and admins the instance names when it refuses the linked workspace. */
-  administrators: unknown = []
+  administrators: unknown = [],
+  /** The memberships once `workspaces.ensure_personal` made the Personal Workspace. */
+  ensured?: ReturnType<typeof sharedWorkspace>[]
 ) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const reads: string[] = [];
+  let listed = memberships;
   const client = createApiClient({
     baseUrl: "https://chat.example.com",
     fetchImpl: async (input, init) => {
@@ -45,7 +51,11 @@ async function openLink(
           { status: 404 }
         );
       }
-      return Response.json({ items: memberships });
+      if (url.pathname === ensurePersonalPath && ensured !== undefined) {
+        listed = ensured;
+        return Response.json(ensured.find((workspace) => workspace.kind === "personal"));
+      }
+      return Response.json({ items: listed });
     }
   });
   const goTo = vi.fn();
@@ -77,7 +87,17 @@ async function openLink(
   await act(async () => {
     root.render(createElement(QueryClientProvider, { client: queryClient }, createElement(Probe)));
   });
-  await vi.waitFor(() => expect(model?.loading).toBe(false), { timeout: CONDITION_WAIT_MS });
+  // The memberships have been read, and the model has heard of it: React Query tells its
+  // observers on a timer queued when the read settles, so a timer queued after it runs later.
+  const membershipsKey = workspaceQueryKeys.collaborationWorkspaces(
+    input.apiBaseUrl,
+    input.authScope
+  );
+  await vi.waitFor(
+    () => expect(queryClient.getQueryState(membershipsKey)?.status).toBe("success"),
+    { timeout: CONDITION_WAIT_MS }
+  );
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
   await act(async () => undefined);
   return { model: () => model, goTo, reads, unmount: () => act(() => root.unmount()) };
 }
@@ -99,6 +119,41 @@ describe("a link into a workspace the person is no member of", () => {
 
   it("says nothing where the person is a member", async () => {
     const opened = await openLink([personalWorkspace(), sharedWorkspace({ id: "cw_nordlicht" })]);
+    try {
+      expect(opened.goTo).not.toHaveBeenCalled();
+      expect(opened.model()?.closedLink).toBeUndefined();
+      expect(opened.reads).toEqual([]);
+    } finally {
+      await opened.unmount();
+    }
+  });
+
+  // A tab whose browser was signed in as another person reads that person's memberships before
+  // `/me` names them. The route still names a workspace of the person before; it is no closed
+  // link of the person after, so nothing reads it and nothing moves.
+  it("reads nothing while the memberships are those of another person", async () => {
+    const opened = await openLink([
+      { ...personalWorkspace(), id: "cw_personal_b", personalUserId: "user_2" }
+    ]);
+    try {
+      expect(opened.goTo).not.toHaveBeenCalled();
+      expect(opened.model()?.closedLink).toBeUndefined();
+      expect(opened.model()?.collaborationWorkspaces).toEqual([]);
+      expect(opened.reads).toEqual([]);
+    } finally {
+      await opened.unmount();
+    }
+  });
+
+  // At the first visit of the person after, their list holds no Personal Workspace until the
+  // read makes it; the list the model hears of is theirs all the same.
+  it("reads nothing at the first visit of another person", async () => {
+    const otherPersonal = { ...personalWorkspace(), id: "cw_personal_b", personalUserId: "user_2" };
+    const opened = await openLink(
+      [sharedWorkspace({ id: "cw_other" })],
+      [],
+      [otherPersonal, sharedWorkspace({ id: "cw_other" })]
+    );
     try {
       expect(opened.goTo).not.toHaveBeenCalled();
       expect(opened.model()?.closedLink).toBeUndefined();

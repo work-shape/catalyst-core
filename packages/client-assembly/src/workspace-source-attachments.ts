@@ -29,9 +29,12 @@ import type {
 
 /** The upload surface and source handler use the same refusal in the selected language. */
 export function unsupportedAttachmentMessage(locale: LocaleCode | undefined): string {
+  const formats = WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES.filter((type) => type.startsWith("."))
+    .map((type) => type.slice(1).toUpperCase())
+    .join(", ");
   return locale === "de"
-    ? "Diesen Dateityp kannst du hier nicht anhängen. Unterstützt werden PDF, Word (DOC/DOCX), JSON, Text (TXT/Markdown/CSV/RTF), Tabellen (XLS/XLSX/XLSM/ODS) und Präsentationen (PPT/PPTX/PPTM/ODP) sowie ODT."
-    : "You cannot attach this file type here. Supported types are PDF, Word (DOC/DOCX), JSON, text (TXT/Markdown/CSV/RTF), spreadsheets (XLS/XLSX/XLSM/ODS), presentations (PPT/PPTX/PPTM/ODP), and ODT.";
+    ? `Diesen Dateityp kannst du hier nicht anhängen. Unterstützt werden: ${formats}.`
+    : `You cannot attach this file type here. Supported types: ${formats}.`;
 }
 
 const WORKSPACE_SOURCE_ATTACHMENT_KIND = "workspace_source";

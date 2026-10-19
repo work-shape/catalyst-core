@@ -181,6 +181,7 @@ export async function upsertAsset(
     name,
     creates: target.asset?.status !== "active",
     setsDefault,
+    config: next,
     ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn }),
     ...(target.address.workspaceId === undefined ? {} : { madeIn: target.address.workspaceId })
   });

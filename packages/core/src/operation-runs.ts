@@ -344,6 +344,13 @@ export interface OperationRunStore {
     days: number;
     limit: number;
   }): Promise<number>;
+  /** Deletes at most `limit` settled held-call requests whose run no longer exists.
+   * Pending requests and approved calls still queued for execution are kept. */
+  deleteOrphanedRequests(input: {
+    clientInstanceId: ClientInstanceId;
+    kinds: readonly string[];
+    limit: number;
+  }): Promise<number>;
   /**
    * Fails a run that is still `running` with the code `interrupted`, and wakes the Workflow
    * steps that wait for it as `finish` does.
