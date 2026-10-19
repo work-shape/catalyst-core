@@ -545,9 +545,7 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
     recordStepRunInput: async (ref) => {
       await db
         .update(workflowStepRuns)
-        .set({
-          input: sql`coalesce(${workflowStepRuns.input}, '{}'::jsonb) || ${JSON.stringify({ value: ref.input })}::jsonb`
-        })
+        .set({ input: { preview: ref.preview } })
         .where(and(stepRunIs(ref), eq(workflowStepRuns.status, "running")));
     },
     stageCodeStep: (ref) => stageWorkflowCodeStep(db, ref),

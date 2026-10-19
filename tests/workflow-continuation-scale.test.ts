@@ -34,7 +34,8 @@ it("check 112: processes a 50,000-row dataset at 20,000 step runs as one three-p
     expect(fixture.inputs.get(after.id)?.offset).toBe(part * 19_997);
   }
   expect(fixture.seen.size).toBe(50_000);
-  expect(fixture.stepInputs.size).toBe(fixture.seen.size + 1); // Each notice and the final output.
+  // A notice built from a dataset row keeps no input preview, which would outlive the row.
+  expect([...fixture.stepInputs.values()]).toEqual([{ text: "{}", truncated: false }]);
   expect(reads.mock.calls.length).toBe(3); // One bounded immutable part per history.
 });
 

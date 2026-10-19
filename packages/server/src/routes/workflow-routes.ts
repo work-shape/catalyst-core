@@ -352,7 +352,16 @@ function registerWorkflowRoutes(
         },
         ...(context.paging ? { page: context.paging } : {})
       });
-      return withConnectionTitles(context.access, stepRuns.map(toStepRunResource));
+      // A step's input is run data: it may hold what the run read from an outside system.
+      const runData = decide(
+        context.access,
+        WORKFLOW_ACTIONS.readRunData,
+        await resourceOf(run.workflow)
+      ).allowed;
+      return withConnectionTitles(
+        context.access,
+        stepRuns.map((stepRun) => toStepRunResource(stepRun, runData))
+      );
     }
   });
 
@@ -388,10 +397,13 @@ function toRunResource(run: WorkflowRunView) {
   };
 }
 
-/** A step run as the API answers it: without the instance it belongs to. */
-function toStepRunResource(stepRun: WorkflowStepRunView) {
-  const { clientInstanceId: _instance, ...resource } = stepRun;
-  return resource;
+/**
+ * A step run as the API answers it: without the instance it belongs to, and with its input
+ * only for a caller who may read the run's data (`workflow.read_run_data`).
+ */
+function toStepRunResource(stepRun: WorkflowStepRunView, runData: boolean) {
+  const { clientInstanceId: _instance, inputPreview, ...resource } = stepRun;
+  return runData && inputPreview ? { ...resource, inputPreview } : resource;
 }
 
 /** What a call on a Workflow touches, as its run and its events name it. */

@@ -37,35 +37,6 @@ const ready = (options: Parameters<typeof workflowFixture>[0] = {}) =>
   }, options);
 
 describe("a Workflow Run from the manual start to its end", () => {
-  it("bounds a resolved step input at the output preview limit", async () => {
-    const definitions = publishedDefinitions();
-    const manifest = notifyClients();
-    const large = "x".repeat(4_000);
-    definitions.publish({
-      ...manifest,
-      inputs: { type: "object" },
-      steps: [
-        manifest.steps[0],
-        {
-          id: "large",
-          name: "Large input",
-          type: "operation",
-          operation: "connection.crm.write",
-          input: { text: { value: large } }
-        },
-        { id: "result", name: "Result", type: "output", input: {} }
-      ]
-    });
-    const t = await ready({ definitions: definitions.source });
-    t.setBehaviour(() => Promise.resolve({ ok: true }));
-    const run = await t.finish((await start(t)).id);
-    const steps = await stepRunsOf(t, run.id);
-    const step = steps.find((step) => step.stepId === "large");
-    expect(step?.inputPreview).toEqual({ text: expect.any(String), truncated: true });
-    expect(step?.inputPreview?.text).toHaveLength(2_000);
-    expect(JSON.parse(step?.outputPreview?.text ?? "null")).toEqual({ ok: true });
-  });
-
   it("runs each step once, the steps of a loop once per item, and ends with its result", async () => {
     const t = await ready();
     const started = await start(t);

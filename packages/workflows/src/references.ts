@@ -65,6 +65,8 @@ export interface ReferenceScope {
   run: WorkflowRun;
   /** The step run that reads. A reference is resolved from its place in the run. */
   stepRun: WorkflowStepRun;
+  /** Set once a reference read a row of a dataset, which may not outlive its dataset. */
+  readDatasetRow?: boolean;
 }
 
 /**
@@ -124,6 +126,7 @@ export async function resolveReference(
               reference: dataset
             });
             for await (const row of reader.rows) item = { value: row };
+            scope.readDatasetRow = true;
           }
         }
       }

@@ -46,10 +46,11 @@ const previewOf = (column: typeof workflowRuns.output | typeof workflowStepRuns.
 const stepPreview = sql<
   string | null
 >`case when ${workflowStepRuns.stepType} = 'trigger' then null else ${previewOf(workflowStepRuns.output)} end`;
-// A loop's existing input holds its list or dataset beside its counters, without duplication.
-const stepInputPreview = boundedPreview(sql`case when ${workflowStepRuns.stepType} = 'loop'
-  then coalesce(${workflowStepRuns.input}->'items', ${workflowStepRuns.input}->'dataset')
-  else ${workflowStepRuns.input}->'value' end`);
+// A loop's input holds its list or dataset beside its counters, and is cut here. Any other
+// step keeps only the cut preview of its input (`recordStepRunInput`).
+const loopInputPreview = boundedPreview(sql`case when ${workflowStepRuns.stepType} = 'loop'
+  then coalesce(${workflowStepRuns.input}->'items', ${workflowStepRuns.input}->'dataset') end`);
+const storedInputPreview = sql<WorkflowOutputPreview | null>`${workflowStepRuns.input}->'preview'`;
 
 function mapPreview(text: string | null): { outputPreview?: WorkflowOutputPreview } {
   if (text === null) return {};
@@ -151,7 +152,8 @@ const notEnded = (column: typeof workflowRuns.status | typeof workflowStepRuns.s
 
 export {
   stepPreview,
-  stepInputPreview,
+  loopInputPreview,
+  storedInputPreview,
   runColumns,
   stepRunColumns,
   previewOf,

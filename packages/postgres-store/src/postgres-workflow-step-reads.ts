@@ -10,7 +10,8 @@ import { keysetFilter } from "./paging";
 import type { PostgresConnection } from "./postgres-database";
 import {
   mapPreview,
-  stepInputPreview,
+  loopInputPreview,
+  storedInputPreview,
   mapStepRun,
   stepPreview,
   stepRunColumns
@@ -28,7 +29,8 @@ export async function listWorkflowStepRuns(
     .select({
       ...stepRunColumns,
       preview: stepPreview,
-      inputPreview: stepInputPreview,
+      loopInputPreview,
+      storedInputPreview,
       log: workflowStepRuns.log,
       childRunId: workflowRuns.id
     })
@@ -68,9 +70,11 @@ export async function listWorkflowStepRuns(
     return {
       ...mapStepRun(row),
       ...mapPreview(row.preview),
-      ...(row.inputPreview === null
-        ? {}
-        : { inputPreview: mapPreview(row.inputPreview).outputPreview }),
+      ...(row.storedInputPreview !== null
+        ? { inputPreview: row.storedInputPreview }
+        : row.loopInputPreview !== null
+          ? { inputPreview: mapPreview(row.loopInputPreview).outputPreview }
+          : {}),
       ...(row.childRunId === null ? {} : { childRunId: row.childRunId }),
       ...(row.log === null ? {} : { log: row.log }),
       ...(loop ? { loop } : {}),

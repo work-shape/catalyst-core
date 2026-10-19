@@ -31,6 +31,7 @@ import type {
   WorkflowRunError,
   WorkflowStagedCode,
   WorkflowStepRunLog,
+  WorkflowOutputPreview,
   WorkflowRunId,
   WorkflowRunMode,
   WorkflowRunStatus,
@@ -196,9 +197,9 @@ export const workflowStepRuns = pgTable(
     iterationLabel: text("iteration_label"),
     status: text("status").$type<WorkflowStepRunStatus>().notNull(),
     attempt: integer("attempt").notNull().default(0),
-    // Resolved input under `value`; a loop also keeps its engine checkpoint here.
+    // A loop's list and checkpoint; of any other step only the cut preview of its input.
     input: jsonb("input").$type<{
-      value?: JsonValue;
+      preview?: WorkflowOutputPreview;
       items?: JsonValue[];
       dataset?: WorkflowDatasetReference;
       total?: number;

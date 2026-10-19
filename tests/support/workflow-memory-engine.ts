@@ -35,6 +35,7 @@ import {
   type ServicePrincipalRecord,
   type WorkflowRun,
   type WorkflowManifest,
+  type WorkflowOutputPreview,
   type WorkflowRunDataset,
   type WorkflowRunDatasetsStore,
   type WorkflowRunsStore,
@@ -99,7 +100,7 @@ export async function memoryWorkflowEngine(
 ) {
   const manifests = new Map<string, NewWorkflowRun["definition"]>();
   const inputs = new Map<string, NewWorkflowRun["input"]>();
-  const stepInputs = new Map<string, JsonValue>();
+  const stepInputs = new Map<string, WorkflowOutputPreview>();
   const checkpoints = new Map<string, NewWorkflowRun["checkpoint"]>();
   const runs = new Map<string, WorkflowRun>();
   const steps = new Map<string, WorkflowStepRun>();
@@ -289,7 +290,7 @@ export async function memoryWorkflowEngine(
       });
     },
     async recordStepRunInput(ref) {
-      if (mustStep(ref.id).status === "running") stepInputs.set(ref.id, clone(ref.input));
+      if (mustStep(ref.id).status === "running") stepInputs.set(ref.id, ref.preview);
     },
     async endStepRun(ref) {
       const step = mustStep(ref.id);

@@ -30,8 +30,9 @@ import type {
 // call carry are in `workflows.ts`; the engine is in `@work-shape/catalyst-workflows`.
 
 /**
- * How many characters of a run's result or of a step's input or output a read shows. The whole value
- * stays in the store; a longer one is cut here and marked as cut.
+ * How many characters of a run's result or of a step's input or output a read shows. A result
+ * and an output stay whole in the store and are cut on read; a step's input is kept only as
+ * this cut preview (`workflowValuePreview`).
  */
 export const WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS = 2_000;
 
@@ -199,6 +200,13 @@ export interface WorkflowOutputPreview {
   truncated: boolean;
 }
 
+/** A value as JSON text, cut at `WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS` and marked where cut. */
+export function workflowValuePreview(value: JsonValue): WorkflowOutputPreview {
+  const text = JSON.stringify(value);
+  const truncated = text.length > WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS;
+  return { text: truncated ? text.slice(0, WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS) : text, truncated };
+}
+
 /** A run as a read shows it: no definition and no input, and the result as a preview. */
 export type WorkflowRunView = WorkflowRun & {
   /** Descendants that failed, reached a limit or contain failed items, excluding this run. */
@@ -335,7 +343,7 @@ export interface WorkflowStepRunRef {
   id: string;
 }
 
-/** How a step run ended. Its resolved input is recorded separately before dispatch. */
+/** How a step run ended. The preview of its resolved input is recorded before dispatch. */
 export interface WorkflowStepRunEnd {
   status: Exclude<WorkflowStepRunStatus, "queued" | "running" | "waiting">;
   finishedAt: ISODateString;
@@ -488,8 +496,8 @@ export interface WorkflowRunsStore {
   markStepRunRunning(
     ref: WorkflowStepRunRef & { attempt: number; startedAt: ISODateString }
   ): Promise<void>;
-  /** Keeps the resolved input before dispatch, while the step is running. */
-  recordStepRunInput(ref: WorkflowStepRunRef & { input: JsonValue }): Promise<void>;
+  /** Keeps the cut preview of the resolved input before dispatch, while the step is running. */
+  recordStepRunInput(ref: WorkflowStepRunRef & { preview: WorkflowOutputPreview }): Promise<void>;
   /** Ends a step run that has not ended. Answers whether this call ended it. */
   endStepRun(ref: WorkflowStepRunRef & WorkflowStepRunEnd): Promise<boolean>;
   /**
