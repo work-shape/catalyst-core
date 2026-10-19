@@ -86,7 +86,7 @@ export type {
   DataStoreUsedBy,
   DataStoreValue
 } from "./data-store-source";
-export { usingPageRoute } from "./data-store-source";
+export { useDataStoreSource, usingPageRoute } from "./data-store-source";
 export { DataStoreReaders } from "./data-store-provenance";
 export {
   appDataLines,

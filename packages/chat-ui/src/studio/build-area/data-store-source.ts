@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useRef } from "react";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { OPERATIONS_AUDIENCES } from "@work-shape/catalyst-core";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
@@ -205,6 +206,12 @@ function refusalReason(error: unknown): string | undefined {
 
 /** How often the state of a store is read again while it is set up or migrated. */
 const STATE_POLL_MS = 3_000;
+/**
+ * How long a store that does not settle is read again, from its first unsettled answer, also
+ * while reads fail: a set up or a migration takes seconds. Past it the page keeps the last state
+ * it read and reads again when it is opened again.
+ */
+const STATE_POLL_MAX_MS = 10 * 60_000;
 
 function useRead<Answer>(
   queryKey: string[],
@@ -212,19 +219,30 @@ function useRead<Answer>(
   options: {
     enabled?: boolean;
     keepPrevious?: boolean;
-    /** Reads again every `STATE_POLL_MS` while what was read says so. */
+    /** Reads again every `STATE_POLL_MS` while what was read says so, for a bounded time. */
     pollWhile?: (answer: Answer) => boolean;
   } = {}
 ): DataStoreRead<Answer> {
   const { pollWhile } = options;
+  // Since when the store this reads, by its query, has been read again: by the clock, as a
+  // failed read changes no answer.
+  const polling = useRef<{ queryHash: string; since: number } | undefined>(undefined);
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) => read(signal),
     retry: false,
     enabled: options.enabled ?? true,
     ...(options.keepPrevious ? { placeholderData: keepPreviousData } : {}),
-    refetchInterval: ({ state }) =>
-      pollWhile && state.data !== undefined && pollWhile(state.data) ? STATE_POLL_MS : false
+    refetchInterval: ({ state, queryHash }) => {
+      if (!pollWhile || state.data === undefined || !pollWhile(state.data)) {
+        polling.current = undefined;
+        return false;
+      }
+      if (polling.current?.queryHash !== queryHash) {
+        polling.current = { queryHash, since: Date.now() };
+      }
+      return Date.now() - polling.current.since < STATE_POLL_MAX_MS ? STATE_POLL_MS : false;
+    }
   });
   // What was read stays while it is read again: the page does not blink.
   if (query.data !== undefined) {
