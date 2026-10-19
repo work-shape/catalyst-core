@@ -139,6 +139,12 @@ export function OperationDetails({
           </KeyValue>
         )}
       </KeyValueList>
+      {/* A server's schema is the one it describes now; a REST API's is the accepted definition. */}
+      {!rest && declaration !== undefined && operation.status === "needs_review" ? (
+        <p className="text-caption text-muted-foreground" data-connection-inputs-unaccepted="">
+          {t("connectionPage.inputsUnaccepted")}
+        </p>
+      ) : null}
       {declaration === undefined ? (
         rest ? null : (
           <p className="text-caption text-muted-foreground">{t("connectionPage.noSchema")}</p>

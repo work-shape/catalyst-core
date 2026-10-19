@@ -14,6 +14,8 @@ export const connectionPage = defineTranslations({
       "What this tool takes is not shown: the server described no input, or its description is too large.",
     "connectionPage.inputsElsewhere":
       "Its inputs are written in a form this page does not list. See Technical details.",
+    "connectionPage.inputsUnaccepted":
+      "These inputs are the new description, which is not accepted yet.",
     "connectionPage.declarationCut":
       "Cut after {count} characters: this is not the whole declaration.",
     "connectionPage.moreInputs": "It takes more inputs. All of them are under Technical details.",
@@ -77,6 +79,8 @@ export const connectionPage = defineTranslations({
       "Was dieses Tool braucht, wird nicht gezeigt: Der Server hat keine Eingaben beschrieben, oder die Beschreibung ist zu groß.",
     "connectionPage.inputsElsewhere":
       "Die Eingaben sind in einer Form beschrieben, die diese Seite nicht auflistet. Siehe Technische Details.",
+    "connectionPage.inputsUnaccepted":
+      "Diese Eingaben sind die neue Beschreibung, die noch nicht akzeptiert ist.",
     "connectionPage.declarationCut":
       "Nach {count} Zeichen abgeschnitten: Das ist nicht die ganze Beschreibung.",
     "connectionPage.moreInputs":
