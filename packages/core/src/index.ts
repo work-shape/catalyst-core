@@ -218,3 +218,5 @@ export { personalWorkspaceOwnerName } from "./personal-workspace-name";
 export * from "./knowledge-citations";
 
 export { boundedActorAccess } from "./bounded-actor-access";
+
+export { RIGHT_VERB_WORDS } from "./right-words";

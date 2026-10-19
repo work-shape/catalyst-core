@@ -1,18 +1,20 @@
 // @rights-copy: included in the rights wording guard.
+import { RIGHT_VERB_WORDS } from "@work-shape/catalyst-core";
 import { defineTranslations } from "./translation-area";
 
 /**
  * The words of a right on every rights screen: one verb per action, said the same way on
- * Instance > Access, Users, API access, a workspace's members and a Connection's page.
+ * Instance > Access, Users, API access, a workspace's members and a Connection's page. The verbs
+ * are core's, so an agent's refusal says a right in the same words.
  */
 export const rights = defineTranslations({
   en: {
-    "rights.verbRead": "view",
-    "rights.verbUse": "use",
-    "rights.verbWrite": "edit",
-    "rights.verbPublish": "publish",
-    "rights.verbDelete": "delete",
-    "rights.verbApprove": "approve",
+    "rights.verbRead": RIGHT_VERB_WORDS.read.en,
+    "rights.verbUse": RIGHT_VERB_WORDS.use.en,
+    "rights.verbWrite": RIGHT_VERB_WORDS.write.en,
+    "rights.verbPublish": RIGHT_VERB_WORDS.publish.en,
+    "rights.verbDelete": RIGHT_VERB_WORDS.delete.en,
+    "rights.verbApprove": RIGHT_VERB_WORDS.approve.en,
     "rights.verbOnAgents": "{verb} agents",
     "rights.verbOnSkills": "{verb} skills",
     "rights.verbOnConnections": "{verb} connections",
@@ -36,12 +38,12 @@ export const rights = defineTranslations({
     "rights.actionUnknown": "A right this version does not know"
   },
   de: {
-    "rights.verbRead": "ansehen",
-    "rights.verbUse": "verwenden",
-    "rights.verbWrite": "bearbeiten",
-    "rights.verbPublish": "veröffentlichen",
-    "rights.verbDelete": "löschen",
-    "rights.verbApprove": "freigeben",
+    "rights.verbRead": RIGHT_VERB_WORDS.read.de,
+    "rights.verbUse": RIGHT_VERB_WORDS.use.de,
+    "rights.verbWrite": RIGHT_VERB_WORDS.write.de,
+    "rights.verbPublish": RIGHT_VERB_WORDS.publish.de,
+    "rights.verbDelete": RIGHT_VERB_WORDS.delete.de,
+    "rights.verbApprove": RIGHT_VERB_WORDS.approve.de,
     "rights.verbOnAgents": "Agenten {verb}",
     "rights.verbOnSkills": "Skills {verb}",
     "rights.verbOnConnections": "Verbindungen {verb}",
