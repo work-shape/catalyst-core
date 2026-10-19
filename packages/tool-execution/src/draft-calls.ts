@@ -30,23 +30,21 @@ import { auditForRun } from "./operation-run-recording";
 
 /**
  * The call as its run keeps it. A call of a Workflow test run names in its origin the
- * principal that bounded it. Refuses a draft context that bounds anything else: only a
- * person's call from a step of a Workflow is bounded.
+ * principal that bounded it, whether a step or the agent of an agent step made it. Refuses a
+ * draft context that bounds anything else: only a person's call from a Workflow test run is.
  */
 export function draftCallOf(call: OperationCall, workflowAgent = false): OperationCall {
   const boundBy = call.draft?.boundBy;
   if (!boundBy) return call;
-  if (
-    workflowAgent &&
-    call.origin.kind === "agent" &&
-    !isAuthenticatedServicePrincipal(call.actor) &&
-    call.actor.authSource === "workflow_test_run"
-  )
-    return call;
-  if (call.origin.kind !== "workflow" || isAuthenticatedServicePrincipal(call.actor)) {
+  const { origin, actor } = call;
+  const bounded =
+    !isAuthenticatedServicePrincipal(actor) &&
+    (origin.kind === "workflow" ||
+      (workflowAgent && origin.kind === "agent" && actor.authSource === "workflow_test_run"));
+  if (!bounded || (origin.kind !== "workflow" && origin.kind !== "agent")) {
     throw new AppError("INTERNAL", "Only a person's call from a Workflow test run is bounded");
   }
-  return { ...call, origin: { ...call.origin, boundBy: principalRef(boundBy) } };
+  return { ...call, origin: { ...origin, boundBy: principalRef(boundBy) } };
 }
 
 /**

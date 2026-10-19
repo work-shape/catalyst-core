@@ -43,6 +43,11 @@ export type OperationOrigin =
        * source names one. A call that waited runs only while that revision still stands.
        */
       toolRevisionId?: string;
+      /**
+       * A Workflow agent step's call in a test run of a draft, which acts as the person
+       * testing: the service principal whose rights bounded theirs (ADR-0031).
+       */
+      boundBy?: { id: string; label: string };
     }
   | { kind: "user" }
   /**

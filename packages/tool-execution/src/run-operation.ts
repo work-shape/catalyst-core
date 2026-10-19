@@ -537,9 +537,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
   ) {
     context.publishedWouldAsk = "approval";
   }
-  if (run.target === "dry_run") {
-    return { ending: await simulateRun(context, policy) };
-  }
+  // A Workflow agent step cannot be confirmed, so its call fails before a test run would
+  // simulate it: the test shows what the published run will do (CR-2).
   if (context.runtime.workflowAgent && policy.next === "await_confirmation") {
     return {
       ending: await denyRun(context, {
@@ -548,6 +547,9 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
         reason: "confirmation_unattended"
       })
     };
+  }
+  if (run.target === "dry_run") {
+    return { ending: await simulateRun(context, policy) };
   }
   // A subagent never waits for a decision: the call does not run, and the agent that started
   // the subagent makes it where its person is asked (CR-1).

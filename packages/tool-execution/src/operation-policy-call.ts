@@ -54,8 +54,10 @@ async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInp
     targets: definition.policyTargets
       ? await definition.policyTargets(call.input)
       : [{ workspaceId: call.workspaceId, assetKind: resource?.kind }],
+    // A Workflow agent step's call is never confirmed by its caller: a published run has
+    // nobody to ask, and its test run answers as that run will (CR-2).
     callerCanConfirm:
-      callConfirmedByCaller(call) ||
+      (runtime.workflowAgent !== true && callConfirmedByCaller(call)) ||
       (isAgentPublish(context) && context.run?.decision?.mode === "confirmed"),
     // A step of a run of what is published carries no draft; one of a test run always does.
     publishedRun: call.origin.kind === "workflow" && call.draft === undefined,
