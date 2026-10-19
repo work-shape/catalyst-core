@@ -1,4 +1,6 @@
+import { prepareSyncPrefix, syncAssetsAtPrefix } from "./support/asset-operations";
 import { z } from "zod";
+import { workflowRunPrincipal } from "@work-shape/catalyst-workflows";
 import { afterEach, describe, expect, it } from "vitest";
 import { type OperationDefinition, type WorkflowManifest } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
@@ -75,6 +77,8 @@ describe("the Workflow's own account (LIVE-1)", () => {
     await t.allow({ kind: "user", id: t.kai.id }, "connection.use");
     await save(t);
     expect(await owned(t)).toBeUndefined();
+    const draftView = await t.expectOk(t.kai.id, "assets.get", { params: address });
+    expect(draftView.json()).toMatchObject({ runsAs: manifest().name });
     expect((await publish(t)).statusCode).toBe(200);
     const principal = await owned(t);
     expect(principal).toBeDefined();
@@ -146,33 +150,174 @@ describe("the Workflow's own account (LIVE-1)", () => {
     expect(await owned(t)).toBeUndefined();
   });
 
+  it("does not lend an owned account's run data without its source rights", async () => {
+    const t = await ready();
+    await t.allow({ kind: "user", id: t.kai.id }, "connection.use");
+    await save(t);
+    expect((await publish(t)).statusCode).toBe(200);
+    const assetId = await t.assetId("workflow", address.name);
+    const manager = await t.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Dataset manager",
+      roles: ["user"],
+      permissions: ["users.manage"]
+    });
+    await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: manager.id,
+      action: "workflow.read_run_data",
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: assetId,
+      grantedBy: t.root.id
+    });
+    const grant = {
+      payload: {
+        holderKind: "user",
+        holderId: t.lena.id,
+        action: "workflow.read_run_data",
+        effect: "allow",
+        scopeKind: "asset",
+        scopeId: assetId
+      }
+    };
+    const refused = await t.call(manager.id, "permissions.grant", grant);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ error: { details: { action: "connection.use" } } });
+    await t.allow({ kind: "user", id: manager.id }, "connection.use");
+    await t.expectOk(manager.id, "permissions.grant", grant);
+    await t.expectOk(t.kai.id, "workflows.unpublish", { params: { workflow: address.name } });
+    const afterWithdrawal = await t.call(manager.id, "permissions.grant", {
+      payload: { ...grant.payload, holderId: t.kai.id }
+    });
+    expect(afterWithdrawal.statusCode).toBe(403);
+    expect(afterWithdrawal.json()).toMatchObject({
+      error: { details: { action: "workflow.read_run_data" } }
+    });
+  });
+
+  it("unpublishes without deleting the datasets of previous runs", async () => {
+    const t = await ready();
+    await t.allow({ kind: "user", id: t.kai.id }, "connection.use");
+    await save(t);
+    expect((await publish(t)).statusCode).toBe(200);
+    const started = runSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "workflows.start", {
+          params: { workflow: address.name },
+          payload: { input: {} }
+        })
+      ).json()
+    );
+    const run = await t.stores.workflowRuns.readRun({ clientInstanceId, id: started.id });
+    if (!run) throw new Error("missing run");
+    const [step] = await t.stores.workflowRuns.listStepRuns({ clientInstanceId, runId: run.id });
+    if (!step) throw new Error("missing step");
+    await t.stores.workflowRuns.markStepRunRunning({
+      clientInstanceId,
+      id: step.id,
+      attempt: 1,
+      startedAt: new Date().toISOString()
+    });
+    const dataset = await t.stores.workflowRunDatasets.create({
+      clientInstanceId,
+      id: "historic-rows",
+      runId: run.id,
+      stepRunId: step.id,
+      field: "rows",
+      rowSchema: { type: "object" }
+    });
+    await t.stores.workflowRuns.endStepRun({
+      clientInstanceId,
+      id: step.id,
+      status: "done",
+      finishedAt: new Date().toISOString()
+    });
+    await t.stores.workflowRunDatasets.completeStep({ clientInstanceId, stepRunId: step.id });
+    await t.stores.workflowRuns.endRun({
+      clientInstanceId,
+      id: run.id,
+      status: "done",
+      finishedAt: new Date().toISOString()
+    });
+    const before = await t.stores.workflowRunDatasets.get({ clientInstanceId, id: dataset.id });
+    expect(before?.state).toBe("complete");
+    await t.expectOk(t.kai.id, "workflows.unpublish", { params: { workflow: address.name } });
+    expect(await t.stores.workflowRunDatasets.get({ clientInstanceId, id: dataset.id })).toEqual(
+      before
+    );
+  });
+
+  it("never shares an asset-owned account through explicit runAs", async () => {
+    const t = await ready();
+    await t.allow({ kind: "user", id: t.kai.id }, "connection.use");
+    await save(t);
+    expect((await publish(t)).statusCode).toBe(200);
+    const principal = await owned(t);
+    if (!principal) throw new Error("missing principal");
+    const borrowed = { ...manifest(), id: "borrowed-account", runAs: principal.name };
+    await t.expectOk(t.root.id, "assets.put", {
+      params: { kind: "workflow", name: borrowed.id },
+      payload: { config: { name: borrowed.id, manifest: borrowed }, expectedRevision: null }
+    });
+    const refused = await t.call(t.root.id, "assets.publish", {
+      params: { kind: "workflow", name: borrowed.id },
+      payload: { revision: 1 }
+    });
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json()).toMatchObject({ error: { details: { reason: "run_as_owned" } } });
+    expect(
+      await workflowRunPrincipal(
+        t.stores.apiAccess,
+        clientInstanceId,
+        borrowed,
+        t.stores.configAssets
+      )
+    ).toBeUndefined();
+    const test = await t.call(t.root.id, "workflows.test", {
+      params: { workflow: borrowed.id },
+      payload: { input: {} }
+    });
+    expect(test.statusCode).toBe(422);
+  });
+
+  it("switches from an owned account to the explicit shared account and removes the old grants", async () => {
+    const t = await ready();
+    await t.allow({ kind: "user", id: t.kai.id }, "connection.use");
+    await save(t);
+    expect((await publish(t)).statusCode).toBe(200);
+    const principal = await owned(t);
+    if (!principal) throw new Error("missing principal");
+    await save(t, { ...manifest(), runAs: t.principal.name }, 1);
+    expect((await publish(t, 2)).statusCode).toBe(200);
+    expect(await owned(t)).toBeUndefined();
+    expect(await grants(t, principal.id)).toEqual([]);
+  });
+
   it.each(["workflows.unpublish", "assets.delete", "assets.sync"] as const)(
     "%s removes the principal and all its grants",
     async (operation) => {
       const t = await ready();
-      if (operation === "assets.sync")
-        await t.expectOk(t.root.id, "namespaces.create", {
-          payload: { prefix: "own-", displayName: "Own workflows" }
-        });
+      if (operation === "assets.sync") await prepareSyncPrefix(t, "own-");
       await t.allow({ kind: "user", id: t.kai.id }, "connection.use");
       await save(t);
       expect((await publish(t)).statusCode).toBe(200);
       const principal = await owned(t);
       if (!principal) throw new Error("missing owned account");
-      await t.expectOk(
-        t.root.id,
-        operation,
-        operation === "assets.sync"
-          ? {
-              payload: {
-                namespace: "own-",
-                items: [{ type: "delete", ...address, expectedRevision: 1 }]
-              }
-            }
-          : operation === "assets.delete"
+      if (operation === "assets.sync") {
+        const response = await syncAssetsAtPrefix(t, t.root.id, "own-", [
+          { type: "delete", ...address, expectedRevision: 1 }
+        ]);
+        expect(response.statusCode, response.body).toBe(200);
+      } else
+        await t.expectOk(
+          t.root.id,
+          operation,
+          operation === "assets.delete"
             ? { params: address, payload: { expectedRevision: 1 } }
             : { params: { workflow: address.name } }
-      );
+        );
       expect(await owned(t)).toBeUndefined();
       expect(await grants(t, principal.id)).toEqual([]);
       expect(

@@ -1,3 +1,4 @@
+import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import type {
   ApiAccessStore,
   AuditActor,
@@ -32,7 +33,7 @@ export async function workflowRunPrincipal(
     manifest.runAs === undefined
       ? await configAssets?.getConfigAsset({
           clientInstanceId,
-          kind: "workflow",
+          kind: WORKFLOW_ASSET_KIND,
           name: manifest.id
         })
       : undefined;
@@ -42,10 +43,11 @@ export async function workflowRunPrincipal(
       : asset?.status === "active"
         ? await principals.findServicePrincipalByOwner({
             clientInstanceId,
-            owner: { kind: "workflow", assetId: asset.id }
+            owner: { kind: WORKFLOW_ASSET_KIND, assetId: asset.id }
           })
         : undefined;
-  if (record?.status !== "active") return undefined;
+  if (record?.status !== "active" || (manifest.runAs !== undefined && record.owner !== undefined))
+    return undefined;
   return { id: record.id, name: record.name, displayLabel: record.displayLabel };
 }
 

@@ -41,13 +41,23 @@ export interface NamespaceHolderInstance extends AccessInstance {
   stored(kind: string, name: string): Promise<ConfigAssetRecord | undefined>;
 }
 
+/** Existing legacy-scoped sync protocol shared by current compatibility tests. */
+export const prepareSyncPrefix = (t: AccessInstance, prefix: string) => t.createNamespace(prefix);
+export const syncAssetsAtPrefix = (
+  t: AccessInstance,
+  userId: string,
+  prefix: string,
+  items: unknown[],
+  headers = {}
+) => t.call(userId, "assets.sync", { payload: { namespace: prefix, items }, headers });
+
 /** Kai holds every right on agents and the write right on skills in `kai-`; Lena holds nothing. */
 export async function setupNamespaceHolder(
   options: AccessInstanceOptions = {}
 ): Promise<NamespaceHolderInstance> {
   const t = await setupAccessInstance(options);
-  await t.createNamespace("kai-");
-  await t.createNamespace("lena-");
+  await prepareSyncPrefix(t, "kai-");
+  await prepareSyncPrefix(t, "lena-");
   for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read", "skill.write"]) {
     await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
   }

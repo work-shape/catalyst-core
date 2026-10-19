@@ -128,6 +128,7 @@
 {"name":"user.profile_updated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.updated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"workflow.before_publish","legacy":false,"audited":false,"phases":["before"]}
+{"name":"workflow.unpublished","legacy":false,"audited":true,"phases":["after"]}
 {"name":"workflow_run.cancelled","legacy":true,"audited":true,"phases":["after"]}
 {"name":"workflow_run.dataset_created","legacy":false,"audited":true,"phases":["after"]}
 {"name":"workflow_run.dataset_deleted","legacy":false,"audited":true,"phases":["after"]}

@@ -117,7 +117,7 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   readonly hasWorkspaceAvailability: boolean;
   /** Resource use can operate on data without opening its published settings. */
   readonly useOpensPublishedRevision?: false;
-  /** The active account's label for this revision. No account ids or internal names. */
+  /** The account label for this revision, including a Workflow's planned own account. No ids or internal names. */
   readRunsAs?(config: JsonObject): Promise<string | undefined>;
   /**
    * Every asset the definition names, including operation targets. The common save and
@@ -360,6 +360,13 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     /** The config that was published until this publish, where one was. */
     replaced?: JsonObject;
     confirmProcessing?: string;
+    stores: PlatformStores;
+  }): Promise<void>;
+  /** Withdraw live bindings in the pointer's transaction, preserving historical run data. */
+  onUnpublish?(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    published?: JsonObject;
     stores: PlatformStores;
   }): Promise<void>;
   /**

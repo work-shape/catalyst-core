@@ -58,6 +58,8 @@ export const workflowRights = defineTranslations({
     "workflowRights.refusedCycle": "Publishing this workflow would make it start itself.",
     "workflowRights.refusedAccountMissing":
       "This workflow names no technical account to run as. Name one in the workflow. An administrator manages the accounts under {place}.",
+    "workflowRights.refusedAccountOwned":
+      "This workflow names a technical account that belongs to something else. Take that account out of the workflow, and publishing gives this workflow its own account.",
     "workflowRights.refusedAccountUnknown":
       "This workflow runs as the technical account “{name}”, which does not exist. Choose an active account in the workflow. An administrator manages the accounts under {place}.",
     "workflowRights.refusedAccountDisabled":
@@ -125,6 +127,8 @@ export const workflowRights = defineTranslations({
       "Würde dieser Workflow veröffentlicht, würde er sich selbst starten.",
     "workflowRights.refusedAccountMissing":
       "Dieser Workflow nennt kein Technisches Konto, als das er läuft. Nenne eines im Workflow. Die Konten verwaltet ein Administrator unter {place}.",
+    "workflowRights.refusedAccountOwned":
+      "Dieser Workflow nennt ein Technisches Konto, das zu etwas anderem gehört. Nimm das Konto aus dem Workflow, dann bekommt dieser Workflow beim Veröffentlichen ein eigenes Konto.",
     "workflowRights.refusedAccountUnknown":
       "Dieser Workflow läuft als Technisches Konto „{name}“, das es nicht gibt. Wähle im Workflow ein aktives Konto. Die Konten verwaltet ein Administrator unter {place}.",
     "workflowRights.refusedAccountDisabled":

@@ -8,6 +8,7 @@ import {
   type JsonObject,
   type PlatformStores,
   type WorkflowRun,
+  type WorkflowRunMode,
   type WorkflowStep
 } from "@work-shape/catalyst-core";
 import type { WorkflowDefinitionRevision } from "./definition-source";
@@ -44,7 +45,7 @@ export function createStartCheck(options: StartCheckOptions) {
   return async function prepareStart(
     published: WorkflowDefinitionRevision,
     given: unknown,
-    mode?: "live" | "test"
+    mode?: WorkflowRunMode
   ): Promise<PreparedStart> {
     const { manifest } = published;
     await checkDatasetContracts(manifest, options.definitions, operationCalls.registry);
@@ -103,9 +104,15 @@ export function createStartCheck(options: StartCheckOptions) {
             stores.configAssets
           );
     if (!principal) {
+      if (manifest.runAs === undefined)
+        throw new AppError(
+          "CONFLICT",
+          "The Workflow's own account is missing or disabled. Publish it again.",
+          { reason: "principal_inactive" }
+        );
       const account = await stores.apiAccess.findServicePrincipalByName({
         clientInstanceId,
-        name: manifest.runAs ?? ""
+        name: manifest.runAs
       });
       throw new AppError(
         "CONFLICT",

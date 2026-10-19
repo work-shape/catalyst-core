@@ -1,27 +1,32 @@
+import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import { createWorkflowAssetKind } from "@work-shape/catalyst-client-assembly";
 import {
   INSTANCE_ASSET_SCOPE,
   asClientInstanceId,
   type LocaleCode,
+  type OperationDefinition,
   type WorkflowManifest,
   type WorkflowNeededRight
 } from "@work-shape/catalyst-core";
-import { WORKFLOW_UNBOUNDED_CEILINGS } from "@work-shape/catalyst-workflows";
-import { workflowPublishQuestion } from "../packages/client-assembly/src/workflow-publish-question";
+import {
+  WORKFLOW_UNBOUNDED_CEILINGS,
+  type WorkflowLimitContext
+} from "@work-shape/catalyst-workflows";
 
 // REH-900: the publish question named notify recipients by raw user id, in English, to German
 // staff. It is now written in the reader's language and names people and workspaces by name.
 
 const untouched = () => Promise.reject(new Error("The publish question reads no asset or grant"));
-const kind = createWorkflowAssetKind({
+const kindOptions = {
   clientInstanceId: asClientInstanceId("ci_test"),
   limits: { ceilings: WORKFLOW_UNBOUNDED_CEILINGS, stepSlots: 4 },
   runnerPackages: [],
   configAssets: { getConfigAsset: untouched, listPublishedConfigAssets: untouched },
   apiAccess: { findServicePrincipalByName: untouched, findServicePrincipalByOwner: untouched },
   access: { loadPersistedAccess: untouched, listGrantScopeAssets: untouched }
-});
+};
+const kind = createWorkflowAssetKind(kindOptions);
 
 const PEOPLE = new Map([
   ["usr_mara", "Mara Lindqvist"],
@@ -103,6 +108,71 @@ describe("the publish question of a Workflow", () => {
     for (const line of await question("de")) expect(line).not.toContain("\n");
   });
 });
+
+/** Exercise the kind's public question with operations exposing the rights of these steps. */
+async function workflowPublishQuestion(input: {
+  manifest: WorkflowManifest;
+  limits: WorkflowLimitContext;
+  locale: LocaleCode;
+  names: Parameters<NonNullable<typeof kind.publishQuestion>>[0]["names"];
+  rights?: readonly WorkflowNeededRight[];
+}): Promise<string[]> {
+  const operations: OperationDefinition[] = (input.rights ?? []).map((right, index) => ({
+    name: `test.right_${index}`,
+    effect: "reading",
+    auth: "principal",
+    scope: null,
+    action: right.action,
+    inputSchema: z.object({}),
+    outputSchema: z.unknown(),
+    timeoutMs: 1000,
+    resource: () => ({
+      kind: right.asset.kind,
+      id: right.asset.assetId ?? right.asset.name,
+      name: right.asset.name,
+      assetId: right.asset.assetId
+    }),
+    execute: untouched
+  }));
+  const definition: WorkflowManifest = {
+    ...input.manifest,
+    steps: [
+      { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+      ...operations.map((operation, index) => ({
+        id: `right_${index}`,
+        name: "Step",
+        type: "operation" as const,
+        input: {},
+        operation: operation.name
+      })),
+      { id: "end", name: "End", type: "output", input: {} }
+    ]
+  };
+  const testKind = createWorkflowAssetKind({
+    ...kindOptions,
+    limits: input.limits,
+    registry: () => ({
+      resolve: (name) => Promise.resolve(operations.find((operation) => operation.name === name)),
+      resolveMany: (names) =>
+        Promise.resolve(
+          new Map(
+            operations
+              .filter((operation) => names.includes(operation.name))
+              .map((operation) => [operation.name, operation])
+          )
+        )
+    })
+  });
+  const ask = testKind.publishQuestion;
+  if (!ask) throw new Error("missing publish question");
+  return ask({
+    assetId: "asset_1",
+    scope: INSTANCE_ASSET_SCOPE,
+    config: { name: definition.id, manifest: definition },
+    locale: input.locale,
+    names: input.names
+  });
+}
 
 // LIVE-1: a definition without `runAs` runs as its own account, which gets the rights its steps
 // need. The question names that account once, with what it may do, by asset names only.
@@ -190,6 +260,15 @@ describe("the publish question of a Workflow that runs as its own account", () =
     expect(await ask("en", RIGHTS)).toEqual([
       "Runs as its own account “Monthly check” and may use Exampledata and Handbook, add rows to Findings, change and delete rows in Open items, and start the workflow “Check month”."
     ]);
+  });
+
+  it("words an action named like an Object property as using, and shows no code", async () => {
+    for (const action of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+      const lines = await ask("en", [right(action, "connection", "Exampledata")]);
+      expect(lines, action).toEqual([
+        "Runs as its own account “Monthly check” and may use Exampledata."
+      ]);
+    }
   });
 
   it("names the account alone where its steps need no right", async () => {

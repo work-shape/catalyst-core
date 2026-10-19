@@ -516,7 +516,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "tests",
-      "count": 828,
+      "count": 827,
       "owner": "NS-RETIRE"
     },
     {

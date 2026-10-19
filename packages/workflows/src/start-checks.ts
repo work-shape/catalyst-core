@@ -88,15 +88,21 @@ export async function workflowStartIssues(
   }
   issues.push(...(await secretOperationSteps(manifest, instance.registry)));
   if (!instance.principal) {
-    const principal = await instance.principals.findServicePrincipalByName({
-      clientInstanceId: instance.clientInstanceId,
-      name: manifest.runAs ?? ""
-    });
+    const principal =
+      manifest.runAs === undefined
+        ? undefined
+        : await instance.principals.findServicePrincipalByName({
+            clientInstanceId: instance.clientInstanceId,
+            name: manifest.runAs
+          });
     issues.push({
       code: "principal_inactive",
-      message: principal
-        ? `The technical account ‘${principal.displayLabel}’ is disabled.`
-        : "The technical account for this Workflow is unavailable.",
+      message:
+        manifest.runAs === undefined
+          ? "The Workflow's own account is missing or disabled. Publish it again."
+          : principal
+            ? `The technical account ‘${principal.displayLabel}’ is disabled.`
+            : "The technical account for this Workflow is unavailable.",
       ...(principal ? { principalDisplayLabel: principal.displayLabel } : {}),
       path: "runAs"
     });

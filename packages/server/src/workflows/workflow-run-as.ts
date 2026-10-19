@@ -88,6 +88,12 @@ export async function workflowRunAsPrincipal(
       { reason: "run_as_unknown", runAs: input.runAs }
     );
   }
+  if (principal.owner !== undefined)
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "An asset-owned account cannot be shared. Omit runAs to use the Workflow's own account.",
+      { reason: "run_as_owned" }
+    );
   // A run never acts as a disabled principal, so no revision that names one goes live.
   if (principal.status !== "active") {
     throw new AppError(

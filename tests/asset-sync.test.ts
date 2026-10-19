@@ -9,6 +9,7 @@ import {
 } from "./support/access-instance";
 import {
   setupNamespaceHolder as setupNamespace,
+  syncAssetsAtPrefix,
   type NamespaceHolderInstance
 } from "./support/asset-operations";
 
@@ -24,7 +25,7 @@ const putSkill = (name: string, expectedRevision: number | null | undefined, con
   ({ type: "put", kind: "skill", config: skill(name, content), expectedRevision }) satisfies Item;
 
 const sync = (t: AccessInstance, userId: string, items: Item[], headers = {}) =>
-  t.call(userId, "assets.sync", { payload: { namespace: "kai-", items }, headers });
+  syncAssetsAtPrefix(t, userId, "kai-", items, headers);
 
 const refusalOf = (response: Awaited<ReturnType<typeof sync>>) =>
   errorSchema.parse(response.json()).error;

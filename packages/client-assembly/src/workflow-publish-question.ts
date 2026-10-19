@@ -25,13 +25,13 @@ type NotifyChannel = (typeof NOTIFY_CHANNELS)[number];
 type AccountDoes = "use" | "addRows" | "changeRows" | "start";
 
 /** By the right a step needs; any other right is worded as using the asset. */
-const ACCOUNT_DOES: Readonly<Record<string, AccountDoes>> = {
-  "connection.use": "use",
-  "knowledge_base.use": "use",
-  "data_store.insert": "addRows",
-  "data_store.execute": "changeRows",
-  "workflow.use": "start"
-};
+const ACCOUNT_DOES: ReadonlyMap<string, AccountDoes> = new Map([
+  ["connection.use", "use"],
+  ["knowledge_base.use", "use"],
+  ["data_store.insert", "addRows"],
+  ["data_store.execute", "changeRows"],
+  ["workflow.use", "start"]
+]);
 
 interface QuestionCopy {
   limits: Record<LimitRaise["field"], string>;
@@ -169,7 +169,7 @@ async function ownAccountLine(
   const titles = new Map<string, string>();
   const assets = new Map<AccountDoes, Set<string>>();
   for (const right of rights) {
-    const does = ACCOUNT_DOES[right.action] ?? "use";
+    const does = ACCOUNT_DOES.get(right.action) ?? "use";
     const key = `${right.asset.kind}:${right.asset.name}`;
     const title =
       titles.get(key) ??

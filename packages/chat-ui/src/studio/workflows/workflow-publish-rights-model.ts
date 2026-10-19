@@ -139,6 +139,8 @@ export function workflowAccountRefusal(error: unknown, t: Translate): string | u
   switch (details.reason) {
     case "run_as_missing":
       return t("workflowRights.refusedAccountMissing", { place });
+    case "run_as_owned":
+      return t("workflowRights.refusedAccountOwned");
     case "run_as_unknown":
       return details.runAs === undefined
         ? t("workflowRights.refusedAccountMissing", { place })
@@ -181,6 +183,7 @@ export function workflowPublishRefusal(error: unknown, t: Translate): string | u
     case "workflow_cycle":
       return t("workflowRights.refusedCycle");
     case "run_as_missing":
+    case "run_as_owned":
     case "run_as_unknown":
     case "run_as_disabled":
     case "principal_inactive":

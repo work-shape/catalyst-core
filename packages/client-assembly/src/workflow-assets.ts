@@ -261,6 +261,7 @@ export function createWorkflowAssetKind(
     async readRunsAs(config) {
       const manifest = runnable(config);
       if (!manifest) return undefined;
+      if (manifest.runAs === undefined) return manifest.name;
       const principal = await workflowRunPrincipal(
         options.apiAccess,
         clientInstanceId,
@@ -371,7 +372,7 @@ export function createWorkflowAssetKind(
         });
       return undefined;
     },
-    async onRemove({ stores, published, name, assetId }) {
+    async onUnpublish({ stores, assetId, published }) {
       const principal = await stores.apiAccess.findServicePrincipalByOwner({
         clientInstanceId,
         owner: { kind: WORKFLOW_ASSET_KIND, assetId }
@@ -381,6 +382,9 @@ export function createWorkflowAssetKind(
           clientInstanceId,
           servicePrincipalId: principal.id
         });
+      await reschedule(stores, published, undefined);
+    },
+    async onRemove({ stores, published, name }) {
       const parsed = workflowConfigSchema.safeParse(published);
       const workflow = name ?? (parsed.success ? parsed.data.name : undefined);
       if (workflow !== undefined) {

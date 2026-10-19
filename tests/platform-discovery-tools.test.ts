@@ -454,6 +454,22 @@ describe("the tools that find what is on the platform", () => {
     expect(files?.inputSchema.safeParse({ kind: "page", text: "tax" }).success).toBe(true);
   });
 
+  it("defaults new Workflows to their own account in discovery guidance", () => {
+    const unused = () => Promise.reject(new Error("guidance makes no call"));
+    const context = createPlatformDiscoveryTools({
+      readContext: unused,
+      listAssets: unused,
+      listFiles: unused
+    }).find((tool) => tool.name === "platform.context");
+    expect(context?.description).toContain(
+      "Leave runAs out of a new Workflow; publishing creates its own account."
+    );
+    expect(context?.description).toContain(
+      "only when the person asks for an existing shared account"
+    );
+    expect(context?.description).not.toContain("Settings > API access");
+  });
+
   it("finds files the agent made for the person and none it only rendered to check its work", async () => {
     const t = await fixture(false, true);
     const { clientInstanceId } = t;

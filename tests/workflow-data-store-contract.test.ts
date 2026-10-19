@@ -670,6 +670,7 @@ describe("the modules workflows and dataStores", () => {
         "workflows.list",
         "workflows.start",
         "workflows.test",
+        "workflows.unpublish",
         "workflows.get_run",
         "workflows.download_dataset",
         "workflows.list_runs",

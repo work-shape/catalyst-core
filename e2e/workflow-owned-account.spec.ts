@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
 import {
   ALLOWED_URL,
@@ -57,6 +57,21 @@ async function personalWorkspaceId(page: Page): Promise<string> {
     })
     .not.toBe("");
   return id;
+}
+
+/**
+ * Waits until the publish question is loaded and readable: its Publish button is enabled once
+ * the instance's sentence is read, and the lines under it stand folded in Details until opened.
+ */
+async function showQuestion(dialog: Locator, confirm: string): Promise<Locator> {
+  await expect(dialog.getByRole("button", { name: confirm, exact: true })).toBeEnabled();
+  const details = dialog.getByTestId("publish-details").getByRole("button", { name: "Details" });
+  if ((await details.count()) > 0 && (await details.getAttribute("aria-expanded")) !== "true") {
+    await details.click();
+  }
+  const question = dialog.getByTestId("workflow-publish-question");
+  await expect(question).toBeVisible();
+  return question;
 }
 
 async function setLocale(page: Page, locale: "en" | "de"): Promise<void> {
@@ -136,7 +151,7 @@ test("a Workflow written in chat without runAs publishes with its own account an
     await expect(bar).toHaveAttribute("data-workflow-draft", "unpublished");
     await bar.getByRole("button", { name: "Publish", exact: true }).click();
     const publish = page.getByRole("dialog", { name: `Publish “${title}”?` });
-    const question = publish.getByTestId("workflow-publish-question");
+    const question = await showQuestion(publish, "Publish");
     await expect(question).toContainText(
       `Runs as its own account “${title}” and may use ${connection.displayName}.`
     );
@@ -155,7 +170,8 @@ test("a Workflow written in chat without runAs publishes with its own account an
     await setLocale(page, "de");
     await bar.getByRole("button", { name: "Veröffentlichen", exact: true }).click();
     const german = page.getByRole("dialog", { name: `„${title}“ veröffentlichen?` });
-    await expect(german.getByTestId("workflow-publish-question")).toContainText(
+    const germanQuestion = await showQuestion(german, "Veröffentlichen");
+    await expect(germanQuestion).toContainText(
       `Läuft unter einem eigenen Konto „${title}“ und darf ${connection.displayName} nutzen.`
     );
     await page.screenshot({
@@ -191,6 +207,12 @@ test("a Workflow written in chat without runAs publishes with its own account an
     const run = await readRun();
     expect(run.mode).not.toBe("test");
     expect(run.principal.displayLabel).toBe(title);
+    // The page read the run while it ran: read once more, then its header says Done.
+    await page.reload();
+    const header = runPage.locator('header[data-variant="detail"]');
+    await expect(header.getByText("Done", { exact: true })).toBeVisible();
+    await expect(header.getByText("Running", { exact: true })).toHaveCount(0);
+    await expect(runPage.getByRole("button", { name: "Cancel run" })).toHaveCount(0);
     await page.screenshot({ path: join(shotsDir, "live-1-run-done.png"), animations: "disabled" });
   } finally {
     // Deleting the Workflow deletes its own account; the rows on the Connection go with it.

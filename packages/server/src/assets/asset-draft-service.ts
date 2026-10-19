@@ -529,9 +529,8 @@ export class AssetDraftWorkflow {
   async unpublish(call: AssetCall, input: AssetAddress) {
     const target = await this.host.target(input);
     const { kind, name } = target;
-    // Only a guardrail acts on others by its published revision; another kind is taken back
-    // by a delete.
-    if (kind.kind !== GUARDRAIL_ASSET_KIND && kind.kind !== "workflow") {
+    // A kind that withdraws live bindings may keep its draft and historical runs.
+    if (kind.kind !== GUARDRAIL_ASSET_KIND && kind.onUnpublish === undefined) {
       throw new AppError("VALIDATION_FAILED", `A ${kind.kind} is taken back by a delete`, {
         reason: "no_unpublish"
       });
@@ -555,19 +554,17 @@ export class AssetDraftWorkflow {
         name,
         assetId: asset.id
       });
-      if (kind.kind === "workflow")
-        await kind.onRemove?.({
-          clientInstanceId: this.options.clientInstanceId,
-          assetId: asset.id,
-          name,
-          ...(asset.publishedConfig === undefined ? {} : { published: asset.publishedConfig }),
-          stores
-        });
+      await kind.onUnpublish?.({
+        clientInstanceId: this.options.clientInstanceId,
+        assetId: asset.id,
+        ...(asset.publishedConfig === undefined ? {} : { published: asset.publishedConfig }),
+        stores
+      });
       return moved;
     });
     await recordAssetEvent(
       call,
-      kind.kind === "workflow" ? "workflow.unpublished" : "guardrail.unpublished",
+      kind.kind === GUARDRAIL_ASSET_KIND ? "guardrail.unpublished" : "workflow.unpublished",
       {
         kind: kind.kind,
         name,

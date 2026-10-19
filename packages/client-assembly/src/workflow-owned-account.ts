@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   AppError,
   WORKFLOW_ASSET_KIND,
@@ -81,6 +82,7 @@ export async function publishWorkflowOwnAccount(
     (await stores.apiAccess.createServicePrincipal({
       clientInstanceId,
       owner,
+      name: `wf-${createHash("sha256").update(assetId).digest("hex").slice(0, 48)}`,
       displayLabel: manifest.name
     }));
   const grants = await stores.access.listGrants({

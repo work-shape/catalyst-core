@@ -71,6 +71,17 @@ describe("a refusal over the Workflow's technical account", () => {
       expect(workflowPublishRefusal(error, en)).toContain("Settings › API access");
       expect(workflowPublishRefusal(error, de)).toContain("Einstellungen › API-Zugang");
     }
+    // An account another asset owns: no place to manage it, and no account or config key named.
+    const owned = refusal("VALIDATION_FAILED", {
+      reason: "run_as_owned",
+      runAs: "nightly-import-a1"
+    });
+    expect(workflowPublishRefusal(owned, en)).toBe(
+      "This workflow names a technical account that belongs to something else. Take that account out of the workflow, and publishing gives this workflow its own account."
+    );
+    expect(workflowPublishRefusal(owned, de)).toBe(
+      "Dieser Workflow nennt ein Technisches Konto, das zu etwas anderem gehört. Nimm das Konto aus dem Workflow, dann bekommt dieser Workflow beim Veröffentlichen ein eigenes Konto."
+    );
     expect(workflowAccountRefusal(refusal("FORBIDDEN", { reason: "no_grant" }), en)).toBe(
       undefined
     );
