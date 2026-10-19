@@ -70,7 +70,10 @@ async function fixture() {
   config.infrastructure.models = {
     local: { provider: TOOL_CALLING_MODEL_PROVIDER, model: "local" }
   };
-  const policies: readonly CentralPolicySetting[] = [{operation:change.name,value:"confirm"},{operation:"scheduled_starts.create",value:"allow"}];
+  const policies: readonly CentralPolicySetting[] = [
+    { operation: change.name, value: "confirm" },
+    { operation: "scheduled_starts.create", value: "allow" }
+  ];
   const app = await createTestInstance({
     config,
     env: {
@@ -79,7 +82,7 @@ async function fixture() {
     },
     capabilities: [model.capability],
     tools: [change],
-    operations: {centralPolicySettings: () => policies}
+    operations: { centralPolicySettings: () => policies }
   });
   const workspace = await app.call("conversations.create", {
     payload: { title: "Owner workspace" }
