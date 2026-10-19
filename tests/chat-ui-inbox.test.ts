@@ -236,6 +236,39 @@ describe("inbox list", () => {
     );
   });
 
+  // ACCEPT-2e C-5: two requests by one person for one skill read alike; only the age differed.
+  it("tells two requests alike in title and requester apart by when each was asked", () => {
+    const save = (id: string, actorId: string, label: string, createdAt: string) =>
+      item({
+        id,
+        kind: "operation_call",
+        requestedBy: { id: actorId, displayLabel: label },
+        createdAt,
+        updatedAt: createdAt,
+        preview: {
+          runId: `opr_${id}`,
+          operation: "assets.put",
+          effect: "changing",
+          actor: { kind: "user", id: actorId, label },
+          origin: { kind: "user" },
+          inputs: [],
+          asset: { kind: "skill", name: "leave", title: "Urlaubsrichtlinie", isNew: false }
+        }
+      });
+    const rows = renderList("to_decide", [
+      save("apr_seeded", "user-elif", "Elif Aydin", "2026-10-04T12:00:00Z"),
+      save("apr_mine", "user-elif", "Elif Aydin", "2026-10-05T10:30:00Z"),
+      save("apr_mara", "user-mara", "Mara Lindqvist", "2026-10-03T12:00:00Z")
+    ]);
+    const rowOf = (id: string) =>
+      rows.slice(rows.indexOf(`data-item-id="${id}"`)).split("</button>")[0] ?? "";
+
+    expect(rowOf("apr_seeded")).toContain("04.10.2026");
+    expect(rowOf("apr_mine")).toContain("05.10.2026");
+    // Mara's request has no twin: its row stays as it was.
+    expect(rowOf("apr_mara")).not.toContain("03.10.2026");
+  });
+
   it("says in a row what is asked, who asked through which agent, and how long ago", () => {
     const markup = renderList("to_decide", [item()]);
 

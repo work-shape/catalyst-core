@@ -13,7 +13,8 @@ import { ApprovalStatusBadge } from "../approvals/approval-status-badge";
 import { isInboxConfirmation } from "../approvals/operation-call-preview";
 import { useTranslation } from "../../shared/i18n";
 import { useInboxItemKindLookup } from "./inbox-item-kinds";
-import { formatInboxAge, inboxTabEmptyKeys, type InboxTab } from "./inbox-model";
+import { formatMomentShort } from "../../shared/locale-format";
+import { formatInboxAge, inboxRowsAlike, inboxTabEmptyKeys, type InboxTab } from "./inbox-model";
 
 /** How a list stands on the page. */
 export type InboxListState =
@@ -61,6 +62,17 @@ export function InboxList({
     return <EmptyState data-testid="inbox-empty">{t(inboxTabEmptyKeys[tab])}</EmptyState>;
   }
 
+  const titleOf = (item: ApprovalRequestView) =>
+    kindOf(item.kind)?.heading?.(item, t) ??
+    (item.summary.trim() || t(kindOf(item.kind)?.label ?? "inbox.kindUnknown"));
+  const alike = inboxRowsAlike(
+    state.items.map((item) => ({
+      id: item.id,
+      title: titleOf(item),
+      requesterId: item.requestedBy.id
+    }))
+  );
+
   return (
     <List data-testid="inbox-list" data-tab={tab}>
       {state.items.map((item) => {
@@ -73,16 +85,15 @@ export function InboxList({
           kind?.asked?.(item, t, agentLabel) ??
           (agentLabel ? `${requester} ${t("inbox.via", { agent: agentLabel })}` : requester);
         const detail = kind?.rowDetail?.(item, t);
+        // Two requests alike in title and requester are told apart by when each was asked.
+        const askedAt = alike.has(item.id) ? formatMomentShort(item.createdAt, locale) : undefined;
         return (
           <ListRow
             key={item.id}
             data-testid="inbox-row"
             data-item-id={item.id}
             leading={<KindIcon className="size-4 text-muted-foreground" aria-hidden="true" />}
-            title={
-              kind?.heading?.(item, t) ??
-              (item.summary.trim() || t(kind?.label ?? "inbox.kindUnknown"))
-            }
+            title={titleOf(item)}
             // The decided list mixes outcomes, and a person's own list mixes all states. In
             // To decide every row is pending, so the state would say nothing.
             chips={
@@ -97,7 +108,7 @@ export function InboxList({
               )
             }
             descriptionLeading={<Avatar kind="person" name={requester} size="xs" />}
-            description={detail ? `${asked} · ${detail}` : asked}
+            description={[asked, detail, askedAt].filter(Boolean).join(" · ")}
             time={
               <time dateTime={tab === "decided" ? item.updatedAt : item.createdAt}>
                 {formatInboxAge(tab === "decided" ? item.updatedAt : item.createdAt, locale, now)}

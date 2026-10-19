@@ -98,6 +98,19 @@ export function orderInboxItems(
   );
 }
 
+/**
+ * The rows that another row of the same list matches in title and requester, such as two skill
+ * changes Elif asked for on the same skill. Only when each was asked tells them apart.
+ */
+export function inboxRowsAlike(
+  rows: readonly { id: string; title: string; requesterId: string }[]
+): ReadonlySet<string> {
+  const counts = new Map<string, number>();
+  const keyOf = (row: { title: string; requesterId: string }) => `${row.requesterId}\n${row.title}`;
+  for (const row of rows) counts.set(keyOf(row), (counts.get(keyOf(row)) ?? 0) + 1);
+  return new Set(rows.filter((row) => (counts.get(keyOf(row)) ?? 0) > 1).map((row) => row.id));
+}
+
 const AGE_STEPS: readonly { unit: Intl.RelativeTimeFormatUnit; seconds: number }[] = [
   { unit: "year", seconds: 365 * 24 * 60 * 60 },
   { unit: "month", seconds: 30 * 24 * 60 * 60 },
