@@ -75,6 +75,7 @@ async function fixture() {
     readRun: vi.fn(),
     listRuns: vi.fn(),
     listStepRuns: vi.fn(),
+    readStepTranscript: vi.fn(),
     listWorkflows: vi.fn(),
     assetIdOf: vi.fn()
   };

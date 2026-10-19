@@ -5,6 +5,7 @@ import {
   LoopEntriesView,
   StartDialog,
   StepPanel,
+  StepTranscriptView,
   WorkflowRunPageView,
   WorkflowsHostProvider,
   resolveWorkflowRights,
@@ -86,6 +87,8 @@ function panel(
     /** The label of the Workflow's account, and the reader's instance actions in a host. */
     account?: string;
     instanceActions?: readonly string[];
+    /** The transcript an open agent step's panel loaded. */
+    transcript?: ReactNode;
   } = {}
 ): string {
   const workflow = options.workflow ?? workflowOf();
@@ -114,6 +117,7 @@ function panel(
     tab: options.tab ?? "run",
     onTabChange: noop,
     entries: null,
+    ...(options.transcript === undefined ? {} : { transcript: options.transcript }),
     onClose: noop
   });
   const actions = options.instanceActions;
@@ -790,14 +794,19 @@ describe("Workflow agent step panels (CR-2)", () => {
     expect(markup).not.toContain((locale === "en" ? en : german).t("workflows.step.fallbackAgent"));
   });
 
+  const transcript = (truncated = false) =>
+    createElement(StepTranscriptView, {
+      transcript: { messages: [{ role: "assistant", text: "The totals agree." }], truncated }
+    });
+
   it.each(["en", "de"] as const)(
-    "shows permitted transcript, validated output and usage (%s)",
+    "shows the loaded transcript, validated output and usage (%s)",
     (locale) => {
+      const text = locale === "en" ? en : german;
       const agent = {
         runId: "run_ai",
         status: "completed" as const,
-        usage: { modelCallCount: 1, inputTokens: 7, outputTokens: 3, totalTokens: 10 },
-        transcript: [{ role: "assistant", text: "The totals agree." }]
+        usage: { modelCallCount: 1, inputTokens: 7, outputTokens: 3, totalTokens: 10 }
       };
       const resource = stepRun({
         id: "sr_ai",
@@ -806,21 +815,59 @@ describe("Workflow agent step panels (CR-2)", () => {
         agent,
         outputPreview: { text: '{"balanced":true}', truncated: false }
       });
-      const markup = panel("clients", run(), [resource], { workflow: agentWorkflow(), locale });
+      const markup = panel("clients", run(), [resource], {
+        workflow: agentWorkflow(),
+        locale,
+        transcript: transcript(true)
+      });
       expect(markup).toContain("The totals agree.");
+      expect(markup).toContain(text.t("workflows.panel.agentTranscriptTruncated"));
       expect(markup).toContain("balanced");
-      expect(markup).toContain((locale === "en" ? en : german).t("workflows.panel.agentUsage"));
-      const { transcript: _transcript, ...summary } = agent;
-      const hidden = panel(
-        "clients",
-        run(),
-        [{ ...resource, agent: summary, outputPreview: undefined }],
-        { workflow: agentWorkflow(), locale }
-      );
+      expect(markup).toContain(text.t("workflows.panel.agentUsage"));
+      // A reader without run data gets neither: the panel loads no transcript for them.
+      const hidden = panel("clients", run(), [{ ...resource, outputPreview: undefined }], {
+        workflow: agentWorkflow(),
+        locale
+      });
       expect(hidden).not.toContain("The totals agree.");
       expect(hidden).not.toContain("balanced");
     }
   );
+
+  it.each(["en", "de"] as const)(
+    "names the operation that needed a confirmation (%s)",
+    (locale) => {
+      const text = locale === "en" ? en : german;
+      const markup = panel(
+        "clients",
+        run({
+          status: "failed",
+          ...ended,
+          error: { code: "confirmation_unattended", message: "x" }
+        }),
+        [
+          stepRun({
+            id: "sr_ai",
+            stepId: "clients",
+            stepType: "agent",
+            status: "failed",
+            error: {
+              code: "confirmation_unattended",
+              message: "x",
+              operation: "connection.bookings.write"
+            }
+          })
+        ],
+        { workflow: agentWorkflow(), locale }
+      );
+      expect(markup).toContain(
+        text.t("workflows.reason.confirmationUnattendedNamed", {
+          operation: "connection.bookings.write"
+        })
+      );
+    }
+  );
+
   it("shows a failure before the transcript so the next action stays visible", () => {
     const markup = panel(
       "clients",
@@ -835,16 +882,15 @@ describe("Workflow agent step panels (CR-2)", () => {
           agent: {
             runId: "run_ai",
             status: "failed",
-            usage: { modelCallCount: 1, inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-            transcript: [{ role: "assistant", text: "Private transcript" }]
+            usage: { modelCallCount: 1, inputTokens: 1, outputTokens: 1, totalTokens: 2 }
           }
         })
       ],
-      { workflow: agentWorkflow() }
+      { workflow: agentWorkflow(), transcript: transcript() }
     );
     expect(markup.indexOf("data-failure-happened")).toBeGreaterThan(0);
     expect(markup.indexOf("data-failure-happened")).toBeLessThan(
-      markup.indexOf("Private transcript")
+      markup.indexOf("The totals agree.")
     );
   });
 });
