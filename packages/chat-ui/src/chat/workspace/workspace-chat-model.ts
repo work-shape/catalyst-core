@@ -31,6 +31,7 @@ import { canViewUsageGovernance } from "../../shared/governance";
 import { createTranslationContext } from "../../shared/i18n";
 import { workspaceRoutePath } from "../../shared/routes";
 import {
+  apiErrorReason,
   apiErrorStatus,
   applyFavicon,
   createEnvironmentDocumentTitle
@@ -748,6 +749,7 @@ export function useWorkspaceChatModel({
       user: meQuery.data,
       loginRequired: apiErrorStatus(meQuery.error) === 401,
       sessionUnavailable: Boolean(meQuery.error),
+      accountDisabled: apiErrorReason(meQuery.error) === "user_disabled",
       sessionRetrying: meQuery.isFetching,
       signingOut: signOutMutation.isPending,
       signOut: () => signOutMutation.mutate(),

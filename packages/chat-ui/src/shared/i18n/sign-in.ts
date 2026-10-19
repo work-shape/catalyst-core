@@ -16,6 +16,8 @@ export const signIn = defineTranslations({
     passwordSetupTitle: "Set a new password",
     signIn: "Sign in",
     signInFailed: "Sign in failed",
+    signInInvalid:
+      "The email or password is wrong. If you were invited, set your password with the link in your invitation email. An admin of your organization can send you a new one.",
     signInTo: "Sign in to {clientName}",
     signingIn: "Signing in"
   },
@@ -34,6 +36,8 @@ export const signIn = defineTranslations({
     passwordSetupTitle: "Neues Passwort festlegen",
     signIn: "Anmelden",
     signInFailed: "Anmeldung fehlgeschlagen",
+    signInInvalid:
+      "E-Mail oder Passwort stimmt nicht. Wenn du eingeladen wurdest, lege dein Passwort über den Link in deiner Einladungsmail fest. Ein Admin deiner Organisation kann dir einen neuen schicken.",
     signInTo: "Bei {clientName} anmelden",
     signingIn: "Anmeldung läuft"
   }

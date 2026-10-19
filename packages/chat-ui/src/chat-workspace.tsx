@@ -289,8 +289,11 @@ function ChatWorkspaceContent({
           <SessionCheckPanel
             className={className}
             unavailable={model.auth.sessionUnavailable}
+            disabled={model.auth.accountDisabled}
             retrying={model.auth.sessionRetrying}
+            signingOut={model.auth.signingOut}
             onRetry={model.auth.retryCurrentUser}
+            onSignOut={model.auth.signOut}
           />
         </UiRoot>
       </TranslationProvider>

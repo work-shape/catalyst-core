@@ -21,6 +21,29 @@ const {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("standalone auth client", () => {
+  it("passes on the sign-in library's code for a refusal", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        Response.json(
+          { code: "INVALID_EMAIL_OR_PASSWORD", message: "Invalid email or password" },
+          { status: 401 }
+        )
+      )
+    );
+    await expect(
+      signInWithEmail({
+        apiBaseUrl: "https://chat.example.test",
+        email: "noah@example.test",
+        password: "anything"
+      })
+    ).resolves.toEqual({
+      ok: false,
+      code: "INVALID_EMAIL_OR_PASSWORD",
+      message: "Invalid email or password"
+    });
+  });
+
   it("keeps an empty widget token in token mode with cookies omitted", async () => {
     const fetchMock = vi.fn<typeof fetch>(async () =>
       Response.json({ error: { code: "UNAUTHENTICATED" } }, { status: 401 })

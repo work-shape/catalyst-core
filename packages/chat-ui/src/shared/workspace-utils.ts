@@ -42,6 +42,16 @@ export function apiErrorCode(error: unknown): ApiErrorCode | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
+/** The reason an API refusal names in its details, such as `user_disabled`. */
+export function apiErrorReason(error: unknown): string | undefined {
+  const field = (value: unknown, key: string): unknown =>
+    value !== null && typeof value === "object" && !Array.isArray(value) && key in value
+      ? Object.getOwnPropertyDescriptor(value, key)?.value
+      : undefined;
+  const reason = field(field(field(field(error, "payload"), "error"), "details"), "reason");
+  return typeof reason === "string" ? reason : undefined;
+}
+
 export function apiErrorMessage(error: unknown, fallback: string | undefined): string | undefined {
   if (error instanceof Error && error.message) {
     return error.message;

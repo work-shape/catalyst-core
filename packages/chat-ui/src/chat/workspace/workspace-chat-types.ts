@@ -111,6 +111,8 @@ export interface WorkspaceAuthModel {
   user: ApiUser | undefined;
   loginRequired: boolean;
   sessionUnavailable: boolean;
+  /** The person signed in, but an administrator disabled their account. */
+  accountDisabled: boolean;
   sessionRetrying: boolean;
   signingOut: boolean;
   signOut(): void;

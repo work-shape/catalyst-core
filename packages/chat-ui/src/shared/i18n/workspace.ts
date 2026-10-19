@@ -2,6 +2,9 @@ import { defineTranslations } from "./translation-area";
 
 export const workspace = defineTranslations({
   en: {
+    accountDisabledDescription:
+      "An administrator disabled your account. Ask an admin of your organization to turn it back on.",
+    accountDisabledTitle: "Your account is disabled",
     accountMenuLabel: "{label} account",
     documentation: "Documentation",
     documentationOpensNewTab: "Documentation, opens in a new tab",
@@ -55,6 +58,9 @@ export const workspace = defineTranslations({
     workspaceLoadingDescription: "Your workspace is being prepared."
   },
   de: {
+    accountDisabledDescription:
+      "Dein Konto wurde deaktiviert. Bitte einen Admin deiner Organisation, es wieder freizuschalten.",
+    accountDisabledTitle: "Dein Konto ist deaktiviert",
     accountMenuLabel: "Konto von {label}",
     documentation: "Dokumentation",
     documentationOpensNewTab: "Dokumentation, öffnet in neuem Tab",

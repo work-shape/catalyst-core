@@ -1,10 +1,18 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { ApiError } from "@work-shape/catalyst-api-client";
 import {
   renderToStaticMarkup as renderInUiRoot,
   TranslationProvider
 } from "./chat-ui-render-harness";
-import { ConfigCheckPanel, OutdatedInterfaceBanner, SessionCheckPanel } from "./support/chat-ui";
+import {
+  apiErrorReason,
+  ConfigCheckPanel,
+  OutdatedInterfaceBanner,
+  SessionCheckPanel,
+  signInRefusal
+} from "./support/chat-ui";
 
 describe("workspace config status", () => {
   const idle = { retrying: false, onRetry: () => undefined, onReload: () => undefined };
@@ -152,5 +160,63 @@ describe("an interface older than its server", () => {
     expect(markup).toMatch(new RegExp(`<button[^>]*>${action}</button>`, "u"));
     // The banner's tinted fill floats over the page on an opaque surface of its own.
     expect(markup).toMatch(/<div class="[^"]*bg-popover[^"]*"><div role="status"/u);
+  });
+});
+
+// ACCEPT-2e C-4: Lena, disabled, signed in and saw "Dienst nicht erreichbar"; Noah, invited
+// without a password, read the English "Invalid email or password". Both now read who helps.
+describe("a person who cannot get in", () => {
+  it.each([
+    ["en", "Your account is disabled", "Ask an admin of your organization", "Sign out"],
+    ["de", "Dein Konto ist deaktiviert", "Bitte einen Admin deiner Organisation", "Abmelden"]
+  ] as const)("is told their account is disabled, and may sign out, in %s", (locale, ...texts) => {
+    const markup = renderInUiRoot(
+      createElement(
+        TranslationProvider,
+        { children: null, locale },
+        createElement(SessionCheckPanel, {
+          className: undefined,
+          unavailable: true,
+          disabled: true,
+          retrying: false,
+          onRetry: () => undefined,
+          onSignOut: () => undefined
+        })
+      )
+    );
+    for (const text of texts) expect(markup).toContain(text);
+    expect(markup).not.toContain(
+      locale === "de" ? "Dienst nicht erreichbar" : "Service unavailable"
+    );
+    expect(markup.match(/<button/gu)).toHaveLength(1);
+  });
+
+  it("is known as disabled by the reason the instance names, not by its sentence", () => {
+    const refusal = (reason: string | undefined) =>
+      new ApiError(403, "User is disabled", {
+        error: {
+          code: "FORBIDDEN",
+          message: "User is disabled",
+          ...(reason === undefined ? {} : { details: { reason } })
+        }
+      });
+    expect(apiErrorReason(refusal("user_disabled"))).toBe("user_disabled");
+    expect(apiErrorReason(refusal(undefined))).toBeUndefined();
+    expect(apiErrorReason(new Error("down"))).toBeUndefined();
+  });
+
+  it("reads a wrong password in the person's language, with how an invited person gets in", () => {
+    const refused = {
+      ok: false,
+      code: "INVALID_EMAIL_OR_PASSWORD",
+      message: "Invalid email or password"
+    };
+    const de = signInRefusal(refused, createTranslationContext("de").t);
+    expect(de).toContain("E-Mail oder Passwort stimmt nicht.");
+    expect(de).toContain("Einladungsmail");
+    expect(de).toContain("Ein Admin deiner Organisation");
+    expect(signInRefusal(refused, createTranslationContext("en").t)).toContain(
+      "If you were invited, set your password"
+    );
   });
 });

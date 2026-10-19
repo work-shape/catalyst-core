@@ -458,7 +458,9 @@ export {
   routeConversationId,
   workspaceRouteView
 } from "../../packages/chat-ui/src/shared/workspace-route";
+export { signInRefusal } from "../../packages/chat-ui/src/chat/login-panel";
 export {
+  apiErrorReason,
   createEnvironmentDocumentTitle,
   readStoredContextIndicatorPreference,
   writeStoredContextIndicatorPreference

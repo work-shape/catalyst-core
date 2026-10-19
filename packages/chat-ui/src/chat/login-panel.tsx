@@ -1,5 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { createApiClient, signInWithEmail, type LocaleCode } from "@work-shape/catalyst-api-client";
+import {
+  createApiClient,
+  signInWithEmail,
+  type AuthResult,
+  type LocaleCode
+} from "@work-shape/catalyst-api-client";
 import { localeCodes } from "@work-shape/catalyst-core";
 import {
   Button,
@@ -13,7 +18,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { workspaceQueryKeys } from "../shared/api/workspace-query-keys";
-import { useTranslation } from "../shared/i18n";
+import { useTranslation, type TranslationContextValue } from "../shared/i18n";
 import {
   readSystemThemeMode,
   resolveThemeModePreference,
@@ -26,6 +31,16 @@ import { LocaleSelector } from "./locale-selector";
 const DEFAULT_LOGIN_LOCALES: LocaleCode[] = [...localeCodes];
 
 type LoginMode = "signIn" | "requestReset" | "setPassword";
+
+/**
+ * What a refused sign-in says. A wrong password and an account without one read alike, so no
+ * address is given away; the sentence says how an invited person sets a password.
+ */
+export function signInRefusal(result: AuthResult, t: TranslationContextValue["t"]): string {
+  return result.code === "INVALID_EMAIL_OR_PASSWORD"
+    ? t("signInInvalid")
+    : (result.message ?? t("signInFailed"));
+}
 
 export function LoginPanel({
   apiBaseUrl,
@@ -121,7 +136,7 @@ export function LoginPanel({
     });
     setPending(false);
     if (!result.ok) {
-      setError(result.message ?? t("signInFailed"));
+      setError(signInRefusal(result, t));
       return;
     }
     onSignedIn();

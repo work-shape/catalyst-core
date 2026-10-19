@@ -55,15 +55,40 @@ export function OutdatedInterfaceBanner({ onReload }: { onReload(): void }) {
 export function SessionCheckPanel({
   className,
   unavailable,
+  disabled = false,
   retrying,
-  onRetry
+  signingOut = false,
+  onRetry,
+  onSignOut
 }: {
   className: string | undefined;
   unavailable: boolean;
+  /** The account is disabled: only an administrator helps, and the person may sign out. */
+  disabled?: boolean;
   retrying: boolean;
+  signingOut?: boolean;
   onRetry(): void;
+  onSignOut?(): void;
 }) {
   const { t } = useTranslation();
+
+  if (disabled) {
+    return (
+      <StatusPanel
+        className={className}
+        role="alert"
+        title={t("accountDisabledTitle")}
+        description={t("accountDisabledDescription")}
+        action={
+          onSignOut ? (
+            <Button size="sm" variant="secondary" disabled={signingOut} onClick={onSignOut}>
+              {t("signOut")}
+            </Button>
+          ) : undefined
+        }
+      />
+    );
+  }
 
   return (
     <StatusPanel
