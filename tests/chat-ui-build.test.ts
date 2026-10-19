@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
@@ -160,26 +161,31 @@ function render(
     docsAddress?: string;
   } = {}
 ): string {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return renderToStaticMarkup(
     createElement(
-      TranslationProvider,
-      { children: null, locale: input.locale ?? "en" },
+      QueryClientProvider,
+      { client: queryClient },
       createElement(
-        DocsAddressProvider,
-        { address: input.docsAddress, children: null },
+        TranslationProvider,
+        { children: null, locale: input.locale ?? "en" },
         createElement(
-          BuildAssetKindsProvider,
-          { value: input.kinds ?? buildAssetKinds },
+          DocsAddressProvider,
+          { address: input.docsAddress, children: null },
           createElement(
-            BuildNavigationProvider,
-            {
-              value: {
-                location,
-                open: () => undefined,
-                href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
-              }
-            },
-            createElement(BuildFrame, { source: input.source ?? source() })
+            BuildAssetKindsProvider,
+            { value: input.kinds ?? buildAssetKinds },
+            createElement(
+              BuildNavigationProvider,
+              {
+                value: {
+                  location,
+                  open: () => undefined,
+                  href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
+                }
+              },
+              createElement(BuildFrame, { source: input.source ?? source() })
+            )
           )
         )
       )

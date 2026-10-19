@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import {
@@ -203,10 +204,15 @@ function render(
       )
     )
   );
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return renderToStaticMarkup(
-    settings === undefined
-      ? page
-      : createElement(SettingsPageProvider, { value: settings, children: page })
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      settings === undefined
+        ? page
+        : createElement(SettingsPageProvider, { value: settings, children: page })
+    )
   );
 }
 
