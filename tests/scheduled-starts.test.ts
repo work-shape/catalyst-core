@@ -408,6 +408,53 @@ describe("scheduled prompts API", () => {
     });
   });
 
+  it("keeps one future tick for the new owner when a handed-over start resumes before its due time", async () => {
+    const { t } = await fixture();
+    const team = await t.sharedWorkspace("Resume handover team");
+    for (const user of [t.kai, t.lena])
+      await t.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: team,
+        userId: user.id,
+        role: "member"
+      });
+    const start = scheduledStartSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "scheduled_starts.create", {
+          payload: { ...fields, collaborationWorkspaceId: team }
+        })
+      ).json()
+    );
+    await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "disabled" });
+    await t.expectOk(t.admin.id, "scheduled_starts.handover", {
+      params: { scheduledStartId: start.id },
+      payload: { ownerUserId: t.lena.id }
+    });
+    const resumed = scheduledStartSchema.parse(
+      (
+        await t.expectOk(t.lena.id, "scheduled_starts.set_state", {
+          params: { scheduledStartId: start.id },
+          payload: { state: "active" }
+        })
+      ).json()
+    );
+    // Resumed before the original due time, so the new tick has the old tick's due time.
+    expect(resumed).toMatchObject({ state: "active", nextRunAt: start.nextRunAt });
+    await withTestSql(async (sql) => {
+      expect(
+        await sql`select payload->>'ownerUserId' as "ownerUserId", payload->>'dueAt' as "dueAt" from platform_jobs where client_instance_id = ${clientInstanceId} and kind = 'scheduled_prompt.fire' and subject = ${start.id} and status = 'queued'`
+      ).toEqual([{ ownerUserId: t.lena.id, dueAt: resumed.nextRunAt }]);
+    });
+    await fireDue(t, start.id);
+    const runs = await t.stores.scheduledStarts.listRuns({
+      clientInstanceId,
+      scheduledStartId: start.id,
+      page: { limit: 10 }
+    });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ scheduledFor: resumed.nextRunAt, status: "queued" });
+  });
+
   it("records a terminal dispatcher failure in history and advances the schedule", async () => {
     const { t, workspace } = await fixture();
     const start = scheduledStartSchema.parse(

@@ -9,6 +9,8 @@ import {
   lastDueWithin,
   nextDueAfter,
   parseCron,
+  SCHEDULED_PROMPT_JOB_KIND,
+  scheduledPromptDedupeKey,
   type AuthenticatedUser,
   type PlatformStores,
   type ScheduledStart,
@@ -20,7 +22,7 @@ import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
 
 /** One saved start's due time. The subject lock and run row make a retried tick idempotent. */
 export const scheduledPromptJob = defineJobKind({
-  kind: "scheduled_prompt.fire",
+  kind: SCHEDULED_PROMPT_JOB_KIND,
   payloadSchema: z.strictObject({
     scheduledStartId: z.string().min(1),
     dueAt: z.iso.datetime({ offset: true }),
@@ -47,7 +49,7 @@ export function schedulePromptJob(
       clientInstanceId: start.clientInstanceId,
       subject: start.id,
       runAfter: new Date(dueAt),
-      dedupeKey: `${scheduledPromptJob.kind}:${start.id}:${manual ? "manual:" : ""}${dueAt}`,
+      dedupeKey: scheduledPromptDedupeKey(start.id, dueAt, manual),
       concurrencyKey: start.id
     }
   );

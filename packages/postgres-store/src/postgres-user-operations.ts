@@ -22,6 +22,8 @@ import {
   createPlatformId,
   createUserId,
   requireUsableUser,
+  SCHEDULED_PROMPT_JOB_KIND,
+  scheduledPromptDedupeKey,
   userInDeletionError,
   type UserStore
 } from "@work-shape/catalyst-core";
@@ -40,6 +42,7 @@ import {
   scheduledStarts,
   scheduledStartRuns
 } from "./schema";
+import { withdrawQueuedJobs } from "./jobs/store";
 import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-workspace-operations";
 import { lockRights, lockRightsOfUsableUser } from "./rights-lock";
 import { appendAuditEvent as appendPostgresAuditEvent } from "./postgres-audit-usage-operations";
@@ -452,18 +455,31 @@ async function updateUser(db: PostgresConnection, input: UpdateUserInput): Promi
         )
       )
       .returning();
-    // A deactivated person's scheduled starts pause at once, not at their next tick.
-    if (updated && input.status === "disabled")
+    // A deactivated person's scheduled starts pause at once, not at their next tick. Their
+    // queued ticks go with `nextRunAt`: a later handover or Resume no longer knows their keys.
+    if (updated && input.status === "disabled") {
+      const activeStarts = and(
+        eq(scheduledStarts.clientInstanceId, input.clientInstanceId),
+        eq(scheduledStarts.ownerUserId, updated.id),
+        eq(scheduledStarts.state, "active")
+      );
+      const paused = await tx
+        .select({ id: scheduledStarts.id, nextRunAt: scheduledStarts.nextRunAt })
+        .from(scheduledStarts)
+        .where(activeStarts)
+        .for("update");
       await tx
         .update(scheduledStarts)
         .set({ state: "paused", nextRunAt: null, updatedAt: set.updatedAt })
-        .where(
-          and(
-            eq(scheduledStarts.clientInstanceId, input.clientInstanceId),
-            eq(scheduledStarts.ownerUserId, updated.id),
-            eq(scheduledStarts.state, "active")
-          )
-        );
+        .where(activeStarts);
+      await withdrawQueuedJobs(tx, {
+        clientInstanceId: input.clientInstanceId,
+        kind: SCHEDULED_PROMPT_JOB_KIND,
+        dedupeKeys: paused.flatMap((start) =>
+          start.nextRunAt ? [scheduledPromptDedupeKey(start.id, start.nextRunAt.toISOString())] : []
+        )
+      });
+    }
     if (updated && input.permissions !== undefined) {
       await writeLegacyPermissionList(tx, {
         clientInstanceId: input.clientInstanceId,

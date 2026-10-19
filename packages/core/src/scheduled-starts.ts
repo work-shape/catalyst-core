@@ -3,6 +3,21 @@ export { SCHEDULED_START_STATES };
 import type { AgentRunId, ClientInstanceId, CollaborationWorkspaceId, ConversationId } from "./ids";
 import type { StorePage } from "./paging";
 
+/**
+ * The kind of the job that fires one due time of a saved start. It is named here because a store
+ * that clears `nextRunAt` withdraws the queued tick in the same transaction.
+ */
+export const SCHEDULED_PROMPT_JOB_KIND = "scheduled_prompt.fire";
+
+/** The dedupe key of the tick for one due time. A manual Run now never shares a scheduled key. */
+export function scheduledPromptDedupeKey(
+  scheduledStartId: string,
+  dueAt: string,
+  manual = false
+): string {
+  return `${SCHEDULED_PROMPT_JOB_KIND}:${scheduledStartId}:${manual ? "manual:" : ""}${dueAt}`;
+}
+
 /** A person's saved prompt, independent of Workflows. Times are ISO instants. */
 export interface ScheduledStart {
   id: string;

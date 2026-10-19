@@ -9,6 +9,7 @@ import {
   isTimeZone,
   nextDueAfter,
   parseCron,
+  scheduledPromptDedupeKey,
   SCHEDULED_START_MIN_INTERVAL_MINUTES,
   shortestCronGapMinutes,
   type AuthenticatedUser,
@@ -324,7 +325,7 @@ export class ScheduledStartsWorkflow {
     if (current.nextRunAt)
       await tx.jobs.withdraw(scheduledPromptJob, {
         clientInstanceId: current.clientInstanceId,
-        dedupeKey: `${scheduledPromptJob.kind}:${current.id}:${current.nextRunAt}`
+        dedupeKey: scheduledPromptDedupeKey(current.id, current.nextRunAt)
       });
   }
 }
