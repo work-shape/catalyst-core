@@ -16,7 +16,8 @@ export {
   type DisclosureProps,
   type DisclosureVariant
 } from "./disclosure";
-export { Page, PageFooter, type PageProps, type PageWidth } from "./page";
+export { Page, PageBar, PageFooter, type PageProps, type PageWidth } from "./page";
+export { pagePinnedHeight } from "./page-head";
 export { PageLead } from "./page-lead";
 export {
   PageHeader,

@@ -564,6 +564,15 @@ describe("texts per language", () => {
     expect(language(page("de"), "en")).toContain(">1<");
   });
 
+  it("keeps the switch reachable under the page's head while the page scrolls", () => {
+    const markup = page("en");
+    const bar = /<div([^>]*)><span[^>]*>Texts in<\/span>/u.exec(markup);
+    expect(bar?.[1]).toContain('data-page-bar=""');
+    expect(bar?.[1]).toMatch(/class="[^"]*\bsticky top-\(--page-bar-top,var\(--layout-header\)\)/u);
+    // Inside the form: it stops at the form's end and adds nothing to the scrolling there.
+    expect(markup.indexOf("<form")).toBeLessThan(bar?.index ?? -1);
+  });
+
   it("has no language switch on a page without texts per language", () => {
     const markup = render(
       createElement(SkillEditor, {

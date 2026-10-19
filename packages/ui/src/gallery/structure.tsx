@@ -22,7 +22,7 @@ import {
   DisclosureTrigger,
   type DisclosureVariant
 } from "../structure/disclosure";
-import { Page, PageFooter, type PageWidth } from "../structure/page";
+import { Page, PageBar, PageFooter, type PageWidth } from "../structure/page";
 import { PageHeader, PageHeaderBack, PageHeaderShellAction } from "../structure/page-header";
 import { PageLead } from "../structure/page-lead";
 import { Section, type SectionLayout } from "../structure/section";
@@ -395,12 +395,13 @@ export const structureGallery: GalleryGroup = {
   entries: [
     {
       name: "Page",
-      components: ["Page", "PageFooter"],
+      components: ["Page", "PageFooter", "PageBar"],
       render: (text) => (
         <div className="grid gap-3">
           {/* A page that scrolls ends with the page-end space; with a footer the space is above it. */}
           <div className="h-56 overflow-y-auto rounded-lg border" data-gallery-sample="page-footer">
             <Page width="narrow">
+              <PageBar className="text-caption text-muted-foreground">{text.pageBarPinned}</PageBar>
               <p className="min-h-64 rounded-md bg-muted px-3 py-2 text-caption text-muted-foreground">
                 {pageWidthLabel("narrow", text)}
               </p>

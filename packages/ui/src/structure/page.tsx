@@ -1,5 +1,6 @@
-import type { ComponentProps, ReactNode } from "react";
+import { useRef, type ComponentProps, type ReactNode } from "react";
 import { cn } from "../cn";
+import { usePageHeadHeight } from "./page-head";
 
 /** The widest the content column grows: 44rem for a form, 64rem for a list, or all the room. */
 export type PageWidth = "narrow" | "default" | "wide";
@@ -201,6 +202,29 @@ export function PageFooter({
       className={cn(
         pageFooterPinned[pinned],
         "z-(--layer-sticky-header) mt-(--layout-page-end) -mb-(--layout-page-end) border-t bg-background",
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
+/**
+ * A row of the content that stays reachable while the `Page` scrolls, such as the switch of the
+ * language its texts are shown in. It is pinned directly below the page's detail head, as tall
+ * as the head is on this screen, and goes no further than the element it stands in, so it
+ * never adds to the scrolling at the page's end. A section scrolled to rests below it.
+ */
+export function PageBar({ className, ...props }: Omit<ComponentProps<"div">, "ref">) {
+  const ref = useRef<HTMLDivElement>(null);
+  usePageHeadHeight(ref, "--page-bar-top");
+  return (
+    <div
+      ref={ref}
+      data-page-bar=""
+      className={cn(
+        // Under the head's layer; the token stands in until the head is measured.
+        "sticky top-(--page-bar-top,var(--layout-header)) z-[calc(var(--layer-sticky-header)-1)] bg-background py-2",
         className
       )}
       {...props}

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   Page,
+  PageBar,
   PageHeader,
   PageOutline,
   Section,
@@ -90,6 +91,23 @@ describe("the outline of a page's sections", () => {
     const head = render(createElement(PageHeader, { variant: "detail", title: "HEAD" }));
     expect(head).toMatch(/<header[^>]*data-page-head=""/u);
     expect(render(createElement(PageHeader, { title: "HEAD" }))).not.toContain("data-page-head");
+  });
+
+  it("pins a bar of the content directly below the head, under the head's layer", () => {
+    const classes =
+      render(createElement(PageBar, null, "BAR"))
+        .match(/<div data-page-bar="" class="([^"]*)">BAR</u)?.[1]
+        ?.split(" ") ?? [];
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        "sticky",
+        // As tall as the head is measured; the token stands in until then.
+        "top-(--page-bar-top,var(--layout-header))",
+        "z-[calc(var(--layer-sticky-header)-1)]",
+        // What scrolls under it does not show through.
+        "bg-background"
+      ])
+    );
   });
 
   it("draws the focus line of a link inside it, where the scrolling outline does not clip it", () => {

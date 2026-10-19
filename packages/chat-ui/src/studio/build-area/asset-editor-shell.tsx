@@ -3,6 +3,7 @@ import {
   Banner,
   FormNotice,
   Page,
+  PageBar,
   PageFooter,
   PageHeader,
   PageOutline,
@@ -270,7 +271,8 @@ export function AssetEditorShell({
         )}
         {notices}
         {missingTranslations ? (
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          // The switch stays under the head while the reader scrolls through the texts.
+          <PageBar className="flex flex-wrap items-center justify-end gap-2">
             <span className="text-label text-muted-foreground">{t("build.textsIn")}</span>
             <SegmentedControl
               size="sm"
@@ -304,7 +306,7 @@ export function AssetEditorShell({
                 </SegmentedControlItem>
               ))}
             </SegmentedControl>
-          </div>
+          </PageBar>
         ) : null}
         <AssetLanguageProvider value={language}>
           {sections.map((section) => (

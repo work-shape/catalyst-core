@@ -95,6 +95,8 @@ export interface LayoutGalleryText {
   disclosureKeptMounted: string;
   disclosureKeptMountedBody: string;
   saveChanges: string;
+  /** The `PageBar` sample: a row that stays while the page scrolls. */
+  pageBarPinned: string;
   saveSaved: string;
   saveHint: string;
   saveDiscard: string;
@@ -289,6 +291,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     disclosureKeptMountedBody:
       "This stays in the page while folded, so what it reads is read at once.",
     saveChanges: "Save changes",
+    pageBarPinned: "Stays in view while the page scrolls",
     saveSaved: "Changes saved",
     saveHint: "Changes apply to new conversations at once.",
     saveDiscard: "Discard changes",
@@ -483,6 +486,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     disclosureKeptMountedBody:
       "Das bleibt zugeklappt in der Seite, so wird sofort gelesen, was es liest.",
     saveChanges: "Änderungen speichern",
+    pageBarPinned: "Bleibt beim Scrollen sichtbar",
     saveSaved: "Änderungen gespeichert",
     saveHint: "Änderungen gelten sofort für neue Unterhaltungen.",
     saveDiscard: "Änderungen verwerfen",

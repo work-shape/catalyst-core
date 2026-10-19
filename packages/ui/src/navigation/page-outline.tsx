@@ -1,6 +1,7 @@
 import { ChevronDown, CircleAlert } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type RefObject } from "react";
 import { cn } from "../cn";
+import { pageHead, pagePinnedHeight, usePageHeadHeight } from "../structure/page-head";
 import { useUiLabels } from "../ui-root";
 
 export interface PageOutlineItem {
@@ -201,9 +202,9 @@ function useSectionTracking({
     }
     const scroller = scrollParent(first.element);
     const scrollerTop = Math.max(viewTop(scroller), 0);
-    const head = pageHead(root);
-    if (head) {
-      return { scroller, line: scrollerTop + head.getBoundingClientRect().height, targets };
+    if (pageHead(root)) {
+      // Below the head and the bars pinned under it.
+      return { scroller, line: scrollerTop + pagePinnedHeight(root), targets };
     }
     if (getComputedStyle(list).display !== "none") {
       return { scroller, line: root.getBoundingClientRect().top, targets };
@@ -253,23 +254,7 @@ function useSectionTracking({
   }, [measure, select]);
 
   // Beside the content the outline is pinned under the head, however tall the head is here.
-  useEffect(() => {
-    const root = rootRef.current;
-    const head = root ? pageHead(root) : null;
-    if (!root || !head) {
-      return undefined;
-    }
-    const apply = () => {
-      root.style.setProperty("--page-outline-head", `${head.getBoundingClientRect().height}px`);
-    };
-    apply();
-    const resized = new ResizeObserver(apply);
-    resized.observe(head);
-    return () => {
-      resized.disconnect();
-      root.style.removeProperty("--page-outline-head");
-    };
-  }, [rootRef]);
+  usePageHeadHeight(rootRef, "--page-outline-head");
 
   const scrollTo = (id: string) => {
     const measured = measure();
@@ -333,11 +318,6 @@ function sectionAtLine({
     }
   });
   return holder;
-}
-
-/** The pinned head of the `Page` the outline stands in. */
-function pageHead(root: HTMLElement): HTMLElement | null {
-  return root.closest("[data-page]")?.querySelector<HTMLElement>("[data-page-head]") ?? null;
 }
 
 /** Where the view of what scrolls starts: the window scrolls from its own top edge. */

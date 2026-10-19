@@ -1,3 +1,5 @@
+import { pagePinnedHeight } from "@work-shape/catalyst-ui";
+
 /**
  * The element that scrolls the page's content. Only this one is moved: asking the browser to
  * bring an element into view would also move every box around it, the window included.
@@ -26,10 +28,10 @@ export function scrollToSection(within: HTMLElement | null, id: string): void {
     return;
   }
   const scroller = scrollParentOf(target);
-  // The page's head stays at the top and is as tall as its content makes it on this screen.
-  const head = scroller?.querySelector("[data-page-head]")?.getBoundingClientRect().height ?? 0;
+  // The page's head and the bars under it stay at the top, as tall as they are on this screen.
+  const pinned = pagePinnedHeight(target);
   scroller?.scrollBy({
-    top: target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - head,
+    top: target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - pinned,
     behavior: "instant"
   });
 }
