@@ -69,7 +69,11 @@ export { GuardrailPage } from "./guardrail-page";
 export { guardrailRunSentence, type GuardrailRunFacts } from "./guardrail-sentence";
 export type { GuardrailSource, ShippedGuardrailsRead } from "./guardrail-source";
 export { ShippedGuardrailsLead } from "./shipped-guardrails";
-export { dataStoreStateView, formatDataStoreSize } from "./data-store-model";
+export {
+  dataStoreStateSettling,
+  dataStoreStateView,
+  formatDataStoreSize
+} from "./data-store-model";
 export { DataStoreValueDialog } from "./data-store-rows";
 export type {
   DataStoreListed,

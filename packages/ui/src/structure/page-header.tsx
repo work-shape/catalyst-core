@@ -200,6 +200,11 @@ function useActionsFolded(): {
   primary: RefObject<HTMLSpanElement | null>;
   menu: RefObject<HTMLSpanElement | null>;
   folded: boolean;
+  /**
+   * The actions that never fold leave the name less than its least width beside them: they go
+   * under the name, as they do in a narrow window.
+   */
+  crowded: boolean;
 } {
   const head = useRef<HTMLElement>(null);
   const unfolded = useRef<HTMLDivElement>(null);
@@ -207,11 +212,13 @@ function useActionsFolded(): {
   const primary = useRef<HTMLSpanElement>(null);
   const menu = useRef<HTMLSpanElement>(null);
   const [folded, setFolded] = useState(false);
+  const [crowded, setCrowded] = useState(false);
   useLayoutEffect(() => {
     const headNode = head.current;
     const row = unfolded.current;
-    if (!headNode || !row || typeof ResizeObserver === "undefined") {
+    if (!headNode || typeof ResizeObserver === "undefined") {
       setFolded(false);
+      setCrowded(false);
       return undefined;
     }
     const kept = [shell.current, primary.current, menu.current].filter((node) => node !== null);
@@ -219,19 +226,28 @@ function useActionsFolded(): {
       const style = getComputedStyle(headNode);
       const room =
         headNode.clientWidth - pixels(style.paddingInlineStart) - pixels(style.paddingInlineEnd);
-      const gap = pixels(getComputedStyle(row).columnGap);
-      const needed = kept.reduce(
+      const gap = pixels(getComputedStyle(row ?? kept[0]?.parentElement ?? headNode).columnGap);
+      const keptWidth = kept.reduce(
         (width, node) => width + gap + node.getBoundingClientRect().width,
-        row.getBoundingClientRect().width + nameReserve(headNode, style)
+        0
       );
       // Half a pixel absorbs the rounding of scaled displays.
-      setFolded(needed > room + 0.5);
+      setFolded(
+        row !== null &&
+          row.getBoundingClientRect().width + keptWidth + nameReserve(headNode, style) > room + 0.5
+      );
+      // Whether the kept actions leave the name its room is asked of the one-line head, also
+      // once they went under the name: the answer does not change by its own effect.
+      setCrowded(keptWidth + nameReserve(headNode, style, true) > room + 0.5);
     };
     measure();
-    const observer = observeAFrameLater([headNode, row, ...kept], measure);
+    const observer = observeAFrameLater(
+      [headNode, ...(row === null ? [] : [row]), ...kept],
+      measure
+    );
     return () => observer.disconnect();
   });
-  return { head, unfolded, shell, primary, menu, folded };
+  return { head, unfolded, shell, primary, menu, folded, crowded };
 }
 
 // The width a detail head keeps for its name beside the actions, or the whole name where it is
@@ -244,10 +260,15 @@ const NAME_LEAST = 160;
  * and the gap to the actions. Where the head wraps, the actions take a line of their own and
  * the name needs none of theirs.
  */
-function nameReserve(headNode: HTMLElement, style: CSSStyleDeclaration): number {
+function nameReserve(
+  headNode: HTMLElement,
+  style: CSSStyleDeclaration,
+  /** The room asked of the head on one line, whether it wraps now or not. */
+  oneLine = false
+): number {
   const measure = headNode.querySelector<HTMLElement>("[data-name]");
   const name = measure?.parentElement;
-  if (!measure || !name || style.flexWrap === "wrap") {
+  if (!measure || !name || (!oneLine && style.flexWrap === "wrap")) {
     return 0;
   }
   // The box of the way back's text: as wide as the text shows, nothing where it is gone.
@@ -413,7 +434,10 @@ export function PageHeader({
         data-page-head=""
         ref={fold.head}
         className={cn(
-          "sticky top-0 z-(--layer-sticky-header) flex min-h-(--layout-header) min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b bg-background px-(--layout-gutter) py-1 md:flex-nowrap",
+          "sticky top-0 z-(--layer-sticky-header) flex min-h-(--layout-header) min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b bg-background px-(--layout-gutter) py-1",
+          // Beside a name that keeps its least width the actions stay on its line in a wide
+          // window; where they would cut the name to a few letters, they go under it.
+          fold.crowded ? undefined : "md:flex-nowrap",
           className
         )}
         {...props}

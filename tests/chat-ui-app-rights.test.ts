@@ -83,7 +83,10 @@ interface Instance {
   recordFails?: () => boolean;
   /** The rows of the Apps list. */
   rows?: readonly ReturnType<typeof appRow>[];
+  /** The address the instance names for the published App's frame, in this workspace's path. */
+  previewIn?: string;
   editWithAgent?: AppsHost["editWithAgent"];
+  showRoute?: AppsHost["showRoute"];
 }
 
 /**
@@ -110,6 +113,21 @@ async function mount(
       }
       return Response.json(appRecord(instance.allowed ?? []));
     }
+    if (
+      instance.previewIn !== undefined &&
+      path === apiOperations["apps.preview"].path.replace(":app", "fees")
+    ) {
+      return Response.json({
+        url: "/frames/fees/",
+        expiresAt: "2026-10-19T10:00:00.000Z",
+        fileSetId: "fs_1",
+        number: 2,
+        pageSessionId: "ps_1",
+        revision: 2,
+        interfacePath: `/w/${instance.previewIn}/apps/fees`,
+        heldBackHosts: []
+      });
+    }
     return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -120,7 +138,7 @@ async function mount(
     enabled: true,
     rights: resolveAppRights(context, OPEN),
     workspace: { id: OPEN, name: "Office" },
-    showRoute: () => undefined,
+    showRoute: instance.showRoute ?? (() => undefined),
     startChat: () => undefined,
     ...(instance.editWithAgent === undefined ? {} : { editWithAgent: instance.editWithAgent })
   };
@@ -358,6 +376,23 @@ describe("one App", () => {
       timeout: CONDITION_WAIT_MS
     });
     expect(denied.querySelector(`button[aria-label="${more}"]`)).toBeNull();
+  });
+
+  // ACCEPT-FIX-11 B1: an App shared with the instance, opened from team T, stays in T. The
+  // instance let the reader open it there; the address its preview names may be the reader's
+  // Personal Workspace, which they can open too, and moving there would leave the team.
+  it("stays in the workspace it was opened from, whichever workspace its preview names", async () => {
+    const showRoute = vi.fn<AppsHost["showRoute"]>();
+    const view = await mount(createElement(AppView, { app: "fees" }), contextWith({ [OPEN]: [] }), {
+      allowed: ["read"],
+      previewIn: OTHER,
+      showRoute
+    });
+    await vi.waitFor(() => expect(view.querySelector("iframe")).not.toBeNull(), {
+      timeout: CONDITION_WAIT_MS
+    });
+    await shows(view, "Fees");
+    expect(showRoute).not.toHaveBeenCalled();
   });
 
   it("says a failed reading of its draft failed, with Try again, and not that it is not there", async () => {

@@ -18,6 +18,10 @@ export const conversation = defineTranslations({
     conversationOpened: "Opened {name}",
     conversationAttachedFile: ATTACHED_FILE_TITLES.en.one,
     conversationAttachedFiles: ATTACHED_FILE_TITLES.en.many,
+    conversationPrivateBuildRefused:
+      "Others in this workspace read this conversation, so the agent builds nothing here. Go on in a private conversation of your own in this workspace; your request comes along.",
+    conversationPrivateBuildContinue: "Continue privately",
+    conversationPrivateStartFailed: "The private conversation could not be started. Try again.",
     conversationCreatedAgent: "Agent “{name}” created",
     conversationCreatedDataStore: "Data Store draft “{name}” created",
     conversationCreatedOpen: "Open",
@@ -55,6 +59,11 @@ export const conversation = defineTranslations({
     conversationOpened: "{name} geöffnet",
     conversationAttachedFile: ATTACHED_FILE_TITLES.de.one,
     conversationAttachedFiles: ATTACHED_FILE_TITLES.de.many,
+    conversationPrivateBuildRefused:
+      "Andere in diesem Arbeitsbereich lesen diese Unterhaltung, deshalb baut der Agent hier nichts. Mach in einer privaten Unterhaltung in diesem Arbeitsbereich weiter; deine Anfrage kommt mit.",
+    conversationPrivateBuildContinue: "Privat weitermachen",
+    conversationPrivateStartFailed:
+      "Die private Unterhaltung konnte nicht gestartet werden. Versuche es noch einmal.",
     conversationCreatedAgent: "Agent „{name}“ erstellt",
     conversationCreatedDataStore: "Datenspeicher-Entwurf „{name}“ erstellt",
     conversationCreatedOpen: "Öffnen",

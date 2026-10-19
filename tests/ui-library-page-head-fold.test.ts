@@ -51,7 +51,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function renderHead(menu?: string): HTMLElement {
+function renderHead(menu?: string, secondary = true): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -63,10 +63,12 @@ function renderHead(menu?: string): HTMLElement {
         createElement(PageHeader, {
           variant: "detail",
           title: "Rechnungsprüfung",
-          secondaryActions: [
-            { label: "Verlauf", onSelect: () => undefined },
-            { label: "Als Standard festlegen", onSelect: () => undefined }
-          ],
+          secondaryActions: secondary
+            ? [
+                { label: "Verlauf", onSelect: () => undefined },
+                { label: "Als Standard festlegen", onSelect: () => undefined }
+              ]
+            : [],
           primaryAction: createElement("button", { type: "button" }, "Jetzt starten"),
           menu
         })
@@ -139,5 +141,29 @@ describe("a page head's actions", () => {
 
     expect(head.querySelectorAll("button")).toHaveLength(4);
     expect(head.querySelector("[inert]")?.textContent).toBe("VerlaufAls Standard festlegen");
+  });
+});
+
+// ACCEPT-FIX-11: an App's draft head keeps "Show chat", "Edit with the agent" and Publish, none
+// of which fold. At 1024 px they cut the name to "Fri s…" on its one line; they now go under
+// the name, as they do in a narrow window.
+describe("a page head whose kept actions leave the name no room", () => {
+  const oneLine = (head: HTMLElement) => head.className.includes("md:flex-nowrap");
+
+  it("puts them under the name, and keeps one line where the name has its least width", () => {
+    // 120 + 32 and the 160 kept for the name do not fit in 300.
+    headWidth = 300;
+    expect(oneLine(renderHead("ID kopieren", false))).toBe(false);
+    act(() => root?.unmount());
+    headWidth = 320;
+    expect(oneLine(renderHead("ID kopieren", false))).toBe(true);
+  });
+
+  it("folds the secondary actions first and wraps only where the kept ones still crowd the name", () => {
+    // 300 + 120 + 32 + 160 do not fit in 400, so the secondary actions fold; the kept ones fit.
+    headWidth = 400;
+    const head = renderHead("ID kopieren");
+    expect(shownButtons(head)).toEqual(["Jetzt starten", "Weitere Aktionen"]);
+    expect(oneLine(head)).toBe(true);
   });
 });

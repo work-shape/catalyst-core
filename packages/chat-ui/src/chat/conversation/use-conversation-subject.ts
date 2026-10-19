@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import {
+  publishedCalls,
+  rowWriteCalls,
   savedDraftCalls,
   subjectOpenedInRun,
   type SubjectAsset,
@@ -27,9 +29,10 @@ const FINISHED_RUN_STATES = new Set<string>(ENDED_AGENT_RUN_STATUSES);
 
 /**
  * The asset the open conversation is about: the stored one, or the one the agent opened while
- * the run goes, which makes that asset the subject. Each saved draft drops the reads of the
- * assets, so the asset's page shows what was saved. Answers the asset and the name people read
- * for it.
+ * the run goes, which makes that asset the subject. Each saved draft and each publish drops the
+ * reads of the assets, so the asset's page shows what was saved or made live; each row write
+ * drops the reads of the Data Store pages, so a store's page shows its rows. Answers the asset
+ * and the name people read for it.
  */
 export function useConversationSubject(input: {
   activeRun: WatchedSubjectRun | undefined;
@@ -62,17 +65,23 @@ export function useConversationSubject(input: {
     if (!parts) {
       return;
     }
-    const saves = savedDraftCalls(parts).filter((id) => !handledSaves.current.has(id));
-    if (saves.length === 0) {
-      return;
-    }
-    for (const id of saves) {
+    const fresh = (ids: string[]) => ids.filter((id) => !handledSaves.current.has(id));
+    const saves = fresh([...savedDraftCalls(parts), ...publishedCalls(parts)]);
+    const rowWrites = fresh(rowWriteCalls(parts));
+    for (const id of [...saves, ...rowWrites]) {
       handledSaves.current.add(id);
     }
     // A read that fails again shows on the page that made it.
-    queryClient
-      .invalidateQueries({ queryKey: workspaceQueryKeys.assets(apiBaseUrl, "standalone") })
-      .catch(() => undefined);
+    if (saves.length > 0) {
+      queryClient
+        .invalidateQueries({ queryKey: workspaceQueryKeys.assets(apiBaseUrl, "standalone") })
+        .catch(() => undefined);
+    }
+    if (rowWrites.length > 0) {
+      queryClient
+        .invalidateQueries({ queryKey: workspaceQueryKeys.dataStores(apiBaseUrl) })
+        .catch(() => undefined);
+    }
   }, [apiBaseUrl, parts, queryClient]);
 
   return subject === undefined ? undefined : { subject, title };

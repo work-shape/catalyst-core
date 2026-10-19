@@ -110,6 +110,36 @@ export function AssetOpenedChip({
   );
 }
 
+/**
+ * The way on after the agent was refused to build because others read the conversation
+ * (ACCEPT-FIX-11 E3): one press starts a private conversation of the same workspace with the
+ * person's last request in its composer.
+ */
+export function PrivateBuildOffer({
+  pending,
+  onContinue
+}: {
+  pending: boolean;
+  onContinue(): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Banner
+      tone="info"
+      className="mb-2"
+      data-testid="private-build-offer"
+      action={
+        <Button variant="secondary" size="sm" disabled={pending} onClick={onContinue}>
+          {t("conversationPrivateBuildContinue")}
+          <ArrowRight aria-hidden="true" />
+        </Button>
+      }
+    >
+      {t("conversationPrivateBuildRefused")}
+    </Banner>
+  );
+}
+
 const NAME_MARK = "\u0000";
 
 const AgentOpensContext = createContext<AgentOpens | undefined>(undefined);

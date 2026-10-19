@@ -1,7 +1,9 @@
-import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import type { ApiClient, LocaleCode } from "@work-shape/catalyst-api-client";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../../shared/i18n";
-import type { DataStoreState } from "./data-store-source";
+
+/** The state of one Data Store, as `data_stores.get` answers it. */
+export type DataStoreState = Awaited<ReturnType<ApiClient["data_stores"]["get"]>>;
 
 /** What the list and the page say of a store's state: one word and one sentence each. */
 export type DataStoreStateView =
@@ -48,6 +50,15 @@ export function dataStoreStateView(state: DataStoreState): DataStoreStateView {
     : outcome === "pending"
       ? "migrations_pending"
       : "ready";
+}
+
+/**
+ * Whether a store is on its way to a state of its own: its database is being set up, or a
+ * migration of its published revision still waits. A failure and a ready store stay as they are.
+ */
+export function dataStoreStateSettling(state: DataStoreState): boolean {
+  const view = dataStoreStateView(state);
+  return view === "provisioning" || view === "migrations_pending";
 }
 
 type DataStoreConditionCode = DataStoreState["conditions"][number]["code"];

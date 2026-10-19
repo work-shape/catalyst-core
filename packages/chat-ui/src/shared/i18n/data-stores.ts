@@ -5,6 +5,9 @@ export const dataStores = defineTranslations({
     "dataStores.audienceAdminsOnly": "Only instance admins",
     "dataStores.audienceHidden": "{count} more with access",
     "dataStores.audienceHiddenOnly": "{count} with access",
+    "dataStores.audienceInstance": "Whole instance ({count} people)",
+    "dataStores.audienceInstanceOne": "Whole instance ({count} person)",
+    "dataStores.audienceSelf": "One selected person",
     "dataStores.audienceWorkspace": "Everyone in {workspace} ({count} people)",
     "dataStores.audienceWorkspaceOne": "Everyone in {workspace} ({count} person)",
     "dataStores.column": "Column",
@@ -31,12 +34,20 @@ export const dataStores = defineTranslations({
     "dataStores.publishDescriptionOne":
       "Publishing creates the store's database and applies its migration. A migration cannot be taken back: a later change needs a new migration.",
     "dataStores.description":
-      "Where apps and workflows keep their records. This page shows what each store holds.",
+      "Where apps, workflows and agents in conversations keep their records. This page shows what each store holds.",
     "dataStores.descriptionLabel": "Description",
     "dataStores.empty":
       "No data stores yet. A data store is a database in which apps and workflows keep their records. Describe one to the agent, and its first save creates it.",
     "dataStores.emptyReadOnly":
       "No data stores yet. A data store keeps records such as a client list or the hours per project, for apps and workflows to use.",
+    "dataStores.filledByConversations": "Agents in conversations",
+    "dataStores.conversationWriters": "{agents} in {conversations}",
+    "dataStores.conversationWritersAtLeast": "At least {agents} in {conversations}",
+    "dataStores.conversationWritersOlderMissing": "Older conversation writes may be missing",
+    "dataStores.writerAgent": "1 agent",
+    "dataStores.writerAgents": "{count} agents",
+    "dataStores.writerConversation": "1 conversation",
+    "dataStores.writerConversations": "{count} conversations",
     "dataStores.filledByDescription": "Where the rows come from.",
     "dataStores.filledByEmpty": "No published workflow or app adds rows to this store.",
     "dataStores.filledByHiddenOnly":
@@ -163,6 +174,9 @@ export const dataStores = defineTranslations({
     "dataStores.audienceAdminsOnly": "Nur Instanz-Admins",
     "dataStores.audienceHidden": "{count} weitere mit Zugriff",
     "dataStores.audienceHiddenOnly": "{count} mit Zugriff",
+    "dataStores.audienceInstance": "Ganze Instanz ({count} Personen)",
+    "dataStores.audienceInstanceOne": "Ganze Instanz ({count} Person)",
+    "dataStores.audienceSelf": "Eine ausgewählte Person",
     "dataStores.audienceWorkspace": "Alle in {workspace} ({count} Personen)",
     "dataStores.audienceWorkspaceOne": "Alle in {workspace} ({count} Person)",
     "dataStores.column": "Spalte",
@@ -190,12 +204,21 @@ export const dataStores = defineTranslations({
     "dataStores.publishDescriptionOne":
       "Beim Veröffentlichen entsteht die Datenbank des Speichers, und seine Migration wird angewendet. Eine Migration lässt sich nicht zurücknehmen: Eine spätere Änderung braucht eine neue Migration.",
     "dataStores.description":
-      "Hier legen Apps und Workflows ihre Einträge ab. Diese Seite zeigt, was jeder Speicher enthält.",
+      "Hier legen Apps, Workflows und Agenten in Unterhaltungen ihre Einträge ab. Diese Seite zeigt, was jeder Speicher enthält.",
     "dataStores.descriptionLabel": "Beschreibung",
     "dataStores.empty":
       "Noch keine Datenspeicher. Ein Datenspeicher ist eine Datenbank, in der Apps und Workflows ihre Einträge ablegen. Beschreib dem Agenten einen, und sein erstes Speichern legt ihn an.",
     "dataStores.emptyReadOnly":
       "Noch keine Datenspeicher. Ein Datenspeicher hält Einträge wie eine Kundenliste oder die Stunden je Projekt, mit denen Apps und Workflows arbeiten.",
+    "dataStores.filledByConversations": "Agenten in Unterhaltungen",
+    "dataStores.conversationWriters": "{agents} in {conversations}",
+    "dataStores.conversationWritersAtLeast": "Mindestens {agents} in {conversations}",
+    "dataStores.conversationWritersOlderMissing":
+      "Ältere Einträge aus Unterhaltungen fehlen hier möglicherweise",
+    "dataStores.writerAgent": "1 Agent",
+    "dataStores.writerAgents": "{count} Agenten",
+    "dataStores.writerConversation": "1 Unterhaltung",
+    "dataStores.writerConversations": "{count} Unterhaltungen",
     "dataStores.filledByDescription": "Woher die Zeilen kommen.",
     "dataStores.filledByEmpty":
       "Kein veröffentlichter Workflow und keine veröffentlichte App schreibt Zeilen in diesen Speicher.",

@@ -3,7 +3,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { ApiError, type AgentRunProjection } from "@work-shape/catalyst-api-client";
 import { DECISION_EXPIRED_REASON } from "@work-shape/catalyst-core";
-import { ToolCallPart, ToolDecisionsProvider } from "@work-shape/catalyst-chat-ui/tool-call";
+import {
+  readToolDisplayProjection,
+  ToolCallPart,
+  ToolDecisionsProvider
+} from "@work-shape/catalyst-chat-ui/tool-call";
 import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
 import {
@@ -17,6 +21,7 @@ import {
   type ToolDecision
 } from "@work-shape/catalyst-chat-ui/tool-decision-model";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { workspaceQueryKeys } from "./support/chat-ui";
 
 // EW-2b: an agent's call under `confirm` pauses its run, and the conversation shows the host's
 // own card on that call: what it is, its input as it will run, when it expires, Allow and Deny
@@ -396,5 +401,197 @@ describe("a tool call whose run waits for a decision", () => {
   it("is the plain tool call once the call answered, and without a decision", () => {
     expect(renderCall([part], { result: { offerId: "o_1" } })).not.toContain("tool-decision-card");
     expect(renderCall([])).not.toContain("tool-decision-card");
+  });
+});
+
+// ACCEPT-FIX-11 C1: every confirmation reads in the person's language and words. A Knowledge
+// Base's add_files names the base and the files as their person named them, never an id; a
+// Workflow's publish says what goes live before Allow; a row write is titled by what it does
+// and says a yes-or-no value as a word.
+describe("a confirmation in the person's own words", () => {
+  const API = "http://127.0.0.1:1";
+  const title = (toolName: string, locale: "en" | "de") =>
+    readToolDisplayProjection({ args: {}, result: undefined, toolName, locale }).title;
+
+  it("titles a row write, an add_files and a publish by what they do, in either language", () => {
+    expect(title("data_store.ds_7f3a.insert", "en")).toBe("Add rows");
+    expect(title("data_store.ds_7f3a.update", "de")).toBe("Datensätze ändern");
+    expect(title("data_store.ds_7f3a.delete_rows", "de")).toBe("Datensätze löschen");
+    expect(title("knowledge.kb_notes.add_files", "en")).toBe("Add files to the Knowledge Base");
+    expect(title("knowledge.kb_notes.add_files", "de")).toBe("Dateien zur Wissensbasis hinzufügen");
+    expect(title("assets.publish", "de")).toBe("Veröffentlichen");
+    // Any other operation of a store keeps the title its name gives.
+    expect(title("data_store.ds_7f3a.select", "en")).toBe("Select");
+  });
+
+  it("says a yes-or-no value of a row as a word", () => {
+    const decision: ToolDecision = {
+      ...waiting,
+      operationId: "data_store.ds_7f3a.insert",
+      targetTitle: "Mandanten-Fristen",
+      inputPreview: { table: "fristen", rows: [{ mandant: "Kai", erledigt: false, eilig: true }] }
+    };
+    const german = text(renderView(decision, {}, "de"));
+    expect(german).toContain("erledigt: Nein");
+    expect(german).toContain("eilig: Ja");
+    const english = text(renderView(decision));
+    expect(english).toContain("erledigt: No");
+    expect(english).not.toMatch(/: (true|false)/u);
+  });
+
+  const user = (conversationId: string, files: { fileId: string; filename: string }[]) => ({
+    id: "msg_user",
+    conversationId,
+    clientInstanceId: "client_test",
+    role: "user" as const,
+    text: "Lege die Unterlagen in die Wissensbasis.",
+    createdAt: "2026-10-19T00:00:00.000Z",
+    metadata: {
+      agentRuntime: {
+        version: 1,
+        kind: "user_message",
+        attachmentManifest: {
+          version: 1,
+          attachments: files.map((file) => ({
+            ...file,
+            kind: "file",
+            attachmentId: `att_${file.fileId}`,
+            byteSize: 10,
+            status: "ready"
+          }))
+        }
+      }
+    }
+  });
+
+  function renderWaiting(input: {
+    toolName: string;
+    decision: Omit<ToolDecision, "toolCallId">;
+    locale?: "en" | "de";
+    seed?: (client: QueryClient) => void;
+  }): string {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(["operation-runs", API, "standalone", input.decision.operationRunId], {
+      id: input.decision.operationRunId
+    });
+    input.seed?.(queryClient);
+    return inLocale(
+      input.locale ?? "en",
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(WorkspaceApiClientProvider, {
+          apiBaseUrl: API,
+          children: createElement(
+            ToolDisplayPanelProvider,
+            null,
+            createElement(ToolDecisionsProvider, {
+              parts: [
+                {
+                  type: "tool_call" as const,
+                  toolCallId: "call_1",
+                  toolName: input.toolName,
+                  state: "waiting_for_decision" as const,
+                  decision: input.decision
+                }
+              ],
+              children: createElement(ToolCallPart, {
+                toolName: input.toolName,
+                toolCallId: "call_1",
+                args: {},
+                argsText: "{}",
+                result: undefined,
+                type: "tool-call" as const,
+                status: { type: "running" as const },
+                addResult: () => undefined,
+                resume: () => undefined,
+                respondToApproval: () => undefined
+              })
+            })
+          )
+        })
+      )
+    );
+  }
+
+  const addFiles = (fileIds: string[]) => ({
+    operationRunId: "oprun_kb",
+    operationId: "knowledge.kb_notes.add_files",
+    mode: "confirm" as const,
+    targetTitle: "Mandanten-Notizen",
+    inputPreview: { files: fileIds.map((fileId) => ({ conversationId: "conv_1", fileId })) },
+    expiresAt: "2026-10-19T18:30:00Z"
+  });
+  const threadOf = (files: { fileId: string; filename: string }[]) => (client: QueryClient) =>
+    client.setQueryData(workspaceQueryKeys.thread(API, "standalone", "conv_1"), {
+      conversation: { id: "conv_1" },
+      messages: [user("conv_1", files)]
+    });
+
+  it("names the Knowledge Base and each file its person sent, never an id", () => {
+    const sent = [
+      { fileId: "file_fristen", filename: "Fristen 2026.pdf" },
+      { fileId: "file_notiz", filename: "Notiz Kai.docx" }
+    ];
+    const german = renderWaiting({
+      toolName: "knowledge.kb_notes.add_files",
+      decision: addFiles(["file_fristen", "file_notiz"]),
+      locale: "de",
+      seed: threadOf(sent)
+    });
+    const words = text(german);
+    expect(words).toContain("Dateien zur Wissensbasis hinzufügen");
+    expect(words).toMatch(/Wissensbasis Mandanten-Notizen/u);
+    expect(words).toContain("Fristen 2026.pdf");
+    expect(words).toContain("Notiz Kai.docx");
+    // The ids are a technical detail of the call: under Details at most, never in the lead.
+    const lead = german.slice(0, german.indexOf('data-testid="tool-decision-details"'));
+    expect(lead).not.toMatch(/file_fristen|file_notiz|conv_1/u);
+    expect(lead).not.toContain('data-input-key="files"');
+
+    // A file the conversation no longer names is counted with the rest.
+    const english = renderWaiting({
+      toolName: "knowledge.kb_notes.add_files",
+      decision: addFiles(["file_fristen", "file_gone"]),
+      seed: threadOf(sent)
+    });
+    const lead2 = english.slice(0, english.indexOf('data-testid="tool-decision-details"'));
+    expect(text(lead2)).toContain("Files 2 files");
+    expect(lead2).not.toMatch(/file_gone|Fristen 2026\.pdf/u);
+  });
+
+  const publish = {
+    operationRunId: "oprun_pub",
+    operationId: "assets.publish",
+    mode: "confirm" as const,
+    inputPreview: { kind: "workflow", name: "mandanten-fristen", revision: 2 },
+    expiresAt: "2026-10-19T18:30:00Z"
+  };
+  const allowOf = (markup: string) =>
+    markup.match(/<button[^>]*>(?:(?!<\/button>).)*(?:Allow|Erlauben)<\/button>/u)?.[0] ?? "";
+
+  it("says what a Workflow's publish makes live before Allow, and holds Allow until then", () => {
+    const summary =
+      "Mandanten-Fristen läuft jeden Montag um 08:00 (Europe/Berlin) als Fristen-Konto und schreibt in Mandanten-Fristen, das Mara liest.";
+    const ready = renderWaiting({
+      toolName: "assets.publish",
+      decision: publish,
+      locale: "de",
+      seed: (client) =>
+        client.setQueryData(["publish-narrative", "de", API, "workflow", "mandanten-fristen", 2], {
+          status: "present",
+          narrative: { summary, warnings: [] }
+        })
+    });
+    expect(text(ready)).toContain("Veröffentlichen");
+    expect(ready).toContain(summary);
+    expect(allowOf(ready)).not.toContain(`disabled=""`);
+    // The raw inputs are details now.
+    const lead = ready.slice(0, ready.indexOf('data-testid="tool-decision-details"'));
+    expect(lead).not.toContain('data-input-key="kind"');
+
+    const reading = renderWaiting({ toolName: "assets.publish", decision: publish });
+    expect(reading).toContain('data-testid="publish-narrative-loading"');
+    expect(allowOf(reading)).toContain(`disabled=""`);
   });
 });
