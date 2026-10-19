@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "../../shared/i18n";
 import { AssetEditorShell, type AssetSection } from "./asset-editor-shell";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
+import { ConnectionAvailability } from "./connection-availability";
 import { ConnectionAuthFields, ConnectionServerFields } from "./connection-form";
 import {
   connectionConfigToForm,
@@ -31,6 +32,8 @@ export function ConnectionEditor({
   source: ConnectionSource;
 }) {
   const { asset } = frame;
+  // Where agents can use it belongs to the instance, so a Connection of release config has it too.
+  const availability = source.useAvailability?.(frame);
   if (!asset) {
     return <NewConnectionPage frame={frame} source={source} />;
   }
@@ -44,6 +47,15 @@ export function ConnectionEditor({
       notice={frame.notice}
       source={source}
       editing={editable ? frame : undefined}
+      availability={
+        availability ? (
+          <ConnectionAvailability
+            choice={availability}
+            saveBlocked={frame.saveBlocked === true}
+            onUnsavedChange={frame.onUnsavedChange}
+          />
+        ) : undefined
+      }
     />
   );
 }

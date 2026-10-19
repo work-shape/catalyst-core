@@ -2,6 +2,7 @@ import {
   APP_AUDIENCES,
   GRANT_HOLDER_KINDS,
   WORKSPACE_MEMBER_ACTIONS,
+  WORKSPACE_USE_ASSET_KINDS,
   asCollaborationWorkspaceId,
   asUserId,
   explainAccessEntries,
@@ -168,7 +169,10 @@ export function createAudienceReader(
       const rows = await rowsOf(action);
       // A holder holds the right where its own rows allow it and none of them denies it, as the
       // evaluator decides for one holder.
-      const byHolder = new Map<string, { holder: HolderKey; rows: PermissionGrant[] }>();
+      const byHolder = new Map<
+        string,
+        { holder: HolderKey; rows: PermissionGrant[]; membership?: true }
+      >();
       for (const row of rows) {
         const key = `${row.holderKind}\u0000${row.holderId}`;
         const entry = byHolder.get(key) ?? {
@@ -178,11 +182,47 @@ export function createAudienceReader(
         entry.rows.push(row);
         byHolder.set(key, entry);
       }
+      // Availability is another source of the same right. Merge by person, and let the
+      // evaluator apply their denies; no copied grant rows or second permission rule.
+      if (
+        resource.assetId &&
+        WORKSPACE_USE_ASSET_KINDS.some((kind) => resource.kind === kind && action === `${kind}.use`)
+      ) {
+        const members = await stores.access.listAvailabilityMembers({
+          clientInstanceId,
+          assetId: resource.assetId,
+          action,
+          page: { limit: AUDIENCE_MAX_GRANT_ROWS + 1 }
+        });
+        if (members.length > AUDIENCE_MAX_GRANT_ROWS) truncated = true;
+        for (const member of members.slice(0, AUDIENCE_MAX_GRANT_ROWS)) {
+          const key = `user\u0000${member.userId}`;
+          byHolder.set(key, {
+            holder: { kind: "user", id: member.userId },
+            rows: member.grants,
+            membership: true
+          });
+          titles.set(`user:${member.userId}`, Promise.resolve(member.displayLabel));
+        }
+      }
       const holding = [...byHolder.values()].filter(
-        ({ rows: own }) =>
+        ({ rows: own, membership }) =>
           explainAccessEntries(
             // A row is an entry of the holder's own, with what it covers as the row says it.
-            own.map((row) => ({ ...row, source: "grant" as const })),
+            [
+              ...own.map((row) => ({ ...row, source: "grant" as const })),
+              ...(membership
+                ? [
+                    {
+                      action,
+                      effect: "allow" as const,
+                      scopeKind: "asset" as const,
+                      scopeId: resource.assetId,
+                      source: "membership" as const
+                    }
+                  ]
+                : [])
+            ],
             action,
             resource
           ).decision.allowed

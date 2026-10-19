@@ -1,3 +1,4 @@
+import { agentDependencyAvailability } from "./agent-dependency-availability";
 import { appAudienceReview } from "../apps/app-audience";
 import type { AppAudience } from "@work-shape/catalyst-core";
 import {
@@ -196,7 +197,14 @@ export class AssetReadWorkflow {
 
   async get(
     call: AssetCall,
-    address: AssetAddress & { revision?: string; files?: boolean; audience?: AppAudience }
+    address: AssetAddress & {
+      revision?: string;
+      files?: boolean;
+      audience?: AppAudience;
+      availabilityMode?: AgentAvailability["mode"];
+      availabilityPersonalWorkspaces?: string;
+      availabilityWorkspaceIds?: string;
+    }
   ) {
     const target = await this.readTarget(address);
     const read = this.readAction(call.access, target, address);
@@ -289,6 +297,33 @@ export class AssetReadWorkflow {
       ...(appAudience ? { appAudience } : {}),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
+      ...(target.kind.hasWorkspaceAvailability
+        ? {
+            canSetAvailability:
+              call.access.authorize(target.kind.actions.write).allowed &&
+              call.access.authorize(target.kind.actions.write, target.resource).allowed
+          }
+        : {}),
+      ...(target.kind.kind === "agent" &&
+      (call.access.authorize("agent.write", target.resource).allowed ||
+        call.access.authorize("agent.publish", target.resource).allowed)
+        ? {
+            dependencyAvailability: await agentDependencyAvailability(
+              this.options,
+              call,
+              content.config,
+              address.availabilityMode
+                ? {
+                    mode: address.availabilityMode,
+                    personalWorkspaces: address.availabilityPersonalWorkspaces === "true",
+                    collaborationWorkspaceIds: (
+                      address.availabilityWorkspaceIds?.split(",").filter(Boolean) ?? []
+                    ).map(asCollaborationWorkspaceId)
+                  }
+                : availability
+            )
+          }
+        : {}),
       allowed,
       updatedAt: asset.updatedAt
     };
@@ -591,7 +626,8 @@ export class AssetReadWorkflow {
     }
     const stored = await this.options.configAssets.store.listAgentAvailability({
       clientInstanceId: this.options.clientInstanceId,
-      agentName: name
+      agentName: name,
+      kind: kind.kind
     });
     const availability = stored.get(name);
     if (
@@ -661,7 +697,9 @@ function showsPublishedView(
     kind.lifecycle === "draft_published" &&
     published &&
     (access.authorize(read, resource).allowed ||
-      (use !== undefined && access.authorize(use, resource).allowed))
+      (kind.useOpensPublishedRevision !== false &&
+        use !== undefined &&
+        access.authorize(use, resource).allowed))
   );
 }
 

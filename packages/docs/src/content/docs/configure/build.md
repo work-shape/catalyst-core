@@ -62,7 +62,7 @@ A Connection made in Studio is changed on its page by a person who may change Co
 - **Operations**: each accepted operation with its tool name `connection.<name>.<operation>`, whether it reads or changes, who may call it (agents, Apps, Workflows, outside clients or nobody) and its status. On a Connection made on the instance, a person with `connection.write` opens an operation to outside clients with the check box **Outside clients (CLI, MCP)** (German: **Externe Clients (CLI, MCP)**), and closes it again by clearing it. It is off on every operation until somebody ticks it, because what such a call returns is copied to the computer that holds the key. Only an operation with the status **Ready** can be called. **Awaiting discovery** means the instance has not read it from the outside system yet, **Needs review** that the outside system describes it differently than was accepted, **Unknown** that the outside system does not offer it, and **Disabled** that the operator switched it off. On a Connection made in Studio, **Accept new description** clears **Needs review**, and **Remove** takes an operation away.
 - **Discovered tools** (German: **Gefundene Tools**), for a person who may change the Connection: the tools the server offers. For each, check **What it does** (**Was es tut**: Reading or Changing), untick **Agents can use it** (**Agenten dürfen es nutzen**) if agents should not call it, then **Accept** (**Akzeptieren**) to add it as an operation. **Read tools again** asks the server once more.
 - **Used by**: the agents that carry a tool of the Connection, of those the reader may read.
-- **Who may use it**: the people and service principals given this Connection by itself. Other rights are on the [Access page](/operate/rights-for-one-person/).
+- **Additional use rights**: the people and service principals given a right on this Connection itself. Workspace members use it through **Available in** and are not listed here.
 
 **Test connection** asks the connector type to check the Connection and records the answer. It is offered to a person who may change Connections (`connection.write`); a person who may only read sees the recorded state. A test that a policy holds for an approval has not run: it waits in the Inbox.
 
@@ -137,6 +137,7 @@ Selected workspaces**, choose the requested shared workspace, then **Save change
 then **Änderungen speichern**. **Personal workspaces** includes every person's personal workspace;
 it is not a selector for one person's workspace. Availability belongs to the instance: a person who may change
 agents across the instance performs this step if you lack the right. Changes to an existing agent's draft also need **Publish** (**Veröffentlichen**).
+Knowledge Bases and Connections the agent uses need the same workspaces under their own **Available in**. Publish and **Available in** list any that are missing; a person who may change them can tick **Make them available there too** (**Dort auch verfügbar machen**), anyone else is told which admins to ask.
 
 For orientation, point to the places enabled for the person: **Workflows**, **Apps**, **Inbox**
 (**Eingang**), and Studio's **Agents**, **Skills**, **Connections** (**Verbindungen**),

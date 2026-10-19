@@ -155,8 +155,11 @@ export async function runOperation(
   }
   const idempotencyKey = readIdempotencyKey(call, definition);
   const declared = definition.resource(input);
+  // A self-checked write may create the asset: its declared scope governs creation guardrails.
   const resolved =
-    definition.action === null ? { resource: declared } : await deps.resolveResource(declared);
+    definition.action === null && definition.effect === "changing"
+      ? { resource: declared }
+      : await deps.resolveResource(declared);
   const { resource } = resolved;
   const now = deps.now ?? (() => new Date());
   const actor = runActor(call);

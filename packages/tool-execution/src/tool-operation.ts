@@ -303,6 +303,7 @@ interface ToolCallNames {
   correlationId: string;
   /** The reason a tool's own definition gives for its mode, where it gives one. */
   policyReason?: string;
+  useRightRefusal?: string;
 }
 
 /**
@@ -331,6 +332,7 @@ export function toolResultFromOperationResult(
       // The operation's work goes on after the call; its run says when it ended.
       return { status: "success", output: { status: "running", operationRunId: result.runId } };
     case "denied":
+      if (names.useRightRefusal) return failed("permission_missing", names.useRightRefusal);
       return result.reason.kind === "policy" && result.reason.reason === "confirmation_required"
         ? failed("confirmation_required", confirmationRequiredMessage(result.reason.operation), {
             operation: result.reason.operation
@@ -529,6 +531,7 @@ export function createToolOperationRunner(
           },
           operation: tool.name,
           effect: tool.effect,
+          workspaceId: await deps.conversationWorkspace?.(request.conversationId),
           correlationId: context.correlationId,
           ...(projected.idempotencyKey === undefined
             ? {}
@@ -560,6 +563,13 @@ export function createToolOperationRunner(
           ),
           expiresAt: result.expiresAt
         };
+      }
+      if (
+        result.status === "denied" &&
+        result.reason.kind === "forbidden" &&
+        (result.reason.action === "connection.use" || result.reason.action === "knowledge_base.use")
+      ) {
+        names.useRightRefusal = await deps.useRightRefusal?.(result.reason.action, context.locale);
       }
       const answered = toolResultFromOperationResult(outcome, names);
       // The runtime keeps the started subagent's call with the run it waits on.

@@ -489,7 +489,9 @@ async function admitAgain(
       "The agent that made this call is no longer available in its workspace."
     );
   }
-  const access = await deps.authorizer.forActor(call.actor);
+  const access = await deps.authorizer.forActor(call.actor, {
+    workspaceId: call.workspaceId ?? null
+  });
   const surface = await authorizeOrigin(call, definition, deps);
   // An operation's own rule may answer with an error where it does not say that the resource
   // exists: a workspace the person has left is not found. The run ends with that error and
@@ -597,7 +599,9 @@ async function executeWaitingCall(
     ...admitted,
     runtime: { ...admitted.runtime, signal }
   };
-  const access = await deps.authorizer.forActor(call.actor);
+  const access = await deps.authorizer.forActor(call.actor, {
+    workspaceId: call.workspaceId ?? null
+  });
   /** What kept the call from being dispatched, where something did. */
   let notBegun: ApprovedOperationEnd | "still_waiting" | undefined;
   /**

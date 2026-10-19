@@ -21,6 +21,9 @@ export function invalidateOfferedAgents(
   ]);
 }
 
+/** The kinds whose assets are made available per workspace. */
+export type AvailabilityKind = "agent" | "knowledge_base" | "connection";
+
 interface AgentPlacementMutationInput {
   apiBaseUrl: string;
   authScope: string;
@@ -30,9 +33,10 @@ interface AgentPlacementMutationInput {
 }
 
 /**
- * The two changes of an agent that belong to the instance and are not part of its definition:
- * which agent is the default, and where an agent can be chosen. Each is an asset operation and
- * an Operation Run. The definition itself is written by `createAssetWrites`.
+ * The two changes of an asset that belong to the instance and are not part of its definition:
+ * which agent is the default, and where an agent, a Knowledge Base or a Connection is
+ * available. Each is an asset operation and an Operation Run. The definition itself is written
+ * by `createAssetWrites`.
  */
 export function useAgentPlacementMutations(input: AgentPlacementMutationInput) {
   const queryClient = useQueryClient();
@@ -66,8 +70,9 @@ export function useAgentPlacementMutations(input: AgentPlacementMutationInput) {
         invalidateOfferedAgents(queryClient, input.apiBaseUrl, input.authScope)
       ])
   });
-  const setAgentAvailability = useMutation({
+  const setAvailability = useMutation({
     mutationFn: async (mutationInput: {
+      kind: AvailabilityKind;
       name: string;
       mode: AgentAvailability["mode"];
       personalWorkspaces: boolean;
@@ -75,11 +80,18 @@ export function useAgentPlacementMutations(input: AgentPlacementMutationInput) {
       assetId: string;
       /** The availability the page shows as stored. A change beside it is a conflict. */
       loaded: AgentAvailability | undefined;
+      /** An agent's: also make what it uses available where it now is. */
+      makeDependenciesAvailable?: boolean;
+      /**
+       * An agent's: the live revision the page read. A publish beside it may have added what
+       * the agent uses, so the instance refuses the change as a conflict.
+       */
+      expectedRevision?: number;
     }) => {
-      const { name, assetId, loaded, ...availability } = mutationInput;
+      const { kind, name, assetId, loaded, ...availability } = mutationInput;
       return completedOutput(
         await input.client.assets.set_availability({
-          params: { kind: "agent", name },
+          params: { kind, name },
           body: { ...availability, expectedAssetId: assetId, expectedAvailability: loaded ?? null }
         }),
         input.heldMessage
@@ -95,7 +107,7 @@ export function useAgentPlacementMutations(input: AgentPlacementMutationInput) {
 
   return {
     setDefaultAgent,
-    setAgentAvailability,
-    isPending: setDefaultAgent.isPending || setAgentAvailability.isPending
+    setAvailability,
+    isPending: setDefaultAgent.isPending || setAvailability.isPending
   };
 }

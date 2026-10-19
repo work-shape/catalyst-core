@@ -89,6 +89,7 @@ export type ToolRuntimeContext = ToolExecutionContext;
 export type ToolExecutionErrorCode =
   | "tool_not_found"
   | "not_allowed"
+  | "permission_missing"
   | "approval_required"
   | "validation_failed"
   | "handler_failed"

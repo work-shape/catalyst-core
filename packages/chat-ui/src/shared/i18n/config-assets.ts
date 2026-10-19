@@ -10,12 +10,28 @@ export const configAssets = defineTranslations({
     configAvailability: "Available in",
     configAvailabilityAll: "All workspaces",
     configAvailabilityAllHint: "Every personal and shared workspace, including future ones.",
+    configAvailabilityAskAdmin: "Ask an instance admin to make them available.",
+    configAvailabilityAskAdmins: "Ask {names} to make them available.",
+    configAvailabilityAssetHiddenHint:
+      "With nothing selected, agents cannot use it in any workspace.",
+    configAvailabilityConnectionDescription:
+      "The workspaces where agents can use this connection. Members there can use it, but not see its settings or key or change it.",
     configAvailabilityDefaultLocked:
       "The default agent is always available in all workspaces. Make another agent the default to restrict this one.",
     configAvailabilityDescription: "The workspaces in which this agent can be chosen.",
     configAvailabilityHidden: "Hidden",
     configAvailabilityHiddenHint:
       "With nothing selected, this agent is not available in any workspace.",
+    configAvailabilityKnowledgeBaseDescription:
+      "The workspaces where agents can answer from this knowledge base. Members there can use it, but not open its settings or change it.",
+    configAvailabilityMakeDependencies: "Make them available there too",
+    configAvailabilityMakeDependenciesHint: "Members there can use them, nothing more.",
+    configAvailabilityMissingConnection: "{name} (connection)",
+    configAvailabilityMissingFailed:
+      "Could not check whether what this agent uses is available there.",
+    configAvailabilityMissingKnowledgeBase: "{name} (knowledge base)",
+    configAvailabilityMissingText: "Members in some of this agent's workspaces cannot use:",
+    configAvailabilityMissingTitle: "Not available everywhere this agent is",
     configAvailabilityNoSharedWorkspaces: "There are no shared workspaces yet.",
     configAvailabilityPersonal: "Personal workspaces",
     configAvailabilityPersonalHint: "Every user's own personal workspace.",
@@ -167,6 +183,12 @@ export const configAssets = defineTranslations({
     configAvailability: "Verfügbar in",
     configAvailabilityAll: "Alle Arbeitsbereiche",
     configAvailabilityAllHint: "Jeder persönliche und geteilte Arbeitsbereich, auch künftige.",
+    configAvailabilityAskAdmin: "Bitte einen Instanz-Admin, sie verfügbar zu machen.",
+    configAvailabilityAskAdmins: "Bitte {names}, sie verfügbar zu machen.",
+    configAvailabilityAssetHiddenHint:
+      "Ohne Auswahl können Agenten sie in keinem Arbeitsbereich verwenden.",
+    configAvailabilityConnectionDescription:
+      "Die Arbeitsbereiche, in denen Agenten diese Verbindung verwenden können. Mitglieder dort können sie verwenden, aber weder Einstellungen noch Schlüssel sehen oder sie ändern.",
     configAvailabilityDefaultLocked:
       "Der Standardagent ist immer in allen Arbeitsbereichen verfügbar. Lege einen anderen Agenten als Standard fest, um diesen einzuschränken.",
     configAvailabilityDescription:
@@ -174,6 +196,17 @@ export const configAssets = defineTranslations({
     configAvailabilityHidden: "Ausgeblendet",
     configAvailabilityHiddenHint:
       "Ohne Auswahl ist dieser Agent in keinem Arbeitsbereich verfügbar.",
+    configAvailabilityKnowledgeBaseDescription:
+      "Die Arbeitsbereiche, in denen Agenten aus dieser Wissensbasis antworten können. Mitglieder dort können sie verwenden, aber weder ihre Einstellungen öffnen noch sie ändern.",
+    configAvailabilityMakeDependencies: "Dort auch verfügbar machen",
+    configAvailabilityMakeDependenciesHint: "Mitglieder dort können sie verwenden, mehr nicht.",
+    configAvailabilityMissingConnection: "{name} (Verbindung)",
+    configAvailabilityMissingFailed:
+      "Konnte nicht prüfen, ob dort verfügbar ist, was dieser Agent verwendet.",
+    configAvailabilityMissingKnowledgeBase: "{name} (Wissensbasis)",
+    configAvailabilityMissingText:
+      "In einigen Arbeitsbereichen dieses Agenten können Mitglieder Folgendes nicht verwenden:",
+    configAvailabilityMissingTitle: "Nicht überall verfügbar, wo dieser Agent ist",
     configAvailabilityNoSharedWorkspaces: "Es gibt noch keine geteilten Arbeitsbereiche.",
     configAvailabilityPersonal: "Persönliche Arbeitsbereiche",
     configAvailabilityPersonalHint: "Der eigene persönliche Arbeitsbereich jedes Benutzers.",

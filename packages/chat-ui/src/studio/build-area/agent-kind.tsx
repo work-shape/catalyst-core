@@ -2,10 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge, Page, SkeletonPage } from "@work-shape/catalyst-ui";
 import { useAgentPlacementMutations } from "../../shared/api/agent-placement-mutations";
-import {
-  useAdministeredCollaborationWorkspacesQuery,
-  usePlatformContextQuery
-} from "../../shared/api/workspace-queries";
+import { usePlatformContextQuery } from "../../shared/api/workspace-queries";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { canManageAgentModels } from "../../shared/governance";
 import { useTranslation } from "../../shared/i18n";
@@ -13,6 +10,7 @@ import { useAppToolsRead } from "../apps/app-tools-group";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorMessage } from "../../shared/workspace-utils";
 import { AgentEditor } from "./agent-editor";
+import { useAvailabilityChoice } from "./asset-availability";
 import { useAgentDraft } from "./agent-draft-source";
 import { agentConfigToForm, startedAgentForm } from "./asset-form-model";
 import type { BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
@@ -105,14 +103,10 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
     knowledgeOn,
     owner
   );
-  const administeredWorkspacesQuery = useAdministeredCollaborationWorkspacesQuery({
-    ...api,
-    enabled: instanceWrite && asset !== undefined
-  });
   // The default and the availability are stored beside the agent. A change of either leaves
   // the form alone, so the page keeps what it was told and what it changed itself.
   const [isDefault, setIsDefault] = useState(asset?.isDefault === true);
-  const [availability, setAvailability] = useState(asset?.availability);
+  const availability = useAvailabilityChoice(frame, "agent");
   // The page edits the agent's one draft where it has one: the form waits for its read.
   const draftSource = useAgentDraft({
     agent: asset?.name,
@@ -179,32 +173,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
                 )
           : undefined
       }
-      availability={
-        asset && instanceWrite
-          ? {
-              saved: availability,
-              workspaces: administeredWorkspacesQuery.data ?? [],
-              workspacesError: administeredWorkspacesQuery.error
-                ? apiErrorMessage(administeredWorkspacesQuery.error, undefined)
-                : undefined,
-              save: (next) =>
-                placement.setAgentAvailability
-                  .mutateAsync({
-                    name: asset.name,
-                    assetId: asset.id,
-                    loaded: availability,
-                    ...next
-                  })
-                  .then(
-                    (saved) => {
-                      setAvailability(saved);
-                      return undefined;
-                    },
-                    (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
-                  )
-            }
-          : undefined
-      }
+      {...(availability === undefined ? {} : { availability })}
     />
   );
 }

@@ -7,6 +7,7 @@ import {
   createActorAccess,
   DocumentSourceError,
   LEGACY_LIST_GRANTOR,
+  requireHeldRights,
   type ActorAccess,
   type ClientInstanceId,
   type PlatformStores
@@ -61,11 +62,16 @@ export async function publishSourcePrincipal(
           (old) => old.id === source.id && JSON.stringify(old) === JSON.stringify(source)
         )
       )
-        access.require(CONNECTION_ACTIONS.use, {
-          kind: CONNECTION_ASSET_KIND,
-          assetId: asset.id,
-          name: asset.name
-        });
+        requireHeldRights(
+          access,
+          [
+            {
+              action: CONNECTION_ACTIONS.use,
+              resource: { kind: CONNECTION_ASSET_KIND, assetId: asset.id, name: asset.name }
+            }
+          ],
+          { lends: { label: `Knowledge Base ${input.name}` } }
+        );
       if (input.documentSourceOffered && !input.documentSourceOffered(asset.config))
         throw new AppError(
           "VALIDATION_FAILED",

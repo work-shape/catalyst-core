@@ -765,6 +765,10 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         })),
         actions: ofExisting(read.actions),
         assetActions: ofExisting(read.assetActions),
+        workspaces: read.workspaces.flatMap((workspace) => {
+          const actions = ofExisting(workspace.actions);
+          return actions.length > 0 ? [{ ...workspace, actions }] : [];
+        }),
         namespaces: read.namespaces.flatMap((namespace) => {
           const actions = ofExisting(namespace.actions);
           return actions.length > 0 ? [{ ...namespace, actions }] : [];

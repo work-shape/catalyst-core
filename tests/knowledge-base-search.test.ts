@@ -15,6 +15,7 @@ import {
   knowledgeSearchOperationName,
   type AgentConfig,
   type AuthenticatedUser,
+  type CollaborationWorkspaceId,
   type DataStoreRecord,
   type JsonObject
 } from "@work-shape/catalyst-core";
@@ -454,14 +455,18 @@ describe("searching the documents of a Knowledge Base", () => {
       expect(saved.statusCode, saved.body).toBe(200);
     }
 
-    async function conversationOf(world: DataStoreInstance, user: AuthenticatedUser) {
+    async function conversationOf(
+      world: DataStoreInstance,
+      user: AuthenticatedUser,
+      usedIn?: CollaborationWorkspaceId
+    ) {
       const workspace = await world.stores.workspaces.ensurePersonalWorkspace({
         clientInstanceId,
         userId: asUserId(user.id)
       });
       return world.stores.conversations.createConversation({
         clientInstanceId,
-        collaborationWorkspaceId: workspace.id,
+        collaborationWorkspaceId: usedIn ?? workspace.id,
         createdByUserId: user.id,
         createdByExternalUserId: user.id,
         visibility: "private",
@@ -557,8 +562,14 @@ describe("searching the documents of a Knowledge Base", () => {
       const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
       const member = await person(instance, "member-1", ["user"]);
       let call = 0;
-      const ask = async (user: AuthenticatedUser, input: JsonObject, runId = "run-1") => {
-        const conversation = await conversationOf(instance, user);
+      let usedIn: CollaborationWorkspaceId | undefined;
+      const ask = async (
+        user: AuthenticatedUser,
+        input: JsonObject,
+        runId = "run-1",
+        locale: "en" | "de" = "en"
+      ) => {
+        const conversation = await conversationOf(instance, user, usedIn);
         call += 1;
         return runtime.runTool(
           {
@@ -569,7 +580,7 @@ describe("searching the documents of a Knowledge Base", () => {
             agentName: "berater",
             input
           },
-          { clientInstanceId, user, correlationId: `corr_search_${call}` }
+          { clientInstanceId, user, locale, correlationId: `corr_search_${call}` }
         );
       };
 
@@ -598,23 +609,37 @@ describe("searching the documents of a Knowledge Base", () => {
         error: { code: "not_allowed", details: { reason: "knowledge_base_not_assigned" } }
       });
 
-      // The member may use two of the three: the third is named as skipped with the reason.
+      const workspace = await instance.stores.workspaces.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Nordlicht",
+        creatorUserId: asUserId(admin.id)
+      });
+      await instance.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: workspace.id,
+        userId: asUserId(member.id),
+        role: "member"
+      });
+      usedIn = workspace.id;
+      // Upgrade and new assets grant no use until somebody explicitly saves availability.
+      expect(await ask(member, { query: "Kaution" })).toMatchObject({
+        status: "failed",
+        error: { code: "permission_missing", message: expect.stringContaining("permission") }
+      });
+      const germanRefusal = await ask(member, { query: "Kaution" }, "run-de", "de");
+      expect(germanRefusal).toMatchObject({
+        status: "failed",
+        error: { code: "permission_missing", message: expect.stringContaining("user-1") }
+      });
+      expect(germanRefusal.status === "failed" ? germanRefusal.error.message : "").toContain(
+        "Dir fehlt das Recht"
+      );
+      expect(JSON.stringify(germanRefusal)).not.toMatch(/no_access|not_allowed/u);
       for (const name of ["mieten", "kautionen"]) {
-        const asset = required(
-          await instance.stores.configAssets.getConfigAsset({
-            clientInstanceId,
-            kind: KNOWLEDGE_BASE_ASSET_KIND,
-            name
-          })
-        );
-        const granted = await instance.api.call("permissions.grant", {
-          payload: {
-            holderKind: "user",
-            holderId: member.id,
-            action: KNOWLEDGE_BASE_ACTIONS.use,
-            scopeKind: "asset",
-            scopeId: asset.id
-          }
+        const granted = await instance.api.call("assets.set_availability", {
+          params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name },
+          payload: { mode: "selected", collaborationWorkspaceIds: [workspace.id] }
         });
         expect(granted.statusCode, granted.body).toBe(200);
       }
@@ -630,8 +655,8 @@ describe("searching the documents of a Knowledge Base", () => {
       expect(answer.skipped).toEqual([
         {
           knowledgeBase: "protokolle",
-          reason: "no_access",
-          message: expect.stringContaining("knowledge_base.use")
+          reason: "permission_missing",
+          message: expect.stringContaining("permission")
         }
       ]);
       // Each Knowledge Base searched is its own recorded call, the refused one included.
@@ -646,6 +671,66 @@ describe("searching the documents of a Knowledge Base", () => {
         ].sort()
       );
       expect(runs.every((run) => run.actor.id === member.id)).toBe(true);
+      const secondWorkspace = await instance.stores.workspaces.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Other shared chat",
+        creatorUserId: asUserId(admin.id)
+      });
+      await instance.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: secondWorkspace.id,
+        userId: asUserId(member.id),
+        role: "member"
+      });
+      usedIn = secondWorkspace.id;
+      expect(await ask(member, { query: "Kaution", knowledgeBases: ["kautionen"] })).toMatchObject({
+        status: "failed",
+        error: { code: "permission_missing" }
+      });
+      usedIn = workspace.id;
+      const kb = required(
+        await instance.stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: KNOWLEDGE_BASE_ASSET_KIND,
+          name: "mieten"
+        })
+      );
+      await instance.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: member.id,
+        action: KNOWLEDGE_BASE_ACTIONS.use,
+        effect: "deny",
+        scopeKind: "asset",
+        scopeId: kb.id,
+        grantedBy: asUserId(admin.id)
+      });
+      expect(await ask(member, { query: "Kaution", knowledgeBases: ["mieten"] })).toMatchObject({
+        status: "failed",
+        error: { code: "permission_missing" }
+      });
+      await instance.stores.workspaces.removeMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: workspace.id,
+        userId: asUserId(member.id)
+      });
+      const other = await instance.stores.workspaces.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Other team",
+        creatorUserId: asUserId(admin.id)
+      });
+      await instance.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: other.id,
+        userId: asUserId(member.id),
+        role: "member"
+      });
+      expect(await ask(member, { query: "Kaution", knowledgeBases: ["kautionen"] })).toMatchObject({
+        status: "failed",
+        error: { code: "permission_missing" }
+      });
     });
   });
 });

@@ -98,7 +98,7 @@ export interface OperationApprovalRequests {
 export interface RunOperationDeps {
   clientInstanceId: ClientInstanceId;
   registry: OperationRegistry;
-  /** Resolves a named-right resource to its retained asset identity and owner before authorization. */
+  /** Resolves a declared resource to its retained asset identity and owner before authorization. */
   resolveResource(resource: OperationResource | undefined): Promise<{
     resource: OperationResource | undefined;
     /** Answered only after the caller holds the kind-level right. */
@@ -133,6 +133,15 @@ export interface RunOperationDeps {
     agentName: string,
     conversationId?: ConversationId
   ): readonly string[] | Promise<readonly string[]>;
+  /** Plain, localized help for missing resource use rights, read only after a refusal. */
+  useRightRefusal?(
+    action: "knowledge_base.use" | "connection.use",
+    locale?: string
+  ): Promise<string>;
+  /** The persisted workspace of an agent conversation, never chosen by its tool input. */
+  conversationWorkspace?(
+    conversationId: ConversationId
+  ): Promise<CollaborationWorkspaceId | undefined>;
   /**
    * Whether a person is a member of a workspace now. Asked before a call that waited for an
    * approval is executed in a workspace, for an agent's call and for an operation whose right

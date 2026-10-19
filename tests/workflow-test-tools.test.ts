@@ -97,6 +97,7 @@ async function fixture() {
     runtime: {},
     access: {
       authorize: () => ({ allowed: true, source: "grant" }),
+      authorizeTransfer: () => ({ allowed: true, source: "grant" }),
       require: () => undefined,
       holdsGrantAt: () => true,
       denials: () => []

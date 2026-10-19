@@ -33,6 +33,14 @@ const SCALAR_TYPES = DATA_STORE_SCALAR_TYPES;
 const scalarSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const valueSchema = z.union([scalarSchema, z.array(scalarSchema)]);
 
+/**
+ * A cited document is opened from a conversation: its workspace is where the reader may use the
+ * Knowledge Base through its availability. The reader must be able to open that conversation.
+ */
+const knowledgeOpenDocumentQuerySchema = z.object({
+  conversationId: z.string().min(1).optional()
+});
+
 const knowledgeQueryRequestSchema = z.strictObject({
   /** One read-only SELECT or WITH statement with positional placeholders. */
   sql: z.string().min(1),
@@ -212,12 +220,14 @@ export const knowledgeOperations = {
     method: "GET",
     path: "/api/v1/knowledge-bases/:knowledgeBase/documents/:documentId/content",
     summary:
-      "Open an original source document with knowledge_base.use; removed documents are unavailable",
+      "Open an original source document with knowledge_base.use; a cited document is opened in the context of its conversation's workspace; removed documents are unavailable",
     tag: "Knowledge Bases",
     auth: "user",
     scope: "data_store_rows:read",
-    requires: ["knowledge_base.use"],
+    // The route checks knowledge_base.use itself, in the workspace of the citing conversation.
+    requires: [],
     effect: "reading",
+    query: knowledgeOpenDocumentQuerySchema,
     response: blob(),
     errors: ["NOT_FOUND"],
     rateClass: "read"

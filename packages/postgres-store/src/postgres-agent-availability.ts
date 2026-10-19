@@ -5,6 +5,7 @@ import type { PostgresConnection } from "./postgres-database";
 import {
   configAssetAvailability,
   configAssets,
+  configAssetRevisions,
   configAssetState,
   configAssetWorkspaceAvailability
 } from "./schema";
@@ -27,7 +28,7 @@ export async function listAgentAvailability(
     .where(
       and(
         eq(configAssets.clientInstanceId, input.clientInstanceId),
-        eq(configAssets.kind, "agent"),
+        eq(configAssets.kind, input.kind ?? "agent"),
         eq(configAssets.status, "active"),
         input.agentName === undefined ? undefined : eq(configAssets.name, input.agentName)
       )
@@ -85,14 +86,30 @@ export async function setAgentAvailability(
       .limit(1);
     const asset = await findConfigAssetRow(tx, {
       clientInstanceId: input.clientInstanceId,
-      kind: "agent",
+      kind: input.kind ?? "agent",
       name: input.agentName
     });
     if (!asset || asset.status !== "active") {
-      throw new AppError("NOT_FOUND", `Config agent '${input.agentName}' was not found`);
+      throw new AppError(
+        "NOT_FOUND",
+        `Config ${input.kind ?? "agent"} '${input.agentName}' was not found`
+      );
+    }
+    if (input.expectedRevision !== undefined) {
+      const [revision] = await tx
+        .select({ revision: configAssetRevisions.revision })
+        .from(configAssetRevisions)
+        .where(eq(configAssetRevisions.id, asset.activeRevisionId))
+        .limit(1);
+      if (revision?.revision !== input.expectedRevision)
+        throw new AppError("CONFLICT", "The asset changed since its availability was reviewed", {
+          kind: input.kind ?? "agent",
+          name: input.agentName,
+          reason: "definition_changed"
+        });
     }
     if (input.expectedAssetId !== undefined && input.expectedAssetId !== asset.id) {
-      throw availabilityConflict(input.agentName, "asset_replaced");
+      throw availabilityConflict(input.agentName, "asset_replaced", input.kind);
     }
     if (input.expectedAvailability !== undefined) {
       // Every change of an availability holds the lock above, so what is read here stands.
@@ -114,10 +131,22 @@ export async function setAgentAvailability(
         ? { ...stored, collaborationWorkspaceIds: storedWorkspaces.map(({ id }) => id) }
         : null;
       if (!availabilitiesEqual(current, input.expectedAvailability)) {
-        throw availabilityConflict(input.agentName, "availability_changed");
+        throw availabilityConflict(input.agentName, "availability_changed", input.kind);
       }
+      // A compare of an unchanged setting holds the lock without rewriting rows or version.
+      if (availabilitiesEqual(current, input.availability))
+        return {
+          ...input.availability,
+          collaborationWorkspaceIds: [
+            ...new Set(input.availability.collaborationWorkspaceIds)
+          ].sort()
+        };
     }
-    if (input.availability.mode !== "all" && state?.defaultAgentName === input.agentName) {
+    if (
+      (input.kind ?? "agent") === "agent" &&
+      input.availability.mode !== "all" &&
+      state?.defaultAgentName === input.agentName
+    ) {
       throw new AppError(
         "VALIDATION_FAILED",
         `Default agent '${input.agentName}' must be available in all workspaces`
@@ -170,14 +199,15 @@ export async function setAgentAvailability(
 /** The refusal of an availability change that was decided against what is no longer stored. */
 function availabilityConflict(
   agentName: string,
-  reason: "asset_replaced" | "availability_changed"
+  reason: "asset_replaced" | "availability_changed",
+  kind = "agent"
 ): AppError {
   return new AppError(
     "CONFLICT",
     reason === "asset_replaced"
-      ? `Config agent '${agentName}' is another asset than the one this change was made for`
-      : `The availability of config agent '${agentName}' changed since it was read`,
-    { kind: "agent", name: agentName, reason }
+      ? `Config ${kind} '${agentName}' is another asset than the one this change was made for`
+      : `The availability of config ${kind} '${agentName}' changed since it was read`,
+    { kind, name: agentName, reason }
   );
 }
 
