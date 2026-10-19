@@ -10,7 +10,6 @@ import type {
   FileSet,
   JsonObject,
   LocaleCode,
-  Namespace,
   OperationEffect,
   PlatformStores,
   RegisteredAssetKind,

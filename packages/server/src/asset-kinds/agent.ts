@@ -12,14 +12,12 @@ import {
   AppError,
   ASSET_OWNER_KINDS,
   defineAssetKind,
-  findNamespaceOfAssetName,
   KNOWLEDGE_BASE_ASSET_KIND,
   type AgentConfig,
   type AgentEditableField,
   type AgentModelSettingField,
   type AssetValidationContext,
-  type AssetValidationIssue,
-  type Namespace
+  type AssetValidationIssue
 } from "@work-shape/catalyst-core";
 import {
   configValuesEqual,
@@ -148,7 +146,7 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         : undefined;
     },
 
-    assertInteractiveUpsertAllowed({ access, name, current, next, modelBindingsListed }) {
+    assertInteractiveUpsertAllowed({ access, current, next, modelBindingsListed }) {
       if (current === undefined && !policy().allowAgentCreation) {
         throw new AppError("FORBIDDEN", "Interactive agent creation is disabled");
       }
