@@ -162,11 +162,12 @@ export function withConnectionForm(
  * instance writes the origin, the owner and the secret handle itself.
  */
 export function newConnectionConfig(
-  start: { name: string; title: string; copyOf?: Record<string, unknown> },
+  start: { name: string; title: string; description?: string; copyOf?: Record<string, unknown> },
   form: ConnectionFormState
 ): Record<string, unknown> {
   const copied = start.copyOf ?? {};
-  const description = textOf(copied.description);
+  // What the person typed, an empty field included; without a field, the copied description.
+  const description = (start.description ?? textOf(copied.description)).trim();
   return withConnectionForm(
     {
       name: start.name,
@@ -274,6 +275,40 @@ export function withOperationExposure(
       const others = operation.exposure.filter((surface) => surface !== exposure);
       return { ...operation, exposure: exposed ? [...others, exposure] : others };
     })
+  };
+}
+
+/**
+ * The definition with one accepted operation switched on or off, and everything else of it as
+ * it was. An operation that is off stays accepted and is callable from no surface.
+ */
+export function withOperationEnabled(
+  config: Record<string, unknown>,
+  name: string,
+  enabled: boolean
+): Record<string, unknown> {
+  return {
+    ...config,
+    operations: acceptedOperationsOf(config).map((operation) =>
+      operation.name === name ? { ...operation, enabled } : operation
+    )
+  };
+}
+
+/**
+ * The definition with the name people read and the description, trimmed. An empty description
+ * is left out. The id stays: references name it, not the name.
+ */
+export function withConnectionAbout(
+  config: Record<string, unknown>,
+  about: { title: string; description: string }
+): Record<string, unknown> {
+  const rest = Object.fromEntries(Object.entries(config).filter(([key]) => key !== "description"));
+  const description = about.description.trim();
+  return {
+    ...rest,
+    displayName: about.title.trim(),
+    ...(description === "" ? {} : { description })
   };
 }
 

@@ -6,7 +6,13 @@ import { join } from "node:path";
 import type { Locator, Page, Request } from "@playwright/test";
 import { availableSamplePort } from "./sample-port.mjs";
 import { sendToolCall } from "./page-surface-fixtures";
-import { assetRevision, requestWithOrigin } from "./request-with-origin";
+import {
+  assetBaseRevision,
+  assetRevision,
+  readAgentDraft,
+  readAsset,
+  requestWithOrigin
+} from "./request-with-origin";
 import { expect, test } from "./test";
 
 // The New connection dialog against the demo's sample MCP server, which this file starts on
@@ -600,3 +606,181 @@ for (const locale of LOCALES) {
     }
   });
 }
+
+/** The agent the page test gives a new Connection's tools to; the test stores and deletes it. */
+const HANDOFF_AGENT_TITLE = "Handoff probe";
+
+async function removeAgent(page: Page, url: string): Promise<void> {
+  if (!(await page.request.get(url)).ok()) return;
+  const removed = await requestWithOrigin(page, "post", `${url}/delete`, {
+    data: { expectedRevision: await assetRevision(page, url) }
+  });
+  expect(removed.ok(), `Delete agent during cleanup: ${removed.status()}`).toBe(true);
+}
+
+/** Pictures of the Connection page as it stands, light and dark, at 1280 and at 390. */
+async function shootPage(page: Page, locale: Locale, name: string): Promise<void> {
+  if (!shotsDir) return;
+  await mkdir(shotsDir, { recursive: true });
+  for (const mode of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: mode });
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({
+        path: join(shotsDir, `connection-page-${name}-${width}-${locale}-${mode}.png`),
+        fullPage: true,
+        animations: "disabled"
+      });
+    }
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 1280, height: 900 });
+}
+
+// CONN-PAGE: a new REST API asks what it is for, and once its tools are approved the dialog
+// gives them to an agent the person may publish, as one published revision (CS-5d). Its
+// page shows what each tool sends, edits the name and the description and switches one tool
+// off, each kept over a reload, and names the agent using it; the list says how it is.
+test("en: a new REST API is given to an agent, and its page edits it, switches a tool and shows what it sends", async ({
+  page,
+  instanceAgentsChange: _instanceAgentsChange
+}) => {
+  test.setTimeout(180_000);
+  const id = `e2e-page-edit-${randomUUID().slice(0, 8)}`;
+  const agentName = `e2e_handoff_${randomUUID().slice(0, 8)}`;
+  const agentUrl = `${apiBaseUrl}/api/v1/assets/agent/${agentName}`;
+  const connectionUrl = `${apiBaseUrl}/api/v1/assets/connection/${id}`;
+  const { main, dialog } = await openDialog(page, "en");
+  try {
+    const stored = await requestWithOrigin(page, "put", agentUrl, {
+      data: {
+        expectedRevision: await assetBaseRevision(page, agentUrl),
+        config: {
+          name: agentName,
+          displayName: HANDOFF_AGENT_TITLE,
+          modelProviderId: "local",
+          instructions: "A probe of the handoff.",
+          toolNames: ["show_view"]
+        }
+      }
+    });
+    expect(stored.ok(), await stored.text()).toBe(true);
+    const liveRevision = await assetRevision(page, agentUrl);
+
+    await dialog.locator('[data-connection-type="http_api"]').getByRole("button").click();
+    const field = (name: string) => dialog.locator(`[data-connection-field="${name}"]`);
+    await dialog.locator('[data-name-with-address-field="name"]').fill("Ledger probe");
+    await field("description").fill("Reads the health of the sample service.");
+    await field("url").fill(sampleBase);
+    await field("secret").fill(sampleKey);
+    await dialog.locator("[data-name-with-address-fold]").click();
+    await dialog.locator('[data-name-with-address-field="address"]').fill(id);
+    await field("testPath").fill("/healthz");
+    await dialog.locator("[data-connection-connect]").click();
+    await dialog.locator("[data-connection-paste]").getByRole("button").click();
+    await dialog
+      .locator("[data-connection-paste-field]")
+      .fill(
+        [
+          "- name: health",
+          "  description: Says whether the service runs.",
+          "  method: GET",
+          "  path: /healthz",
+          `  query: ${JSON.stringify(enumQuery)}`,
+          "- name: status",
+          "  description: Says since when the service runs.",
+          "  method: GET",
+          "  path: /healthz"
+        ].join("\n")
+      );
+    await dialog.locator("[data-connection-paste-check]").click();
+    await dialog.locator("[data-connection-approve]").click();
+
+    // Approved for agents: "Give to an agent" publishes the agent with the tools (CS-5d).
+    await expect(dialog.locator("[data-connection-approved]")).toContainText("2");
+    await dialog.locator("[data-connection-give]").click();
+    await dialog.getByRole("radio", { name: HANDOFF_AGENT_TITLE }).check();
+    await dialog.locator("[data-connection-give-next]").click();
+    const tools = [`connection.${id}.health`, `connection.${id}.status`];
+    const ask = dialog.locator(`[data-connection-give-ask="${agentName}"]`);
+    for (const tool of tools) {
+      await expect(ask.locator(`[data-connection-give-tool="${tool}"]`)).toBeVisible();
+    }
+    await shootPage(page, "en", "handoff");
+    await dialog.locator("[data-connection-give-confirm]").click();
+    await expect(dialog.locator('[data-connection-give-outcome="published"]')).toBeVisible();
+    expect(await assetRevision(page, agentUrl)).toBe(liveRevision + 1);
+    expect(await readAgentDraft(page, agentUrl)).toBeNull();
+    expect((await readAsset(page, agentUrl))?.config.toolNames).toEqual(["show_view", ...tools]);
+    await dialog.locator("[data-connection-give-done]").click();
+    await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
+
+    // What each tool sends, read from the definition: its request, its inputs, the declaration.
+    const health = main.locator('[data-connection-operation-details="health"]');
+    await expect(health.locator("[data-connection-request]")).toContainText("GET /healthz");
+    await expect(health.locator('[data-connection-parameter="status"]')).toContainText("ready");
+    await expect(health.locator("[data-enum-injection]")).toHaveCount(0);
+    await health.locator('[data-connection-declaration="health"]').getByRole("button").click();
+    await expect(health.locator('[data-connection-declaration="health"]')).toContainText('"enum"');
+    await shootPage(page, "en", "declarations");
+
+    // The name and the description, changed in place and kept over a reload.
+    const about = main.locator("[data-connection-about]");
+    await expect(about).toContainText("Reads the health of the sample service.");
+    await about.locator("[data-connection-about-edit]").click();
+    const form = main.locator("[data-connection-about-form]");
+    await form.locator('[data-connection-field="title"]').fill("Ledger probe renamed");
+    await form.locator('[data-connection-field="description"]').fill("Changed on its page.");
+    await form.locator("[data-connection-about-save]").click();
+    await expect(form).toHaveCount(0);
+    await page.reload();
+    await expect(main.locator("[data-connection-about]")).toContainText("Ledger probe renamed");
+    await expect(main.locator("[data-connection-about]")).toContainText("Changed on its page.");
+
+    // One tool switched off beside Remove, kept over a reload and in the definition.
+    const toggle = main.locator('[data-connection-enabled="status"]');
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
+    await page.reload();
+    await expect(main.locator('[data-connection-enabled="status"]')).toHaveAttribute(
+      "aria-checked",
+      "false"
+    );
+    await expect(main.locator('[data-connection-enabled="health"]')).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
+    const definition = await readAsset(page, connectionUrl);
+    expect(definition?.config.displayName).toBe("Ledger probe renamed");
+    expect(definition?.config.description).toBe("Changed on its page.");
+    expect(definition?.config.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "status", enabled: false }),
+        expect.objectContaining({ name: "health", enabled: true })
+      ])
+    );
+
+    // Published by the give, the agent is named under Used by by its title, never its id.
+    const using = main.locator('[data-connection-used-by="agent"]');
+    await expect(using).toContainText(HANDOFF_AGENT_TITLE);
+    await expect(using).not.toContainText(agentName);
+    await shootPage(page, "en", "edited");
+
+    // The list says the Connection was tested and works.
+    await page.goto("/build/connections");
+    const row = page
+      .getByRole("list", { name: "Connections", exact: true })
+      .getByRole("listitem")
+      .filter({ has: page.locator(`a[href="/build/connections/${id}"]`) });
+    await expect(row.locator("[data-connection-list-health]")).toHaveAttribute(
+      "data-connection-list-health",
+      "ready"
+    );
+    await expect(row).toContainText("Ready");
+    expect(await page.content()).not.toContain(sampleKey);
+  } finally {
+    await removeAgent(page, agentUrl);
+    await removeConnection(page, id);
+  }
+});

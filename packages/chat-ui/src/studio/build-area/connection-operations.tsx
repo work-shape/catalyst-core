@@ -7,6 +7,7 @@ import {
   Chip,
   EmptyState,
   List,
+  Switch,
   type BadgeTone
 } from "@work-shape/catalyst-ui";
 import type { ReactNode } from "react";
@@ -14,17 +15,20 @@ import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { operationTitle } from "./connection-approval-model";
 import { useConnectionWrite } from "./connection-editing";
+import { OperationDetails } from "./connection-operation-details";
 import { operationPagingText } from "./connection-paging";
 import { RefusalNotice } from "./refusal-notice";
 import {
+  withOperationEnabled,
   withOperationExposure,
   withReviewedOperation,
   withoutOperation
 } from "./connection-form-model";
 
-// The accepted operations of a Connection: what each does, who may call it and whether it is
-// callable now. On a Connection made on the instance, a reader who may change it takes an
-// operation off here, or accepts the new description of one the server changed.
+// The accepted operations of a Connection: what each does, what it calls and takes, who may call
+// it and whether it is callable now. On a Connection made on the instance, a reader who may
+// change it switches an operation off or on, takes it off here, or accepts the new description
+// of one the server changed.
 
 const OPERATION_STATUS: Record<
   ConnectionOperationDetail["status"],
@@ -88,6 +92,7 @@ export function EditableOperations({
     <>
       <ConnectionOperations
         operations={operations}
+        config={asset.config}
         actions={(operation) => (
           <div className="flex flex-wrap items-center gap-2">
             <div
@@ -141,6 +146,23 @@ export function EditableOperations({
                 {t("connections.acceptNewDescription")}
               </Button>
             ) : null}
+            <Switch
+              className="ml-auto"
+              aria-label={t("connectionPage.operationSwitch", {
+                name: operationTitle(operation.name)
+              })}
+              checked={operation.enabled}
+              disabled={blocked}
+              data-connection-enabled={operation.name}
+              onCheckedChange={(enabled) => {
+                write
+                  .write(
+                    `enabled:${operation.name}`,
+                    withOperationEnabled(asset.config, operation.name, enabled)
+                  )
+                  .catch(() => undefined);
+              }}
+            />
             <Button
               size="sm"
               variant="ghost"
@@ -165,9 +187,12 @@ export function EditableOperations({
 
 export function ConnectionOperations({
   operations,
+  config,
   actions
 }: {
   operations: ConnectionOperationDetail[];
+  /** The Connection's definition: a REST API declares there what each operation sends. */
+  config: Record<string, unknown>;
   /** What the reader may do to one operation, below it. */
   actions?: (operation: ConnectionOperationDetail) => ReactNode;
 }) {
@@ -214,6 +239,7 @@ export function ConnectionOperations({
                 {operation.description}
               </p>
             ) : null}
+            <OperationDetails operation={operation} config={config} />
             <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
               {operation.exposure.length === 0 ? (
                 t("connections.exposureNone")

@@ -150,25 +150,34 @@ export function useDataStoreSource(): DataStoreSource {
       ),
     useUsedBy: (store) =>
       useRead(key("used-by", store), (signal) => calls.used_by({ params: { store }, signal })),
-    useUsingPage(workspaceId) {
-      // An App and a Workflow are opened inside a workspace: the store's own, or the one the
-      // reader has open.
-      const apps = useAppsHost();
-      const workflows = useWorkflowsHost();
-      const collaborationWorkspaceId =
-        workspaceId ?? apps?.workspace?.id ?? workflows?.workspace?.id;
-      return (kind, name) => {
-        const route = usingPageRoute(kind, name, {
-          collaborationWorkspaceId,
-          apps: apps?.enabled ?? false,
-          workflows: workflows !== undefined
-        });
-        const showRoute = kind === "app" ? apps?.showRoute : workflows?.showRoute;
-        return route && showRoute
-          ? { href: workspaceRoutePath(route), open: () => showRoute(route) }
-          : undefined;
-      };
-    }
+    useUsingPage
+  };
+}
+
+/**
+ * A hook: the way to the page of an App or a Workflow, or nothing where the reader is shown no
+ * such page. An App and a Workflow are opened inside a workspace: the one named, such as the
+ * one an asset belongs to, or the one the reader has open.
+ */
+export function useUsingPage(workspaceId: string | undefined): (
+  kind: (typeof OPERATIONS_AUDIENCES)[number],
+  name: string,
+  /** The workspace that owns what is opened, where it is not the one `workspaceId` names. */
+  ownerWorkspaceId?: string
+) => { href: string; open(): void } | undefined {
+  const apps = useAppsHost();
+  const workflows = useWorkflowsHost();
+  const collaborationWorkspaceId = workspaceId ?? apps?.workspace?.id ?? workflows?.workspace?.id;
+  return (kind, name, ownerWorkspaceId) => {
+    const route = usingPageRoute(kind, name, {
+      collaborationWorkspaceId: ownerWorkspaceId ?? collaborationWorkspaceId,
+      apps: apps?.enabled ?? false,
+      workflows: workflows !== undefined
+    });
+    const showRoute = kind === "app" ? apps?.showRoute : workflows?.showRoute;
+    return route && showRoute
+      ? { href: workspaceRoutePath(route), open: () => showRoute(route) }
+      : undefined;
   };
 }
 

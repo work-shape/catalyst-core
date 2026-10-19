@@ -1,0 +1,136 @@
+// @rights-copy: included in the rights wording guard.
+import { defineTranslations } from "./translation-area";
+
+// The Connection page's name and description, what each operation calls and takes, its switch,
+// "Used by" beyond agents, the list's health and "Give it to an agent" after an approval.
+
+export const connectionPage = defineTranslations({
+  en: {
+    "connectionPage.request": "Request",
+    "connectionPage.mcpTool": "Tool on the server",
+    "connectionPage.inputs": "Inputs",
+    "connectionPage.noInputs": "Takes no input.",
+    "connectionPage.noSchema":
+      "What this tool takes is not shown: the server described no input, or its description is too large.",
+    "connectionPage.inputsElsewhere":
+      "Its inputs are written in a form this page does not list. See Technical details.",
+    "connectionPage.declarationCut":
+      "Cut after {count} characters: this is not the whole declaration.",
+    "connectionPage.moreInputs": "It takes more inputs. All of them are under Technical details.",
+    "connectionPage.locationPath": "In the path",
+    "connectionPage.locationQuery": "In the query",
+    "connectionPage.required": "Required",
+    "connectionPage.optional": "Optional",
+    "connectionPage.allowedValues": "Allowed values: {values}",
+    "connectionPage.allowedEntries": "Allowed entries: {values}",
+    "connectionPage.moreValues": "{values} and more",
+    "connectionPage.typeString": "Text",
+    "connectionPage.typeInteger": "Whole number",
+    "connectionPage.typeNumber": "Number",
+    "connectionPage.typeBoolean": "Yes or no",
+    "connectionPage.typeArray": "List",
+    "connectionPage.typeListOf": "List ({type})",
+    "connectionPage.typeObject": "Group of values",
+    "connectionPage.typeNull": "Empty",
+    "connectionPage.typeOr": "{first} or {second}",
+    "connectionPage.minimum": "At least {value}",
+    "connectionPage.exclusiveMinimum": "More than {value}",
+    "connectionPage.maximum": "At most {value}",
+    "connectionPage.exclusiveMaximum": "Less than {value}",
+    "connectionPage.multipleOf": "A multiple of {value}",
+    "connectionPage.minLength": "At least {value} characters",
+    "connectionPage.maxLength": "At most {value} characters",
+    "connectionPage.minItems": "At least {value} entries",
+    "connectionPage.maxItems": "At most {value} entries",
+    "connectionPage.format": "Format: {value}",
+    "connectionPage.pattern": "Matches the pattern {value}",
+    "connectionPage.default": "Default: {value}",
+    "connectionPage.operationSwitch": "{name} can be called",
+    "connectionPage.aboutTitle": "Name and description",
+    "connectionPage.aboutDescription": "What people and agents read about this connection.",
+    "connectionPage.name": "Name",
+    "connectionPage.descriptionField": "Description",
+    "connectionPage.descriptionHint":
+      "What the connection is for, in a sentence or two. Agents read it to know when to use it.",
+    "connectionPage.noDescription": "No description yet.",
+    "connectionPage.aboutEdit": "Edit name and description",
+    "connectionPage.aboutSave": "Save",
+    "connectionPage.aboutCancel": "Cancel",
+    "connectionPage.nameRequired": "Enter a name.",
+    "connectionPage.usedByDescription":
+      "The agents, Apps, Workflows and knowledge bases that use this connection.",
+    "connectionPage.usedByEmpty": "Nothing you can see uses this connection.",
+    "connectionPage.usedByTruncated": "The list may not show everything that uses this connection.",
+    "connectionPage.usedByNoneShown":
+      "Nothing could be listed, but the search stopped early. Something may still use this connection.",
+    "connectionPage.kindAgent": "Agent",
+    "connectionPage.kindApp": "App",
+    "connectionPage.kindWorkflow": "Workflow",
+    "connectionPage.kindKnowledgeBase": "Knowledge base"
+  },
+  de: {
+    "connectionPage.request": "Anfrage",
+    "connectionPage.mcpTool": "Tool auf dem Server",
+    "connectionPage.inputs": "Eingaben",
+    "connectionPage.noInputs": "Braucht keine Eingaben.",
+    "connectionPage.noSchema":
+      "Was dieses Tool braucht, wird nicht gezeigt: Der Server hat keine Eingaben beschrieben, oder die Beschreibung ist zu groß.",
+    "connectionPage.inputsElsewhere":
+      "Die Eingaben sind in einer Form beschrieben, die diese Seite nicht auflistet. Siehe Technische Details.",
+    "connectionPage.declarationCut":
+      "Nach {count} Zeichen abgeschnitten: Das ist nicht die ganze Beschreibung.",
+    "connectionPage.moreInputs":
+      "Es braucht weitere Eingaben. Alle stehen unter Technische Details.",
+    "connectionPage.locationPath": "Im Pfad",
+    "connectionPage.locationQuery": "In der Abfrage",
+    "connectionPage.required": "Pflicht",
+    "connectionPage.optional": "Optional",
+    "connectionPage.allowedValues": "Erlaubte Werte: {values}",
+    "connectionPage.allowedEntries": "Erlaubte Einträge: {values}",
+    "connectionPage.moreValues": "{values} und weitere",
+    "connectionPage.typeString": "Text",
+    "connectionPage.typeInteger": "Ganze Zahl",
+    "connectionPage.typeNumber": "Zahl",
+    "connectionPage.typeBoolean": "Ja oder nein",
+    "connectionPage.typeArray": "Liste",
+    "connectionPage.typeListOf": "Liste ({type})",
+    "connectionPage.typeObject": "Gruppe von Werten",
+    "connectionPage.typeNull": "Leer",
+    "connectionPage.typeOr": "{first} oder {second}",
+    "connectionPage.minimum": "Mindestens {value}",
+    "connectionPage.exclusiveMinimum": "Mehr als {value}",
+    "connectionPage.maximum": "Höchstens {value}",
+    "connectionPage.exclusiveMaximum": "Weniger als {value}",
+    "connectionPage.multipleOf": "Ein Vielfaches von {value}",
+    "connectionPage.minLength": "Mindestens {value} Zeichen",
+    "connectionPage.maxLength": "Höchstens {value} Zeichen",
+    "connectionPage.minItems": "Mindestens {value} Einträge",
+    "connectionPage.maxItems": "Höchstens {value} Einträge",
+    "connectionPage.format": "Format: {value}",
+    "connectionPage.pattern": "Passt zum Muster {value}",
+    "connectionPage.default": "Standard: {value}",
+    "connectionPage.operationSwitch": "{name} kann aufgerufen werden",
+    "connectionPage.aboutTitle": "Name und Beschreibung",
+    "connectionPage.aboutDescription": "Was Menschen und Agenten über diese Verbindung lesen.",
+    "connectionPage.name": "Name",
+    "connectionPage.descriptionField": "Beschreibung",
+    "connectionPage.descriptionHint":
+      "Wofür die Verbindung da ist, in ein oder zwei Sätzen. Agenten lesen sie, um zu wissen, wann sie sie nutzen.",
+    "connectionPage.noDescription": "Noch keine Beschreibung.",
+    "connectionPage.aboutEdit": "Name und Beschreibung bearbeiten",
+    "connectionPage.aboutSave": "Speichern",
+    "connectionPage.aboutCancel": "Abbrechen",
+    "connectionPage.nameRequired": "Gib einen Namen ein.",
+    "connectionPage.usedByDescription":
+      "Die Agenten, Apps, Workflows und Wissensbasen, die diese Verbindung nutzen.",
+    "connectionPage.usedByEmpty": "Nichts, was du sehen kannst, nutzt diese Verbindung.",
+    "connectionPage.usedByNoneShown":
+      "Es konnte nichts aufgelistet werden, aber die Suche hat früh aufgehört. Etwas könnte diese Verbindung trotzdem nutzen.",
+    "connectionPage.usedByTruncated":
+      "Die Liste zeigt womöglich nicht alles, was diese Verbindung nutzt.",
+    "connectionPage.kindAgent": "Agent",
+    "connectionPage.kindApp": "App",
+    "connectionPage.kindWorkflow": "Workflow",
+    "connectionPage.kindKnowledgeBase": "Wissensbasis"
+  }
+});

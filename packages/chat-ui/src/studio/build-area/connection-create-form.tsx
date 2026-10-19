@@ -8,20 +8,24 @@ import {
   Select,
   Step,
   Steps,
+  Textarea,
   type AddressCheck
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildNamespace } from "../../shared/build-rights";
+import type { BuildCreateDialogProps } from "./build-asset-kind";
 import type { ConnectStep, ConnectStepState } from "./connection-connect";
+import type { ConnectionDraft } from "./connection-draft";
 import {
   ConnectionHeaderRows,
   ConnectionPersonContextHeaderField,
   ConnectionTestPathField
 } from "./connection-form";
-import type { ConnectionFormState } from "./connection-form-model";
+import { emptyConnectionForm, type ConnectionFormState } from "./connection-form-model";
 import { RefusalDetail } from "./refusal-notice";
 
-// The second step of the New connection dialog: the name, the address and the key, with the
+// The second step of the New connection dialog: the name, what the Connection is for, the
+// address and the key, with the
 // id, how the key is sent and, for a REST API, its fixed headers and test path under
 // "Technical details". The id follows the name until it is typed and is checked as it
 // changes. The auth scheme follows the key field: empty sends none.
@@ -32,6 +36,8 @@ export const NO_NAMESPACE = "";
 /** What the dialog asks for beside the definition's settings. */
 export interface CreateFields {
   title: string;
+  /** What the Connection is for, as agents and people read it. Empty for none. */
+  description: string;
   /** The id as typed. Until it is, the id follows the name. */
   typedId?: string;
   prefix: string;
@@ -182,6 +188,19 @@ export function ConnectionCreateForm({
         }
       >
         <Field
+          label={t("connectionPage.descriptionField")}
+          hint={t("connectionPage.descriptionHint")}
+          optional
+        >
+          <Textarea
+            rows={2}
+            value={fields.description}
+            disabled={busy}
+            data-connection-field="description"
+            onChange={(event) => onChange({ ...fields, description: event.target.value })}
+          />
+        </Field>
+        <Field
           label={t(rest ? "connectionCreate.baseUrl" : "connectionCreate.serverUrl")}
           hint={rest ? t("connectionCreate.baseUrlHint") : undefined}
           error={errors.url}
@@ -249,4 +268,38 @@ export function ConnectionCreateForm({
       <RefusalDetail detail={errors.detail} />
     </form>
   );
+}
+
+/**
+ * The fields of a new REST API filled with the agent's draft: its name, address and the names
+ * of its fixed headers, whose values the person types, as the key. The draft's id keeps the
+ * Namespace it starts with where the reader may create in that one.
+ */
+export function draftedFields(
+  draft: ConnectionDraft,
+  namespaces: BuildCreateDialogProps["namespaces"],
+  mayNameFreely: boolean
+): CreateFields {
+  const { name, title, baseUrl, headerNames, testPath } = draft.connection;
+  const namespace = namespaces
+    .filter((entry) => entry.prefix !== NO_NAMESPACE && name.startsWith(entry.prefix))
+    .sort((left, right) => right.prefix.length - left.prefix.length)[0];
+  const prefix =
+    namespace?.prefix ?? (mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE));
+  const id = namespace ? name.slice(namespace.prefix.length) : name;
+  return {
+    title,
+    description: "",
+    ...(id === assetAddressFromName(title, CONNECTION_ASSET_KIND) ? {} : { typedId: id }),
+    prefix,
+    form: {
+      ...emptyConnectionForm(),
+      connectorType: "http_api",
+      url: baseUrl,
+      headers: headerNames.map((header) => ({ name: header, value: "" })),
+      ...(testPath === undefined ? {} : { testPath })
+    },
+    key: "",
+    sendAs: "bearer"
+  };
 }

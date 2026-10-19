@@ -1,5 +1,6 @@
 import { BookOpen, Bot, Database, LayoutGrid, MessagesSquare, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
+import type { PublishedDataConsumerKind } from "@work-shape/catalyst-core";
 import { Chip, EmptyState, List, ListRow } from "@work-shape/catalyst-ui";
 import { AGENTS_BUILD_PATH, useBuildNavigation } from "../../shared/build-route";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
@@ -19,7 +20,7 @@ import type { DataStoreSource, DataStoreUsedBy } from "./data-store-source";
 // in. A row is a link where the interface has a page for what it names. Of what the reader may
 // not see, the instance tells a number, in the section where it would stand.
 
-type UsingKind = "app" | "workflow" | "knowledge_base";
+type UsingKind = PublishedDataConsumerKind;
 
 const KINDS: Record<UsingKind, { icon: typeof Workflow; label: TranslationKey }> = {
   app: { icon: LayoutGrid, label: "dataStores.usedByApp" },

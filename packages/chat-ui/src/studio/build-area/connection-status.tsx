@@ -144,6 +144,23 @@ export function recordedHealth(detail: ConnectionDetail): HealthView {
   }
 }
 
+/** The health a list row names, as `attributes.health`, in the words of the page. */
+const LISTED_HEALTH = new Map<string, HealthView>([
+  ["ok", "ready"],
+  ["failed", "failed"],
+  ["needs_configuration", "not_configured"],
+  ["secret_unreadable", "secret_unreadable"],
+  ["unknown", "never_tested"]
+]);
+
+/**
+ * The status a list row shows for the health the instance names beside a Connection, or
+ * nothing where it names none or one this interface does not know.
+ */
+export function listedHealth(health: unknown): HealthView | undefined {
+  return typeof health === "string" ? LISTED_HEALTH.get(health) : undefined;
+}
+
 /**
  * What the page says: a running test first, then the answer of the test just run, then what
  * the instance recorded. A test that failed does not hide the recorded reason for it, a

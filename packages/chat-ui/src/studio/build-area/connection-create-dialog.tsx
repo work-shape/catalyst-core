@@ -37,11 +37,12 @@ import {
 } from "./connection-connect";
 import {
   ConnectionCreateForm,
+  draftedFields,
   NO_NAMESPACE,
   type CreateFieldErrors,
   type CreateFields
 } from "./connection-create-form";
-import { useDraftForNewConnection, type ConnectionDraft } from "./connection-draft";
+import { useDraftForNewConnection } from "./connection-draft";
 import {
   DISCOVERY_WAIT_MS,
   emptyConnectionForm,
@@ -131,6 +132,7 @@ export function ConnectionCreateFlow({
       ? draftedFields(drafted, namespaces, mayNameFreely)
       : {
           title: "",
+          description: "",
           prefix: mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE),
           form: emptyConnectionForm(),
           key: "",
@@ -209,7 +211,7 @@ export function ConnectionCreateFlow({
   const connect = async () => {
     const key = fields.key;
     const config = newConnectionConfig(
-      { name, title },
+      { name, title, description: fields.description },
       { ...fields.form, authScheme: key === "" ? "none" : fields.sendAs }
     );
     written.current = config;
@@ -790,39 +792,6 @@ export function ConnectionCreateFlow({
       }
     }
   }
-}
-
-/**
- * The fields of a new REST API filled with the agent's draft: its name, address, test path and
- * the names of its fixed headers, whose values the person types, as the key. The draft's id keeps the
- * Namespace it starts with where the reader may create in that one.
- */
-function draftedFields(
-  draft: ConnectionDraft,
-  namespaces: BuildCreateDialogProps["namespaces"],
-  mayNameFreely: boolean
-): CreateFields {
-  const { name, title, baseUrl, headerNames, testPath } = draft.connection;
-  const namespace = namespaces
-    .filter((entry) => entry.prefix !== NO_NAMESPACE && name.startsWith(entry.prefix))
-    .sort((left, right) => right.prefix.length - left.prefix.length)[0];
-  const prefix =
-    namespace?.prefix ?? (mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE));
-  const id = namespace ? name.slice(namespace.prefix.length) : name;
-  return {
-    title,
-    ...(id === assetAddressFromName(title, CONNECTION_ASSET_KIND) ? {} : { typedId: id }),
-    prefix,
-    form: {
-      ...emptyConnectionForm(),
-      connectorType: "http_api",
-      url: baseUrl,
-      headers: headerNames.map((header) => ({ name: header, value: "" })),
-      ...(testPath === undefined ? {} : { testPath })
-    },
-    key: "",
-    sendAs: "bearer"
-  };
 }
 
 /** The line that says what was connected. */

@@ -4,6 +4,7 @@ import type { BuildAsset, BuildAssetKind } from "./build-asset-kind";
 import { ConnectionCreateDialog } from "./connection-create-dialog";
 import { ConnectionAssetEditor } from "./connection-editor";
 import { connectorTypeLabel } from "./connection-form";
+import { HEALTH_VIEWS, listedHealth } from "./connection-status";
 import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 
 /**
@@ -58,14 +59,21 @@ export const connectionKind: BuildAssetKind = {
       description: asset.description?.trim() || undefined
     };
   },
+  // An enabled Connection shows its health in the words of its page; a list of an instance
+  // that names no health shows that it is on.
   badges: (asset, t) => {
-    const { connectorType, enabled } = asset.attributes ?? {};
+    const { connectorType, enabled, health } = asset.attributes ?? {};
+    const listed = enabled === false ? undefined : listedHealth(health);
     return (
       <>
         {typeof connectorType === "string" ? (
           <Chip size="sm">{connectorTypeLabel(connectorType, t)}</Chip>
         ) : null}
-        {typeof enabled === "boolean" ? (
+        {listed ? (
+          <Badge tone={HEALTH_VIEWS[listed].tone} dot data-connection-list-health={listed}>
+            {t(HEALTH_VIEWS[listed].label)}
+          </Badge>
+        ) : typeof enabled === "boolean" ? (
           <Badge tone={enabled ? "success" : "neutral"} dot>
             {t(enabled ? "connections.enabled" : "connections.disabled")}
           </Badge>

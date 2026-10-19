@@ -1,5 +1,5 @@
 // @rights-screen: included in the rights wording guard.
-import { Bot, KeyRound } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import {
   Avatar,
@@ -22,16 +22,14 @@ import {
   Section,
   SkeletonList
 } from "@work-shape/catalyst-ui";
-import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
-import { agentKind } from "./agent-kind";
 import { usePageShown } from "./asset-editor-shell";
 import type {
   BuildAssetEditorProps,
   BuildAssetViewProps,
   BuildHeadActions
 } from "./build-asset-kind";
-import { useBuildNavigation } from "../../shared/build-route";
+import { ConnectionAboutEditor } from "./connection-about";
 import {
   ConnectionSecretEditor,
   ConnectionSettingsEditor,
@@ -47,6 +45,7 @@ import { ConnectionOperations, EditableOperations } from "./connection-operation
 import { PersonContextSection } from "./connection-person-context";
 import { RestToolsSection } from "./connection-rest-tools";
 import { ConnectionSignInSection } from "./connection-sign-in-section";
+import { ConnectionUsedBy, usedByCount } from "./connection-used-by";
 import {
   AUTH_SCHEME_NONE,
   ConnectionStatus,
@@ -127,6 +126,16 @@ export function ConnectionPage({
     count?: number;
     body: ReactNode;
   }[] = [
+    ...(editing
+      ? [
+          {
+            id: "about",
+            label: t("connectionPage.aboutTitle"),
+            description: t("connectionPage.aboutDescription"),
+            body: <ConnectionAboutEditor asset={asset} frame={editing} written={written} />
+          }
+        ]
+      : []),
     {
       id: "status",
       label: t("connections.statusTitle"),
@@ -210,7 +219,7 @@ export function ConnectionPage({
           asset={asset}
           frame={editing}
           written={written}
-          view={<ConnectionSettings config={config} />}
+          view={<ConnectionSettings config={config} withDescription={false} />}
           {...(detail?.secret.state === "set" ? { keyUsers: detail.usedBy } : {})}
         />
       ) : (
@@ -250,7 +259,7 @@ export function ConnectionPage({
                   written={written}
                 />
               ) : (
-                <ConnectionOperations operations={detail.operations} />
+                <ConnectionOperations operations={detail.operations} config={config} />
               )
             ) : (
               <SkeletonList rows={3} />
@@ -296,9 +305,9 @@ export function ConnectionPage({
           {
             id: "agents",
             label: t("connections.agentsTitle"),
-            description: t("connections.agentsDescription"),
-            count: detail?.usedBy.length,
-            body: detail ? <ConnectionAgents usedBy={detail.usedBy} /> : <SkeletonList rows={2} />
+            description: t("connectionPage.usedByDescription"),
+            count: detail ? usedByCount(detail) : undefined,
+            body: detail ? <ConnectionUsedBy detail={detail} /> : <SkeletonList rows={2} />
           }
         ]),
     ...(availability
@@ -411,9 +420,16 @@ const SETTING_LABELS = new Map<string, TranslationKey>([
  * What the definition says of how the Connection reaches its system, in words. The ids of its
  * type and its authentication stand under Technical details. No setting is a credential.
  */
-function ConnectionSettings({ config }: { config: Record<string, unknown> }) {
+function ConnectionSettings({
+  config,
+  withDescription = true
+}: {
+  config: Record<string, unknown>;
+  /** Without it the description stands in its own section, where it is changed. */
+  withDescription?: boolean;
+}) {
   const { t } = useTranslation();
-  const description = textOf(config, "description");
+  const description = withDescription ? textOf(config, "description") : undefined;
   const connectorType = textOf(config, "connectorType") ?? "";
   const authScheme = textOf(config, "authScheme") ?? "";
   return (
@@ -522,50 +538,6 @@ function ConnectionHolders({
               </>
             }
             link={holder.name === undefined ? undefined : <a href={principalHref(holder.id)} />}
-          />
-        );
-      })}
-    </List>
-  );
-}
-
-function ConnectionAgents({ usedBy }: { usedBy: ConnectionDetail["usedBy"] }) {
-  const { t } = useTranslation();
-  const { href, open } = useBuildNavigation();
-  if (usedBy.length === 0) {
-    return <EmptyState layout="inline">{t("connections.agentsEmpty")}</EmptyState>;
-  }
-  return (
-    <List aria-label={t("connections.agentsTitle")}>
-      {usedBy.map((agent) => {
-        const place = { kindPath: agentKind.path, name: agent.agentName };
-        return (
-          <ListRow
-            key={agent.agentName}
-            leading={<Bot aria-hidden="true" className="size-4 text-muted-foreground" />}
-            title={agent.title.trim() || agent.agentName}
-            description={<code className="font-mono">{agent.agentName}</code>}
-            time={t(
-              agent.toolNames.length === 1 ? "connections.agentTool" : "connections.agentTools",
-              { count: agent.toolNames.length }
-            )}
-            link={
-              <a
-                href={href(place)}
-                onClick={(event) => {
-                  if (
-                    event.button === 0 &&
-                    !event.metaKey &&
-                    !event.ctrlKey &&
-                    !event.shiftKey &&
-                    !event.altKey
-                  ) {
-                    event.preventDefault();
-                    open(place);
-                  }
-                }}
-              />
-            }
           />
         );
       })}

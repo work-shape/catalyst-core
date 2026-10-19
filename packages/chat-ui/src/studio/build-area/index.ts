@@ -37,6 +37,7 @@ export {
   useBuildSource
 } from "./build-data";
 export { BuildFrame } from "./build-frame";
+export { connectionAboutOf, countAboutChanges } from "./connection-about";
 export * from "./connection-approval-model";
 export { ConnectionApprovalList } from "./connection-approval";
 export * from "./connection-connect";
@@ -65,6 +66,12 @@ export {
 } from "./connection-give-card";
 export { ConnectionEditor } from "./connection-editor";
 export * from "./connection-form-model";
+export {
+  OperationDetails,
+  operationDeclarationOf,
+  typesInWords
+} from "./connection-operation-details";
+export * from "./connection-operation-schema";
 export * from "./connection-sign-in-model";
 export {
   SignInActions,
@@ -79,6 +86,8 @@ export {
 } from "./connection-sign-in";
 export { ConnectionSignInLanding } from "./connection-sign-in-landing";
 export { ConnectionSignInSection, SignInStateBadge } from "./connection-sign-in-section";
+export { listedHealth } from "./connection-status";
+export { ConnectionUsedBy, usedByCount } from "./connection-used-by";
 export type {
   ConnectionDetailRead,
   ConnectionHoldersRead,

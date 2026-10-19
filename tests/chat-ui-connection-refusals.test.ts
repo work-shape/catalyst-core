@@ -14,6 +14,7 @@ import {
   readBuildRefusal,
   readConnectionDraft,
   refusalsOf,
+  type ConnectionGiveHost,
   type ConnectionSource
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { SettingsPageProvider } from "@work-shape/catalyst-chat-ui/settings-page-context";
@@ -24,6 +25,7 @@ import { buildPageSettings, mountBuildPage, unmountBuildPages } from "./chat-ui-
 import { connectionAsset, connectionDetail, recordedStates } from "./chat-ui-connection-fixtures";
 import { TranslationProvider } from "./chat-ui-render-harness";
 import { settingsUser } from "./chat-ui-settings-fixtures";
+import { CONDITION_WAIT_MS } from "./support/assertions";
 
 // ACCEPT-1c E4: a Connection whose address the instance may not reach was refused with the
 // server's sentence, `egress_denied: … release config … 'egress.allowPublicHttps: true'`, in
@@ -609,5 +611,154 @@ describe("A new REST API whose key the server refuses, on the instance's answers
     expect(
       dialog().querySelector<HTMLInputElement>('[data-connection-field="secret"]')?.value
     ).toBe("");
+  });
+});
+
+// CONN-PAGE 5: approved, the New connection dialog stays open at its done step, which gives
+// the approved tools for agents to the agent the reader chooses (CS-5d); Done leaves.
+describe("The done step of a new REST API", () => {
+  it("is reached after the approval, and gives the approved tools to the chosen agent", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const read = readConnectionDraft({
+      output: {
+        connection: { name: "ledger", title: "Ledger", baseUrl: "https://api.ledger.example" },
+        operations: [{ name: "list_invoices", method: "GET", path: "/invoices" }]
+      }
+    });
+    if (!read) throw new Error("The answer is a draft");
+    await openConnectionDraft(read, {
+      connectorTypeOf: async () => undefined,
+      showConnection: () => undefined,
+      requestCreateDialog: () => undefined
+    });
+    // The reader may publish two agents; the instance holds the publish for an approval.
+    const writes: string[] = [];
+    const give: ConnectionGiveHost = {
+      viewerId: "user-reader",
+      source: {
+        connection: async () => ({
+          title: "Ledger",
+          tools: [{ toolName: "connection.ledger.list_invoices", title: "List invoices" }]
+        }),
+        agents: async () => [
+          { name: "assistant", title: "Assistant" },
+          { name: "reporter", title: "Reporter" }
+        ],
+        readAgent: async () => ({ revision: 3, config: { toolNames: ["show_view"] } }),
+        readDraft: async () => null,
+        saveDraft: async (name, config) => {
+          writes.push(`save ${name} ${JSON.stringify(config.toolNames)}`);
+          return 4;
+        },
+        publish: async (name, revision) => {
+          writes.push(`publish ${name} ${revision}`);
+          return "waits";
+        },
+        discard: async () => undefined
+      }
+    };
+    const source: ConnectionSource = {
+      mayTest: () => true,
+      useDetail: () => ({ status: "loading" }),
+      readDetail: async () => connectionDetail("ledger"),
+      test: async () => ({ status: "ready", testedAt: "2026-10-18T10:00:00.000Z" }),
+      setSecret: async () => undefined,
+      discover: async () => undefined,
+      useTest: () => ({ run: { status: "idle" }, start: () => undefined }),
+      useHolders: () => ({ status: "hidden" }),
+      principalHref: () => "",
+      oauthStart: async () => {
+        throw new Error("This test signs nothing in.");
+      },
+      give
+    };
+    const created: string[] = [];
+    const puts: { config: Record<string, unknown>; expectedRevision: number | null }[] = [];
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mounted.push(root);
+    await act(async () =>
+      root.render(
+        createElement(
+          UiRoot,
+          { mode: "light", labels: uiLabelsEn },
+          createElement(
+            TranslationProvider,
+            { locale: "en", children: null },
+            createElement(ConnectionCreateFlow, {
+              source,
+              ...createDefaults,
+              put: async (input) => {
+                puts.push(input);
+                return { revision: puts.length };
+              },
+              onClose: () => undefined,
+              onCreated: (name) => created.push(name)
+            })
+          )
+        )
+      )
+    );
+    const body = document.body;
+    const key = body.querySelector<HTMLInputElement>('input[type="password"]');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        key,
+        "sk-test"
+      );
+      key?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () =>
+      body.querySelector<HTMLButtonElement>("[data-connection-connect]")?.click()
+    );
+    await vi.waitFor(() => expect(body.querySelector("[data-connection-approve]")).not.toBeNull(), {
+      timeout: CONDITION_WAIT_MS
+    });
+    await act(async () =>
+      body.querySelector<HTMLButtonElement>("[data-connection-approve]")?.click()
+    );
+    await vi.waitFor(
+      () => expect(body.querySelector("[data-connection-approved]")).not.toBeNull(),
+      { timeout: CONDITION_WAIT_MS }
+    );
+    // The approval saved the tools and did not leave for the page yet.
+    expect(created).toEqual([]);
+    expect(body.textContent).toContain("1 tool approved.");
+    await act(async () => body.querySelector<HTMLButtonElement>("[data-connection-give]")?.click());
+    // Choose Assistant, then confirm the question that names it and the tool.
+    await vi.waitFor(
+      () => expect(body.querySelector('[data-connection-give-agent="assistant"]')).not.toBeNull(),
+      { timeout: CONDITION_WAIT_MS }
+    );
+    await act(async () =>
+      body.querySelector<HTMLButtonElement>("[data-connection-give-next]")?.click()
+    );
+    await vi.waitFor(
+      () =>
+        expect(body.querySelector('[data-connection-give-ask="assistant"]')?.textContent).toContain(
+          "Give Assistant 1 tool of Ledger?"
+        ),
+      { timeout: CONDITION_WAIT_MS }
+    );
+    expect(writes).toEqual([]);
+    await act(async () =>
+      body.querySelector<HTMLButtonElement>("[data-connection-give-confirm]")?.click()
+    );
+    await vi.waitFor(
+      () => expect(body.querySelector('[data-connection-give-outcome="waits"]')).not.toBeNull(),
+      { timeout: CONDITION_WAIT_MS }
+    );
+    expect(writes).toEqual([
+      'save assistant ["show_view","connection.ledger.list_invoices"]',
+      "publish assistant 4"
+    ]);
+    expect(body.textContent).toContain(
+      "The change to Assistant waits for an approval in the Inbox."
+    );
+    await act(async () =>
+      body.querySelector<HTMLButtonElement>("[data-connection-give-done]")?.click()
+    );
+    expect(created).toEqual(["ledger"]);
   });
 });
