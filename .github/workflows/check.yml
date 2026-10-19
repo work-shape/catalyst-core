@@ -11,7 +11,9 @@
 #   Dockerfile, package.json or lockfile (including source-only import changes).
 # - Workflows/actions/scripts, quality-config, any lockfile or config file, root
 #   configuration and unknown paths select EVERYTHING (even inside a docs PR).
-# - Pushes to main and release tags always select EVERYTHING.
+# - Release branches, release tags and the nightly main run always select EVERYTHING.
+# - A push to main runs nothing: pr-land merges only a head that already contains main
+#   and passed this Check, so the merged tree was tested. The nightly run catches drift.
 # Keep `check` as the stable aggregate: selected failures/cancellations fail it;
 # intentionally skipped jobs pass. `browser` remains for existing check consumers.
 name: Check
@@ -19,18 +21,21 @@ on:
   pull_request:
     types: [labeled]
   workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
   push:
-    branches: [main, "release/**"]
+    branches: ["release/**"]
     tags: ["v*"]
 permissions:
   contents: read
   packages: read
 # Explicit CI label requests share a PR group and cancel superseded requests.
 # Unrelated label events get unique groups so they cannot displace a requested run.
-# Main/tag/dispatch runs also get unique groups, including re-runs.
+# A dispatch on a branch other than main cancels the branch's earlier dispatch: only the
+# newest push needs a result. Main/tag/schedule runs get unique groups, including re-runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.label.name == 'ci' && github.ref || format('{0}-{1}-{2}', github.ref, github.run_id, github.run_attempt) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.label.name == 'ci' }}
+  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request' && github.event.label.name == 'ci' && github.ref) || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && format('dispatch-{0}', github.ref)) || format('{0}-{1}-{2}', github.ref, github.run_id, github.run_attempt) }}
+  cancel-in-progress: ${{ (github.event_name == 'pull_request' && github.event.label.name == 'ci') || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main') }}
 jobs:
   paths:
     if: github.event_name != 'pull_request' || github.event.label.name == 'ci'
@@ -112,11 +117,10 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node packages/quality-config/baseline-guard.mjs "$BASE" "$HEAD"
       # Dispatches have no PR title: every branch commit must be chore(limits).
-      # Main pushes compare the landed squash commit with its parent as a backstop.
       - name: Check limits move only in a chore(limits) pull request
-        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
         env:
-          BASE: ${{ github.event.pull_request.base.sha || (github.event_name == 'push' && 'HEAD^' || 'origin/main') }}
+          BASE: ${{ github.event.pull_request.base.sha || 'origin/main' }}
           HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: node packages/quality-config/limit-guard.mjs "$BASE" "$HEAD" "$PR_TITLE"
