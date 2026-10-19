@@ -327,6 +327,18 @@ function withinInputDepth(input: unknown): boolean {
 }
 
 /**
+ * What a German caller reads for an input the surface could not read, by the reader's code.
+ * The reader writes its text in English.
+ */
+const GERMAN_UNREADABLE_INPUT: ReadonlyMap<string, string> = new Map([
+  ["invalid_json", "Die Eingabe muss ein gültiges JSON-Objekt sein."],
+  [
+    "invalid_text",
+    "Die Eingabe enthält ein NUL-Zeichen oder ein halbes Surrogatpaar, das sich nicht speichern lässt. Sende den Aufruf ohne es noch einmal."
+  ]
+]);
+
+/**
  * The validated input, or the refusal of a call whose input no run can be started with. The
  * schema is asked without blocking: an operation of an outside system checks its input in a
  * worker thread, and its check can end with an error of its own instead of an answer. A caller
@@ -338,16 +350,28 @@ async function parseInput(
   runtime: OperationCallRuntime,
   surface: OperationAuthorization
 ): Promise<unknown> {
-  const unreadable =
-    runtime.unreadableInput ??
-    (withinInputDepth(call.input)
+  const german = runtime.locale === "de";
+  const unreadable = runtime.unreadableInput
+    ? {
+        code: runtime.unreadableInput.code,
+        message: german
+          ? (GERMAN_UNREADABLE_INPUT.get(runtime.unreadableInput.code) ??
+            "Die Eingabe für diesen Aufruf ist nicht lesbar.")
+          : runtime.unreadableInput.message
+      }
+    : withinInputDepth(call.input)
       ? undefined
-      : { code: "input_invalid", message: "Operation input is nested too deeply" });
+      : {
+          code: "input_invalid",
+          message: german
+            ? "Die Eingabe für diesen Aufruf ist zu tief verschachtelt."
+            : "Operation input is nested too deeply"
+        };
   const parsed = unreadable
     ? undefined
     : await definition.inputSchema
         .safeParseAsync(call.input, {
-          error: (runtime.locale === "de" ? z.locales.de() : z.locales.en()).localeError
+          error: (german ? z.locales.de() : z.locales.en()).localeError
         })
         .catch((error: unknown) => {
           if (!surface.allowed) throw operationDenialError({ kind: "forbidden", ...surface });
@@ -363,7 +387,7 @@ async function parseInput(
     "VALIDATION_FAILED",
     unreadable
       ? unreadable.message
-      : runtime.locale === "de"
+      : german
         ? "Die Eingabe für diesen Aufruf ist ungültig."
         : "Operation input is invalid",
     {

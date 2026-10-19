@@ -500,6 +500,7 @@ export {
   dockKindOfRoute,
   type ConversationStart
 } from "../../packages/chat-ui/src/chat/dock/subject-starters";
+export { createSampleSource } from "../../packages/chat-ui/src/studio/workflows/samples/sample-source";
 export { useStartRun } from "../../packages/chat-ui/src/studio/workflows/start-run";
 export {
   readsRecipientPeople,

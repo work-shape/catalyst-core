@@ -12,6 +12,7 @@ import {
   resolveBuildRights,
   type AssetRights
 } from "../../shared/build-rights";
+import { actionLabel } from "../../admin/access/right-words";
 import { canManageServicePrincipals } from "../../shared/governance";
 import type { TranslationKey } from "../../shared/i18n";
 import { startFormUsable } from "./start-form";
@@ -493,7 +494,7 @@ export function failureHappened(
       : t("workflows.reason.missingRightAccount", { account, right: failure.action });
   }
   if (failure.action !== undefined && failure.reason === "testerMissingRight") {
-    return t("workflows.reason.testerMissingRightNamed", { right: failure.action });
+    return t("workflows.reason.testerMissingRightNamed", { right: actionLabel(failure.action, t) });
   }
   // The work goes on, and its owner's sentence says so, such as "Abgleich läuft weiter".
   if (failure.reason === "stillRunning" && failure.detail) {

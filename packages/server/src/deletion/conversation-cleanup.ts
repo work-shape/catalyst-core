@@ -122,9 +122,8 @@ async function cleanUpOneConversation(
 
 /**
  * Deletes the Operation Runs the agents of a Conversation caused. A call of theirs that still
- * waits for an approval is ended first, and its request loses the input, so nothing of a
- * deleted Conversation stays open for a decision that could execute nothing. The request of a
- * call that was decided lost its input when it ended.
+ * waits for an approval is ended first. Its settled request is deleted atomically with the
+ * run, so neither the held input nor Inbox history outlives the deleted Conversation.
  */
 async function deleteOperationRunsOfConversation(
   options: ChatServerOptions,

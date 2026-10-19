@@ -438,6 +438,125 @@ describe("Postgres operation run store", () => {
     ).toHaveLength(1);
   });
 
+  it.each(["conversation", "audit"] as const)(
+    "deletes decided Inbox requests atomically with their runs on %s cleanup",
+    async (cleanup) => {
+      const { stores } = await createTestInstance({ postgres: {} });
+      const runs = stores.operationRuns;
+      const approvals = stores.approvals;
+      const conversationId = asConversationId("conv_retention");
+      const make = async (
+        settled: boolean,
+        conversation = cleanup === "conversation",
+        startedAt = "2020-01-01T00:00:00.000Z"
+      ) => {
+        const runId = createPlatformId<"OperationRunId">("oprun");
+        const request = await approvals.createApprovalRequest({
+          clientInstanceId,
+          kind: "operation_call",
+          summary: "Retained call",
+          payload: { runId, input: { text: "private" } },
+          requestedBy: { id: "usr_1", displayLabel: "One" }
+        });
+        const run = await runs.create(
+          newRun({
+            id: runId,
+            startedAt,
+            ...(conversation ? { conversationId } : {})
+          })
+        );
+        if (!run) throw new Error("The call must start a run");
+        await runs.finish({
+          clientInstanceId,
+          id: run.id,
+          end: {
+            status: "pending_approval",
+            approvalRequestId: request.id,
+            inputRef: `approval_request:${request.id}`,
+            expiresAt: "2999-01-01T00:00:00.000Z",
+            finishedAt: "2020-01-01T00:00:00.000Z"
+          }
+        });
+        if (settled) {
+          await approvals.transitionPendingApprovalRequest({
+            clientInstanceId,
+            requestId: request.id,
+            resolve: async () => ({ status: "rejected" })
+          });
+          await runs.resume({
+            clientInstanceId,
+            id: run.id,
+            startedAt: "2020-01-01T00:00:00.000Z",
+            decision: decision("declined", "usr_2")
+          });
+          await runs.finish({
+            clientInstanceId,
+            id: run.id,
+            end: {
+              status: "denied",
+              finishedAt: "2020-01-01T00:00:00.000Z",
+              error: { code: "declined", message: "Declined" },
+              denial: { kind: "declined", by: "usr_2" }
+            }
+          });
+        }
+        return { run, request };
+      };
+      const removed = await make(true);
+      // A confirmation can settle as "held" and leave a second request for this same run.
+      const confirmation = await approvals.createApprovalRequest({
+        clientInstanceId,
+        kind: "operation_call",
+        summary: "Earlier confirmation",
+        payload: { runId: removed.run.id },
+        requestedBy: { id: "usr_1", displayLabel: "One" }
+      });
+      await approvals.transitionPendingApprovalRequest({
+        clientInstanceId,
+        requestId: confirmation.id,
+        resolve: async () => ({ status: "approved", applyResult: { execution: "held" } })
+      });
+      const open = await make(false, false);
+      const settling = await make(false, cleanup === "conversation", "2019-01-01T00:00:00.000Z");
+      // Even if a run ended before its pending request was settled, never orphan the request.
+      await runs.resume({
+        clientInstanceId,
+        id: settling.run.id,
+        decision: decision("approved", "usr_2"),
+        startedAt: "2020-01-01T00:00:00.000Z"
+      });
+      await runs.finish({
+        clientInstanceId,
+        id: settling.run.id,
+        end: {
+          status: "failed",
+          error: { code: "interrupted", message: "Interrupted" },
+          finishedAt: "2020-01-01T00:00:00.000Z"
+        }
+      });
+      const otherConversation = await make(true, cleanup !== "conversation");
+      const remove = () =>
+        cleanup === "conversation"
+          ? runs.deleteOfConversations({ clientInstanceId, conversationIds: [conversationId] })
+          : runs.deleteWithoutConversationOlderThan({ clientInstanceId, days: 30, limit: 1 });
+      expect(await remove()).toBe(1);
+      expect(await runs.get({ clientInstanceId, id: removed.run.id })).toBeUndefined();
+      expect(
+        await approvals.getApprovalRequest({ clientInstanceId, requestId: removed.request.id })
+      ).toBeUndefined();
+      expect(
+        await approvals.getApprovalRequest({ clientInstanceId, requestId: confirmation.id })
+      ).toBeUndefined();
+      for (const kept of [open, settling, otherConversation]) {
+        expect(await runs.get({ clientInstanceId, id: kept.run.id })).toBeDefined();
+        expect(
+          await approvals.getApprovalRequest({ clientInstanceId, requestId: kept.request.id })
+        ).toBeDefined();
+      }
+      expect(await remove()).toBe(0);
+    }
+  );
+
   it("deletes the runs of conversations, and of no conversation only ended and old ones", async () => {
     const runs = await createStore();
     const agent = (conversationId: string) =>

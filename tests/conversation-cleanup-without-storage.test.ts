@@ -10,9 +10,14 @@ import { createTestConfig } from "./support/fixtures";
 import { createTestInstanceWith, getTestJobs } from "./support/test-instance";
 
 describe("conversation cleanup without object storage", () => {
-  it.each([true, false])(
-    "retries Operation Run cleanup after a transient deletion failure with expiry %s",
-    async (expireConversations) => {
+  it.each([
+    { expireConversations: true, throws: true },
+    { expireConversations: false, throws: true },
+    { expireConversations: true, throws: false },
+    { expireConversations: false, throws: false }
+  ])(
+    "retries leftover Operation Runs with expiry $expireConversations and throwing cleanup $throws",
+    async ({ expireConversations, throws }) => {
       const config = createTestConfig();
       config.retention.expireConversations = expireConversations;
       // The default instance has neither attachments nor Pages storage.
@@ -50,9 +55,11 @@ describe("conversation cleanup without object storage", () => {
           clientInstanceId,
           limit: 100
         });
-      const removeRuns = vi
-        .spyOn(runs, "deleteOfConversations")
-        .mockRejectedValueOnce(new Error("Transient Operation Run cleanup failure"));
+      const removeRuns = vi.spyOn(runs, "deleteOfConversations");
+      if (throws)
+        removeRuns.mockRejectedValueOnce(new Error("Transient Operation Run cleanup failure"));
+      else removeRuns.mockResolvedValueOnce(0); // A run kept while its request is still settling.
+
       try {
         const deleted = await instance.call("conversations.delete", {
           params: { conversationId }

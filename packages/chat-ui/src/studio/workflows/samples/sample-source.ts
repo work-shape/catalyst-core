@@ -3,6 +3,7 @@ import { startFormOf } from "../start-form";
 import { toWorkflow, toWorkflowRun, toWorkflowStepRun } from "../workflow-mapping";
 import type { WorkflowRunsSource, WorkflowsSource } from "../source-shapes";
 import {
+  SAMPLE_PRINCIPAL,
   SAMPLE_REVISION,
   SAMPLE_VIEWER_ID,
   sampleEntryStepRuns,
@@ -14,9 +15,6 @@ import { sampleWorkflows, type SampleWorkflow } from "./sample-workflows";
 // A source of Workflows and runs that reads the samples and keeps what a reader starts or
 // cancels in memory. It answers through the mapping the instance's source uses, so the samples
 // page shows what a screen makes of the contract's shapes.
-
-/** The account the samples run as, by its label: a sample names no principal of the instance. */
-const SAMPLE_ACCOUNT = "Workflow runner";
 
 function missing(what: string): ApiError {
   return new ApiError(404, `${what} was not found.`, { code: "NOT_FOUND" });
@@ -111,6 +109,7 @@ export function createSampleSource(
           workflow,
           trigger: "manual",
           startedBy: { id: SAMPLE_VIEWER_ID, label: "Dana Weber" },
+          principal: SAMPLE_PRINCIPAL,
           status: "running",
           rootRunId: id,
           depth: 0,
@@ -197,7 +196,7 @@ export function createSampleSource(
             revisionId: SAMPLE_REVISION,
             mayStart,
             startForm: startFormOf(sample.manifest.inputs),
-            runsAs: SAMPLE_ACCOUNT
+            runsAs: SAMPLE_PRINCIPAL.displayLabel
           }
         )
       );

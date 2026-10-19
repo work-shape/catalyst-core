@@ -27,7 +27,7 @@ vi.mock("@work-shape/catalyst-ui", async (importOriginal) => {
   const ui = await importOriginal<typeof import("@work-shape/catalyst-ui")>();
   return {
     ...ui,
-    FlowCanvas: ({ graph }: FlowCanvasProps) =>
+    FlowCanvas: ({ graph, panel }: FlowCanvasProps) =>
       createElement(
         "div",
         null,
@@ -38,7 +38,8 @@ vi.mock("@work-shape/catalyst-ui", async (importOriginal) => {
             title: node.title,
             ...(node.status === undefined ? {} : { status: node.status })
           })
-        )
+        ),
+        panel
       )
   };
 });
@@ -423,6 +424,46 @@ describe("the steps of a run on its page", () => {
     await until(() => expect(node("Result")?.getAttribute("data-status")).toBe("done"));
     expect(page.container.querySelector("[data-run-more-steps]")).toBeNull();
     expect(cursors).toEqual([undefined, "200"]);
+  });
+
+  // LOWS-C 5: the panel of the step a run failed at names the account the run acted as. The
+  // Workflow runs as another account now, and that one never stands in the panel.
+  it("names the run's own account in the panel of the failed step, not the Workflow's now", async () => {
+    const failedRun = toWorkflowRun({
+      id: "wr_1",
+      workflow: "notify-clients",
+      trigger: "manual",
+      status: "failed",
+      startedBy: { id: "user_1", label: "Ada Lovelace" },
+      principal: { displayLabel: "Belegprüfung" },
+      createdAt,
+      startedAt: "2026-10-12T09:00:01.000Z",
+      finishedAt: "2026-10-12T09:00:42.000Z",
+      error: { code: "FORBIDDEN", message: "x", action: "connection.use" }
+    });
+    const workflow = toWorkflow(
+      { name: "notify-clients", config: definition, publishedRevision: 2 },
+      { mayStart: true, runsAs: "Buchhaltung" },
+      { draftRevision: 2, publishedRevision: 2 }
+    );
+    const refusedClients: StepRunResource = {
+      ...doneClients,
+      status: "failed",
+      source: "CRM",
+      error: { code: "FORBIDDEN", message: "x", action: "connection.use" }
+    };
+    const page = await mountRunPage(
+      () => Promise.resolve([refusedClients]),
+      () => Promise.resolve(failedRun),
+      undefined,
+      { workflow }
+    );
+    await until(() =>
+      expect(page.container.textContent).toContain(
+        "This runStateFailedReads fromCRMThe workflow may not do this: its account “Belegprüfung” may not use the Connection"
+      )
+    );
+    expect(page.container.textContent).not.toContain("its account “Buchhaltung”");
   });
 
   it("follows more than ten frame pages, including pages with no frame steps", async () => {
