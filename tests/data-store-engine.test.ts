@@ -313,10 +313,11 @@ describe("a Data Store on Postgres", () => {
     // Left out, a conflict refuses the whole call and adds no row of it.
     expect(await refusal(call(world, "insert", rerun))).toMatchObject({
       code: "VALIDATION_FAILED",
-      message: "The insert violates constraint 'one_finding' on table 'findings' (SQLSTATE 23505)."
+      message:
+        "A value in „Run id“ (Text), „Client id“ (Text), „Rule id“ (Text) already exists. Use a different value."
     });
     expect(await refusal(call(world, "insert", { ...rerun, onConflict: "fail" }))).toMatchObject({
-      details: { sqlState: "23505" }
+      details: { reason: "unique" }
     });
     expect(
       await call(world, "query", { sql: "select count(*)::integer as count from findings" })
@@ -541,7 +542,7 @@ describe("a Data Store on Postgres", () => {
     expect(byBytes.rows.length).toBeLessThan(1_000);
   });
 
-  it("answers a failure of the database with its SQLSTATE and no value", async () => {
+  it("answers a row refusal without database codes or values and keeps SQL diagnostics for queries", async () => {
     const world = await published("failures");
 
     const check = await refusal(
@@ -560,11 +561,11 @@ describe("a Data Store on Postgres", () => {
     expect(check).toEqual({
       code: "VALIDATION_FAILED",
       message:
-        "The insert violates constraint 'findings_severity_check' on table 'findings' (SQLSTATE 23514).",
-      details: { sqlState: "23514" }
+        "The database could not accept these rows. Check the table's requirements and try again.",
+      details: { reason: "database_refusal" }
     });
     expect(type.message).toBe(
-      "The insert holds a value that does not fit the type of its column (SQLSTATE 22P02)."
+      "A value does not fit „Revision“ (Integer). Check its type and try again."
     );
     expect(
       await refusal(call(world, "insert", { table: "bookings", rows: [finding(1)] }))

@@ -26,6 +26,7 @@ import { readTables, rowsOf } from "./catalog";
 import { validateConstraintNames } from "./constraint-errors";
 import { dataStoreDefinitionSchema } from "./definition";
 import { databaseFailureError } from "./failures";
+import { rowWriteDatabaseFailure } from "./row-write-failures";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 import type { DataStoreRuntime } from "./runtime";
 import { asStoreRole } from "./roles";
@@ -236,7 +237,7 @@ function parseOperationName(name: string): { store: string; verb: StoreVerb } | 
 /**
  * Runs one verb on one store as its app role. A store whose database is not there yet is
  * refused with what an author does next, and a failure of the database is answered as a
- * sentence and its SQLSTATE.
+ * localized row refusal or, for author-written SQL, database diagnostics.
  */
 async function runVerb(
   runtime: DataStoreRuntime,
@@ -326,21 +327,39 @@ async function runVerb(
     if (error instanceof AnsweredBefore) return verb.outputSchema.parse(error.outcome);
     const unknown = error instanceof CommitOutcomeUnknown;
     const cause: unknown = unknown ? error.failure : error;
-    const failure =
+    const checked =
       cause instanceof AppError
         ? cause
+        : await validateConstraintNames(
+            runtime.server.executor,
+            {
+              ...runtime.server.asPlatform(record.location.database),
+              ...(signal ? { signal } : {})
+            },
+            cause
+          );
+    const rowFailure = ["insert", "update", "delete_rows"].includes(verb.verb)
+      ? await rowWriteDatabaseFailure(
+          runtime.server.executor,
+          {
+            ...runtime.server.asRole(record, "app", runtime.stores.connections),
+            ...(signal ? { signal } : {})
+          },
+          checked,
+          input,
+          verb.verb,
+          context.runtime.locale ?? runtime.defaultLocale
+        )
+      : undefined;
+    const failure =
+      rowFailure ??
+      (cause instanceof AppError
+        ? cause
         : databaseFailureError(
-            await validateConstraintNames(
-              runtime.server.executor,
-              {
-                ...runtime.server.asPlatform(record.location.database),
-                ...(signal ? { signal } : {})
-              },
-              cause
-            ),
+            checked,
             `The ${verb.effect === "changing" ? verb.verb : "query"}`,
             context.runtime.locale
-          );
+          ));
     // Everything a changing verb does to a store is one transaction. Whatever fails before
     // that transaction is being kept leaves nothing of the call, so the call path may run the
     // same call again under its key: a step that is tried again adds its rows once the cause
