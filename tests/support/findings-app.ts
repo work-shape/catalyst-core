@@ -179,6 +179,7 @@ export async function setupFindingsApp(): Promise<FindingsWorld> {
       secrets: { resolve: () => Promise.resolve(key) }
     }),
     limits: { sizeLimitBytes: 5 * 1024 ** 3, poolMaxConnections: 5, statement: statementLimits },
+    scopes: { mandant: { label: "Mandant", valueType: "text" } },
     logger: silent
   });
   let dataStoresOn = true;

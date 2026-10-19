@@ -10,7 +10,6 @@ import {
   isAuthenticatedServicePrincipal,
   isPageId,
   liveRevisionId,
-  viewerScopeBindings,
   type ActorAccess,
   type AuthenticatedUser,
   type ConfigAssetFromPage,
@@ -380,20 +379,17 @@ export class AppWorkflow {
         ).id;
       }
     }
-    // Labels explain an empty scoped read without exposing assignments to the App bridge.
-    const unassignedScopes = [
-      ...new Set(
-        compiledActionsOf(fileSet.manifest).flatMap((action) =>
-          action.kind === "sql" && action.effect === "reading"
-            ? viewerScopeBindings(action.statement).map((binding) => binding.dimension)
-            : []
-        )
-      )
-    ].flatMap((dimension) => {
-      const definition = this.options.config.scopes?.[dimension];
-      const values = caller.access.scopeOf(dimension);
-      return definition && values !== "all" && values.length === 0 ? [definition.label] : [];
-    });
+    // Labels explain an empty scoped read without exposing assignments to the App bridge. Any
+    // read of a store may meet a scoped table, which filters it without a binding of its own.
+    const reads = compiledActionsOf(fileSet.manifest).some(
+      (action) => action.kind === "sql" && action.effect === "reading"
+    );
+    const unassignedScopes = Object.entries(reads ? (this.options.config.scopes ?? {}) : {})
+      .filter(([dimension]) => {
+        const values = caller.access.scopeOf(dimension);
+        return values !== "all" && values.length === 0;
+      })
+      .map(([, definition]) => definition.label);
     return {
       ...(unassignedScopes.length ? { unassignedScopes } : {}),
       url: appContentPath(fileSet.id, token),

@@ -1,4 +1,3 @@
-import type { ScopedTables } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
 
 export interface ViewerScopeBinding {
@@ -8,9 +7,19 @@ export interface ViewerScopeBinding {
   all: boolean;
 }
 
+/**
+ * One token of executable SQL: a word (an unquoted identifier or keyword, its ASCII letters
+ * folded to lower case as Postgres folds them), a quoted identifier with its quotes undone, a
+ * viewer binding, or any other single character. Strings and comments are no tokens.
+ */
+export type SqlToken =
+  | { kind: "word" | "quoted"; start: number; end: number; text: string; unicode?: true }
+  | ({ kind: "viewer"; text: string } & ViewerScopeBinding)
+  | { kind: "symbol"; start: number; end: number; text: string };
+
 /** Read executable tokens only. Strings, identifiers and nested comments never bind a viewer. */
-export function viewerScopeBindings(sql: string): ViewerScopeBinding[] {
-  const bindings: ViewerScopeBinding[] = [];
+export function sqlTokens(sql: string): SqlToken[] {
+  const tokens: SqlToken[] = [];
   let index = 0;
   while (index < sql.length) {
     const rest = sql.slice(index);
@@ -36,6 +45,7 @@ export function viewerScopeBindings(sql: string): ViewerScopeBinding[] {
     }
     const quote = sql[index];
     if (quote === "'" || quote === '"') {
+      const start = index;
       const escapes = quote === "'" && /(?:^|[^\p{L}\p{N}_$])[eE]$/u.test(sql.slice(0, index));
       index++;
       let closed = false;
@@ -53,6 +63,17 @@ export function viewerScopeBindings(sql: string): ViewerScopeBinding[] {
         break;
       }
       if (!closed) throw new AppError("VALIDATION_FAILED", "The SQL quoted value never ends");
+      if (quote === '"')
+        tokens.push({
+          kind: "quoted",
+          start,
+          end: index,
+          text: sql.slice(start + 1, index - 1).replaceAll('""', '"'),
+          // U&"..." spells an identifier with escapes, which no reader here undoes.
+          ...(/(?:^|[^\p{L}\p{N}_$])[uU]&$/u.test(sql.slice(0, start))
+            ? { unicode: true as const }
+            : {})
+        });
       continue;
     }
     const dollar = /^\$(?:[\p{L}_][\p{L}\p{N}_]*)?\$/u.exec(rest);
@@ -70,7 +91,9 @@ export function viewerScopeBindings(sql: string): ViewerScopeBinding[] {
           "VALIDATION_FAILED",
           "A viewer scope binding names its dimension as $viewer.scope('dimension') or $viewer.scope_all('dimension')"
         );
-      bindings.push({
+      tokens.push({
+        kind: "viewer",
+        text: binding[0],
         start: index,
         end: index + binding[0].length,
         dimension: binding[2],
@@ -79,27 +102,29 @@ export function viewerScopeBindings(sql: string): ViewerScopeBinding[] {
       index += binding[0].length;
       continue;
     }
-    const word = /^[\p{L}\p{N}_][\p{L}\p{N}_$]*/u.exec(rest);
-    index += word?.[0].length ?? 1;
+    // A number ends where a word begins, so `1findings` holds the word `findings`.
+    const word = /^(?:[0-9]+|[\p{L}_][\p{L}\p{N}_$]*)/u.exec(rest)?.[0];
+    if (word) {
+      tokens.push({
+        kind: "word",
+        start: index,
+        end: index + word.length,
+        text: word.replace(/[A-Z]+/gu, (letters) => letters.toLowerCase())
+      });
+      index += word.length;
+      continue;
+    }
+    if (!/^\s/u.test(rest))
+      tokens.push({ kind: "symbol", start: index, end: index + 1, text: sql.charAt(index) });
+    index++;
   }
-  return bindings;
+  return tokens;
 }
 
-/** Static publish check: every declared table must bind its dimension, including reads through a view. */
-export function requireScopeBindings(
-  sql: string,
-  tables: ScopedTables | undefined,
-  action: string
-): void {
-  const bindings = viewerScopeBindings(sql);
-  for (const [table, metadata] of Object.entries(tables ?? {})) {
-    for (const dimension of Object.keys(metadata.scope)) {
-      if (!bindings.some((binding) => binding.dimension === dimension && !binding.all))
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `Action '${action}' reads scoped table '${table}' without $viewer.scope('${dimension}')`,
-          { reason: "scope_binding_required", action, table }
-        );
-    }
-  }
+export function viewerScopeBindings(sql: string): ViewerScopeBinding[] {
+  return sqlTokens(sql).flatMap((token) =>
+    token.kind === "viewer"
+      ? [{ start: token.start, end: token.end, dimension: token.dimension, all: token.all }]
+      : []
+  );
 }

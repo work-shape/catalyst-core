@@ -1,4 +1,3 @@
-import { requireScopeBindings } from "@work-shape/catalyst-core";
 import { createKnowledgeBases } from "@work-shape/catalyst-data-stores";
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
@@ -104,7 +103,7 @@ describe("scoped Data Store rows", () => {
       scopeUnassigned: "Mandant"
     });
   });
-  it("uses server-owned bindings for authored SQL, including the all flag, and refuses unbound reads", async () => {
+  it("uses server-owned bindings for authored SQL, including the all flag, and filters unbound reads", async () => {
     const w = await world();
     const sql =
       "select * from findings where $viewer.scope_all('mandant') or mandant_nr = any($viewer.scope('mandant')) order by id";
@@ -115,29 +114,86 @@ describe("scoped Data Store rows", () => {
       rows: [expect.anything(), expect.anything(), expect.anything()]
     });
     expect(
-      await refusal(
-        call(
+      await call(
+        w,
+        "query",
+        { sql: "select * from findings -- $viewer.scope('mandant')" },
+        access(["101"]),
+        { byAppAction: true }
+      )
+    ).toMatchObject({ rows: [{ mandant_nr: "101" }] });
+  });
+  it.each([
+    ["or true", "select mandant_nr from findings where mandant_nr = '102' or true", ["101"]],
+    [
+      "a union",
+      "select mandant_nr from findings union all select mandant_nr from findings order by 1",
+      ["101", "101"]
+    ],
+    [
+      "a join, a subquery and folded case",
+      "with r(n) as (select 1) select f.mandant_nr, (select count(*)::text from FINDINGS) as n from r, findings f",
+      ["101"]
+    ],
+    [
+      "a recursive CTE",
+      "with recursive r(n) as (select 1 union all select n + 1 from r where n < 2) select f.mandant_nr from r, findings f",
+      ["101", "101"]
+    ],
+    [
+      // Run first on every row, an error would tell another scope's value.
+      "a predicate that fails on another scope's row",
+      "select mandant_nr from findings where 1 / (id - 3) = 0",
+      ["101"]
+    ]
+  ])("filters free SQL with %s to the caller's rows", async (_shape, sql, expected) => {
+    const w = await world();
+    const result = z
+      .object({ rows: z.array(z.object({ mandant_nr: z.string() })) })
+      // Seven values make the scope filter the costlier predicate, which a planner would run
+      // last; more would make it a hashed lookup again.
+      .parse(
+        await call(
           w,
           "query",
-          { sql: "select * from findings -- $viewer.scope('mandant')" },
-          access("all"),
-          { byAppAction: true }
+          { sql },
+          access(["101", ...Array.from({ length: 6 }, (_, index) => `unused-${index}`)])
         )
-      )
-    ).toMatchObject({ details: { reason: "scope_binding_required" } });
+      );
+    expect(result.rows.map((row) => row.mandant_nr)).toEqual(expected);
   });
-  it("refuses arbitrary free SQL, missing scope values, out-of-scope inserts and cross-scope value cursors", async () => {
+  it("lets an all holder filter by Mandant and count every row (M3)", async () => {
     const w = await world();
     expect(
-      await refusal(
-        call(
-          w,
-          "query",
-          { sql: "select * from findings union all select * from findings" },
-          access("all")
-        )
+      await call(
+        w,
+        "query",
+        { sql: "select id from findings where mandant_nr = $1", parameters: ["103"] },
+        access("all")
       )
-    ).toMatchObject({ details: { reason: "scoped_sql_refused" } });
+    ).toMatchObject({ rows: [{ id: 3 }] });
+    expect(
+      await call(w, "query", { sql: "select count(*)::int as n from findings" }, access("all"))
+    ).toMatchObject({ rows: [{ n: 3 }] });
+    expect(
+      await call(w, "query", { sql: "select count(*)::int as n from findings" }, access(["101"]))
+    ).toMatchObject({ rows: [{ n: 1 }] });
+  });
+  it.each([
+    "select * from public.findings",
+    'select * from "public" . "findings"',
+    'select * from U&"findings"',
+    "select query_to_xml('select * from findings', true, false, '')",
+    "select table_to_xml('findings', true, false, '')",
+    "select * from pg_catalog.pg_stats"
+  ])("refuses SQL that reaches past the filter: %s", async (sql) => {
+    const w = await world();
+    expect(await refusal(call(w, "query", { sql }, access(["101"])))).toMatchObject({
+      details: { reason: "scoped_sql_refused" }
+    });
+  });
+  it("refuses missing scope values, out-of-scope inserts and cross-scope value cursors", async () => {
+    const w = await world();
     expect(
       await refusal(call(w, "insert", { table: "findings", rows: [{ id: 4 }] }, access("all")))
     ).toMatchObject({ details: { reason: "scope_value_required" } });
@@ -243,7 +299,7 @@ describe("scoped Data Store rows", () => {
     ).toMatchObject({ rows: [expect.anything(), expect.anything(), expect.anything()] });
   });
 
-  it("filters a published named query, refuses free SQL even for all, and names a missing publish binding", async () => {
+  it("filters a published named query, with or without a binding, and refuses free SQL even for all", async () => {
     const w = await world();
     const kb = createKnowledgeBases({
       defaultLocale: "en",
@@ -263,7 +319,10 @@ describe("scoped Data Store rows", () => {
       description: "Client findings",
       backend: { dataStore: "findings" },
       tables: [{ name: "findings", description: "One finding per client" }],
-      queries: [{ name: "findings", file: "queries/findings.sql", sql }]
+      queries: [
+        { name: "findings", file: "queries/findings.sql", sql },
+        { name: "unbound", file: "queries/unbound.sql", sql: "select * from findings order by id" }
+      ]
     };
     const written = await db.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: w.clientInstanceId,
@@ -340,13 +399,7 @@ describe("scoped Data Store rows", () => {
       expect(
         await refusal(run({ query: "findings", parameters: { viewer: ["103"] } }))
       ).toMatchObject({ details: { reason: "named_query_parameters" } });
-      expect(() =>
-        requireScopeBindings(
-          "select * from findings /* $viewer.scope('mandant') */",
-          { findings: { scope: { mandant: "mandant_nr" } } },
-          "list_findings"
-        )
-      ).toThrow("Action 'list_findings' reads scoped table 'findings'");
+      expect(await run({ query: "unbound" })).toMatchObject({ rows: [{ mandant_nr: "101" }] });
     } finally {
       await w.dataStores.knowledgeBackend.retire(db.store, target);
     }

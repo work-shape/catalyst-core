@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   AppError,
   type ScopedTables,
+  sqlTokens,
   viewerScopeBindings,
   type ActorAccess,
   type DataStoreParameter,
@@ -77,29 +78,103 @@ export function bindViewerScopes(
   return { sql: statement + sql.slice(from), parameters: bound };
 }
 
-/** Free query callers may select one table's columns. Expressions, joins and functions use a reviewed named query. */
-export function scopedQuery(
+/**
+ * Functions that read a relation by name or run SQL from text, and views of column
+ * statistics: what they read is no reference the rewrite below can filter.
+ */
+const UNFILTERABLE = new Set([
+  "query_to_xml",
+  "query_to_xmlschema",
+  "query_to_xml_and_xmlschema",
+  "cursor_to_xml",
+  "cursor_to_xmlschema",
+  "table_to_xml",
+  "table_to_xmlschema",
+  "table_to_xml_and_xmlschema",
+  "schema_to_xml",
+  "schema_to_xmlschema",
+  "schema_to_xml_and_xmlschema",
+  "database_to_xml",
+  "database_to_xmlschema",
+  "database_to_xml_and_xmlschema",
+  "ts_stat",
+  "ts_rewrite",
+  "crosstab",
+  "crosstab2",
+  "crosstab3",
+  "crosstab4",
+  "connectby",
+  "pg_stats",
+  "pg_stats_ext",
+  "pg_stats_ext_exprs",
+  "pg_statistic",
+  "pg_statistic_ext_data"
+]);
+
+/** The name Postgres reads: at most 63 bytes, cut at a character. */
+function identifierName(text: string): string {
+  const encoder = new TextEncoder();
+  let name = "";
+  for (const character of text) {
+    if (encoder.encode(name + character).length > 63) break;
+    name += character;
+  }
+  return name;
+}
+
+function unfilterable(message: string): never {
+  throw new AppError("VALIDATION_FAILED", message, { reason: "scoped_sql_refused" });
+}
+
+/**
+ * Every SQL read of a store with scoped tables, whoever wrote it: each scoped table it names
+ * reads only the caller's rows. The statement gets a materialized CTE of the table's name in
+ * front, so the table's name means the caller's rows wherever it stands, and no predicate of
+ * the statement is evaluated on another row first. What would reach the table past that name
+ * is refused: a schema-qualified name, an escaped identifier, and the functions above. A
+ * caller with every value reads the table itself.
+ */
+export function scopedStatement(
   sql: string,
   tables: ScopedTables | undefined,
   access?: ActorAccess,
   parameters: readonly DataStoreParameter[] = []
 ) {
   if (!Object.keys(tables ?? {}).length) return { sql, parameters: [...parameters] };
-  const read =
-    /^\s*select\s+(\*|"?[a-z_][a-z0-9_]*"?(?:\s*,\s*"?[a-z_][a-z0-9_]*"?)*)\s+from\s+(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s*;?\s*$/iu.exec(
-      sql
+  const tokens = sqlTokens(sql);
+  const named = new Set<string>();
+  tokens.forEach((token, index) => {
+    if (token.kind !== "word" && token.kind !== "quoted") return;
+    if (token.kind === "quoted" && token.unicode)
+      unfilterable("SQL on a scoped Data Store spells identifiers without Unicode escapes");
+    const name = identifierName(token.text);
+    if (UNFILTERABLE.has(name)) unfilterable(`SQL on a scoped Data Store cannot use '${name}'`);
+    if (!tables?.[name]) return;
+    if (tokens[index - 1]?.text === ".")
+      unfilterable(`Name scoped table '${name}' without a schema`);
+    named.add(name);
+  });
+  const ctes: string[] = [];
+  const bound = [...parameters];
+  for (const table of named) {
+    const filter = scopePredicate(tables, table, access, bound.length);
+    if (filter.condition === "true") continue;
+    ctes.push(
+      `${quoteIdentifier(table)} as materialized (select * from public.${quoteIdentifier(table)} where ${filter.condition})`
     );
-  if (!read?.[2] || !tables?.[read[2]])
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "Free SQL on a scoped Data Store is refused. Select one table or use a published named query.",
-      { reason: "scoped_sql_refused" }
-    );
-  const filter = scopePredicate(tables, read[2], access, parameters.length);
-  return {
-    sql: `select ${read[1]} from public.${quoteIdentifier(read[2])} where ${filter.condition}`,
-    parameters: [...parameters, ...filter.parameters]
-  };
+    bound.push(...filter.parameters);
+  }
+  if (!ctes.length) return { sql, parameters: bound };
+  const [first, second] = tokens;
+  if (first?.kind !== "word" || (first.text !== "select" && first.text !== "with"))
+    unfilterable("Queries must be read-only SELECT or WITH statements");
+  if (first.text === "select")
+    return {
+      sql: `${sql.slice(0, first.start)}with ${ctes.join(", ")} ${sql.slice(first.start)}`,
+      parameters: bound
+    };
+  const at = second?.kind === "word" && second.text === "recursive" ? second.end : first.end;
+  return { sql: `${sql.slice(0, at)} ${ctes.join(", ")},${sql.slice(at)}`, parameters: bound };
 }
 
 /** Checked inside the DDL transaction before commit; scope columns stay text and NOT NULL. */

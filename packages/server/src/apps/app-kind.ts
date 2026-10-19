@@ -1,4 +1,3 @@
-import { scopedTablesSchema, requireScopeBindings } from "@work-shape/catalyst-core";
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 
 export { APP_ASSET_KIND };
@@ -245,12 +244,6 @@ async function requireDataStores(input: {
     for (const action of actions) {
       if (action.dataStore === name) {
         access.require(STORE_RIGHT_OF_EFFECT[action.effect], resource);
-        if (action.effect === "reading")
-          requireScopeBindings(
-            action.statement,
-            z.object({ tables: scopedTablesSchema.optional() }).parse(asset.publishedConfig).tables,
-            action.name
-          );
       }
     }
   }

@@ -1,6 +1,4 @@
-import { requireScopeBindings } from "@work-shape/catalyst-core";
-import { bindViewerScopes } from "../scoped-tables";
-import { compiledNamedQuery } from "./named-query";
+import { bindViewerScopes, scopedStatement } from "../scoped-tables";
 import { z } from "zod";
 import {
   AppError,
@@ -126,10 +124,6 @@ export function createDataStoreKnowledgeBackend(
       // store the publisher may not read is not named to them: the check refuses it as missing.
       if (store) {
         access.require(DATA_STORE_ACTIONS.read, store.resource);
-        for (const query of target.queries ?? []) {
-          const compiled = compiledNamedQuery(query);
-          requireScopeBindings(compiled.statement, store.definition.tables, query.name);
-        }
         if (Object.keys(store.definition.tables ?? {}).length && !target.queries?.length)
           throw new AppError(
             "VALIDATION_FAILED",
@@ -188,10 +182,16 @@ export function createDataStoreKnowledgeBackend(
           "Free SQL on scoped tables is refused. Use a published named query.",
           { reason: "scoped_sql_refused" }
         );
-      if (viewer?.namedQuery)
-        requireScopeBindings(statement.sql, reached.store.definition.tables, target.name);
-      const bound = viewer?.namedQuery
+      const named = viewer?.namedQuery
         ? bindViewerScopes(statement.sql, statement.parameters, viewer.access)
+        : undefined;
+      const bound = named
+        ? scopedStatement(
+            named.sql,
+            reached.store.definition.tables,
+            viewer?.access,
+            named.parameters
+          )
         : statement;
       const read = async () =>
         rowsOf(
