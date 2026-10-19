@@ -29,6 +29,7 @@ import {
 export function CollaborationWorkspaceSelector({
   collaborationWorkspaces,
   activeCollaborationWorkspaceId,
+  buildingCollaborationWorkspace,
   userLabel,
   loading,
   loadFailed,
@@ -40,6 +41,8 @@ export function CollaborationWorkspaceSelector({
 }: {
   collaborationWorkspaces: CollaborationWorkspaceWithRole[];
   activeCollaborationWorkspaceId: string | undefined;
+  /** The workspace open for a Builder who is no member of it, named in place of a member's. */
+  buildingCollaborationWorkspace?: { name: string } | undefined;
   userLabel: string;
   loading: boolean;
   loadFailed: boolean;
@@ -98,9 +101,11 @@ export function CollaborationWorkspaceSelector({
 
   const triggerLabel = activeCollaborationWorkspace
     ? collaborationWorkspaceDisplayName(activeCollaborationWorkspace, userLabel, t)
-    : loading
-      ? t("collaborationWorkspaceLoading")
-      : personalCollaborationWorkspaceName(userLabel, t);
+    : buildingCollaborationWorkspace
+      ? buildingCollaborationWorkspace.name
+      : loading
+        ? t("collaborationWorkspaceLoading")
+        : personalCollaborationWorkspaceName(userLabel, t);
 
   return (
     <div ref={rootRef} className="relative min-w-0">
@@ -122,6 +127,13 @@ export function CollaborationWorkspaceSelector({
             name={activeCollaborationWorkspace.name}
             emoji={activeCollaborationWorkspace.emoji}
             accentColor={activeCollaborationWorkspace.accentColor}
+            size="sm"
+          />
+        ) : buildingCollaborationWorkspace ? (
+          <CollaborationWorkspaceAvatar
+            name={buildingCollaborationWorkspace.name}
+            emoji={null}
+            accentColor={null}
             size="sm"
           />
         ) : (

@@ -34,6 +34,12 @@ export interface CollaborationWorkspaceModel {
   collaborationWorkspaces: CollaborationWorkspaceWithRole[];
   activeCollaborationWorkspaceId: string | undefined;
   activeCollaborationWorkspace: CollaborationWorkspaceWithRole | undefined;
+  /**
+   * The Shared Workspace whose asset the address opens for a person who builds there without
+   * being a member (`BuildingWorkspace`). Absent where the person is a member, or the address
+   * opens nothing of the kind.
+   */
+  buildingCollaborationWorkspace: BuildingWorkspace | undefined;
   personalCollaborationWorkspaceId: string | undefined;
   loading: boolean;
   loadFailed: boolean;
@@ -97,6 +103,16 @@ export function canonicalConversationRedirect(input: {
   return undefined;
 }
 
+/**
+ * A Shared Workspace the person holds Builder or Publisher in without being its member, with
+ * the actions they hold on what it owns, as `platform.context.get` names them (WS-BUILD-1).
+ */
+export interface BuildingWorkspace {
+  id: string;
+  name: string;
+  actions: readonly string[];
+}
+
 export interface CollaborationWorkspaceModelInput {
   apiBaseUrl: string;
   authScope: string;
@@ -110,6 +126,12 @@ export interface CollaborationWorkspaceModelInput {
   enabled: boolean;
   userId: string | undefined;
   route: WorkspaceRoute;
+  /**
+   * The workspaces the person builds in without being a member; undefined until known. An
+   * address of an asset there that the person's actions open is opened; every other address of
+   * such a workspace leads to the person's own, as for any workspace they are no member of.
+   */
+  buildingWorkspaces: readonly BuildingWorkspace[] | undefined;
   /** Owning workspace of the routed conversation, once its thread is loaded. */
   loadedConversationCollaborationWorkspaceId: string | undefined;
   legacyConversationUnavailable: boolean;
@@ -133,6 +155,7 @@ export function useCollaborationWorkspaceModel(
     enabled,
     userId,
     route,
+    buildingWorkspaces,
     loadedConversationCollaborationWorkspaceId,
     legacyConversationUnavailable,
     goToCollaborationWorkspace,
@@ -198,6 +221,13 @@ export function useCollaborationWorkspaceModel(
   const activeCollaborationWorkspace = collaborationWorkspaces.find(
     (collaborationWorkspace) => collaborationWorkspace.id === activeCollaborationWorkspaceId
   );
+  // Undefined while it is not yet known whether the routed asset opens without membership.
+  const buildingCollaborationWorkspace = useMemo(
+    () => routedBuildingWorkspace(route, activeCollaborationWorkspace, buildingWorkspaces),
+    [activeCollaborationWorkspace, buildingWorkspaces, route]
+  );
+  const buildingWorkspacesKnown =
+    buildingWorkspaces !== undefined || assetKindOpenedWithoutMembership(route) === undefined;
 
   // Application root: restore the browser-local last workspace, validated
   // against the memberships the server actually returns.
@@ -263,6 +293,11 @@ export function useCollaborationWorkspaceModel(
     if (activeCollaborationWorkspace || !fallbackCollaborationWorkspaceId) {
       return;
     }
+    // A Builder who is no member opens the workspace's assets their bundle reaches, and nothing
+    // else of it. Until the instance said which workspaces those are, nothing moves.
+    if (!buildingWorkspacesKnown || buildingCollaborationWorkspace) {
+      return;
+    }
     // The page says why it went elsewhere, and whom to ask: a link from a colleague otherwise
     // just lands here.
     setClosedLinkWorkspaceId(activeCollaborationWorkspaceId);
@@ -270,6 +305,8 @@ export function useCollaborationWorkspaceModel(
   }, [
     activeCollaborationWorkspace,
     activeCollaborationWorkspaceId,
+    buildingCollaborationWorkspace,
+    buildingWorkspacesKnown,
     collaborationWorkspacesLoaded,
     fallbackCollaborationWorkspaceId,
     goToCollaborationWorkspace
@@ -362,6 +399,7 @@ export function useCollaborationWorkspaceModel(
     collaborationWorkspaces,
     activeCollaborationWorkspaceId,
     activeCollaborationWorkspace,
+    buildingCollaborationWorkspace,
     personalCollaborationWorkspaceId,
     loading:
       (collaborationWorkspacesQuery.isPending || listedForAnother) && isAuthenticated && enabled,
@@ -398,6 +436,30 @@ function listsAnotherPerson(
   if (listed === undefined || userId === undefined) return false;
   return !listed.some(
     (workspace) => workspace.kind === "personal" && workspace.personalUserId === userId
+  );
+}
+
+/**
+ * The kind of asset an address opens that a Builder or Publisher who is no member may open:
+ * the draft of an App. Every other address of a workspace is its members' alone.
+ */
+function assetKindOpenedWithoutMembership(route: WorkspaceRoute): string | undefined {
+  return route.kind === "app-edit" ? "app" : undefined;
+}
+
+/** The workspace the route names, where the person builds without membership what it opens. */
+function routedBuildingWorkspace(
+  route: WorkspaceRoute,
+  member: CollaborationWorkspaceWithRole | undefined,
+  building: readonly BuildingWorkspace[] | undefined
+): BuildingWorkspace | undefined {
+  const kind = assetKindOpenedWithoutMembership(route);
+  const workspaceId = routeCollaborationWorkspaceId(route);
+  if (member !== undefined || kind === undefined || workspaceId === undefined) return undefined;
+  return building?.find(
+    (workspace) =>
+      workspace.id === workspaceId &&
+      workspace.actions.some((action) => action.startsWith(`${kind}.`))
   );
 }
 

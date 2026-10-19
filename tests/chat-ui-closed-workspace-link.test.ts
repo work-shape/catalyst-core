@@ -35,7 +35,15 @@ async function openLink(
   /** The owners and admins the instance names when it refuses the linked workspace. */
   administrators: unknown = [],
   /** The memberships once `workspaces.ensure_personal` made the Personal Workspace. */
-  ensured?: ReturnType<typeof sharedWorkspace>[]
+  ensured?: ReturnType<typeof sharedWorkspace>[],
+  opened: Pick<CollaborationWorkspaceModelInput, "route" | "buildingWorkspaces"> = {
+    route: {
+      kind: "conversation",
+      collaborationWorkspaceId: "cw_nordlicht",
+      conversationId: "c_1"
+    },
+    buildingWorkspaces: []
+  }
 ) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const reads: string[] = [];
@@ -67,11 +75,7 @@ async function openLink(
     isAuthenticated: true,
     enabled: true,
     userId: "user_1",
-    route: {
-      kind: "conversation",
-      collaborationWorkspaceId: "cw_nordlicht",
-      conversationId: "c_1"
-    },
+    ...opened,
     loadedConversationCollaborationWorkspaceId: undefined,
     legacyConversationUnavailable: false,
     goToCollaborationWorkspace: goTo,
@@ -216,5 +220,73 @@ describe("a link into a workspace the person is no member of", () => {
     const markup = banner(locale, ["Mara Lindqvist", "Jonas Brandt"]);
     expect(markup).toContain(said);
     expect(markup).not.toContain(locale === "en" ? "Ask an admin" : "Bitte einen Admin");
+  });
+});
+
+// The review of WS-BUILD-1: Lena holds Builder in Nordlicht and is no member. The address of an
+// App draft there led to her own workspace and asked for membership, so she could not open the
+// draft her bundle lets her write. Fails without `buildingWorkspaces` in the model.
+describe("an address into a workspace the person builds in without membership", () => {
+  const appDraft = {
+    kind: "app-edit",
+    collaborationWorkspaceId: "cw_nordlicht",
+    app: "offers"
+  } as const;
+  const nordlicht = { id: "cw_nordlicht", name: "Nordlicht", actions: ["app.read", "app.write"] };
+
+  it("opens an App draft there, with the workspace named", async () => {
+    const opened = await openLink([personalWorkspace()], [], undefined, {
+      route: appDraft,
+      buildingWorkspaces: [nordlicht]
+    });
+    try {
+      expect(opened.goTo).not.toHaveBeenCalled();
+      expect(opened.model()?.closedLink).toBeUndefined();
+      expect(opened.model()?.buildingCollaborationWorkspace).toEqual(nordlicht);
+      // The workspace stays one the person is no member of.
+      expect(opened.model()?.activeCollaborationWorkspace).toBeUndefined();
+    } finally {
+      await opened.unmount();
+    }
+  });
+
+  it("waits while the instance has not said where the person builds", async () => {
+    const opened = await openLink([personalWorkspace()], [], undefined, {
+      route: appDraft,
+      buildingWorkspaces: undefined
+    });
+    try {
+      expect(opened.goTo).not.toHaveBeenCalled();
+      expect(opened.model()?.buildingCollaborationWorkspace).toBeUndefined();
+    } finally {
+      await opened.unmount();
+    }
+  });
+
+  it("leads every other address of it to the person's own workspace", async () => {
+    const cases: Pick<CollaborationWorkspaceModelInput, "route" | "buildingWorkspaces">[] = [
+      // A conversation of the workspace is its members' alone.
+      {
+        route: {
+          kind: "conversation",
+          collaborationWorkspaceId: "cw_nordlicht",
+          conversationId: "c_1"
+        },
+        buildingWorkspaces: [nordlicht]
+      },
+      // An App draft of a workspace the person holds no App right in.
+      { route: appDraft, buildingWorkspaces: [{ ...nordlicht, actions: ["agent.write"] }] },
+      // An App draft of a workspace the person does not build in.
+      { route: appDraft, buildingWorkspaces: [{ ...nordlicht, id: "cw_other" }] }
+    ];
+    for (const input of cases) {
+      const opened = await openLink([personalWorkspace()], [], undefined, input);
+      try {
+        expect(opened.goTo).toHaveBeenCalledWith("cw_personal", { replace: true });
+        expect(opened.model()?.buildingCollaborationWorkspace).toBeUndefined();
+      } finally {
+        await opened.unmount();
+      }
+    }
   });
 });

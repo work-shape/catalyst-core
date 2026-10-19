@@ -398,6 +398,7 @@ function ChatWorkspaceContent({
     <CollaborationWorkspaceSelector
       collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
       activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
+      buildingCollaborationWorkspace={collaborationWorkspace.buildingCollaborationWorkspace}
       userLabel={userLabel}
       loading={collaborationWorkspace.loading}
       loadFailed={collaborationWorkspace.loadFailed}
@@ -447,10 +448,14 @@ function ChatWorkspaceContent({
   const appsHost: AppsHost = {
     enabled: model.apps.enabled,
     rights: model.apps.rights,
+    // A Builder who is no member opens an App draft of the workspace, and nothing else of it.
     workspace:
       activeWorkspace && activeWorkspaceName !== undefined
         ? { id: activeWorkspace.id, name: activeWorkspaceName, emoji: activeWorkspace.emoji }
-        : undefined,
+        : collaborationWorkspace.buildingCollaborationWorkspace && {
+            id: collaborationWorkspace.buildingCollaborationWorkspace.id,
+            name: collaborationWorkspace.buildingCollaborationWorkspace.name
+          },
     showRoute: model.route.showRoute,
     startChat: model.apps.startChat,
     editWithAgent: model.apps.editWithAgent,

@@ -2,6 +2,7 @@ import {
   APP_ASSET_KIND,
   type AgentRunProjection,
   type ConversationListItem,
+  type PlatformContext,
   type StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
 import { dockKindOfRoute } from "../dock/subject-starters";
@@ -26,7 +27,10 @@ import {
   useWorkspaceModelPreferenceQuery,
   useWorkspaceThreadQuery
 } from "../../shared/api/workspace-queries";
-import { useCollaborationWorkspaceModel } from "../../shared/collaboration-workspace/collaboration-workspace-model";
+import {
+  useCollaborationWorkspaceModel,
+  type BuildingWorkspace
+} from "../../shared/collaboration-workspace/collaboration-workspace-model";
 import { canViewUsageGovernance } from "../../shared/governance";
 import { createTranslationContext } from "../../shared/i18n";
 import { workspaceRoutePath } from "../../shared/routes";
@@ -194,6 +198,31 @@ export function useWorkspaceChatModel({
     threadQuery.data?.conversation.id === selectedConversationId && !threadQuery.isFetching
       ? threadQuery.data?.conversation
       : undefined;
+  // The modules are the instance's, so they are read from its own configuration: the
+  // workspace's view of it is not there yet while the workspace's agents load.
+  const instanceModules = configQuery.data?.modules;
+  const appsEnabled = collaborationWorkspacesAvailable && instanceModules?.apps?.enabled === true;
+  const platformContextQuery = usePlatformContextQuery({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    enabled:
+      isAuthenticated &&
+      (appsEnabled ||
+        (collaborationWorkspacesAvailable && instanceModules?.workflows?.enabled === true))
+  });
+  // Where the person builds without being a member: an App draft there opens. Known once the
+  // instance's configuration said whether Apps are on, and where they are, once it said where.
+  const buildingContext =
+    configQuery.isError ||
+    platformContextQuery.isError ||
+    (configQuery.data !== undefined && !appsEnabled)
+      ? NO_CONTEXT_WORKSPACES
+      : platformContextQuery.data;
+  const buildingWorkspaces = useMemo(
+    () => buildingWorkspacesOf(buildingContext),
+    [buildingContext]
+  );
   const collaborationWorkspace = useCollaborationWorkspaceModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -202,6 +231,7 @@ export function useWorkspaceChatModel({
     enabled: collaborationWorkspacesAvailable,
     userId: meQuery.data?.id,
     route,
+    buildingWorkspaces,
     loadedConversationCollaborationWorkspaceId: loadedConversation?.collaborationWorkspaceId,
     legacyConversationUnavailable:
       route.kind === "legacy-conversation" && Boolean(threadQuery.error),
@@ -535,19 +565,6 @@ export function useWorkspaceChatModel({
     enabled: isAuthenticated
   });
   const inbox = inboxRailEntry(approvalPendingCountQuery.data);
-  // The modules are the instance's, so they are read from its own configuration: the
-  // workspace's view of it is not there yet while the workspace's agents load.
-  const instanceModules = configQuery.data?.modules;
-  const appsEnabled = collaborationWorkspacesAvailable && instanceModules?.apps?.enabled === true;
-  const platformContextQuery = usePlatformContextQuery({
-    apiBaseUrl,
-    authScope: WORKSPACE_AUTH_SCOPE,
-    client,
-    enabled:
-      isAuthenticated &&
-      (appsEnabled ||
-        (collaborationWorkspacesAvailable && instanceModules?.workflows?.enabled === true))
-  });
   const appRights = useMemo(
     () =>
       appsEnabled
@@ -1030,3 +1047,14 @@ export function useWorkspaceChatModel({
 
 const NO_CONVERSATIONS: readonly ConversationListItem[] = [];
 const NO_RUN_PROJECTIONS: Readonly<Record<string, AgentRunProjection>> = {};
+
+const NO_CONTEXT_WORKSPACES: Pick<PlatformContext, "workspaces"> = { workspaces: [] };
+
+/** The Shared Workspaces of the context the person is no member of; undefined until read. */
+function buildingWorkspacesOf(
+  context: Pick<PlatformContext, "workspaces"> | undefined
+): BuildingWorkspace[] | undefined {
+  return context?.workspaces.filter(
+    (workspace) => workspace.kind === "shared" && !workspace.member
+  );
+}

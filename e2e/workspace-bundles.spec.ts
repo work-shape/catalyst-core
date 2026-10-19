@@ -11,6 +11,10 @@ const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const shotsDir = process.env.E2E_SHOTS_DIR;
 const normalUser = { email: "e2e-user@example.test", password: "e2e-user-password" };
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
+const superadminUser = {
+  email: "e2e-superadmin@example.test",
+  password: "e2e-superadmin-password"
+};
 const WIDE = { width: 1280, height: 800 };
 const NARROW = { width: 390, height: 844 };
 
@@ -126,5 +130,91 @@ test("an instance admin gives Builder in a workspace and sets the workspace's bu
         `${apiBaseUrl}/api/v1/instance/access/grants/${grant.id}`
       );
     }
+  }
+});
+
+// The review of WS-BUILD-1: a Builder who is no member opened the address of an App draft of the
+// workspace and was led to their own workspace, asked to become a member. The draft opens; every
+// other address of the workspace still leads to their own.
+test("a Builder who is no member opens an App draft of the workspace and nothing else of it", async ({
+  browser,
+  page,
+  instanceAgentsChange: _instanceAgentsChange
+}) => {
+  test.setTimeout(90_000);
+  await signInViaApi(page, superadminUser);
+  const builderContext = await browser.newContext();
+  const builder = await builderContext.newPage();
+  await builder.addInitScript((theme) => {
+    window.localStorage.setItem("vivd-catalyst:theme", theme);
+  }, shotsTheme);
+  await signInViaApi(builder, normalUser);
+  const me: { id: string } = await (await builder.request.get(`${apiBaseUrl}/api/v1/me`)).json();
+  const name = `Outside builder ${Date.now()}`;
+  const app = `outside-draft-${Date.now()}`;
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+    data: { name }
+  });
+  expect(created.ok()).toBe(true);
+  const workspace: { id: string } = await created.json();
+  const grants: string[] = [];
+  try {
+    const put = await requestWithOrigin(page, "put", `${apiBaseUrl}/api/v1/assets/app/${app}`, {
+      data: {
+        workspaceId: workspace.id,
+        expectedRevision: null,
+        files: [
+          {
+            path: "app.yaml",
+            text: `id: ${app}\nname: Outside draft\nkit: 1.0.0\nentry: index.html\n`
+          },
+          { path: "index.html", text: "<!doctype html><title>Outside</title><p>Outside draft</p>" }
+        ]
+      }
+    });
+    expect(put.ok(), await put.text()).toBe(true);
+    const granted = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/v1/instance/access/grants`,
+      {
+        data: {
+          holderKind: "user",
+          holderId: me.id,
+          action: "builder",
+          effect: "allow",
+          scopeKind: "workspace",
+          scopeId: workspace.id
+        }
+      }
+    );
+    expect(granted.ok(), await granted.text()).toBe(true);
+    const row: { id: string } = await granted.json();
+    grants.push(row.id);
+
+    await builder.setViewportSize(WIDE);
+    await builder.goto(`/w/${workspace.id}/app-drafts/${app}`);
+    await expect(builder.getByTestId("app-edit")).toBeVisible();
+    await expect(builder).toHaveURL(new RegExp(`/w/${workspace.id}/app-drafts/${app}`, "u"));
+    await expect(builder.getByText(/not a member of/u)).toHaveCount(0);
+    // The rail names the workspace the draft belongs to, not the person's own.
+    await expect(builder.getByTestId("collaboration-workspace-selector-trigger")).toContainText(
+      name
+    );
+    await pictures(builder, "outside-builder-app-draft");
+
+    // The workspace's conversations stay its members': its address leads to the own workspace.
+    await builder.goto(`/w/${workspace.id}`);
+    await expect(builder.getByText(/not a member of/u)).toBeVisible();
+    await expect(builder).not.toHaveURL(new RegExp(workspace.id, "u"));
+  } finally {
+    for (const grant of grants) {
+      await requestWithOrigin(
+        page,
+        "delete",
+        `${apiBaseUrl}/api/v1/instance/access/grants/${grant}`
+      );
+    }
+    await builderContext.close();
   }
 });
