@@ -5,11 +5,15 @@ import { inboxPlaces, type ApprovalRevisionHost } from "./support/chat-ui";
 
 // DAILY-WINS 4: an Inbox item leads to what it is about, for a reader who may open it there.
 
-const workspaces = [{ id: "cw_1", kind: "shared" as const, name: "Vertrieb", emoji: null }];
+const workspaces = [
+  { id: "cw_personal", kind: "personal" as const, name: "Personal", emoji: null },
+  { id: "cw_1", kind: "shared" as const, name: "Vertrieb", emoji: null }
+];
 
 function host(
   context: Parameters<typeof inboxPlaces>[0]["context"],
-  open: { apps?: boolean; workflows?: boolean } = {}
+  open: { apps?: boolean; workflows?: boolean } = {},
+  listed: typeof workspaces = workspaces
 ): ApprovalRevisionHost {
   return {
     currentUserId: "user-anna",
@@ -19,7 +23,7 @@ function host(
     openConversation: () => undefined,
     places: inboxPlaces({
       context,
-      workspaces,
+      workspaces: listed,
       ownerLabel: "Anna Beispiel",
       appsOpen: open.apps ?? true,
       workflowsOpen: open.workflows ?? true
@@ -56,6 +60,13 @@ const workflowPublish = {
   summary: "assets.publish",
   canDecide: true,
   preview: { ...call, review: { ...review, kind: "workflow", name: "nightly-import" } }
+};
+
+// A Workflow the instance owns is published without a workspace: the held call names none.
+const { workspaceId: _owner, ...instanceCall } = call;
+const instanceWorkflowPublish = {
+  ...workflowPublish,
+  preview: { ...instanceCall, review: workflowPublish.preview.review }
 };
 
 /** The place link of the item's foot, as `[href, words]`, or nothing. */
@@ -115,5 +126,26 @@ describe("inbox item places", () => {
         })
       )
     ).toBeUndefined();
+  });
+
+  it("leads who may read the instance's Workflows to one the instance owns, in their own workspace", () => {
+    const reader = host(workflowsContext(["workflow.read"]));
+    expect(place(renderItem(instanceWorkflowPublish, { host: reader, locale: "en" }))).toEqual([
+      "/w/cw_personal/workflows/nightly-import",
+      "Open the Workflow"
+    ]);
+    // A right in a workspace is never lent to what the instance owns, not even in the reader's
+    // own workspace, where the link would lead.
+    const inWorkspaces = host(
+      workflowsContext([], { cw_personal: ["workflow.read"], cw_1: ["workflow.read"] })
+    );
+    expect(place(renderItem(instanceWorkflowPublish, { host: inWorkspaces }))).toBeUndefined();
+    // Without a workspace of the reader's own, there is no place to open it in.
+    const homeless = host(
+      workflowsContext(["workflow.read"]),
+      {},
+      workspaces.filter((workspace) => workspace.kind !== "personal")
+    );
+    expect(place(renderItem(instanceWorkflowPublish, { host: homeless }))).toBeUndefined();
   });
 });

@@ -10,9 +10,10 @@ import {
 } from "./inbox-fixtures";
 import { publishQuestionsLeadWithTheSentence } from "./publish-narrative-fixtures";
 import { shareAsksForWhom } from "./share-1-fixtures";
-import { approveMemberPublish } from "./publish-approval-fixtures";
+import { allowOnInstance, approveMemberPublish } from "./publish-approval-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Response } from "@playwright/test";
+import { z } from "zod";
 import { expect, test } from "./test";
 
 /**
@@ -801,6 +802,83 @@ test("a member's publish of an App waits in the Inbox with its review, and an ad
   test.setTimeout(shotsDir ? 300_000 : 120_000);
   await signIn(page, reviewer);
   await approveMemberPublish({ page, browser, baseURL, pageErrors }, testInfo.retry);
+});
+
+// A Workflow the instance owns is published without a workspace. Fails without the reader's own
+// workspace as its place: the item named the Workflow and led nowhere.
+test("a member's held publish of an instance Workflow leads the reviewer to the Workflow", async ({
+  page,
+  browser,
+  accessState: _accessState
+}) => {
+  test.setTimeout(90_000);
+  const send = async (on: typeof page, method: "post" | "put", path: string, data?: unknown) => {
+    const response = await requestWithOrigin(on, method, `${apiBaseUrl}${path}`, { data });
+    expect(response.ok(), await response.text()).toBe(true);
+    const body: unknown = await response.json();
+    return body;
+  };
+  await signIn(page, reviewer);
+  const personal = idOf(await send(page, "post", "/api/v1/workspaces/personal"));
+  const name = `inbox-workflow-${Date.now()}`;
+  await send(page, "post", "/api/v1/instance/service-principals", {
+    name,
+    displayLabel: name,
+    description: "Runs the Inbox review Workflow"
+  });
+  await send(page, "put", `/api/v1/assets/workflow/${name}`, {
+    expectedRevision: null,
+    config: {
+      name,
+      manifest: {
+        id: name,
+        name: "Inbox review Workflow",
+        description: "Waits for its publish to be approved",
+        runAs: name,
+        inputs: { type: "object", additionalProperties: false },
+        outputs: {
+          type: "object",
+          properties: { done: { type: "integer" } },
+          required: ["done"]
+        },
+        steps: [
+          { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+          { id: "result", name: "Result", type: "output", input: { done: { value: 1 } } }
+        ]
+      }
+    }
+  });
+  const context = await browser.newContext();
+  const undo = await allowOnInstance("e2e-publish-member@example.test", [
+    "workflow.read",
+    "workflow.write",
+    "workflow.publish"
+  ]);
+  try {
+    const memberPage = await context.newPage();
+    await send(memberPage, "post", "/api/auth/sign-in/email", {
+      email: "e2e-publish-member@example.test",
+      password: "e2e-publish-member-password",
+      rememberMe: true
+    });
+    const held = z
+      .object({ status: z.literal("pending_approval"), approvalRequestId: z.string() })
+      .parse(
+        await send(memberPage, "post", `/api/v1/assets/workflow/${name}/publish`, { revision: 1 })
+      );
+    await page.goto(`/inbox/${held.approvalRequestId}`);
+    await expect(page.getByTestId("publish-review")).toBeVisible();
+    const link = page.getByTestId("inbox-item-place");
+    await expect(link).toHaveText("Open the Workflow");
+    await expect(link).toHaveAttribute("href", `/w/${personal}/workflows/${name}`);
+    await link.click();
+    await expect(
+      page.getByRole("heading", { name: "Inbox review Workflow", exact: true })
+    ).toBeVisible();
+  } finally {
+    await undo();
+    await context.close();
+  }
 });
 
 test(

@@ -249,7 +249,10 @@ function InboxItemFoot({
   const opensConversation =
     originConversationId !== undefined && originConversationId !== openConversationId;
   // Where what is asked can be read in full, for a reader who may open it there.
-  const place = inboxItemPlaces(item).find(({ route }) => host?.places?.opens(route) === true);
+  const place = inboxItemPlaces(item).flatMap(({ target, label }) => {
+    const route = host?.places?.route(target);
+    return route ? [{ route, label }] : [];
+  })[0];
   const leads = opensConversation || place !== undefined;
 
   if (!canDecide && !canWithdraw && !canRevert && !leads && !actions.failure) {

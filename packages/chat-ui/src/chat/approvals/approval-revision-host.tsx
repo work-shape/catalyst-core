@@ -42,13 +42,22 @@ export interface InboxWorkspace {
 }
 
 /**
+ * What an item leads to, in the workspace that owns it. A Workflow the instance owns names no
+ * workspace.
+ */
+export type InboxItemTarget =
+  | { kind: "app" | "app-edit"; workspaceId: string; app: string }
+  | { kind: "workflow"; workspaceId?: string; workflow: string };
+
+/**
  * What the Inbox knows of the places its items come from: the reader's workspaces by name, and
  * whether the reader may open a place an item leads to. A link that would end on "You may not
  * read this" is never drawn.
  */
 export interface InboxPlaces {
   workspace(workspaceId: string, t: TranslationContextValue["t"]): InboxWorkspace | undefined;
-  opens(route: WorkspaceRoute): boolean;
+  /** The route to what an item leads to, where the reader may open it there. */
+  route(target: InboxItemTarget): WorkspaceRoute | undefined;
 }
 
 export interface ApprovalRevisionStart {
