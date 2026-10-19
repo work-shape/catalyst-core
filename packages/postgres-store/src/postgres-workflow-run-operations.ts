@@ -26,7 +26,6 @@ import {
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   WORKFLOW_ENDED_STATUSES,
-  workflowStepsDeep,
   type JsonObject,
   type JsonValue,
   type WorkflowCodeOutcome,
@@ -133,6 +132,13 @@ async function endWorkflowRunWait(
   return row ? mapRun(row) : undefined;
 }
 
+/**
+ * Whether the run's pinned definition holds an `agent` step at any depth, read in the database
+ * so a list of runs loads no definition. A literal value shaped like a step makes it stricter.
+ */
+const hasAgentSteps = () =>
+  sql<boolean>`jsonb_path_exists(coalesce(${workflowRuns.definition}, '{}'::jsonb), 'lax $.steps.** ? (@.type == "agent")')`;
+
 async function readWorkflowRun(
   db: PostgresConnection,
   input: Input<"readRun">
@@ -140,7 +146,7 @@ async function readWorkflowRun(
   const [row] = await db
     .select({
       ...runColumns,
-      definition: workflowRuns.definition,
+      hasAgentSteps: hasAgentSteps(),
       preview: previewOf(workflowRuns.output)
     })
     .from(workflowRuns)
@@ -149,7 +155,7 @@ async function readWorkflowRun(
   return {
     ...mapRun(row),
     ...mapPreview(row.preview),
-    hasAgentSteps: workflowStepsDeep(row.definition?.steps).some((step) => step.type === "agent")
+    hasAgentSteps: row.hasAgentSteps
   };
 }
 
@@ -173,7 +179,7 @@ async function listWorkflowRuns(
   const rows = await db
     .select({
       ...runColumns,
-      definition: workflowRuns.definition,
+      hasAgentSteps: hasAgentSteps(),
       preview: previewOf(workflowRuns.output)
     })
     .from(workflowRuns)
@@ -199,7 +205,7 @@ async function listWorkflowRuns(
   return rows.map((row) => ({
     ...mapRun(row),
     ...mapPreview(row.preview),
-    hasAgentSteps: workflowStepsDeep(row.definition?.steps).some((step) => step.type === "agent"),
+    hasAgentSteps: row.hasAgentSteps,
     failedDescendantCount: counts.get(row.id) ?? 0
   }));
 }

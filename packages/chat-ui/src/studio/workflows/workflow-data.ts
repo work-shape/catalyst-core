@@ -13,6 +13,7 @@ import type {
   WorkflowListItem,
   WorkflowRunView,
   WorkflowStepRunView,
+  WorkflowStepTranscriptView,
   WorkflowView
 } from "./workflow-views";
 
@@ -360,6 +361,33 @@ export function useLoopEntries(input: {
     loadMore: () => void query.fetchNextPage().catch(() => undefined),
     retry: () => void query.refetch().catch(() => undefined)
   };
+}
+
+/**
+ * The transcript of one agent step run, read while its panel shows the run and again while
+ * the run goes on. Nothing while it is read, and nothing for a reader the instance refuses.
+ */
+export function useStepTranscript(input: {
+  runId: string;
+  stepRunId: string;
+  following: boolean;
+}): WorkflowStepTranscriptView | undefined {
+  const { runs } = useWorkflowsSource();
+  const keys = useWorkflowKeys();
+  const read = runs?.getStepTranscript;
+  const query = useQuery({
+    queryKey: [...keys.runs, "transcript", input.runId, input.stepRunId],
+    queryFn: ({ signal }) => {
+      if (!read) throw new Error("This source has no transcripts");
+      return read(input.runId, input.stepRunId, signal);
+    },
+    enabled: read !== undefined,
+    // A reader without run-data access is refused: asking again changes nothing.
+    retry: (count, error) => readProblem(error) === "failed" && count < 2,
+    refetchInterval: (query) =>
+      input.following && query.state.status !== "error" ? RUN_REFRESH_MS : false
+  });
+  return query.data;
 }
 
 /** Why the instance did not start or cancel a run, as far as the page says it itself. */

@@ -342,6 +342,16 @@ export interface WorkflowLoopCounts {
 }
 
 /** One step run of a run. */
+/** The bounded transcript of an agent step's run, for a reader with run-data access. */
+export interface WorkflowStepTranscriptView {
+  messages: readonly {
+    role: string;
+    text: string;
+    toolCalls?: readonly { toolName: string; input?: unknown }[];
+  }[];
+  truncated: boolean;
+}
+
 export interface WorkflowStepRunView {
   id: string;
   /** The id of the step in the definition. */
@@ -373,8 +383,16 @@ export interface WorkflowStepRunView {
   publishedWouldAsk?: "approval";
   /** On the step run of a `workflow` step: the child run it started or was answered. */
   childRunId?: string;
-  agent?: Omit<import("@work-shape/catalyst-core").WorkflowAgentRunData, "runId"> & {
+  /** On an agent step: its Agent Run, its status and its usage. */
+  agent?: {
     runId: string;
+    status: string;
+    usage: {
+      modelCallCount: number;
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    };
   };
   failure?: WorkflowFailure;
   output?: WorkflowOutputPreview;

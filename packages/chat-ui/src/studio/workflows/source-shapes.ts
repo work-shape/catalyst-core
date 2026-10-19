@@ -3,6 +3,7 @@ import type {
   WorkflowListItem,
   WorkflowRunView,
   WorkflowStepRunView,
+  WorkflowStepTranscriptView,
   WorkflowView
 } from "./workflow-views";
 import type {
@@ -69,6 +70,15 @@ export interface WorkflowRunsSource {
     },
     signal: AbortSignal
   ): Promise<SourcePage<WorkflowStepRunView>>;
+  /**
+   * The transcript of one agent step run, for a reader with run-data access. Absent where the
+   * source has none, such as samples.
+   */
+  getStepTranscript?(
+    runId: string,
+    stepRunId: string,
+    signal: AbortSignal
+  ): Promise<WorkflowStepTranscriptView>;
   /** Starts a run of the published revision of a Workflow with the input its form gave. */
   start(workflow: string, input: Readonly<Record<string, unknown>>): Promise<WorkflowRunView>;
   cancel(runId: string): Promise<WorkflowRunView>;

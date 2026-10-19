@@ -30,6 +30,7 @@ import type { LiveOnceControl } from "./test-run";
 import { StepDatasets } from "./step-datasets";
 import { simulatedCall, stepDatasets, stepOutputRows } from "./step-output";
 import { countsLine } from "./workflow-canvas-model";
+import { useStepTranscript } from "./workflow-data";
 import { stepConnection, stepFallbackSentence } from "./workflow-model";
 import type {
   WorkflowDatasetView,
@@ -37,6 +38,7 @@ import type {
   WorkflowOutputPreview,
   WorkflowStepRunView,
   WorkflowStepSource,
+  WorkflowStepTranscriptView,
   WorkflowStepView
 } from "./workflow-views";
 import { RunStateBadge, durationText } from "./workflows-frame";
@@ -192,6 +194,7 @@ export function StepPanel({
   tab,
   onTabChange,
   entries,
+  transcript,
   onOpenChild,
   onClose
 }: {
@@ -208,6 +211,8 @@ export function StepPanel({
   onTabChange(tab: StepPanelTab): void;
   /** The list of a loop's entries, shown on the tab "Entries". */
   entries: ReactNode;
+  /** On an agent step: its transcript, read when the panel shows its run (CR-2). */
+  transcript?: ReactNode;
   /** On a `workflow` step: opens the Workflow it starts, or the child run. */
   onOpenChild?(): void;
   onClose(): void;
@@ -246,7 +251,13 @@ export function StepPanel({
       {shown === "what" ? (
         <StepDescription step={step} summary={part.summary} onOpenChild={onOpenChild} />
       ) : shown === "run" && run !== undefined ? (
-        <StepRunDetails step={step} account={account} run={run} onOpenChild={onOpenChild} />
+        <StepRunDetails
+          step={step}
+          account={account}
+          run={run}
+          transcript={transcript}
+          onOpenChild={onOpenChild}
+        />
       ) : (
         entries
       )}
@@ -394,11 +405,13 @@ function StepRunDetails({
   step,
   account,
   run,
+  transcript,
   onOpenChild
 }: {
   step: WorkflowStepView;
   account: string | undefined;
   run: StepPanelRun;
+  transcript: ReactNode;
   onOpenChild: (() => void) | undefined;
 }) {
   const translation = useTranslation();
@@ -491,34 +504,7 @@ function StepRunDetails({
           datasets={[...(stepRun.datasets ?? []), ...(run.runDatasets ?? [])]}
         />
       ) : null}
-      {stepRun.agent?.transcript ? (
-        <Disclosure defaultOpen>
-          <DisclosureTrigger>{t("workflows.panel.agentTranscript")}</DisclosureTrigger>
-          <DisclosureContent>
-            <CodeBlock
-              label={t("workflows.panel.agentTranscript")}
-              code={stepRun.agent?.transcript
-                .map((message) => {
-                  const speaker = t(
-                    message.role === "user"
-                      ? "workflows.panel.agentInput"
-                      : message.role === "tool"
-                        ? "workflows.panel.agentToolResult"
-                        : "workflows.panel.agentSpeaker"
-                  );
-                  const calls = message.toolCalls ?? [];
-                  const work = calls
-                    .map((call) => `${call.toolName} ${JSON.stringify(call.input)}`)
-                    .join("\n");
-                  return `${speaker}: ${message.text}${work ? `\n${work}` : ""}`;
-                })
-                .join("\n\n")}
-              lineNumbers={false}
-              maxLines={OUTPUT_PREVIEW_LINES}
-            />
-          </DisclosureContent>
-        </Disclosure>
-      ) : null}
+      {stepRun.agent ? transcript : null}
       {onOpenChild !== undefined && stepRun.childRunId !== undefined ? (
         <Button variant="outline" size="sm" className="justify-self-start" onClick={onOpenChild}>
           {t("workflows.panel.openRun")}
@@ -526,6 +512,65 @@ function StepRunDetails({
       ) : null}
     </>
   );
+}
+
+/**
+ * The transcript of an agent step's run, as `workflows.get_step_transcript` answers it for a
+ * reader with run-data access: who said what, and the tools the agent called.
+ */
+export function StepTranscriptView({ transcript }: { transcript: WorkflowStepTranscriptView }) {
+  const { t } = useTranslation();
+  const code = transcript.messages
+    .map((message) => {
+      const speaker = t(
+        message.role === "user"
+          ? "workflows.panel.agentInput"
+          : message.role === "tool"
+            ? "workflows.panel.agentToolResult"
+            : "workflows.panel.agentSpeaker"
+      );
+      const work = (message.toolCalls ?? [])
+        .map((call) =>
+          call.input === undefined
+            ? call.toolName
+            : `${call.toolName} ${JSON.stringify(call.input)}`
+        )
+        .join("\n");
+      return `${speaker}: ${message.text}${work ? `\n${work}` : ""}`;
+    })
+    .join("\n\n");
+  return (
+    <Disclosure defaultOpen>
+      <DisclosureTrigger>{t("workflows.panel.agentTranscript")}</DisclosureTrigger>
+      <DisclosureContent>
+        <CodeBlock
+          label={t("workflows.panel.agentTranscript")}
+          code={code}
+          lineNumbers={false}
+          maxLines={OUTPUT_PREVIEW_LINES}
+        />
+        {transcript.truncated ? (
+          <p className="text-caption text-muted-foreground">
+            {t("workflows.panel.agentTranscriptTruncated")}
+          </p>
+        ) : null}
+      </DisclosureContent>
+    </Disclosure>
+  );
+}
+
+/** Reads an agent step's transcript while its panel is open. Nothing for a reader without it. */
+export function StepTranscript({
+  runId,
+  stepRunId,
+  following
+}: {
+  runId: string;
+  stepRunId: string;
+  following: boolean;
+}) {
+  const transcript = useStepTranscript({ runId, stepRunId, following });
+  return transcript === undefined ? null : <StepTranscriptView transcript={transcript} />;
 }
 
 /**

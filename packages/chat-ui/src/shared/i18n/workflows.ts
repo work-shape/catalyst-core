@@ -16,6 +16,8 @@ export const workflows = defineTranslations({
     "workflows.panel.noAgentTools": "No tools",
     "workflows.panel.agentUsage": "Tokens used",
     "workflows.panel.agentTranscript": "Agent transcript",
+    "workflows.panel.agentTranscriptTruncated":
+      "The transcript is long: only its start is shown, and long texts are cut.",
     "workflows.notRunnable.accountDisabled":
       "This workflow runs as the technical account “{name}”, which is switched off. An administrator switches it on under {place}.",
     "workflows.notRunnable.accountUnavailable":
@@ -416,6 +418,8 @@ export const workflows = defineTranslations({
     "workflows.panel.noAgentTools": "Keine Werkzeuge",
     "workflows.panel.agentUsage": "Verwendete Tokens",
     "workflows.panel.agentTranscript": "Agentenprotokoll",
+    "workflows.panel.agentTranscriptTruncated":
+      "Das Protokoll ist lang: Nur sein Anfang wird gezeigt, lange Texte sind gekürzt.",
     "workflows.notRunnable.accountDisabled":
       "Dieser Workflow läuft als Technisches Konto „{name}“, das ausgeschaltet ist. Ein Administrator schaltet es unter {place} ein.",
     "workflows.notRunnable.accountUnavailable":

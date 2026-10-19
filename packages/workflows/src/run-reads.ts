@@ -64,22 +64,22 @@ export function createRunReads(options: {
         ...(filter ? { filter } : {}),
         ...(page ? { page } : {})
       });
-      stepRuns = await Promise.all(
-        stepRuns.map(async (step) => {
-          if (step.stepType !== "agent") return step;
-          const agent = await stores.childAgentRuns.readWorkflowAgentData({
-            clientInstanceId,
-            stepRunId: step.id,
-            includeTranscript: includeAgentData === true && !run.dataPrunedAt
-          });
-          const { outputPreview, ...summary } = step;
-          return {
-            ...summary,
-            ...(agent ? { agent } : {}),
-            ...(includeAgentData && outputPreview ? { outputPreview } : {})
-          };
-        })
-      );
+      // The run and usage of every agent step on the page in one read; the transcript is
+      // read alone, for one step, by `readStepTranscript`.
+      const agents = await stores.childAgentRuns.readWorkflowAgentSummaries({
+        clientInstanceId,
+        stepRunIds: stepRuns.filter((step) => step.stepType === "agent").map((step) => step.id)
+      });
+      stepRuns = stepRuns.map((step) => {
+        if (step.stepType !== "agent") return step;
+        const agent = agents.get(step.id);
+        const { outputPreview, ...summary } = step;
+        return {
+          ...summary,
+          ...(agent ? { agent } : {}),
+          ...(includeAgentData && outputPreview ? { outputPreview } : {})
+        };
+      });
       const rows = await stores.workflowRunDatasets.listForSteps({
         clientInstanceId,
         stepRunIds: stepRuns.map((step) => step.id)
@@ -98,6 +98,13 @@ export function createRunReads(options: {
       // Pruned snapshots cannot reconstruct unreached body steps or concurrency. Return
       // the reached steps and their stored counts; never fall back to a newer definition.
       return definition ? withEveryBodyStep(stepRuns, definition, slots) : stepRuns;
+    },
+
+    /** The transcript of one agent step of the run; nothing for any other step run. */
+    async readStepTranscript({ runId, stepRunId }: { runId: string; stepRunId: string }) {
+      const stepRun = await stores.workflowRuns.getStepRun({ clientInstanceId, id: stepRunId });
+      if (stepRun?.runId !== runId || stepRun.stepType !== "agent") return undefined;
+      return stores.childAgentRuns.readWorkflowAgentTranscript({ clientInstanceId, stepRunId });
     },
 
     async listWorkflows(page?: StorePage) {

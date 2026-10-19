@@ -83,6 +83,13 @@ function runsSource(client: WorkflowsClient): WorkflowRunsSource {
       });
       return { items: page.items.map(toWorkflowStepRun), nextCursor: page.nextCursor };
     },
+    getStepTranscript: async (runId, stepRunId, signal) => {
+      const { messages, truncated } = await client.workflows.get_step_transcript({
+        params: { runId, stepRunId },
+        signal
+      });
+      return { messages, truncated };
+    },
     start: async (workflow, input) =>
       toWorkflowRun(done(await client.workflows.start({ params: { workflow }, body: { input } }))),
     cancel: async (runId) =>

@@ -17,6 +17,7 @@ export const WORKFLOW_OPERATION_IDS = [
   "workflows.download_dataset",
   "workflows.list_runs",
   "workflows.list_step_runs",
+  "workflows.get_step_transcript",
   "workflows.cancel_run",
   "workflows.principal_rights"
 ] as const;
@@ -166,3 +167,4 @@ export { workflowContinuationIssues } from "./continuation-rules";
 
 export { resolveWorkflowNeededRights } from "./needed-rights";
 export { testRunCall } from "./test-run";
+export { agentOutputError } from "./agent-step";

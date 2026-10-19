@@ -5,7 +5,7 @@ export { fixWithAgentPrompt } from "./fix-with-agent";
 export { LoopEntriesView, defaultEntryFilter, loopEntries } from "./loop-entries";
 export { createInstanceSource } from "./instance-source";
 export { scheduleInWords } from "./schedule-words";
-export { StepPanel } from "./step-panel";
+export { StepPanel, StepTranscriptView } from "./step-panel";
 export { stepOutputRows } from "./step-output";
 export { countsLine, placedSteps, workflowGraph, type CanvasRun } from "./workflow-canvas-model";
 export {

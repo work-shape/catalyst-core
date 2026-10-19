@@ -2,7 +2,13 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FlowCanvas, type FlowGraph } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { LoopEntries } from "./loop-entries";
-import { StepPanel, stepPanelTabs, type StepPanelRun, type StepPanelTab } from "./step-panel";
+import {
+  StepPanel,
+  StepTranscript,
+  stepPanelTabs,
+  type StepPanelRun,
+  type StepPanelTab
+} from "./step-panel";
 import type { LiveOnceControl } from "./test-run";
 import { placedSteps, workflowGraph } from "./workflow-canvas-model";
 import { useRecipientNames, useWorkflowsHost } from "./workflows-host";
@@ -177,6 +183,18 @@ export function WorkflowCanvas({
     );
   }
 
+  // An agent step's transcript is read once its panel shows the run, never for the list.
+  const agentRun = selectedRun?.stepRun?.agent === undefined ? undefined : selectedRun.stepRun;
+  const transcript =
+    run === undefined || agentRun === undefined || tab !== "run" ? null : (
+      <StepTranscript
+        key={agentRun.id}
+        runId={run.run.id}
+        stepRunId={agentRun.id}
+        following={!run.run.ended}
+      />
+    );
+
   return (
     <FlowCanvas
       data-testid="workflow-canvas"
@@ -216,6 +234,7 @@ export function WorkflowCanvas({
             tab={tab}
             onTabChange={setTab}
             entries={entries}
+            transcript={transcript}
             onOpenChild={
               selected.step.kind === "workflow"
                 ? () => onOpenChild(selected.step, selectedRun?.stepRun)

@@ -7,6 +7,7 @@ import type {
   JsonObject,
   OperationRunId,
   StorePage,
+  WorkflowAgentTranscript,
   WorkflowLastRun,
   WorkflowRunKeyFilter,
   WorkflowRunView,
@@ -71,6 +72,11 @@ export interface WorkflowRunsPort {
     filter?: WorkflowStepRunFilter;
     page?: StorePage;
   }): Promise<WorkflowStepRunView[]>;
+  /** The bounded transcript of one agent step run of the run; nothing for any other. */
+  readStepTranscript(input: {
+    runId: string;
+    stepRunId: string;
+  }): Promise<WorkflowAgentTranscript | undefined>;
   /**
    * Every Workflow with a published revision, each with its latest run where it has one and
    * with what a start by hand of it would be refused for now.

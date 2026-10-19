@@ -54,19 +54,40 @@ export async function agentStepOutcome(
     conversationId: child.conversationId
   });
   const last = messages.filter((message) => message.role === "assistant").at(-1);
+  // The engine validates the answer again before a later step reads it (check 100).
+  const error = agentOutputError(
+    declared?.type === "agent" ? declared.outputSchema : undefined,
+    last
+  );
+  if (error) return { kind: "failed", systemic: false, error };
+  return { kind: "done", output: unknownToJsonValue(JSON.parse(last?.text ?? "")) };
+}
+
+/** Where an agent step's answer misses its schema, by field path; nothing where it fits. */
+export function agentOutputError(
+  outputSchema: JsonObject | undefined,
+  answer: { text: string } | undefined
+): WorkflowRunError | undefined {
+  const issue = outputIssue(outputSchema, answer);
+  return issue === undefined
+    ? undefined
+    : { code: "output_invalid", message: `Agent output is invalid at ${issue}` };
+}
+
+function outputIssue(
+  outputSchema: JsonObject | undefined,
+  answer: { text: string } | undefined
+): string | undefined {
+  const schema = outputSchema ? compileJsonSchema(outputSchema) : undefined;
+  if (!schema?.ok) return "schema";
+  let value: unknown;
   try {
-    const value: unknown = JSON.parse(last?.text ?? "");
-    const schema =
-      declared?.type === "agent" ? compileJsonSchema(declared.outputSchema) : undefined;
-    if (!schema?.ok || schema.validate(value).length) throw new Error("invalid");
-    return { kind: "done", output: unknownToJsonValue(value) };
+    value = JSON.parse(answer?.text ?? "");
   } catch {
-    return {
-      kind: "failed",
-      systemic: false,
-      error: { code: "output_invalid", message: "Agent output does not fit its output schema" }
-    };
+    return "JSON";
   }
+  const [issue] = schema.validate(value);
+  return issue ? issue.path.join(".") || "output" : undefined;
 }
 
 /** The child and its waiting step commit together under the Workflow run's lock. */

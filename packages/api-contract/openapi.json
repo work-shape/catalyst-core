@@ -24555,6 +24555,9 @@
                         "connectionTitle": {
                           "type": "string"
                         },
+                        "operation": {
+                          "type": "string"
+                        },
                         "stepRunId": {
                           "type": "string"
                         }
@@ -24935,6 +24938,9 @@
                           "type": "string"
                         },
                         "connectionTitle": {
+                          "type": "string"
+                        },
+                        "operation": {
                           "type": "string"
                         },
                         "stepRunId": {
@@ -25558,39 +25564,6 @@
                                   "outputTokens",
                                   "totalTokens"
                                 ]
-                              },
-                              "transcript": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "role": {
-                                      "type": "string"
-                                    },
-                                    "text": {
-                                      "type": "string"
-                                    },
-                                    "toolCalls": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "object",
-                                        "properties": {
-                                          "toolName": {
-                                            "type": "string"
-                                          },
-                                          "input": {}
-                                        },
-                                        "required": [
-                                          "toolName"
-                                        ]
-                                      }
-                                    }
-                                  },
-                                  "required": [
-                                    "role",
-                                    "text"
-                                  ]
-                                }
                               }
                             },
                             "required": [
@@ -25615,6 +25588,9 @@
                                 "type": "string"
                               },
                               "connectionTitle": {
+                                "type": "string"
+                              },
+                              "operation": {
                                 "type": "string"
                               },
                               "stepRunId": {
@@ -25729,6 +25705,136 @@
                   },
                   "required": [
                     "items"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/workflow-runs/{runId}/steps/{stepRunId}/transcript": {
+      "get": {
+        "operationId": "workflows.get_step_transcript",
+        "summary": "Read the bounded transcript of one agent step of a Workflow Run; requires run-data access",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stepRunId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runId": {
+                      "type": "string"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "role": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "toolCalls": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "toolName": {
+                                  "type": "string"
+                                },
+                                "input": {}
+                              },
+                              "required": [
+                                "toolName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "role",
+                          "text"
+                        ]
+                      }
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "runId",
+                    "messages",
+                    "truncated"
                   ]
                 }
               }
@@ -26449,6 +26555,9 @@
                               "connectionTitle": {
                                 "type": "string"
                               },
+                              "operation": {
+                                "type": "string"
+                              },
                               "stepRunId": {
                                 "type": "string"
                               }
@@ -26857,6 +26966,9 @@
                           "type": "string"
                         },
                         "connectionTitle": {
+                          "type": "string"
+                        },
+                        "operation": {
                           "type": "string"
                         },
                         "stepRunId": {
@@ -27290,6 +27402,9 @@
                           "type": "string"
                         },
                         "connectionTitle": {
+                          "type": "string"
+                        },
+                        "operation": {
                           "type": "string"
                         },
                         "stepRunId": {
@@ -38616,6 +38731,21 @@
               },
               "toolRevisionId": {
                 "type": "string"
+              },
+              "boundBy": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "label"
+                ]
               }
             },
             "required": [

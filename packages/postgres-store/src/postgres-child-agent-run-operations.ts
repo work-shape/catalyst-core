@@ -5,6 +5,9 @@ import {
   SUBAGENTS_PER_RUN,
   SUBAGENT_ANSWER_MAX_LENGTH,
   SUBAGENT_FILES_MAX,
+  WORKFLOW_STEP_TRANSCRIPT_MAX_MESSAGES,
+  WORKFLOW_STEP_TRANSCRIPT_TEXT_MAX_CHARS,
+  WORKFLOW_STEP_TRANSCRIPT_TOOL_INPUT_MAX_CHARS,
   agentRunJobOptions,
   asAgentRunId,
   asConversationId,
@@ -17,7 +20,8 @@ import {
   type StartSubagentRunInput,
   type StartSubagentRunResult,
   type SubagentOutcome,
-  type SubagentSummary
+  type SubagentSummary,
+  type WorkflowAgentRunData
 } from "@work-shape/catalyst-core";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { requestAgentRunCancellation } from "./postgres-agent-run-cancellation";
@@ -48,50 +52,79 @@ export function createPostgresChildAgentRunStore(
   enqueued: () => void
 ): ChildAgentRunStore {
   return {
-    async readWorkflowAgentData(input) {
-      const child = await this.readWorkflowAgentRun(input);
-      if (!child) return undefined;
-      const [usage] = await db
+    async readWorkflowAgentSummaries(input) {
+      if (input.stepRunIds.length === 0) return new Map();
+      const rows = await db
         .select({
-          modelCallCount: count(),
+          stepRunId: agentRuns.workflowStepRunId,
+          runId: agentRuns.id,
+          status: agentRuns.status,
+          modelCallCount: sql<number>`count(${modelUsageEvents.id})::int`,
           inputTokens: sql<number>`coalesce(sum(${modelUsageEvents.inputTokens}), 0)::int`,
           outputTokens: sql<number>`coalesce(sum(${modelUsageEvents.outputTokens}), 0)::int`,
           totalTokens: sql<number>`coalesce(sum(${modelUsageEvents.totalTokens}), 0)::int`
         })
-        .from(modelUsageEvents)
+        .from(agentRuns)
+        .leftJoin(
+          modelUsageEvents,
+          and(
+            eq(modelUsageEvents.clientInstanceId, agentRuns.clientInstanceId),
+            eq(modelUsageEvents.agentRunId, agentRuns.id)
+          )
+        )
         .where(
           and(
-            eq(modelUsageEvents.clientInstanceId, input.clientInstanceId),
-            eq(modelUsageEvents.agentRunId, child.id)
+            eq(agentRuns.clientInstanceId, input.clientInstanceId),
+            inArray(agentRuns.workflowStepRunId, [...input.stepRunIds])
           )
-        );
-      const transcript = input.includeTranscript
-        ? await db
-            .select({ role: messages.role, text: messages.text, metadata: messages.metadata })
-            .from(messages)
-            .where(
-              and(
-                eq(messages.clientInstanceId, input.clientInstanceId),
-                eq(messages.conversationId, child.conversationId)
-              )
-            )
-            .orderBy(asc(messages.createdAt), asc(messages.storageOrdinal))
-        : undefined;
-      return {
-        runId: child.id,
-        status: child.status,
-        usage: usage ?? { modelCallCount: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-        ...(transcript
-          ? {
-              transcript: transcript.map(({ metadata, ...message }) => {
-                const toolCalls = readAssistantToolCallsMetadata(metadata)?.toolCalls.map(
-                  ({ toolName, input }) => ({ toolName, input })
-                );
-                return { ...message, ...(toolCalls?.length ? { toolCalls } : {}) };
-              })
+        )
+        .groupBy(agentRuns.id);
+      const summaries = new Map<string, WorkflowAgentRunData>();
+      for (const { stepRunId, runId, status, ...usage } of rows)
+        if (stepRunId) summaries.set(stepRunId, { runId: asAgentRunId(runId), status, usage });
+      return summaries;
+    },
+    async readWorkflowAgentTranscript(input) {
+      const child = await this.readWorkflowAgentRun(input);
+      if (!child) return undefined;
+      const rows = await db
+        .select({
+          role: messages.role,
+          text: sql<string>`left(${messages.text}, ${WORKFLOW_STEP_TRANSCRIPT_TEXT_MAX_CHARS})`,
+          cut: sql<boolean>`length(${messages.text}) > ${WORKFLOW_STEP_TRANSCRIPT_TEXT_MAX_CHARS}`,
+          metadata: messages.metadata
+        })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.clientInstanceId, input.clientInstanceId),
+            eq(messages.conversationId, child.conversationId)
+          )
+        )
+        .orderBy(asc(messages.createdAt), asc(messages.storageOrdinal))
+        .limit(WORKFLOW_STEP_TRANSCRIPT_MAX_MESSAGES + 1);
+      let truncated = rows.length > WORKFLOW_STEP_TRANSCRIPT_MAX_MESSAGES;
+      const transcriptMessages = rows
+        .slice(0, WORKFLOW_STEP_TRANSCRIPT_MAX_MESSAGES)
+        .flatMap(({ role, text, cut, metadata }) => {
+          if (cut) truncated = true;
+          const toolCalls = readAssistantToolCallsMetadata(metadata)?.toolCalls.map(
+            ({ toolName, input: toolInput }) => {
+              const fits =
+                (JSON.stringify(toolInput) ?? "").length <=
+                WORKFLOW_STEP_TRANSCRIPT_TOOL_INPUT_MAX_CHARS;
+              if (!fits) truncated = true;
+              return fits ? { toolName, input: toolInput } : { toolName };
             }
-          : {})
-      };
+          );
+          const message = { role, text, ...(toolCalls?.length ? { toolCalls } : {}) };
+          // The repair turn's prompt is kept with the answer it rejected.
+          const repairPrompt = metadata.workflowRepairPrompt;
+          return typeof repairPrompt === "string"
+            ? [message, { role: "user", text: repairPrompt }]
+            : [message];
+        });
+      return { runId: child.id, messages: transcriptMessages, truncated };
     },
     async startWorkflowAgentRun(input) {
       const [existing] = await db
@@ -139,7 +172,7 @@ export function createPostgresChildAgentRunStore(
           ...(input.tester ? { ownerUserId: input.tester.id } : {}),
           workflowStepRunId: input.stepRunId,
           inputMessageId,
-          agentName: input.title,
+          agentName: input.agentName,
           status: "queued",
           startedAt: at,
           updatedAt: at,

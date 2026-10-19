@@ -140,6 +140,25 @@ export const workflowRunSchema = z.object({
   dataPrunedAt: timestampSchema.optional()
 });
 
+/**
+ * The transcript of one agent step's run, read by a holder of `workflow.read_run_data`. It is
+ * bounded: at most 100 messages, each text cut at 10,000 characters and a tool input over 2,000
+ * characters left out; `truncated` says that something was.
+ */
+export const workflowStepTranscriptSchema = z.object({
+  runId: z.string(),
+  messages: z.array(
+    z.object({
+      role: z.string(),
+      text: z.string(),
+      toolCalls: z
+        .array(z.object({ toolName: z.string(), input: z.unknown().optional() }))
+        .optional()
+    })
+  ),
+  truncated: z.boolean()
+});
+
 export const workflowStepRunSchema = z.object({
   id: z.string(),
   runId: z.string(),
@@ -204,18 +223,7 @@ export const workflowStepRunSchema = z.object({
         inputTokens: z.number(),
         outputTokens: z.number(),
         totalTokens: z.number()
-      }),
-      transcript: z
-        .array(
-          z.object({
-            role: z.string(),
-            text: z.string(),
-            toolCalls: z
-              .array(z.object({ toolName: z.string(), input: z.unknown().optional() }))
-              .optional()
-          })
-        )
-        .optional()
+      })
     })
     .optional(),
   error: workflowRunErrorSchema.optional(),
@@ -455,6 +463,21 @@ export const workflowOperations = {
     query: listWorkflowStepRunsQuerySchema,
     response: page(workflowStepRunSchema, ["createdAt", "id"], false),
     errors: ["NOT_FOUND", "VALIDATION_FAILED"],
+    rateClass: "read"
+  }),
+  "workflows.get_step_transcript": defineRegisteredOperation({
+    id: "workflows.get_step_transcript",
+    method: "GET",
+    path: "/api/v1/workflow-runs/:runId/steps/:stepRunId/transcript",
+    summary:
+      "Read the bounded transcript of one agent step of a Workflow Run; requires run-data access",
+    tag: "Workflows",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    response: json(workflowStepTranscriptSchema),
+    errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
   "workflows.cancel_run": defineRegisteredOperation({

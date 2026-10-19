@@ -315,6 +315,22 @@ function registerWorkflowRoutes(
     }
   });
 
+  // An agent step's transcript is the run's data: only a holder of `workflow.read_run_data`
+  // reads it, one step at a time and bounded (CR-2, check 99).
+  route.operation(apiOperations["workflows.get_step_transcript"], {
+    authorize: (input, { access }) =>
+      authorizeOnRun(input.runId, (_run, resource) =>
+        decide(access, WORKFLOW_ACTIONS.readRunData, resource)
+      ),
+    resource: runResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input) => {
+      const transcript = await required().readStepTranscript(input);
+      if (!transcript) throw new AppError("NOT_FOUND", "There is no such agent step run");
+      return transcript;
+    }
+  });
+
   route.operation(apiOperations["workflows.get_run"], {
     authorize: (input, { access, actor, origin }) =>
       authorizeOnRun(input.runId, mayReadRun(access, actor, origin)),

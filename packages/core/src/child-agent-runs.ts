@@ -10,6 +10,7 @@ import type {
 import type { ISODateString } from "./time";
 import type { RunAgentResult } from "./subagents";
 import type { ReasoningEffortConfig } from "./config";
+import type { AuthenticatedUser, WorkflowRunPrincipal } from "./identity";
 
 // The store of Child Agent Runs (CR-1): a subagent's start, the parent's wait for its
 // subagents, and what a parent and a person read of them. Apart from `subagents.ts`, which the
@@ -54,31 +55,60 @@ export interface SubagentSummary {
 export type SubagentOutcome =
   { runId: AgentRunId; status: "open" } | ({ runId: AgentRunId } & RunAgentResult);
 
+/**
+ * The agent name of a Workflow `agent` step's run, `workflow.<workflow>.<stepId>`. Its
+ * definition and tools come from the step, never from an agent asset of the same name.
+ */
+export const WORKFLOW_AGENT_NAME_PREFIX = "workflow.";
+export function workflowAgentName(workflow: string, stepId: string): string {
+  return `${WORKFLOW_AGENT_NAME_PREFIX}${workflow}.${stepId}`;
+}
+
+/** What every reader of a Workflow agent step sees: its run, its status and its usage. */
 export interface WorkflowAgentRunData {
   runId: AgentRunId;
   status: AgentRun["status"];
   usage: { modelCallCount: number; inputTokens: number; outputTokens: number; totalTokens: number };
-  transcript?: {
+}
+
+/** The bounds of one read of a step's transcript (`workflows.get_step_transcript`). */
+export const WORKFLOW_STEP_TRANSCRIPT_MAX_MESSAGES = 100;
+export const WORKFLOW_STEP_TRANSCRIPT_TEXT_MAX_CHARS = 10_000;
+export const WORKFLOW_STEP_TRANSCRIPT_TOOL_INPUT_MAX_CHARS = 2_000;
+
+/**
+ * The transcript of a Workflow agent step's run, for a reader with `workflow.read_run_data`.
+ * `truncated`: a message, a text or a tool input was left out or cut at the bounds above.
+ */
+export interface WorkflowAgentTranscript {
+  runId: AgentRunId;
+  messages: {
     role: string;
     text: string;
     toolCalls?: { toolName: string; input?: unknown }[];
   }[];
+  truncated: boolean;
 }
 
 export interface ChildAgentRunStore {
-  readWorkflowAgentData(input: {
+  /** The run and usage of each agent step run of these ids that has started one, in one read. */
+  readWorkflowAgentSummaries(input: {
+    clientInstanceId: ClientInstanceId;
+    stepRunIds: readonly string[];
+  }): Promise<Map<string, WorkflowAgentRunData>>;
+  readWorkflowAgentTranscript(input: {
     clientInstanceId: ClientInstanceId;
     stepRunId: string;
-    includeTranscript: boolean;
-  }): Promise<WorkflowAgentRunData | undefined>;
+  }): Promise<WorkflowAgentTranscript | undefined>;
 
   /** Called under the Workflow run lock; the unique step key makes retries idempotent. */
   startWorkflowAgentRun(input: {
     clientInstanceId: ClientInstanceId;
     runId: string;
     stepRunId: string;
-    principal: import("./identity").WorkflowRunPrincipal;
-    tester?: import("./identity").AuthenticatedUser;
+    agentName: string;
+    principal: WorkflowRunPrincipal;
+    tester?: AuthenticatedUser;
     task: string;
     title: string;
     correlationId: string;
