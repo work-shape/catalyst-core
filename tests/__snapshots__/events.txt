@@ -113,6 +113,12 @@
 {"name":"operation.started","legacy":false,"audited":true,"phases":["after"]}
 {"name":"permission.granted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"permission.revoked","legacy":true,"audited":true,"phases":["after"]}
+{"name":"role.created","legacy":true,"audited":true,"phases":["after"]}
+{"name":"role.deleted","legacy":true,"audited":true,"phases":["after"]}
+{"name":"role.pending_decided","legacy":true,"audited":true,"phases":["after"]}
+{"name":"role.reconciled","legacy":true,"audited":true,"phases":["after"]}
+{"name":"role.reset","legacy":true,"audited":true,"phases":["after"]}
+{"name":"role.updated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"scope_assignment.changed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"storage.orphaned_file_cleanup_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"storage.orphaned_files_deleted","legacy":true,"audited":true,"phases":["after"]}
