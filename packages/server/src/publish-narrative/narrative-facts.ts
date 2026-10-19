@@ -6,6 +6,7 @@ import {
   DATA_STORE_OPERATION_VERBS,
   MAIL_SEND_OPERATION,
   MAIL_SENDER_SYSTEM,
+  mailCopyRecipientListSchema,
   mailRecipientListSchema,
   NOTIFY_CHANNELS,
   parseConnectionOperationName,
@@ -273,7 +274,8 @@ function mailStepFact(name: string, input: unknown): MailStepFact {
   for (const field of ["to", "cc", "bcc"]) {
     if (mapping[field] === undefined) continue;
     const value = literal(field);
-    const list = mailRecipientListSchema.safeParse(
+    // A copy list may hold nobody, as the operation takes it: an empty one names no recipient.
+    const list = (field === "to" ? mailRecipientListSchema : mailCopyRecipientListSchema).safeParse(
       typeof value === "object" && value !== null && !Array.isArray(value) ? [value] : value
     );
     // A reference, or a text with one, names its recipients only when the run resolves it.

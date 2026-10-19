@@ -885,7 +885,14 @@ describe("MAIL-2 a mail step in the publish question (check 139)", () => {
   });
 
   it("says nothing of outside addresses where a step mails only people and workspaces", async () => {
-    const config = mailer([mail("team", "An das Team", { to: { value: [{ user: "usr_ben" }] } })]);
+    // An empty copy list, which the operation takes, names nobody and reads no recipient.
+    const config = mailer([
+      mail("team", "An das Team", {
+        to: { value: [{ user: "usr_ben" }] },
+        cc: { value: [] },
+        bcc: { value: [] }
+      })
+    ]);
     const { summary } = await narrateWorkflow("en", options(), config);
     expect(summary).toBe(
       "Monatsmail runs when someone starts it and e-mails Ben Kurz as “Kanzlei Muster” <catalyst@mail.example.test>."
