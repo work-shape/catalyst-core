@@ -131,6 +131,26 @@ export function isAuthenticatedServicePrincipal(
 }
 
 /**
+ * A service principal in the shape of the user an Agent Run acts for: a Workflow agent step's
+ * run (CR-2) acts as its principal, with the principal's own rights and no person behind it.
+ */
+export function servicePrincipalAsRunUser(principal: ActingServicePrincipal): AuthenticatedUser {
+  return {
+    ...principal,
+    externalUserId: principal.id,
+    roles: [],
+    subjectUserId: principal.id,
+    principal: {
+      kind: "service",
+      id: principal.id,
+      displayLabel: principal.displayLabel,
+      clientInstanceId: principal.clientInstanceId,
+      authSource: principal.authSource
+    }
+  };
+}
+
+/**
  * The hold of one attempt of an `agent_run.execute` job on its run, as a store write names
  * it. A write that carries it is stored only while the job is still running under the token
  * and the run has not ended, in the transaction of the write. Otherwise it throws

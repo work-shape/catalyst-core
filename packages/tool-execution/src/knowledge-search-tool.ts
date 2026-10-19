@@ -108,7 +108,7 @@ export async function runKnowledgeSearch(
     );
   }
   const { query, knowledgeBases: named, limit = KNOWLEDGE_SEARCH_LIMIT_DEFAULT } = parsed.data;
-  const listed = (await deps.agentToolNames?.(request.agentName)) ?? [];
+  const listed = (await deps.agentToolNames?.(request.agentName, request.conversationId)) ?? [];
   const assigned = [
     ...new Set(
       listed.flatMap((name) => {

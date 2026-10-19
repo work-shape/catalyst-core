@@ -1,4 +1,4 @@
-import { workflowAgentActor } from "./workflow-agent-actor";
+import { workflowAgentActor, workflowAgentStep } from "./workflow-agent-actor";
 import {
   GuardrailRunner,
   ApprovalRequestWorkflow,
@@ -104,22 +104,12 @@ export function createInstanceOperationCalls(
       return run ? workflowAgentActor(store, run) : undefined;
     },
     async agentToolNames(agentName, conversationId) {
-      if (conversationId) {
-        const run = await store.agentRuns.getActiveConversationAgentRun({
-          clientInstanceId,
-          conversationId
-        });
-        if (run?.workflowStepRunId) {
-          const step = await store.workflowRuns.getStepRun({
-            clientInstanceId,
-            id: run.workflowStepRunId
-          });
-          const definition =
-            step &&
-            (await store.workflowRuns.readRunDefinition({ clientInstanceId, id: step.runId }));
-          return definition?.tools ?? [];
-        }
-      }
+      // A Workflow agent step's thread holds its one run, whatever its status: its tools are
+      // its Workflow's, never those of an agent asset of the same name (CR-2).
+      const run =
+        conversationId &&
+        (await store.agentRuns.getLatestConversationAgentRun({ clientInstanceId, conversationId }));
+      if (run && run.workflowStepRunId) return (await workflowAgentStep(store, run))?.tools ?? [];
       const assets = await assetSource.getSnapshot();
       const agent = assets.agents.find((candidate) => candidate.name === agentName);
       const listed = agent?.toolNames ?? [];

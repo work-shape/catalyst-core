@@ -1,4 +1,3 @@
-import { readWorkflowAgentInput } from "./run/workflow-agent";
 import {
   AGENT_RUN_CANCELLATION_CHECK_INTERVAL_MS,
   AGENT_RUN_INTERRUPTED_ERROR,
@@ -30,6 +29,7 @@ import {
   type ConversationHistoryStore,
   type JobControl,
   type JobSchedule,
+  type OperationDraftContext,
   type PlatformStores,
   type RegisteredJobHandler,
   type RuntimeCallContext,
@@ -90,9 +90,10 @@ export interface AgentRunJobsOptions {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
   loadCurrentUser(run: AgentRun): Promise<AuthenticatedUser>;
-  loadWorkflowAgentDraft?(
-    run: AgentRun
-  ): Promise<import("@work-shape/catalyst-core").OperationDraftContext | undefined>;
+  /** A Workflow agent step's run: its agent, from the step of its run's pinned definition. */
+  loadWorkflowAgent?(run: AgentRun): Promise<NonNullable<StartAgentRunInput["workflowAgent"]>>;
+  /** A Workflow agent step's run in a draft test: the draft its calls carry. */
+  loadWorkflowAgentDraft?(run: AgentRun): Promise<OperationDraftContext | undefined>;
   execute: ExecuteAgentRun;
   /** How many runs this process executes at once. */
   slots: number;
@@ -560,7 +561,7 @@ async function reconstructInput(
     throw new AppError("NOT_FOUND", "Agent run input message is not available");
   }
   const attachmentManifest = readUserAttachmentManifest(message.metadata);
-  const workflowAgent = await readWorkflowAgentInput(options.stores, run);
+  const workflowAgent = run.workflowStepRunId ? await workflowAgentOf(options, run) : undefined;
   return {
     ...(workflowAgent ? { workflowAgent } : {}),
     agentName: run.agentName,
@@ -733,6 +734,12 @@ function failedEvent(
   error: AgentRunError
 ): AgentRuntimeEvent {
   return { type: "run_failed", runId: run.id, sequence, createdAt, error };
+}
+
+function workflowAgentOf(options: AgentRunJobsOptions, run: AgentRun) {
+  if (!options.loadWorkflowAgent)
+    throw new AppError("NOT_FOUND", "Workflow agent definition is unavailable");
+  return options.loadWorkflowAgent(run);
 }
 
 function requireAuthorization(run: AgentRun, user: AuthenticatedUser) {

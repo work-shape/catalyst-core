@@ -1,11 +1,16 @@
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   unknownToJsonValue,
+  workflowAgentName,
+  type AuthenticatedUser,
+  type JsonObject,
+  type JsonValue,
   type PlatformStores,
   type WorkflowRun,
+  type WorkflowRunError,
+  type WorkflowRunPrincipal,
   type WorkflowStepRun
 } from "@work-shape/catalyst-core";
-import type { JsonValue, WorkflowRunError } from "@work-shape/catalyst-core";
 import { indexWorkflowSteps } from "./definition";
 
 /** A terminal Child Agent Run answers its step; an open one leaves the step waiting. */
@@ -69,11 +74,7 @@ export async function startAgentStep(
   tx: PlatformStores,
   run: WorkflowRun,
   stepRun: WorkflowStepRun,
-  end: {
-    input: import("@work-shape/catalyst-core").JsonObject;
-    principal: import("@work-shape/catalyst-core").WorkflowRunPrincipal;
-    tester?: import("@work-shape/catalyst-core").AuthenticatedUser;
-  },
+  end: { input: JsonObject; principal: WorkflowRunPrincipal; tester?: AuthenticatedUser },
   title: string,
   retainedUntil: string
 ): Promise<void> {
@@ -81,6 +82,7 @@ export async function startAgentStep(
     clientInstanceId: run.clientInstanceId,
     runId: run.id,
     stepRunId: stepRun.id,
+    agentName: workflowAgentName(run.workflow, stepRun.stepId),
     principal: end.principal,
     ...(end.tester ? { tester: end.tester } : {}),
     task: JSON.stringify(end.input),

@@ -1,4 +1,7 @@
-import { isAuthenticatedServicePrincipal } from "@work-shape/catalyst-core";
+import {
+  isAuthenticatedServicePrincipal,
+  servicePrincipalAsRunUser
+} from "@work-shape/catalyst-core";
 import {
   createAgentRunJobs,
   createLocalAgentRunExecutor,
@@ -18,7 +21,7 @@ import {
   type Logger,
   type PlatformStores
 } from "@work-shape/catalyst-core";
-import { workflowAgentActor, workflowAgentCall } from "./workflow-agent-actor";
+import { workflowAgentActor, workflowAgentCall, workflowAgentInput } from "./workflow-agent-actor";
 import type { ClientInstanceEnv } from "./env";
 import { createJobWorker } from "./job-worker";
 
@@ -54,6 +57,7 @@ export function createClientInstanceAgentRunJobs(
     stores: execution.store,
     slots: readAgentRunWorkerConcurrency(execution.env) ?? DEFAULT_AGENT_RUN_WORKER_SLOTS,
     loadCurrentUser: (run) => loadCurrentUser(execution.store, run),
+    loadWorkflowAgent: (run) => workflowAgentInput(execution.store, run),
     loadWorkflowAgentDraft: async (run) => {
       const call = await workflowAgentCall(execution.store, run);
       return call && "draft" in call ? call.draft : undefined;
@@ -107,20 +111,7 @@ async function loadCurrentUser(store: PlatformStores, run: AgentRun): Promise<Au
       throw new AppError("FORBIDDEN", "Workflow principal is unavailable or disabled", {
         reason: "run_as_disabled"
       });
-    if (!isAuthenticatedServicePrincipal(actor)) return actor;
-    return {
-      ...actor,
-      externalUserId: actor.id,
-      roles: [],
-      subjectUserId: actor.id,
-      principal: {
-        kind: "service",
-        id: actor.id,
-        displayLabel: actor.displayLabel,
-        clientInstanceId: actor.clientInstanceId,
-        authSource: actor.authSource
-      }
-    };
+    return isAuthenticatedServicePrincipal(actor) ? servicePrincipalAsRunUser(actor) : actor;
   }
   if (!run.ownerUserId) throw new AppError("FORBIDDEN", "Agent run has no owner");
   const user = await store.users.getUser({
