@@ -353,6 +353,7 @@ describe("operation contracts", () => {
           runId: OperationRunId;
           expiresAt: ISODateString;
           preview: unknown;
+          simulation?: unknown;
           inputHash: string;
           approvalRequestId?: string;
         }

@@ -428,6 +428,26 @@ export async function callStepOperation(input: {
           throw new Error(`The reading call of '${operation}' failed for now and is made again`);
         }
       }
+      // A changing call refused by a limit before it changed anything, such as a mail beyond
+      // `outbound.limits`, waits queued for the window's room and spends no attempt. Its run
+      // ended changing nothing, so the call made again takes it up under the same key. The
+      // run deadline still bounds the wait.
+      if (
+        changing &&
+        result.error.code === "RATE_LIMITED" &&
+        outcome.run.error?.unexecuted === true
+      ) {
+        const retry = z
+          .object({ retryAfterSeconds: z.number().finite().nonnegative() })
+          .safeParse(result.error.details);
+        const remainingMs = Math.max(0, Date.parse(run.deadlineAt) - input.wait.now().getTime());
+        throw new JobDeferredError(
+          Math.min(
+            retry.success ? retry.data.retryAfterSeconds * 1000 : input.wait.pollMs,
+            remainingMs
+          )
+        );
+      }
       // The sentence of the error can quote the outside system, and the Operation Run keeps
       // it. Its reason is one of a fixed list, such as `upstream_conflict` for a 409.
       const reason = failureReasonSchema.safeParse(result.error.details);

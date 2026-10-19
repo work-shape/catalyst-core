@@ -27,7 +27,8 @@ import {
   decideTarget,
   draftCallOf,
   rightsOf,
-  simulateRun
+  simulateRun,
+  simulationOf
 } from "./draft-calls";
 import {
   authorizeOrigin,
@@ -660,6 +661,15 @@ async function holdForConfirmation(context: RunContext): Promise<OperationEnding
   if (definition.secret || call.draft || context.unrecorded || call.origin.kind !== "agent") {
     return denyRun(context, { kind: "policy", operation: definition.name });
   }
+  // The person is shown what the call will do where the operation can say it, such as the mail
+  // as it will go out. A call its simulation refuses is refused now, before anybody is asked:
+  // it changed nothing, and the live call would be refused the same way.
+  let simulation: unknown;
+  try {
+    simulation = await simulationOf(context);
+  } catch (error) {
+    return failRun(context, error, true);
+  }
   const expiresAt = new Date(now().getTime() + PENDING_CONFIRMATION_EXPIRES_AFTER_MS).toISOString();
   const pending = await endRun(context, {
     status: "pending_confirmation",
@@ -674,6 +684,7 @@ async function holdForConfirmation(context: RunContext): Promise<OperationEnding
       runId: run.id,
       expiresAt,
       preview: call.input,
+      ...(simulation === undefined ? {} : { simulation }),
       inputHash: run.inputHash
     },
     run: pending

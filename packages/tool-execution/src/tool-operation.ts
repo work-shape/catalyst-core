@@ -539,6 +539,9 @@ export function createToolOperationRunner(
           frozenInput: unknownToJsonValue(
             result.status === "pending_confirmation" ? result.preview : outcome.waitingInput
           ),
+          ...(result.status === "pending_confirmation" && result.simulation !== undefined
+            ? { simulation: unknownToJsonValue(result.simulation) }
+            : {}),
           expiresAt: result.expiresAt
         };
       }

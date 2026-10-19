@@ -35,6 +35,8 @@ export interface ToolDecisionWait {
   mode: ToolDecisionMode;
   /** The validated input as it is executed after the decision. A call whose input holds a secret never waits. */
   frozenInput: JsonValue;
+  /** What the operation's own simulation answered, shown beside the input, such as a mail. */
+  simulation?: JsonValue;
   expiresAt: ISODateString;
 }
 
@@ -49,6 +51,11 @@ export interface ToolDecisionRequested {
   mode: ToolDecisionMode;
   /** The frozen input as the person is shown it. */
   inputPreview: JsonValue;
+  /**
+   * What the operation's own simulation of the call answered, where it has one: `mail.send`
+   * the mail as it would go out, rendered, with its sender and recipients. Shown, never run.
+   */
+  simulation?: JsonValue;
   expiresAt: ISODateString;
 }
 

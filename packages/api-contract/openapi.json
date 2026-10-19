@@ -28360,6 +28360,7 @@
                       "type": "string"
                     },
                     "inputPreview": {},
+                    "simulation": {},
                     "expiresAt": {
                       "$ref": "#/components/schemas/Timestamp"
                     }
@@ -28506,6 +28507,7 @@
                     "type": "string"
                   },
                   "inputPreview": {},
+                  "simulation": {},
                   "expiresAt": {
                     "$ref": "#/components/schemas/Timestamp"
                   }
@@ -28837,6 +28839,7 @@
                 "type": "string"
               },
               "inputPreview": {},
+              "simulation": {},
               "expiresAt": {
                 "$ref": "#/components/schemas/Timestamp"
               }

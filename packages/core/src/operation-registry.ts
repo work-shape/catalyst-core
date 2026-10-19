@@ -20,7 +20,7 @@ import type {
   OperationOrigin,
   PolicyValue
 } from "./operations";
-import type { OperationRunUsage } from "./operation-runs";
+import type { OperationRunUsage, OperationTarget } from "./operation-runs";
 import type { AccessResource, ActorAccess } from "./permissions";
 import type { ToolHandlerResult } from "./tool-execution";
 import { WORKFLOW_OPERATION_PREFIX } from "./workflows";
@@ -95,6 +95,13 @@ export interface OperationExecutionContext {
   /** Writes audit rows that carry the run's id and correlation id. */
   audit: AuditRecorder;
   /**
+   * Where the call goes, as its run says (ADR-0031). `test` is a call of a draft that "Run
+   * live once" sent to the operation's own test target (`liveOnceTarget`), such as a mail to
+   * the tester alone. Absent where the caller built the context without a run's target, which
+   * is a live call.
+   */
+  target?: OperationTarget;
+  /**
    * Set where an App action hands the call on to the operation it stands for, whoever called
    * the action: a frame, an agent that carries it as a tool, or anything else. The App action
    * sets it when it executes; no caller does.
@@ -112,7 +119,7 @@ export interface OperationExecutionContext {
 /** What a simulated call is told (`simulate` of the definition). */
 export type OperationSimulationContext = Pick<
   OperationExecutionContext,
-  "runId" | "actor" | "origin" | "workspaceId" | "correlationId" | "runtime" | "audit"
+  "runId" | "actor" | "origin" | "workspaceId" | "correlationId" | "runtime" | "audit" | "target"
 >;
 
 /** What an operation's own check of the caller's right answers. A refusal names the right. */
@@ -260,6 +267,24 @@ interface OperationDefinitionBase<Input, Output> {
    * with.
    */
   simulate?(input: Input, context: OperationSimulationContext): Promise<unknown>;
+  /**
+   * Where a changing call of a draft goes that its caller switched "Run live once" on for:
+   * `test` sends it to a test target the operation has of its own instead of live, such as
+   * `mail.send` to the tester's own address alone. Its run has target `test`, and the
+   * operation reads it as `target` of its context. Without it the switched call goes live.
+   */
+  liveOnceTarget?: "test";
+  /**
+   * What a guardrail at `operation.before_call` reads of a call in place of its whole input,
+   * as JSON: `mail.send` hands its subject, body, attachment names and recipient domains, and
+   * no address, so a pattern for e-mail addresses does not fire on every mail. It is asked
+   * with the input as the call has it: a publish preview of a step whose fields are
+   * references has only the literal ones, and no actor.
+   */
+  guardrailInput?(
+    input: unknown,
+    call: { actor?: AuthenticatedIdentity; origin: OperationOrigin }
+  ): Promise<JsonObject>;
   /**
    * The reasons of a failure (`details.reason` of its error) that a Workflow step takes as its
    * code in place of the error's code, such as `recipient_not_allowed`.

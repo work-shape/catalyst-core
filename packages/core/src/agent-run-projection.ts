@@ -85,6 +85,7 @@ export function applyAgentRunObservation(
         ...(event.targetTitle ? { targetTitle: event.targetTitle } : {}),
         mode: event.mode,
         inputPreview: event.inputPreview,
+        ...(event.simulation === undefined ? {} : { simulation: event.simulation }),
         expiresAt: event.expiresAt
       }
     });

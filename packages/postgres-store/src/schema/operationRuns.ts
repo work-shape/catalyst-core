@@ -67,6 +67,9 @@ export const operationRuns = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
+    // When the call took its place within its operation's limits (`admitWithinLimits`), such
+    // as a mail of `mail.send` within `outbound.limits`. Null for every other call.
+    admittedAt: timestamp("admitted_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
   },
   (table) => [
@@ -132,6 +135,10 @@ export const operationRuns = pgTable(
       .where(sql`${table.conversationId} is not null`),
     index("operation_runs_approval_request_idx")
       .on(table.approvalRequestId)
-      .where(sql`${table.approvalRequestId} is not null`)
+      .where(sql`${table.approvalRequestId} is not null`),
+    // The places taken within an operation's limits, read by window from the newest back.
+    index("operation_runs_admitted_idx")
+      .on(table.clientInstanceId, table.operation, table.admittedAt)
+      .where(sql`${table.admittedAt} is not null`)
   ]
 );

@@ -212,6 +212,11 @@ export type OperationResult<TOutput = unknown> =
       runId: OperationRunId;
       expiresAt: ISODateString;
       preview: unknown;
+      /**
+       * What the operation's own simulation of the call answered (`simulate`), shown beside its
+       * input: `mail.send` the mail as it would go out. Never what the call is executed with.
+       */
+      simulation?: unknown;
       inputHash: string;
       /** The Inbox item the confirmation waits in, where it waits in its person's Inbox (OP-4b). */
       approvalRequestId?: string;

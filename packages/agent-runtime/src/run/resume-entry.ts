@@ -291,6 +291,7 @@ export function pauseRun(
       ...(waiting.targetTitle ? { targetTitle: waiting.targetTitle } : {}),
       mode: waiting.mode,
       inputPreview: waiting.frozenInput,
+      ...(waiting.simulation === undefined ? {} : { simulation: waiting.simulation }),
       expiresAt: waiting.expiresAt
     },
     {

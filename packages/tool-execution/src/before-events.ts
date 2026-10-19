@@ -19,7 +19,10 @@ import {
 
 /** What the before-events of a call are asked from: a run's context. */
 export interface BeforeEventsOf {
-  definition: Pick<OperationDefinition, "name" | "events" | "beforeEvents" | "inputWithoutSecrets">;
+  definition: Pick<
+    OperationDefinition,
+    "name" | "events" | "beforeEvents" | "inputWithoutSecrets" | "guardrailInput"
+  >;
   call: Pick<OperationCall, "input" | "origin"> & Partial<Pick<OperationCall, "actor">>;
   emit(
     name: PlatformEventName,
@@ -51,11 +54,20 @@ export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectA
       {},
       {
         // The input as JSON: a pattern or a judge reads the arguments of the call, a secret
-        // such as a password marked, so it never reaches a judge's model. A hit names the
-        // operation and not the run, whose actor is a person.
+        // such as a password marked, so it never reaches a judge's model. An operation may
+        // hand what its guardrails read in place of the input, as `mail.send` leaves out the
+        // addresses. A hit names the operation and not the run, whose actor is a person.
         subject: { kind: "operation", name: definition.name },
-        checkable: () => ({
-          input: JSON.stringify(definition.inputWithoutSecrets?.(call.input) ?? call.input) ?? ""
+        checkable: async () => ({
+          input:
+            JSON.stringify(
+              definition.guardrailInput
+                ? await definition.guardrailInput(call.input, {
+                    ...(call.actor ? { actor: call.actor } : {}),
+                    origin: call.origin
+                  })
+                : (definition.inputWithoutSecrets?.(call.input) ?? call.input)
+            ) ?? ""
         }),
         filterBy: { operation: definition.name },
         ...about

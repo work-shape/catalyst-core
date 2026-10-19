@@ -18,8 +18,41 @@ export function createMemoryOperationRunStore(): OperationRunStore & { runs: Ope
     runs[runs.indexOf(run)] = next;
     return next;
   };
+  // The moments calls took their places within their operation's limits, by run id.
+  const places = new Map<string, number>();
   return {
     runs,
+    admitWithinLimits({ clientInstanceId, id, operation, at, windows }) {
+      const now = Date.parse(at);
+      // This store knows no Workflow runs, so a window of one Workflow counts every call.
+      for (const [index, window] of windows.entries()) {
+        const held = runs
+          .filter(
+            (run) =>
+              run.clientInstanceId === clientInstanceId &&
+              run.operation === operation &&
+              run.target === "live" &&
+              run.id !== id &&
+              !(run.status === "failed" && run.error?.unexecuted === true)
+          )
+          .map((run) => places.get(run.id))
+          .filter(
+            (place): place is number => place !== undefined && place > now - window.seconds * 1000
+          )
+          .sort((a, b) => a - b);
+        if (held.length < window.calls) continue;
+        const taken = held[held.length - window.calls] ?? now;
+        return Promise.resolve({
+          admitted: false as const,
+          window: index,
+          roomAt: new Date(taken + window.seconds * 1000).toISOString()
+        });
+      }
+      if (find(clientInstanceId, id)?.status !== "running")
+        return Promise.reject(new Error(`Operation run '${id}' is not running`));
+      places.set(id, now);
+      return Promise.resolve({ admitted: true as const });
+    },
     checkpointReading({ clientInstanceId, id, ...counts }) {
       const run = find(clientInstanceId, id);
       if (

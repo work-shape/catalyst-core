@@ -13,6 +13,7 @@ import {
   asc,
   desc,
   eq,
+  gt,
   gte,
   inArray,
   isNull,
@@ -31,6 +32,7 @@ import { conversations } from "./schema/conversations";
 import { operationRuns } from "./schema/operationRuns";
 import { approvalRequests } from "./schema/approvals";
 import { agentRuns } from "./schema/agentRuns";
+import { workflowRuns } from "./schema/workflowRuns";
 
 const OPEN_RUN_STATUSES = [
   "running",
@@ -95,6 +97,8 @@ async function createOperationRun(
         status: "running",
         attempt: sql`${operationRuns.attempt} + 1`,
         error: null,
+        // The next attempt asks for its own place within the operation's limits.
+        admittedAt: null,
         correlationId: run.correlationId,
         startedAt,
         finishedAt: null,
@@ -116,6 +120,85 @@ async function createOperationRun(
     })
     .returning();
   return row ? mapOperationRun(row) : undefined;
+}
+
+/**
+ * Takes a place within the windows of an operation's limits. One lock for the instance and the
+ * operation orders every taker, so a call counts each place taken before it, in this process or
+ * another. A place is the moment its call took it; a call that ended as changing nothing, such
+ * as a mail whose provider could not be reached, gives its place back.
+ */
+async function admitOperationRunWithinLimits(
+  db: PostgresConnection,
+  input: Input<"admitWithinLimits">
+): Promise<Awaited<ReturnType<OperationRunStore["admitWithinLimits"]>>> {
+  const at = new Date(input.at);
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["operation-limits", input.clientInstanceId, input.operation])}, 0))`
+    );
+    for (const [index, window] of input.windows.entries()) {
+      const since = new Date(at.getTime() - window.seconds * 1000);
+      const held = and(
+        eq(operationRuns.clientInstanceId, input.clientInstanceId),
+        eq(operationRuns.operation, input.operation),
+        eq(operationRuns.target, "live"),
+        ne(operationRuns.id, input.id),
+        gt(operationRuns.admittedAt, since),
+        sql`not (${operationRuns.status} = 'failed' and coalesce(${operationRuns.error}->>'unexecuted', 'false') = 'true')`,
+        // The runs of one Workflow and their children: the call's run or one it descends from.
+        window.workflow === undefined
+          ? undefined
+          : sql`exists (
+              with recursive chain(id, parent_run_id, workflow) as (
+                select step_run.id, step_run.parent_run_id, step_run.workflow
+                from ${workflowRuns} as step_run
+                where step_run.client_instance_id = ${input.clientInstanceId}
+                  and step_run.id = ${operationRuns.origin}->>'workflowRunId'
+                union all
+                select parent.id, parent.parent_run_id, parent.workflow
+                from ${workflowRuns} as parent
+                join chain on parent.id = chain.parent_run_id
+                where parent.client_instance_id = ${input.clientInstanceId}
+              )
+              select 1 from chain where chain.workflow = ${window.workflow}
+            )`
+      );
+      const [counted] = await tx
+        .select({ calls: sql<number>`count(*)::int` })
+        .from(operationRuns)
+        .where(held);
+      const calls = counted?.calls ?? 0;
+      if (calls < window.calls) continue;
+      // One more call fits once the oldest places beyond the window's room have left it.
+      const [freeing] = await tx
+        .select({ admittedAt: operationRuns.admittedAt })
+        .from(operationRuns)
+        .where(held)
+        .orderBy(asc(operationRuns.admittedAt))
+        .offset(calls - window.calls)
+        .limit(1);
+      const taken = freeing?.admittedAt ?? at;
+      return {
+        admitted: false,
+        window: index,
+        roomAt: new Date(taken.getTime() + window.seconds * 1000).toISOString()
+      };
+    }
+    const [row] = await tx
+      .update(operationRuns)
+      .set({ admittedAt: at })
+      .where(
+        and(
+          eq(operationRuns.clientInstanceId, input.clientInstanceId),
+          eq(operationRuns.id, input.id),
+          eq(operationRuns.status, "running")
+        )
+      )
+      .returning({ id: operationRuns.id });
+    if (!row) throw new Error(`Operation run '${input.id}' is not running`);
+    return { admitted: true };
+  });
 }
 
 async function recordEndedOperationRun(
@@ -581,6 +664,7 @@ export function createPostgresOperationRunsStore(
     create: (run) => createOperationRun(db, run),
     recordEnded: (run) => recordEndedOperationRun(db, run),
     finish: (input) => settle(input, (tx) => finishOperationRun(tx, input)),
+    admitWithinLimits: (input) => admitOperationRunWithinLimits(db, input),
     checkpointReading: async ({ clientInstanceId, id, ...counts }) => {
       const [row] = await db
         .update(operationRuns)

@@ -510,6 +510,7 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     mode: toolDecisionModeSchema,
     targetTitle: z.string().optional(),
     inputPreview: z.unknown(),
+    simulation: z.unknown().optional(),
     expiresAt: timestampSchema
   }),
   z.object({
@@ -627,6 +628,8 @@ const toolCallDecisionSchema = z.object({
   mode: toolDecisionModeSchema,
   targetTitle: z.string().optional(),
   inputPreview: z.unknown(),
+  /** What the operation's own simulation answered, such as the mail `mail.send` would send. */
+  simulation: z.unknown().optional(),
   expiresAt: timestampSchema
 });
 

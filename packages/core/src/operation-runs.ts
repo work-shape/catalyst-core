@@ -216,6 +216,25 @@ export interface OperationRunFilters {
   since?: ISODateString;
 }
 
+/**
+ * One window of an operation's limits: at most `calls` calls with target `live` within
+ * `seconds`, counted over the whole instance, or over the runs of one Workflow and their
+ * children where `workflow` names it (`infrastructure.mail.outbound.limits` of MAIL-2).
+ */
+export interface OperationLimitWindow {
+  seconds: number;
+  calls: number;
+  /** The Workflow whose runs, and the child runs they started at any depth, are counted. */
+  workflow?: string;
+}
+
+/**
+ * What asking for a place within the limits answered. `roomAt`: when the first full window
+ * has room for one more call, by the moments the calls in it took their places.
+ */
+export type OperationLimitAdmission =
+  { admitted: true } | { admitted: false; window: number; roomAt: ISODateString };
+
 export interface OperationRunStore {
   /**
    * Starts a run. Where the actor already used the run's idempotency key, nothing is inserted.
@@ -245,6 +264,22 @@ export interface OperationRunStore {
     attempt?: number;
     end: OperationRunEnd;
   }): Promise<OperationRun | undefined>;
+  /**
+   * Takes a place for a running call within the windows of its operation's limits, counted
+   * from the Operation Runs of the operation with target `live`, so every process counts the
+   * same calls. A call holds its place for each window's length from the moment it took it,
+   * unless it ended as changing nothing (`unexecuted`). The places are taken one after the
+   * other for the instance and the operation: of two calls that ask at once, the second
+   * counts the first. A call that finds a window full takes no place.
+   */
+  admitWithinLimits(input: {
+    clientInstanceId: ClientInstanceId;
+    id: OperationRunId;
+    operation: string;
+    /** The moment of the call, from which each window is counted back. */
+    at: ISODateString;
+    windows: readonly OperationLimitWindow[];
+  }): Promise<OperationLimitAdmission>;
   /** Counts and recovery timestamps for a paged Workflow read, kept across job deferrals. */
   checkpointReading(input: {
     clientInstanceId: ClientInstanceId;

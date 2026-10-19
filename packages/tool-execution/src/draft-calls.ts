@@ -49,9 +49,10 @@ export function draftCallOf(call: OperationCall): OperationCall {
  * call uses the switch up. A call of a Workflow test run binds the switch to its run, and every
  * call of that step in that run goes live, each item of a loop and each retry. Only a call that
  * may be made takes the switch: a caller the surface or the right refuses leaves it, so nobody
- * without the right uses up a builder's switch. A test target of the called asset (a Data
- * Store's test copy, a Connection's test credential) will send every call of a draft there;
- * DT-2 and DT-3 add it here.
+ * without the right uses up a builder's switch. An operation with a test target of its own
+ * (`liveOnceTarget`) is sent there by the switch instead of live: `mail.send` mails the tester
+ * alone. A test target of the called asset (a Data Store's test copy, a Connection's test
+ * credential) will send every call of a draft there; DT-2 and DT-3 add it here.
  */
 export async function decideTarget(input: {
   call: OperationCall;
@@ -87,7 +88,7 @@ export async function decideTarget(input: {
       ...(forRun === undefined ? {} : { workflowRunId: forRun })
     });
   }
-  return "live";
+  return definition.liveOnceTarget ?? "live";
 }
 
 /** One audit row of a switch, with the asset as its subject. */
@@ -201,7 +202,7 @@ export async function simulateRun(
   context: RunContext,
   policy: PolicyResolution
 ): Promise<OperationEnding> {
-  const { run, definition, call, now, deps } = context;
+  const { run, definition, call, now } = context;
   const wouldAsk: "confirmation" | "approval" | undefined =
     policy.next === "await_confirmation"
       ? "confirmation"
@@ -213,15 +214,7 @@ export async function simulateRun(
   let output: unknown;
   if (definition.simulate) {
     try {
-      output = await definition.simulate(call.input, {
-        runId: run.id,
-        actor: call.actor,
-        origin: call.origin,
-        ...(call.workspaceId === undefined ? {} : { workspaceId: call.workspaceId }),
-        correlationId: call.correlationId,
-        runtime: context.runtime,
-        audit: auditForRun(deps.audit, run.id, call.correlationId)
-      });
+      output = await simulationOf(context);
     } catch (error) {
       return failRun(context, error, true);
     }
@@ -242,6 +235,26 @@ export async function simulateRun(
     },
     run: simulated
   };
+}
+
+/**
+ * What the operation's own simulation answers for the call of a run (`simulate`): what a
+ * changing call of a draft would have done, or what a call that waits for its person's
+ * confirmation will do, as the card shows it. It throws where the live call would be refused.
+ */
+export async function simulationOf(context: RunContext): Promise<unknown> {
+  const { run, definition, call, deps } = context;
+  if (!definition.simulate) return undefined;
+  return definition.simulate(call.input, {
+    runId: run.id,
+    actor: call.actor,
+    origin: call.origin,
+    ...(call.workspaceId === undefined ? {} : { workspaceId: call.workspaceId }),
+    correlationId: call.correlationId,
+    runtime: context.runtime,
+    audit: auditForRun(deps.audit, run.id, call.correlationId),
+    target: run.target
+  });
 }
 
 function principalRef(principal: ActingServicePrincipal) {
