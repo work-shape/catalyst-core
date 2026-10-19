@@ -143,27 +143,36 @@ describe("an agent carries data tools", () => {
     expect(connection.describeCalls).toEqual([[ECHO], [ECHO]]);
   });
 
-  it("refuses an agent that does not list the tool, naming the tool, without a read of the source", async () => {
-    const connection = createFakeConnection();
-    const path = createCallPath({ agentToolNames: { other_agent: ["test.inspect"] }, connection });
+  it.each(["en", "de"] as const)(
+    "explains unavailable agent tools in %s without reading the source",
+    async (locale) => {
+      const connection = createFakeConnection();
+      const path = createCallPath({
+        agentToolNames: { other_agent: ["test.inspect"] },
+        connection
+      });
 
-    const result = await path.runTool(toolRequest(ECHO, "other_agent"), context);
+      path.deps.instanceAdminName = async () => "Mara";
+      const result = await path.runTool(toolRequest(ECHO, "other_agent"), { ...context, locale });
 
-    expect(result).toEqual({
-      status: "failed",
-      error: {
-        code: "not_allowed",
-        message:
-          "This agent is not set up for this action here. Nothing ran. Ask an instance administrator; no contact person is currently listed.",
-        details: { action: `agent_tool:${ECHO}` }
-      }
-    });
-    expect(connection.executed).toEqual([]);
-    // The agent's list is asked first: an agent that lists no data tool reaches no source,
-    // so a source that is down cannot fail its run.
-    expect(connection.describeCalls).toEqual([]);
-    expect(path.runs.runs).toEqual([]);
-  });
+      expect(result).toEqual({
+        status: "failed",
+        error: {
+          code: "not_allowed",
+          message:
+            locale === "de"
+              ? "Dieser Agent ist hier nicht für diese Aktion eingerichtet. Es wurde nichts ausgeführt. Frag eine Instanz-Admin, zum Beispiel Mara."
+              : "This agent is not set up for this action here. Nothing ran. Ask an instance administrator, for example Mara.",
+          details: { action: `agent_tool:${ECHO}` }
+        }
+      });
+      expect(connection.executed).toEqual([]);
+      // The agent's list is asked first: an agent that lists no data tool reaches no source,
+      // so a source that is down cannot fail its run.
+      expect(connection.describeCalls).toEqual([]);
+      expect(path.runs.runs).toEqual([]);
+    }
+  );
 
   it("fails one call, not the run, when the source fails or does not answer at call time", async () => {
     for (const answers of ["throws", "never"] as const) {

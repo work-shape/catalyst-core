@@ -3,7 +3,7 @@ import {
   guardrailDenial,
   toolResultFromOperationResult
 } from "@work-shape/catalyst-tool-execution";
-import type { GuardrailAnswer } from "@work-shape/catalyst-core";
+import { createPlatformId, type GuardrailAnswer } from "@work-shape/catalyst-core";
 
 describe("ACCEPT-FIX-10 refusal language", () => {
   it.each(["en", "de"] as const)("names who can help the person in %s", (locale) => {
@@ -11,6 +11,7 @@ describe("ACCEPT-FIX-10 refusal language", () => {
       {
         result: {
           status: "denied",
+          runId: createPlatformId<"OperationRunId">("operation"),
           reason: { kind: "forbidden", action: "ref:vault", reason: "no_grant" }
         }
       },
@@ -75,7 +76,14 @@ describe("configuration and policy refusals keep their meaning", () => {
     };
     expect(
       toolResultFromOperationResult(
-        { result: { status: "done", output: {} }, toolResult },
+        {
+          result: {
+            status: "done",
+            runId: createPlatformId<"OperationRunId">("operation"),
+            output: {}
+          },
+          toolResult
+        },
         {
           toolName: "knowledge.search",
           agentName: "helper",
@@ -93,6 +101,7 @@ describe("configuration and policy refusals keep their meaning", () => {
         {
           result: {
             status: "denied",
+            runId: createPlatformId<"OperationRunId">("operation"),
             reason: {
               kind: "forbidden",
               action: "agent_tool:private.tool",
@@ -126,6 +135,7 @@ describe("configuration and policy refusals keep their meaning", () => {
       {
         result: {
           status: "denied",
+          runId: createPlatformId<"OperationRunId">("operation"),
           reason: {
             kind: "policy",
             operation: "data_store.private.insert",
@@ -143,6 +153,12 @@ describe("configuration and policy refusals keep their meaning", () => {
     );
     if (result.status === "success") throw new Error("Expected a refusal");
     expect(result.error.message).not.toContain("data_store.private.insert");
-    expect(result.error.message).toMatch(/Diese|Workflow/u);
+    const expected =
+      reason === "workflow_deleted"
+        ? "Workflow"
+        : reason === "confirmation_required"
+          ? "Bestätigung"
+          : "Freigabe";
+    expect(result.error.message).toContain(expected);
   });
 });

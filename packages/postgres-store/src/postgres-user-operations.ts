@@ -742,7 +742,7 @@ export function createPostgresUsersStore(db: PostgresConnection): UserStore {
         .where(
           and(
             eq(productUsers.clientInstanceId, clientInstanceId),
-            drizzleSql`${productUsers.roles} @> '["superadmin"]'::jsonb`,
+            drizzleSql`${productUsers.roles} ?| array['admin', 'superadmin']`,
             eq(productUsers.status, "active"),
             isNull(productUsers.deletionRequestedAt),
             isNotNull(productUsers.lastAuthenticatedAt)
