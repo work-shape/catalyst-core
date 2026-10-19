@@ -12,6 +12,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { createOperationRegistry } from "@work-shape/catalyst-core";
 import {
+  OPERATION_INPUT_MAX_DEPTH,
   registerToolOperations,
   ToolRegistry,
   type OperationApprovalRequests
@@ -292,6 +293,42 @@ describe("an agent's tool call as an operation", () => {
         }
       }
     });
+  });
+
+  it("answers a German caller's unreadable or too deep input in German", async () => {
+    const { runTool } = setup();
+    const german: ToolExecutionContext = { ...context(), locale: "de" };
+    const unreadable = await runTool(request("demo.echo", {}), german, {
+      unreadableInput: { code: "invalid_json", message: "Tool input must be valid JSON" }
+    });
+    const message = "Die Eingabe muss ein gültiges JSON-Objekt sein.";
+    expect(unreadable).toEqual({
+      status: "failed",
+      error: {
+        code: "validation_failed",
+        message,
+        details: { issues: [{ code: "invalid_json", path: "", message }] }
+      }
+    });
+
+    let deep: unknown = "x";
+    for (let level = 0; level <= OPERATION_INPUT_MAX_DEPTH; level += 1) deep = { a: deep };
+    const tooDeep = await runTool(request("demo.echo", { text: "x", deep }), german);
+    expect(tooDeep).toMatchObject({
+      status: "failed",
+      error: {
+        message: "Die Eingabe für diesen Aufruf ist zu tief verschachtelt.",
+        details: {
+          issues: [
+            {
+              code: "input_invalid",
+              message: "Die Eingabe für diesen Aufruf ist zu tief verschachtelt."
+            }
+          ]
+        }
+      }
+    });
+    expect(executed).toEqual([]);
   });
 
   it("asks the surface before the input, so a tool that is not listed is refused as that", async () => {
