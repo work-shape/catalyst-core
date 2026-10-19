@@ -178,7 +178,7 @@ describe("Guardrail page", () => {
     });
     expect(markup).toContain('data-guardrail-hit="block"');
     expect(markup).toContain('data-guardrail-hit="warn"');
-    expect(markup).toContain("The text names a customer.");
+    expect(markup).toContain("Checked when an approval was requested.");
     expect(markup).toContain("Skill change");
     expect(markup).toMatch(/Last 7 days<\/dt>.*?>2</su);
     expect(markup).toMatch(/Last 30 days<\/dt>.*?>61</su);
@@ -256,6 +256,50 @@ describe("Guardrail page", () => {
     expect(unseen).toContain('data-guardrail-hit-subject="kunden-faq"');
     expect(unseen).not.toContain('href="/build/skills/kunden-faq"');
   });
+
+  // Fails without the change: a hit showed the reason as stored, in the language of whoever
+  // acted, and the fallback named the guardrail by its id.
+  it.each([
+    [
+      "en",
+      "Die Leitplanke „no-iban“ verhindert IBANs.",
+      "Checked when it was saved.",
+      "Checked when it was called."
+    ],
+    [
+      "de",
+      "The content matches the pattern of guardrail 'no-iban'.",
+      "Geprüft beim Speichern.",
+      "Geprüft beim Aufruf."
+    ]
+  ] as const)(
+    "words each hit in the reader's language (%s) from what it records",
+    (locale, stored, saved, called) => {
+      const markup = renderPage({
+        locale,
+        hits: {
+          status: "ready",
+          hits: {
+            items: [
+              hit({ event: "asset.before_write", subjectKind: "skill", message: stored }),
+              hit({
+                id: "ghit_2",
+                event: "operation.before_call",
+                subjectKind: "operation",
+                message: stored
+              })
+            ],
+            hasMore: false,
+            counts: { last7Days: 2, last30Days: 2 }
+          }
+        }
+      });
+      expect(markup).toContain(saved);
+      expect(markup).toContain(called);
+      expect(markup).not.toContain(stored);
+      expect(markup).not.toMatch(/no-iban|asset\.before_write|operation\.before_call/u);
+    }
+  );
 
   it("shows an empty, a waiting and a failed read of the hits", () => {
     expect(renderPage()).toContain("No hits yet.");

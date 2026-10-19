@@ -115,6 +115,11 @@ export const guardrails = defineTranslations({
     "guardrails.hitBlocked": "Blocked",
     "guardrails.hitBlockedApprovalCouldNotWait": "Blocked: approval could not wait",
     "guardrails.hitUnevaluated": "The check could not be run.",
+    "guardrails.hitAtWrite": "Checked when it was saved.",
+    "guardrails.hitAtCall": "Checked when it was called.",
+    "guardrails.hitAtPublish": "Checked when it was published.",
+    "guardrails.hitAtApprovalRequest": "Checked when an approval was requested.",
+    "guardrails.hitAtUnknownEvent": "Checked at an action this version cannot name.",
     "guardrails.subjectOperation": "Call of {name}",
     "guardrails.blockedChange": "The guardrail “{name}” stopped this change."
   },
@@ -235,6 +240,12 @@ export const guardrails = defineTranslations({
     "guardrails.hitBlocked": "Blockiert",
     "guardrails.hitBlockedApprovalCouldNotWait": "Blockiert: konnte nicht auf Freigabe warten",
     "guardrails.hitUnevaluated": "Die Prüfung konnte nicht ausgeführt werden.",
+    "guardrails.hitAtWrite": "Geprüft beim Speichern.",
+    "guardrails.hitAtCall": "Geprüft beim Aufruf.",
+    "guardrails.hitAtPublish": "Geprüft beim Veröffentlichen.",
+    "guardrails.hitAtApprovalRequest": "Geprüft bei einer Bitte um Freigabe.",
+    "guardrails.hitAtUnknownEvent":
+      "Geprüft bei einer Aktion, die diese Version nicht benennen kann.",
     "guardrails.subjectOperation": "Aufruf von {name}",
     "guardrails.blockedChange": "Die Leitplanke „{name}“ hat diese Änderung verhindert."
   }

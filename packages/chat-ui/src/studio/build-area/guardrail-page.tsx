@@ -232,6 +232,17 @@ function scopeLabel(
     : t("guardrails.scopeWorkspace", { name });
 }
 
+/** When a hit was checked, by its before-event. */
+const HIT_MOMENTS: Record<string, TranslationKey> = {
+  "asset.before_write": "guardrails.hitAtWrite",
+  "operation.before_call": "guardrails.hitAtCall",
+  "app.before_publish": "guardrails.hitAtPublish",
+  "agent.before_publish": "guardrails.hitAtPublish",
+  "workflow.before_publish": "guardrails.hitAtPublish",
+  "data_store.before_publish": "guardrails.hitAtPublish",
+  "approval_request.before_create": "guardrails.hitAtApprovalRequest"
+};
+
 /**
  * How often the guardrail fired, by period, and the newest hits, the newest first: on what, why,
  * and when. A hit on an asset of the Build area links it. No hit names a person: hits are
@@ -325,7 +336,14 @@ function GuardrailHitList({
                   />
                 ) : undefined
               }
-              description={hit.message || t("guardrails.hitUnevaluated")}
+              // The stored reason is in the language of whoever acted or wrote the rule, and a
+              // fallback names the guardrail's id. The row says in the reader's language what
+              // was checked; the rule itself stands above under Rule.
+              description={t(
+                hit.message === ""
+                  ? "guardrails.hitUnevaluated"
+                  : (HIT_MOMENTS[hit.event] ?? "guardrails.hitAtUnknownEvent")
+              )}
               descriptionWraps
               time={formatMomentShort(hit.createdAt, locale)}
             />
