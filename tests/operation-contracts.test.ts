@@ -374,6 +374,7 @@ describe("operation contracts", () => {
           status: "dry_run";
           runId: OperationRunId;
           input?: unknown;
+          output?: unknown;
           wouldAsk?: "confirmation" | "approval";
         }
       | { status: "running"; runId: OperationRunId }
