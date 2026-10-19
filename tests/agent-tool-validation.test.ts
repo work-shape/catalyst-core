@@ -95,7 +95,12 @@ describe("agent tool references on the target instance", () => {
       expect(checked.json()).toMatchObject({ valid: true, warnings: [warning] });
       const added = await syncAsService(t, [putAgent(config.name, config)]);
       expect(added.statusCode, added.body).toBe(200);
-      expect(added.json()).toMatchObject({ warnings: [warning] });
+      expect(added.json()).toMatchObject({
+        warnings: expect.arrayContaining([
+          warning,
+          expect.objectContaining({ code: "agent_dependency_unavailable" })
+        ])
+      });
       // An unchanged submitted agent receives the same nonblocking preflight warning.
       const again = await asService(t, "assets.sync_check", {
         payload: { items: [putAgent(config.name, config, 1)] }
