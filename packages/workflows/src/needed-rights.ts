@@ -139,14 +139,17 @@ function operationRights(
   return [];
 }
 
-/** A load replaces or updates stored rows, or a reference decides that when it runs. */
+/**
+ * A load replaces or updates stored rows, or a reference or a text joined from parts decides
+ * that when it runs.
+ */
 function loadChangesRows(input: WorkflowInputMapping | undefined): boolean {
   if (input === undefined) return true;
   const replace = input.replace;
   const onConflict = input.onConflict;
-  const replaces = replace !== undefined && (replace.ref !== undefined || replace.value !== null);
+  const replaces = replace !== undefined && replace.value !== null;
   const updates =
-    onConflict !== undefined && (onConflict.ref !== undefined || onConflict.value === "update");
+    onConflict !== undefined && (onConflict.value === undefined || onConflict.value === "update");
   return replaces || updates;
 }
 

@@ -3,6 +3,7 @@ import {
   AppError,
   operationBatchFailureSchema,
   type JsonObject,
+  type OperationDefinition,
   type OperationRegistry,
   type WorkflowInputText,
   type WorkflowInputValue,
@@ -142,6 +143,25 @@ function checkTextMapping(
   });
 }
 
+/**
+ * An operation's input as JSON Schema: the one it was described by, else the one its
+ * `inputSchema` derives, as every reader of an operation takes it. A release operation such as
+ * `mail.send` carries its Zod schema alone, and the `format: markdown` of its body is what
+ * makes a joined text escape its values.
+ */
+function inputJsonSchemaOf(
+  descriptor: Pick<OperationDefinition, "inputJsonSchema" | "inputSchema">
+): JsonObject {
+  if (descriptor.inputJsonSchema) return jsonObjectSchema.parse(descriptor.inputJsonSchema);
+  try {
+    return jsonObjectSchema.parse(
+      z.toJSONSchema(descriptor.inputSchema, { io: "input", unrepresentable: "any" })
+    );
+  } catch {
+    return {};
+  }
+}
+
 /** Builds the schemas of a definition's steps; refuses a paging or dataset shape that cannot hold. */
 export async function workflowStepSchemas(
   manifest: WorkflowManifest,
@@ -226,10 +246,7 @@ export async function workflowStepSchemas(
             { reason: "paging_invalid" }
           );
       }
-      inputs.set(
-        step.id,
-        expanded(jsonObjectSchema.parse(descriptor.inputJsonSchema ?? {}), manifest.types)
-      );
+      inputs.set(step.id, expanded(inputJsonSchemaOf(descriptor), manifest.types));
       let output = expanded(
         jsonObjectSchema.parse(descriptor.outputJsonSchema ?? {}),
         manifest.types

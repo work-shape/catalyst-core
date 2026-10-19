@@ -1,10 +1,17 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   WORKFLOW_MARKDOWN_MAX_ROWS,
   WORKFLOW_TEXT_FORMAT_MARKDOWN,
   type JsonValue
 } from "@work-shape/catalyst-core";
-import { publishedDefinitions, type WorkflowFixture } from "./support/workflow-instance";
+import { operationOf, write } from "./support/connection-operations";
+import {
+  publishedDefinitions,
+  runSchema,
+  workflowFixture,
+  type WorkflowFixture
+} from "./support/workflow-instance";
 import { NOTE, readyWorkflows, start, stepRunsOf } from "./support/workflow-runs";
 
 // EW-TEXT at run time (events-workflows-and-guardrails.md check 143): a published Workflow
@@ -125,5 +132,88 @@ describe("a text joined from parts when the step runs", () => {
     });
     // The message names the field and its limit, and nothing of the text.
     expect(run.error?.message).not.toContain(NOTE);
+  });
+});
+
+describe("a text in a Markdown field of an operation step", () => {
+  it("is published and joins a list, every value escaped, into what the operation is handed", async () => {
+    const t = await workflowFixture({
+      definitions: "assets",
+      connectorCatalog: [
+        {
+          name: "post",
+          description: "Posts a message.",
+          proposedEffect: "reading",
+          inputSchema: {
+            type: "object",
+            properties: { message: { type: "string", format: WORKFLOW_TEXT_FORMAT_MARKDOWN } },
+            required: ["message"],
+            additionalProperties: false
+          },
+          outputSchema: { type: "object" }
+        },
+        write
+      ]
+    });
+    open = t;
+    await t.seed("crm", { operations: [operationOf("post", { exposure: ["workflow"] })] });
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "connection.use");
+    const handed: JsonValue[] = [];
+    t.setBehaviour((_operation, input) => {
+      handed.push(input);
+      return Promise.resolve({});
+    });
+    const manifest = {
+      id: "post-names",
+      name: "Post the names",
+      runAs: "workflow-runner",
+      inputs: {
+        type: "object",
+        properties: { names: { type: "array", items: { type: "string" } } },
+        required: ["names"]
+      },
+      outputs: { type: "object" },
+      steps: [
+        { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
+        {
+          id: "post",
+          name: "Post",
+          type: "operation",
+          operation: "connection.crm.post",
+          input: { message: { text: ["Namen:\n\n", ref("start", "input.names"), "Ende"] } }
+        },
+        { id: "result", name: "Result", type: "output", input: {} }
+      ]
+    };
+    const written = await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "workflow", name: manifest.id },
+      payload: { config: { name: manifest.id, manifest }, expectedRevision: null }
+    });
+    // The publish reads the operation's schema as the save does, so the list is taken.
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: { kind: "workflow", name: manifest.id },
+      payload: z.object({ revision: z.number() }).parse(written.json())
+    });
+    const started = runSchema.parse(
+      (
+        await t.expectOk(t.root.id, "workflows.start", {
+          params: { workflow: manifest.id },
+          payload: { input: { names: ["Anna [GmbH](https://evil.example)", "<b>Bert</b>"] } }
+        })
+      ).json()
+    );
+    expect((await t.finish(started.id)).status).toBe("done");
+    expect(handed).toEqual([
+      {
+        message: [
+          "Namen:",
+          "",
+          "- Anna \\[GmbH\\]\\(https\\:\\/\\/evil\\.example\\)",
+          "- \\<b\\>Bert\\<\\/b\\>",
+          "",
+          "Ende"
+        ].join("\n")
+      }
+    ]);
   });
 });

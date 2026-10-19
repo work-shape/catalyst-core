@@ -155,6 +155,8 @@ describe("the text value form in a definition", () => {
 
 describe("the reference check of each part at save and publish", () => {
   const definitions = { read: async () => undefined };
+  // As MAIL-1 registers it: the Zod schema alone, no `inputJsonSchema`. The check and the run
+  // read the body's `format: markdown` and the subject's limit from the schema it derives.
   const mailSend: OperationDefinition = {
     name: "mail.send",
     effect: "changing",
@@ -163,10 +165,6 @@ describe("the reference check of each part at save and publish", () => {
     scope: null,
     timeoutMs: 1000,
     inputSchema: mailSendInputSchema,
-    inputJsonSchema: z.toJSONSchema(mailSendInputSchema, {
-      io: "input",
-      unrepresentable: "any"
-    }) as JsonObject,
     outputSchema: z.object({}),
     resource: () => undefined,
     execute: async () => {
@@ -279,6 +277,45 @@ describe("the reference check of each part at save and publish", () => {
     await expect(
       check({ subject: { text: ["Namen: ", ref("findings", "names")] } })
     ).rejects.toMatchObject(refusal("subject", 2));
+  });
+
+  it("reads the Markdown body of an operation that carries only its Zod schema", async () => {
+    // Without the derived schema the body would be no Markdown field: a list would be refused
+    // here, and at run time a value would join unescaped and could add a link to the mail.
+    expect(mailSend.inputJsonSchema).toBeUndefined();
+    await expect(
+      check({ body: { text: ["Namen:\n\n", ref("findings", "names")] } })
+    ).resolves.toBeUndefined();
+    // A described operation's own JSON Schema still comes first.
+    const described = {
+      ...mailSend,
+      inputJsonSchema: { type: "object", properties: { body: { type: "string" } } }
+    };
+    const parsed = parseWorkflowManifest({
+      id: "described",
+      name: "Described",
+      runAs: "runner",
+      inputs: {
+        type: "object",
+        properties: { names: { type: "array", items: { type: "string" } } }
+      },
+      outputs: { type: "object" },
+      steps: [
+        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+        {
+          id: "mail",
+          name: "Send the mail",
+          type: "operation",
+          operation: "mail.send",
+          input: { body: { text: [ref("start", "input.names")] } }
+        },
+        { id: "result", name: "Result", type: "output", input: {} }
+      ]
+    });
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+    await expect(
+      checkDatasetContracts(parsed.manifest, definitions, { resolve: async () => described })
+    ).rejects.toMatchObject(refusal("body", 1));
   });
 
   it("refuses a dataset in a Markdown field", async () => {

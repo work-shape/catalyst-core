@@ -118,6 +118,11 @@ describe("the rights a Workflow's account needs", () => {
       "data_store.insert",
       "data_store.execute"
     ]);
+    // A text joined from parts is decided by the run, as a reference is (EW-TEXT).
+    expect(load({ onConflict: { text: ["upd", "ate"] } })).toEqual([
+      "data_store.insert",
+      "data_store.execute"
+    ]);
     expect(load({ replace: { value: { by: ["year"] } } })).toEqual([
       "data_store.insert",
       "data_store.execute"

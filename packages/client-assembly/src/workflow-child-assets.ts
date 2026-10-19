@@ -22,7 +22,9 @@ export async function checkPublishedChildren(
   manifest: WorkflowManifest,
   definitions: WorkflowDefinitionSource
 ): Promise<void> {
-  await checkChildContracts(manifest, definitions);
+  // With the operations, as the save checks: a text in a Markdown field of an operation step
+  // joins a list only where the field's schema is read (EW-TEXT).
+  await checkChildContracts(manifest, definitions, options.registry?.());
   const account = await workflowRunAccount(options, manifest.runAs);
   if (manifest.runAs !== undefined && account?.principal.status !== "active")
     throw new AppError("VALIDATION_FAILED", "The Workflow principal is unavailable", {
