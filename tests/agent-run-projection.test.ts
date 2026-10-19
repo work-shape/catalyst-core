@@ -1,3 +1,4 @@
+import { agentRunProjectionSchema } from "@work-shape/catalyst-api-contract";
 import { describe, expect, it } from "vitest";
 import {
   applyAgentRunObservation,
@@ -13,6 +14,15 @@ import {
 } from "@work-shape/catalyst-core";
 
 describe("agent run projection", () => {
+  it("keeps the requesting person and input message through the wire projection", () => {
+    const run = createRun();
+    const projection = agentRunProjectionSchema.parse(projectAgentRun(run, []));
+    expect(projection).toMatchObject({
+      ownerUserId: run.ownerUserId,
+      inputMessageId: run.inputMessageId
+    });
+  });
+
   it("clears an unfinished preparing tool when the run becomes terminal", () => {
     const run = createRun();
     const projection = projectAgentRun(run, [

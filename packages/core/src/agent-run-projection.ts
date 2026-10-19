@@ -169,6 +169,8 @@ function createAgentRunProjection(run: AgentRun): AgentRunProjection {
   const endedAt = run.completedAt ?? run.cancelledAt ?? run.failedAt;
   return {
     runId: run.id,
+    ownerUserId: run.ownerUserId,
+    inputMessageId: run.inputMessageId,
     lastSequence: run.lastSequence,
     status: run.status,
     ...(endedAt
