@@ -136,7 +136,9 @@ describe("skill change approval workflow", () => {
       actor: { userId: reviewer.id },
       origin: { requestId: request.id }
     });
-    expect(f.onDecided).toHaveBeenLastCalledWith(reverted);
+    expect(f.onDecided).toHaveBeenLastCalledWith(
+      await f.store.approvals.getApprovalRequest({ clientInstanceId, requestId: request.id })
+    );
     expect(
       (await f.store.audit.listAuditEvents({ clientInstanceId })).find(
         (event) => event.type === "approval_request.reverted"
@@ -189,7 +191,9 @@ describe("skill change approval workflow", () => {
       }
     });
     expect(await f.revisions()).toHaveLength(1);
-    expect(f.onDecided).toHaveBeenLastCalledWith(decided);
+    expect(f.onDecided).toHaveBeenLastCalledWith(
+      await f.store.approvals.getApprovalRequest({ clientInstanceId, requestId: request.id })
+    );
     const [hit, ...more] = await f.store.guardrails.listHits({
       clientInstanceId,
       guardrailName: "no_iban",

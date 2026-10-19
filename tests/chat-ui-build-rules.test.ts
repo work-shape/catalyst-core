@@ -10,6 +10,7 @@ import { addressOf } from "@work-shape/catalyst-ui";
 import {
   addressBlocksCreate,
   addressCheckOf,
+  approverNamesOf,
   buildScopes,
   PendingApprovalError,
   mayCreateAgents,
@@ -531,10 +532,32 @@ describe("Studio refusals", () => {
       refusals: [
         {
           message:
-            "This change waits for an approval. Nothing was changed yet and your text is still here."
+            "This change waits for an approval. Nothing was changed yet and your text is still here.",
+          waiting: true
         }
       ]
     });
+  });
+
+  // ACCEPT-FIX-9 E6: the notice named nobody. It names who may approve, as the request lists
+  // them, joined by "or" in the reader's language.
+  it("names who may approve a change that waits, in both languages", () => {
+    const waiting = new PendingApprovalError(["Mara Lindqvist", "Jonas Berg"]);
+
+    expect(refusalsOf(readBuildRefusal(waiting, t), undefined)).toEqual([
+      "This change waits for approval by Mara Lindqvist or Jonas Berg. Nothing has changed yet and your text is still here."
+    ]);
+    expect(
+      refusalsOf(readBuildRefusal(waiting, createTranslationContext("de").t, "de"), undefined)
+    ).toEqual([
+      "Diese Änderung wartet auf Freigabe durch Mara Lindqvist oder Jonas Berg. Es wurde noch nichts geändert und dein Text ist noch da."
+    ]);
+    // The names come from the waiting request's preview; anything else there is left out.
+    expect(approverNamesOf({ approverNames: ["Mara Lindqvist", 7, " ", "Jonas Berg"] })).toEqual([
+      "Mara Lindqvist",
+      "Jonas Berg"
+    ]);
+    expect(approverNamesOf(undefined)).toEqual([]);
   });
 
   it("shows every other sentence as the instance said it", () => {

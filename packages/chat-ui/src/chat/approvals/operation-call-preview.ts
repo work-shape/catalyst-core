@@ -38,12 +38,13 @@ const outcomes: readonly OperationCallOutcome[] = [...APPROVAL_EXECUTIONS];
 export function operationCallOutcome(request: {
   status: string;
   applyResult?: unknown;
-}): { outcome: OperationCallOutcome; reason?: string } | undefined {
+}): { outcome: OperationCallOutcome; reason?: string; reasonCode?: string } | undefined {
   const result = isRecord(request.applyResult) ? request.applyResult : {};
   const outcome = outcomes.find((candidate) => candidate === result.execution);
   const reason = isRecord(result.error) ? readText(result.error.message) : undefined;
+  const reasonCode = isRecord(result.error) ? readText(result.error.code) : undefined;
   if (outcome) {
-    return { outcome, ...(reason ? { reason } : {}) };
+    return { outcome, ...(reason ? { reason } : {}), ...(reasonCode ? { reasonCode } : {}) };
   }
   return request.status === "approved" ? { outcome: "done" } : undefined;
 }
@@ -85,10 +86,11 @@ export interface OperationCallAsset {
   kind: string;
   name: string;
   title: string;
-  /** The registered prefix the asset's name starts with. */
-  namespace?: string;
-  /** Approving creates the asset. */
-  isNew: boolean;
+  /**
+   * Approving creates the asset. Absent where the server does not say: to a reader who may not
+   * read the stored asset, and in a preview frozen for a requester who could not.
+   */
+  isNew?: boolean;
   /** A skill's text in the shape `SkillChangeBody` reads. An opened request has it, a row has not. */
   content?: unknown;
   /** A skill's description as the call saves it. */
@@ -97,8 +99,10 @@ export interface OperationCallAsset {
   previous: { title?: string; description?: string };
   /** The resources the stored skill has and the call leaves out. */
   removedResources: string[];
-  /** The reader may not read the stored skill, so nothing is compared with it. */
+  /** The reader may not read the stored skill: nothing of its text or the call's is shown. */
   beforeWithheld: boolean;
+  /** The stored asset changed after the call was held: approving it applies nothing. */
+  isStale: boolean;
 }
 
 /** Why a held publish can no longer be approved: what it would publish moved since. */
@@ -261,7 +265,12 @@ function parseActor(value: unknown): OperationCallPreview["actor"] | undefined {
 }
 
 function parseAsset(value: unknown): OperationCallAsset | undefined {
-  if (!isRecord(value) || typeof value.isNew !== "boolean") {
+  // Whether the save creates may be unknown. Where the reader may read the asset, a value that
+  // is not a yes or no makes the asset unreadable; a withheld one is read for its title alone.
+  if (
+    !isRecord(value) ||
+    (value.isNew !== undefined && typeof value.isNew !== "boolean" && value.beforeWithheld !== true)
+  ) {
     return undefined;
   }
   const kind = readText(value.kind);
@@ -269,7 +278,6 @@ function parseAsset(value: unknown): OperationCallAsset | undefined {
   if (!kind || !name) {
     return undefined;
   }
-  const namespace = readText(value.namespace);
   const previous = isRecord(value.previous) ? value.previous : {};
   const previousTitle = readText(previous.title);
   const previousDescription = readText(previous.description);
@@ -278,7 +286,7 @@ function parseAsset(value: unknown): OperationCallAsset | undefined {
     kind,
     name,
     title: readText(value.title) ?? name,
-    isNew: value.isNew,
+    ...(typeof value.isNew === "boolean" ? { isNew: value.isNew } : {}),
     previous: {
       ...(previousTitle ? { title: previousTitle } : {}),
       ...(previousDescription ? { description: previousDescription } : {})
@@ -287,7 +295,7 @@ function parseAsset(value: unknown): OperationCallAsset | undefined {
       ? value.removedResources.flatMap((path) => readText(path) ?? [])
       : [],
     beforeWithheld: value.beforeWithheld === true,
-    ...(namespace ? { namespace } : {}),
+    isStale: value.isStale === true,
     ...(description ? { description } : {}),
     ...(value.content === undefined ? {} : { content: value.content })
   };

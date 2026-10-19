@@ -6,6 +6,7 @@ import { createApiClient } from "@work-shape/catalyst-api-client";
 import { approvalRequestSchema } from "@work-shape/catalyst-api-contract";
 import {
   asClientInstanceId,
+  asUserId,
   asConversationId,
   asAgentRunId,
   asToolCallId,
@@ -19,7 +20,12 @@ const fakeHandler: ApprovalRequestHandler = {
   kind: "fake",
   requiredPermission: "agent_skills.approve",
   validate: (payload) => payload,
-  preview: async (payload) => ({ proposed: payload.value ?? null }),
+  preview: async (payload, context) => ({
+    proposed: payload.value ?? null,
+    ...(context.viewer?.access.authorize("skill.read").allowed && payload.asset
+      ? { asset: payload.asset }
+      : {})
+  }),
   isStale: async () => false,
   apply: async (_payload, actor) => ({ actorId: actor.id }),
   revert: async (_request, actor) => ({ actorId: actor.id })
@@ -83,6 +89,43 @@ async function fixture(empty = false) {
 }
 
 describe("approval routes and generated instance client", () => {
+  it("ACCEPT-FIX-9b: revert returns the reader-gated view, never the retained payload", async () => {
+    // Held operation calls have no revert; this handler exercises the same response seam
+    // for kinds that do, with an approver explicitly denied the skill read right.
+    const f = await fixture();
+    const reviewerId = (await f.reviewer.me.get()).id;
+    await f.app.stores.access.createGrant({
+      clientInstanceId: asClientInstanceId(getTestConfig(f.app).clientInstance.id),
+      holderKind: "user",
+      holderId: reviewerId,
+      action: "skill.read",
+      effect: "deny",
+      scopeKind: "instance",
+      grantedBy: asUserId(reviewerId)
+    });
+    const request = await f.app.stores.approvals.createApprovalRequest({
+      clientInstanceId: asClientInstanceId(getTestConfig(f.app).clientInstance.id),
+      kind: "fake",
+      summary: "Held change",
+      requestedBy: { id: (await f.requester.me.get()).id, displayLabel: "Requester" },
+      payload: { value: "new", asset: { content: "Private before-text" } }
+    });
+    expect(
+      JSON.stringify(await f.reviewer.approval_requests.get({ params: { requestId: request.id } }))
+    ).not.toContain("Private before-text");
+    await f.reviewer.approval_requests.decide({
+      params: { requestId: request.id },
+      body: { decision: "approve" }
+    });
+    const reverted = await f.reviewer.approval_requests.revert({
+      params: { requestId: request.id }
+    });
+    expect(JSON.stringify(reverted)).not.toContain("Private before-text");
+    expect(reverted.payload).toEqual(
+      (await f.reviewer.approval_requests.get({ params: { requestId: request.id } })).payload
+    );
+  });
+
   it("projects a decision in the owner's thread when the reviewer cannot access it", async () => {
     const f = await fixture();
     try {

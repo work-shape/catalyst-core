@@ -17,7 +17,12 @@ import { useTranslation } from "../../shared/i18n";
 import { AssetLanguageProvider } from "./asset-form-fields";
 import { ASSET_LANGUAGES, type LocalizedPair } from "./asset-form-model";
 import type { BuildAssetEditorProps, BuildPageSlot } from "./build-asset-kind";
-import { refusalsOf, type BuildRefusalField, type BuildWriteOutcome } from "./build-refusals";
+import {
+  refusalsOf,
+  waitingNotice,
+  type BuildRefusalField,
+  type BuildWriteOutcome
+} from "./build-refusals";
 import { scrollToSection } from "./build-scroll";
 
 type AssetLanguage = keyof LocalizedPair;
@@ -184,7 +189,9 @@ export function AssetEditorShell({
       () => undefined
     );
   };
-  const general = refusalsOf(outcome, undefined);
+  // A change that waits for an approval is no refusal: it says so in a neutral tone.
+  const waiting = waitingNotice(outcome);
+  const general = waiting === undefined ? refusalsOf(outcome, undefined) : [];
 
   return (
     <Page
@@ -303,7 +310,7 @@ export function AssetEditorShell({
             </Section>
           ))}
         </AssetLanguageProvider>
-        {notice || general.length > 0 || (canWrite && (dirty || saving)) ? (
+        {notice || waiting || general.length > 0 || (canWrite && (dirty || saving)) ? (
           <PageFooter
             ref={footerRef}
             className="grid gap-2 py-3"
@@ -312,6 +319,11 @@ export function AssetEditorShell({
             pinned={hasNotice ? "wide" : "always"}
           >
             {notice}
+            {waiting ? (
+              <Banner tone="info" role="status" data-testid="build-save-waiting">
+                {waiting}
+              </Banner>
+            ) : null}
             {general.map((message) => (
               <FormNotice key={message} tone="error">
                 {message}
@@ -333,7 +345,8 @@ export function AssetEditorShell({
                 }
                 discardLabel={isNew ? undefined : t("build.discard")}
                 onDiscard={isNew ? undefined : control.discard}
-                hint={saveHint ?? t("configAppliesImmediately")}
+                // While a change waits for an approval it does not apply at once.
+                hint={waiting ? undefined : (saveHint ?? t("configAppliesImmediately"))}
               />
             ) : null}
           </PageFooter>
