@@ -69,6 +69,7 @@ describe("a Builder and Publisher who is no member of the workspace", () => {
     errorSchema.parse(response.json()).error.details;
 
   let builderRow: string;
+  let publisherRow: string;
   let ownConversation: string;
 
   it("builds in the workspace and nowhere else", async () => {
@@ -139,7 +140,7 @@ describe("a Builder and Publisher who is no member of the workspace", () => {
   });
 
   it("publishes the workspace's assets as a Publisher, and nowhere else", async () => {
-    await t.grant(t.lena.id, "publisher", { workspaceId: t.workspaceId });
+    publisherRow = await t.grant(t.lena.id, "publisher", { workspaceId: t.workspaceId });
     expectStatus(await publishApp("offers", t.workspaceId), 200);
     expect(refusal(await publishApp("offers-other", other))).toMatchObject({
       action: "app.publish"
@@ -148,13 +149,6 @@ describe("a Builder and Publisher who is no member of the workspace", () => {
 
   it("loses the building and the conversations at once when the right is revoked", async () => {
     // Publisher alone still opens the workspace; take both away.
-    const publisherRow = (
-      await t.stores.access.listGrants({
-        clientInstanceId,
-        holderId: t.lena.id,
-        action: "publisher"
-      })
-    )[0]?.id;
     for (const grantId of [builderRow, publisherRow]) {
       await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId } });
     }

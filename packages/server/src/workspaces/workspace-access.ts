@@ -80,7 +80,11 @@ export async function requireWorkspaceToWorkIn(
   }
 }
 
-/** A bundle of a Shared Workspace, read anew on every call, so a revoked one ends at once. */
+/**
+ * A bundle of a Shared Workspace given as a grant row, to the user or a group of theirs, read
+ * anew on every call, so a revoked one ends at once. The bundles an instance admin holds by
+ * role open no workspace's conversations.
+ */
 export async function holdsWorkspaceBundle(
   options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
   user: AuthenticatedUser,
@@ -92,7 +96,10 @@ export async function holdsWorkspaceBundle(
   );
   if (workspace?.kind !== "shared") return false;
   const access = await createAuthorizer(options.stores.access).forActor(user);
-  return WORKSPACE_BUNDLES.some((bundle) => access.authorize(bundle, { workspaceId }).allowed);
+  return WORKSPACE_BUNDLES.some((bundle) => {
+    const decision = access.authorize(bundle, { workspaceId });
+    return decision.allowed && decision.source === "grant";
+  });
 }
 
 /** Membership decides, except that a superadmin is Owner of every Shared Workspace. */
