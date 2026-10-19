@@ -1,5 +1,6 @@
 import {
   APP_AUDIENCES,
+  OPERATION_EFFECTS,
   WORKSPACE_USE_ASSET_KINDS,
   ASSET_ACCESS_VERBS,
   ASSET_NAME_REFUSAL_REASONS,
@@ -199,6 +200,30 @@ export const publishNarrativeSchema = z.object({
 /** A save by the caller that waits for an approval, and up to three people who may decide it. */
 export const saveApprovalSchema = z.object({ approverNames: z.array(z.string()) });
 
+/** Facts resolved for the revision read, with unreadable sources reduced to their kind. */
+const workflowFactSourceSchema = z.object({
+  kind: z.enum(["connection", "data_store", "knowledge_base", "workflow", "other"]),
+  title: z.string().optional(),
+  service: z.string().optional()
+});
+const workflowOperationFactSchema = z.object({
+  source: workflowFactSourceSchema,
+  title: z.string().optional(),
+  effect: z.enum(OPERATION_EFFECTS).optional(),
+  description: z.string().optional(),
+  inputSchema: configAssetConfigSchema.optional(),
+  outputSchema: configAssetConfigSchema.optional(),
+  available: z.boolean().optional()
+});
+export const workflowStepFactSchema = workflowOperationFactSchema.partial().extend({
+  published: z.boolean().optional(),
+  model: z.string().optional(),
+  timeZone: z.string().optional(),
+  nextDueAt: timestampSchema.optional(),
+  /** Every AI step may use these Workflow tools. */
+  tools: z.array(workflowOperationFactSchema.extend({ name: z.string() })).optional()
+});
+
 export const assetSchema = z.object({
   id: z.string(),
   kind: z.string(),
@@ -210,6 +235,7 @@ export const assetSchema = z.object({
   config: configAssetConfigSchema,
   /** The active account's display label for the Workflow revision returned by this read. */
   runsAs: z.string().optional(),
+  stepFacts: z.record(z.string(), workflowStepFactSchema).optional(),
   /** Unrecorded draft review lines naming its audience and shared source accounts. */
   publishQuestion: z.array(z.string()).optional(),
   /**

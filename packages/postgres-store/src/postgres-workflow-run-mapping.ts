@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns, notInArray, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, notInArray, sql, type SQL } from "drizzle-orm";
 import {
   WORKFLOW_ENDED_STATUSES,
   WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS,
@@ -35,15 +35,21 @@ const {
 } = getTableColumns(workflowStepRuns);
 
 // One character more than a preview shows, so a cut value is told from one that just fits.
-const previewOf = (column: typeof workflowRuns.output | typeof workflowStepRuns.output) =>
+const boundedPreview = (value: SQL) =>
   sql<
     string | null
-  >`left((${column}->'value')::text, ${sql.raw(String(WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS + 1))})`;
+  >`left((${value})::text, ${sql.raw(String(WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS + 1))})`;
+const previewOf = (column: typeof workflowRuns.output | typeof workflowStepRuns.output) =>
+  boundedPreview(sql`${column}->'value'`);
 
-// The output of a trigger step is the run's input, and a read never answers an input.
+// A trigger's output wraps the run input; its existing read contract excludes that value.
 const stepPreview = sql<
   string | null
 >`case when ${workflowStepRuns.stepType} = 'trigger' then null else ${previewOf(workflowStepRuns.output)} end`;
+// A loop's existing input holds its list or dataset beside its counters, without duplication.
+const stepInputPreview = boundedPreview(sql`case when ${workflowStepRuns.stepType} = 'loop'
+  then coalesce(${workflowStepRuns.input}->'items', ${workflowStepRuns.input}->'dataset')
+  else ${workflowStepRuns.input}->'value' end`);
 
 function mapPreview(text: string | null): { outputPreview?: WorkflowOutputPreview } {
   if (text === null) return {};
@@ -145,6 +151,7 @@ const notEnded = (column: typeof workflowRuns.status | typeof workflowStepRuns.s
 
 export {
   stepPreview,
+  stepInputPreview,
   runColumns,
   stepRunColumns,
   previewOf,

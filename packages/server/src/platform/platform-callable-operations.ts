@@ -61,7 +61,10 @@ function listingOrigin(
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 /** The input or output of an operation as JSON Schema, where it can be told as one. */
-function jsonSchemaOf(given: JsonObject | undefined, schema: z.ZodType): JsonObject | undefined {
+export function jsonSchemaOf(
+  given: JsonObject | undefined,
+  schema: z.ZodType
+): JsonObject | undefined {
   if (given) return given;
   try {
     const derived = jsonObjectSchema.safeParse(z.toJSONSchema(schema, { unrepresentable: "any" }));

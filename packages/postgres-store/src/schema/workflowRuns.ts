@@ -196,8 +196,9 @@ export const workflowStepRuns = pgTable(
     iterationLabel: text("iteration_label"),
     status: text("status").$type<WorkflowStepRunStatus>().notNull(),
     attempt: integer("attempt").notNull().default(0),
-    // Set for a loop alone: `{ items, last }`, the list it runs over and the id of its last step.
+    // Resolved input under `value`; a loop also keeps its engine checkpoint here.
     input: jsonb("input").$type<{
+      value?: JsonValue;
       items?: JsonValue[];
       dataset?: WorkflowDatasetReference;
       total?: number;

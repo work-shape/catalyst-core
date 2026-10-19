@@ -36,7 +36,7 @@ const runValues = {
 // A loop keeps only step names and counters. Whitelist rather than subtract: a newly
 // staged field cannot escape retention. Re-evaluated under the row lock, this is idempotent.
 const stepValues = {
-  input: sql`case when ${workflowStepRuns.input} is null then null else
+  input: sql`case when ${workflowStepRuns.stepType} <> 'loop' or ${workflowStepRuns.input} is null then null else
     jsonb_strip_nulls(jsonb_build_object(
       'last', ${workflowStepRuns.input}->'last',
       'total', case when jsonb_typeof(${workflowStepRuns.input}->'items') = 'array'

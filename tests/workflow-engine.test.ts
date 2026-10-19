@@ -37,6 +37,35 @@ const ready = (options: Parameters<typeof workflowFixture>[0] = {}) =>
   }, options);
 
 describe("a Workflow Run from the manual start to its end", () => {
+  it("bounds a resolved step input at the output preview limit", async () => {
+    const definitions = publishedDefinitions();
+    const manifest = notifyClients();
+    const large = "x".repeat(4_000);
+    definitions.publish({
+      ...manifest,
+      inputs: { type: "object" },
+      steps: [
+        manifest.steps[0],
+        {
+          id: "large",
+          name: "Large input",
+          type: "operation",
+          operation: "connection.crm.write",
+          input: { text: { value: large } }
+        },
+        { id: "result", name: "Result", type: "output", input: {} }
+      ]
+    });
+    const t = await ready({ definitions: definitions.source });
+    t.setBehaviour(() => Promise.resolve({ ok: true }));
+    const run = await t.finish((await start(t)).id);
+    const steps = await stepRunsOf(t, run.id);
+    const step = steps.find((step) => step.stepId === "large");
+    expect(step?.inputPreview).toEqual({ text: expect.any(String), truncated: true });
+    expect(step?.inputPreview?.text).toHaveLength(2_000);
+    expect(JSON.parse(step?.outputPreview?.text ?? "null")).toEqual({ ok: true });
+  });
+
   it("runs each step once, the steps of a loop once per item, and ends with its result", async () => {
     const t = await ready();
     const started = await start(t);
@@ -65,6 +94,17 @@ describe("a Workflow Run from the manual start to its end", () => {
       ["each_client[2].send", "done", 1],
       ["result", "done", 1]
     ]);
+    expect(
+      JSON.parse(stepRuns.find((step) => step.key === "clients")?.inputPreview?.text ?? "null")
+    ).toEqual({ text: NOTE });
+    expect(
+      JSON.parse(
+        stepRuns.find((step) => step.key === "each_client[0].send")?.inputPreview?.text ?? "null"
+      )
+    ).toEqual({ client: CLIENTS[0]?.id, note: NOTE });
+    expect(
+      JSON.parse(stepRuns.find((step) => step.key === "each_client")?.inputPreview?.text ?? "null")
+    ).toEqual(CLIENTS);
     expect(t.executed.map((call) => call.operation)).toEqual(["echo", "write", "write", "write"]);
     expect(writesOf(t)).toEqual(CLIENTS.map((client) => ({ client: client.id, note: NOTE })));
     // A step run of a loop's item says which item, by the field the loop names as its label,

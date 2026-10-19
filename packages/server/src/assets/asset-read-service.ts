@@ -1,3 +1,4 @@
+import { workflowStepFacts } from "../workflows/workflow-step-facts";
 import { agentDependencyAvailability } from "./agent-dependency-availability";
 import { appAudienceReview } from "../apps/app-audience";
 import type { AppAudience } from "@work-shape/catalyst-core";
@@ -333,6 +334,20 @@ export class AssetReadWorkflow {
           })
           .catch(() => unavailablePublishNarrative(locale))
       : undefined;
+    const stepFacts =
+      target.kind.kind === "workflow"
+        ? await workflowStepFacts(this.options, content.config, asset.name, call.access, {
+            timeZone:
+              target.kind.readSchedule?.(content.config).timeZone ??
+              this.options.config.clientInstance.timeZone ??
+              "UTC",
+            ...(asset.publishedConfig
+              ? {
+                  nextDueAt: target.kind.readSchedule?.(asset.publishedConfig).nextDueAt
+                }
+              : {})
+          })
+        : undefined;
     const agentStatus =
       target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;
     // What the caller may do here, decided as each write decides it, so the page offers no
@@ -354,6 +369,7 @@ export class AssetReadWorkflow {
         : pointersOf(target.kind, asset)),
       ...content,
       ...(runsAs === undefined ? {} : { runsAs }),
+      ...(stepFacts === undefined ? {} : { stepFacts }),
       ...(publishQuestion?.length ? { publishQuestion } : {}),
       ...(publishNarrative ? { publishNarrative } : {}),
       ...(appAudience ? { appAudience } : {}),

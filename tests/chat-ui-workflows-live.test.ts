@@ -267,7 +267,7 @@ describe("the Workflow screens over the engine of an instance", () => {
           kind: "data",
           startsByHand: true,
           // Listed although the instance starts none of it, with the instance's own reason.
-          refusedFor: [{ code: NOT_BUILT.code, message: NOT_BUILT.message }],
+          refusedFor: [NOT_BUILT],
           mayStart: true,
           startForm: { fields: [], unsupported: [] },
           lastRun: {

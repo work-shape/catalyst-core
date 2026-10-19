@@ -1,7 +1,5 @@
 import type { Asset } from "@work-shape/catalyst-api-client";
 import {
-  CONNECTION_OPERATION_PREFIX,
-  DATA_STORE_OPERATION_PREFIX,
   WORKFLOW_ACTIONS,
   WORKFLOW_RUN_MODES,
   WORKFLOW_TRIGGER_KINDS,
@@ -372,9 +370,10 @@ export interface WorkflowSummaryResource {
 
 /** The reasons of a summary as the screens hold them: the code and the sentence. */
 function startIssues(summary: WorkflowSummaryResource | undefined): WorkflowStartIssue[] {
-  return (summary?.reasons ?? []).map(({ code, message, principalDisplayLabel }) => ({
+  return (summary?.reasons ?? []).map(({ code, message, principalDisplayLabel, path }) => ({
     code,
     message,
+    ...(path === undefined ? {} : { path }),
     ...(principalDisplayLabel === undefined ? {} : { principalDisplayLabel })
   }));
 }
@@ -527,6 +526,7 @@ function records(value: unknown): Record<string, unknown>[] {
 }
 
 interface StepNames {
+  facts?: Asset["stepFacts"];
   /** The names of the steps that can be referred to, by id. */
   names: ReadonlyMap<string, string>;
   triggerId: string | undefined;
@@ -555,14 +555,6 @@ function stepSources(input: unknown, known: StepNames): WorkflowStepSource[] {
   return sources;
 }
 
-/** What an operation works on, as far as its name says: a Connection or a Data Store. */
-function sourceKindOf(operation: string | undefined): WorkflowStepView["sourceKind"] {
-  if (operation?.startsWith(CONNECTION_OPERATION_PREFIX) === true) {
-    return "connection";
-  }
-  return operation?.startsWith(DATA_STORE_OPERATION_PREFIX) === true ? "data_store" : undefined;
-}
-
 /**
  * The steps of one list of the file, in its order: the file is a step list with nested blocks
  * and has no edges. A step of a type no screen knows is left out.
@@ -577,14 +569,18 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
     }
     const description = text(raw.description);
     const itemName = text(raw.itemName);
-    const source = text(raw.source);
-    const service = text(raw.service);
+    const fact = known.facts?.[id];
+    const source = fact?.source?.title;
+    const service = fact?.source?.service;
     const child = text(raw.workflow);
     const triggers = records(raw.triggers);
     const schedule = triggers.find((trigger) => text(trigger.cron) !== undefined);
     const cron = text(schedule?.cron);
     const timeZone = text(schedule?.timeZone);
-    const sourceKind = kind === "operation" ? sourceKindOf(text(raw.operation)) : undefined;
+    const sourceKind =
+      fact?.source?.kind === "connection" || fact?.source?.kind === "data_store"
+        ? fact.source.kind
+        : undefined;
     const inside: StepNames =
       kind === "loop" ? { ...known, loops: new Map([...known.loops, [id, itemName]]) } : known;
     const branches: WorkflowBranchView[] | undefined =
@@ -630,10 +626,7 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
       ...(kind === "loop" && typeof raw.concurrency === "number" && raw.concurrency > 1
         ? { concurrency: raw.concurrency }
         : {}),
-      // The definition names an operation and not what it does. A read that says whether the
-      // step reads or changes, what it works on and the `service` of its Connection is shown;
-      // without one the step has its name and a generic icon. Contract need C8.
-      ...(raw.effect === "reading" || raw.effect === "changing" ? { effect: raw.effect } : {}),
+      ...(fact?.effect === undefined ? {} : { effect: fact.effect }),
       ...(source === undefined ? {} : { source }),
       ...(sourceKind === undefined ? {} : { sourceKind }),
       ...(service === undefined ? {} : { service }),
@@ -687,7 +680,10 @@ export function toWorkflow(
    * to who may read it.
    */
   pointers: Partial<
-    Pick<Asset, "draftRevision" | "publishedRevision" | "publishQuestion" | "allowed" | "scope">
+    Pick<
+      Asset,
+      "draftRevision" | "publishedRevision" | "publishQuestion" | "allowed" | "scope" | "stepFacts"
+    >
   > = {}
 ): WorkflowView {
   const definition = asset.config;
@@ -696,6 +692,7 @@ export function toWorkflow(
     .filter((step) => step.type === "trigger")
     .map((step) => text(step.id))[0];
   const steps = readSteps(definition.steps, {
+    facts: pointers.stepFacts,
     names: stepNames(definition.steps),
     triggerId,
     loops: new Map()

@@ -1,3 +1,5 @@
+import { workflowStepsDeep } from "@work-shape/catalyst-core";
+import type { Asset } from "@work-shape/catalyst-api-client";
 import { ApiError, type LocaleCode } from "@work-shape/catalyst-api-client";
 import { startFormOf } from "../start-form";
 import { toWorkflow, toWorkflowRun, toWorkflowStepRun } from "../workflow-mapping";
@@ -20,34 +22,32 @@ function missing(what: string): ApiError {
   return new ApiError(404, `${what} was not found.`, { code: "NOT_FOUND" });
 }
 
-/** The definition as the read answers it: the file, and on a step what the read says of it. */
-function withReadings(sample: SampleWorkflow) {
-  const read = (steps: readonly unknown[]): unknown[] =>
-    steps.map((step) => {
-      if (typeof step !== "object" || step === null) {
-        return step;
-      }
-      const record: Record<string, unknown> = { ...step };
-      const id = typeof record.id === "string" ? record.id : "";
-      for (const list of ["steps", "then", "else"]) {
-        const nested = record[list];
-        if (Array.isArray(nested)) {
-          record[list] = read(nested);
-        }
-      }
-      if (Array.isArray(record.branches)) {
-        record.branches = record.branches.map((branch: unknown) =>
-          typeof branch === "object" &&
-          branch !== null &&
-          "steps" in branch &&
-          Array.isArray(branch.steps)
-            ? { ...branch, steps: read(branch.steps) }
-            : branch
-        );
-      }
-      return { ...record, ...sample.readings[id] };
-    });
-  return { ...sample.manifest, steps: read(sample.manifest.steps) };
+/** Sample facts travel beside the manifest, as they do on an instance. */
+function stepFactsOf(sample: SampleWorkflow): Asset["stepFacts"] {
+  return Object.fromEntries(
+    workflowStepsDeep(sample.manifest.steps).flatMap((step) => {
+      const reading = sample.readings[step.id];
+      if (!reading) return [];
+      return [
+        [
+          step.id,
+          {
+            effect: reading.effect,
+            source: {
+              kind:
+                step.type === "operation" &&
+                typeof step.operation === "string" &&
+                step.operation.startsWith("data_store.")
+                  ? "data_store"
+                  : "connection",
+              title: reading.source,
+              ...(reading.service ? { service: reading.service } : {})
+            }
+          }
+        ]
+      ];
+    })
+  );
 }
 
 /** The samples as a source, in one language. `now` is the moment the sample runs count from. */
@@ -191,13 +191,14 @@ export function createSampleSource(
       }
       return Promise.resolve(
         toWorkflow(
-          { name: sample.manifest.id, config: withReadings(sample), publishedRevision: 2 },
+          { name: sample.manifest.id, config: { ...sample.manifest }, publishedRevision: 2 },
           {
             revisionId: SAMPLE_REVISION,
             mayStart,
             startForm: startFormOf(sample.manifest.inputs),
             runsAs: SAMPLE_PRINCIPAL.displayLabel
-          }
+          },
+          { stepFacts: stepFactsOf(sample) }
         )
       );
     },

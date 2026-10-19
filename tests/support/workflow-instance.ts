@@ -113,6 +113,7 @@ export const stepRunsSchema = z.object({
           connectionTitle: z.string().optional()
         })
         .optional(),
+      inputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional(),
       outputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional()
     })
   )

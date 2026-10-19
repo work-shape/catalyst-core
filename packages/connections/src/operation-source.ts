@@ -169,6 +169,9 @@ function definitionOf(
   return {
     name: connectionOperationName(connection.config.name, operation.name),
     effect: operation.effect,
+    available: descriptor !== undefined,
+    ...(operation.title ? { title: operation.title } : {}),
+    ...(descriptor ? { description: descriptor.description } : {}),
     ...(operation.paging ? { paging: operation.paging } : {}),
     // A read of a customer's system is recorded, every time.
     ...(operation.effect === "reading" ? { recordsEveryCall: true as const } : {}),

@@ -119,6 +119,8 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   readonly useOpensPublishedRevision?: false;
   /** The account label for this revision, including a Workflow's planned own account. No ids or internal names. */
   readRunsAs?(config: JsonObject): Promise<string | undefined>;
+  /** The Workflow schedule, using the engine's cron and clock. */
+  readSchedule?(config: JsonObject): { timeZone: string; nextDueAt?: string };
   /**
    * Every asset the definition names, including operation targets. The common save and
    * publish checks use this one inventory for reference resolution and owner boundaries.

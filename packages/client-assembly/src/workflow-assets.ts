@@ -46,6 +46,8 @@ import {
   indexWorkflowSteps,
   parseWorkflowManifest,
   replaceScheduleJob,
+  parseCron,
+  nextDueAfter,
   stepFileBytes,
   workflowDefinitionRefusal,
   workflowStepFileIssues,
@@ -263,6 +265,23 @@ export function createWorkflowAssetKind(
       if (failure?.startsWith("workflow."))
         references.push({ kind: WORKFLOW_ASSET_KIND, name: failure.slice("workflow.".length) });
       return references;
+    },
+    readSchedule(config) {
+      const manifest = runnable(config);
+      const trigger = manifest?.steps[0];
+      const schedules =
+        trigger?.type === "trigger"
+          ? trigger.triggers.filter((entry) => entry.kind === "schedule")
+          : [];
+      const crons = schedules.flatMap((entry) => {
+        const parsed = parseCron(entry.cron);
+        return parsed ? [{ ...parsed, timeZone: entry.timeZone }] : [];
+      });
+      const next = nextDueAfter(crons, now(), timeZone);
+      return {
+        timeZone: schedules[0]?.timeZone ?? timeZone,
+        ...(next ? { nextDueAt: next.toISOString() } : {})
+      };
     },
     async readRunsAs(config) {
       const manifest = runnable(config);

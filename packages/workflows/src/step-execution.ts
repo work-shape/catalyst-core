@@ -169,6 +169,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
       step.input
     );
     withinStepData(input, "The input of the step");
+    await stores.workflowRuns.recordStepRunInput({ clientInstanceId, id: stepRun.id, input });
     fitsSchema(
       workflowValueSchema(step.inputSchema, definition.types),
       input,
@@ -359,6 +360,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           if (step.key !== undefined) {
             input[WORKFLOW_START_KEY_INPUT] = await resolveRunKey(scope, step.key);
           }
+          await stores.workflowRuns.recordStepRunInput({ clientInstanceId, id: stepRun.id, input });
           const caller = await callerOf(run, stepRun, attempt.definition);
           const { operationRunId, call } = await callStepOperation({
             calls: operationCalls,
@@ -390,6 +392,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "operation": {
           const input = await resolveInput(scope, step.input);
           withinStepData(input, "The input of the step");
+          await stores.workflowRuns.recordStepRunInput({ clientInstanceId, id: stepRun.id, input });
           if (options.datasets)
             for (const ref of datasetReferences(input))
               await options.datasets.reader({ id: ref.$dataset, runId: run.id, reference: ref });
@@ -497,6 +500,11 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "notify": {
           const mapped = await resolveInput(scope, { title: step.title, text: step.text });
           withinStepData(mapped, "The notice");
+          await stores.workflowRuns.recordStepRunInput({
+            clientInstanceId,
+            id: stepRun.id,
+            input: mapped
+          });
           if (typeof mapped.title !== "string" || typeof mapped.text !== "string") {
             throw new WorkflowStepFailure(
               "notice_invalid",
@@ -603,6 +611,11 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "output": {
           const output = await resolveInput(scope, step.input);
           withinStepData(output, "The result of the run");
+          await stores.workflowRuns.recordStepRunInput({
+            clientInstanceId,
+            id: stepRun.id,
+            input: output
+          });
           const schema = compileJsonSchema(
             workflowValueSchema(attempt.definition.outputs, attempt.definition.types)
           );

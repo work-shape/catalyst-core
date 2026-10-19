@@ -76,6 +76,7 @@ describe("the values of a Workflow Run", () => {
     expect(run.status).toBe("done");
     const before = await stepRunsOf(t, run.id);
     expect(before.find((stepRun) => stepRun.key === "result")?.outputPreview).toBeDefined();
+    expect(before.find((stepRun) => stepRun.key === "clients")?.inputPreview).toBeDefined();
 
     time.pass(DAYS + 1);
     // Seven step runs carry a value: the trigger, the read, the loop, three sends, the result.
@@ -103,6 +104,7 @@ describe("the values of a Workflow Run", () => {
       before.map(({ id, key, status, attempt }) => ({ id, key, status, attempt }))
     );
     expect(stepRuns.filter((stepRun) => stepRun.outputPreview)).toEqual([]);
+    expect(stepRuns.filter((stepRun) => stepRun.inputPreview)).toEqual([]);
     expect(stepRuns.find((stepRun) => stepRun.key === "each_client")).toMatchObject({
       loop: { total: 3, done: 3, failed: 0, running: 0 },
       bodyCounts: { send: { total: 3, done: 3, failed: 0, running: 0 } }

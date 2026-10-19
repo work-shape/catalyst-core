@@ -30,7 +30,7 @@ import type {
 // call carry are in `workflows.ts`; the engine is in `@work-shape/catalyst-workflows`.
 
 /**
- * How many characters of a run's result or of a step's output a read shows. The whole value
+ * How many characters of a run's result or of a step's input or output a read shows. The whole value
  * stays in the store; a longer one is cut here and marked as cut.
  */
 export const WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS = 2_000;
@@ -254,13 +254,14 @@ export type NewWorkflowStepRun = Pick<
 >;
 
 /**
- * A step run as a read shows it: its output as a preview, and of a loop how far its items are
+ * A step run as a read shows it: its input and output as previews, and of a loop how far its items are
  * (`loop`) and how the step runs of each step directly inside it stand (`bodyCounts`).
  */
 export type WorkflowStepRunView = WorkflowStepRun &
   WorkflowBlockStepRunView & {
     /** The child run this step owns, resolved when reading; distinct from a reused keyed run. */
     childRunId?: WorkflowRunId;
+    inputPreview?: WorkflowOutputPreview;
     outputPreview?: WorkflowOutputPreview;
     datasets?: Pick<WorkflowRunDataset, "id" | "rowSchema" | "rowCount" | "bytes" | "state">[];
     /** On the step run of a loop step alone. */
@@ -334,7 +335,7 @@ export interface WorkflowStepRunRef {
   id: string;
 }
 
-/** How a step run ended. The input of a step is not kept: the steps before it hold it. */
+/** How a step run ended. Its resolved input is recorded separately before dispatch. */
 export interface WorkflowStepRunEnd {
   status: Exclude<WorkflowStepRunStatus, "queued" | "running" | "waiting">;
   finishedAt: ISODateString;
@@ -487,6 +488,8 @@ export interface WorkflowRunsStore {
   markStepRunRunning(
     ref: WorkflowStepRunRef & { attempt: number; startedAt: ISODateString }
   ): Promise<void>;
+  /** Keeps the resolved input before dispatch, while the step is running. */
+  recordStepRunInput(ref: WorkflowStepRunRef & { input: JsonValue }): Promise<void>;
   /** Ends a step run that has not ended. Answers whether this call ended it. */
   endStepRun(ref: WorkflowStepRunRef & WorkflowStepRunEnd): Promise<boolean>;
   /**

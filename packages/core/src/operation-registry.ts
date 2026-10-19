@@ -205,6 +205,11 @@ export function recordsAllowedCalls(
 interface OperationDefinitionBase<Input, Output> {
   /** `<resource>.<verb>`. Over HTTP it is the operation id of the API contract. */
   name: string;
+  /** Human wording from the accepted operation descriptor, where available. */
+  title?: string;
+  description?: string;
+  /** A sourced operation may exist so calls can explain why it is currently unavailable. */
+  available?: boolean;
   effect: OperationEffect;
   /**
    * Set on a reading operation whose every call is recorded. Without it an allowed read that

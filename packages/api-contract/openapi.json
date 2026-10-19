@@ -22602,6 +22602,22 @@
                               "message"
                             ]
                           },
+                          "inputPreview": {
+                            "type": "object",
+                            "properties": {
+                              "text": {
+                                "type": "string",
+                                "maxLength": 2000
+                              },
+                              "truncated": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "text",
+                              "truncated"
+                            ]
+                          },
                           "outputPreview": {
                             "type": "object",
                             "properties": {
@@ -29979,6 +29995,15 @@
           },
           "runsAs": {
             "type": "string"
+          },
+          "stepFacts": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WorkflowStepFact"
+            }
           },
           "publishQuestion": {
             "type": "array",
@@ -38704,6 +38729,130 @@
           "url",
           "provider"
         ]
+      },
+      "WorkflowStepFact": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "connection",
+                  "data_store",
+                  "knowledge_base",
+                  "workflow",
+                  "other"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "service": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "changing"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "inputSchema": {
+            "$ref": "#/components/schemas/ConfigAssetConfig"
+          },
+          "outputSchema": {
+            "$ref": "#/components/schemas/ConfigAssetConfig"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "nextDueAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "connection",
+                        "data_store",
+                        "knowledge_base",
+                        "workflow",
+                        "other"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "service": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "effect": {
+                  "type": "string",
+                  "enum": [
+                    "reading",
+                    "changing"
+                  ]
+                },
+                "description": {
+                  "type": "string"
+                },
+                "inputSchema": {
+                  "$ref": "#/components/schemas/ConfigAssetConfig"
+                },
+                "outputSchema": {
+                  "$ref": "#/components/schemas/ConfigAssetConfig"
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "name"
+              ]
+            }
+          }
+        }
       },
       "WorkspaceAccentColor": {
         "type": "string",

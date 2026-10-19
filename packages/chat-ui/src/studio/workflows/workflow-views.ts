@@ -182,6 +182,7 @@ export type WorkflowStepTarget = (typeof OPERATION_TARGETS)[number];
 
 /** One thing the instance refuses a start for: its code and its own sentence. */
 export interface WorkflowStartIssue {
+  path?: string;
   code: string;
   /** The instance's fallback sentence, which it writes in English. */
   message: string;

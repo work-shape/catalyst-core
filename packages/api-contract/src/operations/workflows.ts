@@ -193,6 +193,7 @@ export const workflowStepRunSchema = z.object({
   /** The child run owned by this step, when one has started. */
   childRunId: z.string().optional(),
   error: workflowRunErrorSchema.optional(),
+  inputPreview: workflowOutputPreviewSchema.optional(),
   outputPreview: workflowOutputPreviewSchema.optional(),
   datasets: z.array(datasetMetadataSchema).optional(),
   createdAt: timestampSchema,

@@ -98,7 +98,7 @@ function verbEffect(verb: string): StoreVerbEffect {
 }
 
 /** What an operation's name says it reaches. */
-function operationTarget(operation: string): OperationTarget {
+export function operationTarget(operation: string): OperationTarget {
   if (operation.startsWith(DATA_STORE_OPERATION_PREFIX)) {
     const rest = operation.slice(DATA_STORE_OPERATION_PREFIX.length);
     const dot = rest.indexOf(".");

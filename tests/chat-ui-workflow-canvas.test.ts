@@ -28,12 +28,30 @@ type Step = Record<string, unknown>;
 
 const OBJECT = { type: "object" };
 
-function definition(steps: readonly Step[]) {
-  return toWorkflow({
-    name: "check",
-    config: { id: "check", name: "Check", runAs: "runner", inputs: OBJECT, outputs: OBJECT, steps },
-    publishedRevision: 1
-  });
+function definition(
+  steps: readonly Step[],
+  stepFacts: NonNullable<Parameters<typeof toWorkflow>[2]>["stepFacts"] = {
+    clients: { source: { kind: "connection" } },
+    bookings: { source: { kind: "connection" } },
+    save: { source: { kind: "data_store" } }
+  }
+) {
+  return toWorkflow(
+    {
+      name: "check",
+      config: {
+        id: "check",
+        name: "Check",
+        runAs: "runner",
+        inputs: OBJECT,
+        outputs: OBJECT,
+        steps
+      },
+      publishedRevision: 1
+    },
+    {},
+    { stepFacts }
+  );
 }
 
 const trigger: Step = {
@@ -154,9 +172,12 @@ describe("the drawing of a definition", () => {
       iconFallback: "database"
     });
 
-    const told = definition([
-      { ...operation("clients"), effect: "reading", source: "Bookings", service: "datev" }
-    ]);
+    const told = definition([operation("clients")], {
+      clients: {
+        effect: "reading",
+        source: { kind: "connection", title: "Bookings", service: "datev" }
+      }
+    });
     expect(workflowGraph(told.steps, en).nodes[0]).toMatchObject({
       icon: "datev",
       iconFallback: "connection",
