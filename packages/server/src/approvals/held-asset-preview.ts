@@ -303,7 +303,7 @@ export async function heldAssetIsStale(
 }
 
 /** The revision the frozen call was made against: `null` creates, none for an older call. */
-export function heldAssetRequestedRevision(input: JsonValue): number | null | undefined {
+export function heldAssetRequestedRevision(input: unknown): number | null | undefined {
   const parsed = inputSchema.safeParse(input);
   return parsed.success ? parsed.data.expectedRevision : undefined;
 }
