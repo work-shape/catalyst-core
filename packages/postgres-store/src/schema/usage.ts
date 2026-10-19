@@ -50,8 +50,6 @@ export const modelUsageEvents = pgTable(
     providerServiceTier: text("provider_service_tier"),
     // A call in a Try conversation (TRY-1b). The insert reads it from the conversation's link.
     preview: boolean("preview").notNull().default(false),
-    // Scheduled owner runs retain their attribution while using unattended safeguards.
-    unattended: boolean("unattended").notNull().default(false),
     source: text("source").$type<ModelUsageEvent["source"]>().notNull(),
     customerBillableCost:
       jsonb("customer_billable_cost").$type<ModelUsageEvent["customerBillableCost"]>(),

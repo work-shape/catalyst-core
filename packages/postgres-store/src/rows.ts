@@ -537,7 +537,6 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
   return {
     id: row.id as ModelUsageEvent["id"],
     status: row.status,
-    unattended: row.unattended,
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     ...(row.conversationId === null
       ? {}

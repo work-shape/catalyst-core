@@ -28,7 +28,6 @@ CREATE TABLE "scheduled_starts" (
 	CONSTRAINT "scheduled_starts_state_check" CHECK ("scheduled_starts"."state" in ('active', 'paused'))
 );
 --> statement-breakpoint
-ALTER TABLE "model_usage_events" ADD COLUMN "unattended" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "scheduled_start_runs" ADD CONSTRAINT "scheduled_start_runs_scheduled_start_id_scheduled_starts_id_fk" FOREIGN KEY ("scheduled_start_id") REFERENCES "public"."scheduled_starts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "scheduled_start_runs" ADD CONSTRAINT "scheduled_start_runs_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "scheduled_start_runs" ADD CONSTRAINT "scheduled_start_runs_agent_run_id_agent_runs_id_fk" FOREIGN KEY ("agent_run_id") REFERENCES "public"."agent_runs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

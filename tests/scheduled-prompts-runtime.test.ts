@@ -145,17 +145,17 @@ describe("scheduled prompts use the shared executor and the owner's unattended r
       await f.app.stores.usage.listModelUsageEvents({ clientInstanceId: f.clientInstanceId })
     ).filter((event) => event.agentRunId === result.agentRunId);
     expect(usage.length).toBeGreaterThan(0);
-    expect(
-      usage.every((event) => event.userId === start.ownerUserId && event.unattended === true)
-    ).toBe(true);
+    expect(usage.every((event) => event.userId === start.ownerUserId)).toBe(true);
 
-    const shared = await withTestSql(
+    // It runs as its owner, so it counts against the owner like a chat run, not the shared
+    // bucket of work without a person (limits spec).
+    const counted = await withTestSql(
       (sql) =>
         sql<
-          { calls: number }[]
-        >`select coalesce(sum(model_call_count),0)::int as calls from model_usage_counters where client_instance_id = ${f.clientInstanceId} and scope_kind = 'system' and scope_id = '' and period_kind = 'day'`
+          { scope: string; calls: number }[]
+        >`select scope_kind || ':' || scope_id as scope, sum(model_call_count)::int as calls from model_usage_counters where client_instance_id = ${f.clientInstanceId} and scope_kind in ('user', 'system') and period_kind = 'day' group by 1`
     );
-    expect(shared[0]?.calls).toBe(1);
+    expect(counted).toEqual([{ scope: `user:${start.ownerUserId}`, calls: 1 }]);
 
     const conversation = await f.app.call("conversations.thread.get", {
       params: { conversationId: required(result.conversationId) }

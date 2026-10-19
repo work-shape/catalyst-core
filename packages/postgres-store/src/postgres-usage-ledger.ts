@@ -99,7 +99,6 @@ function written(event: ModelUsageEventRecordInput, id: string): SQL {
   return drizzleSql`
     written as (
       select (select id from attributed_user where open) as user_id,
-        ${event.unattended ?? false}::boolean as unattended,
         ${event.purpose ?? null}::text as purpose,
         ${personalOf(event)(correlationId, drizzleSql`${id}`)}::text as correlation_id
     ),
@@ -131,7 +130,7 @@ function insertEvent(input: {
     insert into model_usage_events (
       id, client_instance_id, conversation_id, agent_run_id, agent_name, purpose, provider_id,
       model, region, binding_id, input_tokens, cached_input_tokens, output_tokens, total_tokens,
-      web_search_call_count, fast_mode, provider_service_tier, preview, unattended, source,
+      web_search_call_count, fast_mode, provider_service_tier, preview, source,
       customer_billable_cost, user_id, collaboration_workspace_id, operation_run_id,
       correlation_id, status, counted_tokens, counted_cost_micros, created_at
     )
@@ -146,7 +145,7 @@ function insertEvent(input: {
         select 1 from agent_try_conversations
         where conversation_id = ${event.conversationId ?? null}
       ),
-      ${event.unattended ?? false}::boolean, ${event.source},
+      ${event.source},
       ${JSON.stringify(event.customerBillableCost)}::jsonb,
       (select user_id from written), (select id from attributed_workspace),
       ${personal(event.operationRunId)}, (select correlation_id from written),
