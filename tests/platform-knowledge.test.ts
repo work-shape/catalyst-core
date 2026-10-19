@@ -177,6 +177,28 @@ describe("the platform's knowledge of an agent", () => {
     expect(offered.orientation).toContain("never dump HTTP or YAML");
   });
 
+  // ACCEPT-2c C-4: German replies said "technischer Primärschlüssel", "App-ID" and
+  // "Entwurf-Revision 1". The offered orientation asks for titles and plain words in English and
+  // German, and keeps the technical fields in tool calls. A model's replies are not tested here.
+  it("asks for titles and plain words in replies, in English and German, and keeps ids in calls", async () => {
+    const offer = await offerFor(PLATFORM_TOOLS);
+    expect(offer.orientation).toContain(
+      "name an asset or App by its title, never by its id or name"
+    );
+    expect(offer.orientation).toContain(
+      'Say "Draft saved" (German: "Entwurf gespeichert"), never a revision number.'
+    );
+    expect(offer.orientation).toContain(
+      'the column or columns that tell the rows apart (German: "die Spalte, an der jede Zeile erkannt wird")'
+    );
+    expect(offer.orientation).toContain(
+      'never "technical primary key" or "technischer Primärschlüssel"'
+    );
+    expect(offer.orientation).toContain(
+      "Tool calls keep their ids, names, revisions and key columns."
+    );
+  });
+
   it("leaves new agents on the default model and requires a reader for their skills", async () => {
     const offer = await offerFor(PLATFORM_TOOLS);
     expect(offer.orientation).toContain("leave all model settings out");
