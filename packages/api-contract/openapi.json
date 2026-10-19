@@ -29633,6 +29633,12 @@
           "pageSessionId": {
             "type": "string"
           },
+          "unassignedScopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "revision": {
             "type": "integer",
             "exclusiveMinimum": 0,

@@ -150,6 +150,8 @@ export const appPreviewRequestSchema = z.object({ mode: appModeSchema }).strict(
  * caller: put it in the frame and nowhere else. `interfacePath` holds none and can be shared.
  */
 export const appPreviewSchema = pagePreviewSchema.extend({
+  /** Data scope labels the viewer has no assignment for; never sent into the App bridge. */
+  unassignedScopes: z.array(z.string()).optional(),
   /** The number of the asset revision shown. */
   revision: z.number().int().positive(),
   interfacePath: z.string(),

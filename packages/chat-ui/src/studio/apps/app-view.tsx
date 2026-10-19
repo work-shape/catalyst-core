@@ -1,7 +1,7 @@
 import { Pencil } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
 import type { AppPreviewResponse } from "@work-shape/catalyst-api-client";
-import { Button, DropdownMenuItem } from "@work-shape/catalyst-ui";
+import { Banner, Button, DropdownMenuItem } from "@work-shape/catalyst-ui";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
 import { workspaceRoutePath } from "../../shared/routes";
@@ -82,6 +82,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
     <>
       <AppViewFrame
         name={name}
+        unassignedScopes={shown?.unassignedScopes}
         description={appDescription(record.app?.config)}
         workspace={workspace}
         rights={rights}
@@ -138,7 +139,8 @@ export function AppViewFrame({
   onBack,
   onEdit,
   onDetails,
-  dataSources
+  dataSources,
+  unassignedScopes
 }: {
   name: string;
   /** What the App does, in one line after its name. */
@@ -158,6 +160,7 @@ export function AppViewFrame({
   onDetails(): void;
   /** Where the App's data comes from, one sentence per filler, once it is known. */
   dataSources?: readonly string[] | undefined;
+  unassignedScopes?: readonly string[] | undefined;
 }) {
   const { t } = useTranslation();
   const editWithAgent = useAppEditWithAgent(app, rights);
@@ -216,7 +219,14 @@ export function AppViewFrame({
         />
       }
     >
-      {children}
+      <div className="flex h-full min-h-0 flex-col">
+        {unassignedScopes?.map((scope) => (
+          <Banner key={scope} tone="info">
+            {t("access.scopeUnassigned", { scope })}
+          </Banner>
+        ))}
+        <div className="min-h-0 flex-1">{children}</div>
+      </div>
       {editWithAgent.dialog}
     </AppFrame>
   );

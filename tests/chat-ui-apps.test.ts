@@ -264,6 +264,23 @@ describe("an open App (layout 2)", () => {
       })
     );
 
+  it("explains an App's empty scoped read in both languages outside its frame", () => {
+    const node = createElement(AppViewFrame, {
+      name: "Findings",
+      app: "findings",
+      draftShown: false,
+      workspace,
+      rights: NO_APP_RIGHTS,
+      publishedRevision: 1,
+      unassignedScopes: ["Mandant"],
+      children: createElement("p", null, "the app"),
+      onBack() {},
+      onEdit() {},
+      onDetails() {}
+    });
+    expect(render(node, "de")).toContain("Ihnen ist kein Mandant zugeordnet");
+    expect(render(node, "en")).toContain("No Mandant is assigned to you.");
+  });
   it("heads the App with the way back, its name and the published number for a builder", () => {
     const markup = frame(WRITER);
     const order = [
