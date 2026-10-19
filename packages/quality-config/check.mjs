@@ -35,7 +35,9 @@ const formatted = "js,jsx,mjs,cjs,ts,tsx,mts,cts,json,css,scss,html,yml,yaml".sp
 // type check of the tests ran out of memory. On a smaller heap than this every target starts
 // itself again with this one, so no caller has to set it and no target is left on the
 // machine's default. It is the ceiling: a target that nears it is split, as the lint was.
-const heapMegabytes = 4096;
+// On 19 October 2026 the type check of the tests passed 4 GB on a batch of four PRs; 6 GB holds
+// it until it is split like the lint.
+const heapMegabytes = 6144;
 if (
   getHeapStatistics().heap_size_limit < heapMegabytes * 1024 * 1024 &&
   !process.execArgv.some((argument) => argument.startsWith("--max-old-space-size"))
