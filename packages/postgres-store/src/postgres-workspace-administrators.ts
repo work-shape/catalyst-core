@@ -3,7 +3,8 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { PostgresConnection } from "./postgres-database";
 import { collaborationWorkspaces, collaborationWorkspaceMemberships, productUsers } from "./schema";
 
-/** Closed links expose help contacts, never the workspace name or ordinary members. */
+/** Closed links to a discoverable workspace expose help contacts, never the workspace name or
+ * ordinary members. A private workspace stays undiscoverable to nonmembers, so it names nobody. */
 export async function listWorkspaceAdministratorNames(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId; collaborationWorkspaceId: CollaborationWorkspaceId }
@@ -37,6 +38,7 @@ export async function listWorkspaceAdministratorNames(
         ),
         inArray(collaborationWorkspaceMemberships.role, ["owner", "admin"]),
         eq(collaborationWorkspaces.kind, "shared"),
+        eq(collaborationWorkspaces.visibility, "discoverable"),
         isNull(collaborationWorkspaces.deletionRequestedAt),
         eq(productUsers.status, "active"),
         isNull(productUsers.deletionRequestedAt)

@@ -96,6 +96,19 @@ describe("ACCEPT-FIX-12 recovery and workspace contact", () => {
         "kai"
       );
       expect(personal.json().error.details.administrators).toEqual([]);
+      const hidden = await app.call(
+        "workspaces.create",
+        { payload: { name: "Vertraulich", visibility: "private" } },
+        "mara"
+      );
+      expect(hidden.statusCode, hidden.body).toBe(200);
+      const privateLink = await app.call(
+        "workspaces.get",
+        { params: { collaborationWorkspaceId: hidden.json().id } },
+        "kai"
+      );
+      expect(privateLink.statusCode).toBe(404);
+      expect(privateLink.json().error.details.administrators).toEqual([]);
     } finally {
       await app.close();
     }
