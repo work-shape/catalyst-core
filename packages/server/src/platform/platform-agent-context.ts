@@ -1,5 +1,10 @@
 import { resolveConfigLocale, resolveLocalizedString } from "@work-shape/catalyst-config-schema";
-import { AppError, type Conversation, type ToolExecutionContext } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  asUserId,
+  type Conversation,
+  type ToolExecutionContext
+} from "@work-shape/catalyst-core";
 import {
   PLATFORM_ASSET_LIST_MAX,
   type PlatformAssetFound,
@@ -48,6 +53,29 @@ export async function readAgentPlatformContext(
   );
   const existing = new Set<string>(kinds.flatMap((kind) => Object.values(kind.actions)));
   const ofExisting = (actions: string[]) => actions.filter((action) => existing.has(action));
+  const workspaces: PlatformContextRead["workspaces"] = read.workspaces.flatMap((place) => {
+    const actions = ofExisting(place.actions);
+    return actions.length > 0
+      ? [{ ...place, actions, ...(place.id === workspace?.id ? { current: true as const } : {}) }]
+      : [];
+  });
+  // Even a person with no build rights here must distinguish this workspace from another
+  // where they may build. The conversation already made this workspace visible to them.
+  if (workspace && !workspaces.some((place) => place.current)) {
+    const membership = await options.stores.workspaces.getMembership({
+      clientInstanceId: options.clientInstanceId,
+      collaborationWorkspaceId: workspace.id,
+      userId: asUserId(call.actor.id)
+    });
+    workspaces.push({
+      id: workspace.id,
+      name: workspace.name,
+      kind: workspace.kind,
+      member: membership !== undefined,
+      current: true,
+      actions: []
+    });
+  }
   return {
     ...(adminName ? { helpContact: { displayLabel: adminName } } : {}),
     ...(await workflowAuthoringContext(
@@ -83,10 +111,7 @@ export async function readAgentPlatformContext(
     })),
     actions: ofExisting(read.actions),
     assetActions: ofExisting(read.assetActions),
-    workspaces: read.workspaces.flatMap((workspace) => {
-      const actions = ofExisting(workspace.actions);
-      return actions.length > 0 ? [{ ...workspace, actions }] : [];
-    }),
+    workspaces,
     namespaces: read.namespaces.flatMap((namespace) => {
       const actions = ofExisting(namespace.actions);
       return actions.length > 0 ? [{ ...namespace, actions }] : [];

@@ -190,6 +190,55 @@ describe("the tools that find what is on the platform", () => {
     return { app, conversationOf, clientInstanceId: asClientInstanceId(config.clientInstance.id) };
   }
 
+  it("marks only this conversation's workspace as current, even without build rights here", async () => {
+    const t = await fixture(false);
+    const shared = await t.app.call(
+      "workspaces.create",
+      { payload: { name: "Skill builders" } },
+      OWNER
+    );
+    expect(shared.statusCode, shared.body).toBe(200);
+    const workspaceId = asCollaborationWorkspaceId(
+      z.object({ id: z.string() }).parse(shared.json()).id
+    );
+    const member = await t.conversationOf(MEMBER);
+    await t.app.stores.access.createGrant({
+      clientInstanceId: t.clientInstanceId,
+      holderKind: "user",
+      holderId: member.createdByUserId,
+      action: "skill.write",
+      effect: "allow",
+      scopeKind: "workspace",
+      scopeId: workspaceId,
+      grantedBy: asUserId(member.createdByUserId)
+    });
+    const schema = z.object({
+      workspaces: z.array(
+        z.object({
+          id: z.string(),
+          current: z.literal(true).optional(),
+          actions: z.array(z.string())
+        })
+      )
+    });
+    const read = schema.parse((await member("platform.context")).answer);
+    expect(read.workspaces.filter((place) => place.current)).toEqual([
+      { id: member.collaborationWorkspaceId, current: true, actions: [] }
+    ]);
+    expect(read.workspaces.find((place) => place.id === workspaceId)).toEqual({
+      id: workspaceId,
+      actions: ["skill.write"]
+    });
+    const owner = await t.conversationOf(OWNER);
+    const ownerRead = schema.parse((await owner("platform.context")).answer);
+    expect(ownerRead.workspaces.filter((place) => place.current)).toEqual([
+      expect.objectContaining({
+        id: owner.collaborationWorkspaceId,
+        actions: expect.arrayContaining(["skill.write"])
+      })
+    ]);
+  }, 120_000);
+
   it("orients from localized agents and published Apps available in this workspace", async () => {
     const t = await fixture(false, true);
     t.app.stores.users.getInstanceAdminName = async () => "Mara";

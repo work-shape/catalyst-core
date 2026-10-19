@@ -6,6 +6,7 @@ import {
   auditActorFromUser,
   getSubjectUserId,
   hasAuthScope,
+  isJsonObject,
   operationDenialError,
   type AccessResource,
   type ActorAccess,
@@ -591,13 +592,29 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
         };
         this.approverNames.set(request.id, cached);
       }
-      preview.approverNames = await cached.names;
+      try {
+        preview.approverNames = await cached.names;
+      } catch (error) {
+        if (this.approverNames.get(request.id) === cached) this.approverNames.delete(request.id);
+        throw error;
+      }
     }
-    // A retained comparison is subject to the same read check in the payload as in the preview.
-    const { asset: _asset, ...payload } = request.payload;
+    // Lists need only the summary. An opened comparison withheld by the kind must not leak
+    // its proposed content through the executable input or the technical field preview.
+    const withholdInput =
+      viewer.inList || (isJsonObject(preview.asset) && preview.asset.beforeWithheld === true);
+    if (withholdInput && "inputs" in preview) {
+      preview.inputs = [];
+      preview.inputFieldCount = 0;
+    }
+    const { asset: _asset, input, ...payload } = request.payload;
     return {
       ...request,
-      payload: { ...payload, ...(preview.asset ? { asset: preview.asset } : {}) },
+      payload: {
+        ...payload,
+        ...(!withholdInput && input !== undefined ? { input } : {}),
+        ...(preview.asset ? { asset: preview.asset } : {})
+      },
       preview,
       // A flag is true only if the route would also accept the caller's token scopes.
       canRevert:

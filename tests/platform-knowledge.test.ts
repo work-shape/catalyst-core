@@ -12,6 +12,7 @@ import {
 } from "@work-shape/catalyst-client-assembly";
 import { createModuleRegistry } from "@work-shape/catalyst-core";
 import {
+  createPlatformDiscoveryTools,
   createWorkspaceOpenTool,
   showViewTool,
   WorkspaceCommandService
@@ -175,6 +176,25 @@ describe("the platform's knowledge of an agent", () => {
       (await offerFor(["read_skill"], { kind: "connection", name: "crm" }, true)).toolNames
     ).toContain("platform.connections.draft_tools");
     expect(offered.orientation).toContain("never dump HTTP or YAML");
+  });
+
+  it("explains workspace skill rights once in the context tool, using a plain apostrophe", async () => {
+    const unused = async () => {
+      throw new Error("This test only reads tool descriptions");
+    };
+    const tool = createPlatformDiscoveryTools({
+      readContext: unused,
+      listAssets: unused,
+      listFiles: unused
+    }).find((tool) => tool.name === "platform.context");
+    const offer = await offerFor(PLATFORM_TOOLS);
+    const description = tool?.description ?? "";
+    expect(description).toContain("current: true");
+    expect(description).toContain("A workspace skill.write allows creating a skill there");
+    expect(`${offer.orientation} ${description}`.match(/A workspace skill\.write/gu)).toHaveLength(
+      1
+    );
+    expect(description).not.toContain("conversation’s");
   });
 
   it("leaves new agents on the default model and requires a reader for their skills", async () => {
