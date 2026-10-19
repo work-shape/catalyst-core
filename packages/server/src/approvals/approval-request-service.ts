@@ -35,6 +35,9 @@ import type { GuardrailRunner } from "../guardrails/guardrail-runner";
 const APPROVAL_DECIDE_AUTH_SCOPE = "governance:write";
 const APPROVAL_WITHDRAW_AUTH_SCOPE = "conversation:write";
 
+// Bound optional help cached for opened request revisions; older items can be computed again.
+const APPROVER_CACHE_ENTRIES_MAX = 500;
+
 /** How far back the list of decided requests reaches. Older decisions stay in the audit trail. */
 const DECIDED_LIST_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -75,6 +78,11 @@ export interface ApprovalRequestView extends ApprovalRequest {
 }
 
 export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
+  private readonly approverNames = new Map<
+    string,
+    { updatedAt: string; names: Promise<string[]> }
+  >();
+
   constructor(private readonly options: ApprovalRequestWorkflowOptions) {}
 
   async createRequest(
@@ -137,6 +145,15 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     requestId: string
   ): Promise<ApprovalRequestView> {
     const request = await this.visibleRequest(user, access, requestId);
+    return this.detailView(user, access, context, request);
+  }
+
+  private async detailView(
+    user: AuthenticatedUser,
+    access: ActorAccess,
+    context: CallContext,
+    request: ApprovalRequest
+  ): Promise<ApprovalRequestView> {
     const locale = this.options.readerLocale
       ? await this.options.readerLocale(user.id, context.locale)
       : context.locale;
@@ -253,7 +270,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       decision: "approve" | "reject" | "request_changes";
       comment?: string;
     }
-  ): Promise<ApprovalRequest> {
+  ): Promise<ApprovalRequestView> {
     const request = await this.visibleRequest(user, access, command.requestId);
     const handler = this.handler(request.kind);
     // A request addressed to a person is theirs to decide, whatever rights they hold; only
@@ -325,7 +342,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     });
     await this.record(user, context, "approval_request.decided", updated);
     await this.options.onDecided?.(updated);
-    return updated;
+    return this.detailView(user, access, context, updated);
   }
 
   async withdrawRequest(
@@ -333,7 +350,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     access: ActorAccess,
     context: CallContext,
     requestId: string
-  ): Promise<ApprovalRequest> {
+  ): Promise<ApprovalRequestView> {
     const request = await this.visibleRequest(user, access, requestId);
     if (request.requestedBy.id !== user.id) {
       throw new AppError("FORBIDDEN", "Only the requester can withdraw an approval request");
@@ -359,7 +376,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     });
     await this.record(user, context, "approval_request.withdrawn", updated);
     await this.options.onDecided?.(updated);
-    return updated;
+    return this.detailView(user, access, context, updated);
   }
 
   async revertRequest(
@@ -367,7 +384,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     access: ActorAccess,
     context: CallContext,
     requestId: string
-  ): Promise<ApprovalRequest> {
+  ): Promise<ApprovalRequestView> {
     const request = await this.visibleRequest(user, access, requestId);
     const handler = this.handler(request.kind);
     access.require(handler.requiredPermission, resourceOfRequest(handler, request));
@@ -403,7 +420,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     });
     await this.record(user, context, "approval_request.reverted", updated);
     await this.options.onDecided?.(updated);
-    return updated;
+    return this.detailView(user, access, context, updated);
   }
 
   /**
@@ -562,7 +579,19 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       !viewer.inList &&
       request.addresseeUserId === undefined
     ) {
-      preview.approverNames = (await this.options.approverNames?.(user, handler, request)) ?? [];
+      let cached = this.approverNames.get(request.id);
+      if (!cached || cached.updatedAt !== request.updatedAt) {
+        if (this.approverNames.size >= APPROVER_CACHE_ENTRIES_MAX) {
+          const oldest = this.approverNames.keys().next().value;
+          if (oldest !== undefined) this.approverNames.delete(oldest);
+        }
+        cached = {
+          updatedAt: request.updatedAt,
+          names: this.options.approverNames?.(user, handler, request) ?? Promise.resolve([])
+        };
+        this.approverNames.set(request.id, cached);
+      }
+      preview.approverNames = await cached.names;
     }
     // A retained comparison is subject to the same read check in the payload as in the preview.
     const { asset: _asset, ...payload } = request.payload;

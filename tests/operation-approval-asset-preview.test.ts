@@ -83,6 +83,48 @@ describe("the preview of a held asset save", () => {
     expect(withheld.preview.asset.beforeWithheld).toBe(true);
   });
 
+  it.each(["decide", "withdraw"] as const)(
+    "ACCEPT-FIX-9b: %s returns the same reader-gated comparison as GET",
+    async (action) => {
+      const { t, holding, hold } = await setup();
+      await t.expectOk(t.kai.id, "assets.put", {
+        params: { kind: "skill", name: "kai-leave" },
+        payload: { config: skill("kai-leave", stored) }
+      });
+      holding("assets.put");
+      const requestId = await hold("assets.put", "skill", "kai-leave", {
+        config: { ...skill("kai-leave", changed), title: "Leave policy" },
+        expectedRevision: 1
+      });
+      const reader = action === "withdraw" ? t.kai : t.admin;
+      await t.grant(
+        reader.id,
+        "skill.read",
+        { assetId: await t.assetId("skill", "kai-leave") },
+        "deny"
+      );
+      const response =
+        action === "withdraw"
+          ? await t.expectOk(reader.id, "approval_requests.withdraw", { params: { requestId } })
+          : await t.expectOk(reader.id, "approval_requests.decide", {
+              params: { requestId },
+              payload: { decision: "reject" }
+            });
+      const item = response.json();
+      expect(JSON.stringify(item)).not.toContain(OLD_PARAGRAPH);
+      expect(item.preview.asset).toEqual({
+        kind: "skill",
+        name: "kai-leave",
+        title: "Leave policy",
+        namespace: "kai-",
+        beforeWithheld: true
+      });
+      expect(item).toEqual(
+        (await t.expectOk(reader.id, "approval_requests.get", { params: { requestId } })).json()
+      );
+    }
+  );
+
   it("does not claim a later reader lacks access when the filer could not read before-text", async () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
@@ -160,6 +202,7 @@ describe("the preview of a held asset save", () => {
     const requestId = await hold("assets.put", "skill", "kai-leave", {
       config: skill("kai-leave", changed)
     });
+    const reads = vi.spyOn(t.stores.workspaces, "listWorkspacesForUser");
     const item = (
       await t.expectOk(t.kai.id, "approval_requests.get", { params: { requestId } })
     ).json();
@@ -174,7 +217,30 @@ describe("the preview of a held asset save", () => {
     const withoutApprover = (
       await t.expectOk(t.kai.id, "approval_requests.get", { params: { requestId } })
     ).json();
-    expect(withoutApprover.preview.approverNames).toEqual([]);
+    // Help is cached for this revision rather than walking memberships on each poll.
+    expect(reads).toHaveBeenCalledTimes(1);
+    expect(withoutApprover.preview.approverNames).toEqual(item.preview.approverNames);
+  });
+
+  it("ACCEPT-FIX-9b: leaves an approver with only an e-mail display label unnamed", async () => {
+    const { t, holding, hold, preview } = await setup();
+    const workspaceId = await t.sharedWorkspace("Approval team");
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: workspaceId,
+      userId: t.kai.id,
+      role: "member"
+    });
+    await t.stores.users.updateUser({
+      clientInstanceId,
+      userId: t.admin.id,
+      displayLabel: "admin@example.test"
+    });
+    holding("assets.put");
+    const requestId = await hold("assets.put", "skill", "kai-leave", {
+      config: skill("kai-leave", changed)
+    });
+    expect((await preview(t.kai.id, requestId)).approverNames).toEqual([]);
   });
 
   it("shows a new skill with its title, its Namespace and its whole text", async () => {
@@ -246,7 +312,7 @@ describe("the preview of a held asset save", () => {
   });
 
   // The request is open to who may decide it. The stored text is open to who may read the
-  // skill. A person with the first and without the second is shown the new text alone.
+  // skill. A person with the first and without the second is shown the title alone.
   it("shows nothing of the stored skill to a reader who may not read it", async () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
@@ -269,11 +335,11 @@ describe("the preview of a held asset save", () => {
     const shown = await preview(t.admin.id, requestId);
 
     expect(shown.asset).toMatchObject({
-      isNew: false,
-      beforeWithheld: true,
-      content: { changes: [{ type: "replace", target: "root", after: changed }] }
+      beforeWithheld: true
     });
     expect(shown.asset.previous).toBeUndefined();
+    expect(shown.asset.content).toBeUndefined();
+    expect(shown.asset.isNew).toBeUndefined();
     expect(JSON.stringify(shown)).not.toContain(OLD_PARAGRAPH);
     // Kai may read the skill and is shown the paragraph it had.
     expect(JSON.stringify(await preview(t.kai.id, requestId))).toContain(OLD_PARAGRAPH);
@@ -311,54 +377,57 @@ describe("the preview of a held asset save", () => {
       payload: { expectedRevision: 1 }
     });
 
-    // The answer is the one the input alone gives: a create is new and whole, a change is a
-    // change with nothing to compare.
+    // A non-reader sees only the submitted title and that comparison is withheld.
+    for (const [requestId, name] of [
+      [collision, "kai-leave"],
+      [orphaned, "kai-faq"]
+    ] as const) {
+      expect((await preview(t.admin.id, requestId)).asset).toEqual({
+        kind: "skill",
+        name,
+        title: name,
+        namespace: "kai-",
+        beforeWithheld: true
+      });
+    }
+    // Kai may read both and is shown what is stored: the first exists, the second is gone.
+    expect((await preview(t.kai.id, collision)).asset).toMatchObject({ isNew: false });
+    expect((await preview(t.kai.id, orphaned)).asset).toMatchObject({ isNew: true });
+
+    // A decided preview also withholds the comparison shape from a non-reader.
+    await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId: collision },
+      payload: { decision: "reject" }
+    });
     expect((await preview(t.admin.id, collision)).asset).toEqual({
       kind: "skill",
       name: "kai-leave",
       title: "kai-leave",
       namespace: "kai-",
-      isNew: true,
-      description: "A skill",
-      content: {
-        skillName: "kai-leave",
-        skillTitle: "kai-leave",
-        isNewSkill: true,
-        changes: [],
-        newSkill: {
-          name: "kai-leave",
-          title: "kai-leave",
-          description: "A skill",
-          content: changed
-        }
-      }
+      beforeWithheld: true
     });
-    expect((await preview(t.admin.id, orphaned)).asset).toEqual({
-      kind: "skill",
-      name: "kai-faq",
-      title: "kai-faq",
-      namespace: "kai-",
-      isNew: false,
-      description: "A skill",
-      beforeWithheld: true,
-      content: {
-        skillName: "kai-faq",
-        skillTitle: "kai-faq",
-        isNewSkill: false,
-        changes: [{ type: "replace", target: "root", after: changed }]
-      }
-    });
-    // Kai may read both and is shown what is stored: the first exists, the second is gone.
-    expect((await preview(t.kai.id, collision)).asset).toMatchObject({ isNew: false });
-    expect((await preview(t.kai.id, orphaned)).asset).toMatchObject({ isNew: true });
+  });
 
-    // A decided preview still uses the frozen call's existence claim for a non-reader, not
-    // what the filer learned from the stored skill.
+  it("ACCEPT-FIX-9b: withholds a new skill's comparison shape before and after rejection", async () => {
+    const { t, holding, hold, preview } = await setup();
+    await t.seedHistoricalGrant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
+    holding("assets.put");
+    const requestId = await hold("assets.put", "skill", "kai-new", {
+      config: { ...skill("kai-new", changed), title: "New policy" }
+    });
+    const withheld = {
+      kind: "skill",
+      name: "kai-new",
+      title: "New policy",
+      namespace: "kai-",
+      beforeWithheld: true
+    };
+    expect((await preview(t.admin.id, requestId)).asset).toEqual(withheld);
     await t.expectOk(t.admin.id, "approval_requests.decide", {
-      params: { requestId: collision },
+      params: { requestId },
       payload: { decision: "reject" }
     });
-    expect((await preview(t.admin.id, collision)).asset.isNew).toBe(true);
+    expect((await preview(t.admin.id, requestId)).asset).toEqual(withheld);
   });
 
   it("names an asset of another kind and shows no content for it", async () => {

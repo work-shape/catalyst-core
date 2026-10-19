@@ -51,11 +51,11 @@ interface HeldAssetPreview {
   /** The registered prefix the name starts with, for an asset of the instance's own. */
   namespace?: string;
   /**
-   * Approving creates the asset. For a reader who may read the target: no asset of the name
-   * exists. For every other reader: the call names no revision it replaces.
+   * Approving creates the asset. Present only when the viewer may read the target, or for
+   * a list row whose existence claim comes from the submitted call.
    */
-  isNew: boolean;
-  /** Stored only: what the frozen call said about existence, safe for a non-reader. */
+  isNew?: boolean;
+  /** Stored only: what the frozen call said about existence for list rows. */
   requestedNew?: boolean;
   /** A skill's text: all of it for a new one, otherwise what differs from the stored one. */
   content?: ReturnType<typeof createSkillRevisionPreview>;
@@ -142,41 +142,22 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
       kind.actions.read,
       accessResource(kind.kind, name, scope, inScope?.id)
     ).allowed;
-    // A reader without the right is told what the call asks for and nothing of what is stored:
-    // not its text and not whether it exists.
-    const stored = mayRead && inScope?.status === "active" ? inScope : undefined;
+    // Only the submitted title identifies a held change to a non-reader. Neither a stored
+    // comparison nor its shape (creation, change kinds or resource targets) is disclosed.
+    if (!mayRead) return { ...named, beforeWithheld: true };
+    const stored = inScope?.status === "active" ? inScope : undefined;
     if (frozen) {
-      // The request keeps its original comparison. A later reader still needs the read right
-      // for its before-text, even if the requester could read it when it was filed.
       const { requestedNew: _requestedNew, beforeWithheld: _withheld, ...retained } = frozen;
-      if (mayRead) return { ...retained, ...named };
-      return {
-        ...named,
-        isNew: frozen.requestedNew ?? false,
-        ...(frozen.description === undefined ? {} : { description: frozen.description }),
-        beforeWithheld: true,
-        ...(frozen.content
-          ? {
-              content: {
-                ...frozen.content,
-                changes: frozen.content.changes.map(
-                  ({ before: _before, sectionHeading: _heading, ...change }) => change
-                )
-              }
-            }
-          : {})
-      };
+      return { ...retained, ...named };
     }
-    const isNew = mayRead ? stored === undefined : (expectedRevision ?? null) === null;
+    const isNew = stored === undefined;
     const next = kind.kind === SKILL_KIND ? skillConfigSchema.safeParse(config) : undefined;
     if (!next?.success) return { ...named, isNew };
     const preview: HeldAssetPreview = {
       ...named,
       isNew,
       description: next.data.description,
-      ...(mayRead &&
-      expectedRevision !== undefined &&
-      (stored?.revision ?? null) !== expectedRevision
+      ...(expectedRevision !== undefined && (stored?.revision ?? null) !== expectedRevision
         ? { isStale: true }
         : {})
     };
@@ -228,7 +209,7 @@ export const heldAssetPreviewSchema = z.object({
   name: z.string(),
   title: z.string(),
   workspaceId: z.string().optional(),
-  isNew: z.boolean(),
+  isNew: z.boolean().optional(),
   requestedNew: z.boolean().optional(),
   description: z.string().optional(),
   previous: z

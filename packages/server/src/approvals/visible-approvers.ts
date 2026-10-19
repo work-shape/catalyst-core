@@ -47,7 +47,14 @@ export async function visibleApproverNames(
   const names: string[] = [];
   for (const id of candidates) {
     const record = await options.stores.users.getUser({ clientInstanceId, userId: asUserId(id) });
-    if (!record || record.status !== "active") continue;
+    // An account without a person's name is left unnamed; an e-mail is never help text.
+    if (
+      !record ||
+      record.status !== "active" ||
+      !record.displayLabel.trim() ||
+      record.displayLabel.includes("@")
+    )
+      continue;
     const actor = authenticatedUserFromRecord({
       user: record,
       identity: { authSource: "approval-help", externalUserId: record.id }
