@@ -29,6 +29,39 @@ export function attachedFilesTitle(files: readonly File[], locale: LocaleCode): 
     : t("conversationAttachedFiles", { count: String(files.length) });
 }
 
+/**
+ * A conversation of the person's own in a workspace, made before its first turn, with `prompt`
+ * in its composer (ACCEPT-FIX-11 E3). A workspace whose members read its conversations builds
+ * nothing in them: building goes on in a private conversation of the same workspace, whatever
+ * the workspace starts conversations as.
+ */
+export async function createPrivateConversationWith(input: {
+  client: {
+    conversations: {
+      create(
+        input: Parameters<ApiClient["conversations"]["create"]>[0]
+      ): Promise<{ id: string; collaborationWorkspaceId: string }>;
+    };
+  };
+  locale: LocaleCode;
+  collaborationWorkspaceId: string;
+  prompt: string;
+  draftController: Pick<ReturnType<typeof useWorkspaceDraftController>, "setDraft">;
+}): Promise<{ id: string; collaborationWorkspaceId: string }> {
+  const conversation = await input.client.conversations.create({
+    body: {
+      locale: input.locale,
+      collaborationWorkspaceId: input.collaborationWorkspaceId,
+      visibility: "private"
+    }
+  });
+  input.draftController.setDraft(
+    { authScope: WORKSPACE_AUTH_SCOPE, conversationId: conversation.id },
+    input.prompt
+  );
+  return conversation;
+}
+
 interface WorkspaceConversationActionsInput {
   client: ApiClient;
   activeLocale: LocaleCode;
@@ -199,6 +232,33 @@ export function createWorkspaceConversationActions({
     chrome.requestComposerFocus();
   }
 
+  /**
+   * A private conversation of the open workspace with `prompt` in its composer, where building
+   * goes on in a workspace whose members read its conversations. It opens in the dock where
+   * `inDock`, else where a conversation the server made opens. Answers its id.
+   */
+  async function startPrivateConversationWith(prompt: string, inDock: boolean): Promise<string> {
+    if (!activeCollaborationWorkspaceId) {
+      throw new Error("A private conversation belongs to a workspace");
+    }
+    const conversation = await createPrivateConversationWith({
+      client,
+      locale: activeLocale,
+      collaborationWorkspaceId: activeCollaborationWorkspaceId,
+      prompt,
+      draftController
+    });
+    if (inDock) {
+      dock.show(conversation.id);
+    } else {
+      showCreatedConversation(conversation);
+    }
+    setNotice(undefined);
+    workspaceCache.invalidateConversations();
+    chrome.requestComposerFocus();
+    return conversation.id;
+  }
+
   // A conversation that only existed to hold draft attachments is an unsent draft. Once the
   // last one is removed the composer is back on the start page; the server stops listing the
   // empty conversation and its retention job removes it.
@@ -308,6 +368,7 @@ export function createWorkspaceConversationActions({
     createConversationForFiles,
     showConversationForFiles,
     startConversationAbout,
+    startPrivateConversationWith,
     returnToStartPageAfterDraftEmptied,
     startNewConversation,
     startNewConversationWith,

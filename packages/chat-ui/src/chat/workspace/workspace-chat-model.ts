@@ -373,6 +373,7 @@ export function useWorkspaceChatModel({
     createConversationForFiles,
     showConversationForFiles,
     startConversationAbout,
+    startPrivateConversationWith,
     returnToStartPageAfterDraftEmptied,
     startNewConversation,
     startNewConversationWith,
@@ -428,16 +429,17 @@ export function useWorkspaceChatModel({
   const { resolvedThemeMode, theme, toggleTheme, themePreference, selectThemePreference } =
     useWorkspaceTheme(config?.ui);
   const activeAgentName = activeAgentNameFor(config, selectedAgentName);
-  // A first save creates only in a conversation of the person's own: where the open workspace
-  // starts conversations its members read, no New button opens the dock.
+  // A first save creates only in a conversation of the person's own. Where the open workspace
+  // starts conversations its members read, a New button makes a private one first (E3).
   const openWorkspace = collaborationWorkspace.activeCollaborationWorkspace;
   const ownConversations =
     openWorkspace !== undefined &&
     (openWorkspace.kind === "personal" ||
       openWorkspace.defaultConversationVisibility === "private");
-  const buildingAgentName = ownConversations
-    ? buildingAgentNameFor(config?.agents ?? [], activeAgentName)
-    : undefined;
+  const buildingAgentName =
+    openWorkspace === undefined
+      ? undefined
+      : buildingAgentNameFor(config?.agents ?? [], activeAgentName);
   // The list page a New button opened the dock on, until the dock's first message is sent.
   const newStartedFrom = useRef<string | undefined>(undefined);
 
@@ -451,11 +453,21 @@ export function useWorkspaceChatModel({
       return;
     }
     setSelectedAgentName(buildingAgentName);
+    const startedFrom = workspaceRoutePath(route);
+    if (!ownConversations) {
+      // The members would read a new conversation here: the build starts in a private one.
+      startPrivateConversationWith(prompt, true)
+        .then((conversationId) => agentOpens.startedFrom(conversationId, startedFrom))
+        .catch(() =>
+          setNotice(createTranslationContext(activeLocale).t("conversationPrivateStartFailed"))
+        );
+      return;
+    }
     draftController.setDraft(
       { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
       prompt
     );
-    newStartedFrom.current = workspaceRoutePath(route);
+    newStartedFrom.current = startedFrom;
     dock.show(undefined);
     setNotice(undefined);
     chrome.requestComposerFocus();
@@ -960,7 +972,14 @@ export function useWorkspaceChatModel({
       messageSubmitted,
       runStarted,
       streamError,
-      cancelSelectedRun
+      cancelSelectedRun,
+      continuePrivately: async (prompt: string) => {
+        try {
+          await startPrivateConversationWith(prompt, false);
+        } catch {
+          setNotice(createTranslationContext(activeLocale).t("conversationPrivateStartFailed"));
+        }
+      }
     },
     controlPlane,
     toolDisplay: {

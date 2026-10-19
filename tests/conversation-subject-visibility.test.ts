@@ -92,7 +92,7 @@ describe("a conversation about a Workflow in a shared workspace", () => {
       return id;
     };
     const workspaceId = await shared("Shared");
-    const create = async (about?: typeof subject) =>
+    const create = async (about?: typeof subject, visibility?: "private") =>
       conversationSchema.parse(
         (
           await ok(
@@ -100,7 +100,8 @@ describe("a conversation about a Workflow in a shared workspace", () => {
               payload: {
                 title: "Edit",
                 collaborationWorkspaceId: workspaceId,
-                ...(about ? { subject: about } : {})
+                ...(about ? { subject: about } : {}),
+                ...(visibility ? { visibility } : {})
               }
             })
           )
@@ -121,6 +122,74 @@ describe("a conversation about a Workflow in a shared workspace", () => {
     };
     await say(about.id, "/tool platform.assets.get {}");
     await say(plain.id, "Hello");
+
+    // ACCEPT-FIX-11 E-3: a workspace with shared conversations still has a private build path.
+    const draft = {
+      kind: "workflow",
+      name: "private-build",
+      config: {
+        ...config,
+        name: "private-build",
+        manifest: { ...config.manifest, id: "private-build" }
+      }
+    };
+    await say(plain.id, `/tool platform.assets.put ${JSON.stringify(draft)}`);
+    expect(
+      await app.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "workflow",
+        name: "private-build"
+      })
+    ).toBeUndefined();
+    const sharedThread = await app.call("conversations.thread.get", {
+      params: { conversationId: plain.id }
+    });
+    expect(sharedThread.statusCode, sharedThread.body).toBe(200);
+    expect(sharedThread.body).toContain('"errorReason":"subject_conversation_shared"');
+    const modelOutputs = z
+      .looseObject({
+        messages: z.array(
+          z.looseObject({
+            metadata: z.looseObject({
+              agentRuntime: z.looseObject({ modelOutput: z.string().optional() }).optional()
+            })
+          })
+        )
+      })
+      .parse(sharedThread.json())
+      .messages.flatMap((message) => message.metadata.agentRuntime?.modelOutput ?? []);
+    expect(modelOutputs.join("\n")).not.toContain("subject_conversation_shared");
+    expect(modelOutputs.join("\n")).not.toContain("private_conversation");
+    expect(
+      (
+        await app.call("conversations.create", {
+          payload: {
+            collaborationWorkspaceId: workspaceId,
+            visibility: "workspace"
+          }
+        })
+      ).statusCode
+    ).toBe(422);
+    const privateBuild = await create(undefined, "private");
+    expect(privateBuild.visibility).toBe("private");
+    await say(privateBuild.id, `/tool platform.assets.put ${JSON.stringify(draft)}`);
+    expect(
+      await app.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "workflow",
+        name: "private-build"
+      })
+    ).toMatchObject({ status: "active" });
+    expect(
+      (
+        await app.call(
+          "conversations.messages.list",
+          { params: { conversationId: privateBuild.id } },
+          OTHER
+        )
+      ).statusCode
+    ).toBe(404);
+
     const messages = (as?: string) =>
       app.call("conversations.messages.list", { params: { conversationId: about.id } }, as);
     expect((await ok(messages())).body).toContain("manifest");
@@ -145,7 +214,7 @@ describe("a conversation about a Workflow in a shared workspace", () => {
         )
         .items.map((item) => item.id);
     expect(await listed(OTHER)).toEqual([plain.id]);
-    expect((await listed()).sort()).toEqual([plain.id, about.id].sort());
+    expect((await listed()).sort()).toEqual([plain.id, about.id, privateBuild.id].sort());
 
     // A move cannot open it to a workspace, and without a visibility it stays private.
     const elsewhere = await shared("Elsewhere");

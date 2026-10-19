@@ -1,3 +1,4 @@
+import { conversationWriters } from "./conversation-writers";
 import { recordKnowledgeSources } from "./records/lineage";
 import { workflowDataFlowsSchema } from "@work-shape/catalyst-core";
 import { DATA_STORE_USED_BY_MAX_ASSETS, workflowDataFlows } from "./workflow-data-flows";
@@ -81,6 +82,14 @@ const usingSchema = z.object({
 });
 
 const usedByOutputSchema = z.object({
+  /** Counts of agents and conversations with successful retained live row writes. */
+  conversationWriters: z
+    .object({
+      agents: z.number().int(),
+      conversations: z.number().int(),
+      truncated: z.boolean()
+    })
+    .optional(),
   dataFlows: workflowDataFlowsSchema.optional(),
   /** The published Apps that use the store, with who opens them, and that the caller may be shown. */
   apps: z.array(usingSchema.extend({ audience: audienceSchema })),
@@ -350,7 +359,7 @@ async function usedBy(
       asset.scope.kind === "workspace" ? [asset.scope.workspaceId] : []
     )
   );
-  const [appsShown, knowledgeBasesShown, readers] = await Promise.all([
+  const [appsShown, knowledgeBasesShown, readers, chatWriters] = await Promise.all([
     Promise.all(
       usingApps.shown.map(async (shown) => ({
         ...using(shown),
@@ -365,12 +374,16 @@ async function usedBy(
         audience: await audiences.of(KNOWLEDGE_BASE_ACTIONS.use, assetResource(asset))
       }))
     ),
-    audiences.of(DATA_STORE_ACTIONS.read, store.resource)
+    audiences.of(DATA_STORE_ACTIONS.read, store.resource),
+    conversationWriters(runtime, store.record)
   ]);
   const dataFlows = workflowDataFlows(workflows, { kind: "data_store", name }, access);
   return {
     ...(dataFlows ? { dataFlows } : {}),
     apps: appsShown,
+    ...(chatWriters.conversations > 0 || chatWriters.truncated
+      ? { conversationWriters: chatWriters }
+      : {}),
     workflows: usingWorkflows.shown.map((shown) => {
       const { runAs } = shown.use;
       return {

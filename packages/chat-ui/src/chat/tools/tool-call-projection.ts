@@ -110,7 +110,10 @@ export function readToolDisplayProjection(input: {
   return {
     actionLabel: readToolActionLabel(input),
     technicalName: input.toolName,
-    title: readTranslatedToolTitle(input.toolName, input.locale) ?? humanizeToolName(input.toolName)
+    title:
+      readTranslatedToolTitle(input.toolName, input.locale) ??
+      readOperationToolTitle(input.toolName, input.locale) ??
+      humanizeToolName(input.toolName)
   };
 }
 
@@ -124,6 +127,7 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "platform.assets.put": "Save the draft",
     "platform.assets.operations": "Look up what a step may call",
     "platform.connections.draft_tools": "Draft access to an API",
+    "assets.publish": "Publish",
     read_skill: "Read instructions",
     show_view: "Show an overview",
     "structured_data.publish": "Update the fact sheet",
@@ -147,6 +151,7 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "platform.assets.put": "Entwurf speichern",
     "platform.assets.operations": "Nachschlagen, was ein Schritt aufrufen darf",
     "platform.connections.draft_tools": "Zugriff auf eine API entwerfen",
+    "assets.publish": "Veröffentlichen",
     read_skill: "Anleitung lesen",
     show_view: "Übersicht zeigen",
     "structured_data.publish": "Faktenblatt aktualisieren",
@@ -181,6 +186,32 @@ const TOOL_NAME_ACRONYMS = new Set([
 
 function readTranslatedToolTitle(toolName: string, locale: LocaleCode): string | undefined {
   return TOOL_TITLES_BY_LOCALE[locale][toolName] ?? TOOL_TITLES_BY_LOCALE.en[toolName];
+}
+
+/**
+ * The tools of a Data Store and of a Knowledge Base by what they do, whichever store or base
+ * they name: `data_store.<id>.insert` is "Add rows", `knowledge.<id>.add_files` "Add files to
+ * the Knowledge Base".
+ */
+const OPERATION_TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
+  en: {
+    "data_store.insert": "Add rows",
+    "data_store.update": "Change rows",
+    "data_store.delete_rows": "Delete rows",
+    "knowledge.add_files": "Add files to the Knowledge Base"
+  },
+  de: {
+    "data_store.insert": "Datensätze hinzufügen",
+    "data_store.update": "Datensätze ändern",
+    "data_store.delete_rows": "Datensätze löschen",
+    "knowledge.add_files": "Dateien zur Wissensbasis hinzufügen"
+  }
+};
+
+function readOperationToolTitle(toolName: string, locale: LocaleCode): string | undefined {
+  const segments = toolName.split(".");
+  const key = `${segments[0] ?? ""}.${segments.at(-1) ?? ""}`;
+  return OPERATION_TOOL_TITLES_BY_LOCALE[locale][key];
 }
 
 function readToolSubjectLabel(input: {

@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { OPERATIONS_AUDIENCES } from "@work-shape/catalyst-core";
+import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
@@ -8,9 +9,9 @@ import { useAppsHost } from "../apps/apps-host";
 import { useWorkflowsHost } from "../workflows/workflows-host";
 import { instanceSentence } from "./build-refusals";
 import type { DataFlows } from "./data-flows-model";
+import { dataStoreStateSettling, type DataStoreState } from "./data-store-model";
 
-/** The state of one Data Store, as `data_stores.get` answers it. */
-export type DataStoreState = Awaited<ReturnType<ApiClient["data_stores"]["get"]>>;
+export type { DataStoreState };
 /** The tables and columns of one Data Store, as `data_stores.describe` answers them. */
 export type DataStoreSchema = Awaited<ReturnType<ApiClient["data_stores"]["describe"]>>;
 /** The stores the reader may read with what was last measured, as `data_stores.list` answers. */
@@ -107,16 +108,19 @@ export function useDataStoreSource(): DataStoreSource {
   const { apiBaseUrl, authScope, client, user } = useSettingsPage();
   const calls = client.data_stores;
   const key = (read: string, ...parts: string[]) => [
-    "data-store",
-    apiBaseUrl,
+    ...workspaceQueryKeys.dataStores(apiBaseUrl),
     authScope,
     read,
     ...parts
   ];
   return {
     seesServerConditions: user.roles.includes("superadmin"),
+    // A store being set up or migrated is read again until it settles, as the jobs run apart
+    // from the page that published it.
     useStoreState: (store) =>
-      useRead(key("state", store), (signal) => calls.get({ params: { store }, signal })),
+      useRead(key("state", store), (signal) => calls.get({ params: { store }, signal }), {
+        pollWhile: dataStoreStateSettling
+      }),
     useSchema: (store) =>
       useRead(key("schema", store), (signal) => calls.describe({ params: { store }, signal })),
     useListed: () => useRead(key("list"), (signal) => calls.list({ signal })),
@@ -199,17 +203,28 @@ function refusalReason(error: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+/** How often the state of a store is read again while it is set up or migrated. */
+const STATE_POLL_MS = 3_000;
+
 function useRead<Answer>(
   queryKey: string[],
   read: (signal: AbortSignal) => Promise<Answer>,
-  options: { enabled?: boolean; keepPrevious?: boolean } = {}
+  options: {
+    enabled?: boolean;
+    keepPrevious?: boolean;
+    /** Reads again every `STATE_POLL_MS` while what was read says so. */
+    pollWhile?: (answer: Answer) => boolean;
+  } = {}
 ): DataStoreRead<Answer> {
+  const { pollWhile } = options;
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) => read(signal),
     retry: false,
     enabled: options.enabled ?? true,
-    ...(options.keepPrevious ? { placeholderData: keepPreviousData } : {})
+    ...(options.keepPrevious ? { placeholderData: keepPreviousData } : {}),
+    refetchInterval: ({ state }) =>
+      pollWhile && state.data !== undefined && pollWhile(state.data) ? STATE_POLL_MS : false
   });
   // What was read stays while it is read again: the page does not blink.
   if (query.data !== undefined) {

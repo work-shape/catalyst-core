@@ -388,6 +388,8 @@ export const artifactPreviewResponseSchema = z.discriminatedUnion("status", [
 export type ArtifactPreviewResponse = z.infer<typeof artifactPreviewResponseSchema>;
 
 export const createConversationRequestSchema = z.object({
+  /** A build starts privately even in a workspace with shared conversations by default. */
+  visibility: z.literal("private").optional(),
   title: z.string().min(1).optional(),
   collaborationWorkspaceId: z.string().min(1).optional(),
   locale: localeCodeSchema.optional(),
@@ -647,6 +649,7 @@ export const agentRunProjectionPartSchema = z.discriminatedUnion("type", [
     state: agentRunProjectionToolCallStateSchema,
     output: z.unknown().optional(),
     errorText: z.string().optional(),
+    errorReason: z.literal("subject_conversation_shared").optional(),
     decision: toolCallDecisionSchema.optional(),
     subagent: toolCallSubagentSchema.optional()
   })
@@ -680,6 +683,7 @@ export const agentRunProjectionSchema = z.object({
       state: agentRunProjectionToolCallStateSchema,
       output: z.unknown().optional(),
       errorText: z.string().optional(),
+      errorReason: z.literal("subject_conversation_shared").optional(),
       decision: toolCallDecisionSchema.optional(),
       subagent: toolCallSubagentSchema.optional()
     })

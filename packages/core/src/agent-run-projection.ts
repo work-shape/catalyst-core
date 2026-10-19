@@ -131,6 +131,9 @@ export function applyAgentRunObservation(
       input: findToolCallInput(activeToolCalls, event.toolCallId),
       state: "output_error",
       errorText: toToolError(event),
+      ...(event.result.status !== "success" && event.result.recovery === "private_conversation"
+        ? { errorReason: "subject_conversation_shared" as const }
+        : {}),
       ...findSubagent(activeToolCalls, event.toolCallId)
     });
   }

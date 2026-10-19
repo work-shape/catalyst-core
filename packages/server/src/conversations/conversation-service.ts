@@ -50,6 +50,7 @@ const waitingAnswerSchema = z.object({
 const waitingOpenSchema = z.union([waitingAnswerSchema, z.object({ output: waitingAnswerSchema })]);
 
 export interface CreateConversationCommand {
+  visibility?: "private";
   title?: string;
   collaborationWorkspaceId?: CollaborationWorkspaceId;
   /** The asset the conversation is about. Its creator holds the read right on it. */
@@ -118,7 +119,7 @@ export class ConversationWorkflow {
       // The transcript of a conversation about an asset holds the asset's definition, and a
       // member of the workspace need not hold the read right on it: it is its creator's alone.
       visibility:
-        command.subject && workspace.kind !== "personal"
+        (command.subject || command.visibility === "private") && workspace.kind !== "personal"
           ? "private"
           : workspace.defaultConversationVisibility,
       title: command.title ?? "New conversation",

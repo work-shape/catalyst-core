@@ -27,8 +27,11 @@ import { FollowUpQueueProvider } from "./follow-up-queue";
 import {
   AgentOpensProvider,
   AssetOpenedChip,
-  ConversationSubjectLine
+  ConversationSubjectLine,
+  PrivateBuildOffer
 } from "../conversation/conversation-subject";
+import { refusedRequest } from "../conversation/subject-run";
+import { readCompatibleMessageRunId } from "./assistant-message-compat";
 import { useTranslation } from "../../shared/i18n";
 import { useAutoOpenPageSurface } from "../../studio/pages/page-card";
 import { useOpenConversationFile } from "../files/conversation-file-presentation";
@@ -124,6 +127,7 @@ function AssistantRuntimePane({
     runStarted: onRunStarted,
     streamError: onStreamError,
     cancelSelectedRun: onCancelRun,
+    continuePrivately,
     followUpSource
   } = chat;
   const { t } = useTranslation();
@@ -175,6 +179,8 @@ function AssistantRuntimePane({
   });
   useReportDockSubject(conversationSubject);
   const pendingOpen = agentOpens.pending;
+  // A build refused because others read this conversation goes on in a private one (E3).
+  const privateBuild = usePrivateBuildOffer(chat, continuePrivately);
   useAutoOpenPageSurface(activeRun, selectedConversationId);
 
   useEffect(() => {
@@ -422,8 +428,11 @@ function AssistantRuntimePane({
               notice={visibleNotice}
               newConversationPrivate={newConversationPrivate}
               subjectLine={
-                conversationSubject === undefined && pendingOpen === undefined ? undefined : (
+                conversationSubject === undefined &&
+                pendingOpen === undefined &&
+                privateBuild === undefined ? undefined : (
                   <>
+                    {privateBuild}
                     {pendingOpen === undefined ? null : (
                       <AssetOpenedChip open={pendingOpen} onGoTo={agentOpens.goTo} />
                     )}
@@ -485,6 +494,46 @@ function AssistantRuntimePane({
         </FollowUpQueueProvider>
       </AssistantToolRegistry>
     </AssistantRuntimeProvider>
+  );
+}
+
+/**
+ * The offer to go on privately, where the run that answers the person's last request was
+ * refused to build because others read the conversation, with that request to take along.
+ * Nothing elsewhere, and nothing for a later request after a refused one.
+ */
+function usePrivateBuildOffer(
+  chat: Pick<SelectedChatModel, "activeRun" | "completedRunProjections" | "messages">,
+  continuePrivately: SelectedChatModel["continuePrivately"]
+) {
+  const { activeRun, completedRunProjections, messages } = chat;
+  const [pending, setPending] = useState(false);
+  const request = useMemo(
+    () =>
+      refusedRequest({
+        messages: (messages ?? []).map((message) => ({
+          role: message.role,
+          text: message.text,
+          runId: readCompatibleMessageRunId(message)
+        })),
+        activeRun: activeRun && { runId: activeRun.run.id, parts: activeRun.projection.parts },
+        completedRuns: completedRunProjections ?? {}
+      }),
+    [activeRun, completedRunProjections, messages]
+  );
+  if (continuePrivately === undefined || request === undefined) return undefined;
+  return (
+    <PrivateBuildOffer
+      pending={pending}
+      onContinue={() => {
+        setPending(true);
+        // It says itself where the conversation could not be started.
+        continuePrivately(request).then(
+          () => setPending(false),
+          () => setPending(false)
+        );
+      }}
+    />
   );
 }
 

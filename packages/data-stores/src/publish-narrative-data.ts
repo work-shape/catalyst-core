@@ -26,6 +26,7 @@ const APP_RIGHTS = { read: "app.read", use: "app.use" } as const;
 /** The people and holders of an audience, counted. */
 function counted(audience: Awaited<ReturnType<AudienceReader["of"]>>): PublishNarrativeAudience {
   return {
+    ...(audience.app ? { app: audience.app } : {}),
     ...(audience.workspace ? { workspace: audience.workspace } : {}),
     holders: audience.holders.length + audience.hiddenHolders
   };

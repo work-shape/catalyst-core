@@ -40,7 +40,8 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
         collaborationWorkspaceId: body.collaborationWorkspaceId
           ? asCollaborationWorkspaceId(body.collaborationWorkspaceId)
           : undefined,
-        ...(body.subject ? { subject: body.subject } : {})
+        ...(body.subject ? { subject: body.subject } : {}),
+        ...(body.visibility ? { visibility: body.visibility } : {})
       }
     )
   );

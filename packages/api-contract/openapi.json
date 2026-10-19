@@ -1121,6 +1121,28 @@
                     "audience": {
                       "type": "object",
                       "properties": {
+                        "app": {
+                          "type": "object",
+                          "properties": {
+                            "audience": {
+                              "type": "string",
+                              "enum": [
+                                "self",
+                                "workspace",
+                                "instance"
+                              ]
+                            },
+                            "people": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "audience",
+                            "people"
+                          ]
+                        },
                         "workspace": {
                           "type": "object",
                           "properties": {
@@ -10749,6 +10771,29 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "conversationWriters": {
+                      "type": "object",
+                      "properties": {
+                        "agents": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "conversations": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "agents",
+                        "conversations",
+                        "truncated"
+                      ]
+                    },
                     "dataFlows": {
                       "type": "object",
                       "properties": {
@@ -10869,6 +10914,28 @@
                           "audience": {
                             "type": "object",
                             "properties": {
+                              "app": {
+                                "type": "object",
+                                "properties": {
+                                  "audience": {
+                                    "type": "string",
+                                    "enum": [
+                                      "self",
+                                      "workspace",
+                                      "instance"
+                                    ]
+                                  },
+                                  "people": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "audience",
+                                  "people"
+                                ]
+                              },
                               "workspace": {
                                 "type": "object",
                                 "properties": {
@@ -11016,6 +11083,28 @@
                           "audience": {
                             "type": "object",
                             "properties": {
+                              "app": {
+                                "type": "object",
+                                "properties": {
+                                  "audience": {
+                                    "type": "string",
+                                    "enum": [
+                                      "self",
+                                      "workspace",
+                                      "instance"
+                                    ]
+                                  },
+                                  "people": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "audience",
+                                  "people"
+                                ]
+                              },
                               "workspace": {
                                 "type": "object",
                                 "properties": {
@@ -11084,6 +11173,28 @@
                     "readers": {
                       "type": "object",
                       "properties": {
+                        "app": {
+                          "type": "object",
+                          "properties": {
+                            "audience": {
+                              "type": "string",
+                              "enum": [
+                                "self",
+                                "workspace",
+                                "instance"
+                              ]
+                            },
+                            "people": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "audience",
+                            "people"
+                          ]
+                        },
                         "workspace": {
                           "type": "object",
                           "properties": {
@@ -27144,6 +27255,10 @@
                 "errorText": {
                   "type": "string"
                 },
+                "errorReason": {
+                  "type": "string",
+                  "const": "subject_conversation_shared"
+                },
                 "decision": {
                   "type": "object",
                   "properties": {
@@ -27285,6 +27400,10 @@
               "output": {},
               "errorText": {
                 "type": "string"
+              },
+              "errorReason": {
+                "type": "string",
+                "const": "subject_conversation_shared"
               },
               "decision": {
                 "type": "object",
@@ -32449,6 +32568,10 @@
       "CreateConversationRequest": {
         "type": "object",
         "properties": {
+          "visibility": {
+            "type": "string",
+            "const": "private"
+          },
           "title": {
             "type": "string",
             "minLength": 1

@@ -327,6 +327,8 @@ export {
   openConversationAbout
 } from "../../packages/chat-ui/src/chat/workspace/open-conversation-about";
 export { UserMenu } from "../../packages/chat-ui/src/chat/workspace/user-menu";
+export { createPrivateConversationWith } from "../../packages/chat-ui/src/chat/workspace/workspace-conversation-actions";
+export { PrivateBuildOffer } from "../../packages/chat-ui/src/chat/conversation/conversation-subject";
 export {
   activeAgentNameFor,
   isAbandonedDraftConversation,

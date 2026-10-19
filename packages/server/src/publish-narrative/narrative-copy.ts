@@ -224,6 +224,8 @@ const EN: Copy = {
   callsNothing: "calls nothing outside the Workflow",
   audience: (audience, _case, incomplete) => {
     if (!audience) return "whoever may use it";
+    if (audience.app?.audience === "instance") return "everyone in the instance";
+    if (audience.app?.audience === "self") return "the person it is shared with";
     const members =
       audience.workspace && audience.workspace.members > 0
         ? audience.workspace.members === 1
@@ -332,6 +334,10 @@ const DE: Copy = {
     const dative = grammaticalCase === "dative";
     if (!audience)
       return dative ? "allen, die sie verwenden dürfen" : "alle, die sie verwenden dürfen";
+    if (audience.app?.audience === "instance")
+      return dative ? "allen in der Instanz" : "alle in der Instanz";
+    if (audience.app?.audience === "self")
+      return dative ? "der Person, mit der sie geteilt ist" : "die Person, mit der sie geteilt ist";
     const members =
       audience.workspace && audience.workspace.members > 0
         ? audience.workspace.members === 1
@@ -398,7 +404,11 @@ const COPY: Record<LocaleCode, Copy> = { en: EN, de: DE };
 
 /** Nobody holds its use by a membership or a grant: instance admins alone, by their role. */
 function adminsOnly(audience: PublishNarrativeAudience): boolean {
-  return (audience.workspace?.members ?? 0) === 0 && audience.holders === 0;
+  return (
+    (audience.app?.people ?? 0) === 0 &&
+    (audience.workspace?.members ?? 0) === 0 &&
+    audience.holders === 0
+  );
 }
 
 /** The channels of a notice in words: "by mail", "in the Inbox", or both. */

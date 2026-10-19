@@ -275,10 +275,19 @@ function thrownHandlerFailure(
   logger: Logger | undefined
 ): ToolHandlerFailureResult {
   if (isAppError(error) && error.code !== "INTERNAL" && error.exposeMessage) {
-    return failed("handler_failed", toErrorEnvelope(error, context.correlationId).error.message);
+    return {
+      ...failed("handler_failed", toErrorEnvelope(error, context.correlationId).error.message),
+      ...privateConversationRecovery(error.details)
+    };
   }
   logger?.error(toolFailureLogRecord(error, request, context), "Tool handler failed");
   return internalFailure(context.correlationId);
+}
+
+/** Only this fixed recovery reaches the host; arbitrary server reasons stay private. */
+function privateConversationRecovery(details: unknown): Pick<ToolHandlerFailureResult, "recovery"> {
+  const parsed = z.object({ reason: z.literal("subject_conversation_shared") }).safeParse(details);
+  return parsed.success ? { recovery: "private_conversation" } : {};
 }
 
 function internalFailure(correlationId: string): ToolHandlerFailureResult {
@@ -324,12 +333,15 @@ export function toolResultFromOperationResult(
         ? internalFailure(names.correlationId)
         : // The message is all the model reads. A fixed reason stays in the run and in the
           // details of the result, and is not handed on: a model repeats a code to the person.
-          failed(
-            "handler_failed",
-            result.error.code === INTERRUPTED_RUN_ERROR.code
-              ? `${INTERRUPTED_RUN_ERROR.message}. Its outcome is not known; check before calling again.`
-              : result.error.message
-          );
+          {
+            ...failed(
+              "handler_failed",
+              result.error.code === INTERRUPTED_RUN_ERROR.code
+                ? `${INTERRUPTED_RUN_ERROR.message}. Its outcome is not known; check before calling again.`
+                : result.error.message
+            ),
+            ...privateConversationRecovery(result.error.details)
+          };
     case "expired":
     case "pending_confirmation":
     case "pending_approval":

@@ -262,4 +262,38 @@ describe("API access panel", () => {
     expect(german).toContain('aria-label="Server-URL kopieren"');
     expect(german).toContain('aria-label="API-Schlüssel kopieren"');
   });
+  // ACCEPT-FIX-11: an account with rights on resources only read "No rights" beside its
+  // "Rights on resources 2/3". The line counts the rights on the configuration alone.
+  it("says which rights an account lacks, not that it has none at all", () => {
+    const resourcesOnly: ServicePrincipalDetail = {
+      ...detail,
+      principal: { ...detail.principal, permissions: [] }
+    };
+    const [credential] = detail.credentials;
+    if (credential === undefined) throw new Error("The fixture holds an API key.");
+    for (const [locale, words, misleading] of [
+      ["en", ">No configuration rights<", ">No rights<"],
+      ["de", ">Keine Rechte an der Konfiguration<", ">Keine Rechte<"]
+    ] as const) {
+      const markup = renderToStaticMarkup(
+        createElement(
+          TranslationProvider,
+          { children: null, locale },
+          createElement(ApiAccessPanel, {
+            may: { principals: true, keys: true },
+            principals: [resourcesOnly],
+            loading: false,
+            mutating: false,
+            onCreatePrincipal: noopResult,
+            onUpdatePrincipal: noopResult,
+            onCreateCredential: async () => ({ credential, secret: "never-rendered" }),
+            onRevokeCredential: async () => credential,
+            onClearRevealedCredential: () => undefined
+          })
+        )
+      );
+      expect(markup).toContain(words);
+      expect(markup).not.toContain(misleading);
+    }
+  });
 });
