@@ -92,6 +92,9 @@ export const modelUsageEvents = pgTable(
     index("model_usage_events_workspace_idx")
       .on(table.collaborationWorkspaceId)
       .where(sql`${table.collaborationWorkspaceId} is not null`),
+    index("model_usage_events_agent_run_idx")
+      .on(table.clientInstanceId, table.agentRunId)
+      .where(sql`${table.agentRunId} is not null`),
     index("model_usage_events_workflow_run_idx")
       .on(table.workflowRunId)
       .where(sql`${table.workflowRunId} is not null`),
