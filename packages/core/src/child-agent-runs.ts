@@ -54,7 +54,44 @@ export interface SubagentSummary {
 export type SubagentOutcome =
   { runId: AgentRunId; status: "open" } | ({ runId: AgentRunId } & RunAgentResult);
 
+export interface WorkflowAgentRunData {
+  runId: AgentRunId;
+  status: AgentRun["status"];
+  usage: { modelCallCount: number; inputTokens: number; outputTokens: number; totalTokens: number };
+  transcript?: {
+    role: string;
+    text: string;
+    toolCalls?: { toolName: string; input?: unknown }[];
+  }[];
+}
+
 export interface ChildAgentRunStore {
+  readWorkflowAgentData(input: {
+    clientInstanceId: ClientInstanceId;
+    stepRunId: string;
+    includeTranscript: boolean;
+  }): Promise<WorkflowAgentRunData | undefined>;
+
+  /** Called under the Workflow run lock; the unique step key makes retries idempotent. */
+  startWorkflowAgentRun(input: {
+    clientInstanceId: ClientInstanceId;
+    runId: string;
+    stepRunId: string;
+    principal: import("./identity").WorkflowRunPrincipal;
+    task: string;
+    title: string;
+    correlationId: string;
+    retainedUntil: ISODateString;
+  }): Promise<AgentRun>;
+  cancelWorkflowAgentRuns(input: {
+    clientInstanceId: ClientInstanceId;
+    runId: string;
+  }): Promise<void>;
+  readWorkflowAgentRun(input: {
+    clientInstanceId: ClientInstanceId;
+    stepRunId: string;
+  }): Promise<AgentRun | undefined>;
+
   /**
    * Starts a subagent of a running parent in one transaction: its run thread, its task as
    * the thread's first message, its run and its job. The call under the same Operation Run

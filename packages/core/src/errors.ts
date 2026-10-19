@@ -92,8 +92,22 @@ export function runFailureOf(error: AppError): { code: string; usageLimit?: Mode
   return { code };
 }
 
+export class WorkflowAgentOutputInvalidError extends AppError {
+  constructor(path: string) {
+    super("VALIDATION_FAILED", `Agent output is invalid at ${path}`);
+  }
+}
+
+export class ConfirmationUnattendedError extends AppError {
+  constructor() {
+    super("POLICY_DENIED", "A Workflow agent step cannot ask for confirmation");
+  }
+}
+
 /** The stable code of a run failure, without its optional refusal details. */
 export function runFailureCodeOf(error: AppError): string {
+  if (error instanceof WorkflowAgentOutputInvalidError) return "output_invalid";
+  if (error instanceof ConfirmationUnattendedError) return "confirmation_unattended";
   if (error instanceof ModelNotPricedError) return MODEL_NOT_PRICED_CODE;
   if (error instanceof ModelUsageLimitReachedError) return MODEL_USAGE_LIMIT_REACHED_CODE;
   return error.code;

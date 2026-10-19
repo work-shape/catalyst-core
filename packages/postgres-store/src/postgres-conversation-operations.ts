@@ -78,7 +78,8 @@ async function getConversation(
     .where(
       and(
         eq(conversations.clientInstanceId, clientInstanceId),
-        eq(conversations.id, conversationId)
+        eq(conversations.id, conversationId),
+        isNull(conversations.workflowRunId)
       )
     )
     .limit(1);
@@ -238,11 +239,27 @@ async function requireNotInDeletion(
     .where(
       and(
         eq(conversations.clientInstanceId, clientInstanceId),
-        eq(conversations.id, conversationId)
+        eq(conversations.id, conversationId),
+        isNull(conversations.workflowRunId)
       )
     )
     .for("share", { of: collaborationWorkspaces });
-  if (!place) throw new AppError("NOT_FOUND", "Conversation is not available");
+  if (!place) {
+    const [thread] = await tx
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.clientInstanceId, clientInstanceId),
+          eq(conversations.id, conversationId),
+          eq(conversations.kind, "run_thread"),
+          isNull(conversations.parentConversationId)
+        )
+      )
+      .limit(1);
+    if (thread) return;
+    throw new AppError("NOT_FOUND", "Conversation is not available");
+  }
   const ownerUserId =
     place.visibility === "private" || place.kind === "personal" ? place.createdByUserId : undefined;
   const userIds = [
@@ -523,7 +540,16 @@ async function listMessages(
     conversationId: ConversationId;
   }
 ): Promise<ChatMessage[]> {
-  const conversation = await getConversation(db, input.clientInstanceId, input.conversationId);
+  const [conversation] = await db
+    .select({ status: conversations.status })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.clientInstanceId, input.clientInstanceId),
+        eq(conversations.id, input.conversationId)
+      )
+    )
+    .limit(1);
   if (!conversation || conversation.status !== "active") {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
@@ -549,7 +575,16 @@ async function listRecentMessages(
     limit: number;
   }
 ): Promise<ChatMessage[]> {
-  const conversation = await getConversation(db, input.clientInstanceId, input.conversationId);
+  const [conversation] = await db
+    .select({ status: conversations.status })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.clientInstanceId, input.clientInstanceId),
+        eq(conversations.id, input.conversationId)
+      )
+    )
+    .limit(1);
   if (!conversation || conversation.status !== "active") {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
@@ -580,7 +615,8 @@ export async function touchConversation(
     .where(
       and(
         eq(conversations.clientInstanceId, clientInstanceId),
-        eq(conversations.id, conversationId)
+        eq(conversations.id, conversationId),
+        isNull(conversations.workflowRunId)
       )
     );
 }

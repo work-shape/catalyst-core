@@ -158,6 +158,7 @@ export interface WorkflowStepRunResource
   loop?: WorkflowLoopCounts;
   /** On the step run of a `workflow` step: the child run it started. Contract need C7. */
   childRunId?: string;
+  agent?: WorkflowStepRunView["agent"];
   /** On the step run of a condition that has decided. Contract need C3. */
   taken?: string;
   error?: ErrorResource;
@@ -313,6 +314,7 @@ export function toWorkflowStepRun(stepRun: WorkflowStepRunResource): WorkflowSte
   const childRunId = stepRun.childRunId ?? stepRun.linkedRunId;
   return {
     id: stepRun.id,
+    ...(stepRun.agent ? { agent: stepRun.agent } : {}),
     stepId: stepRun.stepId,
     kind: stepKind(stepRun.stepType) ?? "operation",
     status: stepRun.status,
@@ -527,6 +529,7 @@ function records(value: unknown): Record<string, unknown>[] {
 
 interface StepNames {
   facts?: Asset["stepFacts"];
+  tools: readonly string[];
   /** The names of the steps that can be referred to, by id. */
   names: ReadonlyMap<string, string>;
   triggerId: string | undefined;
@@ -611,6 +614,7 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
     steps.push({
       id,
       kind,
+      ...(kind === "agent" ? { instructions: text(raw.instructions), tools: known.tools } : {}),
       name: text(raw.name) ?? nameFromId(id),
       ...(description === undefined ? {} : { description }),
       ...(kind === "trigger"
@@ -698,6 +702,7 @@ export function toWorkflow(
   const steps = readSteps(definition.steps, {
     facts: pointers.stepFacts,
     names: stepNames(definition.steps),
+    tools: ids(definition.tools),
     triggerId,
     loops: new Map()
   });

@@ -1,3 +1,4 @@
+import { wakeWorkflowAgentStep } from "./postgres-workflow-agent-wake";
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import { lockParentRunsOf, settleEndedAgentRuns } from "./postgres-agent-run-lineage";
 import {
@@ -215,7 +216,11 @@ async function insertClaimedRunObservation(
   }
 
   // A subagent's thread takes no follow-ups: it has no composer.
-  if (event.type === "run_completed" && run.parentRunId === null) {
+  if (
+    event.type === "run_completed" &&
+    run.parentRunId === null &&
+    run.workflowStepRunId === null
+  ) {
     await enqueueJob(
       tx,
       dispatchConversationFollowUpJob,
@@ -246,6 +251,7 @@ async function insertClaimedRunObservation(
   // that waits in the Inbox (OP-4b). One in the conversation is decided only once it is
   // stored, and the resume leaves a run that waits on one alone.
   if (event.type === "tool_decision_requested") {
+    await wakeWorkflowAgentStep(tx, run);
     await resumeAgentRunAfterApproval(tx, {
       clientInstanceId: claim.clientInstanceId,
       agentRunId: claim.runId

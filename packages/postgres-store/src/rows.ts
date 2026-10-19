@@ -228,12 +228,13 @@ export function mapAgentRun(row: AgentRunRow | undefined): AgentRun {
   if (!row) {
     throw new AppError("INTERNAL", "Expected agent run row");
   }
-  if (row.ownerUserId === null) throw new AppError("INTERNAL", AGENT_STEP_ROW_MESSAGE);
   return {
     id: asAgentRunId(row.id),
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     conversationId: asConversationId(row.conversationId),
-    ownerUserId: row.ownerUserId,
+    ...(row.ownerUserId ? { ownerUserId: row.ownerUserId } : {}),
+    ...(row.principalId ? { principalId: row.principalId } : {}),
+    ...(row.workflowStepRunId ? { workflowStepRunId: row.workflowStepRunId } : {}),
     ...(row.parentRunId === null ? {} : { parentRunId: asAgentRunId(row.parentRunId) }),
     inputMessageId: asMessageId(row.inputMessageId),
     agentName: row.agentName,
@@ -264,12 +265,11 @@ export function mapRunObservation(row: RunObservationRow | undefined): RunObserv
   if (!row) {
     throw new AppError("INTERNAL", "Expected agent run observation row");
   }
-  if (row.ownerUserId === null) throw new AppError("INTERNAL", AGENT_STEP_ROW_MESSAGE);
   return {
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     runId: asAgentRunId(row.runId),
     conversationId: asConversationId(row.conversationId),
-    ownerUserId: row.ownerUserId,
+    ...(row.ownerUserId ? { ownerUserId: row.ownerUserId } : {}),
     sequence: row.sequence,
     type: row.type,
     payload: row.payload,
@@ -536,6 +536,7 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
   }
   return {
     id: row.id as ModelUsageEvent["id"],
+    ...(row.workflowRunId ? { workflowRunId: row.workflowRunId } : {}),
     status: row.status,
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     ...(row.conversationId === null

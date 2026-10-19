@@ -27,6 +27,7 @@ import {
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { workflowValueSchema } from "./dataset-schema";
+import { agentOutputSchemaSupported } from "./agent-schema";
 import { codeFileIssue } from "./code-step";
 import { isTimeZone, parseCron } from "./cron";
 import { workflowOperationTimeoutSchema } from "./operation-wait";
@@ -49,15 +50,7 @@ import {
 // definition, publishing one and starting a run all ask `parseWorkflowManifest`.
 
 /** The step types this release executes. A definition that names another is not accepted. */
-export const WORKFLOW_EXECUTED_STEP_TYPES = [
-  "trigger",
-  "operation",
-  "workflow",
-  "loop",
-  "code",
-  "notify",
-  "output"
-] as const satisfies readonly WorkflowStepType[];
+export const WORKFLOW_EXECUTED_STEP_TYPES = WORKFLOW_STEP_TYPES;
 
 /**
  * One thing that keeps a definition from being run: where it is, and a sentence to show. An
@@ -415,6 +408,13 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
   for (const [id, { step, sequence }] of index) {
     const refused = step.type === "operation" ? stepOperationRefusal(step.operation) : undefined;
     if (refused) issues.push({ path: `steps.${id}.operation`, ...refused });
+    if (step.type === "agent" && !agentOutputSchemaSupported(step.outputSchema)) {
+      issues.push({
+        path: `steps.${id}.outputSchema`,
+        message:
+          "An agent output schema supports named objects, arrays, strings, numbers, booleans, enums and required fields, without references or recursion"
+      });
+    }
     if (step.type === "code") {
       const file = codeFileIssue(step.file);
       if (file) issues.push({ path: `steps.${id}.file`, message: file });

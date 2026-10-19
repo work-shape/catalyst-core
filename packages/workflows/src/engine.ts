@@ -1,3 +1,4 @@
+import { startAgentStep } from "./agent-step";
 import { createStepBeginning } from "./step-begin";
 import { createRunReads } from "./run-reads";
 import { createRunFinisher } from "./run-finish";
@@ -153,6 +154,7 @@ export interface WorkflowEngine {
   /** The step runs of a run: all of them, or those of one block, status or item of a loop. */
   listStepRuns(input: {
     runId: string;
+    includeAgentData?: boolean;
     filter?: WorkflowStepRunFilter;
     page?: StorePage;
   }): Promise<WorkflowStepRunView[]>;
@@ -421,6 +423,23 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           systemic: error.code === "principal_inactive"
         });
       else await advance(tx, run, index, stepRun);
+      return;
+    }
+    if (end.kind === "agent") {
+      if (!live) {
+        await tx.workflowRuns.endStepRun({ ...ref, status: "cancelled", finishedAt });
+        return;
+      }
+      await startAgentStep(
+        tx,
+        run,
+        stepRun,
+        end,
+        index.get(stepRun.stepId)?.step.name ?? stepRun.stepId,
+        new Date(
+          now().getTime() + (options.stepDataDays ?? WORKFLOW_STEP_DATA_DAYS) * 86400000
+        ).toISOString()
+      );
       return;
     }
     if (end.kind === "child") {

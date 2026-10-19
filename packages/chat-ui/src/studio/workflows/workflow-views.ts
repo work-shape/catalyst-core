@@ -85,6 +85,8 @@ export interface WorkflowStepView {
   id: string;
   kind: WorkflowStepKind;
   name: string;
+  instructions?: string;
+  tools?: readonly string[];
   description?: string;
   /** On an operation step: whether it reads or changes, where the instance says it. */
   effect?: (typeof OPERATION_EFFECTS)[number];
@@ -368,6 +370,9 @@ export interface WorkflowStepRunView {
   publishedWouldAsk?: "approval";
   /** On the step run of a `workflow` step: the child run it started or was answered. */
   childRunId?: string;
+  agent?: Omit<import("@work-shape/catalyst-core").WorkflowAgentRunData, "runId"> & {
+    runId: string;
+  };
   failure?: WorkflowFailure;
   output?: WorkflowOutputPreview;
   /** The datasets the step wrote, where the instance names them. */

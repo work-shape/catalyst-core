@@ -285,7 +285,7 @@ function StepDescription({
   // A Notify node's line names its recipients, which the panel lists in a row of their own.
   const fallback = stepFallbackSentence(step);
   const sentence =
-    step.description ??
+    (step.kind === "agent" ? step.instructions : step.description) ??
     (recipients === undefined ? summary : fallback === undefined ? undefined : t(fallback));
   const worksOn =
     step.source === undefined
@@ -296,6 +296,14 @@ function StepDescription({
           ? t("workflows.panel.readsFrom")
           : t("workflows.panel.worksOn");
   const rows: { label: string; value: ReactNode }[] = [
+    ...(step.kind === "agent"
+      ? [
+          {
+            label: t("workflows.panel.agentTools"),
+            value: step.tools?.join(", ") || t("workflows.panel.noAgentTools")
+          }
+        ]
+      : []),
     ...(step.starts === undefined
       ? []
       : [
@@ -454,6 +462,38 @@ function StepRunDetails({
           </KeyValue>
         ) : null}
       </KeyValueList>
+      {stepRun.agent ? (
+        <>
+          <KeyValueList>
+            <KeyValue label={t("workflows.panel.agentUsage")}>
+              {stepRun.agent.usage.totalTokens.toLocaleString(locale)}
+            </KeyValue>
+          </KeyValueList>
+          {stepRun.agent.transcript ? (
+            <CodeBlock
+              label={t("workflows.panel.agentTranscript")}
+              code={stepRun.agent.transcript
+                .map((message) => {
+                  const speaker = t(
+                    message.role === "user"
+                      ? "workflows.panel.agentInput"
+                      : message.role === "tool"
+                        ? "workflows.panel.agentToolResult"
+                        : "workflows.panel.agentSpeaker"
+                  );
+                  const calls = message.toolCalls ?? [];
+                  const work = calls
+                    .map((call) => `${call.toolName} ${JSON.stringify(call.input)}`)
+                    .join("\n");
+                  return `${speaker}: ${message.text}${work ? `\n${work}` : ""}`;
+                })
+                .join("\n\n")}
+              lineNumbers={false}
+              maxLines={OUTPUT_PREVIEW_LINES}
+            />
+          ) : null}
+        </>
+      ) : null}
       {stepRun.loop === undefined ? null : (
         <p>{countsLine(stepRun.loop, translation, stepRun.finishedAt !== undefined)}</p>
       )}

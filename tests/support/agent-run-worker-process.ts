@@ -28,6 +28,7 @@ const jobs = createAgentRunJobs({
   stores,
   slots: 1,
   async loadCurrentUser(run) {
+    if (!run.ownerUserId) throw new AppError("NOT_FOUND", "Run has no person as owner");
     const user = await stores.users.getUser({
       clientInstanceId,
       userId: asUserId(run.ownerUserId)

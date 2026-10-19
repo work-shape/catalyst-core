@@ -10,6 +10,7 @@ import {
   type WorkflowCodeOutcome,
   type WorkflowRunError
 } from "@work-shape/catalyst-core";
+import { agentStepOutcome } from "./agent-step";
 import { operationWaitMs } from "./operation-wait";
 import { childStepOutcome } from "./child-runs";
 import { indexWorkflowSteps } from "./definition";
@@ -64,6 +65,19 @@ export function createStepClaim(options: {
         stepRun.status === "waiting" && stepRun.stepType === "workflow"
           ? await childStepOutcome(tx, run, stepRun)
           : undefined;
+      const afterAgent =
+        stepRun.status === "waiting" && stepRun.stepType === "agent"
+          ? await agentStepOutcome(tx, run, stepRun)
+          : undefined;
+      if (stepRun.status === "waiting" && stepRun.stepType === "agent" && !afterAgent) {
+        const child = await tx.childAgentRuns.readWorkflowAgentRun({
+          clientInstanceId,
+          stepRunId: stepRun.id
+        });
+        if (child?.status === "waiting_for_decision") await waiting.noteWaiting(tx, chain);
+        else await waiting.endWaits(tx, chain);
+        return undefined;
+      }
       const afterCode =
         stepRun.status === "waiting" && stepRun.stepType === "code"
           ? await tx.workflowRuns.readCodeOutcome(ref)
@@ -79,6 +93,7 @@ export function createStepClaim(options: {
         stepRun.status !== "queued" &&
         stepRun.status !== "running" &&
         !afterCode &&
+        !afterAgent &&
         !afterChild &&
         !afterOperation
       ) {

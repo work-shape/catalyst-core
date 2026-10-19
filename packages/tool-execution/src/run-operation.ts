@@ -540,6 +540,15 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
   if (run.target === "dry_run") {
     return { ending: await simulateRun(context, policy) };
   }
+  if (context.runtime.workflowAgent && policy.next === "await_confirmation") {
+    return {
+      ending: await denyRun(context, {
+        kind: "policy",
+        operation: definition.name,
+        reason: "confirmation_unattended"
+      })
+    };
+  }
   // A subagent never waits for a decision: the call does not run, and the agent that started
   // the subagent makes it where its person is asked (CR-1).
   if (

@@ -88,6 +88,7 @@ export interface ModelUsageEvent extends ModelTokenUsage {
   conversationId?: ConversationId;
   /** Absent for a call the product made for itself. */
   agentRunId?: AgentRunId;
+  workflowRunId?: string;
   /** The agent of the run. A call the product made for itself carries its purpose here too. */
   agentName: string;
   /** What a call the product made for itself was for. Absent for a call of an agent run. */
@@ -127,6 +128,7 @@ export type ModelEmbeddingPurpose = (typeof MODEL_EMBEDDING_PURPOSES)[number];
 
 /** What a model call that no agent run made was for. */
 export type ModelSystemPurpose =
+  | "workflow_step"
   | "conversation_title"
   | "guardrail_judge"
   | "document_extraction"
@@ -141,11 +143,12 @@ export const KNOWLEDGE_INGESTION_PURPOSES = [
 
 /** A model call an agent run made. */
 export interface AgentRunModelAttribution {
-  kind: "agent_run";
+  kind: "agent_run" | "workflow_step";
+  workflowRunId?: string;
   conversationId: ConversationId;
   runId: AgentRunId;
   agentName: string;
-  userId: string;
+  userId?: string;
   workspaceId?: string;
   /** The Operation Run of the tool call that made the model call, where a tool made it. */
   operationRunId?: string;
@@ -217,6 +220,7 @@ export interface ModelUsageEventRecordInput extends ModelTokenUsage {
   clientInstanceId: ClientInstanceId;
   conversationId?: ConversationId;
   agentRunId?: AgentRunId;
+  workflowRunId?: string;
   /** The agent of the run. A call the product made for itself carries its purpose here too. */
   agentName?: string;
   purpose?: ModelSystemPurpose;

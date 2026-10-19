@@ -1,3 +1,4 @@
+import { agentStepOutcome } from "./agent-step";
 import { valuePosition } from "./json";
 import { checkpointFrame } from "./continuation-checkpoint";
 import type { WorkflowLimitContext } from "./run-limits";
@@ -85,6 +86,11 @@ import { testRunCall } from "./test-run";
 
 /** How the attempt of a step went, before anything of it is written. */
 export type StepEnd =
+  | {
+      kind: "agent";
+      input: JsonObject;
+      principal: import("@work-shape/catalyst-core").WorkflowRunPrincipal;
+    }
   | { kind: "notice"; notice: NoticeSendInput }
   | { kind: "done"; output: JsonValue; operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
   | {
@@ -652,6 +658,34 @@ export function createStepExecutor(options: StepExecutorOptions) {
           }
           withinStepData(items, "The list of the loop");
           return { kind: "loop", items };
+        }
+        case "agent": {
+          const ended = await agentStepOutcome(stores, run, stepRun);
+          if (ended) {
+            if (ended.kind === "done") withinStepData(ended.output, "The agent output");
+            return ended;
+          }
+          const input = await resolveInput(scope, step.input);
+          withinStepData(input, "The input of the agent step");
+          if (holdsDatasetReference(input))
+            throw new WorkflowStepFailure(
+              "not_supported_yet",
+              "Agent steps do not receive datasets yet"
+            );
+          fitsSchema(
+            step.inputSchema,
+            input,
+            "input_invalid",
+            "The input does not fit the agent step"
+          );
+          const actor = await workflowRunActor(stores.apiAccess, run);
+          if (!actor)
+            throw new WorkflowStepFailure(
+              "run_as_disabled",
+              "The Workflow principal is unavailable",
+              { systemic: true }
+            );
+          return { kind: "agent", input, principal: actor };
         }
         case "code":
           return await stageCode(attempt, step);

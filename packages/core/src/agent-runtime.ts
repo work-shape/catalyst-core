@@ -39,6 +39,12 @@ export interface StartAgentRunInput {
   conversationId: ConversationId;
   idempotencyKey?: string;
   inputMessageId?: MessageId;
+  workflowAgent?: {
+    workflowRunId: string;
+    instructions: string;
+    toolNames: readonly string[];
+    outputSchema: JsonObject;
+  };
   preparedRun?: {
     id: AgentRunId;
     startedAt: ISODateString;
@@ -88,7 +94,10 @@ export interface AgentRun {
   id: AgentRunId;
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
-  ownerUserId: string;
+  /** Absent on a Workflow agent step, which acts as its principal. */
+  ownerUserId?: string;
+  principalId?: string;
+  workflowStepRunId?: string;
   /** Of a subagent: the run whose `run_agent` call started it. It is never started deeper. */
   parentRunId?: AgentRunId;
   inputMessageId: MessageId;
@@ -194,7 +203,7 @@ export interface RunObservation {
   clientInstanceId: ClientInstanceId;
   runId: AgentRunId;
   conversationId: ConversationId;
-  ownerUserId: string;
+  ownerUserId?: string;
   sequence: number;
   type: AgentRuntimeEvent["type"];
   payload: AgentRuntimeEvent;

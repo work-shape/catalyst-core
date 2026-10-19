@@ -42,7 +42,11 @@ export type OperationDenial =
        * Without a reason the policy refuses the call itself.
        */
       reason?:
-        "approval_unavailable" | "approval_stale" | "workflow_deleted" | "confirmation_required";
+        | "approval_unavailable"
+        | "approval_stale"
+        | "workflow_deleted"
+        | "confirmation_required"
+        | "confirmation_unattended";
       /**
        * The guardrail whose `require_approval` asked for the approval, where one did, with
        * its reason where it gave one.

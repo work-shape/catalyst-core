@@ -1,3 +1,4 @@
+import { workflowAgentActor } from "./workflow-agent-actor";
 import {
   GuardrailRunner,
   ApprovalRequestWorkflow,
@@ -98,7 +99,27 @@ export function createInstanceOperationCalls(
       handlers: input.approvalRequestHandlers,
       guardrails
     },
+    async workflowAgentActor(runId) {
+      const run = await store.agentRuns.getAgentRun({ clientInstanceId, runId });
+      return run ? workflowAgentActor(store, run) : undefined;
+    },
     async agentToolNames(agentName, conversationId) {
+      if (conversationId) {
+        const run = await store.agentRuns.getActiveConversationAgentRun({
+          clientInstanceId,
+          conversationId
+        });
+        if (run?.workflowStepRunId) {
+          const step = await store.workflowRuns.getStepRun({
+            clientInstanceId,
+            id: run.workflowStepRunId
+          });
+          const definition =
+            step &&
+            (await store.workflowRuns.readRunDefinition({ clientInstanceId, id: step.runId }));
+          return definition?.tools ?? [];
+        }
+      }
       const assets = await assetSource.getSnapshot();
       const agent = assets.agents.find((candidate) => candidate.name === agentName);
       const listed = agent?.toolNames ?? [];

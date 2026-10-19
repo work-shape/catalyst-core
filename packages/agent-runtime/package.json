@@ -39,6 +39,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@work-shape/catalyst-connections": "workspace:*",
     "@work-shape/catalyst-core": "workspace:*",
     "@work-shape/catalyst-model-provider": "workspace:*"
   },

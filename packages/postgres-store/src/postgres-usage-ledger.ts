@@ -128,7 +128,7 @@ function insertEvent(input: {
   const personal = personalOf(event);
   return drizzleSql`
     insert into model_usage_events (
-      id, client_instance_id, conversation_id, agent_run_id, agent_name, purpose, provider_id,
+      id, client_instance_id, conversation_id, agent_run_id, agent_name, purpose, workflow_run_id, provider_id,
       model, region, binding_id, input_tokens, cached_input_tokens, output_tokens, total_tokens,
       web_search_call_count, fast_mode, provider_service_tier, preview, source,
       customer_billable_cost, user_id, collaboration_workspace_id, operation_run_id,
@@ -136,7 +136,7 @@ function insertEvent(input: {
     )
     select
       ${input.id}, ${event.clientInstanceId}, ${personal(event.conversationId)},
-      ${personal(event.agentRunId)}, ${event.agentName ?? null}, ${event.purpose ?? null},
+      ${personal(event.agentRunId)}, ${event.agentName ?? null}, ${event.purpose ?? null}, ${event.workflowRunId ?? null},
       ${event.providerId}, ${event.model}, ${event.region ?? null}, ${event.bindingId ?? null},
       ${event.inputTokens}::int, ${event.cachedInputTokens ?? null}::int,
       ${event.outputTokens}::int, ${event.totalTokens}::int, ${event.webSearchCallCount}::int,

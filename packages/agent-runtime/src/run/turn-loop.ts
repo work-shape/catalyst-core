@@ -1,6 +1,9 @@
+import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import { collectKnowledgeCitations } from "./knowledge-citations";
 import {
   AppError,
+  WorkflowAgentOutputInvalidError,
+  WORKFLOW_STEP_DATA_MAX_BYTES,
   SUBJECT_TOOL_PREFIX,
   systemClock,
   unknownToJsonValue,
@@ -70,16 +73,27 @@ export class TurnLoop {
     context: RuntimeCallContext
   ): Promise<RunSetup> {
     const assets = await this.options.assetSource.getSnapshot();
-    const listed = getSnapshotAgentConfig(assets, input.agentName);
+    const listed: import("@work-shape/catalyst-core").AgentConfig = input.workflowAgent
+      ? {
+          name: input.agentName,
+          instructions: input.workflowAgent.instructions,
+          toolNames: [...input.workflowAgent.toolNames],
+          skillNames: [],
+          displayName: { en: input.agentName, de: input.agentName },
+          initialPrompts: []
+        }
+      : getSnapshotAgentConfig(assets, input.agentName);
     // An agent whose definition lists the platform's tools is offered those it lists, the
     // orientation on the platform and the skills the platform ships. The asset tools come from
     // the offer alone, which may hold back one the definition lists.
-    const offer = await this.options.conversationOffer?.offerOf({
-      clientInstanceId: context.clientInstanceId,
-      conversationId: input.conversationId,
-      agentToolNames: listed.toolNames,
-      user: context.user
-    });
+    const offer = input.workflowAgent
+      ? undefined
+      : await this.options.conversationOffer?.offerOf({
+          clientInstanceId: context.clientInstanceId,
+          conversationId: input.conversationId,
+          agentToolNames: listed.toolNames,
+          user: context.user
+        });
     const withheld = new Set(offer?.withheldToolNames ?? []);
     const agent = {
       ...listed,
@@ -148,14 +162,21 @@ export class TurnLoop {
     );
     const systemMessage: ModelMessage = {
       role: "system",
-      content: createSystemInstructions(agent.instructions, context.locale, {
-        currentDate: this.options.clock?.now() ?? systemClock.now(),
-        skills: getSnapshotSkillMetadata(assets, agent, offer?.skillNames ?? []),
-        agentToolNames: agent.toolNames,
-        agentSkillChangesEnabled: this.options.agentSkillChangesEnabled,
-        ...(offer?.orientation ? { orientation: offer.orientation } : {}),
-        ...(offer?.subject ? { subject: { ...offer, subject: offer.subject } } : {})
-      })
+      content: createSystemInstructions(
+        agent.instructions +
+          (input.workflowAgent
+            ? `\nReturn only JSON matching this output schema: ${JSON.stringify(input.workflowAgent.outputSchema)}`
+            : ""),
+        context.locale,
+        {
+          currentDate: this.options.clock?.now() ?? systemClock.now(),
+          skills: getSnapshotSkillMetadata(assets, agent, offer?.skillNames ?? []),
+          agentToolNames: agent.toolNames,
+          agentSkillChangesEnabled: this.options.agentSkillChangesEnabled,
+          ...(offer?.orientation ? { orientation: offer.orientation } : {}),
+          ...(offer?.subject ? { subject: { ...offer, subject: offer.subject } } : {})
+        }
+      )
     };
     const userMessage: ModelMessage = { role: "user", content: userContent };
     return {
@@ -373,7 +394,62 @@ export class TurnLoop {
         if (context.signal?.aborted || isCancellationRequested(state.getStatus())) {
           return;
         }
-        const assistantText = completion.text || completedWithoutTextFallback(context.locale);
+        let assistantText = completion.text || completedWithoutTextFallback(context.locale);
+        if (input.workflowAgent) {
+          const schema = compileJsonSchema(input.workflowAgent.outputSchema);
+          const invalid = (text: string): string | undefined => {
+            if (Buffer.byteLength(text, "utf8") > WORKFLOW_STEP_DATA_MAX_BYTES)
+              return `output exceeds ${WORKFLOW_STEP_DATA_MAX_BYTES} bytes`;
+            try {
+              const value: unknown = JSON.parse(text);
+              if (!schema.ok) return "schema";
+              const [issue] = schema.validate(value);
+              return issue ? issue.path.join(".") || "output" : undefined;
+            } catch {
+              return "JSON";
+            }
+          };
+          const issue = invalid(assistantText);
+          if (issue) {
+            await this.runEvents.beforeEffect("assistant_message", runId);
+            await this.options.conversationHistory.appendAssistantMessage({
+              clientInstanceId: context.clientInstanceId,
+              conversationId: input.conversationId,
+              text: assistantText,
+              metadata: { workflowRejectedOutput: true }
+            });
+            messages.push(
+              { role: "assistant", content: assistantText },
+              {
+                role: "user",
+                content: `The output is invalid at ${issue}. Repair the rejected answer to match the output schema. Return JSON only. No tools may be called.`
+              }
+            );
+            const repair = await this.modelInput.callModel(
+              runId,
+              input,
+              context,
+              messages,
+              modelSelection,
+              [],
+              undefined,
+              state,
+              this.runEvents
+            );
+            assistantText = repair.completion.text;
+            const secondIssue = invalid(assistantText);
+            if (secondIssue || repair.completion.toolCalls.length > 0) {
+              await this.runEvents.beforeEffect("assistant_message", runId);
+              await this.options.conversationHistory.appendAssistantMessage({
+                clientInstanceId: context.clientInstanceId,
+                conversationId: input.conversationId,
+                text: assistantText,
+                metadata: { workflowRejectedOutput: true }
+              });
+              throw new WorkflowAgentOutputInvalidError(secondIssue ?? "toolCalls");
+            }
+          }
+        }
         await this.runEvents.beforeEffect("assistant_message", runId);
         const persisted = await this.options.conversationHistory.appendAssistantMessage({
           clientInstanceId: context.clientInstanceId,

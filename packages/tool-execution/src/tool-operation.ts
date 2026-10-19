@@ -4,6 +4,7 @@ import {
   AGENTS_RUN_OPERATION,
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
+  ConfirmationUnattendedError,
   INTERRUPTED_RUN_ERROR,
   KNOWLEDGE_OPERATION_PREFIX,
   KNOWLEDGE_QUERY_TOOL_NAME,
@@ -525,11 +526,20 @@ export function createToolOperationRunner(
           signal: context.signal,
           runFence: context.runFence,
           ...(context.subagent ? { subagent: true } : {}),
+          ...(context.workflowAgent ? { workflowAgent: true } : {}),
           ...(context.unattended ? { unattended: true } : {}),
           unreadableInput: options.unreadableInput
         }
       );
       const { result } = outcome;
+      if (
+        context.workflowAgent &&
+        result.status === "denied" &&
+        result.reason.kind === "policy" &&
+        result.reason.reason === "confirmation_unattended"
+      ) {
+        throw new ConfirmationUnattendedError();
+      }
       if (result.status === "pending_confirmation" || result.status === "pending_approval") {
         // Both decisions hold the step open; neither is a successful tool result.
         return {

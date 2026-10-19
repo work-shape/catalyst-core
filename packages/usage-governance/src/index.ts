@@ -97,6 +97,7 @@ export type SafeModelUsageEvent = Pick<
   | "clientInstanceId"
   | "conversationId"
   | "agentRunId"
+  | "workflowRunId"
   | "agentName"
   | "purpose"
   | "providerId"
@@ -570,6 +571,7 @@ function usageEventOrigin(
   ModelUsageEventRecordInput,
   | "conversationId"
   | "agentRunId"
+  | "workflowRunId"
   | "agentName"
   | "purpose"
   | "userId"
@@ -582,11 +584,14 @@ function usageEventOrigin(
       ? {}
       : { collaborationWorkspaceId: attribution.workspaceId })
   };
-  if (attribution.kind === "agent_run") {
+  if (attribution.kind !== "system") {
     return {
       ...who,
       conversationId: attribution.conversationId,
       agentRunId: attribution.runId,
+      ...(attribution.kind === "workflow_step"
+        ? { purpose: "workflow_step", workflowRunId: attribution.workflowRunId }
+        : {}),
       agentName: attribution.agentName,
       ...(attribution.operationRunId ? { operationRunId: attribution.operationRunId } : {})
     };

@@ -67,6 +67,7 @@ export interface WorkflowRunsPort {
   }): Promise<WorkflowRunView[]>;
   listStepRuns(input: {
     runId: string;
+    includeAgentData?: boolean;
     filter?: WorkflowStepRunFilter;
     page?: StorePage;
   }): Promise<WorkflowStepRunView[]>;

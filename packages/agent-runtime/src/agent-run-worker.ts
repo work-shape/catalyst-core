@@ -1,3 +1,4 @@
+import { readWorkflowAgentInput } from "./run/workflow-agent";
 import {
   AGENT_RUN_CANCELLATION_CHECK_INTERVAL_MS,
   AGENT_RUN_INTERRUPTED_ERROR,
@@ -483,6 +484,7 @@ async function executeClaimedRun(
         runFence: { runId: run.id, lease },
         // A subagent never waits for a decision and starts no subagent of its own (CR-1).
         ...(run.parentRunId ? { subagent: true } : {}),
+        ...(run.workflowStepRunId ? { workflowAgent: true } : {}),
         ...(!run.parentRunId && (scheduled || options.unattended?.(run))
           ? { unattended: true }
           : {})
@@ -551,7 +553,9 @@ async function reconstructInput(
     throw new AppError("NOT_FOUND", "Agent run input message is not available");
   }
   const attachmentManifest = readUserAttachmentManifest(message.metadata);
+  const workflowAgent = await readWorkflowAgentInput(options.stores, run);
   return {
+    ...(workflowAgent ? { workflowAgent } : {}),
     agentName: run.agentName,
     modelBindingId: run.modelBindingId,
     reasoningEffort: run.reasoningEffort,
@@ -726,10 +730,11 @@ function failedEvent(
 
 function requireAuthorization(run: AgentRun, user: AuthenticatedUser) {
   const authorization = run.authorization;
+  const subjectId = run.ownerUserId ?? run.principalId;
   if (
     !authorization ||
-    authorization.subjectUserId !== run.ownerUserId ||
-    getSubjectUserId(user) !== run.ownerUserId ||
+    authorization.subjectUserId !== subjectId ||
+    getSubjectUserId(user) !== subjectId ||
     user.clientInstanceId !== run.clientInstanceId ||
     authorization.principal.clientInstanceId !== run.clientInstanceId ||
     !Array.isArray(authorization.scopes) ||

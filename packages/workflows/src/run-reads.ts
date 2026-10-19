@@ -47,10 +47,12 @@ export function createRunReads(options: {
 
     async listStepRuns({
       runId,
+      includeAgentData,
       filter,
       page
     }: {
       runId: string;
+      includeAgentData?: boolean;
       filter?: WorkflowStepRunFilter;
       page?: StorePage;
     }) {
@@ -62,6 +64,22 @@ export function createRunReads(options: {
         ...(filter ? { filter } : {}),
         ...(page ? { page } : {})
       });
+      stepRuns = await Promise.all(
+        stepRuns.map(async (step) => {
+          if (step.stepType !== "agent") return step;
+          const agent = await stores.childAgentRuns.readWorkflowAgentData({
+            clientInstanceId,
+            stepRunId: step.id,
+            includeTranscript: includeAgentData === true && !run.dataPrunedAt
+          });
+          const { outputPreview, ...summary } = step;
+          return {
+            ...summary,
+            ...(agent ? { agent } : {}),
+            ...(includeAgentData && outputPreview ? { outputPreview } : {})
+          };
+        })
+      );
       const rows = await stores.workflowRunDatasets.listForSteps({
         clientInstanceId,
         stepRunIds: stepRuns.map((step) => step.id)

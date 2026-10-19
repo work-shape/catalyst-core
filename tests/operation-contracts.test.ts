@@ -326,7 +326,8 @@ describe("operation contracts", () => {
             | "approval_unavailable"
             | "approval_stale"
             | "workflow_deleted"
-            | "confirmation_required";
+            | "confirmation_required"
+            | "confirmation_unattended";
           guardrail?: { id: string; label: string; reason?: string };
         }
       | {

@@ -276,12 +276,19 @@ function registerWorkflowRoutes(
           : input.keyPrefix !== undefined
             ? { prefix: input.keyPrefix }
             : undefined;
+      const includeData = context.access.authorize(
+        WORKFLOW_ACTIONS.readRunData,
+        await resourceOf(input.workflow)
+      ).allowed;
       const runs = await required().listRuns({
         workflow: input.workflow,
         ...(key ? { key } : {}),
         ...(context.paging ? { page: context.paging } : {})
       });
-      return withConnectionTitles(context.access, runs.map(toRunResource));
+      return withConnectionTitles(
+        context.access,
+        runs.map((run) => toRunResource(run, includeData))
+      );
     }
   });
 
@@ -314,8 +321,12 @@ function registerWorkflowRoutes(
     resource: runResource,
     module: WORKFLOWS_MODULE,
     execute: async (input, { access, actor, origin }) => {
-      const run = toRunResource(await runOf(input.runId, mayReadRun(access, actor, origin)));
-      const [titled = run] = await withConnectionTitles(access, [run]);
+      const run = await runOf(input.runId, mayReadRun(access, actor, origin));
+      const resource = toRunResource(
+        run,
+        access.authorize(WORKFLOW_ACTIONS.readRunData, await resourceOf(run.workflow)).allowed
+      );
+      const [titled = resource] = await withConnectionTitles(access, [resource]);
       return titled;
     }
   });
@@ -342,8 +353,13 @@ function registerWorkflowRoutes(
           "'iteration' names an item of one loop: give the 'containerStepRunId' of that loop's step run with it"
         );
       }
+      const mayReadData = context.access.authorize(
+        WORKFLOW_ACTIONS.readRunData,
+        await resourceOf(run.workflow)
+      ).allowed;
       const stepRuns = await required().listStepRuns({
         runId: run.id,
+        includeAgentData: mayReadData,
         filter: {
           ...(topLevel ? { topLevel } : {}),
           ...(containerStepRunId === undefined ? {} : { containerStepRunId }),
@@ -352,15 +368,14 @@ function registerWorkflowRoutes(
         },
         ...(context.paging ? { page: context.paging } : {})
       });
-      // A step's input is run data: it may hold what the run read from an outside system.
-      const runData = decide(
-        context.access,
-        WORKFLOW_ACTIONS.readRunData,
-        await resourceOf(run.workflow)
-      ).allowed;
       return withConnectionTitles(
         context.access,
-        stepRuns.map((stepRun) => toStepRunResource(stepRun, runData))
+        stepRuns.map((step) => {
+          const { outputPreview, log, ...summary } = toStepRunResource(step, mayReadData);
+          return mayReadData
+            ? { ...summary, ...(outputPreview ? { outputPreview } : {}), ...(log ? { log } : {}) }
+            : summary;
+        })
       );
     }
   });
@@ -388,10 +403,19 @@ function startedBy(run: WorkflowRunView, actor: AuthenticatedIdentity): boolean 
 }
 
 /** A run as the API answers it: without the instance and the correlation id it carries. */
-function toRunResource(run: WorkflowRunView) {
-  const { clientInstanceId: _instance, correlationId: _correlation, principal, ...resource } = run;
+function toRunResource(run: WorkflowRunView, includeData = true) {
+  const {
+    clientInstanceId: _instance,
+    correlationId: _correlation,
+    principal,
+    outputPreview,
+    datasets,
+    ...resource
+  } = run;
   return {
     ...resource,
+    ...(includeData && outputPreview ? { outputPreview } : {}),
+    ...(includeData && datasets ? { datasets } : {}),
     principal: { id: principal.id, name: principal.name, displayLabel: principal.displayLabel },
     startedBy: { kind: run.startedBy.kind, id: run.startedBy.id, label: run.startedBy.label }
   };

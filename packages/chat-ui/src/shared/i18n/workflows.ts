@@ -3,6 +3,13 @@ import { defineTranslations } from "./translation-area";
 /** Workflows: their list, what one does, its runs, and one run with its steps. */
 export const workflows = defineTranslations({
   en: {
+    "workflows.panel.agentInput": "Input",
+    "workflows.panel.agentToolResult": "Tool result",
+    "workflows.panel.agentSpeaker": "Agent",
+    "workflows.panel.agentTools": "Tools",
+    "workflows.panel.noAgentTools": "No tools",
+    "workflows.panel.agentUsage": "Tokens used",
+    "workflows.panel.agentTranscript": "Agent transcript",
     "workflows.notRunnable.accountDisabled":
       "This workflow runs as the technical account “{name}”, which is switched off. An administrator switches it on under {place}.",
     "workflows.notRunnable.accountUnavailable":
@@ -390,6 +397,13 @@ export const workflows = defineTranslations({
     "workflows.unavailable": "This workflow is not available to you."
   },
   de: {
+    "workflows.panel.agentInput": "Eingabe",
+    "workflows.panel.agentToolResult": "Werkzeugergebnis",
+    "workflows.panel.agentSpeaker": "Agent",
+    "workflows.panel.agentTools": "Werkzeuge",
+    "workflows.panel.noAgentTools": "Keine Werkzeuge",
+    "workflows.panel.agentUsage": "Verwendete Tokens",
+    "workflows.panel.agentTranscript": "Agentenprotokoll",
     "workflows.notRunnable.accountDisabled":
       "Dieser Workflow läuft als Technisches Konto „{name}“, das ausgeschaltet ist. Ein Administrator schaltet es unter {place} ein.",
     "workflows.notRunnable.accountUnavailable":

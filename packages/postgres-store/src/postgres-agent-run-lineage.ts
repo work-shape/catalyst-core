@@ -1,3 +1,4 @@
+import { wakeWorkflowAgentStep } from "./postgres-workflow-agent-wake";
 import {
   ACTIVE_AGENT_RUN_STATUSES,
   agentRunJobOptions,
@@ -69,6 +70,20 @@ export async function settleEndedAgentRuns(
   at: Date
 ): Promise<{ queuedParents: number }> {
   if (ended.length === 0) return { queuedParents: 0 };
+  const workflowAgents = await tx
+    .select()
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.clientInstanceId, clientInstanceId),
+        inArray(
+          agentRuns.id,
+          ended.map((run) => run.id)
+        ),
+        isNotNull(agentRuns.workflowStepRunId)
+      )
+    );
+  for (const child of workflowAgents) await wakeWorkflowAgentStep(tx, child);
   await cancelOpenChildren(
     tx,
     clientInstanceId,

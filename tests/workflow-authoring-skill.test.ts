@@ -103,13 +103,8 @@ describe("the skill for writing a Workflow", () => {
     });
     expect(parseWorkflowManifest(withStep("none")).ok).toBe(true);
     expect(parseWorkflowManifest(withStep("notify")).ok).toBe(true);
-    for (const type of ["agent"]) {
-      expect(workflowStepTypesNotRun()).toContain(type);
-      const parsed = parseWorkflowManifest(withStep(type));
-      expect(parsed.ok ? [] : parsed.issues.map((issue) => issue.code)).toEqual([
-        "not_supported_yet"
-      ]);
-    }
+    expect(workflowStepTypesNotRun()).not.toContain("agent");
+    expect(parseWorkflowManifest(withStep("agent")).ok).toBe(true);
   });
 
   it("shows examples the engine accepts as they are written", () => {

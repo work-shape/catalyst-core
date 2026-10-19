@@ -317,7 +317,7 @@ describe("agent run jobs beside an API and a worker of the previous release", ()
           (client_instance_id, run_id, conversation_id, owner_user_id, sequence, type, payload,
            created_at)
         values
-          (${fixture.clientInstanceId}, ${run.id}, ${run.conversationId}, ${run.ownerUserId},
+          (${fixture.clientInstanceId}, ${run.id}, ${run.conversationId}, ${run.ownerUserId ?? null},
            ${sequence}, ${type}, ${tx.json(payload)}, ${createdAt})
       `;
       return true;

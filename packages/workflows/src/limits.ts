@@ -1,4 +1,4 @@
-import { WORKFLOW_PAGING_DEFAULTS } from "@work-shape/catalyst-core";
+import { WORKFLOW_PAGING_DEFAULTS, WORKFLOW_STEP_DATA_MAX_BYTES } from "@work-shape/catalyst-core";
 
 // The bounds of one Workflow Run. Those of a run are settings: `limits` in `workflow.yaml`
 // raises or lowers each one, under the ceiling the operator sets in release config
@@ -31,11 +31,7 @@ export const WORKFLOW_RUN_MAX_DURATION_MS = 12 * 60 * 60 * 1_000;
  */
 export const WORKFLOW_LOOP_MAX_ITEMS = 10_000;
 
-/**
- * How large the input or the output of one step may be, as JSON in UTF-8. Step data is kept
- * in the run's rows and read by the steps after it, so a larger value fails the step.
- */
-export const WORKFLOW_STEP_DATA_MAX_BYTES = 256 * 1_024;
+export { WORKFLOW_STEP_DATA_MAX_BYTES } from "@work-shape/catalyst-core";
 
 /** How large `workflow.yaml` may be. A larger file is not read as a definition. */
 export const WORKFLOW_MANIFEST_MAX_BYTES = 256 * 1_024;

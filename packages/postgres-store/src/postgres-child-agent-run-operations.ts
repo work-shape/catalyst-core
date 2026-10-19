@@ -1,5 +1,6 @@
 import {
   ACTIVE_AGENT_RUN_STATUSES,
+  readAssistantToolCallsMetadata,
   AppError,
   SUBAGENTS_PER_RUN,
   SUBAGENT_ANSWER_MAX_LENGTH,
@@ -19,6 +20,7 @@ import {
   type SubagentSummary
 } from "@work-shape/catalyst-core";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { requestAgentRunCancellation } from "./postgres-agent-run-cancellation";
 import { enqueueJob } from "./jobs/store";
 import { enqueueSubagentWake, hasOpenChildren } from "./postgres-agent-run-lineage";
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
@@ -31,6 +33,7 @@ import {
   managedArtifacts,
   messages,
   operationRuns,
+  modelUsageEvents,
   workspaceCommands
 } from "./schema";
 
@@ -45,6 +48,152 @@ export function createPostgresChildAgentRunStore(
   enqueued: () => void
 ): ChildAgentRunStore {
   return {
+    async readWorkflowAgentData(input) {
+      const child = await this.readWorkflowAgentRun(input);
+      if (!child) return undefined;
+      const [usage] = await db
+        .select({
+          modelCallCount: count(),
+          inputTokens: sql<number>`coalesce(sum(${modelUsageEvents.inputTokens}), 0)::int`,
+          outputTokens: sql<number>`coalesce(sum(${modelUsageEvents.outputTokens}), 0)::int`,
+          totalTokens: sql<number>`coalesce(sum(${modelUsageEvents.totalTokens}), 0)::int`
+        })
+        .from(modelUsageEvents)
+        .where(
+          and(
+            eq(modelUsageEvents.clientInstanceId, input.clientInstanceId),
+            eq(modelUsageEvents.agentRunId, child.id)
+          )
+        );
+      const transcript = input.includeTranscript
+        ? await db
+            .select({ role: messages.role, text: messages.text, metadata: messages.metadata })
+            .from(messages)
+            .where(
+              and(
+                eq(messages.clientInstanceId, input.clientInstanceId),
+                eq(messages.conversationId, child.conversationId)
+              )
+            )
+            .orderBy(asc(messages.createdAt), asc(messages.storageOrdinal))
+        : undefined;
+      return {
+        runId: child.id,
+        status: child.status,
+        usage: usage ?? { modelCallCount: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        ...(transcript
+          ? {
+              transcript: transcript.map(({ metadata, ...message }) => {
+                const toolCalls = readAssistantToolCallsMetadata(metadata)?.toolCalls.map(
+                  ({ toolName, input }) => ({ toolName, input })
+                );
+                return { ...message, ...(toolCalls?.length ? { toolCalls } : {}) };
+              })
+            }
+          : {})
+      };
+    },
+    async startWorkflowAgentRun(input) {
+      const [existing] = await db
+        .select()
+        .from(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.clientInstanceId, input.clientInstanceId),
+            eq(agentRuns.workflowStepRunId, input.stepRunId)
+          )
+        )
+        .limit(1);
+      if (existing) return mapAgentRun(existing);
+      const at = new Date();
+      const threadId = createPlatformId<"ConversationId">("conv");
+      const inputMessageId = createPlatformId<"MessageId">("msg");
+      await db.insert(conversations).values({
+        id: threadId,
+        clientInstanceId: input.clientInstanceId,
+        kind: "run_thread",
+        workflowRunId: input.runId,
+        visibility: "private",
+        title: input.title,
+        status: "active",
+        createdAt: at,
+        updatedAt: at,
+        retainedUntil: new Date(input.retainedUntil)
+      });
+      await db.insert(messages).values({
+        id: inputMessageId,
+        clientInstanceId: input.clientInstanceId,
+        conversationId: threadId,
+        role: "user",
+        text: input.task,
+        metadata: {},
+        createdAt: at
+      });
+      const [row] = await db
+        .insert(agentRuns)
+        .values({
+          id: createPlatformId<"AgentRunId">("run"),
+          clientInstanceId: input.clientInstanceId,
+          conversationId: threadId,
+          principalId: input.principal.id,
+          workflowStepRunId: input.stepRunId,
+          inputMessageId,
+          agentName: input.title,
+          status: "queued",
+          startedAt: at,
+          updatedAt: at,
+          correlationId: input.correlationId,
+          authorizationContext: {
+            principal: {
+              kind: "service",
+              id: input.principal.id,
+              displayLabel: input.principal.displayLabel,
+              clientInstanceId: input.clientInstanceId,
+              authSource: "workflow_run"
+            },
+            subjectUserId: input.principal.id,
+            scopes: []
+          }
+        })
+        .returning();
+      const run = mapAgentRun(row);
+      await enqueueJob(db, executeAgentRunJob, { runId: run.id }, agentRunJobOptions(run));
+      enqueued();
+      return run;
+    },
+    async cancelWorkflowAgentRuns(input) {
+      const rows = await db
+        .select({ id: agentRuns.id })
+        .from(agentRuns)
+        .innerJoin(conversations, eq(conversations.id, agentRuns.conversationId))
+        .where(
+          and(
+            eq(agentRuns.clientInstanceId, input.clientInstanceId),
+            eq(conversations.workflowRunId, input.runId),
+            inArray(agentRuns.status, ACTIVE_AGENT_RUN_STATUSES)
+          )
+        );
+      for (const row of rows)
+        await requestAgentRunCancellation(db, {
+          clientInstanceId: input.clientInstanceId,
+          runId: asAgentRunId(row.id),
+          requestedAt: new Date().toISOString(),
+          reason: "The Workflow run ended"
+        });
+    },
+    async readWorkflowAgentRun(input) {
+      const [row] = await db
+        .select()
+        .from(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.clientInstanceId, input.clientInstanceId),
+            eq(agentRuns.workflowStepRunId, input.stepRunId)
+          )
+        )
+        .limit(1);
+      return row ? mapAgentRun(row) : undefined;
+    },
     async startSubagentRun(input) {
       const started = await startSubagentRun(db, input);
       if (started.status === "started" && started.run.status === "queued") enqueued();

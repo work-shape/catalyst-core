@@ -16,6 +16,13 @@ import {
 import { WORKFLOW_ENDED_STATUSES, type WorkflowRunsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { runIs } from "./postgres-workflow-run-mapping";
+import {
+  conversations,
+  messages,
+  agentRunObservations,
+  agentRuns,
+  modelProviderContinuations
+} from "./schema";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 
 // This is the only owner of values on Workflow Runs and ALL attempts of their steps.
@@ -201,34 +208,61 @@ export function workflowRetention(
       return pruned.length;
     },
     async markRunDataPruned(ref) {
-      const remaining = db
-        .select({ id: workflowStepRuns.id })
-        .from(workflowStepRuns)
-        .where(
-          and(
-            eq(workflowStepRuns.clientInstanceId, ref.clientInstanceId),
-            eq(workflowStepRuns.runId, ref.id),
-            hasStepValue
+      return db.transaction(async (tx) => {
+        const remaining = tx
+          .select({ id: workflowStepRuns.id })
+          .from(workflowStepRuns)
+          .where(
+            and(
+              eq(workflowStepRuns.clientInstanceId, ref.clientInstanceId),
+              eq(workflowStepRuns.runId, ref.id),
+              hasStepValue
+            )
+          );
+        const marked = await tx
+          .update(workflowRuns)
+          .set({
+            ...runValues,
+            // Preserve when values first expired, including when repairing an older prune.
+            dataPrunedAt: sql`coalesce(${workflowRuns.dataPrunedAt}, ${ref.prunedAt}::timestamptz)`,
+            dataPruneVersion: WORKFLOW_RETENTION_VERSION
+          })
+          .where(
+            and(
+              runIs(ref),
+              sql`${workflowRuns.dataPruneVersion} < ${sql.raw(String(WORKFLOW_RETENTION_VERSION))}`,
+              inArray(workflowRuns.status, [...WORKFLOW_ENDED_STATUSES]),
+              notExists(remaining)
+            )
           )
-        );
-      const marked = await db
-        .update(workflowRuns)
-        .set({
-          ...runValues,
-          // Preserve when values first expired, including when repairing an older prune.
-          dataPrunedAt: sql`coalesce(${workflowRuns.dataPrunedAt}, ${ref.prunedAt}::timestamptz)`,
-          dataPruneVersion: WORKFLOW_RETENTION_VERSION
-        })
-        .where(
-          and(
-            runIs(ref),
-            sql`${workflowRuns.dataPruneVersion} < ${sql.raw(String(WORKFLOW_RETENTION_VERSION))}`,
-            inArray(workflowRuns.status, [...WORKFLOW_ENDED_STATUSES]),
-            notExists(remaining)
-          )
-        )
-        .returning({ id: workflowRuns.id });
-      return marked.length > 0;
+          .returning({ id: workflowRuns.id });
+        if (marked.length > 0) {
+          const threads = tx
+            .select({ id: conversations.id })
+            .from(conversations)
+            .where(
+              and(
+                eq(conversations.clientInstanceId, ref.clientInstanceId),
+                eq(conversations.workflowRunId, ref.id)
+              )
+            );
+          await tx
+            .update(messages)
+            .set({ text: "", metadata: {} })
+            .where(inArray(messages.conversationId, threads));
+          await tx
+            .delete(agentRunObservations)
+            .where(inArray(agentRunObservations.conversationId, threads));
+          await tx
+            .delete(modelProviderContinuations)
+            .where(inArray(modelProviderContinuations.conversationId, threads));
+          await tx
+            .update(agentRuns)
+            .set({ resumeState: null })
+            .where(inArray(agentRuns.conversationId, threads));
+        }
+        return marked.length > 0;
+      });
     }
   };
 }

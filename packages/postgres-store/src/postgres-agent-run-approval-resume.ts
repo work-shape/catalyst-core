@@ -1,3 +1,4 @@
+import { wakeWorkflowAgentStep } from "./postgres-workflow-agent-wake";
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import {
   agentRunJobOptions,
@@ -92,6 +93,7 @@ export async function resumeAgentRunAfterApproval(
     .update(agentRuns)
     .set({ status: "queued", lastSequence: sequence, updatedAt: sql`now()` })
     .where(identity);
+  await wakeWorkflowAgentStep(tx, { ...run, lastSequence: sequence });
   await enqueueJob(
     tx,
     executeAgentRunJob,

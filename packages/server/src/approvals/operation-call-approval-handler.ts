@@ -12,7 +12,6 @@ import {
   type ApprovalRequestOutcome,
   type ApprovalRequestStore,
   type ApprovalTransactionStores,
-  type AuthenticatedUser,
   type ClientInstanceId,
   type ConfigAssetStore,
   type JsonObject,
@@ -68,6 +67,9 @@ export interface OperationCallApprovalOptions {
   /** The call path the frozen call is executed on. Read when a request is decided. */
   deps(): RunOperationDeps;
   users: Pick<UserStore, "getUser">;
+  workflowAgentActor?(
+    runId: import("@work-shape/catalyst-core").AgentRunId
+  ): Promise<import("@work-shape/catalyst-core").WorkflowRunPrincipal | undefined>;
   /** Describes the asset a held `assets.put` saves. Without it such a call is shown as any other. */
   assetPreview?: HeldAssetPreviewer;
   /** Where a kind reads what its request is about, outside a decision. */
@@ -512,7 +514,7 @@ export async function executeApprovedOperationCall(
   options: ApprovedOperationCallExecutorOptions,
   requestId: string,
   signal?: AbortSignal,
-  runtime?: Pick<OperationCallRuntime, "locale" | "runFence">
+  runtime?: Pick<OperationCallRuntime, "locale" | "runFence" | "workflowAgent">
 ): Promise<ApprovedOperationEnd | undefined> {
   const { clientInstanceId } = options;
   const request = await options.approvals.getApprovalRequest({ clientInstanceId, requestId });
@@ -533,7 +535,7 @@ async function runFrozenCall(
   options: ApprovedOperationCallExecutorOptions,
   request: ApprovalRequest,
   signal: AbortSignal | undefined,
-  runtime?: Pick<OperationCallRuntime, "locale" | "runFence">
+  runtime?: Pick<OperationCallRuntime, "locale" | "runFence" | "workflowAgent">
 ): Promise<ApprovedOperationEnd> {
   const { clientInstanceId } = options;
   const deps = options.deps();
@@ -651,12 +653,16 @@ export async function recordApprovedOperationCallEnd(
  * gone or may not act: the call is then not executed.
  */
 async function currentActor(
-  options: Pick<OperationCallApprovalOptions, "clientInstanceId" | "users">,
+  options: Pick<OperationCallApprovalOptions, "clientInstanceId" | "users" | "workflowAgentActor">,
   run: OperationRun,
   payload: OperationCallPayload
-): Promise<AuthenticatedUser | undefined> {
+): Promise<import("@work-shape/catalyst-core").AuthenticatedIdentity | undefined> {
   const { clientInstanceId } = options;
   const { externalUserId, authSource, principal } = payload.actor;
+  if (run.actor.kind === "service_principal" && run.origin.kind === "agent") {
+    const actor = await options.workflowAgentActor?.(run.origin.agentRunId);
+    return actor && actor.id === run.actor.id && actor.id === payload.actor.id ? actor : undefined;
+  }
   if (
     run.actor.kind !== "user" ||
     run.actor.id !== payload.actor.id ||

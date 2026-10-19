@@ -250,15 +250,19 @@ export class ModelInput {
           binding: modelSelection.binding,
           messages: withinImageBudget.messages,
           tools,
+          ...(input.workflowAgent && capabilities.structuredOutput
+            ? { output: { jsonSchema: input.workflowAgent.outputSchema } }
+            : {}),
           reasoningEffort,
           fastTier: modelSelection.fastMode && capabilities.fastTier,
           continuation: capabilities.continuation ? providerContinuation : undefined,
           attribution: {
-            kind: "agent_run",
+            kind: input.workflowAgent ? "workflow_step" : "agent_run",
+            ...(input.workflowAgent ? { workflowRunId: input.workflowAgent.workflowRunId } : {}),
             conversationId: input.conversationId,
             runId,
             agentName: input.agentName,
-            userId: getRuntimeSubjectUserId(context)
+            ...(input.workflowAgent ? {} : { userId: getRuntimeSubjectUserId(context) })
           },
           clientInstanceId: context.clientInstanceId,
           correlationId: context.correlationId,

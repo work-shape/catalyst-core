@@ -50,6 +50,7 @@ export type OperationCallsOptions = Pick<
   configAssets?: Pick<ResolvedChatServerOptions["configAssets"], "kinds">;
   /** The tools an agent's definition lists. Without it this process serves no agent. */
   agentToolNames?: RunOperationDeps["agentToolNames"];
+  workflowAgentActor?: import("../approvals/operation-call-approval-handler").OperationCallApprovalOptions["workflowAgentActor"];
   /** Who sees which stored data, for the publish question's sentence. Absent without the module. */
   publishStoredData?: PublishNarrativeStoredData;
 };
@@ -76,6 +77,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
   const registry = createOperationRegistry();
   const { clientInstanceId } = options;
   const handlerOptions = {
+    workflowAgentActor: options.workflowAgentActor,
     clientInstanceId,
     deps: () => deps,
     users: options.stores.users,

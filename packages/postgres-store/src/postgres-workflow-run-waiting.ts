@@ -15,14 +15,21 @@ export const runIsWaiting = (ref: Input<"markRunWaiting">) => sql`exists (
     where waiting.client_instance_id = ${ref.clientInstanceId}
       and waiting.run_id = ${ref.id}
       and waiting.status = 'waiting'
-      and waiting.step_type in ('operation', 'workflow')
+      and (waiting.step_type in ('operation', 'workflow') or (waiting.step_type = 'agent' and exists (
+        select 1 from agent_runs agent where agent.client_instance_id = waiting.client_instance_id
+          and agent.workflow_step_run_id = waiting.id and agent.status = 'waiting_for_decision'
+      )))
   ) and not exists (
     select 1 from workflow_step_runs working
     where working.client_instance_id = ${ref.clientInstanceId}
       and working.run_id = ${ref.id}
       and (
         working.status in ('queued', 'running')
-        or (working.status = 'waiting' and working.step_type not in ('operation', 'workflow', 'loop'))
+        or (working.status = 'waiting' and working.step_type not in ('operation', 'workflow', 'loop', 'agent'))
+        or (working.status = 'waiting' and working.step_type = 'agent' and not exists (
+          select 1 from agent_runs agent where agent.client_instance_id = working.client_instance_id
+            and agent.workflow_step_run_id = working.id and agent.status = 'waiting_for_decision'
+        ))
         or (working.status = 'waiting' and working.step_type = 'workflow'
           and working.linked_run_id is null and not exists (
           select 1 from workflow_runs child

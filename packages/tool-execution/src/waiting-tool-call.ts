@@ -59,6 +59,7 @@ export function createDecidedToolCallRunner(callDeps: RunOperationDeps): ToolDec
     const runtime = {
       locale: context.locale,
       runFence: context.runFence,
+      ...(context.workflowAgent ? { workflowAgent: true as const } : {}),
       signal: context.signal
     };
     const end =

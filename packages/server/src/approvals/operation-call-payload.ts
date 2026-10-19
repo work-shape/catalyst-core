@@ -115,7 +115,11 @@ export function previewOf(payload: OperationCallPayload) {
     operation: payload.operation,
     effect: payload.effect,
     ...(payload.mode ? { mode: payload.mode } : {}),
-    actor: { kind: "user", id: payload.actor.id, label: payload.actor.label },
+    actor: {
+      kind: payload.actor.principal?.kind === "service" ? "service_principal" : "user",
+      id: payload.actor.id,
+      label: payload.actor.label
+    },
     origin: payload.origin,
     ...(payload.workspaceId ? { workspaceId: payload.workspaceId } : {}),
     ...(payload.heldBy ? { heldBy: payload.heldBy } : {}),

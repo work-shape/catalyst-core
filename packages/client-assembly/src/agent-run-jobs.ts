@@ -17,6 +17,7 @@ import {
   type Logger,
   type PlatformStores
 } from "@work-shape/catalyst-core";
+import { workflowAgentActor } from "./workflow-agent-actor";
 import type { ClientInstanceEnv } from "./env";
 import { createJobWorker } from "./job-worker";
 
@@ -95,6 +96,27 @@ export function readAgentRunWorkerConcurrency(env: ClientInstanceEnv): number | 
 }
 
 async function loadCurrentUser(store: PlatformStores, run: AgentRun): Promise<AuthenticatedUser> {
+  if (run.workflowStepRunId) {
+    const actor = await workflowAgentActor(store, run);
+    if (!actor || actor.id !== run.principalId)
+      throw new AppError("FORBIDDEN", "Workflow principal is unavailable or disabled", {
+        reason: "run_as_disabled"
+      });
+    return {
+      ...actor,
+      externalUserId: actor.id,
+      roles: [],
+      subjectUserId: actor.id,
+      principal: {
+        kind: "service",
+        id: actor.id,
+        displayLabel: actor.displayLabel,
+        clientInstanceId: actor.clientInstanceId,
+        authSource: actor.authSource
+      }
+    };
+  }
+  if (!run.ownerUserId) throw new AppError("FORBIDDEN", "Agent run has no owner");
   const user = await store.users.getUser({
     clientInstanceId: run.clientInstanceId,
     userId: asUserId(run.ownerUserId)

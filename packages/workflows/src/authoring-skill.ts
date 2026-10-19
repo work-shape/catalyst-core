@@ -95,6 +95,16 @@ const STEP_REFERENCE: {
       collect: "Reserved for EW-13. Leave it out."
     }
   },
+  agent: {
+    does: "Runs an AI step as the Workflow principal, with the Workflow tools and the instance default model. It validates JSON output and allows one repair turn without tools. Confirmation fails with confirmation_unattended; approval pauses the run.",
+    fields: {
+      instructions: "What the agent should do with its input and return as JSON.",
+      input: "A mapping onto inputSchema; datasets are not supported in agent inputs yet.",
+      inputSchema: "The JSON Schema of its mapped input.",
+      outputSchema:
+        "An object, array, string, number or boolean schema with named properties, required fields and enums; no references or recursion."
+    }
+  },
   code: {
     does: `Runs one script of the Workflow's step files on its input as JSON and returns JSON. The script is one entry of the config's \`files\`, and the step names it. See 'The step files of a code step' for what a file is, what a script is handed and how its issues come back.`,
     fields: {

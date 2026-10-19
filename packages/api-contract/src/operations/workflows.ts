@@ -1,5 +1,6 @@
 import { WORKFLOW_KINDS } from "@work-shape/catalyst-asset-schemas";
 import {
+  AGENT_RUN_STATUSES,
   OPERATION_EFFECTS,
   OPERATION_TARGETS,
   PRINCIPAL_HOLDER_KINDS,
@@ -192,6 +193,29 @@ export const workflowStepRunSchema = z.object({
   linkedRunId: z.string().optional(),
   /** The child run owned by this step, when one has started. */
   childRunId: z.string().optional(),
+  agent: z
+    .object({
+      runId: z.string(),
+      status: z.enum(AGENT_RUN_STATUSES),
+      usage: z.object({
+        modelCallCount: z.number(),
+        inputTokens: z.number(),
+        outputTokens: z.number(),
+        totalTokens: z.number()
+      }),
+      transcript: z
+        .array(
+          z.object({
+            role: z.string(),
+            text: z.string(),
+            toolCalls: z
+              .array(z.object({ toolName: z.string(), input: z.unknown().optional() }))
+              .optional()
+          })
+        )
+        .optional()
+    })
+    .optional(),
   error: workflowRunErrorSchema.optional(),
   inputPreview: workflowOutputPreviewSchema.optional(),
   outputPreview: workflowOutputPreviewSchema.optional(),

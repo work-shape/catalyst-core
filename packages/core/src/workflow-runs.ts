@@ -29,6 +29,9 @@ import type {
 // A Workflow Run and its step runs as they are stored and read. The names a definition and a
 // call carry are in `workflows.ts`; the engine is in `@work-shape/catalyst-workflows`.
 
+/** The UTF-8 byte ceiling of one inline step value; larger values fail the step. */
+export const WORKFLOW_STEP_DATA_MAX_BYTES = 256 * 1_024;
+
 /**
  * How many characters of a run's result or of a step's input or output a read shows. A result
  * and an output stay whole in the store and are cut on read; a step's input is kept only as
@@ -274,6 +277,7 @@ export type WorkflowStepRunView = WorkflowStepRun &
     /** The child run this step owns, resolved when reading; distinct from a reused keyed run. */
     childRunId?: WorkflowRunId;
     inputPreview?: WorkflowOutputPreview;
+    agent?: import("./child-agent-runs").WorkflowAgentRunData;
     outputPreview?: WorkflowOutputPreview;
     datasets?: Pick<WorkflowRunDataset, "id" | "rowSchema" | "rowCount" | "bytes" | "state">[];
     /** On the step run of a loop step alone. */

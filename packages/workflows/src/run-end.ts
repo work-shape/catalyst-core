@@ -48,6 +48,7 @@ export function createRunEnd(options: {
     if (end.status !== "continued")
       await options.datasetEnd(tx, { ...run, status: end.status }, end.output);
     await cancelWaiting(tx, run);
+    await tx.childAgentRuns.cancelWorkflowAgentRuns({ clientInstanceId, runId: run.id });
     await tx.jobs.withdraw(workflowDeadlineJobKind, {
       clientInstanceId,
       dedupeKey: workflowDeadlineKey(run.id)

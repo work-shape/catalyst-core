@@ -219,7 +219,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
         providerCode: error.providerCode,
         providerRequestId: error.providerRequestId,
         providerMessage: error.providerMessage,
-        ...(attribution.kind === "agent_run"
+        ...(attribution.kind !== "system"
           ? { runId: attribution.runId }
           : { purpose: attribution.purpose })
       },

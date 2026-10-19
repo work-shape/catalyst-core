@@ -768,3 +768,56 @@ describe("a fan-out that ended done with failed child runs", () => {
     expect(markup).toContain('data-child-run="wr_child_1002"');
   });
 });
+
+describe("Workflow agent step panels (CR-2)", () => {
+  const agentWorkflow = () =>
+    toWorkflow({
+      name: "notify-clients",
+      publishedRevision: 1,
+      config: {
+        ...definitionOf({
+          clients: { type: "agent", instructions: "Check the monthly totals and return JSON." }
+        }),
+        tools: ["connection.bookings.read"]
+      }
+    });
+
+  it.each(["en", "de"] as const)("shows instructions and tools in What it does (%s)", (locale) => {
+    const markup = panel("clients", run(), [], { tab: "what", workflow: agentWorkflow(), locale });
+    expect(markup).toContain("Check the monthly totals and return JSON.");
+    expect(markup).toContain("connection.bookings.read");
+    expect(markup).not.toContain((locale === "en" ? en : german).t("workflows.step.fallbackAgent"));
+  });
+
+  it.each(["en", "de"] as const)(
+    "shows permitted transcript, validated output and usage (%s)",
+    (locale) => {
+      const agent = {
+        runId: "run_ai",
+        status: "completed" as const,
+        usage: { modelCallCount: 1, inputTokens: 7, outputTokens: 3, totalTokens: 10 },
+        transcript: [{ role: "assistant", text: "The totals agree." }]
+      };
+      const resource = stepRun({
+        id: "sr_ai",
+        stepId: "clients",
+        stepType: "agent",
+        agent,
+        outputPreview: { text: '{"balanced":true}', truncated: false }
+      });
+      const markup = panel("clients", run(), [resource], { workflow: agentWorkflow(), locale });
+      expect(markup).toContain("The totals agree.");
+      expect(markup).toContain("balanced");
+      expect(markup).toContain((locale === "en" ? en : german).t("workflows.panel.agentUsage"));
+      const { transcript: _transcript, ...summary } = agent;
+      const hidden = panel(
+        "clients",
+        run(),
+        [{ ...resource, agent: summary, outputPreview: undefined }],
+        { workflow: agentWorkflow(), locale }
+      );
+      expect(hidden).not.toContain("The totals agree.");
+      expect(hidden).not.toContain("balanced");
+    }
+  );
+});

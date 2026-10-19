@@ -75,10 +75,25 @@ export function createOperationApprovalFiler(
       approval,
       confirmation
     }) {
-      const { actor, origin } = call;
-      if (isAuthenticatedServicePrincipal(actor)) {
+      const { actor: identity, origin } = call;
+      if (isAuthenticatedServicePrincipal(identity) && (!runtime.workflowAgent || confirmation))
         return undefined;
-      }
+      const actor: import("@work-shape/catalyst-core").AuthenticatedUser =
+        isAuthenticatedServicePrincipal(identity)
+          ? {
+              ...identity,
+              externalUserId: identity.id,
+              roles: [],
+              subjectUserId: identity.id,
+              principal: {
+                kind: "service",
+                id: identity.id,
+                displayLabel: identity.displayLabel,
+                clientInstanceId: identity.clientInstanceId,
+                authSource: identity.authSource
+              }
+            }
+          : identity;
       // A confirmation is the person's own, in their Inbox: always an `operation_call`, and
       // about the subject of the approval it would otherwise be, where its operation names one.
       const kind = confirmation
