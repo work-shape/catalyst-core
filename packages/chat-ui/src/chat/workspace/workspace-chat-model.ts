@@ -852,6 +852,7 @@ export function useWorkspaceChatModel({
       agents: agentsRowShown(collaborationWorkspacesAvailable, workspaceAgentsQuery.data),
       apps: appsRowShown(appsEnabled, workspaceAgentsQuery.data),
       workflows: workflowsRowShown(workflowsOpen, platformContextQuery.data),
+      scheduled: collaborationWorkspacesAvailable,
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
@@ -871,10 +872,13 @@ export function useWorkspaceChatModel({
       },
       deleteConversation: (conversationId) => deleteConversationMutation.mutate(conversationId),
       selectWorkspaceView: (nextView) => {
-        // The agents, the Apps and the Workflows of the open workspace: the row has no address
-        // without one.
+        // The agents, the Apps, the Workflows and the scheduled prompts of the open workspace:
+        // the row has no address without one.
         if (
-          (nextView === "agents" || nextView === "apps" || nextView === "workflows") &&
+          (nextView === "agents" ||
+            nextView === "apps" ||
+            nextView === "workflows" ||
+            nextView === "scheduled") &&
           activeCollaborationWorkspaceId
         ) {
           routeState.showRoute({

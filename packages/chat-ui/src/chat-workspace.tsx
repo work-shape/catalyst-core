@@ -40,6 +40,7 @@ import {
 import { AGENTS_BUILD_PATH, buildRouteOfLocation } from "./shared/build-route";
 import { useRailApps } from "./studio/apps/rail-apps";
 import { InboxArea } from "./chat/inbox";
+import { ScheduledPage } from "./chat/scheduled/scheduled-page";
 import { LoginPanel } from "./chat/login-panel";
 import { operationRunHref, operationRunsHref } from "./shared/operations-model";
 import { PageHostProvider } from "./studio/pages/page-host";
@@ -221,6 +222,7 @@ function ChatWorkspaceContent({
   // An address of the Workflows shows nothing until the instance has said whether the area is
   // there for this person: the model leads a closed one to the chat.
   const workflowsRoute = isWorkflowsRoute(model.route.route) ? model.route.route : undefined;
+  const scheduledRoute = model.route.route.kind === "scheduled" ? model.route.route : undefined;
   // The published Apps of the open workspace, under the Apps row of the rail.
   const railAppsWorkspaceId = model.collaborationWorkspace.activeCollaborationWorkspaceId;
   const railApps = useRailApps({
@@ -548,6 +550,7 @@ function ChatWorkspaceContent({
             agents={rail.agents}
             apps={rail.apps}
             workflows={rail.workflows}
+            scheduled={rail.scheduled}
             publishedApps={railApps.apps}
             morePublishedApps={railApps.more}
             openAppName={appsRoute?.kind === "app" ? appsRoute.app : undefined}
@@ -792,6 +795,25 @@ function ChatWorkspaceContent({
                                 )
                               ) : undefined
                             }
+                          scheduledArea={
+                            scheduledRoute ? (
+                              <ScheduledPage
+                                key={scheduledRoute.collaborationWorkspaceId}
+                                workspaceId={scheduledRoute.collaborationWorkspaceId}
+                                agents={model.config.config.agents}
+                                defaultAgentName={model.config.config.defaultAgentName}
+                                {...(model.controlPlane.canViewBuild
+                                  ? {
+                                      connectionsRoute: {
+                                        kind: "build-kind",
+                                        assetKind: CONNECTIONS_BUILD_PATH
+                                      }
+                                    }
+                                  : {})}
+                                onOpenRoute={model.route.showRoute}
+                              />
+                            ) : undefined
+                          }
                             inboxArea={
                               inboxRoute ? (
                                 <InboxArea

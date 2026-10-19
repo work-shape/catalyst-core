@@ -45,6 +45,7 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
     "settings"
   ],
   ["/settings/instance/users", { kind: "settings", group: "instance", page: "users" }, "settings"],
+  ["/w/cw_1/scheduled", { kind: "scheduled", collaborationWorkspaceId: "cw_1" }, "scheduled"],
   ["/inbox", { kind: "inbox" }, "inbox"],
   ["/inbox/apr_1", { kind: "inbox-item", itemId: "apr_1" }, "inbox"],
   ["/admin", { kind: "administration" }, "settings"],
@@ -69,6 +70,7 @@ describe("area route table", () => {
       "agents",
       "apps",
       "workflows",
+      "scheduled",
       "settings",
       "inbox",
       "build",

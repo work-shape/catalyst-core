@@ -104,6 +104,7 @@ describe("workspace rail without a Chat row", () => {
       "agents",
       "apps",
       "workflows",
+      "scheduled",
       "inbox"
     ]);
 

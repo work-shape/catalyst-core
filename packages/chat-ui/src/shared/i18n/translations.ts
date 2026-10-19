@@ -30,6 +30,7 @@ import { pages } from "./pages";
 import { personalApiKeys } from "./personal-api-keys";
 import { publishNarrative } from "./publish-narrative";
 import { rights } from "./rights";
+import { scheduled } from "./scheduled";
 import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { skillFiles } from "./skill-files";
@@ -77,6 +78,7 @@ export const translations = combineTranslations(common)
   .and(personalApiKeys)
   .and(publishNarrative)
   .and(rights)
+  .and(scheduled)
   .and(settings)
   .and(signIn)
   .and(skillFiles)

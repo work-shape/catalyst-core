@@ -202,6 +202,8 @@ export interface ConversationRailModel {
    * may write one: the Workflows row shows.
    */
   workflows: boolean;
+  /** The session has workspaces: the Scheduled row shows. */
+  scheduled: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;

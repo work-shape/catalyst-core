@@ -62,6 +62,8 @@ interface WorkspaceRailProps {
   apps?: boolean;
   /** The Workflows area is open to the person: the Workflows row shows. */
   workflows?: boolean;
+  /** The session has workspaces: the Scheduled row shows. */
+  scheduled?: boolean;
   /**
    * The published Apps the person may open, most recently used first. The first
    * `RAIL_APPS_LIMIT` fold under the Apps row, whose caret opens and folds them; the row
@@ -104,7 +106,8 @@ export function WorkspaceRail(props: WorkspaceRailProps) {
     agents: props.agents,
     inbox: props.inbox,
     apps: props.apps,
-    workflows: props.workflows
+    workflows: props.workflows,
+    scheduled: props.scheduled
   });
 
   return (

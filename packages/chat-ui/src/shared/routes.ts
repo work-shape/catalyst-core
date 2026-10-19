@@ -6,6 +6,7 @@ export type WorkspaceRouteView =
   | "agents"
   | "apps"
   | "workflows"
+  | "scheduled"
   | "settings"
   | "inbox"
   | "build"
@@ -51,6 +52,8 @@ export type WorkspaceRoute =
   | { kind: "workflow-runs"; collaborationWorkspaceId: string; workflow: string }
   /** One run of a Workflow with its steps. */
   | { kind: "workflow-run"; collaborationWorkspaceId: string; workflow: string; run: string }
+  /** The person's own scheduled prompts in one workspace. */
+  | { kind: "scheduled"; collaborationWorkspaceId: string }
   /** One page of the Settings area. The Settings catalog knows the groups and the pages. */
   | { kind: "settings"; group: string; page: string }
   /**
@@ -153,6 +156,10 @@ export const areaRoutes: readonly AreaRoute[] = [
       { path: "/w/$collaborationWorkspaceId/workflows/$workflow/runs", route: "workflow-runs" },
       { path: "/w/$collaborationWorkspaceId/workflows/$workflow/runs/$run", route: "workflow-run" }
     ]
+  },
+  {
+    area: "scheduled",
+    paths: [{ path: "/w/$collaborationWorkspaceId/scheduled", route: "scheduled" }]
   },
   {
     area: "settings",
@@ -325,6 +332,7 @@ function routeOf(
     case "agents":
     case "apps":
     case "workflows":
+    case "scheduled":
       return collaborationWorkspaceId ? { kind, collaborationWorkspaceId } : undefined;
     case "workflow":
       return collaborationWorkspaceId && params.workflow

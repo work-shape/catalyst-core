@@ -68,6 +68,9 @@
     "./workflows": {
       "development": "./src/studio/workflows/index.ts"
     },
+    "./scheduled": {
+      "development": "./src/chat/scheduled/index.ts"
+    },
     "./reading-place": {
       "development": "./src/chat/assistant/reading-place.ts"
     },

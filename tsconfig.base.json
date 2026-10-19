@@ -26,6 +26,9 @@
       "@work-shape/catalyst-tool-execution/native-document": [
         "packages/tool-execution/src/native-document.ts"
       ],
+      "@work-shape/catalyst-chat-ui/follow-up-queue-state": [
+        "packages/chat-ui/src/chat/conversation/follow-up-queue-state.ts"
+      ],
       "@work-shape/catalyst-chat-ui/settings-page-context": [
         "packages/chat-ui/src/shared/settings-page-context.tsx"
       ],
@@ -38,22 +41,18 @@
       "@work-shape/catalyst-chat-ui/tool-decision-model": [
         "packages/chat-ui/src/chat/approvals/tool-decision-model.ts"
       ],
-      "@work-shape/catalyst-chat-ui/follow-up-queue": [
-        "packages/chat-ui/src/chat/assistant/follow-up-queue.tsx"
-      ],
-      "@work-shape/catalyst-chat-ui/follow-up-queue-state": [
-        "packages/chat-ui/src/chat/conversation/follow-up-queue-state.ts"
-      ],
       "@work-shape/catalyst-chat-ui/tool-decision-card": [
         "packages/chat-ui/src/chat/approvals/tool-decision-card.tsx"
       ],
       "@work-shape/catalyst-chat-ui/tool-display-panel": [
         "packages/chat-ui/src/chat/tools/tool-display-panel.tsx"
       ],
-      "@work-shape/catalyst-chat-ui/views": ["packages/chat-ui/src/chat/views/index.ts"],
       "@work-shape/catalyst-api-contract/openapi.json": ["packages/api-contract/openapi.json"],
       "@work-shape/catalyst-chat-ui/asset-tool-lines": [
         "packages/chat-ui/src/chat/conversation/asset-tool-lines.ts"
+      ],
+      "@work-shape/catalyst-chat-ui/follow-up-queue": [
+        "packages/chat-ui/src/chat/assistant/follow-up-queue.tsx"
       ],
       "@work-shape/catalyst-quality-config/baseline": ["packages/quality-config/baseline.mjs"],
       "@work-shape/catalyst-chat-ui/surface-layout": [
@@ -77,6 +76,7 @@
       "@work-shape/catalyst-chat-ui/open-move": [
         "packages/chat-ui/src/chat/conversation/open-move.ts"
       ],
+      "@work-shape/catalyst-chat-ui/scheduled": ["packages/chat-ui/src/chat/scheduled/index.ts"],
       "@work-shape/catalyst-chat-ui/tool-call": ["packages/chat-ui/src/chat/tools/tool-call.tsx"],
       "@work-shape/catalyst-chat-ui/workflows": ["packages/chat-ui/src/studio/workflows/index.ts"],
       "@work-shape/catalyst-app-kit/protocol": ["packages/app-kit/src/protocol.ts"],
@@ -101,6 +101,7 @@
       "@work-shape/catalyst-chat-ui/admin": ["packages/chat-ui/src/admin.tsx"],
       "@work-shape/catalyst-chat-ui/pages": ["packages/chat-ui/src/studio/pages/index.ts"],
       "@work-shape/catalyst-chat-ui/shell": ["packages/chat-ui/src/shell.tsx"],
+      "@work-shape/catalyst-chat-ui/views": ["packages/chat-ui/src/chat/views/index.ts"],
       "@work-shape/catalyst-config-schema": ["packages/config-schema/src/index.ts"],
       "@work-shape/catalyst-ui/styles.css": ["packages/ui/src/styles.css"],
       "@work-shape/catalyst-api-contract": ["packages/api-contract/src/index.ts"],

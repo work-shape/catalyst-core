@@ -16,6 +16,8 @@ export interface RailSectionsGiven {
   apps?: boolean;
   /** The Workflows module is on and the person may read a Workflow. */
   workflows?: boolean;
+  /** The session has workspaces: each person keeps their own scheduled prompts in them. */
+  scheduled?: boolean;
   /** Present for a person who may decide requests or has made one. */
   inbox?: { toDecide: number };
 }
@@ -62,6 +64,13 @@ export const railSections: readonly RailSection[] = [
     icon: "workflow",
     view: "workflows",
     shown: (given) => given.workflows === true
+  },
+  {
+    id: "scheduled",
+    label: "scheduled.title",
+    icon: "schedule",
+    view: "scheduled",
+    shown: (given) => given.scheduled === true
   },
   {
     id: "inbox",

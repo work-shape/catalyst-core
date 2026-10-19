@@ -1,5 +1,5 @@
 import { Inbox } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import {
   Banner,
   Button,
@@ -35,6 +35,11 @@ import { dataStoreRowChange } from "./data-store-row-change";
 import { knowledgeAddFilesCall, useKnowledgeAddFilesAsk } from "./knowledge-add-files";
 import { MailSendDecisionView, mailSendDecisionPreview } from "./mail-send-decision";
 import { CallInputs, RowChangeInputs } from "./operation-call-body";
+import {
+  ScheduledStartSummary,
+  scheduledStartCall,
+  type ScheduledStartCall
+} from "../scheduled/scheduled-confirmation";
 import {
   useToolDecisionDecide,
   useWaitingOperationRunQuery,
@@ -119,7 +124,28 @@ function ToolConfirmation({
   if (workflowCall) return <WorkflowPublishDecisionCard call={workflowCall} {...props} />;
   const addedFiles = knowledgeAddFilesCall(decision);
   if (addedFiles) return <KnowledgeAddFilesDecisionCard files={addedFiles} {...props} />;
+  const scheduled = scheduledStartCall(decision.operationId, decision.inputPreview);
+  if (scheduled) return <ScheduledStartDecisionCard call={scheduled} {...props} />;
   return <ToolDecisionCardView {...props} />;
+}
+
+/** The confirmation of a call on a scheduled prompt: what it plans or changes, in words. */
+function ScheduledStartDecisionCard({
+  call,
+  ...props
+}: Parameters<typeof ToolDecisionCardView>[0] & { call: ScheduledStartCall }) {
+  const host = useApprovalRevisionHost();
+  return (
+    <ToolDecisionCardView
+      {...props}
+      summary={
+        <ScheduledStartSummary
+          call={call}
+          agentName={(name) => host?.agentDisplayName(name) ?? name}
+        />
+      }
+    />
+  );
 }
 
 /** The confirmation of an agent's Workflow publish: Allow waits for the sentence on it. */
@@ -226,7 +252,8 @@ export function ToolDecisionCardView({
   title,
   toolName,
   answer,
-  ask
+  ask,
+  summary
 }: {
   decision: ToolDecision;
   title: string;
@@ -234,6 +261,8 @@ export function ToolDecisionCardView({
   answer: ToolDecisionAnswer;
   /** A question the call asks before Allow, as "For whom?" of an App publish. */
   ask?: AppPublishConfirmationAsk;
+  /** What the call does in words, as for a scheduled prompt. Its raw input moves to details. */
+  summary?: ReactNode;
 }) {
   const { locale, t } = useTranslation();
   const [reasonOpen, setReasonOpen] = useState(false);
@@ -264,7 +293,7 @@ export function ToolDecisionCardView({
   const agent = agentSaveSummary(decision, locale);
   // A mail shows as it will go out, rendered by the server: its input is a technical detail.
   const mail = mailSendDecisionPreview(decision);
-  const inputsInDetails = ask !== undefined || agent !== undefined || mail !== undefined;
+  const inputsInDetails = ask !== undefined || agent !== undefined || mail !== undefined || summary !== undefined;
 
   function deny(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -307,6 +336,7 @@ export function ToolDecisionCardView({
           question what it does: its raw inputs are technical details then. */}
       {agent ? <AgentSummary agent={agent} /> : null}
       {mail ? <MailSendDecisionView mail={mail} /> : null}
+      {summary}
       {inputsInDetails ? null : inputs}
       <Disclosure data-testid="tool-decision-details">
         <DisclosureTrigger>{t("operations.callDetails")}</DisclosureTrigger>
