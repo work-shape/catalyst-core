@@ -463,17 +463,32 @@ export function stepConnection(
 }
 
 /**
+ * The Connection a failure names: its title where the instance sends one, otherwise what the
+ * screen knows of the step, otherwise the name the failure recorded.
+ */
+function failedConnection(
+  failure: Pick<WorkflowFailure, "connection" | "connectionTitle">,
+  known: string | undefined
+): string | undefined {
+  return failure.connectionTitle ?? known ?? failure.connection;
+}
+
+/**
  * What happened, as one sentence. A missing right is named where the instance names it: the
  * action the account of the Workflow does not hold, with the account and the Connection where
  * the screen or the failure knows them (C7).
  */
 export function failureHappened(
-  failure: Pick<WorkflowFailure, "reason" | "action" | "connection" | "workflow"> & {
+  failure: Pick<
+    WorkflowFailure,
+    "reason" | "action" | "connection" | "connectionTitle" | "workflow"
+  > & {
     detail?: string;
   },
   t: (key: TranslationKey, values?: Record<string, string>) => string,
-  { account, connection = failure.connection }: FailureNames = {}
+  { account, connection: known }: FailureNames = {}
 ): string {
+  const connection = failedConnection(failure, known);
   if (failure.workflow !== undefined && failure.reason === "runKeyCycle") {
     return t("workflows.reason.runKeyCycleNamed", { workflow: failure.workflow });
   }
@@ -527,15 +542,16 @@ export function runFailedBecause(
  * to give the missing right, never to ask an administrator (C7).
  */
 export function failureAdvice(
-  failure: Pick<WorkflowFailure, "reason" | "action" | "connection">,
+  failure: Pick<WorkflowFailure, "reason" | "action" | "connection" | "connectionTitle">,
   t: (key: TranslationKey, values?: Record<string, string>) => string,
   {
     account,
-    connection = failure.connection,
+    connection: known,
     administers,
     place
   }: FailureNames & { administers: boolean; place: string }
 ): string {
+  const connection = failedConnection(failure, known);
   if (failure.reason !== "missingRight" || !administers) {
     return t(failureSentences(failure.reason).advice, { place });
   }

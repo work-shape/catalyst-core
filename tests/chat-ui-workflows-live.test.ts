@@ -9,7 +9,8 @@ import {
   startOffered,
   toWorkflow,
   toWorkflowRun,
-  toWorkflowStepRun
+  toWorkflowStepRun,
+  workflowGraph
 } from "@work-shape/catalyst-chat-ui/workflows";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { recordedApiClient } from "./support/recorded-api-client";
@@ -755,6 +756,39 @@ describe("what a run says about how it ended", () => {
         error: { code: "FORBIDDEN", message: "may not", action: "connection.use" }
       })
     ).toContain("its account “Workflow runner” may not use the Connection");
+  });
+
+  it("names the Connection by its title and the account on the step and the run (ACCEPT-2e C-3)", () => {
+    const refused = {
+      code: "FORBIDDEN",
+      message: "may not",
+      action: "connection.use",
+      connection: "buchhaltung-kanzlei",
+      connectionTitle: "Buchhaltung Kanzlei"
+    };
+    const failure = toWorkflowRun({ ...run, status: "failed", error: refused }).failure;
+    expect(failure && failureHappened(failure, t, { connection: "buchhaltung-kanzlei" })).toBe(
+      "The workflow may not do this: its account may not use the Connection “Buchhaltung Kanzlei”."
+    );
+    const html = page({ ...run, status: "failed", error: refused }, [
+      stepRun("wfs_1", "start", { stepType: "trigger" }),
+      stepRun("wfs_2", "remind", { status: "failed", error: refused })
+    ]);
+    const named = "its account “Workflow runner” may not use the Connection “Buchhaltung Kanzlei”";
+    // The run's notice says it with what to do about it, although the failed step is held.
+    expect(html).toContain(named);
+    expect(html).toContain("data-failure-advice");
+    expect(html).not.toContain("“buchhaltung-kanzlei”");
+    // The failed step on the canvas names the account too.
+    const failedRun = toWorkflowRun({ ...run, status: "failed", error: refused });
+    const graph = workflowGraph(definition.steps, createTranslationContext("en"), {
+      run: failedRun,
+      stepRuns: [
+        toWorkflowStepRun(stepRun("wfs_2", "remind", { status: "failed", error: refused }))
+      ],
+      now: new Date("2026-10-12T09:12:00.000Z")
+    });
+    expect(graph.nodes.find((node) => node.id === "remind")?.footer).toContain(named);
   });
 
   it("names the right a tester lacks in words, never as its technical name", () => {

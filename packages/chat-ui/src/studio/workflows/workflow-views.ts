@@ -228,6 +228,8 @@ export interface WorkflowFailure {
   action?: string;
   /** On a refused `connection.use`: the Connection the step called, where the instance names it. */
   connection?: string;
+  /** That Connection's title, where the reader may read or use it. */
+  connectionTitle?: string;
   /** On a run key held in the call chain: the name of the Workflow the step would start. */
   workflow?: string;
 }

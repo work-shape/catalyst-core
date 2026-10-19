@@ -86,6 +86,8 @@ interface ErrorResource {
   action?: string;
   /** On a refused `connection.use`: the Connection the step called. */
   connection?: string;
+  /** That Connection's title, where the reader may read or use it. */
+  connectionTitle?: string;
 }
 
 interface TimesResource {
@@ -189,6 +191,7 @@ function toFailure(error: ErrorResource | undefined) {
       detail: error.message,
       ...(error.action === undefined ? {} : { action: error.action }),
       ...(error.connection === undefined ? {} : { connection: error.connection }),
+      ...(error.connectionTitle === undefined ? {} : { connectionTitle: error.connectionTitle }),
       ...(workflow === undefined ? {} : { workflow })
     }
   };

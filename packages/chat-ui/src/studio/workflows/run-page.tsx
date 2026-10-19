@@ -418,8 +418,12 @@ export function WorkflowRunPageView({
                   ? undefined
                   : Math.max(0, Math.round((now.getTime() - read.silentSince) / 1000))
               }
+              // A missing right is fixed outside the step: the run says where, with its account.
               showFailure={
-                run.failure !== undefined && (run.status === "limit_reached" || !failedStepHeld)
+                run.failure !== undefined &&
+                (run.status === "limit_reached" ||
+                  run.failure.reason === "missingRight" ||
+                  !failedStepHeld)
               }
               // The canvas draws the published definition. A run keeps the revision it started
               // on, so where the two differ the page says that the steps are not the run's own.

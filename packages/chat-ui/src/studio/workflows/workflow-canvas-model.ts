@@ -34,7 +34,7 @@ type Translate = CanvasText["t"];
 
 /** What the canvas draws of one run. */
 export interface CanvasRun {
-  run: Pick<WorkflowRunView, "startedBy" | "createdAt" | "startedAt" | "ended">;
+  run: Pick<WorkflowRunView, "startedBy" | "createdAt" | "startedAt" | "ended" | "runsAs">;
   /** The step runs outside every item of a loop: at most one per step of the definition. */
   stepRuns: readonly WorkflowStepRunView[];
   now: Date;
@@ -352,6 +352,7 @@ export function workflowGraph(
           : {}
         : {
             footer: failureHappened(stepRun.failure, t, {
+              account: run.run.runsAs,
               connection: stepConnection(step, stepRun)
             })
           }),
