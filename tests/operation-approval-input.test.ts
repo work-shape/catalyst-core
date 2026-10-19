@@ -110,6 +110,68 @@ describe("the input of a held call", () => {
     expect(f.executed).toEqual([]);
   });
 
+  it.each(["expired", "failed"] as const)(
+    "settles a request left pending after its run %s, then permits age pruning (LOWS-D)",
+    async (status) => {
+      const old = new Date(Date.now() - 400 * 24 * HOUR_MS);
+      const f = await fixture({ now: () => old });
+      const held = await f.hold("secret-cut-off");
+      // Simulate a process cut off after the expiry statement but before request settlement.
+      if (status === "expired") {
+        expect(
+          await f.app.stores.operationRuns.markExpired({
+            clientInstanceId: f.clientInstanceId,
+            limit: 10
+          })
+        ).toEqual(expect.arrayContaining([expect.objectContaining({ id: held.runId })]));
+      } else {
+        await f.app.stores.operationRuns.endWaiting({
+          clientInstanceId: f.clientInstanceId,
+          id: (await f.run(held.runId)).id,
+          end: {
+            status: "failed",
+            finishedAt: old.toISOString(),
+            error: { code: "interrupted", message: "Interrupted" }
+          }
+        });
+      }
+      expect((await f.stored(held.requestId)).status).toBe("pending");
+      const orphan = await f.app.stores.approvals.createApprovalRequest({
+        clientInstanceId: f.clientInstanceId,
+        kind: "operation_call",
+        summary: "Old orphan",
+        payload: { runId: "gone-before-0123" },
+        requestedBy: { id: "gone", displayLabel: "Gone" }
+      });
+      await f.app.stores.approvals.transitionPendingApprovalRequest({
+        clientInstanceId: f.clientInstanceId,
+        requestId: orphan.id,
+        resolve: async () => ({ status: "rejected" })
+      });
+      await f.runJobs();
+      expect(
+        await f.app.stores.approvals.getApprovalRequest({
+          clientInstanceId: f.clientInstanceId,
+          requestId: orphan.id
+        })
+      ).toBeUndefined();
+      // The audit retention job repairs and prunes in one pass, regardless of schedule order.
+      expect(
+        await f.app.stores.operationRuns.get({
+          clientInstanceId: f.clientInstanceId,
+          id: held.runId
+        })
+      ).toBeUndefined();
+      expect(
+        await f.app.stores.approvals.getApprovalRequest({
+          clientInstanceId: f.clientInstanceId,
+          requestId: held.requestId
+        })
+      ).toBeUndefined();
+      expect(f.executed).toEqual([]);
+    }
+  );
+
   it("is removed by the cleanup job from requests that ended before their input was removed", async () => {
     const f = await fixture();
     const ended = await f.hold("secret-old", "key-old");

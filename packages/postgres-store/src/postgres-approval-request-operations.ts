@@ -11,7 +11,7 @@ import {
 import { requireClaimedAgentRun } from "./postgres-agent-run-worker-operations";
 import { type PostgresConnection } from "./postgres-database";
 import { mapApprovalRequest } from "./rows";
-import { approvalRequests } from "./schema";
+import { approvalRequests, operationRuns } from "./schema";
 import { appendApprovalDecision } from "./postgres-conversation-operations";
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 
@@ -209,6 +209,12 @@ function listFilter(input: ListFilter) {
     input.payloadKey === undefined
       ? undefined
       : sql`jsonb_exists(${approvalRequests.payload}, ${input.payloadKey})`,
+    input.endedRunOnly
+      ? sql`exists (select 1 from ${operationRuns}
+          where ${operationRuns.clientInstanceId} = ${approvalRequests.clientInstanceId}
+            and ${operationRuns.id} = ${approvalRequests.payload}->>'runId'
+            and ${operationRuns.status} not in ('running', 'pending_approval', 'pending_confirmation'))`
+      : undefined,
     input.subjectContains === undefined
       ? undefined
       : sql`${approvalRequests.payload} @> ${JSON.stringify({ subject: input.subjectContains })}::jsonb`

@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
   INTERRUPTED_RUN_ERROR,
@@ -35,6 +37,29 @@ async function createStore() {
 }
 
 describe("Postgres operation run store", () => {
+  it("requires a SQL filter on the private run deletion boundary (LOWS-D)", async () => {
+    const text = await readFile(
+      new URL(
+        "../packages/postgres-store/src/postgres-operation-run-operations.ts",
+        import.meta.url
+      ),
+      "utf8"
+    );
+    const source = ts.createSourceFile("operations.ts", text, ts.ScriptTarget.Latest, true);
+    const declaration = source.statements.find(
+      (statement) =>
+        ts.isFunctionDeclaration(statement) &&
+        statement.name?.text === "deleteOperationRunsAndRequests"
+    );
+    if (!declaration || !ts.isFunctionDeclaration(declaration))
+      throw new Error("Deletion boundary missing");
+    const filter = declaration.parameters.find(
+      (parameter) => parameter.name.getText(source) === "filter"
+    );
+    expect(filter?.type?.getText(source)).toBe("SQL");
+    expect(filter?.questionToken).toBeUndefined();
+  });
+
   it("hands one of many simultaneous calls with one key the run", async () => {
     const runs = await createStore();
     const created = await Promise.all(
@@ -556,6 +581,125 @@ describe("Postgres operation run store", () => {
       expect(await remove()).toBe(0);
     }
   );
+
+  it("selects ended-run requests before paging a retention repair, so live pending calls cannot fill its budget (LOWS-D)", async () => {
+    const { stores } = await createTestInstance({ postgres: {} });
+    const make = async (expired: boolean) => {
+      const run = newRun();
+      const request = await stores.approvals.createApprovalRequest({
+        clientInstanceId,
+        kind: "operation_call",
+        summary: "Held",
+        payload: { runId: run.id, input: {} },
+        requestedBy: { id: "usr_1", displayLabel: "One" }
+      });
+      await stores.operationRuns.create(run);
+      await stores.operationRuns.finish({
+        clientInstanceId,
+        id: run.id,
+        end: {
+          status: "pending_approval",
+          approvalRequestId: request.id,
+          inputRef: request.id,
+          expiresAt: expired ? "2000-01-01T00:00:00.000Z" : "2999-01-01T00:00:00.000Z",
+          finishedAt: new Date().toISOString()
+        }
+      });
+      return request;
+    };
+    const expired = await make(true);
+    await stores.operationRuns.markExpired({ clientInstanceId, limit: 1 });
+    await make(false);
+    const filter = {
+      clientInstanceId,
+      kinds: ["operation_call"],
+      payloadKey: "input",
+      endedRunOnly: true as const
+    };
+    const listed = await stores.approvals.listApprovalRequests({ ...filter, page: { limit: 1 } });
+    expect(listed.map((request) => request.id)).toEqual([expired.id]);
+    expect(await stores.approvals.countApprovalRequests(filter)).toBe(1);
+  });
+
+  it("prunes only bounded settled orphan held calls of its own instance (LOWS-D)", async () => {
+    const { stores } = await createTestInstance({ postgres: {} });
+    const other = asClientInstanceId("other-instance");
+    const make = async (
+      instance = clientInstanceId,
+      kind = "operation_call",
+      runId = "gone",
+      queued = false,
+      pending = false
+    ) => {
+      const request = await stores.approvals.createApprovalRequest({
+        clientInstanceId: instance,
+        kind,
+        summary: "Orphan",
+        payload: { runId },
+        requestedBy: { id: "usr_1", displayLabel: "One" }
+      });
+      if (!pending)
+        await stores.approvals.transitionPendingApprovalRequest({
+          clientInstanceId: instance,
+          requestId: request.id,
+          resolve: async () =>
+            queued
+              ? { status: "approved", applyResult: { execution: "queued" } }
+              : { status: "rejected" }
+        });
+      return request;
+    };
+    const present = newRun();
+    await stores.operationRuns.create(present);
+    const kept = [
+      await make(other),
+      await make(clientInstanceId, "skill_change"),
+      await make(clientInstanceId, "operation_call", present.id),
+      await make(clientInstanceId, "operation_call", "gone", true),
+      await make(clientInstanceId, "operation_call", "gone", false, true)
+    ];
+    const gone = [await make(), await make()];
+    const prune = () =>
+      stores.operationRuns.deleteOrphanedRequests({
+        clientInstanceId,
+        kinds: ["operation_call"],
+        limit: 1
+      });
+    expect(await prune()).toBe(1);
+    const remaining = await Promise.all(
+      gone.map((request) =>
+        stores.approvals.getApprovalRequest({ clientInstanceId, requestId: request.id })
+      )
+    );
+    expect(remaining.filter(Boolean)).toHaveLength(1);
+    expect(await prune()).toBe(1);
+    expect(await prune()).toBe(0);
+    for (const request of kept)
+      expect(
+        await stores.approvals.getApprovalRequest({
+          clientInstanceId: request.clientInstanceId,
+          requestId: request.id
+        })
+      ).toBeDefined();
+  });
+
+  it("keeps other instances' runs and requests when pruning the same conversation id (LOWS-D)", async () => {
+    const { stores } = await createTestInstance({ postgres: {} });
+    const conversationId = asConversationId("shared-id-across-instances");
+    const own = newRun({ conversationId });
+    const other = newRun({ conversationId, clientInstanceId: asClientInstanceId("other") });
+    await stores.operationRuns.create(own);
+    await stores.operationRuns.create(other);
+    expect(
+      await stores.operationRuns.deleteOfConversations({
+        clientInstanceId,
+        conversationIds: [conversationId]
+      })
+    ).toBe(1);
+    expect(
+      await stores.operationRuns.get({ clientInstanceId: other.clientInstanceId, id: other.id })
+    ).toBeDefined();
+  });
 
   it("deletes the runs of conversations, and of no conversation only ended and old ones", async () => {
     const runs = await createStore();

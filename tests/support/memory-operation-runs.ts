@@ -196,6 +196,9 @@ export function createMemoryOperationRunStore(): OperationRunStore & { runs: Ope
     deleteWithoutConversationOlderThan() {
       return Promise.resolve(0);
     },
+    deleteOrphanedRequests() {
+      return Promise.resolve(0);
+    },
     markInterrupted({ clientInstanceId, id }) {
       const run = find(clientInstanceId, id);
       if (run?.status !== "running") return Promise.resolve(undefined);
