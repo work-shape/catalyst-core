@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   createOperationRegistry,
+  createPlatformId,
+  dataStoreOperationName,
   NoopAuditRecorder,
   type AuthenticatedUser,
   type JsonObject
@@ -23,6 +25,22 @@ const migration = {
       unique_number integer unique,
       parent integer references parents(id)
     );`
+};
+
+// A trigger raises the state a database outage or a changed schema would, inside the real write.
+const outageMigration = {
+  path: "migrations/0002_outages.sql",
+  text: `create table outages (id integer primary key, state text, pause integer);
+    create function raise_outage() returns trigger language plpgsql as $$
+    begin
+      perform pg_sleep(coalesce(new.pause, 0));
+      raise exception 'private-row-value' using errcode = new.state;
+    end $$;
+    create trigger outages_raise before insert on outages for each row execute function raise_outage();
+    create table codes (id integer primary key, code text unique);
+    create table code_uses (id integer primary key, code text references codes(code));
+    insert into codes values (1, 'A');
+    insert into code_uses values (1, 'A');`
 };
 
 describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", () => {
@@ -165,5 +183,115 @@ describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", ()
     await expect(
       call(world, "delete_rows", { table: "parents", keys: [{ id: 1 }] }, undefined, "de")
     ).rejects.toMatchObject({ message: expect.stringContaining("„Parent“ (Ganzzahl)") });
+  });
+
+  it("says what to do next when the database, not the rows, failed a write, in German and English", async () => {
+    const world = await published("outages", [manifest(), migration, outageMigration]);
+    const cases = [
+      {
+        state: "57014",
+        code: "TIMEOUT",
+        reason: "timeout",
+        de: "zu lange gebraucht",
+        en: "took too long"
+      },
+      { state: "55P03", reason: "busy", de: "gerade ausgelastet", en: "is busy right now" },
+      { state: "40P01", reason: "busy", de: "gerade ausgelastet", en: "is busy right now" },
+      {
+        state: "08006",
+        code: "INTERNAL",
+        reason: "unavailable",
+        de: "nicht erreichbar",
+        en: "cannot be reached"
+      },
+      { state: "42501", reason: "permission", de: "mangels Rechten", en: "for lack of rights" },
+      {
+        state: "42703",
+        reason: "schema_changed",
+        de: "Tabelle wurde geändert",
+        en: "table changed"
+      },
+      {
+        state: "P0001",
+        reason: "database_refusal",
+        de: "konnte diese Datensätze nicht annehmen",
+        en: "could not accept these rows"
+      }
+    ];
+    for (const entry of cases) {
+      for (const locale of ["de", "en"] as const) {
+        const rejected = await refusal(
+          call(
+            world,
+            "insert",
+            { table: "outages", rows: [{ id: 1, state: entry.state }] },
+            undefined,
+            locale
+          )
+        );
+        expect(rejected, `${entry.state} ${locale}`).toMatchObject({
+          ...(entry.code ? { code: entry.code } : {}),
+          message: expect.stringContaining(entry[locale]),
+          details: { reason: entry.reason }
+        });
+        expect(JSON.stringify(rejected)).not.toMatch(
+          /SQLSTATE|private-row-value|\d{2}[0-9A-Z]{3}/u
+        );
+      }
+    }
+    // An abort while the database still works on the write: the executor's own cancellation.
+    const operation = await world.dataStores.operationSource.resolve(
+      dataStoreOperationName("findings", "insert")
+    );
+    if (!operation) throw new Error("Expected the insert operation");
+    const actor: AuthenticatedUser = {
+      id: "row-refusal-admin",
+      externalUserId: "row-refusal-admin",
+      displayLabel: "Row refusal admin",
+      roles: ["admin"],
+      permissionRefs: [],
+      authSource: "test",
+      clientInstanceId: world.clientInstanceId
+    };
+    const controller = new AbortController();
+    const running = operation.execute(
+      operation.inputSchema.parse({
+        table: "outages",
+        rows: [{ id: 2, state: "P0001", pause: 5 }]
+      }),
+      {
+        runId: createPlatformId<"OperationRunId">("opr"),
+        actor,
+        origin: { kind: "user" },
+        correlationId: "row-refusals-cancel",
+        runtime: { locale: "de", signal: controller.signal },
+        access: accessOf(actor),
+        audit: new NoopAuditRecorder()
+      }
+    );
+    setTimeout(() => controller.abort(), 300);
+    expect(await refusal(running)).toMatchObject({
+      message: expect.stringContaining("abgebrochen"),
+      details: { reason: "cancelled" }
+    });
+  });
+
+  it("tells a changed unique value that another table still uses apart from a missing reference", async () => {
+    const world = await published("still-used", [manifest(), migration, outageMigration]);
+    const update = { table: "codes", rows: [{ key: { id: 1 }, set: { code: "B" } }] };
+    expect(await refusal(call(world, "update", update, undefined, "de"))).toMatchObject({
+      message:
+        "Ein Wert dieses Datensatzes wird in „Code“ (Text) noch verwendet. Ändere zuerst die Verweise oder behalte den Wert.",
+      details: { reason: "reference" }
+    });
+    expect(await refusal(call(world, "update", update, undefined, "en"))).toMatchObject({
+      message:
+        "A value of this row is still referenced in „Code“ (Text). Change those references first, or keep the value."
+    });
+    // Pointing a row at a value that does not exist keeps its own advice.
+    const missing = { table: "code_uses", rows: [{ key: { id: 1 }, set: { code: "Z" } }] };
+    expect(await refusal(call(world, "update", missing, undefined, "de"))).toMatchObject({
+      message: expect.stringContaining("den es nicht gibt")
+    });
   });
 });

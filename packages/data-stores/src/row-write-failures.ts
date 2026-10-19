@@ -45,6 +45,54 @@ function label(column: DataStoreColumn, locale: LocaleCode): string {
   return `„${title}“ (${type}${list ? (locale === "de" ? ", Liste" : ", list") : ""})`;
 }
 
+type Outage = "timeout" | "busy" | "cancelled" | "unavailable" | "permission" | "schema_changed";
+
+function outageReason(error: PostgresExecutorError): Outage | undefined {
+  switch (error.kind) {
+    case "timeout":
+    case "busy":
+    case "cancelled":
+    case "unavailable":
+      return error.kind;
+    case "unauthorized":
+    case "network_denied":
+    case "tls_failed":
+      return "unavailable";
+  }
+  const state = error.sqlState;
+  if (state === "40001" || state === "40P01" || state === "55P03") return "busy";
+  if (state === "42501") return "permission";
+  if (state === "42P01" || state === "42703") return "schema_changed";
+  return undefined;
+}
+
+const OUTAGE_COPY: Readonly<Record<Outage, { en: string; de: string }>> = {
+  timeout: {
+    en: "The database took too long to write these rows. Try again with fewer rows, or later.",
+    de: "Die Datenbank hat zu lange gebraucht, um diese Datensätze zu schreiben. Versuche es mit weniger Datensätzen oder später erneut."
+  },
+  busy: {
+    en: "The database is busy right now. Try again in a moment.",
+    de: "Die Datenbank ist gerade ausgelastet. Versuche es gleich noch einmal."
+  },
+  cancelled: {
+    en: "The write was cancelled before it finished. Start it again if the rows are still needed.",
+    de: "Das Schreiben wurde abgebrochen, bevor es fertig war. Starte es erneut, wenn die Datensätze noch gebraucht werden."
+  },
+  unavailable: {
+    en: "The database cannot be reached right now. Try again later; if it keeps failing, tell an administrator.",
+    de: "Die Datenbank ist gerade nicht erreichbar. Versuche es später erneut; wenn es weiter fehlschlägt, wende dich an einen Administrator."
+  },
+  permission: {
+    en: "The Data Store's database refused this write for lack of rights. Ask an administrator to check the Data Store.",
+    de: "Die Datenbank des Datenspeichers hat das Schreiben mangels Rechten abgelehnt. Bitte einen Administrator, den Datenspeicher zu prüfen."
+  },
+  schema_changed: {
+    en: "The table changed while these rows were being written. Look up its columns again and try again.",
+    de: "Die Tabelle wurde geändert, während die Datensätze geschrieben wurden. Sieh dir ihre Spalten erneut an und versuche es noch einmal."
+  }
+};
+
 /**
  * Row writes have no caller-authored SQL to diagnose. After rollback, explain a refusal in
  * the person's language. Other verbs retain their author-facing database diagnostics.
@@ -61,6 +109,13 @@ export async function rowWriteDatabaseFailure(
   const parsed = input.safeParse(raw);
   if (!parsed.success) return undefined;
   const language = locale === "de" ? "de" : "en";
+  const code = describeDatabaseFailure(error, "The write").code;
+  // The database did not judge the rows: say what to do next, and ask the catalog nothing.
+  const outage = outageReason(error);
+  if (outage) {
+    const message = OUTAGE_COPY[outage][language];
+    return new AppError(code, message, { reason: outage }, { exposeMessage: true });
+  }
   const state = error.sqlState;
   const reason =
     state === "23502"
@@ -77,12 +132,12 @@ export async function rowWriteDatabaseFailure(
                 ? "invalid_value"
                 : "database_refusal";
   let columns: DataStoreColumn[] = [];
+  // Only a refused value or constraint (classes 22 and 23) names a column worth looking up.
+  const judged = state?.startsWith("22") === true || state?.startsWith("23") === true;
   try {
-    const [table] = await readTables(
-      executor,
-      target,
-      error.constraint?.table ?? parsed.data.table
-    );
+    const [table] = judged
+      ? await readTables(executor, target, error.constraint?.table ?? parsed.data.table)
+      : [];
     if (table) {
       const constraint = error.constraint;
       if (constraint?.table === table.name) {
@@ -135,6 +190,11 @@ export async function rowWriteDatabaseFailure(
   } catch {
     // A catalog/probe outage must neither replace the original refusal nor expose raw text.
   }
+  // A changed value another table still points at: the verified constraint is on that table.
+  const referenced =
+    verb === "update" &&
+    error.constraint?.table !== undefined &&
+    error.constraint.table !== parsed.data.table;
   const field =
     columns.length > 0
       ? columns.map((column) => label(column, language)).join(", ")
@@ -147,7 +207,9 @@ export async function rowWriteDatabaseFailure(
     reference:
       verb === "delete_rows"
         ? `A row is still referenced in ${field}. Remove those references first, or keep the row.`
-        : `A value in ${field} refers to a row that does not exist. Choose an existing row.`,
+        : referenced
+          ? `A value of this row is still referenced in ${field}. Change those references first, or keep the value.`
+          : `A value in ${field} refers to a row that does not exist. Choose an existing row.`,
     too_long: `A value in ${field} is too long. Shorten it and try again.`,
     out_of_range: `A value in ${field} is outside the allowed range. Check it and try again.`,
     invalid_value: `A value does not fit ${field}. Check its type and try again.`,
@@ -160,7 +222,9 @@ export async function rowWriteDatabaseFailure(
     reference:
       verb === "delete_rows"
         ? `Ein Datensatz wird in ${field} noch verwendet. Entferne zuerst die Verweise oder behalte den Datensatz.`
-        : `Ein Wert in ${field} verweist auf einen Datensatz, den es nicht gibt. Wähle einen vorhandenen Datensatz.`,
+        : referenced
+          ? `Ein Wert dieses Datensatzes wird in ${field} noch verwendet. Ändere zuerst die Verweise oder behalte den Wert.`
+          : `Ein Wert in ${field} verweist auf einen Datensatz, den es nicht gibt. Wähle einen vorhandenen Datensatz.`,
     too_long: `Ein Wert in ${field} ist zu lang. Kürze ihn und versuche es erneut.`,
     out_of_range: `Ein Wert in ${field} liegt außerhalb des erlaubten Bereichs. Prüfe ihn und versuche es erneut.`,
     invalid_value: `Ein Wert passt nicht zu ${field}. Prüfe den Typ und versuche es erneut.`,
@@ -168,7 +232,7 @@ export async function rowWriteDatabaseFailure(
       "Die Datenbank konnte diese Datensätze nicht annehmen. Prüfe die Vorgaben der Tabelle und versuche es erneut."
   };
   return new AppError(
-    describeDatabaseFailure(error, "The write").code,
+    code,
     (language === "de" ? de : en)[reason] ?? "",
     { reason },
     { exposeMessage: true }
