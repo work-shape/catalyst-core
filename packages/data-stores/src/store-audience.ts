@@ -204,7 +204,6 @@ export function createAudienceReader(
           : undefined;
       return {
         ...(workspace ? { workspace } : {}),
-        ...(app ? { app: { audience: app.audience, people: workspace?.members ?? 0 } } : {}),
         holders,
         hiddenHolders: holding.length - holders.length
       };
