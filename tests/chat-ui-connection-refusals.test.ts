@@ -30,6 +30,14 @@ import { settingsUser } from "./chat-ui-settings-fixtures";
 // English to everybody. The reader is told what happened and who changes it in their language;
 // only an operator, who changes release config, gets the server's sentence under Details.
 
+const createDefaults = {
+  namespaces: [],
+  mayNameFreely: true,
+  checkName: async () => ({ available: true as const }),
+  remove: async () => undefined,
+  mayDelete: () => true
+};
+
 const target = { protocol: "https" as const, host: "api.exampledata.com", port: 443 };
 
 /** The refusal of a save as the server sends it (`server/src/asset-kinds/connection.ts`). */
@@ -116,15 +124,11 @@ async function connectRefused(
   };
   const flow = createElement(ConnectionCreateFlow, {
     source,
-    namespaces: [],
-    mayNameFreely: true,
-    checkName: async () => ({ available: true as const }),
+    ...createDefaults,
     put: async () => {
       if (error) throw error;
       return { revision: 1 };
     },
-    remove: async () => undefined,
-    mayDelete: () => true,
     onClose: () => undefined,
     onCreated: () => undefined
   });
@@ -519,8 +523,10 @@ describe("A new REST API whose key the server refuses, on the instance's answers
         return Response.json(connectionDetail(decodeURIComponent(call[1] ?? "")));
       return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
     };
-    const CreateDialog = buildAssetKinds.find((kind) => kind.kind === "connection")?.CreateDialog;
-    if (!CreateDialog) throw new Error("Connections have a create dialog");
+    const connectionKind = buildAssetKinds.find((kind) => kind.kind === "connection");
+    if (!connectionKind || !("CreateDialog" in connectionKind) || !connectionKind.CreateDialog)
+      throw new Error("Connections have a create dialog");
+    const CreateDialog = connectionKind.CreateDialog;
     const puts: unknown[] = [];
     const container = document.createElement("div");
     document.body.append(container);
@@ -541,15 +547,11 @@ describe("A new REST API whose key the server refuses, on the instance's answers
                 TranslationProvider,
                 { locale, children: null },
                 createElement(CreateDialog, {
-                  namespaces: [],
-                  mayNameFreely: true,
-                  checkName: async () => ({ available: true as const }),
+                  ...createDefaults,
                   put: async (input) => {
                     puts.push(input);
                     return { revision: puts.length };
                   },
-                  remove: async () => undefined,
-                  mayDelete: () => true,
                   onClose: () => calls.push("closed"),
                   onCreated: () => calls.push("created")
                 })
