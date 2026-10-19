@@ -15,6 +15,7 @@ import {
   workflowGraph,
   type WorkflowRunRead
 } from "@work-shape/catalyst-chat-ui/workflows";
+import { definitionOf, workflowOf } from "./support/workflow-run-page-fixtures";
 import { workflowsContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
@@ -34,32 +35,6 @@ const noop = () => undefined;
 
 type RunResource = Parameters<typeof toWorkflowRun>[0];
 type StepRunResource = Parameters<typeof toWorkflowStepRun>[0];
-
-const steps = [
-  { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
-  { id: "clients", name: "Load the clients", type: "operation", operation: "connection.crm.list" },
-  {
-    id: "each_client",
-    name: "For each client",
-    type: "loop",
-    items: { step: "clients", path: "" },
-    itemName: "client",
-    steps: [
-      { id: "send", name: "Send the note", type: "operation", operation: "connection.crm.write" }
-    ]
-  },
-  { id: "result", name: "Result", type: "output", input: {} }
-];
-const definitionOf = (changed: Record<string, Record<string, unknown>> = {}) => ({
-  id: "notify-clients",
-  name: "Notify clients",
-  inputs: { type: "object" },
-  outputs: { type: "object" },
-  steps: steps.map((step) => ({ ...step, ...changed[step.id] })),
-  wiring: []
-});
-const workflowOf = (changed?: Record<string, Record<string, unknown>>) =>
-  toWorkflow({ name: "notify-clients", config: definitionOf(changed), publishedRevision: 1 });
 
 function run(input: Partial<RunResource> = {}): RunResource {
   return {
@@ -457,11 +432,9 @@ describe("the datasets a step's output names", () => {
 });
 
 describe("what an operation step says it does", () => {
-  const told = workflowOf({
-    clients: { effect: "reading", source: "Client register" },
-    each_client: {
-      steps: [{ id: "send", name: "Send the note", type: "operation", effect: "changing" }]
-    }
+  const told = workflowOf(undefined, {
+    clients: { effect: "reading", source: { kind: "connection", title: "Client register" } },
+    send: { effect: "changing", source: { kind: "connection" } }
   });
 
   it("says that a step reads or that it changes, with what it works on, where the instance tells", () => {

@@ -99,6 +99,7 @@ export async function memoryWorkflowEngine(
 ) {
   const manifests = new Map<string, NewWorkflowRun["definition"]>();
   const inputs = new Map<string, NewWorkflowRun["input"]>();
+  const stepInputs = new Map<string, JsonValue>();
   const checkpoints = new Map<string, NewWorkflowRun["checkpoint"]>();
   const runs = new Map<string, WorkflowRun>();
   const steps = new Map<string, WorkflowStepRun>();
@@ -286,6 +287,9 @@ export async function memoryWorkflowEngine(
         attempt: ref.attempt,
         startedAt: ref.startedAt
       });
+    },
+    async recordStepRunInput(ref) {
+      if (mustStep(ref.id).status === "running") stepInputs.set(ref.id, clone(ref.input));
     },
     async endStepRun(ref) {
       const step = mustStep(ref.id);
@@ -488,6 +492,7 @@ export async function memoryWorkflowEngine(
     seen,
     runs,
     inputs,
+    stepInputs,
     async execute() {
       const input = {
         workflow: manifest.id,
