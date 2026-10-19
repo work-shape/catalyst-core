@@ -195,13 +195,22 @@ export async function createModelVisibleToolOutput(
   // Data-critical boundary: privateOutput and private rendered display data must never be
   // serialized into model-visible history. Private render-view tools return only a zero-data
   // acknowledgement through output unless they are explicitly implemented as non-private query tools.
+  // A subagent must hand the confirmation operation back to its parent. Other refusal
+  // details and codes stay in the stored result, outside the model-visible handoff.
   const content =
     result.status === "success"
       ? stringifyForModel(result.output ?? { status: "success" })
       : stringifyForModel(
-          result.error.code === "not_allowed" || result.error.code === "confirmation_required"
-            ? { message: result.error.message }
-            : result.error
+          result.error.code === "confirmation_required"
+            ? {
+                message: result.error.message,
+                operation: isJsonObject(result.error.details)
+                  ? result.error.details.operation
+                  : undefined
+              }
+            : result.error.code === "not_allowed"
+              ? { message: result.error.message }
+              : result.error
         );
   const bounded = boundModelOutput(content, options);
   if (images === "not_loaded") {

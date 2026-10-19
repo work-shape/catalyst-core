@@ -322,7 +322,7 @@ describe("workspace tools", () => {
       error: {
         code: "not_allowed",
         message:
-          "This agent is not set up for this action here. Nothing ran. Ask an instance administrator; no contact person is currently listed."
+          "This agent is not set up for this action here. Nothing ran. Ask the person who built this agent or an instance administrator."
       }
     });
   });

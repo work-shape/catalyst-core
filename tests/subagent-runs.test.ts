@@ -68,10 +68,31 @@ function createSubagentModel() {
       .filter((message) => message.role === "tool")
       .map((message) => modelContentText(message.content));
     const answer = { toolCalls: [], sources: [], citations: [], usage: noUsage };
+    const said = modelContentText(request.messages[lastUser]?.content ?? "");
     if (results.length > 0) {
+      // This scripted parent can only make the call when its child's answer preserved the
+      // operation. It deliberately does not infer the operation from the child's task.
+      if (said.startsWith("/relay-confirmation") && results.length === 1) {
+        const child = z.object({ answer: z.string() }).safeParse(JSON.parse(results[0] ?? "{}"));
+        const operation = child.success
+          ? child.data.answer.match(/"operation"\s*:\s*"([^"\n]+)"/u)?.[1]
+          : undefined;
+        if (operation) {
+          return {
+            ...answer,
+            text: "",
+            toolCalls: [
+              {
+                toolCallId: createPlatformId("toolcall"),
+                toolName: operation,
+                input: { text: "one" }
+              }
+            ]
+          };
+        }
+      }
       return { ...answer, text: `Tool work completed:\n\n${results.join("\n\n")}` };
     }
-    const said = modelContentText(request.messages[lastUser]?.content ?? "");
     const toolCalls = said.split("\n").flatMap((line) => {
       const [, toolName, json = "{}"] = line.trim().match(/^\/tool\s+(\S+)\s*(.*)$/u) ?? [];
       return toolName
@@ -343,6 +364,49 @@ describe("subagents of a chat agent", () => {
       await f.app.close();
     }
   );
+
+  it("ACCEPT-FIX-10b: relays a child's refused operation to the parent and reaches confirmation", async () => {
+    const f = await fixture([{ operation: change.name, value: "confirm" }]);
+    try {
+      const task = `/tool ${change.name} ${JSON.stringify({ text: "one" })}`;
+      const said = await f.say(`/relay-confirmation\n${runAgent({ description: "Change", task })}`);
+      const calls = () => f.app.stores.operationRuns.list({ clientInstanceId: f.clientInstanceId });
+      await waitUntil(
+        async () =>
+          (await calls()).some(
+            (run) => run.operation === change.name && run.status === "pending_confirmation"
+          ),
+        "the parent received the operation and made the call for confirmation"
+      );
+      const children = await f.children(said.runId);
+      const child = required(children[0]);
+      expect(children).toHaveLength(1);
+      expect(await f.agentRun(child.subagentRunId)).toMatchObject({ status: "completed" });
+      expect(executed).toEqual([]);
+      const waiting = required(
+        (await calls()).find((run) => run.status === "pending_confirmation")
+      );
+      expect(waiting.origin).toMatchObject({ kind: "agent", agentRunId: said.runId });
+      const parentRequest = required(
+        f.requestsFor(`/relay-confirmation\n${runAgent({ description: "Change", task })}`).at(-1)
+      );
+      const parentAnswer = parentRequest.messages
+        .filter((message) => message.role === "tool")
+        .map((message) => modelContentText(message.content))
+        .join("\n");
+      expect(parentAnswer).toContain(change.name);
+      expect(parentAnswer).toContain("still");
+      const decided = await f.app.call("operations.decide", {
+        params: { runId: waiting.id },
+        payload: { decision: "confirm" }
+      });
+      expect(decided.statusCode, decided.body).toBe(200);
+      await f.until(said.runId, "completed");
+      expect(executed).toEqual(["one"]);
+    } finally {
+      await f.app.close();
+    }
+  });
 
   it("starts a subagent once its person confirmed the run_agent call", async () => {
     const f = await fixture([{ operation: "agents.run", value: "confirm" }]);

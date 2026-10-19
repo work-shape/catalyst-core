@@ -12,6 +12,13 @@ describe("system instructions", () => {
     expect(content).toContain("Do not substitute HTTP or YAML dumps");
     expect(content).toContain("Never ask for keys or passwords in chat");
   });
+  it("keeps technical ids in agent handoffs and out of replies the person reads", () => {
+    const content = createSystemInstructions("Help.", "en");
+    expect(content).toContain("In text the person reads, never repeat");
+    expect(content).toContain("tell the parent agent the exact operation and arguments");
+    expect(content).toContain("the parent still has to make the call");
+    expect(content).toContain("keep these details in the agent-to-agent answer");
+  });
   it("opens with the platform rules, before the client agent instructions", () => {
     const content = createSystemInstructions("Use customer workflow rules.", "de", {
       currentDate: new Date("2026-06-19T12:00:00.000Z")

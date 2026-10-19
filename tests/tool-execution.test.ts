@@ -176,7 +176,7 @@ describe("an agent's tool call as an operation", () => {
       error: {
         code: "not_allowed",
         message:
-          "This agent is not set up for this action here. Nothing ran. Ask an instance administrator; no contact person is currently listed.",
+          "This agent is not set up for this action here. Nothing ran. Ask the person who built this agent or an instance administrator.",
         details: undefined
       }
     });
@@ -225,7 +225,7 @@ describe("an agent's tool call as an operation", () => {
       error: {
         code: "not_allowed",
         message:
-          "This tool is switched off for the pilot. Ask an instance administrator; no contact person is currently listed."
+          "A rule prevents this action here. The rule's own words: “This tool is switched off for the pilot” Ask an instance administrator; no contact person is currently listed."
       }
     });
     expect(runs[0]).toMatchObject({ status: "denied", denial: { kind: "policy" } });
@@ -302,7 +302,7 @@ describe("an agent's tool call as an operation", () => {
       error: {
         code: "not_allowed",
         message:
-          "This agent is not set up for this action here. Nothing ran. Ask an instance administrator; no contact person is currently listed."
+          "This agent is not set up for this action here. Nothing ran. Ask the person who built this agent or an instance administrator."
       }
     });
   });

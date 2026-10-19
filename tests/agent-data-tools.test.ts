@@ -161,8 +161,8 @@ describe("an agent carries data tools", () => {
           code: "not_allowed",
           message:
             locale === "de"
-              ? "Dieser Agent ist hier nicht für diese Aktion eingerichtet. Es wurde nichts ausgeführt. Frag eine Instanz-Admin, zum Beispiel Mara."
-              : "This agent is not set up for this action here. Nothing ran. Ask an instance administrator, for example Mara.",
+              ? "Dieser Agent ist hier nicht für diese Aktion eingerichtet. Es wurde nichts ausgeführt. Frag die Person, die diesen Agenten gebaut hat, oder eine Instanz-Admin, zum Beispiel Mara."
+              : "This agent is not set up for this action here. Nothing ran. Ask the person who built this agent or an instance administrator, for example Mara.",
           details: { action: `agent_tool:${ECHO}` }
         }
       });
