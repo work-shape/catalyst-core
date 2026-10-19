@@ -2,6 +2,7 @@ import type {
   ApiAccessStore,
   AuditActor,
   ClientInstanceId,
+  ConfigAssetStore,
   WorkflowManifest,
   WorkflowRun,
   WorkflowRunPrincipal
@@ -11,7 +12,10 @@ import type {
 // names its principal by its `name`, which is unique on the instance, never changes and is
 // the same on every instance the definition moves to.
 
-type Principals = Pick<ApiAccessStore, "findServicePrincipalByName">;
+type Principals = Pick<
+  ApiAccessStore,
+  "findServicePrincipalByName" | "findServicePrincipalByOwner"
+>;
 
 /**
  * The service principal a definition names under `runAs`, where it is active. Publishing a
@@ -21,12 +25,26 @@ type Principals = Pick<ApiAccessStore, "findServicePrincipalByName">;
 export async function workflowRunPrincipal(
   principals: Principals,
   clientInstanceId: ClientInstanceId,
-  manifest: Pick<WorkflowManifest, "runAs">
+  manifest: Pick<WorkflowManifest, "runAs" | "id">,
+  configAssets?: Pick<ConfigAssetStore, "getConfigAsset">
 ): Promise<WorkflowRun["principal"] | undefined> {
-  const record = await principals.findServicePrincipalByName({
-    clientInstanceId,
-    name: manifest.runAs
-  });
+  const asset =
+    manifest.runAs === undefined
+      ? await configAssets?.getConfigAsset({
+          clientInstanceId,
+          kind: "workflow",
+          name: manifest.id
+        })
+      : undefined;
+  const record =
+    manifest.runAs !== undefined
+      ? await principals.findServicePrincipalByName({ clientInstanceId, name: manifest.runAs })
+      : asset?.status === "active"
+        ? await principals.findServicePrincipalByOwner({
+            clientInstanceId,
+            owner: { kind: "workflow", assetId: asset.id }
+          })
+        : undefined;
   if (record?.status !== "active") return undefined;
   return { id: record.id, name: record.name, displayLabel: record.displayLabel };
 }

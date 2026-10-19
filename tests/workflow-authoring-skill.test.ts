@@ -30,18 +30,21 @@ const headings = [...workflowAuthoringSkill.content.matchAll(/^### `type: ([a-z]
 );
 
 describe("the skill for writing a Workflow", () => {
-  it("requires a discovered run account and resolves notification people without asking for ids", () => {
-    expect(workflowAuthoringSkill.content).toContain("choose a name from workflowPrincipals");
-    expect(workflowAuthoringSkill.content).not.toContain("runAs: workflow-runner");
-    expect(workflowAuthoringSkill.content).toContain("platform.context caller.id");
-    expect(workflowAuthoringSkill.content).toContain("never ask the person to type an id");
-    expect(workflowAuthoringSkill.content).toContain("sends no Inbox item or mail");
+  it("leaves the run account out of a new Workflow and resolves notification people without asking for ids", () => {
+    const { content } = workflowAuthoringSkill;
+    expect(content).toContain("Leave it out of a new Workflow");
+    expect(content).toContain("creates the\n  Workflow's own account");
+    expect(content).toContain("Keep a `runAs` a definition already\n  has");
+    expect(content).toContain("use a name from workflowPrincipals, never an invented");
+    expect(content).not.toContain("If exactly one is offered");
+    expect(content).not.toContain("runAs: workflow-runner");
+    expect(content).not.toContain("choose-from-platform-context");
+    expect(content).toContain("platform.context caller.id");
+    expect(content).toContain("never ask the person to type an id");
+    expect(content).toContain("sends no Inbox item or mail");
   });
-  it("offers publishing confirmation, the sole account and a named schedule zone", () => {
+  it("offers publishing confirmation and a named schedule zone", () => {
     expect(workflowAuthoringSkill.content).toContain("use assets.publish if it is available");
-    expect(workflowAuthoringSkill.content).toContain(
-      "If exactly one is offered, use it without asking"
-    );
     expect(workflowAuthoringSkill.content).toContain("instance.timeZone");
     expect(workflowAuthoringSkill.content).toContain("German time means Europe/Berlin");
   });
@@ -118,13 +121,17 @@ describe("the skill for writing a Workflow", () => {
     }
   });
 
-  it("shows the fixture Workflow with an account-discovery placeholder for the target instance", async () => {
+  it("shows the fixture Workflow without a run account, so its publish makes its own", async () => {
     const file = await readFile(`${WORKFLOW_FIXTURES}/top-customers/workflow.yaml`, "utf8");
     const stored = readWorkflowManifest(file);
     const shown = readWorkflowManifest(WORKFLOW_AUTHORING_EXAMPLES[0]?.yaml ?? "");
+    const withoutAccount = (manifest: object) =>
+      Object.fromEntries(Object.entries(manifest).filter(([key]) => key !== "runAs"));
     expect(stored.ok && shown.ok ? shown.manifest : shown).toEqual(
-      stored.ok ? { ...stored.manifest, runAs: "choose-from-platform-context" } : stored
+      stored.ok ? withoutAccount(stored.manifest) : stored
     );
+    for (const example of WORKFLOW_AUTHORING_EXAMPLES)
+      expect(example.yaml, example.title).not.toMatch(/^runAs:/mu);
   });
 
   describe("on the step files of a code step", () => {

@@ -2,12 +2,16 @@ import {
   WORKFLOW_ASSET_KIND,
   asUserId,
   callerCanConfirm,
+  isPrincipalGrantableAction,
   type AuthenticatedUser,
   type OperationDraftContext,
+  type WorkflowManifest,
+  type OperationRegistry,
   type PlatformStores,
   type WorkflowRun,
   type WorkflowStepRun
 } from "@work-shape/catalyst-core";
+import { resolveWorkflowNeededRights } from "./needed-rights";
 import { workflowRunActor } from "./run-identity";
 import { WorkflowStepFailure } from "./step-failure";
 
@@ -40,10 +44,25 @@ type TestRunStores = Pick<
 export async function testRunCall(
   stores: TestRunStores,
   run: WorkflowRun,
-  stepRun: Pick<WorkflowStepRun, "stepId">
+  stepRun: Pick<WorkflowStepRun, "stepId">,
+  definition: WorkflowManifest,
+  registry: Pick<OperationRegistry, "resolveMany">
 ): Promise<{ actor: AuthenticatedUser; draft: OperationDraftContext }> {
   const { clientInstanceId } = run;
-  const principal = await workflowRunActor(stores.apiAccess, run);
+  const ownAccount = definition.runAs === undefined;
+  const principal = ownAccount
+    ? {
+        kind: "service" as const,
+        ...run.principal,
+        workflowRunId: run.id,
+        permissionRefs: [],
+        permissions: [],
+        clientInstanceId,
+        authSource: "workflow_test_run",
+        scopes: [],
+        correlationId: run.correlationId
+      }
+    : await workflowRunActor(stores.apiAccess, run);
   if (!principal) {
     throw new WorkflowStepFailure(
       WORKFLOW_TEST_RUN_ERRORS.runAsDisabled,
@@ -86,6 +105,16 @@ export async function testRunCall(
       : await stores.operationRuns.get({ clientInstanceId, id: root.operationRunId });
   const startConfirmed =
     start !== undefined && start.actor.id === tester.id && callerCanConfirm(start.origin);
+  const rights = ownAccount
+    ? await resolveWorkflowNeededRights(
+        {
+          clientInstanceId,
+          configAssets: stores.configAssets,
+          registry: () => registry
+        },
+        definition
+      )
+    : undefined;
   return {
     actor: {
       id: tester.id,
@@ -104,6 +133,15 @@ export async function testRunCall(
       revisionId: run.definitionRevisionId,
       part: stepRun.stepId,
       boundBy: principal,
+      ...(rights === undefined
+        ? {}
+        : {
+            boundRights: rights.flatMap((right) =>
+              isPrincipalGrantableAction(right.action) && right.asset.assetId !== undefined
+                ? [{ action: right.action, assetId: right.asset.assetId }]
+                : []
+            )
+          }),
       startConfirmed
     }
   };

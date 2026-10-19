@@ -1,15 +1,12 @@
 import { AppError, workflowRightsLacking, type WorkflowManifest } from "@work-shape/catalyst-core";
 import {
+  resolveWorkflowNeededRights,
   checkChildContracts,
   checkChildCycles,
   indexWorkflowSteps,
   type WorkflowDefinitionSource
 } from "@work-shape/catalyst-workflows";
-import {
-  workflowRightsOf,
-  workflowRunAccount,
-  type WorkflowRightsOptions
-} from "./workflow-account-rights";
+import { workflowRunAccount, type WorkflowRightsOptions } from "./workflow-account-rights";
 
 /**
  * Publish grants no new right: the parent's account must already be able to start each child.
@@ -22,7 +19,7 @@ export async function checkPublishedChildren(
 ): Promise<void> {
   await checkChildContracts(manifest, definitions);
   const account = await workflowRunAccount(options, manifest.runAs);
-  if (account?.principal.status !== "active")
+  if (manifest.runAs !== undefined && account?.principal.status !== "active")
     throw new AppError("VALIDATION_FAILED", "The Workflow principal is unavailable", {
       reason: "run_as_unknown"
     });
@@ -37,10 +34,10 @@ export async function checkPublishedChildren(
         { reason: "no_parent_trigger", workflow: step.workflow }
       );
   }
-  const needed = (await workflowRightsOf(options, manifest)).filter(
+  const needed = (await resolveWorkflowNeededRights(options, manifest)).filter(
     (right) => right.neededFor === "publish"
   );
-  const [lacking] = workflowRightsLacking(needed, account.access);
+  const [lacking] = account ? workflowRightsLacking(needed, account.access) : [];
   if (lacking)
     throw new AppError(
       "FORBIDDEN",

@@ -298,6 +298,25 @@ export type StartWorkflowRunRequest = z.infer<typeof startWorkflowRunRequestSche
 // Workflow's own (`workflow.use`, `workflow.read`, `workflow.write`) and is decided on the
 // Workflow the call or its run names.
 export const workflowOperations = {
+  "workflows.unpublish": defineRegisteredOperation({
+    id: "workflows.unpublish",
+    method: "POST",
+    path: "/api/v1/workflows/:workflow/unpublish",
+    summary: "Stop a Workflow and remove its owned account and rights; keep its draft",
+    tag: "Workflows",
+    auth: "user",
+    scope: "config_assets:publish",
+    requires: [],
+    effect: "changing",
+    response: json(
+      z.object({
+        draftRevision: z.number().int().positive(),
+        unpublishedRevision: z.number().int().positive()
+      })
+    ),
+    errors: ["NOT_FOUND", "VALIDATION_FAILED"],
+    rateClass: "write"
+  }),
   "workflows.download_dataset": defineRegisteredOperation({
     id: "workflows.download_dataset",
     method: "GET",

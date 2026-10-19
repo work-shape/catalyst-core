@@ -17,7 +17,7 @@ import {
 
 /** What the check reads: the principals of one instance by name, and the rights they hold. */
 export interface WorkflowRunAsOptions extends PrincipalRightsOptions {
-  apiAccess: Pick<ApiAccessStore, "findServicePrincipalByName">;
+  apiAccess: Pick<ApiAccessStore, "findServicePrincipalByName" | "findServicePrincipalByOwner">;
 }
 
 /**

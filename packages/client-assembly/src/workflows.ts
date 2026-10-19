@@ -185,7 +185,12 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     for (const { id, assetId, name, description, revisionId, definition, files } of published) {
       // The active principal answers both whether a run can start and whom it acts as.
       const principal = definition.ok
-        ? await workflowRunPrincipal(stores.apiAccess, clientInstanceId, definition.manifest)
+        ? await workflowRunPrincipal(
+            stores.apiAccess,
+            clientInstanceId,
+            definition.manifest,
+            stores.configAssets
+          )
         : undefined;
       const reasons = definition.ok
         ? [
@@ -241,10 +246,11 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
             if (!draft) throw new AppError("NOT_FOUND", `There is no Workflow '${workflow}'`);
             // The principal bounds the test run and lends it nothing: it is asked to exist and
             // be active, and no right over it is asked of the tester (ADR-0031).
-            await workflowRunAsPrincipal(
-              { clientInstanceId, apiAccess: stores.apiAccess },
-              { workflow, runAs: draft.manifest.runAs }
-            );
+            if (draft.manifest.runAs !== undefined)
+              await workflowRunAsPrincipal(
+                { clientInstanceId, apiAccess: stores.apiAccess },
+                { workflow, runAs: draft.manifest.runAs }
+              );
             return engine.test({ draft, ...start });
           },
           // Definitions a test hands in are no assets: a right on them is decided by name.

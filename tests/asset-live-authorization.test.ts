@@ -59,7 +59,9 @@ describe("making a revision live that names a service principal", () => {
   const runAs: Parameters<typeof createWorkflowLiveCheck>[0] = {
     clientInstanceId,
     apiAccess: {
-      findServicePrincipalByName: (input) => storesOf().apiAccess.findServicePrincipalByName(input)
+      findServicePrincipalByName: (input) => storesOf().apiAccess.findServicePrincipalByName(input),
+      findServicePrincipalByOwner: (input) =>
+        storesOf().apiAccess.findServicePrincipalByOwner(input)
     },
     access: {
       loadPersistedAccess: (input) => storesOf().access.loadPersistedAccess(input),

@@ -653,6 +653,7 @@ export const EVENTS = {
   // the Workflow; the metadata names its draft revision, the action or step and who set it.
   // A guardrail made to enforce at its scope, or taken back: who, which revision and where.
   "guardrail.published": { ...LIVE_ONCE_AUDIT, name: "guardrail.published" },
+  "workflow.unpublished": { ...LIVE_ONCE_AUDIT, name: "workflow.unpublished" },
   "guardrail.unpublished": { ...LIVE_ONCE_AUDIT, name: "guardrail.unpublished" },
   // A guardrail the release ships switched off or on again by an instance admin.
   "guardrail.shipped_switched": { ...LIVE_ONCE_AUDIT, name: "guardrail.shipped_switched" },

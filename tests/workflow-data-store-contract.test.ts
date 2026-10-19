@@ -355,7 +355,7 @@ describe("the names of a Workflow", () => {
     const principal: WorkflowRunPrincipal = {
       kind: "service",
       id: asServicePrincipalId("sp_1"),
-      displayLabel: manifest.runAs,
+      displayLabel: manifest.runAs ?? manifest.name,
       permissionRefs: [],
       permissions: [],
       clientInstanceId: asClientInstanceId("demo-local"),

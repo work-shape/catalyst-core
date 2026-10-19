@@ -1,21 +1,17 @@
 import {
-  WORKFLOW_ASSET_KIND,
   createActorAccess,
   workflowNeededRightResource,
   type ActorAccess,
-  type AssetScope,
   type ConfigAssetStore,
   type OperationRegistry,
   type ServicePrincipalRecord,
   type WorkflowAccountRights,
-  type WorkflowManifest,
-  type WorkflowNeededRight
+  type WorkflowManifest
 } from "@work-shape/catalyst-core";
 import type { WorkflowRunAsOptions } from "@work-shape/catalyst-server";
 import {
   indexWorkflowSteps,
-  workflowNeededRights,
-  workflowOperationNames,
+  resolveWorkflowNeededRights,
   type WorkflowDefinitionRevision,
   type WorkflowDefinitionSource
 } from "@work-shape/catalyst-workflows";
@@ -29,41 +25,15 @@ export type WorkflowRightsOptions = WorkflowRunAsOptions & {
 };
 
 /**
- * The rights the account of a definition needs (`workflowNeededRights`), with the operations
- * it names read from the registry and the child Workflows from their assets. The publish
- * check and the publish screen both ask this.
- */
-export async function workflowRightsOf(
-  options: WorkflowRightsOptions,
-  manifest: Pick<WorkflowManifest, "steps" | "tools">
-): Promise<WorkflowNeededRight[]> {
-  const registry = options.registry?.();
-  const names = workflowOperationNames(manifest);
-  const operations = registry && names.length > 0 ? await registry.resolveMany(names) : new Map();
-  const children = new Set<string>();
-  for (const { step } of indexWorkflowSteps(manifest).values())
-    if (step.type === "workflow") children.add(step.workflow);
-  const workflowAssets = new Map<string, { id: string; scope: AssetScope }>();
-  for (const child of children) {
-    const asset = await options.configAssets.getConfigAsset({
-      clientInstanceId: options.clientInstanceId,
-      kind: WORKFLOW_ASSET_KIND,
-      name: child
-    });
-    if (asset) workflowAssets.set(child, { id: asset.id, scope: asset.scope });
-  }
-  return workflowNeededRights(manifest, { operations, workflowAssets });
-}
-
-/**
  * The account a definition names under `runAs` and what it may do, by the ordinary
  * authorizer with no credential scope and no starter rights. Nothing where no principal of
  * the name exists.
  */
 export async function workflowRunAccount(
   options: WorkflowRunAsOptions,
-  runAs: string
+  runAs: string | undefined
 ): Promise<{ principal: ServicePrincipalRecord; access: ActorAccess } | undefined> {
+  if (runAs === undefined) return undefined;
   const principal = await options.apiAccess.findServicePrincipalByName({
     clientInstanceId: options.clientInstanceId,
     name: runAs
@@ -108,28 +78,29 @@ export async function workflowAccountRights(
   const answer: WorkflowAccountRights[] = [];
   for (let next = open.shift(); next; next = open.shift()) {
     const [rights, account] = await Promise.all([
-      workflowRightsOf(options, next.manifest),
+      resolveWorkflowNeededRights(options, next.manifest),
       workflowRunAccount(options, next.manifest.runAs)
     ]);
     const active = account?.principal.status === "active" ? account.access : undefined;
-    answer.push({
-      workflow: next.id,
-      revision: next.revision,
-      runAs: next.manifest.runAs,
-      ...(account
-        ? {
-            account: {
-              id: account.principal.id,
-              label: account.principal.displayLabel,
-              status: account.principal.status
+    if (next.manifest.runAs !== undefined)
+      answer.push({
+        workflow: next.id,
+        revision: next.revision,
+        runAs: next.manifest.runAs,
+        ...(account
+          ? {
+              account: {
+                id: account.principal.id,
+                label: account.principal.displayLabel,
+                status: account.principal.status
+              }
             }
-          }
-        : {}),
-      rights: rights.map((right) => ({
-        ...right,
-        held: active?.authorize(right.action, workflowNeededRightResource(right)).allowed === true
-      }))
-    });
+          : {}),
+        rights: rights.map((right) => ({
+          ...right,
+          held: active?.authorize(right.action, workflowNeededRightResource(right)).allowed === true
+        }))
+      });
     for (const { step } of indexWorkflowSteps(next.manifest).values()) {
       if (step.type !== "workflow" || seen.has(step.workflow)) continue;
       seen.add(step.workflow);

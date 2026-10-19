@@ -25,7 +25,8 @@ export async function checkWorkflowPersonContexts(
   const principal = await workflowRunPrincipal(
     deps.stores.apiAccess,
     deps.clientInstanceId,
-    manifest
+    manifest,
+    deps.stores.configAssets
   );
   for (const { step } of indexWorkflowSteps(manifest).values()) {
     if (step.type === "workflow") {

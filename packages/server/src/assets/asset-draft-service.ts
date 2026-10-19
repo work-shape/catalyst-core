@@ -531,7 +531,7 @@ export class AssetDraftWorkflow {
     const { kind, name } = target;
     // Only a guardrail acts on others by its published revision; another kind is taken back
     // by a delete.
-    if (kind.kind !== GUARDRAIL_ASSET_KIND) {
+    if (kind.kind !== GUARDRAIL_ASSET_KIND && kind.kind !== "workflow") {
       throw new AppError("VALIDATION_FAILED", `A ${kind.kind} is taken back by a delete`, {
         reason: "no_unpublish"
       });
@@ -539,7 +539,7 @@ export class AssetDraftWorkflow {
     call.access.require(publishAction(kind), target.resource);
     await this.host.authorizeEditing(call, "put");
     const asset = requireActive(target);
-    if (asset.publishedConfig !== undefined) {
+    if (kind.kind === GUARDRAIL_ASSET_KIND && asset.publishedConfig !== undefined) {
       await kind.authorizeLive?.({
         actor: call.actor,
         access: call.access,
@@ -548,18 +548,33 @@ export class AssetDraftWorkflow {
         config: asset.publishedConfig
       });
     }
-    const unpublished = await this.options.configAssets.store.unpublishConfigAsset({
-      clientInstanceId: this.options.clientInstanceId,
-      kind: kind.kind,
-      name,
-      assetId: asset.id
+    const unpublished = await this.options.stores.transaction(async (stores) => {
+      const moved = await stores.configAssets.unpublishConfigAsset({
+        clientInstanceId: this.options.clientInstanceId,
+        kind: kind.kind,
+        name,
+        assetId: asset.id
+      });
+      if (kind.kind === "workflow")
+        await kind.onRemove?.({
+          clientInstanceId: this.options.clientInstanceId,
+          assetId: asset.id,
+          name,
+          ...(asset.publishedConfig === undefined ? {} : { published: asset.publishedConfig }),
+          stores
+        });
+      return moved;
     });
-    await recordAssetEvent(call, "guardrail.unpublished", {
-      kind: kind.kind,
-      name,
-      revision: unpublished.revision,
-      ...scopeMetadata(asset.scope)
-    });
+    await recordAssetEvent(
+      call,
+      kind.kind === "workflow" ? "workflow.unpublished" : "guardrail.unpublished",
+      {
+        kind: kind.kind,
+        name,
+        revision: unpublished.revision,
+        ...scopeMetadata(asset.scope)
+      }
+    );
     return { draftRevision: asset.revision, unpublishedRevision: unpublished.revision };
   }
 

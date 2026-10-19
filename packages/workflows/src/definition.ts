@@ -206,7 +206,7 @@ const manifestSchema = z.strictObject({
   id: z.string().regex(WORKFLOW_ID, "A Workflow id is lowercase letters, digits, '_' and '-'"),
   name: z.string().min(1),
   description: z.string().optional(),
-  runAs: z.string().min(1),
+  runAs: z.string().min(1).optional(),
   kind: z.enum(WORKFLOW_KINDS).optional(),
   inputs: jsonObjectSchema,
   outputs: jsonObjectSchema,

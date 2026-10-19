@@ -1,3 +1,4 @@
+import { registerWorkflowUnpublishRoute } from "./workflows/workflow-unpublish";
 export { SKILL_MAX_BYTES } from "./asset-kinds/skill-files";
 import type { HttpRuntime, Logger } from "@work-shape/catalyst-core";
 import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
@@ -283,6 +284,7 @@ export async function createChatServer(
   registerSuperadminRoutes(route, options);
   registerAccessRoutes(route, options);
   registerWorkflowPrincipalRightsRoutes(route, options);
+  registerWorkflowUnpublishRoute(route, options);
   for (const register of extensions.routes ?? []) register(route);
   registerApiReferenceRoutes(route, options);
 

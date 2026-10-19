@@ -224,6 +224,39 @@ describe("a Data Store right given to the service principal of a Workflow", () =
     expect(await w.rows("findings")).toEqual([1]);
   }, 120_000);
 
+  it("publishes an owned account with exactly insert on the store, then writes through it", async () => {
+    const w = await world();
+    const { runAs: _shared, ...manifest } = storing("findings");
+    const params = { kind: WORKFLOW_ASSET_KIND, name: manifest.id };
+    await w.ok("assets.put", {
+      params,
+      payload: { config: { name: manifest.id, manifest }, expectedRevision: 1 }
+    });
+    await w.ok("assets.publish", { params, payload: { revision: 2 } });
+    const asset = required(
+      await w.api.stores.configAssets.getConfigAsset({ clientInstanceId, ...params })
+    );
+    const principal = required(
+      await w.api.stores.apiAccess.findServicePrincipalByOwner({
+        clientInstanceId,
+        owner: { kind: WORKFLOW_ASSET_KIND, assetId: asset.id }
+      })
+    );
+    const grants = await w.api.stores.access.listGrants({
+      clientInstanceId,
+      holderKind: "service_principal",
+      holderId: principal.id
+    });
+    expect(grants.map((row) => [row.action, row.scopeKind, row.scopeId])).toEqual([
+      ["data_store.insert", "asset", w.storeIds.findings]
+    ]);
+    expect(await w.run("findings")).toMatchObject({
+      status: "done",
+      principal: { id: principal.id }
+    });
+    expect(await w.rows("findings")).toEqual([1]);
+  }, 120_000);
+
   it("gives a principal the three rights on rows, each on one store, and none over its definition", async () => {
     const w = await world();
     const onFindings = { scopeKind: "asset", scopeId: w.storeIds.findings };

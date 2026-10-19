@@ -39,6 +39,7 @@ import {
   type AssetTarget
 } from "./asset-target";
 import type { AssetWorkflowOptions } from "../types";
+import { assetTitle } from "./asset-reference-labels";
 import { unavailablePublishNarrative } from "../publish-narrative/publish-narrator";
 
 /**
@@ -261,7 +262,7 @@ export class AssetReadWorkflow {
             scope: asset.scope,
             config: content.config,
             locale,
-            names: this.addresseeNames()
+            names: this.addresseeNames(call, locale)
           })
         : undefined;
     const appAudience =
@@ -380,14 +381,33 @@ export class AssetReadWorkflow {
   }
 
   /** Names of users and Shared Workspaces of the instance, for a question that hides ids. */
-  private addresseeNames(): AddresseeNames {
-    const { clientInstanceId, stores } = this.options;
+  private addresseeNames(call: AssetCall, locale: LocaleCode): AddresseeNames {
+    const { clientInstanceId, stores, configAssets } = this.options;
     return {
       user: async (id) =>
         (await stores.users.getUser({ clientInstanceId, userId: asUserId(id) }))?.displayLabel,
       workspace: async (id) =>
         (await stores.workspaces.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(id)))
-          ?.name
+          ?.name,
+      // Only a reader who may read or use the asset is told its title.
+      asset: async (kind, name) => {
+        const assetKind = configAssets.kinds.kinds.find((each) => each.kind === kind);
+        if (assetKind === undefined) return undefined;
+        const record = await configAssets.store.getConfigAsset({
+          clientInstanceId,
+          kind: assetKind.kind,
+          name
+        });
+        if (record === undefined || record.config === null) return undefined;
+        const resource = accessResource(record.kind, record.name, record.scope, record.id);
+        const { read, use } = assetKind.actions;
+        const may = [read, use].some(
+          (action) => action !== undefined && call.access.authorize(action, resource).allowed
+        );
+        return may
+          ? assetTitle(configAssets.kinds.kinds, kind, name, record.config, locale)
+          : undefined;
+      }
     };
   }
 

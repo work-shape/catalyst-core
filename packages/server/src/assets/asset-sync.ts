@@ -14,7 +14,11 @@ import {
 import type { AgentToolWarning } from "../agent-tool-validation";
 import { clearLiveOnceSwitches } from "./asset-after-write";
 import { z } from "zod";
-import { configValuesEqual, readDefinitionName } from "../asset-kinds/shared";
+import {
+  configValuesEqual,
+  readDefinitionName,
+  type AssetWriteFollowUp
+} from "../asset-kinds/shared";
 import {
   definitionsByName,
   findAssetSetIssues,
@@ -391,32 +395,64 @@ async function checkBatch(
 async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checked: CheckedBatch) {
   const { planned, ready, storedDefault, defaultChange, mutations } = checked;
   const byKey = new Map(ready.map((entry) => [assetKey(entry.kind.kind, entry.name), entry]));
-  const result = await applyValidatedConfigAssetMutations(
-    options,
-    {
-      clientInstanceId: options.clientInstanceId,
-      actor: auditActorFromIdentity(call.actor),
-      baseRevisions: Object.fromEntries(
-        // Every item named a revision: the batch was refused before the policy otherwise.
-        [...byKey].map(([key, entry]) => [
-          key,
-          entry.absent ? null : (entry.item.expectedRevision ?? null)
-        ])
-      ),
-      baseAssetIds: Object.fromEntries(
-        [...byKey].flatMap(([key, entry]) =>
-          entry.item.expectedAssetId === undefined ? [] : [[key, entry.item.expectedAssetId]]
-        )
-      ),
-      ...(defaultChange ? { baseDefaultAgentName: storedDefault } : {}),
-      ...syncInitialAvailability(
-        call.access,
-        storedDefault === null && defaultChange?.agentName !== undefined
-      ),
-      mutations
-    },
-    call.runtime?.locale
-  ).catch(async (error: unknown) => {
+  const apply = (target: AssetWorkflowOptions) =>
+    applyValidatedConfigAssetMutations(
+      target,
+      {
+        clientInstanceId: options.clientInstanceId,
+        actor: auditActorFromIdentity(call.actor),
+        baseRevisions: Object.fromEntries(
+          // Every item named a revision: the batch was refused before the policy otherwise.
+          [...byKey].map(([key, entry]) => [
+            key,
+            entry.absent ? null : (entry.item.expectedRevision ?? null)
+          ])
+        ),
+        baseAssetIds: Object.fromEntries(
+          [...byKey].flatMap(([key, entry]) =>
+            entry.item.expectedAssetId === undefined ? [] : [[key, entry.item.expectedAssetId]]
+          )
+        ),
+        ...(defaultChange ? { baseDefaultAgentName: storedDefault } : {}),
+        ...syncInitialAvailability(
+          call.access,
+          storedDefault === null && defaultChange?.agentName !== undefined
+        ),
+        mutations
+      },
+      call.runtime?.locale
+    );
+  const removes = ready.filter(
+    (entry) => entry.item.type === "delete" && !entry.absent && entry.kind.withinWrite !== undefined
+  );
+  const followUps: AssetWriteFollowUp[] = [];
+  const writing =
+    removes.length === 0
+      ? apply(options)
+      : options.stores.transaction(async (stores) => {
+          const result = await apply({
+            ...options,
+            stores,
+            configAssets: { ...options.configAssets, store: stores.configAssets }
+          });
+          for (const entry of removes) {
+            const followUp = await entry.kind.withinWrite?.({
+              clientInstanceId: options.clientInstanceId,
+              name: entry.name,
+              assetId: entry.asset?.id,
+              previous: entry.asset?.config,
+              previousRevision: entry.asset?.revision,
+              config: undefined,
+              actor: auditActorFromIdentity(call.actor),
+              correlationId: call.correlationId,
+              stores
+            });
+            if (followUp) followUps.push(followUp);
+          }
+          return result;
+        });
+  const result = await writing.catch(async (error: unknown) => {
+    for (const followUp of followUps) followUp.rolledBack();
     // Another write got between the check above and the store's lock. Nothing was written.
     const replaced =
       isAppError(error) && error.code === "CONFLICT"
@@ -457,6 +493,8 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
     if (stale.length === 0) throw error;
     throw await staleBatch(options, call.access, planned, stale);
   });
+
+  for (const followUp of followUps) await followUp.committed();
 
   // The recorder of the Operation Run: each row names the run that wrote it.
   const auditRecorder = call.audit;

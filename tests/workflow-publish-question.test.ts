@@ -4,9 +4,11 @@ import {
   INSTANCE_ASSET_SCOPE,
   asClientInstanceId,
   type LocaleCode,
-  type WorkflowManifest
+  type WorkflowManifest,
+  type WorkflowNeededRight
 } from "@work-shape/catalyst-core";
 import { WORKFLOW_UNBOUNDED_CEILINGS } from "@work-shape/catalyst-workflows";
+import { workflowPublishQuestion } from "../packages/client-assembly/src/workflow-publish-question";
 
 // REH-900: the publish question named notify recipients by raw user id, in English, to German
 // staff. It is now written in the reader's language and names people and workspaces by name.
@@ -17,7 +19,7 @@ const kind = createWorkflowAssetKind({
   limits: { ceilings: WORKFLOW_UNBOUNDED_CEILINGS, stepSlots: 4 },
   runnerPackages: [],
   configAssets: { getConfigAsset: untouched, listPublishedConfigAssets: untouched },
-  apiAccess: { findServicePrincipalByName: untouched },
+  apiAccess: { findServicePrincipalByName: untouched, findServicePrincipalByOwner: untouched },
   access: { loadPersistedAccess: untouched, listGrantScopeAssets: untouched }
 });
 
@@ -99,5 +101,110 @@ describe("the publish question of a Workflow", () => {
 
   it("keeps each line one line when a name holds a line break", async () => {
     for (const line of await question("de")) expect(line).not.toContain("\n");
+  });
+});
+
+// LIVE-1: a definition without `runAs` runs as its own account, which gets the rights its steps
+// need. The question names that account once, with what it may do, by asset names only.
+describe("the publish question of a Workflow that runs as its own account", () => {
+  const right = (action: string, kind: string, name: string): WorkflowNeededRight => ({
+    action,
+    asset: { kind, name, assetId: `asset_${name}`, workspaceId: "cw_secret" },
+    steps: ["read"],
+    neededFor: "run"
+  });
+  const RIGHTS = [
+    right("connection.use", "connection", "Exampledata"),
+    right("data_store.insert", "data_store", "Findings"),
+    right("knowledge_base.use", "knowledge_base", "Handbook"),
+    right("data_store.execute", "data_store", "Open items"),
+    right("workflow.use", "workflow", "Check\nmonth")
+  ];
+  const own = (runAs?: string): WorkflowManifest => ({
+    id: "monthly-check",
+    name: "Monthly\ncheck",
+    ...(runAs === undefined ? {} : { runAs }),
+    inputs: { type: "object" },
+    outputs: { type: "object" },
+    steps: [
+      { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+      { id: "end", name: "End", type: "output", input: {} }
+    ]
+  });
+  const ask = (
+    locale: LocaleCode,
+    rights: readonly WorkflowNeededRight[] | undefined,
+    runAs?: string
+  ) =>
+    workflowPublishQuestion({
+      manifest: own(runAs),
+      limits: { ceilings: WORKFLOW_UNBOUNDED_CEILINGS, stepSlots: 4 },
+      locale,
+      names,
+      ...(rights === undefined ? {} : { rights })
+    });
+
+  it("names each asset by the title the reader may be told, never by its machine name", async () => {
+    const titled = {
+      ...names,
+      asset: (kind: string, name: string) =>
+        Promise.resolve(
+          kind === "connection" && name === "exampledata-machine"
+            ? "Exampledata"
+            : kind === "data_store" && name === "findings-machine"
+              ? "Findings\nof the month"
+              : undefined
+        )
+    };
+    const lines = await workflowPublishQuestion({
+      manifest: own(),
+      limits: { ceilings: WORKFLOW_UNBOUNDED_CEILINGS, stepSlots: 4 },
+      locale: "en",
+      names: titled,
+      rights: [
+        right("connection.use", "connection", "exampledata-machine"),
+        right("data_store.insert", "data_store", "findings-machine"),
+        // A title the reader may not be told: the definition's name stands.
+        right("knowledge_base.use", "knowledge_base", "handbook")
+      ]
+    });
+    expect(lines).toEqual([
+      "Runs as its own account “Monthly check” and may use Exampledata and handbook and add rows to Findings of the month."
+    ]);
+    expect(lines.join("\n")).not.toMatch(/-machine|asset_|cw_/u);
+  });
+
+  it("names the account and what it may do, in English", async () => {
+    expect(await ask("en", RIGHTS.slice(0, 2))).toEqual([
+      "Runs as its own account “Monthly check” and may use Exampledata and add rows to Findings."
+    ]);
+  });
+
+  it("says the same in German for a German reader", async () => {
+    expect(await ask("de", RIGHTS.slice(0, 2))).toEqual([
+      "Läuft unter einem eigenen Konto „Monthly check“ und darf Exampledata nutzen und Datensätze zu Findings hinzufügen."
+    ]);
+  });
+
+  it("groups the assets one kind of right reaches and words each right", async () => {
+    expect(await ask("en", RIGHTS)).toEqual([
+      "Runs as its own account “Monthly check” and may use Exampledata and Handbook, add rows to Findings, change and delete rows in Open items, and start the workflow “Check month”."
+    ]);
+  });
+
+  it("names the account alone where its steps need no right", async () => {
+    expect(await ask("en", [])).toEqual(["Runs as its own account “Monthly check”."]);
+    expect(await ask("de", undefined)).toEqual([
+      "Läuft unter einem eigenen Konto „Monthly check“."
+    ]);
+  });
+
+  it("shows no id, workspace or step of a right", async () => {
+    const lines = (await ask("en", RIGHTS)).join("\n");
+    expect(lines).not.toMatch(/asset_|cw_|connection\.use|read/u);
+  });
+
+  it("says nothing of an account a definition names under runAs", async () => {
+    expect(await ask("en", RIGHTS, "shared-runner")).toEqual([]);
   });
 });

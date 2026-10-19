@@ -85,12 +85,20 @@ export interface PublishReach {
 /** The operation a write of an asset arrives through. */
 export type AssetWriteSurface = "put" | "delete" | "revert" | "sync";
 
-/** The names a question shows in place of ids: of a user, and of a Shared Workspace. */
+/**
+ * The names a question shows in place of ids: of a user, of a Shared Workspace, and of an asset
+ * a definition names.
+ */
 export interface AddresseeNames {
   /** The user's name, or nothing for an id that names no user. */
   user(id: string): Promise<string | undefined>;
   /** The Shared Workspace's name, or nothing for an id that names none. */
   workspace(id: string): Promise<string | undefined>;
+  /**
+   * The title people read of an asset, by its kind and name, or nothing where none exists or
+   * the reader may neither read nor use it. The name in the definition is then shown.
+   */
+  asset?(kind: string, name: string): Promise<string | undefined>;
 }
 
 /**

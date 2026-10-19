@@ -54,7 +54,7 @@ const STEP_REFERENCE: {
     }
   },
   operation: {
-    does: "Calls one operation by its name, as the service principal the Workflow runs as. Its output is what the operation answered.",
+    does: "Calls one operation by its name, as the account the Workflow runs as. Its output is what the operation answered.",
     fields: {
       operation:
         "The full name of the operation, such as `connection.<connection>.<operation>`. Ask `platform.assets.operations` for the names and input schemas; filter by exact `name` or a `prefix` such as `connection.crm.` or `data_store.orders.`. Each page has at most 200 operations: pass `nextCursor` as `cursor` with the same filters until it is absent before concluding an operation does not exist. Do not guess a name. To run another Workflow and wait for its result, use a `workflow` step, not `workflow.<name>.start` here.",
@@ -129,7 +129,6 @@ const EXAMPLES: { title: string; yaml: string }[] = [
     yaml: `id: top-customers
 name: Top customers
 description: Reads the customers with the highest revenue from the sample system.
-runAs: choose-from-platform-context
 inputs:
   type: object
   properties:
@@ -167,7 +166,6 @@ steps:
     title: "A loop that makes one changing call per item and returns its counts",
     yaml: `id: notify-clients
 name: Notify clients
-runAs: choose-from-platform-context
 inputs:
   type: object
   properties:
@@ -218,7 +216,6 @@ steps:
     title: "A schedule and a literal value in a mapping",
     yaml: `id: nightly-check
 name: Nightly check
-runAs: choose-from-platform-context
 inputs:
   type: object
 outputs:
@@ -430,9 +427,13 @@ ${RULES_REVISION_STEPS.replace(/^/gmu, "  ")}
 - \`id\`: the id of the Workflow: lowercase letters, digits, \`_\` and \`-\`. It is the \`name\` of
   the config. Never change it.
 - \`name\`: what a person calls the Workflow. \`description\`: one or two plain sentences, optional.
-- \`runAs\`: the name of the service principal every step acts as. Its rights decide what a step
-  may call. For a new Workflow, call platform.context and choose a name from workflowPrincipals, never an invented name or the placeholder in these examples. If exactly one is offered, use it without asking. If none is offered, explain that a Workflow account without an API key is created under Settings > API access. Never use an integration, CLI or release account. Do not change it unless the person asks: a publish checks whether its publisher
-  may let a Workflow act as that principal.
+- \`runAs\`: optional. Leave it out of a new Workflow. The first publish then creates the
+  Workflow's own account, which may use only what its steps call, and the publish question says
+  so in one line. Set it only when the person asks the Workflow to run as an existing shared
+  account: call platform.context and use a name from workflowPrincipals, never an invented
+  name. Never use an integration, CLI or release account. Keep a \`runAs\` a definition already
+  has unless the person asks to change it: a publish checks whether its publisher may let a
+  Workflow act as that account.
 - \`kind\`: \`process\` unless set. Use \`data\` for a Workflow that fills or processes a Knowledge Base or Data Store. Publishing Knowledge Base \`ingest\`, \`withdraw\`, \`put_processed\` or Data Store \`records.propose\` from a process Workflow is refused with \`process_workflow_write_operation\`. A copied data template keeps \`kind: data\`.
 - \`labels\`: optional mapping of names to text or numbers, as literals such as
   \`client: { value: acme }\` or references such as \`client: { ref: { step: start, path: input.client } }\`.

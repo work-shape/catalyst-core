@@ -353,14 +353,6 @@ describe("a Workflow stored as an asset", () => {
       undefined
     );
 
-    // A definition without the principal it runs as is refused the same way.
-    const { runAs: _runAs, ...withoutRunAs } = notifyClients();
-    const noPrincipal = await t.call(t.admin.id, "assets.put", {
-      params: address,
-      payload: { config: { name: WORKFLOW, manifest: withoutRunAs }, expectedRevision: null }
-    });
-    expect(noPrincipal.statusCode, noPrincipal.body).toBe(422);
-
     // A manifest of another id than the asset is addressed by is no revision of it.
     const otherId = await t.call(t.admin.id, "assets.put", {
       params: address,

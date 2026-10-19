@@ -12,6 +12,7 @@ export const WORKFLOW_OPERATION_IDS = [
   "workflows.list",
   "workflows.start",
   "workflows.test",
+  "workflows.unpublish",
   "workflows.get_run",
   "workflows.download_dataset",
   "workflows.list_runs",
@@ -155,3 +156,5 @@ export {
 } from "./needed-rights";
 
 export { workflowContinuationIssues } from "./continuation-rules";
+
+export { resolveWorkflowNeededRights } from "./needed-rights";

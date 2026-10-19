@@ -288,13 +288,15 @@ export function createStepExecutor(options: StepExecutorOptions) {
    */
   async function callerOf(
     run: WorkflowRun,
-    stepRun: WorkflowStepRun
+    stepRun: WorkflowStepRun,
+    definition: WorkflowManifest
   ): Promise<{
     actor: AuthenticatedIdentity;
     draft?: OperationDraftContext;
     workflowDeleted?: true;
   }> {
-    if (run.mode === "test") return testRunCall(stores, run, stepRun);
+    if (run.mode === "test")
+      return testRunCall(stores, run, stepRun, definition, operationCalls.registry);
     const actor = await workflowRunActor(stores.apiAccess, run);
     if (!actor) {
       throw new WorkflowStepFailure(
@@ -357,7 +359,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           if (step.key !== undefined) {
             input[WORKFLOW_START_KEY_INPUT] = await resolveRunKey(scope, step.key);
           }
-          const caller = await callerOf(run, stepRun);
+          const caller = await callerOf(run, stepRun, attempt.definition);
           const { operationRunId, call } = await callStepOperation({
             calls: operationCalls,
             run,
@@ -391,7 +393,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           if (options.datasets)
             for (const ref of datasetReferences(input))
               await options.datasets.reader({ id: ref.$dataset, runId: run.id, reference: ref });
-          const caller = await callerOf(run, stepRun);
+          const caller = await callerOf(run, stepRun, attempt.definition);
           const captureOutput =
             !step.paginate && step.dataset && options.datasets
               ? await operationDatasetCapture({
@@ -501,7 +503,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
               "A notice title and text must be strings"
             );
           }
-          const { actor } = await callerOf(run, stepRun);
+          const { actor } = await callerOf(run, stepRun, attempt.definition);
           if (run.mode === "test") {
             return {
               kind: "done",

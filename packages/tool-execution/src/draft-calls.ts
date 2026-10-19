@@ -1,5 +1,7 @@
 import {
   AppError,
+  createActorAccess,
+  asUserId,
   boundedActorAccess,
   isAuthenticatedServicePrincipal,
   type ActingServicePrincipal,
@@ -124,9 +126,36 @@ export interface CallRights {
 export async function rightsOf(call: OperationCall, deps: RunOperationDeps): Promise<CallRights> {
   const own = await deps.authorizer.forActor(call.actor, { workspaceId: call.workspaceId ?? null });
   const principal = call.draft?.boundBy;
-  return principal
-    ? { own, bound: { principal, access: await deps.authorizer.forActor(principal) } }
-    : { own };
+  if (!principal) return { own };
+  const derived = call.draft?.boundRights;
+  const access =
+    derived === undefined
+      ? await deps.authorizer.forActor(principal)
+      : createActorAccess(
+          {
+            kind: "service_principal",
+            id: principal.id,
+            clientInstanceId: principal.clientInstanceId,
+            roles: [],
+            permissionRefs: []
+          },
+          {
+            holderActive: true,
+            grants: derived.map((right, index) => ({
+              id: `draft-${index}`,
+              clientInstanceId: principal.clientInstanceId,
+              holderKind: "service_principal",
+              holderId: principal.id,
+              action: right.action,
+              effect: "allow",
+              scopeKind: "asset",
+              scopeId: right.assetId,
+              grantedBy: asUserId(call.actor.id),
+              createdAt: "1970-01-01T00:00:00.000Z"
+            }))
+          }
+        );
+  return { own, bound: { principal, access } };
 }
 
 /** What the operation is executed with: the actor's rights, bounded where the call is. */

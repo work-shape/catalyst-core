@@ -90,7 +90,7 @@ export async function workflowStartIssues(
   if (!instance.principal) {
     const principal = await instance.principals.findServicePrincipalByName({
       clientInstanceId: instance.clientInstanceId,
-      name: manifest.runAs
+      name: manifest.runAs ?? ""
     });
     issues.push({
       code: "principal_inactive",

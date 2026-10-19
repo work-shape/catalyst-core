@@ -106,6 +106,8 @@ export interface OperationDraftContext {
    * made as the person testing and allowed only where the principal holds the right too.
    */
   boundBy?: ActingServicePrincipal;
+  /** Trusted, derived ceiling of a Workflow-owned draft; never supplied by a request. */
+  boundRights?: readonly { action: string; assetId: string }[];
   /**
    * A test run whose start was the tester's own confirmation: they called `workflows.test`
    * themselves, or confirmed an agent's call of it. A step's `confirm` is then satisfied by

@@ -7,6 +7,9 @@ import {
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   type AssetScope,
+  type ClientInstanceId,
+  type ConfigAssetStore,
+  type OperationRegistry,
   type JsonValue,
   type OperationDefinition,
   type WorkflowInputMapping,
@@ -153,4 +156,42 @@ function resourceOf(operation: NeededRightOperation, input: WorkflowInputMapping
     // What the operation needs on a field a reference fills is known only when it runs.
     return undefined;
   }
+}
+
+/** Resolve the named assets and operations once, for publishing and the draft's ceiling. */
+export async function resolveWorkflowNeededRights(
+  options: {
+    clientInstanceId: ClientInstanceId;
+    configAssets: Pick<ConfigAssetStore, "getConfigAsset">;
+    registry?: () => Pick<OperationRegistry, "resolveMany"> | undefined;
+  },
+  manifest: Pick<WorkflowManifest, "steps" | "tools">
+): Promise<WorkflowNeededRight[]> {
+  const names = workflowOperationNames(manifest);
+  const operations = (await options.registry?.()?.resolveMany(names)) ?? new Map();
+  const workflowAssets = new Map<string, { id: string; scope: AssetScope }>();
+  for (const { step } of indexWorkflowSteps(manifest).values()) {
+    if (step.type !== "workflow" || workflowAssets.has(step.workflow)) continue;
+    const asset = await options.configAssets.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: WORKFLOW_ASSET_KIND,
+      name: step.workflow
+    });
+    if (asset) workflowAssets.set(step.workflow, { id: asset.id, scope: asset.scope });
+  }
+  // Operation resources may name an asset without carrying its id. Grants always name the id.
+  const rights = workflowNeededRights(manifest, { operations, workflowAssets });
+  for (const right of rights) {
+    if (right.asset.assetId !== undefined) continue;
+    const asset = await options.configAssets.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: right.asset.kind,
+      name: right.asset.name
+    });
+    if (asset?.status === "active") {
+      right.asset.assetId = asset.id;
+      if (asset.scope.kind === "workspace") right.asset.workspaceId = asset.scope.workspaceId;
+    }
+  }
+  return rights;
 }

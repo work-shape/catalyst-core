@@ -288,7 +288,9 @@ export async function workflowFixture(
       listPublishedConfigAssets: (input) => storesOf().configAssets.listPublishedConfigAssets(input)
     },
     apiAccess: {
-      findServicePrincipalByName: (input) => storesOf().apiAccess.findServicePrincipalByName(input)
+      findServicePrincipalByName: (input) => storesOf().apiAccess.findServicePrincipalByName(input),
+      findServicePrincipalByOwner: (input) =>
+        storesOf().apiAccess.findServicePrincipalByOwner(input)
     },
     access: {
       loadPersistedAccess: (input) => storesOf().access.loadPersistedAccess(input),

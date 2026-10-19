@@ -82,7 +82,11 @@ export function createRunOpening(options: {
   limits: WorkflowLimitContext;
   now(): Date;
   stepFiles: WorkflowStepFiles;
-  prepareStart(revision: WorkflowDefinitionRevision, given: unknown): Promise<PreparedStart>;
+  prepareStart(
+    revision: WorkflowDefinitionRevision,
+    given: unknown,
+    mode?: WorkflowRunMode
+  ): Promise<PreparedStart>;
   /** Creates the step run of the trigger and the job that executes it. */
   beginTrigger(tx: PlatformStores, run: WorkflowRun, trigger: WorkflowStep): Promise<unknown>;
 }) {
@@ -272,7 +276,7 @@ export function createRunOpening(options: {
     if (input.key !== undefined && !workflowRunKeySchema.safeParse(input.key).success) {
       throw runKeyRefusal();
     }
-    const prepared = await options.prepareStart(revision, input.input);
+    const prepared = await options.prepareStart(revision, input.input, mode);
     const scripts = await codeStepIssues(revision, options.stepFiles);
     if (scripts.length > 0) throw workflowStepFilesRefusal(revision.manifest.id, scripts);
     const { startedBy } = input;

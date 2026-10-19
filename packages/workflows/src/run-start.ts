@@ -3,6 +3,7 @@ import { workflowValueSchema } from "./dataset-schema";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   AppError,
+  createServicePrincipalId,
   type ClientInstanceId,
   type JsonObject,
   type PlatformStores,
@@ -42,7 +43,8 @@ export function createStartCheck(options: StartCheckOptions) {
    */
   return async function prepareStart(
     published: WorkflowDefinitionRevision,
-    given: unknown
+    given: unknown,
+    mode?: "live" | "test"
   ): Promise<PreparedStart> {
     const { manifest } = published;
     await checkDatasetContracts(manifest, options.definitions, operationCalls.registry);
@@ -91,11 +93,19 @@ export function createStartCheck(options: StartCheckOptions) {
         { reason: "operation_secret", issues: secret }
       );
     }
-    const principal = await workflowRunPrincipal(stores.apiAccess, clientInstanceId, manifest);
+    const principal =
+      mode === "test" && manifest.runAs === undefined
+        ? { id: createServicePrincipalId(), name: manifest.id, displayLabel: manifest.name }
+        : await workflowRunPrincipal(
+            stores.apiAccess,
+            clientInstanceId,
+            manifest,
+            stores.configAssets
+          );
     if (!principal) {
       const account = await stores.apiAccess.findServicePrincipalByName({
         clientInstanceId,
-        name: manifest.runAs
+        name: manifest.runAs ?? ""
       });
       throw new AppError(
         "CONFLICT",

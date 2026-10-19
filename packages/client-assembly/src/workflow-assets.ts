@@ -1,3 +1,4 @@
+import { checkWorkflowOwnRights, publishWorkflowOwnAccount } from "./workflow-owned-account";
 import { checkWorkflowPersonContexts } from "./workflow-person-context";
 import {
   getSubjectUserId,
@@ -49,6 +50,7 @@ import {
   workflowLimitIssues,
   workflowContinuationIssues,
   workflowRunPrincipal,
+  resolveWorkflowNeededRights,
   type WorkflowDefinitionResult,
   type WorkflowLimitContext,
   type WorkflowDefinitionRevision,
@@ -257,9 +259,14 @@ export function createWorkflowAssetKind(
       return references;
     },
     async readRunsAs(config) {
-      const runAs = runAsOfConfigSchema.safeParse(config).data?.manifest.runAs;
-      if (typeof runAs !== "string") return undefined;
-      const principal = await workflowRunPrincipal(options.apiAccess, clientInstanceId, { runAs });
+      const manifest = runnable(config);
+      if (!manifest) return undefined;
+      const principal = await workflowRunPrincipal(
+        options.apiAccess,
+        clientInstanceId,
+        manifest,
+        options.configAssets
+      );
       return principal?.displayLabel;
     },
     holdsInstanceDefault: false,
@@ -295,7 +302,7 @@ export function createWorkflowAssetKind(
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
-    async onPublish({ stores, replaced, config, actor, revisionId }) {
+    async onPublish({ stores, replaced, config, actor, revisionId, assetId, access }) {
       const publisher = isAuthenticatedServicePrincipal(actor)
         ? undefined
         : getSubjectUserId(actor);
@@ -308,6 +315,17 @@ export function createWorkflowAssetKind(
       const parsed = workflowConfigSchema.parse(config);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      await publishWorkflowOwnAccount(stores, {
+        clientInstanceId,
+        assetId,
+        manifest: result.manifest,
+        actor,
+        access,
+        rights: await resolveWorkflowNeededRights(
+          { ...options, configAssets: stores.configAssets, registry: () => registryFor(stores) },
+          result.manifest
+        )
+      });
       const continuation = await workflowContinuationIssues(result.manifest, options.registry?.());
       if (continuation.length > 0)
         throw workflowDefinitionRefusal(result.manifest.id, continuation);
@@ -339,7 +357,30 @@ export function createWorkflowAssetKind(
       );
       await reschedule(stores, replaced, config);
     },
-    async onRemove({ stores, published, name }) {
+    // Account revocation is part of the delete, never a best-effort after-write task.
+    async withinWrite({ stores, assetId, config }) {
+      if (config !== undefined || assetId === undefined) return undefined;
+      const principal = await stores.apiAccess.findServicePrincipalByOwner({
+        clientInstanceId,
+        owner: { kind: WORKFLOW_ASSET_KIND, assetId }
+      });
+      if (principal)
+        await stores.apiAccess.deleteServicePrincipal({
+          clientInstanceId,
+          servicePrincipalId: principal.id
+        });
+      return undefined;
+    },
+    async onRemove({ stores, published, name, assetId }) {
+      const principal = await stores.apiAccess.findServicePrincipalByOwner({
+        clientInstanceId,
+        owner: { kind: WORKFLOW_ASSET_KIND, assetId }
+      });
+      if (principal)
+        await stores.apiAccess.deleteServicePrincipal({
+          clientInstanceId,
+          servicePrincipalId: principal.id
+        });
       const parsed = workflowConfigSchema.safeParse(published);
       const workflow = name ?? (parsed.success ? parsed.data.name : undefined);
       if (workflow !== undefined) {
@@ -382,7 +423,13 @@ export function createWorkflowAssetKind(
     publishQuestion: async ({ config, locale, names }) => {
       const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
       return parsed.ok
-        ? workflowPublishQuestion({ manifest: parsed.manifest, limits, locale, names })
+        ? workflowPublishQuestion({
+            manifest: parsed.manifest,
+            limits,
+            locale,
+            names,
+            rights: await resolveWorkflowNeededRights(options, parsed.manifest)
+          })
         : [];
     },
     // What the accounts of a publish need, for the screen that asks it before the publish.
@@ -401,10 +448,17 @@ export function createWorkflowAssetKind(
         throw workflowDefinitionRefusal(result.manifest.id, continuation);
       const kindIssues = workflowKindIssues(result.manifest);
       if (kindIssues.length > 0) throw workflowDefinitionRefusal(config.name, kindIssues);
-      await createWorkflowLiveCheck(
-        options,
-        (config) => runAsOfConfigSchema.safeParse(config).data?.manifest.runAs
-      )(input);
+      if (result.manifest.runAs === undefined) {
+        checkWorkflowOwnRights(
+          result.manifest,
+          await resolveWorkflowNeededRights(options, result.manifest),
+          input
+        );
+      } else
+        await createWorkflowLiveCheck(
+          options,
+          (config) => runAsOfConfigSchema.safeParse(config).data?.manifest.runAs
+        )(input);
       assertWorkflowPackages(
         result.manifest,
         options.runnerPackages ?? runnerPackageManifest.packages

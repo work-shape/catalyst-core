@@ -536,9 +536,9 @@ export interface WorkflowManifest {
    * principal lends its rights to everyone who starts the Workflow, so whoever publishes must
    * hold every one of them (`requireHeldRights`, asked by `requireWorkflowRunAs` of the server).
    * A test run of a draft does not: it acts as the person testing, bounded by the principal
-   * (ADR-0031). A definition without it is refused on save. Spec: Who a run acts as.
+   * (ADR-0031). When omitted, publishing creates a Workflow-owned account. Spec: LIVE-1.
    */
-  runAs: string;
+  runAs?: string;
   /** The schema of the run's input, as JSON Schema: the output schema of the trigger step. */
   inputs: JsonObject;
   /** The schema of the run's result, as JSON Schema: the input schema of the output step. */
