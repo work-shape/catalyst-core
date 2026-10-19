@@ -174,3 +174,39 @@ appendFileSync(process.env.CALLS_FILE, JSON.stringify(process.argv.slice(2)) + "
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /fatal:.*missing-affected-base/);
 });
+
+test("runner defaults its base to origin/main, github/main or the catalyst-core remote", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "catalyst-affected-base-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => {
+    const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+  };
+  writeFileSync(join(root, "tsconfig.tests.json"), JSON.stringify({ include: ["tests/**/*.ts"] }));
+  git("init", "--quiet");
+  git("add", ".");
+  git("-c", "user.name=T", "-c", "user.email=t@example.test", "commit", "--quiet", "-m", "fixture");
+  const runner = fileURLToPath(new URL("./check-affected.mjs", import.meta.url));
+  const env = { ...process.env };
+  delete env.AFFECTED_BASE;
+  const run = () =>
+    spawnSync(process.execPath, [runner, "--list"], { cwd: root, encoding: "utf8", env });
+
+  let result = run();
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /no base branch found; tried origin\/main, github\/main\./);
+
+  git("remote", "add", "upstream", "git@github.com:work-shape/catalyst-core.git");
+  git("update-ref", "refs/remotes/upstream/main", "HEAD");
+  result = run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /check:affected vs upstream\/main:/);
+
+  git("update-ref", "refs/remotes/github/main", "HEAD");
+  result = run();
+  assert.match(result.stdout, /check:affected vs github\/main:/);
+
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+  result = run();
+  assert.match(result.stdout, /check:affected vs origin\/main:/);
+});

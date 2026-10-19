@@ -14,7 +14,30 @@ import {
 
 const started = Date.now();
 const root = process.cwd();
-const base = process.env.AFFECTED_BASE ?? "origin/main";
+const resolves = (ref) =>
+  spawnSync("git", ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], { cwd: root })
+    .status === 0;
+// Lane worktrees on the Mac Mini name the remote `github`, not `origin`.
+const defaultBase = () => {
+  const remotes = spawnSync("git", ["config", "--get-regexp", "^remote\\..*\\.url$"], {
+    cwd: root,
+    encoding: "utf8"
+  })
+    .stdout.split("\n")
+    .map(
+      (line) => line.match(/^remote\.(.+)\.url \S*work-shape\/catalyst-core(?:\.git)?\/?$/u)?.[1]
+    )
+    .filter(Boolean)
+    .map((remote) => `${remote}/main`);
+  const candidates = [...new Set(["origin/main", "github/main", ...remotes])];
+  const found = candidates.find(resolves);
+  if (found) return found;
+  console.error(
+    `check:affected: no base branch found; tried ${candidates.join(", ")}. Fetch main from work-shape/catalyst-core or set AFFECTED_BASE.`
+  );
+  process.exit(2);
+};
+const base = process.env.AFFECTED_BASE || defaultBase();
 const run = (command, args, capture = false) => {
   const result = spawnSync(command, args, {
     cwd: root,
