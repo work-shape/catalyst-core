@@ -79,4 +79,48 @@ describe("data scope administration", () => {
       expect(saved.statusCode, saved.body).toBe(200);
     }
   });
+
+  it("replaces a person's stored groups on each sign-in, so a former group's values stop counting (M4)", async () => {
+    const world = await setupAccessInstance({ scopes });
+    const signIn = (groups: string[]) =>
+      world.stores.users.resolveUserIdentity({
+        clientInstanceId,
+        authSource: "test",
+        externalUserId: "moving-member",
+        displayLabel: "Moving member",
+        roles: ["user"],
+        permissionRefs: [],
+        permissions: [],
+        groups
+      });
+    const member = await signIn(["staff"]);
+    for (const [group, values] of [
+      ["staff", ["101"]],
+      ["auditors", ["102"]]
+    ] as const) {
+      const saved = await world.call(world.root.id, "scope_assignments.set", {
+        payload: {
+          dimension: "mandant",
+          holderKind: "group",
+          holderId: group,
+          effect: "allow",
+          values
+        }
+      });
+      expect(saved.statusCode, saved.body).toBe(200);
+    }
+    const effective = async () => {
+      const read = await world.call(world.root.id, "scope_assignments.list", {
+        query: { holderKind: "user", holderId: member.id }
+      });
+      expect(read.statusCode, read.body).toBe(200);
+      return (read.json() as { effective: unknown }).effective;
+    };
+    expect(await effective()).toEqual({ mandant: ["101"] });
+    await signIn(["auditors"]);
+    expect(
+      (await world.stores.users.getUser({ clientInstanceId, userId: member.id }))?.groups
+    ).toEqual(["auditors"]);
+    expect(await effective()).toEqual({ mandant: ["102"] });
+  });
 });

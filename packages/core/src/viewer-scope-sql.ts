@@ -17,15 +17,28 @@ export type SqlToken =
   | ({ kind: "viewer"; text: string } & ViewerScopeBinding)
   | { kind: "symbol"; start: number; end: number; text: string };
 
-/** Read executable tokens only. Strings, identifiers and nested comments never bind a viewer. */
+/**
+ * Postgres's identifier characters (scan.l `ident_start`, `ident_cont`, `dolq_start`): ASCII
+ * letters, `_` and every character outside ASCII, whether or not it is a letter.
+ */
+const IDENT_START = "A-Za-z_\\u{80}-\\u{10FFFF}";
+const IDENT_CONT = `${IDENT_START}0-9`;
+const DOLLAR_QUOTE = new RegExp(`^\\$(?:[${IDENT_START}][${IDENT_CONT}]*)?\\$`, "u");
+const WORD = new RegExp(`^(?:[0-9]+|[${IDENT_START}][${IDENT_CONT}$]*)`, "u");
+
+/**
+ * Read executable tokens only, where Postgres's lexer reads them. Strings, identifiers and
+ * nested comments never bind a viewer.
+ */
 export function sqlTokens(sql: string): SqlToken[] {
   const tokens: SqlToken[] = [];
   let index = 0;
   while (index < sql.length) {
     const rest = sql.slice(index);
     if (rest.startsWith("--")) {
-      const end = sql.indexOf("\n", index);
-      index = end < 0 ? sql.length : end;
+      // A line comment ends at a carriage return as well as at a newline.
+      const end = rest.search(/[\n\r]/u);
+      index = end < 0 ? sql.length : index + end;
       continue;
     }
     if (rest.startsWith("/*")) {
@@ -43,11 +56,15 @@ export function sqlTokens(sql: string): SqlToken[] {
       if (depth) throw new AppError("VALIDATION_FAILED", "The SQL comment never ends");
       continue;
     }
-    const quote = sql[index];
+    // `E'` and `U&"` begin a token only where a word would: inside `type'…'` the `e` is the
+    // type name's, as in Postgres's longest match.
+    const prefix = /^(?:[eE](?=')|[uU]&(?="))/u.exec(rest)?.[0] ?? "";
+    const quote = sql[index + prefix.length];
     if (quote === "'" || quote === '"') {
       const start = index;
-      const escapes = quote === "'" && /(?:^|[^\p{L}\p{N}_$])[eE]$/u.test(sql.slice(0, index));
-      index++;
+      const escapes = quote === "'" && prefix.length > 0;
+      const unicode = quote === '"' && prefix.length > 0;
+      index += prefix.length + 1;
       let closed = false;
       while (index < sql.length) {
         if (escapes && sql[index] === "\\") {
@@ -68,15 +85,13 @@ export function sqlTokens(sql: string): SqlToken[] {
           kind: "quoted",
           start,
           end: index,
-          text: sql.slice(start + 1, index - 1).replaceAll('""', '"'),
+          text: sql.slice(start + prefix.length + 1, index - 1).replaceAll('""', '"'),
           // U&"..." spells an identifier with escapes, which no reader here undoes.
-          ...(/(?:^|[^\p{L}\p{N}_$])[uU]&$/u.test(sql.slice(0, start))
-            ? { unicode: true as const }
-            : {})
+          ...(unicode ? { unicode: true as const } : {})
         });
       continue;
     }
-    const dollar = /^\$(?:[\p{L}_][\p{L}\p{N}_]*)?\$/u.exec(rest);
+    const dollar = DOLLAR_QUOTE.exec(rest);
     if (dollar) {
       const end = sql.indexOf(dollar[0], index + dollar[0].length);
       if (end < 0)
@@ -103,7 +118,7 @@ export function sqlTokens(sql: string): SqlToken[] {
       continue;
     }
     // A number ends where a word begins, so `1findings` holds the word `findings`.
-    const word = /^(?:[0-9]+|[\p{L}_][\p{L}\p{N}_$]*)/u.exec(rest)?.[0];
+    const word = WORD.exec(rest)?.[0];
     if (word) {
       tokens.push({
         kind: "word",
