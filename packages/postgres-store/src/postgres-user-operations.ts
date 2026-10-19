@@ -38,6 +38,11 @@ import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-w
 import { lockRights, lockRightsOfUsableUser } from "./rights-lock";
 import { appendAuditEvent as appendPostgresAuditEvent } from "./postgres-audit-usage-operations";
 
+/**
+ * Every sign-in replaces the person's stored groups with the ones it carries
+ * (access-and-permissions.md, Lifecycle, first stage): a sign-in without a groups claim leaves
+ * them in none, so only an identity adapter that sends groups supports group assignments.
+ */
 async function resolveUserIdentity(
   db: PostgresConnection,
   input: ResolveUserIdentityInput,
@@ -131,7 +136,7 @@ async function resolveUserIdentity(
         const [updatedUser] = await tx
           .update(productUsers)
           .set({
-            ...(input.groups ? { groups: [...input.groups] } : {}),
+            groups: [...(input.groups ?? [])],
             updatedAt: now,
             lastAuthenticatedAt: now
           })
@@ -173,7 +178,6 @@ async function resolveUserIdentity(
             displayLabel: input.displayLabel,
             email: input.email ?? null,
             emailVerified: input.emailVerified ?? false,
-            ...(input.groups ? { groups: [...input.groups] } : {}),
             updatedAt: now,
             lastAuthenticatedAt: now
           }
@@ -247,7 +251,7 @@ async function refreshLinkedSignIn(tx: PostgresTransaction, input: ResolveUserId
   await tx
     .update(productUsers)
     .set({
-      ...(input.groups ? { groups: [...input.groups] } : {}),
+      groups: [...(input.groups ?? [])],
       updatedAt: now,
       lastAuthenticatedAt: now
     })

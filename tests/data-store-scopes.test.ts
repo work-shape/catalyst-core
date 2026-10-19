@@ -219,6 +219,7 @@ describe("scoped Data Store rows", () => {
     ).toMatchObject({ code: "NOT_FOUND" });
   });
   it("reads the person's current group membership, including on a personal key, and the Workflow principal's own assignment", async () => {
+    // A sign-in without a groups claim leaves the person in no group (M4).
     const w = await world();
     const member = await db.store.users.resolveUserIdentity({
       clientInstanceId: w.clientInstanceId,
@@ -264,8 +265,7 @@ describe("scoped Data Store rows", () => {
       displayLabel: "Group reader",
       roles: ["user"],
       permissionRefs: [],
-      permissions: [],
-      groups: []
+      permissions: []
     });
     expect((await authorizer.forActor(personalKey)).scopeOf("mandant")).toEqual([]);
     const principal = await db.store.apiAccess.createServicePrincipal({
