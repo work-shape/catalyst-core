@@ -267,6 +267,45 @@ describe("the preview of a held asset save", () => {
     expect(never.isStale).toBeUndefined();
   });
 
+  it("ACCEPT-2e: keeps a request filed before the fix named outdated after it is rejected", async () => {
+    const { t, holding, hold } = await setup();
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "skill", name: "kai-leave" },
+      payload: { config: skill("kai-leave", stored) }
+    });
+    // A request filed by an earlier build froze its preview without the revision it asked
+    // for: its call input still names that revision.
+    const create = t.stores.approvals.createApprovalRequest.bind(t.stores.approvals);
+    vi.spyOn(t.stores.approvals, "createApprovalRequest").mockImplementation((input) => {
+      const asset = input.payload.asset;
+      if (typeof asset !== "object" || asset === null || Array.isArray(asset)) return create(input);
+      const { requestedRevision: _dropped, ...earlier } = asset;
+      return create({ ...input, payload: { ...input.payload, asset: earlier } });
+    });
+    holding("assets.put");
+    const requestId = await hold("assets.put", "skill", "kai-leave", {
+      config: skill("kai-leave", changed),
+      expectedRevision: 1
+    });
+    vi.restoreAllMocks();
+    const filed = await t.stores.approvals.getApprovalRequest({ clientInstanceId, requestId });
+    expect(JSON.stringify(filed?.payload)).not.toContain("requestedRevision");
+    holding();
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "skill", name: "kai-leave" },
+      payload: { config: skill("kai-leave", "A newer policy"), expectedRevision: 1 }
+    });
+    await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "reject" }
+    });
+    const item = (
+      await t.expectOk(t.admin.id, "approval_requests.get", { params: { requestId } })
+    ).json();
+    expect(item.status).toBe("rejected");
+    expect(item.preview.asset.isStale).toBe(true);
+  });
+
   it("ACCEPT-2b E6: names only visible active people with the approval right", async () => {
     const { t, holding, hold } = await setup();
     const workspaceId = await t.sharedWorkspace("Approval team");

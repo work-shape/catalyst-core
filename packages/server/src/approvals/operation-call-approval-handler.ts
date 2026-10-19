@@ -39,6 +39,7 @@ import {
   HELD_ASSET_OPERATION,
   heldAssetIsStale,
   heldAssetPreviewSchema,
+  heldAssetRequestedRevision,
   type HeldAssetPreviewer
 } from "./held-asset-preview";
 import type { HeldCallApprovalKind } from "./held-call-kind";
@@ -343,7 +344,15 @@ export function minimizedOperationCallPayload(payload: JsonObject): JsonObject {
     return { inputRemoved: true };
   }
   const { runId, operation, effect, actor, origin, workspaceId, expiresAt, subject } = parsed.data;
-  const { mode, subjectKind, asset } = parsed.data;
+  const { mode, subjectKind, asset: frozen, input } = parsed.data;
+  // A request filed before its preview kept the revision it asked for keeps it from its input,
+  // which goes now (ACCEPT-2e).
+  const requested =
+    frozen && frozen.requestedRevision === undefined && operation === HELD_ASSET_OPERATION
+      ? heldAssetRequestedRevision(unknownToJsonValue(input))
+      : undefined;
+  const asset =
+    frozen && requested !== undefined ? { ...frozen, requestedRevision: requested } : frozen;
   return toJsonObject({
     runId,
     operation,
