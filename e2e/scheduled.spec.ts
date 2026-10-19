@@ -213,11 +213,24 @@ test("the list loads, scrolls and stays across switching to another area and bac
       await expect(last).toBeInViewport();
       await railButton(page, "Workflows").click();
       await expect(page).toHaveURL((url) => url.pathname === `/w/${workspaceId}/workflows`);
-      await railButton(page, "Scheduled").click();
+      const [listRead] = await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            new URL(response.url()).pathname === "/api/v1/scheduled-starts" &&
+            response.request().method() === "GET" &&
+            response.ok()
+        ),
+        railButton(page, "Scheduled").click()
+      ]);
+      await listRead.finished();
       await expect(page).toHaveURL((url) => url.pathname === `/w/${workspaceId}/scheduled`);
       await expect(page.getByRole("heading", { name: "Scheduled", level: 1 })).toBeVisible();
       await expect(cards).toHaveCount(prompts.length);
     }
+
+    // A start saved from chat or another tab appears without leaving this open page.
+    await saveStart(page, workspaceId, `Added while the list is open ${marker}`);
+    await expect(cards).toHaveCount(prompts.length + 1, { timeout: 40_000 });
   } finally {
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await deleteStarts(page, workspaceId, marker);
