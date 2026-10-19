@@ -328,14 +328,16 @@ export interface OperationRunStore {
     startedBefore: ISODateString;
     limit: number;
   }): Promise<OperationRun[]>;
-  /** Deletes the runs that conversations caused, with those conversations. */
+  /** Deletes the runs that conversations caused and their decided Inbox requests atomically.
+   * A run with a pending request is kept until that request settles. */
   deleteOfConversations(input: {
     clientInstanceId: ClientInstanceId;
     conversationIds: readonly ConversationId[];
   }): Promise<number>;
   /**
    * Deletes ended runs no conversation caused that are older than the days, by the database's
-   * clock, at most `limit` of them in one call.
+   * clock, at most `limit` of them in one call. Decided Inbox requests leave atomically with
+   * their runs; a run with a pending request is kept until that request settles.
    */
   deleteWithoutConversationOlderThan(input: {
     clientInstanceId: ClientInstanceId;

@@ -187,8 +187,10 @@ describe("the platform's knowledge of an agent", () => {
       "name an asset or App by its title, never by its id or name"
     );
     expect(offer.orientation).toContain(
-      'Say "Draft saved" (German: "Entwurf gespeichert"), never a revision number.'
+      'a first save created the asset (German: "angelegt"), a later one saved the change (German: "gespeichert")'
     );
+    expect(offer.orientation).toContain("Give a revision number only when the person asks for it.");
+    expect(offer.orientation).not.toContain("never a revision number");
     expect(offer.orientation).toContain(
       'the column or columns that tell the rows apart (German: "die Spalte, an der jede Zeile erkannt wird")'
     );
@@ -197,6 +199,18 @@ describe("the platform's knowledge of an agent", () => {
     );
     expect(offer.orientation).toContain(
       "Tool calls keep their ids, names, revisions and key columns."
+    );
+  });
+
+  // A member cannot change a skill. Only propose_skill_change files a request for one, and a
+  // save on the skill page files one only where the instance asks an approval for it.
+  it("tells the agent how a person who may not change a skill gets a change made", async () => {
+    const offer = await offerFor(PLATFORM_TOOLS);
+    expect(offer.orientation).toContain(
+      "If propose_skill_change is in your tool list, propose the change with it; that files a request"
+    );
+    expect(offer.orientation).toContain(
+      "that save files a request an admin decides in the Inbox, and the skill stays as it was until then"
     );
   });
 

@@ -144,6 +144,8 @@ The Inbox is where a person finds what waits for a decision. It is a section of 
 
 The sidebar shows the Inbox to a person who may decide a kind of Approval Request, and to a person who has made a request. The number beside it counts the pending requests that person can decide. It does not count unread items.
 
+A decided or settled request for an operation call is deleted with its Operation Run: with the conversation that caused the call, or by the daily audit cleanup after `retention.auditDays` when no conversation caused it. The age is counted from the call’s start, following Operation Run retention. Pending calls and their requests stay until they settle. The Decided list's 30-day window only filters history; it does not set retention.
+
 The Inbox has three lists:
 
 - **To decide**: the pending requests the person can decide, oldest first.

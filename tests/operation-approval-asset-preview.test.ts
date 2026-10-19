@@ -3,6 +3,7 @@ import { z } from "zod";
 import { operationRunSchema } from "@work-shape/catalyst-api-contract";
 import { getTestJobs } from "./support/test-instance";
 import { clientInstanceId } from "./support/access-instance";
+import type { AccessInstanceOptions } from "./support/access-instance";
 import type { CentralPolicySetting } from "@work-shape/catalyst-core";
 import { agent, skill } from "./support/access-instance";
 import { setupNamespaceHolder } from "./support/asset-operations";
@@ -21,10 +22,11 @@ const listedSchema = z.object({
 });
 
 /** An instance that holds nothing until `holding` names a setting. */
-async function setup() {
+async function setup(server?: AccessInstanceOptions["server"]) {
   let settings: CentralPolicySetting[] = [];
   const t = await setupNamespaceHolder({
-    operations: { centralPolicySettings: () => settings }
+    operations: { centralPolicySettings: () => settings },
+    ...(server ? { server } : {})
   });
   const holding = (...operations: string[]) => {
     settings = operations.map((operation) => ({ operation, value: "approval" }));
@@ -349,6 +351,34 @@ describe("the preview of a held asset save", () => {
     expect(JSON.stringify(shown)).not.toContain(OLD_PARAGRAPH);
     // Kai may read the skill and is shown the paragraph it had.
     expect(JSON.stringify(await preview(t.kai.id, requestId))).toContain(OLD_PARAGRAPH);
+  });
+
+  it("withholds held asset input when its module no longer provides a readable preview", async () => {
+    let switchedOff = false;
+    const { t, holding, hold } = await setup(() => ({
+      modules: {
+        modules: [],
+        isEnabled: () => true,
+        offModuleOf: (contribution, name) =>
+          switchedOff && contribution === "kind" && name === "skill" ? "assetManagement" : undefined
+      }
+    }));
+    holding("assets.put");
+    const requestId = await hold("assets.put", "skill", "kai-leave", {
+      config: { ...skill("kai-leave", changed), title: "Leave policy" }
+    });
+    switchedOff = true;
+    const detail = (
+      await t.expectOk(t.admin.id, "approval_requests.get", { params: { requestId } })
+    ).json();
+    expect(detail.preview.asset).toBeUndefined();
+    expect(detail.payload.input).toBeUndefined();
+    expect(detail.preview.inputs).toEqual([]);
+    expect(detail.preview.inputFieldCount).toBe(0);
+    expect(JSON.stringify(detail)).not.toContain(NEW_PARAGRAPH);
+    expect(
+      (await t.stores.approvals.getApprovalRequest({ clientInstanceId, requestId }))?.payload.input
+    ).toBeDefined();
   });
 
   it("withholds pending input from an approver without read rights, including the list payload", async () => {

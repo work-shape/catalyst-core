@@ -862,6 +862,13 @@
       "when": 1792347094594,
       "tag": "0122_app_user_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1792383547097,
+      "tag": "0123_approval_run_retention",
+      "breakpoints": true
     }
   ]
 }

@@ -196,7 +196,10 @@ export function StepPanel({
   onClose
 }: {
   step: WorkflowStepView;
-  /** The label of the account the Workflow runs as, for a refusal that names it. */
+  /**
+   * The label of the account the run acted as, or the Workflow runs as without a run, for a
+   * refusal that names it.
+   */
   account?: string | undefined;
   /** The step as the canvas draws it: its icon, the words above its title and its title. */
   part: FlowGraphNode | FlowGraphGroup;

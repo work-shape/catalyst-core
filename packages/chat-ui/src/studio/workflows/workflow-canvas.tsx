@@ -210,7 +210,7 @@ export function WorkflowCanvas({
         selected === undefined || part === undefined ? undefined : (
           <StepPanel
             step={selected.step}
-            account={workflow?.runsAs}
+            account={run === undefined ? workflow?.runsAs : run.run.runsAs}
             part={part}
             run={selectedRun}
             tab={tab}
