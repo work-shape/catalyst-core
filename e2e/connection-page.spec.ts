@@ -302,7 +302,7 @@ test("a Connection's page shows its definition, its state in every case and the 
       await expect(operation("removed")).toContainText("Unknown");
       await expect(operation("echo_off")).toContainText("Disabled");
       await expect(
-        main.getByText("No agent carries a tool of this connection.", { exact: true })
+        main.getByText("Nothing you can see uses this connection.", { exact: true })
       ).toBeVisible();
       // The way back is the list.
       await main.getByRole("button", { name: "Back to Connections" }).click();
