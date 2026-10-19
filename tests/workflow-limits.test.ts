@@ -44,6 +44,27 @@ const ready = (options: Parameters<typeof workflowFixture>[0] = {}) =>
     open = fixture;
   }, options);
 
+/**
+ * Resolves once every run has ended, on `workers` started workers. A started worker claims
+ * what is due while the calls it started still wait at a test's gate; a pass driven by hand
+ * waits for them first, so on a busy machine it may hold one call and claim nothing else.
+ */
+async function untilEnded(t: WorkflowFixture, ids: string[], workers: number) {
+  for (let count = 0; count < workers; count++) t.worker().start();
+  await waitUntil(
+    async () => {
+      for (const id of ids) {
+        const run = await t.stores.workflowRuns.readRun({ clientInstanceId, id });
+        if (!["done", "failed", "cancelled", "limit_reached"].includes(run?.status ?? ""))
+          return false;
+      }
+      return true;
+    },
+    "the runs end",
+    60_000
+  );
+}
+
 /** A Workflow started by hand that reads one value from the Connection `crm`. */
 function reading(id: string, limits?: Record<string, unknown>): WorkflowManifest {
   return parseOk({
@@ -291,21 +312,7 @@ describe("limits.concurrency of a Workflow", () => {
       );
     const bulk = await started("bulk");
     const other = await started("other");
-    const ended = async (id: string) =>
-      ["done", "failed", "cancelled", "limit_reached"].includes(
-        (await t.stores.workflowRuns.readRun({ clientInstanceId, id }))?.status ?? ""
-      );
-    const drive = async () => {
-      const worker = t.worker();
-      // Bound by time, not passes: a pass finds nothing while every slot waits at the gate.
-      const until = Date.now() + 60_000;
-      while (Date.now() < until) {
-        if ((await ended(bulk.id)) && (await ended(other.id))) return;
-        await worker.runDue();
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-    };
-    await Promise.all([drive(), drive()]);
+    await untilEnded(t, [bulk.id, other.id], 2);
     clearTimeout(timer);
 
     const read = async (id: string) =>
@@ -363,8 +370,11 @@ describe("limits.concurrency of a Workflow", () => {
         })
       ).json()
     );
-    const run = await t.finish(started.id);
+    await untilEnded(t, [started.id], 1);
     clearTimeout(timer);
+    const run = runSchema.parse(
+      (await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: started.id } })).json()
+    );
     expect(run, JSON.stringify(run.error)).toMatchObject({ status: "done" });
     expect(seen.most).toBe(8);
     const loop = (await stepRunsOf(t, started.id)).find((step) => step.key === "each");
