@@ -512,6 +512,13 @@ describe("chat UI artifact download cards", () => {
     expect(type({ kind: "document.pdf" }).id).toBe("pdf");
     expect(type({ kind: "document.word" }).id).toBe("document");
     expect(type({ kind: "spreadsheet.workbook" }).id).toBe("spreadsheet");
+    // A JSON file is named JSON, never "Document" (ACCEPT-2e: the chip said "Dokument").
+    expect(type({ filename: "rechnung.json" })).toMatchObject({
+      id: "json",
+      labelKey: "fileTypeJson"
+    });
+    expect(type({ filename: "upload", mimeType: "application/json" }).id).toBe("json");
+    expect(type({ filename: "notes.txt" }).labelKey).toBe("fileTypeText");
   });
 
   it("gives a file of no known type the generic icon", () => {
@@ -537,6 +544,7 @@ describe("chat UI artifact download cards", () => {
       "a.png",
       "a.zip",
       "a.md",
+      "a.json",
       "a.txt"
     ];
     const types = [...names, "a.bin"].map((filename) =>

@@ -18,6 +18,7 @@ export interface FileType {
     | "image"
     | "archive"
     | "markdown"
+    | "json"
     | "text"
     | "file";
   /** The icon that stands for the type. Several types share one. */
@@ -128,13 +129,22 @@ const FILE_TYPE_RULES: readonly FileTypeRule[] = [
     describes: includesAny("markdown")
   },
   {
+    id: "json",
+    icon: "text",
+    labelKey: "fileTypeJson",
+    label: "JSON",
+    extension: "json",
+    extensions: ["json"],
+    describes: includesAny("json")
+  },
+  {
     id: "text",
     icon: "text",
     labelKey: "fileTypeText",
     label: "Document",
     extension: "txt",
-    extensions: ["txt", "rtf", "html", "json"],
-    describes: includesAny("text/", "json")
+    extensions: ["txt", "rtf", "html"],
+    describes: includesAny("text/")
   }
 ];
 
