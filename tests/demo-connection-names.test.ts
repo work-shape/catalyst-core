@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { parseAgentYaml } from "@work-shape/catalyst-cli";
 import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
 import { connectionOperationName, isDataToolName } from "@work-shape/catalyst-core";
 import { outputSchemas } from "@work-shape/catalyst-demo/sample-mcp";
@@ -59,5 +60,31 @@ describe("the demo's Connection and the names its agent carries", () => {
         .map((operation) => connectionOperationName(CONNECTION, operation))
         .sort()
     );
+  });
+});
+
+// ACCEPT-2e C-2: the demo's agent was told to call a skill an "instruction" or "rule" and to say
+// every change waits for approval, against the platform's orientation and the skill page. It
+// now calls a skill a Skill and says what a save does from the read's saveApproval.
+describe("the demo's agent on what a skill change does", () => {
+  const { instructions, toolNames } = parseAgentYaml(
+    readFileSync(resolve(root, "clients/demo/agents/workflow-assistant.agent.yaml"), "utf8")
+  );
+  const learning = instructions.slice(instructions.indexOf("## Learning"));
+
+  it("calls a skill a skill, never an instruction or a rule", () => {
+    expect(instructions).toContain("## Learning");
+    expect(learning).toContain("Call a skill a skill");
+    expect(learning).not.toMatch(/Say “instruction”|rather than “skill”/u);
+    expect(learning).not.toMatch(/shared instructions?\b|affected instruction|new instruction/u);
+  });
+
+  it("says what a save does from saveApproval, read first, never assumed", () => {
+    expect(toolNames).toEqual(expect.arrayContaining(["read_skill", "platform.assets.get"]));
+    expect(learning).toContain("saveApproval.approverNames");
+    expect(learning).toContain(
+      "without saveApproval, a save the user may make takes effect immediately"
+    );
+    expect(learning).not.toContain("that approval is still needed");
   });
 });
