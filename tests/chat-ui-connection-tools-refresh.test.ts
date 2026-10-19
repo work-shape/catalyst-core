@@ -50,7 +50,7 @@ describe("The tools of a REST API approved on its page", () => {
       [],
       {
         put: async (input) => {
-          const written = input.config.operations;
+          const written = "config" in input ? input.config.operations : undefined;
           operations = (Array.isArray(written) ? written : []).map((operation: unknown) => {
             const name =
               typeof operation === "object" && operation !== null && "name" in operation
@@ -119,7 +119,7 @@ describe("A REST API made in the list page's dialog", () => {
       [],
       {
         put: async (input) => {
-          puts.push(input.config);
+          if ("config" in input) puts.push(input.config);
           return { revision: puts.length };
         },
         list: { opened }
