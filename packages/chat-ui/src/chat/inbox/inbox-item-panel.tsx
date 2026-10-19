@@ -29,7 +29,7 @@ import {
 } from "../approvals/approval-request-model";
 import { refusalAskingInstanceAdmin } from "../../admin/settings/ask-instance-admin";
 import { useApprovalRevisionHost } from "../approvals/approval-revision-host";
-import { ApprovalStatusBadge } from "../approvals/approval-status-badge";
+import { ApprovalRefreshButton, ApprovalStatusBadge } from "../approvals/approval-status-badge";
 import { isInboxConfirmation } from "../approvals/operation-call-preview";
 import { useAttachmentContentContext } from "../files/attachment-content";
 import { useTranslation } from "../../shared/i18n";
@@ -132,6 +132,7 @@ export function InboxItemView({
             confirmation={isInboxConfirmation(item)}
             notice={item.kind === "notice"}
           />
+          {state.onRefresh ? <ApprovalRefreshButton onRefresh={state.onRefresh} /> : null}
         </div>
         <p className="text-caption text-muted-foreground" data-testid="inbox-item-asked">
           {asked ? (

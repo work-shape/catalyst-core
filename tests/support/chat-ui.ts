@@ -83,7 +83,10 @@ export {
   readApprovalRequestDisplay,
   shouldSendApprovalFollowUp
 } from "../../packages/chat-ui/src/chat/approvals/approval-request-model";
-export { useApprovalRequestQuery } from "../../packages/chat-ui/src/shared/api/approval-request-api";
+export {
+  approvalRequestState,
+  useApprovalRequestQuery
+} from "../../packages/chat-ui/src/shared/api/approval-request-api";
 export { AssetOpenedChip } from "../../packages/chat-ui/src/chat/conversation/conversation-subject";
 export { useAgentOpens } from "../../packages/chat-ui/src/chat/conversation/use-agent-opens";
 export {

@@ -137,7 +137,7 @@ export const operations = defineTranslations({
     "operations.callAssetCreate": "{actor} wants to create {kind} “{title}”.",
     "operations.callAssetChange": "{actor} wants to change {kind} “{title}”.",
     "operations.callAssetStale":
-      "This request is out of date: “{title}” was changed after it was made. Approving it applies nothing. Ask {actor} to submit a new change.",
+      "This request is out of date: “{title}” was changed after it was made. Approving it changes nothing. Ask {actor} to submit a new change.",
     "operations.callAssetKindSkill": "the skill",
     "operations.callAssetKindAgent": "the agent",
     "operations.callAssetKindConnection": "the Connection",
@@ -353,7 +353,7 @@ export const operations = defineTranslations({
     "operations.callAssetCreate": "{actor} möchte {kind} „{title}“ anlegen.",
     "operations.callAssetChange": "{actor} möchte {kind} „{title}“ ändern.",
     "operations.callAssetStale":
-      "Diese Anfrage ist veraltet: „{title}“ wurde nach ihr geändert. Freigeben übernimmt nichts. Bitte {actor}, eine neue Änderung einzureichen.",
+      "Diese Anfrage ist veraltet: „{title}“ wurde geändert, nachdem die Anfrage gestellt wurde. Eine Freigabe ändert nichts. Bitte {actor} um eine neue Änderung.",
     "operations.callAssetKindSkill": "den Skill",
     "operations.callAssetKindAgent": "den Agenten",
     "operations.callAssetKindConnection": "die Connection",

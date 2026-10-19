@@ -486,10 +486,10 @@ describe("inbox item of an operation call", () => {
     const stale = { ...changedSkill, isStale: true };
 
     expect(put(stale)).toMatch(
-      /data-testid="operation-call-stale"[^>]*>[\s\S]*This request is out of date: “Urlaubsrichtlinie” was changed after it was made\. Approving it applies nothing\. Ask Elif Aydin to submit a new change\./u
+      /data-testid="operation-call-stale"[^>]*>[\s\S]*This request is out of date: “Urlaubsrichtlinie” was changed after it was made\. Approving it changes nothing\. Ask Elif Aydin to submit a new change\./u
     );
     expect(put(stale, "de")).toContain(
-      "Diese Anfrage ist veraltet: „Urlaubsrichtlinie“ wurde nach ihr geändert. Freigeben übernimmt nichts. Bitte Elif Aydin, eine neue Änderung einzureichen."
+      "Diese Anfrage ist veraltet: „Urlaubsrichtlinie“ wurde geändert, nachdem die Anfrage gestellt wurde. Eine Freigabe ändert nichts. Bitte Elif Aydin um eine neue Änderung."
     );
     expect(put(changedSkill)).not.toContain('data-testid="operation-call-stale"');
     // The warning alone says what approving does: no sentence that approving saves the change.
