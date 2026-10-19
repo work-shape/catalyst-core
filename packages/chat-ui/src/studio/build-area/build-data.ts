@@ -1,6 +1,10 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import type { ConfigAssetRevision, OperationOutcome } from "@work-shape/catalyst-api-client";
+import type {
+  ApiClient,
+  ConfigAssetRevision,
+  OperationOutcome
+} from "@work-shape/catalyst-api-client";
 import { invalidateOfferedAgents } from "../../shared/api/agent-placement-mutations";
 import {
   createAssetWrites,
@@ -16,7 +20,7 @@ import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import type { BuildAsset, BuildAssetRow } from "./build-asset-kind";
-import { instanceSentence, PendingApprovalError } from "./build-refusals";
+import { approverNamesOf, instanceSentence, PendingApprovalError } from "./build-refusals";
 import {
   AGENT_ASSET_KIND,
   buildScopes,
@@ -416,15 +420,19 @@ export function useBuildSource(): BuildSource {
     checkName: (kind, name) => writes.checkName({ kind, name, ...inScope(kind) }),
     writes: {
       put: (input) =>
-        made(writes.put({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
+        made(client, writes.put({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
       delete: (input) =>
-        made(writes.delete({ ...input, ...inScope(input.kind) })).finally(
+        made(client, writes.delete({ ...input, ...inScope(input.kind) })).finally(
           changed(input.kind, input.kind === AGENT_ASSET_KIND ? input.name : undefined)
         ),
       publish: (input) =>
-        made(writes.publish({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
+        made(client, writes.publish({ ...input, ...inScope(input.kind) })).finally(
+          changed(input.kind)
+        ),
       revert: (input) =>
-        made(writes.revert({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
+        made(client, writes.revert({ ...input, ...inScope(input.kind) })).finally(
+          changed(input.kind)
+        ),
       readFiles: ({ kind, name }) => writes.readFiles({ kind, name, ...inScope(kind) }),
       revisions: ({ kind, name, cursor }) =>
         client.assets.revisions.list({
@@ -439,11 +447,25 @@ export function useBuildSource(): BuildSource {
   };
 }
 
-/** The answer of a write that was made. One that waits for an approval is thrown as such. */
-async function made<Output>(call: Promise<OperationOutcome<Output>>): Promise<Output> {
+/**
+ * The answer of a write that was made. One that waits for an approval is thrown as such, with
+ * who may approve it as its request names them; without that answer it names nobody.
+ */
+async function made<Output>(
+  client: ApiClient,
+  call: Promise<OperationOutcome<Output, { approvalRequestId?: string }>>
+): Promise<Output> {
   const outcome = await call;
-  if (outcome.status !== "done") {
-    throw new PendingApprovalError();
+  if (outcome.status === "done") {
+    return outcome.output;
   }
-  return outcome.output;
+  const requestId = outcome.run.approvalRequestId;
+  const approverNames =
+    requestId === undefined
+      ? []
+      : await client.approval_requests.get({ params: { requestId } }).then(
+          (request) => approverNamesOf(request.preview),
+          () => []
+        );
+  throw new PendingApprovalError(approverNames);
 }

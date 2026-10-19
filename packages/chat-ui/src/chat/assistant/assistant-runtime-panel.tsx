@@ -428,12 +428,7 @@ function AssistantRuntimePane({
                   <>
                     {privateBuild}
                     {pendingOpen === undefined ? null : (
-                      <AssetOpenedChip
-                        open={pendingOpen}
-                        onGoTo={(open) => {
-                          agentOpens.goTo(open).catch(() => undefined);
-                        }}
-                      />
+                      <AssetOpenedChip open={pendingOpen} onGoTo={agentOpens.goTo} />
                     )}
                     {/* In the dock its head says what the conversation is about. */}
                     {conversationSubject === undefined || docked ? null : (

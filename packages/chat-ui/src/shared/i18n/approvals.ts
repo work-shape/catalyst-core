@@ -32,6 +32,7 @@ export const approvals = defineTranslations({
     approvalLoading: "Loading proposal…",
     approvalNoLongerOpen: "Your decision was not stored: this request is no longer open.",
     approvalNotFound: "This proposal no longer exists or is not visible to you.",
+    approvalRefresh: "Refresh",
     approvalReject: "Reject",
     approvalRejectLabel: "Reason (optional)",
     approvalRequestChanges: "Request changes",
@@ -128,6 +129,7 @@ export const approvals = defineTranslations({
     approvalNoLongerOpen:
       "Deine Entscheidung wurde nicht gespeichert: Diese Anfrage ist nicht mehr offen.",
     approvalNotFound: "Diesen Vorschlag gibt es nicht mehr oder du darfst ihn nicht sehen.",
+    approvalRefresh: "Aktualisieren",
     approvalReject: "Ablehnen",
     approvalRejectLabel: "Begründung (optional)",
     approvalRequestChanges: "Änderung anfragen",

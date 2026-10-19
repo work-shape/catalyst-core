@@ -145,8 +145,10 @@ describe("approval request workflow", () => {
       reviewer,
       expect.objectContaining({ requestId: request.id })
     );
-    expect(f.validate).toHaveBeenCalledTimes(2);
-    expect(f.onDecided).toHaveBeenCalledWith(updated);
+    expect(f.validate).toHaveBeenCalledTimes(3);
+    expect(f.onDecided).toHaveBeenCalledWith(
+      expect.objectContaining({ id: updated.id, status: updated.status })
+    );
     expect(
       (await f.store.audit.listAuditEvents({ clientInstanceId })).find(
         (e) => e.type === "approval_request.decided"
@@ -194,7 +196,7 @@ describe("approval request workflow", () => {
       status: "rejected",
       decision: { approved: false, decidedByLabel: reviewer.displayLabel, comment: "No" }
     });
-    expect(f.validate).toHaveBeenCalledTimes(1);
+    expect(f.validate).toHaveBeenCalledTimes(2);
     expect(f.apply).not.toHaveBeenCalled();
     expect(f.onDecided).toHaveBeenCalledTimes(1);
   });
@@ -240,7 +242,9 @@ describe("approval request workflow", () => {
       request.id
     );
     expect(withdrawn.status).toBe("withdrawn");
-    expect(f.onDecided).toHaveBeenCalledWith(withdrawn);
+    expect(f.onDecided).toHaveBeenCalledWith(
+      expect.objectContaining({ id: withdrawn.id, status: withdrawn.status })
+    );
     await expect(
       f.workflow.withdrawRequest(requester, accessOf(requester), context, request.id)
     ).rejects.toMatchObject({

@@ -1,4 +1,4 @@
-import { Badge, type BadgeProps } from "@work-shape/catalyst-ui";
+import { Badge, Button, type BadgeProps } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import {
   approvalStatusPresentation,
@@ -45,5 +45,15 @@ export function ApprovalStatusBadge({
     >
       {t(presentation.labelKey)}
     </Badge>
+  );
+}
+
+/** Beside the badge of a change that still ran when the page stopped asking for its state. */
+export function ApprovalRefreshButton({ onRefresh }: { onRefresh(): void }) {
+  const { t } = useTranslation();
+  return (
+    <Button size="sm" variant="ghost" onClick={onRefresh} data-testid="approval-refresh">
+      {t("approvalRefresh")}
+    </Button>
   );
 }

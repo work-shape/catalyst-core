@@ -64,9 +64,14 @@ const CONFIRMATION_OUTCOME: Record<
 interface ShownOutcome {
   outcome: string;
   label: TranslationKey;
+  /** The values the label names, such as the title of an asset. */
+  values?: Record<string, string>;
   tone: OutcomeTone;
   reason?: string;
 }
+
+/** The code a refusal carries when the asset changed after the request: nothing was applied. */
+const APPROVAL_STALE = "APPROVAL_STALE";
 
 /**
  * What the item says became of a call once its request ended. A confirmation also says that it
@@ -75,7 +80,8 @@ interface ShownOutcome {
  */
 function shownOutcome(
   request: Pick<ApprovalRequestView, "status" | "applyResult">,
-  confirmation: boolean
+  confirmation: boolean,
+  asset: OperationCallAsset | undefined
 ): ShownOutcome | undefined {
   if (confirmation && request.status === "rejected") {
     return { outcome: "denied", label: "operations.confirmOutcomeDenied", tone: "info" };
@@ -85,6 +91,17 @@ function shownOutcome(
   }
   const ended = operationCallOutcome(request);
   if (!ended) return undefined;
+  // The instance's sentence is in its own language; this one is told in the reader's.
+  if (ended.reasonCode === APPROVAL_STALE) {
+    return asset
+      ? {
+          outcome: ended.outcome,
+          label: "operations.callOutcomeStale",
+          values: { title: asset.title },
+          tone: "warning"
+        }
+      : { outcome: ended.outcome, ...OUTCOME.refused };
+  }
   const words = (confirmation ? CONFIRMATION_OUTCOME : OUTCOME)[ended.outcome];
   return { outcome: ended.outcome, ...words, ...(ended.reason ? { reason: ended.reason } : {}) };
 }
@@ -96,18 +113,18 @@ const ASSET_KIND_PHRASE: Record<string, TranslationKey> = {
   connection: "operations.callAssetKindConnection"
 };
 
-/** The sentence that says who wants what, by whether the asset is new and has a Namespace. */
+/** The sentence that says who wants what. It names no Namespace: its prefix is an id. */
 function assetSentenceKey(asset: OperationCallAsset): TranslationKey {
-  if (asset.isNew) {
-    return asset.namespace ? "operations.callAssetCreateIn" : "operations.callAssetCreate";
-  }
-  return asset.namespace ? "operations.callAssetChangeIn" : "operations.callAssetChange";
+  if (asset.isNew === undefined) return "operations.callAssetSave";
+  return asset.isNew ? "operations.callAssetCreate" : "operations.callAssetChange";
 }
 
 /** What approving and declining do: said of the skill, of another asset, or of the call. */
 function effectKey(asset: OperationCallAsset | undefined): TranslationKey {
   if (!asset) return "operations.callEffect";
-  if (asset.kind !== SKILL_ASSET_KIND) return "operations.callAssetEffect";
+  if (asset.kind !== SKILL_ASSET_KIND || asset.isNew === undefined) {
+    return "operations.callAssetEffect";
+  }
   return asset.isNew ? "operations.callSkillEffectNew" : "operations.callSkillEffectChange";
 }
 
@@ -143,12 +160,17 @@ export function OperationCallBody({
   const pending = request.status === "pending";
   // A person's own confirmation, which only they see: it leads with who asks for them.
   const confirmation = isInboxConfirmation(request);
-  const outcome = pending ? undefined : shownOutcome(request, confirmation);
   const { asset } = call;
+  const outcome = pending ? undefined : shownOutcome(request, confirmation, asset);
   const actor = call.actor.label;
+  // A reader who may not read the asset sees its title and why, never what the call writes.
+  const withheld = asset?.beforeWithheld ? asset : undefined;
   // The skill's own view needs a text the server could read; without one the input shows.
-  const skill = asset?.kind === SKILL_ASSET_KIND && asset.content !== undefined ? asset : undefined;
-  const hiddenFields = call.inputFieldCount - call.inputs.length;
+  const skill =
+    !withheld && asset?.kind === SKILL_ASSET_KIND && asset.content !== undefined
+      ? asset
+      : undefined;
+  const hiddenFields = withheld ? 0 : call.inputFieldCount - call.inputs.length;
   // A row write is read from the input the request froze, which it keeps only while it waits.
   const rowChange = pending
     ? dataStoreRowChange(
@@ -164,8 +186,13 @@ export function OperationCallBody({
     <TechnicalDetailsContent
       call={call}
       pending={pending}
-      showsOperation={skill !== undefined || review !== undefined || rowChange !== undefined}
-      fullInput={operationCallFullInput(request.payload)}
+      showsOperation={
+        skill !== undefined ||
+        review !== undefined ||
+        withheld !== undefined ||
+        rowChange !== undefined
+      }
+      fullInput={withheld ? undefined : operationCallFullInput(request.payload)}
     />
   );
   // A publish that leads with its sentence has one fold, "Details", and the call goes in it.
@@ -188,8 +215,7 @@ export function OperationCallBody({
               ? t(assetSentenceKey(asset), {
                   actor,
                   kind: t(ASSET_KIND_PHRASE[asset.kind] ?? "operations.callAssetKindOther"),
-                  title: asset.title,
-                  namespace: asset.namespace ?? ""
+                  title: asset.title
                 })
               : t(
                   call.effect === "changing"
@@ -198,7 +224,15 @@ export function OperationCallBody({
                   { actor }
                 )}
           </p>
-          <p className="text-caption text-muted-foreground">{t(effectKey(asset), { actor })}</p>
+          {/* An outdated request's warning says what approving does in its stead. */}
+          {asset?.isStale ? null : (
+            <p className="text-caption text-muted-foreground">{t(effectKey(asset), { actor })}</p>
+          )}
+          {asset?.isStale ? (
+            <Banner tone="warning" role="note" data-testid="operation-call-stale">
+              {t("operations.callAssetStale", { title: asset.title, actor })}
+            </Banner>
+          ) : null}
           {/* A reason is given only where it names the rule that holds the request. */}
           {asset?.kind === SKILL_ASSET_KIND && call.heldByRule ? (
             <Banner layout="line" role="note" data-testid="operation-call-why">
@@ -218,7 +252,7 @@ export function OperationCallBody({
           data-testid="operation-call-outcome"
           data-outcome={outcome.outcome}
         >
-          {t(outcome.label)}
+          {t(outcome.label, outcome.values)}
           {outcome.reason ? (
             <span className="block text-caption">
               {t("operations.callOutcomeReason", { reason: outcome.reason })}
@@ -226,7 +260,9 @@ export function OperationCallBody({
           ) : null}
         </Banner>
       ) : null}
-      {review ? null : skill ? (
+      {review ? null : withheld ? (
+        <WithheldAsset asset={withheld} />
+      ) : skill ? (
         <SkillAsset asset={skill} />
       ) : rowChange ? (
         <RowChangeInputs change={rowChange} />
@@ -253,6 +289,25 @@ export function OperationCallBody({
   );
 }
 
+/** An asset the reader may not read: its title and why nothing else of it is shown. */
+function WithheldAsset({ asset }: { asset: OperationCallAsset }) {
+  const { t } = useTranslation();
+  return (
+    <section className="grid min-w-0 gap-3" data-testid="operation-call-withheld">
+      <KeyValueList>
+        <KeyValue label={t("operations.callSkillTitle")} data-field="title">
+          {asset.title}
+        </KeyValue>
+      </KeyValueList>
+      <Banner layout="line" tone="warning" role="note" data-testid="operation-call-no-before">
+        {t("operations.callAssetWithheld", {
+          kind: t(ASSET_KIND_PHRASE[asset.kind] ?? "operations.callAssetKindOther")
+        })}
+      </Banner>
+    </section>
+  );
+}
+
 /** A saved skill as people read one: what else changes about it, then its text. */
 function SkillAsset({ asset }: { asset: OperationCallAsset }) {
   const { t } = useTranslation();
@@ -260,11 +315,6 @@ function SkillAsset({ asset }: { asset: OperationCallAsset }) {
   const hasText = parseSkillChangePreview(asset.content) !== undefined;
   return (
     <section className="grid min-w-0 gap-3" data-testid="operation-call-skill">
-      {asset.beforeWithheld ? (
-        <Banner layout="line" tone="warning" role="note" data-testid="operation-call-no-before">
-          {t("operations.callSkillBeforeWithheld")}
-        </Banner>
-      ) : null}
       {previous.title || previous.description || removedResources.length > 0 ? (
         <KeyValueList layout="stacked" data-testid="operation-call-skill-fields">
           {previous.title ? (

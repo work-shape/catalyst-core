@@ -233,6 +233,49 @@ describe("withdraw next to the decisions", () => {
   });
 });
 
+// ACCEPT-FIX-9 E5: a change that still runs after the page stopped asking keeps its last state
+// and offers a refresh, in the thread and in the Inbox.
+describe("refresh of a change that still runs", () => {
+  const running = request({
+    status: "approved",
+    applyResult: { execution: "queued" },
+    decision: {
+      approved: true,
+      decidedBy: "user-felix",
+      decidedByLabel: "Felix Pahlke",
+      decidedAt: "2026-10-05T09:00:00Z"
+    }
+  });
+  const render = (view: "card" | "item", locale: "de" | "en", onRefresh?: () => void) => {
+    const state = {
+      status: "ready" as const,
+      request: running,
+      ...(onRefresh ? { onRefresh } : {})
+    };
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale },
+        view === "card"
+          ? createElement(ApprovalRequestCardView, { state, actions: idleActions })
+          : createElement(InboxItemView, { state, actions: idleActions })
+      )
+    );
+  };
+
+  for (const view of ["card", "item"] as const) {
+    it(`offers it beside the state in the ${view}, in both languages`, () => {
+      const refresh = () => undefined;
+      expect(render(view, "en", refresh)).toMatch(/Approved, running[\s\S]*>Refresh<\/button>/u);
+      expect(render(view, "de", refresh)).toMatch(
+        /Freigegeben, läuft[\s\S]*>Aktualisieren<\/button>/u
+      );
+      expect(render(view, "en")).toContain("Approved, running");
+      expect(render(view, "en")).not.toContain('data-testid="approval-refresh"');
+    });
+  }
+});
+
 describe("first message of a reviewer's revision conversation", () => {
   const t = createTranslationContext("en").t;
   const comment = "Leave out the customer name.";
