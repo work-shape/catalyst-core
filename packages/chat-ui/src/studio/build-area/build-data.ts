@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type {
   ApiClient,
   ConfigAssetRevision,
@@ -12,6 +12,7 @@ import {
   type AssetFileEntry,
   type AssetFileRead,
   type AvailableIn,
+  type DependencyConsent,
   type NameCheckAnswer
 } from "../../shared/api/asset-writes";
 import { usePlatformContextQuery } from "../../shared/api/workspace-queries";
@@ -28,6 +29,7 @@ import {
   readLastBuildScope,
   resolveBuildRights,
   resolveBuildScope,
+  showBuildScopeInTab,
   storeLastBuildScope,
   subscribeBuildScope,
   type BuildRights,
@@ -125,6 +127,8 @@ interface BuildWrites {
        */
       expectedDraftRevision?: number | null;
       availableIn?: AvailableIn;
+      /** A new agent's: what it uses is made available where it starts, by the reader's choice. */
+      dependencyConsent?: DependencyConsent;
     } & AssetContent
   ): Promise<{ revision: number; draftRevision?: number; files?: AssetFileEntry[] }>;
   /** The whole folder of an asset's current revision, each file with its content. */
@@ -211,6 +215,10 @@ export function useBuildSource(): BuildSource {
     () => undefined
   );
   const scope = resolveBuildScope(rights, chosenScope, activeWorkspace?.id);
+  // The kinds whose list opened on an owner that has some of them, and whether the reader chose
+  // an owner here: a list opens on an owner once, and never against the reader's choice.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+  const [picked, setPicked] = useState(false);
   const scopedKinds = new Set(
     (context?.kinds ?? [])
       .filter((kind) => kind.owners.includes("workspace") && kind.owners.includes("instance"))
@@ -284,7 +292,10 @@ export function useBuildSource(): BuildSource {
       : undefined,
     reload: () => contextQuery.refetch(),
     scope,
-    chooseScope: (next) => storeLastBuildScope(buildScopeValue(next)),
+    chooseScope: (next) => {
+      setPicked(true);
+      storeLastBuildScope(buildScopeValue(next));
+    },
     scoped: (kind) => scopedKinds.has(kind),
     ...(buildWithAgent !== undefined &&
     scope.kind === "workspace" &&
@@ -296,7 +307,57 @@ export function useBuildSource(): BuildSource {
       const owner = inScope(kind);
       // A Namespace is a prefix among the instance's own assets alone.
       const prefix = owner.workspaceId === undefined ? filter.namespace : undefined;
+      // The first time the Skills list opens, an owner without skills would show an empty list
+      // where another owner has some: the list opens on the owner in Studio when it has some,
+      // otherwise on the first owner offered that has, and reads nothing before that is known.
+      // Every other list opens where Studio is set.
+      const opening =
+        kind === "skill" &&
+        scopedKinds.has(kind) &&
+        !picked &&
+        !opened.has(kind) &&
+        otherScopes.length > 0;
+      const firstWithItems = useQuery({
+        queryKey: [...assetsKey, "opening-scope", kind, buildScopeValue(scope)],
+        enabled: opening,
+        queryFn: async ({ signal }) => {
+          const candidates = [scope, ...otherScopes];
+          const holds = await Promise.all(
+            candidates.map((candidate) =>
+              client.assets
+                .list({
+                  params: { kind },
+                  query: {
+                    limit: 1,
+                    ...(candidate.kind === "workspace"
+                      ? { workspaceId: candidate.workspaceId }
+                      : {})
+                  },
+                  signal
+                })
+                .then(
+                  (page) => page.items.length > 0,
+                  () => false
+                )
+            )
+          );
+          const found = candidates.find((_, index) => holds[index]);
+          return found === undefined ? null : buildScopeValue(found);
+        },
+        gcTime: 0,
+        staleTime: Infinity,
+        retry: false
+      });
+      const openingSettled = opening && !firstWithItems.isPending;
+      const openOn = firstWithItems.data;
+      const current = buildScopeValue(scope);
+      useEffect(() => {
+        if (!openingSettled) return;
+        if (typeof openOn === "string" && openOn !== current) showBuildScopeInTab(openOn);
+        setOpened((before) => new Set([...before, kind]));
+      }, [openingSettled, openOn, current, kind]);
       const query = useInfiniteQuery({
+        enabled: !opening,
         queryKey: [...assetsKey, "list", kind, owner.workspaceId ?? "", text, prefix ?? "", locale],
         queryFn: ({ pageParam, signal }) =>
           client.assets.list({
@@ -315,7 +376,8 @@ export function useBuildSource(): BuildSource {
         getNextPageParam: (page) => page.nextCursor
       });
       return {
-        rows: query.data?.pages.flatMap((page) => page.items),
+        // Undefined while the list's owner is chosen: the list shows as loading, not as empty.
+        rows: opening ? undefined : query.data?.pages.flatMap((page) => page.items),
         error: query.error ? (instanceSentence(query.error) ?? t("build.loadFailed")) : undefined,
         hasMore: query.hasNextPage,
         loadingMore: query.isFetchingNextPage,

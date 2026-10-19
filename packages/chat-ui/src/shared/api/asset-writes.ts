@@ -1,8 +1,16 @@
-import type { ApiClient } from "@work-shape/catalyst-api-client";
+import type { AgentAvailability, ApiClient } from "@work-shape/catalyst-api-client";
 import { ASSET_NAME_REFUSAL_REASONS } from "@work-shape/catalyst-core";
 
 /** Where a new agent starts: everywhere, or in the shared workspace it was made in. */
 export type AvailableIn = "all" | { workspaceId: string };
+
+/**
+ * A new agent's create that also makes what it uses available where it starts: the reader
+ * chose so for the availability the instance's check named.
+ */
+export interface DependencyConsent {
+  expectedAvailability: AgentAvailability;
+}
 
 /** What the instance says of a name a create would take. */
 export type NameCheckAnswer =
@@ -71,8 +79,10 @@ export function createAssetWrites(client: ApiClient) {
       client.assets.check_name({ params: { kind }, body: { name, ...scopeOf(workspaceId) } }),
     /**
      * With `null` for the expected revision the call creates the asset. A new agent starts
-     * where `availableIn` says, and hidden without it. A kind whose revision holds a folder,
-     * such as a skill, is written as its config or as its whole folder.
+     * where `availableIn` says, and hidden without it; with `dependencyConsent` the Knowledge
+     * Bases and Connections it uses are made available there with it, by the reader's choice,
+     * for the availability the reader was shown, and refused for any other. A kind whose revision holds a folder, such as a skill, is written as its config or
+     * as its whole folder.
      */
     put: ({
       kind,
@@ -81,6 +91,7 @@ export function createAssetWrites(client: ApiClient) {
       expectedRevision,
       expectedDraftRevision,
       availableIn,
+      dependencyConsent,
       ...content
     }: AssetAddress &
       AssetContent & {
@@ -88,6 +99,7 @@ export function createAssetWrites(client: ApiClient) {
         /** The agent's draft revision the caller read, or `null` where it read none. */
         expectedDraftRevision?: number | null;
         availableIn?: AvailableIn;
+        dependencyConsent?: DependencyConsent;
       }) =>
       client.assets.put({
         params: { kind, name },
@@ -96,7 +108,13 @@ export function createAssetWrites(client: ApiClient) {
           expectedRevision,
           ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
           ...scopeOf(workspaceId),
-          ...(availableIn ? { availableIn } : {})
+          ...(availableIn ? { availableIn } : {}),
+          ...(dependencyConsent
+            ? {
+                makeDependenciesAvailable: true,
+                expectedAvailability: dependencyConsent.expectedAvailability
+              }
+            : {})
         }
       }),
     /** The whole folder of the asset's current revision, each file with its content. */

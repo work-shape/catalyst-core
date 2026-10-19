@@ -6420,6 +6420,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "discardEmpty",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "const": "true"
+            }
           }
         ],
         "responses": {
@@ -32926,6 +32935,24 @@
               }
             ]
           },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          },
           "missing": {
             "type": "array",
             "items": {
@@ -36181,6 +36208,12 @@
             "type": "string",
             "minLength": 1
           },
+          "makeDependenciesAvailable": {
+            "type": "boolean"
+          },
+          "expectedAvailability": {
+            "$ref": "#/components/schemas/AgentAvailability"
+          },
           "availableIn": {
             "anyOf": [
               {
@@ -38270,6 +38303,9 @@
       "ValidateAssetRequest": {
         "type": "object",
         "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/AgentAvailability"
+          },
           "config": {
             "$ref": "#/components/schemas/ConfigAssetConfig"
           },
@@ -38285,6 +38321,9 @@
       "ValidateAssetResponse": {
         "type": "object",
         "properties": {
+          "dependencyAvailability": {
+            "$ref": "#/components/schemas/DependencyAvailability"
+          },
           "valid": {
             "type": "boolean"
           },

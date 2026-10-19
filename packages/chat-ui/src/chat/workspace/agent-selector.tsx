@@ -27,14 +27,14 @@ export function agentChipDisplayFor(
 }
 
 /**
- * The agent of a conversation as a chip.
+ * The agent of a conversation as a chip, the same in the header of a
+ * conversation and on its start page.
  *
- * In the header of a conversation the chip is always the icon alone, and so it
- * is on the start page of an instance that hides the name. Pointing at the icon
- * opens the agent list: that is how the user learns which agent it is, so it
- * opens for a single agent too. With the name beside the icon on the start
- * page, several agents make the chip a picker that opens on click; a single one
- * leaves nothing to choose, so it is a plain label that looks the same.
+ * Where the instance hides the name, the chip is the icon alone. Pointing at the
+ * icon opens the agent list: that is how the user learns which agent it is, so
+ * it opens for a single agent too. With the name beside the icon, several agents
+ * make the chip a picker that opens on click; a single one leaves nothing to
+ * choose, so it is a plain label that looks the same.
  */
 export function AgentSelector({
   agents,
@@ -53,7 +53,7 @@ export function AgentSelector({
   const [open, setOpen] = useState(false);
   const selectedAgent = agents.find((agent) => agent.name === selectedAgentName) ?? agents[0];
 
-  const showName = display.showName && placement === "start-page";
+  const { showName } = display;
 
   if (!selectedAgent) {
     return null;

@@ -107,3 +107,41 @@ export function useKeepReadingPlace(columnRef: RefObject<HTMLElement | null>): v
     };
   }, [columnRef]);
 }
+
+/**
+ * Keeps what stood above the pinned footer in view when the footer grows, as it does when a
+ * notice such as "Opened <name> · Go to it" appears over the composer: the thread moves up by
+ * as much as the footer grew, where it can scroll that far, instead of the footer covering its
+ * last lines, such as a card that waits for the person. A footer that shrinks moves nothing.
+ * `columnRef` is the column that holds the messages and the footer; it scrolls in the element
+ * it stands in.
+ */
+export function useFooterKeepsThreadInView(
+  columnRef: RefObject<HTMLElement | null>,
+  footerRef: RefObject<HTMLElement | null>
+): void {
+  useLayoutEffect(() => {
+    const footer = footerRef.current;
+    const viewport = columnRef.current?.parentElement;
+    if (!footer || !viewport || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+    let height = footer.offsetHeight;
+    const observer = new ResizeObserver(() => {
+      const grew = footer.offsetHeight - height;
+      height = footer.offsetHeight;
+      // A footer that shrank gives a place above the current one, which is never scrolled to.
+      const top = Math.min(
+        viewport.scrollTop + grew,
+        viewport.scrollHeight - viewport.clientHeight
+      );
+      if (top - viewport.scrollTop >= 1) {
+        // At once: the viewport scrolls smoothly by its style, which would show the footer cover
+        // the thread first.
+        viewport.scrollTo({ top, behavior: "instant" });
+      }
+    });
+    observer.observe(footer);
+    return () => observer.disconnect();
+  }, [columnRef, footerRef]);
+}

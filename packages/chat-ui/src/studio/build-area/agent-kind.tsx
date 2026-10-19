@@ -10,6 +10,7 @@ import { useAppToolsRead } from "../apps/app-tools-group";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorMessage } from "../../shared/workspace-utils";
 import { AgentEditor } from "./agent-editor";
+import { startAvailability, type AgentCreateCheck } from "./agent-create-review";
 import { useAvailabilityChoice } from "./asset-availability";
 import { useAgentDraft } from "./agent-draft-source";
 import { agentConfigToForm, startedAgentForm } from "./asset-form-model";
@@ -107,6 +108,39 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   // the form alone, so the page keeps what it was told and what it changed itself.
   const [isDefault, setIsDefault] = useState(asset?.isDefault === true);
   const availability = useAvailabilityChoice(frame, "agent");
+  // A new agent is checked before its create for what it would use that members where it
+  // starts could not use. One that starts hidden is checked too: the instance's first agent
+  // becomes its default, available everywhere.
+  const availableIn = start?.availableIn;
+  const createCheck: AgentCreateCheck | undefined =
+    asset !== undefined
+      ? undefined
+      : {
+          availability: startAvailability(availableIn),
+          workspaceName: (id) =>
+            availableIn !== undefined && availableIn !== "all" && id === availableIn.workspaceId
+              ? start?.availableInName
+              : undefined,
+          read: (config) =>
+            client.assets
+              .validate({
+                params: { kind: AGENT_ASSET_KIND },
+                body: {
+                  config,
+                  availability: startAvailability(availableIn),
+                  ...(owner === undefined ? {} : { workspaceId: owner })
+                }
+              })
+              .then((answer) => {
+                // A definition that does not validate goes on to the create's own refusal.
+                if (!answer.valid) return null;
+                // A valid answer without the list says nothing of what is missing: no create.
+                if (answer.dependencyAvailability === undefined) {
+                  throw new Error("The instance answered the check without its dependencies");
+                }
+                return answer.dependencyAvailability;
+              })
+        };
   // The page edits the agent's one draft where it has one: the form waits for its read.
   const draftSource = useAgentDraft({
     agent: asset?.name,
@@ -174,6 +208,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
           : undefined
       }
       {...(availability === undefined ? {} : { availability })}
+      {...(createCheck === undefined ? {} : { createCheck })}
     />
   );
 }

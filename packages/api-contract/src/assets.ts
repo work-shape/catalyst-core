@@ -104,6 +104,8 @@ const isDefaultSchema = z.literal(true).optional();
 export const dependencyAvailabilitySchema = z.object({
   /** The workspaces reviewed by the publisher; a later change must be read again. */
   availability: agentAvailabilitySchema.nullable().optional(),
+  /** Human names of the shared workspaces reviewed, including ones outside the editor's own list. */
+  workspaces: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
   missing: z.array(
     z.object({
       kind: z.enum(WORKSPACE_USE_ASSET_KINDS),
@@ -335,6 +337,10 @@ export const putAssetRequestSchema = z
     expectedRevision: expectedRevisionOrNewSchema,
     expectedDraftRevision: expectedRevisionOrNewSchema.optional(),
     workspaceId: workspaceIdSchema,
+    /** Include missing dependencies in a new agent's chosen workspaces, by explicit consent. */
+    makeDependenciesAvailable: z.boolean().optional(),
+    /** Availability shown with the dependency consent; a different audience is refused. */
+    expectedAvailability: agentAvailabilitySchema.optional(),
     /**
      * Where a new agent starts available: the shared workspace it is made in, or `all`, which
      * needs the agent write right on the whole instance. An agent's call in a conversation is
@@ -483,6 +489,8 @@ export const setAssetAvailabilityRequestSchema = z.object({
 });
 
 export const validateAssetRequestSchema = z.object({
+  /** Preview dependency use in these workspaces without creating the agent. */
+  availability: agentAvailabilitySchema.optional(),
   config: assetDefinitionSchema,
   workspaceId: workspaceIdSchema
 });
@@ -515,6 +523,7 @@ export const assetValidationIssueSchema = z.object({
 });
 
 export const validateAssetResponseSchema = z.object({
+  dependencyAvailability: dependencyAvailabilitySchema.optional(),
   valid: z.boolean(),
   issues: z.array(assetValidationIssueSchema),
   warnings: z.array(assetWarningSchema).optional()

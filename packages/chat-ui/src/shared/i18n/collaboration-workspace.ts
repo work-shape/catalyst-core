@@ -105,7 +105,9 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceLeaveTitle: "Leave workspace?",
     collaborationWorkspaceLoadFailed: "Workspaces could not be loaded.",
     collaborationWorkspaceLinkClosed:
-      "That link leads into a workspace you are not a member of, so it opened your own workspace. Ask someone in that workspace to add you.",
+      "That link leads into a workspace you are not a member of, so it opened your own workspace. Ask an admin of that workspace to add you.",
+    collaborationWorkspaceLinkClosedAsk:
+      "That link leads into a workspace you are not a member of, so it opened your own workspace. Ask {names} to add you.",
     collaborationWorkspaceLoading: "Loading workspaces…",
     collaborationWorkspaceMemberCandidatePendingRequest: "Has requested access",
     collaborationWorkspaceMemberCandidatesLabel: "Member suggestions",
@@ -282,7 +284,9 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceLeaveTitle: "Arbeitsbereich verlassen?",
     collaborationWorkspaceLoadFailed: "Arbeitsbereiche konnten nicht geladen werden.",
     collaborationWorkspaceLinkClosed:
-      "Der Link führt in einen Arbeitsbereich, in dem du kein Mitglied bist. Deshalb ist dein eigener Arbeitsbereich geöffnet. Bitte jemanden dort, dich hinzuzufügen.",
+      "Der Link führt in einen Arbeitsbereich, in dem du kein Mitglied bist. Deshalb ist dein eigener Arbeitsbereich geöffnet. Bitte einen Admin dieses Arbeitsbereichs, dich hinzuzufügen.",
+    collaborationWorkspaceLinkClosedAsk:
+      "Der Link führt in einen Arbeitsbereich, in dem du kein Mitglied bist. Deshalb ist dein eigener Arbeitsbereich geöffnet. Bitte {names}, dich hinzuzufügen.",
     collaborationWorkspaceLoading: "Arbeitsbereiche werden geladen…",
     collaborationWorkspaceMemberCandidatePendingRequest: "Hat Zugriff angefragt",
     collaborationWorkspaceMemberCandidatesLabel: "Mitgliedervorschläge",

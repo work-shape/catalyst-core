@@ -2,6 +2,9 @@ import type { Asset } from "@work-shape/catalyst-api-contract";
 import { agentConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
+  asUserId,
+  getSubjectUserId,
+  isAuthenticatedServicePrincipal,
   operationDenialError,
   auditActorFromIdentity,
   parseConnectionOperationName,
@@ -143,7 +146,33 @@ export async function agentDependencyAvailability(
         clientInstanceId: options.clientInstanceId
       })
     : undefined;
+  const instanceWriter = call.access.authorize(
+    options.configAssets.kinds.require("agent").actions.write
+  ).allowed;
+  const workspaces =
+    missing.length && wanted?.mode === "selected"
+      ? await Promise.all(
+          wanted.collaborationWorkspaceIds.map(async (id) => {
+            const workspace = await options.stores.workspaces.getWorkspace(
+              options.clientInstanceId,
+              id
+            );
+            if (!workspace || workspace.kind !== "shared") return undefined;
+            if (instanceWriter) return workspace;
+            if (isAuthenticatedServicePrincipal(call.actor)) return undefined;
+            const membership = await options.stores.workspaces.getMembership({
+              clientInstanceId: options.clientInstanceId,
+              collaborationWorkspaceId: id,
+              userId: asUserId(getSubjectUserId(call.actor))
+            });
+            return membership ? workspace : undefined;
+          })
+        )
+      : [];
   return {
+    workspaces: workspaces.flatMap((workspace) =>
+      workspace?.kind === "shared" ? [{ id: workspace.id, name: workspace.name }] : []
+    ),
     availability: wanted ?? null,
     missing: missing.map(({ summary }) => summary),
     administrators: administrator ? [administrator] : []

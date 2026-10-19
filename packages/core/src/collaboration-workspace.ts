@@ -168,6 +168,11 @@ export interface CollaborationWorkspaceStore {
     collaborationWorkspaceId: CollaborationWorkspaceId;
     userId: UserId;
   }): Promise<WorkspaceMembership>;
+  /** Names of active owners/admins of a shared workspace; nothing else for a closed link. */
+  listWorkspaceAdministratorNames(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+  }): Promise<string[]>;
   listMemberships(input: {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;

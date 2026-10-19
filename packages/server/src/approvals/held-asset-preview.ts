@@ -36,7 +36,7 @@ const inputSchema = z.object({
 
 interface HeldAssetPreviewOptions {
   clientInstanceId: ClientInstanceId;
-  store: Pick<ConfigAssetStore, "getConfigAsset">;
+  store: Pick<ConfigAssetStore, "getConfigAsset" | "getConfigAssetRevision">;
   kinds: AssetKindRegistry;
   namespaces: Pick<AccessAdministrationStore, "listNamespaceRecords">;
   modules: ModuleSnapshot;
@@ -85,7 +85,7 @@ export type HeldAssetPreviewer = (
  * What it reads. For a row of a list: the Namespace records of the instance, once for the
  * whole list, and no asset. Whether the call creates is then read from the call itself, which
  * names the revision it replaces. For one opened request: the Namespace records and the one
- * asset the call names.
+ * asset the call names and, for a stale skill change, the revision the requester read.
  *
  * What it shows of the stored asset. Whether it exists, its text, title, description and
  * resource names only to a reader the kind's read right allows on that asset, asked of the same
@@ -164,7 +164,18 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
     if (isNew) {
       return { ...preview, content: createSkillRevisionPreview(undefined, next.data) };
     }
-    const current = stored ? skillConfigSchema.safeParse(stored.config) : undefined;
+    // A pending request is compared with what its requester read, not a newer save that
+    // approving this request cannot overwrite. The same current-asset read right guards history.
+    const baseline =
+      preview.isStale && expectedRevision !== undefined && expectedRevision !== null
+        ? await options.store.getConfigAssetRevision({
+            clientInstanceId,
+            kind: kind.kind,
+            name,
+            revision: expectedRevision
+          })
+        : stored;
+    const current = baseline ? skillConfigSchema.safeParse(baseline.config) : undefined;
     if (!current?.success) {
       return {
         ...preview,

@@ -101,33 +101,45 @@ function chipButton(markup: string): string | undefined {
 }
 
 describe("agent chip in the header", () => {
-  const settings = [
-    ["shows", true],
-    ["hides", false]
-  ] as const;
-
-  it.each(settings)(
-    "is the icon alone on a button that announces the agent list when the instance %s the name",
-    (_, showAgentName) => {
-      for (const agents of [oneAgent, severalAgents]) {
-        const markup = renderHeader({ agents, showAgentName });
-
-        expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
-        expect(markup).toContain('title="Catalyst Assistant"');
-        expect(markup).toContain('aria-haspopup="dialog"');
-        expect(markup).toContain("<svg");
-        expect(markup).not.toContain(">Catalyst Assistant<");
-        expect(markup).not.toContain("Research Assistant");
-      }
-    }
-  );
-
-  it("is the same chip whatever the instance shows on the start page", () => {
+  // ACCEPT-2d: the header of a conversation showed the icon alone, so nobody read which agent
+  // answers there.
+  it("names the agent beside its icon where the instance shows the name", () => {
     for (const agents of [oneAgent, severalAgents]) {
-      const named = chipButton(renderHeader({ agents, showAgentName: true }));
+      const markup = renderHeader({ agents });
 
-      expect(named).toBeDefined();
-      expect(chipButton(renderHeader({ agents, showAgentName: false }))).toBe(named);
+      expect(markup).toContain(">Catalyst Assistant<");
+      expect(markup).toContain('title="Catalyst Assistant"');
+      expect(markup).toContain("<svg");
+      expect(markup).not.toContain("Research Assistant");
+    }
+    // Several agents keep the chip the button that opens the list.
+    expect(renderHeader({ agents: severalAgents })).toContain(
+      'aria-label="Select agent: Catalyst Assistant"'
+    );
+  });
+
+  it("is the icon alone on a button that announces the agent list where the instance hides the name", () => {
+    for (const agents of [oneAgent, severalAgents]) {
+      const markup = renderHeader({ agents, showAgentName: false });
+
+      expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
+      expect(markup).toContain('title="Catalyst Assistant"');
+      expect(markup).toContain('aria-haspopup="dialog"');
+      expect(markup).toContain("<svg");
+      expect(markup).not.toContain(">Catalyst Assistant<");
+      expect(markup).not.toContain("Research Assistant");
+    }
+  });
+
+  it("is the same chip as on the start page, so only its place changes", () => {
+    for (const showAgentName of [true, false]) {
+      for (const agents of [oneAgent, severalAgents]) {
+        const header = renderHeader({ agents, showAgentName });
+        const start = renderStartPage(agents, showAgentName);
+        const chip = chipButton(header) ?? labelContent(header);
+
+        expect(chipButton(start) ?? labelContent(start)).toBe(chip);
+      }
     }
   });
 

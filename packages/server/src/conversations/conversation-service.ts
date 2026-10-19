@@ -476,9 +476,10 @@ export class ConversationWorkflow {
   async deleteConversation(
     conversationId: ConversationId,
     user: AuthenticatedUser,
-    context: RuntimeCallContext
+    context: RuntimeCallContext,
+    discardEmpty = false
   ): Promise<Conversation> {
-    if (!this.options.config.retention.allowUserDelete) {
+    if (!discardEmpty && !this.options.config.retention.allowUserDelete) {
       throw new AppError(
         "FORBIDDEN",
         "User conversation deletion is disabled for this client instance"
@@ -489,7 +490,8 @@ export class ConversationWorkflow {
     const deleted = await this.options.stores.conversations.deleteConversation({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
-      deletedAt
+      deletedAt,
+      ...(discardEmpty ? { discardEmptyByUserId: asUserId(getSubjectUserId(user)) } : {})
     });
     // The Conversation is gone for the user from here on. A cleanup that fails is retried by
     // the retention job and does not fail the request.

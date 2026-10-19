@@ -6,7 +6,8 @@ import type {
   AssetFileRead,
   AssetFileWrite,
   AvailableIn,
-  CheckName
+  CheckName,
+  DependencyConsent
 } from "../../shared/api/asset-writes";
 import type { TranslationKey } from "../../shared/i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
@@ -32,9 +33,15 @@ export interface BuildAssetStart {
   description?: string;
   /** Where a new asset of a kind that `startsInWorkspace` starts available. */
   availableIn?: AvailableIn;
+  /** The name of the workspace `availableIn` names, for what the page says of it. */
+  availableInName?: string;
   /** The definition a copy starts from. A new asset without it starts empty. */
   copyOf?: Record<string, unknown>;
 }
+
+/** What a save names beside the definition: an existing agent's draft, or a new agent's choice. */
+type BuildSaveOptions =
+  { expectedDraftRevision: number | null } | { dependencyConsent: DependencyConsent };
 
 /** Where an asset page stands in the frame. The page's body hands it to its `Page`. */
 export interface BuildPageSlot {
@@ -82,11 +89,12 @@ export interface BuildAssetEditorProps {
    * Saves the definition against the revision the page loaded, or creates the asset. A save of
    * an existing agent names the draft revision the page read, or `null` where it read none: it
    * writes the agent's draft, answers the draft revision it wrote and leaves the live agent and
-   * the revision the page loaded as they are.
+   * the revision the page loaded as they are. The create of an agent may carry the reader's
+   * choice to make what it uses available where it starts.
    */
   save(
     config: Record<string, unknown>,
-    draft?: { expectedDraftRevision: number | null }
+    write?: BuildSaveOptions
   ): Promise<BuildWriteOutcome & { draftRevision?: number }>;
   /** The reader may publish the asset: for an agent, its draft. */
   canPublish?: boolean;

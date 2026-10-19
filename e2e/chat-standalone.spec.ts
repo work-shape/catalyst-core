@@ -80,8 +80,8 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
     page.getByTestId("conversation-row").filter({ hasText: conversationTitle })
   ).toBeVisible();
 
-  // The floating chrome carries the agent's icon once a conversation is open; the start page
-  // names the agent above its heading instead.
+  // The floating chrome carries the agent's chip, its name beside its icon, once a conversation
+  // is open; the start page names the agent above its heading instead.
   const agentSelector = page.locator("header").getByRole("button", { name: "Select agent" });
   await expect(
     page.getByRole("region", { name: "Chat" }).getByRole("button", { name: "Select agent" })
@@ -94,7 +94,7 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
     .first()
     .click();
   await expect(agentSelector).toHaveAccessibleName("Select agent: Application Assistant");
-  await expect(agentSelector).toHaveText("");
+  await expect(agentSelector).toHaveText("Application Assistant");
   await expect(agentSelector.locator("svg").first()).toBeVisible();
   await agentSelector.click();
   await expect(page.getByRole("option", { name: /Application Assistant/ })).toContainText(
@@ -105,21 +105,20 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
     "Research Assistant"
   );
   await expect(page.getByRole("option", { name: /Research Assistant/ })).toBeVisible();
-  // Choosing another agent from the header's list renames the icon, which stays an icon.
+  // Choosing another agent from the header's list renames the chip.
   await page.getByRole("option", { name: /Research Assistant/ }).click();
   await expect(page.getByRole("listbox")).toHaveCount(0);
   await expect(agentSelector).toHaveAccessibleName("Select agent: Research Assistant");
   await expect(agentSelector).toHaveAttribute("title", "Research Assistant");
-  await expect(agentSelector).toHaveText("");
+  await expect(agentSelector).toHaveText("Research Assistant");
 
-  // The icon is the same at every width.
+  // The chip is the same at every width the name fits.
   const wideChipBox = await agentSelector.boundingBox();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(agentSelector).toBeVisible();
   await expect(agentSelector.locator("svg").first()).toBeVisible();
   await expect(agentSelector).toHaveAccessibleName("Select agent: Research Assistant");
   const narrowChipBox = await agentSelector.boundingBox();
-  expect(narrowChipBox?.width).toBe(40);
   expect(narrowChipBox?.width).toBe(wideChipBox?.width);
   expect(narrowChipBox?.height).toBe(wideChipBox?.height);
 
@@ -488,7 +487,7 @@ test("start page centres the composer and settles it at the bottom after the fir
   await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
   await expect(agentPicker).toHaveCount(0);
   await expect(headerAgent).toHaveAccessibleName("Select agent: Application Assistant");
-  await expect(headerAgent).toHaveText("");
+  await expect(headerAgent).toHaveText("Application Assistant");
   await expect(headerAgent.locator("svg").first()).toBeVisible();
   await expect(chat.locator('[data-slot="workspace-apps"]')).toHaveCount(0);
   // The agent echoes the message, so name the user's own bubble.
@@ -501,7 +500,7 @@ test("start page centres the composer and settles it at the bottom after the fir
   await expect.poll(async () => (await composerPlacement()).bottomGap).toBeLessThan(40);
 });
 
-test("the first message puts the agent's icon in the header at once, without its name", async ({
+test("the first message puts the agent's chip with its name in the header at once", async ({
   page
 }) => {
   const chipAnimations = await recordAgentChipAnimations(page);
@@ -538,26 +537,27 @@ test("the first message puts the agent's icon in the header at once, without its
   expect(await composer.boundingBox()).toEqual(composerBox);
 
   // With the conversation the start page is gone and its chip with it. The header has the
-  // icon alone, where it stays, and nothing on either chip was ever animated.
+  // same chip, the agent's name beside its icon, where it stays, and nothing on either chip was
+  // ever animated. ACCEPT-2d: the header had the icon alone, so nobody read which agent answers.
   releaseCreateRun();
   await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
   await expect(chat.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
   await expect(startChip).toHaveCount(0);
   await expect(heading).toHaveCount(0);
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
-  await expect(headerChip).toHaveText("");
+  await expect(headerChip).toHaveText("Application Assistant");
   expect(await runningAnimations(headerChip)).toBe(0);
   expect(await chipAnimations()).toEqual({ animations: 0, mostChipsAtOnce: 1 });
   const headerChipBox = await headerChip.boundingBox();
-  expect(headerChipBox?.width).toBe(40);
-  expect(headerChipBox?.height).toBe(40);
+  expect(headerChipBox?.width).toBe(startChipBox?.width);
+  expect(headerChipBox?.height).toBe(startChipBox?.height);
 
-  // Reloading the conversation shows the icon in the same place. Back on the start page the name is there
-  // again, and opening the conversation from the list brings the icon alone.
+  // Reloading the conversation shows the chip in the same place. Back on the start page the chip
+  // is there again, and opening the conversation from the list brings it back to the header.
   await page.reload();
   await expect(chat.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
-  await expect(headerChip).toHaveText("");
+  await expect(headerChip).toHaveText("Application Assistant");
   expect(await headerChip.boundingBox()).toEqual(headerChipBox);
   await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(startChip).toHaveText("Application Assistant");
@@ -570,7 +570,7 @@ test("the first message puts the agent's icon in the header at once, without its
     .first()
     .click();
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
-  await expect(headerChip).toHaveText("");
+  await expect(headerChip).toHaveText("Application Assistant");
   expect(await runningAnimations(headerChip)).toBe(0);
   expect(await chipAnimations()).toEqual({ animations: 0, mostChipsAtOnce: 1 });
   await expectRecorderToSeeWrapperOf(headerChip, chipAnimations);
@@ -658,7 +658,7 @@ test("an opened conversation without messages has the agent in the header only",
   // The welcome heading is there, as on the start page, but the agent is in the header alone:
   // no second chip above the welcome message and no empty slot in its place.
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
-  await expect(headerChip).toHaveText("");
+  await expect(headerChip).toHaveText("Application Assistant");
   await expect(heading).toBeVisible();
   await expect(page.getByRole("button", { name: "Select agent" })).toHaveCount(1);
   await expect(chat.getByText("Application Assistant")).toHaveCount(0);
@@ -1062,7 +1062,7 @@ test("a single agent's icon names it in the list it opens under the pointer", as
   await expect(listbox).toHaveCount(0);
 });
 
-test("a single named agent is a plain label on the start page and an icon in the header", async ({
+test("a single named agent is the same plain label on the start page and in the header", async ({
   page
 }) => {
   await serveAgentSettings(page, { singleAgent: true, showAgentDescriptions: false });
@@ -1075,21 +1075,23 @@ test("a single named agent is a plain label on the start page and an icon in the
   await expect(chat.getByRole("button", { name: "Select agent" })).toHaveCount(0);
   await label.hover();
   await expect(page.getByRole("listbox")).toHaveCount(0);
+  const labelBox = await label.boundingBox();
 
-  // In a conversation the header keeps the icon alone, which names the agent in its list.
+  // In a conversation the header names the agent with the same label, and it opens nothing:
+  // there is no other agent to choose. ACCEPT-2d: the header had the icon alone.
   await page.getByPlaceholder("Message").fill(`Single agent ${Date.now()}`);
   await page.getByPlaceholder("Message").press("Enter");
   await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
-  const headerChip = page.locator("header").getByRole("button", { name: "Select agent" });
-  await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
-  await expect(headerChip).toHaveText("");
+  const header = page.locator("header");
+  const headerLabel = header.getByTitle("Application Assistant");
+  await expect(headerLabel).toHaveText("Application Assistant");
+  await expect(header.getByRole("button", { name: "Select agent" })).toHaveCount(0);
+  expect((await headerLabel.boundingBox())?.height).toBe(labelBox?.height);
   await expect
-    .poll(() =>
-      page.locator("header").evaluate((header) => header.getAnimations({ subtree: true }).length)
-    )
+    .poll(() => header.evaluate((element) => element.getAnimations({ subtree: true }).length))
     .toBe(0);
-  await headerChip.hover();
-  await expect(page.getByRole("listbox").getByRole("option")).toHaveText(["Application Assistant"]);
+  await headerLabel.hover();
+  await expect(page.getByRole("listbox")).toHaveCount(0);
 });
 
 test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ page }) => {

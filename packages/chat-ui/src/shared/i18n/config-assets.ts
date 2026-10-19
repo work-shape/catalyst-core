@@ -30,6 +30,9 @@ export const configAssets = defineTranslations({
     configAvailabilityMissingFailed:
       "Could not check whether what this agent uses is available there.",
     configAvailabilityMissingKnowledgeBase: "{name} (knowledge base)",
+    configAvailabilityMissingInOne: "Members in {workspace} cannot use:",
+    configAvailabilityMissingInSome: "Members in {workspaces} may be unable to use:",
+    configAvailabilityMissingPersonal: "personal workspaces",
     configAvailabilityMissingText: "Members in some of this agent's workspaces cannot use:",
     configAvailabilityMissingTitle: "Not available everywhere this agent is",
     configAvailabilityNoSharedWorkspaces: "There are no shared workspaces yet.",
@@ -52,6 +55,7 @@ export const configAssets = defineTranslations({
     configChangedTitle: "Configuration changed on the server",
     configContent: "Content",
     configCreateAgent: "Create agent",
+    configCreateAgentReviewTitle: "Create {name}?",
     configCreateSkill: "Create skill",
     configCurrent: "Current",
     configDefaultAgent: "Default agent",
@@ -204,6 +208,10 @@ export const configAssets = defineTranslations({
     configAvailabilityMissingFailed:
       "Konnte nicht prüfen, ob dort verfügbar ist, was dieser Agent verwendet.",
     configAvailabilityMissingKnowledgeBase: "{name} (Wissensbasis)",
+    configAvailabilityMissingInOne: "Mitglieder in {workspace} können Folgendes nicht verwenden:",
+    configAvailabilityMissingInSome:
+      "Mitglieder in {workspaces} können Folgendes womöglich nicht verwenden:",
+    configAvailabilityMissingPersonal: "persönlichen Arbeitsbereichen",
     configAvailabilityMissingText:
       "In einigen Arbeitsbereichen dieses Agenten können Mitglieder Folgendes nicht verwenden:",
     configAvailabilityMissingTitle: "Nicht überall verfügbar, wo dieser Agent ist",
@@ -229,6 +237,7 @@ export const configAssets = defineTranslations({
     configChangedTitle: "Konfiguration auf dem Server geändert",
     configContent: "Inhalt",
     configCreateAgent: "Agenten erstellen",
+    configCreateAgentReviewTitle: "{name} erstellen?",
     configCreateSkill: "Skill erstellen",
     configCurrent: "Aktuell",
     configDefaultAgent: "Standardagent",

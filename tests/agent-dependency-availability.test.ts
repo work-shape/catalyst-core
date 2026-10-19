@@ -37,12 +37,8 @@ describe("agent dependency availability (AVAIL-1)", () => {
     const publish = await world.api.call("assets.publish", { params, payload: { revision: 1 } });
     expect(publish.statusCode, publish.body).toBe(200);
   }
-  it("lists missing KBs and Connections before publish and changes availability only by explicit authorized choice (AVAIL-1)", async () => {
-    const instance = await start(true, undefined, developmentAuth, undefined, {
-      connections: true
-    });
-    await publishKnowledgeBase(instance, "rules");
-    await applyAtCurrentRevisions(instance.stores.configAssets, {
+  async function addAccountingConnection(world: DataStoreInstance) {
+    await applyAtCurrentRevisions(world.stores.configAssets, {
       clientInstanceId,
       mutations: [
         {
@@ -73,6 +69,300 @@ describe("agent dependency availability (AVAIL-1)", () => {
         }
       ]
     });
+  }
+  it.each(["create", "availability", "publish"] as const)(
+    "reviews and explicitly makes the same dependencies available on %s (ACCEPT-FIX-12 E-1)",
+    async (path) => {
+      const world = await start(true, undefined, developmentAuth, undefined, { connections: true });
+      await publishKnowledgeBase(world, "rules");
+      await addAccountingConnection(world);
+      const admin = (await world.api.call("me.get", {})).json<{ id: string }>();
+      const workspace = await world.stores.workspaces.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Nordlicht",
+        creatorUserId: asUserId(admin.id)
+      });
+      const params = { kind: "agent", name: "berater" };
+      const config = { ...agentOf(["rules"]), toolNames: ["connection.accounting.facts"] };
+      const wanted = {
+        mode: "selected" as const,
+        personalWorkspaces: false,
+        collaborationWorkspaceIds: [workspace.id]
+      };
+      // A first agent is the instance default everywhere; this test owns an ordinary agent.
+      expect(
+        (
+          await world.api.call("assets.put", {
+            params: { kind: "agent", name: "welcome" },
+            payload: { config: { ...agentOf([]), name: "welcome" }, expectedRevision: null }
+          })
+        ).statusCode
+      ).toBe(200);
+      let review;
+      if (path === "create") {
+        review = await world.api.call("assets.validate", {
+          params: { kind: "agent" },
+          payload: { config, availability: wanted }
+        });
+      } else {
+        expect(
+          (
+            await world.api.call("assets.put", {
+              params,
+              payload: { config, expectedRevision: null }
+            })
+          ).statusCode
+        ).toBe(200);
+        if (path === "availability") {
+          review = await world.api.call("assets.get", {
+            params,
+            query: {
+              availabilityMode: "selected",
+              availabilityPersonalWorkspaces: "false",
+              availabilityWorkspaceIds: workspace.id
+            }
+          });
+        } else {
+          expect(
+            (await world.api.call("assets.set_availability", { params, payload: wanted }))
+              .statusCode
+          ).toBe(200);
+          expect(
+            (
+              await world.api.call("assets.put", {
+                params,
+                payload: {
+                  config: { ...config, instructions: "Use the rules for answers." },
+                  expectedRevision: 1,
+                  expectedDraftRevision: null
+                }
+              })
+            ).statusCode
+          ).toBe(200);
+          review = await world.api.call("agents.draft.get", { params: { name: "berater" } });
+        }
+      }
+      expect(review.statusCode, review.body).toBe(200);
+      const parsed = path === "publish" ? review.json().draft : review.json();
+      expect(parsed).toMatchObject({
+        dependencyAvailability: {
+          availability: wanted,
+          workspaces: [{ id: workspace.id, name: "Nordlicht" }],
+          missing: [
+            { kind: "knowledge_base", name: "rules", displayName: "Rules", canMakeAvailable: true },
+            {
+              kind: "connection",
+              name: "accounting",
+              displayName: "Accounting",
+              canMakeAvailable: true
+            }
+          ]
+        }
+      });
+      expect(
+        (
+          await world.stores.configAssets.listAgentAvailability({
+            clientInstanceId,
+            kind: "knowledge_base",
+            agentName: "rules"
+          })
+        ).size
+      ).toBe(0);
+      if (path === "create") {
+        for (const expectedAvailability of [
+          undefined,
+          { ...wanted, collaborationWorkspaceIds: [] }
+        ]) {
+          const refused = await world.api.call("assets.put", {
+            params,
+            payload: {
+              config,
+              expectedRevision: null,
+              availableIn: { workspaceId: workspace.id },
+              makeDependenciesAvailable: true,
+              ...(expectedAvailability ? { expectedAvailability } : {})
+            }
+          });
+          expect(refused.statusCode, refused.body).toBe(expectedAvailability ? 409 : 428);
+          expect(
+            await world.stores.configAssets.getConfigAsset({ clientInstanceId, ...params })
+          ).toBeUndefined();
+          expect(
+            (
+              await world.stores.configAssets.listAgentAvailability({
+                clientInstanceId,
+                kind: "knowledge_base",
+                agentName: "rules"
+              })
+            ).size
+          ).toBe(0);
+        }
+      }
+      const write =
+        path === "create"
+          ? await world.api.call("assets.put", {
+              params,
+              payload: {
+                config,
+                expectedRevision: null,
+                availableIn: { workspaceId: workspace.id },
+                expectedAvailability: wanted,
+                makeDependenciesAvailable: true
+              }
+            })
+          : path === "availability"
+            ? await world.api.call("assets.set_availability", {
+                params,
+                payload: { ...wanted, expectedRevision: 1, makeDependenciesAvailable: true }
+              })
+            : await world.api.call("assets.publish", {
+                params,
+                payload: {
+                  revision: parsed.revision,
+                  expectedAvailability: wanted,
+                  makeDependenciesAvailable: true
+                }
+              });
+      expect(write.statusCode, write.body).toBe(200);
+      expect(
+        (
+          await world.stores.configAssets.listAgentAvailability({
+            clientInstanceId,
+            kind: "knowledge_base",
+            agentName: "rules"
+          })
+        ).get("rules")
+      ).toEqual(wanted);
+      expect(
+        (
+          await world.stores.configAssets.listAgentAvailability({
+            clientInstanceId,
+            kind: "connection",
+            agentName: "accounting"
+          })
+        ).get("accounting")
+      ).toEqual(wanted);
+      expect((await world.api.call("assets.get", { params })).json()).toMatchObject({
+        dependencyAvailability: { missing: [] }
+      });
+    }
+  );
+  it("does not name an unrelated private workspace in a caller-chosen dependency preview", async () => {
+    const world = await start(true, undefined, developmentAuth, undefined, true);
+    await publishKnowledgeBase(world, "rules");
+    const config = agentOf(["rules"]);
+    const params = { kind: "agent", name: "berater" };
+    expect(
+      (await world.api.call("assets.put", { params, payload: { expectedRevision: null, config } }))
+        .statusCode
+    ).toBe(200);
+    const admin = (await world.api.call("me.get", {})).json<{ id: string }>();
+    const member = (
+      await world.api.call("me.get", { headers: { "x-dev-user-id": "member-1" } })
+    ).json<{ id: string }>();
+    const workspace = await world.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      name: "Private workspace name",
+      kind: "shared",
+      creatorUserId: asUserId(admin.id)
+    });
+    for (const [kind, name, actions] of [
+      ["agent", "berater", ["agent.read", "agent.write"]],
+      ["knowledge_base", "rules", ["knowledge_base.read"]]
+    ] as const) {
+      const asset = required(
+        await world.stores.configAssets.getConfigAsset({ clientInstanceId, kind, name })
+      );
+      for (const action of actions)
+        await world.stores.access.createGrant({
+          clientInstanceId,
+          holderKind: "user",
+          holderId: member.id,
+          action,
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: asset.id,
+          grantedBy: asUserId(admin.id)
+        });
+    }
+    const response = await world.api.call("assets.validate", {
+      params: { kind: "agent" },
+      headers: { "x-dev-user-id": "member-1" },
+      payload: {
+        config,
+        availability: {
+          mode: "selected",
+          personalWorkspaces: false,
+          collaborationWorkspaceIds: [workspace.id]
+        }
+      }
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({
+      valid: true,
+      dependencyAvailability: { workspaces: [] }
+    });
+    expect(response.body).not.toContain("Private workspace name");
+  });
+
+  it("denies impossible creation consent before policy and leaves no pending approval", async () => {
+    const world = await start(true, undefined, developmentAuth, undefined, true);
+    await publishKnowledgeBase(world, "rules");
+    const admin = (await world.api.call("me.get", {})).json<{ id: string }>();
+    const member = (
+      await world.api.call("me.get", { headers: { "x-dev-user-id": "member-1" } })
+    ).json<{ id: string }>();
+    await world.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: member.id,
+      action: "agent.write",
+      effect: "allow",
+      scopeKind: "instance",
+      grantedBy: asUserId(admin.id)
+    });
+    const response = await world.api.call("assets.put", {
+      params: { kind: "agent", name: "berater" },
+      headers: { "x-dev-user-id": "member-1" },
+      payload: {
+        config: agentOf(["rules"]),
+        expectedRevision: null,
+        availableIn: "all",
+        expectedAvailability: {
+          mode: "all",
+          personalWorkspaces: false,
+          collaborationWorkspaceIds: []
+        },
+        makeDependenciesAvailable: true
+      }
+    });
+    expect(response.statusCode, response.body).toBe(403);
+    expect(response.json()).toMatchObject({
+      error: { details: { action: "knowledge_base.write" } }
+    });
+    const run = required(
+      (await world.stores.operationRuns.list({ clientInstanceId })).find(
+        ({ id }) => id === response.headers["operation-run-id"]
+      )
+    );
+    expect(run.status).toBe("denied");
+    expect(run.approvalRequestId).toBeUndefined();
+    expect(
+      await world.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "agent",
+        name: "berater"
+      })
+    ).toBeUndefined();
+  });
+
+  it("lists missing KBs and Connections before publish and changes availability only by explicit authorized choice (AVAIL-1)", async () => {
+    const instance = await start(true, undefined, developmentAuth, undefined, {
+      connections: true
+    });
+    await publishKnowledgeBase(instance, "rules");
+    await addAccountingConnection(instance);
     const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
     const workspace = await instance.stores.workspaces.createWorkspace({
       clientInstanceId,

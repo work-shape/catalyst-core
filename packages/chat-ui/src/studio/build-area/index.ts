@@ -30,7 +30,12 @@ export type {
   BuildListLeadFilter
 } from "./build-asset-kind";
 export { buildAssetKinds, BuildAssetKindsProvider } from "./build-asset-kinds";
-export { type BuildAssetRead, type BuildList, type BuildSource } from "./build-data";
+export {
+  type BuildAssetRead,
+  type BuildList,
+  type BuildSource,
+  useBuildSource
+} from "./build-data";
 export { BuildFrame } from "./build-frame";
 export * from "./connection-approval-model";
 export { ConnectionApprovalList } from "./connection-approval";

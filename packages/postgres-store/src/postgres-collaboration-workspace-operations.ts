@@ -1,3 +1,4 @@
+import { listWorkspaceAdministratorNames } from "./postgres-workspace-administrators";
 import { and, asc, eq, ilike, inArray, isNull, or, sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   AppError,
@@ -872,6 +873,7 @@ export function createPostgresWorkspacesStore(
     ): Promise<WorkspaceMembership> {
       return removeMembership(db, input);
     },
+    listWorkspaceAdministratorNames: (input) => listWorkspaceAdministratorNames(db, input),
     async listMemberships(
       input: Parameters<CollaborationWorkspaceStore["listMemberships"]>[0]
     ): Promise<WorkspaceMembership[]> {

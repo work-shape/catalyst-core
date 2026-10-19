@@ -1,16 +1,28 @@
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
+  idleActions,
   inboxItemKinds,
   inboxItemSurface,
+  InboxItemView,
   InboxList,
   item,
   now,
   render,
   renderItem
 } from "./chat-ui-inbox-harness";
+import { ApprovalRevisionHostProvider } from "./support/chat-ui";
+
+/** The Inbox's host as one person reads it. */
+const host = (currentUserId: string) => ({
+  currentUserId,
+  personalWorkspaceAgentName: () => undefined,
+  startRevision: () => undefined,
+  agentDisplayName: () => undefined,
+  openConversation: () => undefined
+});
 
 describe("inbox item of an operation call", () => {
   const callPreview = {
@@ -352,7 +364,7 @@ describe("inbox item of an operation call", () => {
     expect(markup).toMatch(
       /data-testid="operation-call-why"[^>]*>.*Needs a decision because this instance holds new and changed skills for approval\./u
     );
-    expect(markup).toMatch(/>New skill: Elternzeit: häufige Fragen<\/h3>/u);
+    expect(markup).toMatch(/>New skill by Elif Aydin: Elternzeit: häufige Fragen<\/h3>/u);
     // The skill as people read one: title, description and the text with its line breaks,
     // shown at once and not as an input row.
     const skill = markup.slice(markup.indexOf('data-testid="operation-call-skill"'));
@@ -413,11 +425,13 @@ describe("inbox item of an operation call", () => {
     expect(put(changedSkill, "de")).toContain(
       "Wenn du freigibst, wird die Änderung gespeichert. Wenn du ablehnst, ändert sich nichts."
     );
-    expect(markup).toMatch(/>Skill change: Urlaubsrichtlinie<\/h3>/u);
+    expect(markup).toMatch(/>Skill change by Elif Aydin: Urlaubsrichtlinie<\/h3>/u);
     expect(markup).toMatch(/Before<\/span>.*Krankmeldung ab dem dritten Tag\./u);
     expect(markup).toMatch(/New<\/span>.*Krankmeldung ab dem ersten Tag\./u);
     expect(markup).toMatch(/data-field="title".*Before: Urlaub<.*New: Urlaubsrichtlinie</u);
     expect(markup).toContain("old/table.md");
+    // A request that is not outdated is approved or declined.
+    expect(markup).toContain('data-decision="approve"');
     expect(markup).not.toContain('data-testid="operation-call-no-before"');
 
     // A save that leaves the text as it is says so.
@@ -564,7 +578,7 @@ describe("inbox item of an operation call", () => {
       );
     // The approver, who could decide it, and the requester, who could not.
     for (const markup of [decided("en", true), decided("en", false)]) {
-      expect(markup).toMatch(/>Skill change: Urlaubsrichtlinie<\/h3>/u);
+      expect(markup).toMatch(/>Skill change by Elif Aydin: Urlaubsrichtlinie<\/h3>/u);
       expect(markup).toMatch(/Before<\/span>.*Krankmeldung ab dem dritten Tag\./u);
       expect(markup).toMatch(/New<\/span>.*Krankmeldung ab dem ersten Tag\./u);
       expect(markup).toMatch(/data-testid="operation-call-outcome" data-outcome="done"/u);
@@ -572,60 +586,128 @@ describe("inbox item of an operation call", () => {
       expect(markup).not.toContain('data-testid="operation-call-input-removed"');
       expect(markup).not.toContain("assets.put");
     }
-    expect(decided("de", false)).toMatch(/>Änderung einer Fähigkeit: Urlaubsrichtlinie<\/h3>/u);
+    // ACCEPT-2d C-9: the German heading said "Fähigkeit" where body and Studio say "Skill".
+    expect(decided("de", false)).toMatch(
+      />Skill-Änderung von Elif Aydin: Urlaubsrichtlinie<\/h3>/u
+    );
     const { content: _content, ...listed } = changedSkill;
     const decidedRow = row({ ...putPreview, inputs: [], inputRemoved: true, asset: listed });
-    expect(decidedRow).toContain("Skill change: Urlaubsrichtlinie");
+    expect(decidedRow).toContain("Skill change by Elif Aydin: Urlaubsrichtlinie");
     expect(decidedRow).not.toContain("assets.put");
   });
 
   // ACCEPT-FIX-9 E7: an outdated request offered Approve without a word, although approving
-  // applies nothing.
-  it("warns before approving a request whose skill changed since, in both languages", () => {
+  // applies nothing. ACCEPT-2d C-2: it then still offered Approve, its comparison read as a
+  // revert of the newer text, and the requester was told to ask themselves.
+  it("offers only Decline on a request whose skill changed since, labels its comparison and speaks to the reader's role", () => {
     const stale = { ...changedSkill, isStale: true };
+    const asRequester = (markup: ReactNode) =>
+      createElement(ApprovalRevisionHostProvider, { value: host("user-elif") }, markup);
 
     expect(put(stale)).toMatch(
-      /data-testid="operation-call-stale"[^>]*>[\s\S]*This request is out of date: “Urlaubsrichtlinie” was changed after it was made\. Approving it changes nothing\. Ask Elif Aydin to submit a new change\./u
+      /data-testid="operation-call-stale"[^>]*>[\s\S]*This request is out of date: “Urlaubsrichtlinie” was changed after Elif Aydin made it, so it can no longer be approved\. Decline it; Elif Aydin can submit a new change\./u
     );
     expect(put(stale, "de")).toContain(
-      "Diese Anfrage ist veraltet: „Urlaubsrichtlinie“ wurde geändert, nachdem die Anfrage gestellt wurde. Eine Freigabe ändert nichts. Bitte Elif Aydin um eine neue Änderung."
+      "Diese Anfrage ist veraltet: „Urlaubsrichtlinie“ wurde geändert, nachdem Elif Aydin sie gestellt hat. Deshalb kann sie nicht mehr freigegeben werden. Lehne sie ab; Elif Aydin kann eine neue Änderung einreichen."
     );
     expect(put(changedSkill)).not.toContain('data-testid="operation-call-stale"');
     // The warning alone says what approving does: no sentence that approving saves the change.
     expect(put(stale)).not.toContain("If you approve, the change is saved.");
     expect(put(changedSkill)).toContain("If you approve, the change is saved.");
+
+    // Only Decline: approving would apply nothing.
+    expect(put(stale)).toContain('data-decision="reject"');
+    expect(put(stale)).not.toContain('data-decision="approve"');
+
+    // The comparison is against the version the requester saw, and says so, in both languages.
+    expect(put(stale)).toMatch(
+      /Version Elif Aydin saw<\/span>.*Krankmeldung ab dem dritten Tag\./u
+    );
+    expect(put(stale)).toMatch(/Proposed by Elif Aydin<\/span>.*Krankmeldung ab dem ersten Tag\./u);
+    expect(put(stale)).toMatch(
+      /data-field="title".*Version Elif Aydin saw: Urlaub<.*Proposed by Elif Aydin: Urlaubsrichtlinie</u
+    );
+    expect(put(stale, "de")).toContain("Version, die Elif Aydin gesehen hat");
+    expect(put(stale, "de")).toContain("Vorschlag von Elif Aydin");
+    expect(put(stale)).not.toMatch(/>Before<\/span>/u);
+
+    // The requester reads their own request: nobody tells them to ask themselves.
+    const own = (locale: "de" | "en") =>
+      render(
+        asRequester(
+          createElement(InboxItemView, {
+            state: {
+              status: "ready",
+              request: item({
+                kind: "operation_call",
+                summary: "assets.put",
+                preview: { ...putPreview, asset: stale }
+              })
+            },
+            actions: idleActions
+          })
+        ),
+        locale
+      );
+    expect(own("en")).toContain(
+      "Your request is out of date: “Urlaubsrichtlinie” was changed after you made it, so it can no longer be approved. Submit a new change if it is still needed."
+    );
+    expect(own("de")).toContain(
+      "Deine Anfrage ist veraltet: „Urlaubsrichtlinie“ wurde geändert, nachdem du sie gestellt hast. Deshalb kann sie nicht mehr freigegeben werden. Reiche eine neue Änderung ein, wenn sie noch nötig ist."
+    );
+    expect(own("en")).not.toContain("Ask Elif Aydin");
+    expect(own("en")).not.toContain("Elif Aydin can submit");
   });
 
   // ACCEPT-FIX-9 E7: approving an outdated request ended "Not executed … no longer allowed"
-  // with the instance's English sentence as the reason, also in German.
-  it("says in the reader's language that an outdated request was approved and nothing applied", () => {
-    const refusedStale = (locale: "de" | "en") =>
-      call(
-        {
-          summary: "assets.put",
-          status: "superseded",
-          canDecide: false,
-          applyResult: {
-            execution: "refused",
-            error: {
-              code: "APPROVAL_STALE",
-              message:
-                "The asset changed after this request was made. Submit a new change; nothing was applied."
-            }
-          },
-          payload: { runId: "opr_2", inputRemoved: true },
-          preview: { ...putPreview, inputs: [], inputRemoved: true, asset: changedSkill }
-        },
+  // with the instance's English sentence as the reason, also in German. ACCEPT-2d C-2: the
+  // approver was then told "Submit a new change", which only the requester can.
+  it("says in the reader's language and role that an outdated request was approved and nothing applied", () => {
+    const refusedStale = {
+      summary: "assets.put",
+      status: "superseded" as const,
+      canDecide: false,
+      applyResult: {
+        execution: "refused" as const,
+        error: {
+          code: "APPROVAL_STALE",
+          message:
+            "The asset changed after this request was made. Submit a new change; nothing was applied."
+        }
+      },
+      payload: { runId: "opr_2", inputRemoved: true },
+      preview: { ...putPreview, inputs: [], inputRemoved: true, asset: changedSkill }
+    };
+    const read = (locale: "de" | "en", reader?: string) => {
+      const view = createElement(InboxItemView, {
+        state: { status: "ready", request: item({ kind: "operation_call", ...refusedStale }) },
+        actions: idleActions
+      });
+      return render(
+        reader === undefined
+          ? view
+          : createElement(ApprovalRevisionHostProvider, { value: host(reader) }, view),
         locale
       );
-    const german = refusedStale("de");
+    };
 
+    // The approver, who decided it.
+    const german = read("de", "user-jonas");
     expect(german).toMatch(
-      /data-testid="operation-call-outcome" data-outcome="refused"[^>]*>[\s\S]*Nicht übernommen: „Urlaubsrichtlinie“ wurde nach dieser Anfrage geändert, deshalb hat sich nichts geändert\. Reiche eine neue Änderung ein, wenn sie noch nötig ist\./u
+      /data-testid="operation-call-outcome" data-outcome="refused"[^>]*>[\s\S]*Nicht übernommen: „Urlaubsrichtlinie“ wurde nach dieser Anfrage geändert, deshalb hat sich nichts geändert\. Elif Aydin kann eine neue Änderung einreichen\./u
     );
+    expect(german).not.toContain("Reiche eine neue Änderung ein");
     expect(german).not.toContain("The asset changed");
     expect(german).not.toContain("nicht mehr erlaubt");
-    expect(refusedStale("en")).toContain(
+    expect(read("en", "user-jonas")).toContain(
+      "Not applied: “Urlaubsrichtlinie” was changed after this request was made, so nothing changed. Elif Aydin can submit a new change."
+    );
+    expect(read("en")).toContain("Elif Aydin can submit a new change.");
+    // The requester, who can submit a new one.
+    expect(read("de", "user-elif")).toContain(
+      "Nicht übernommen: „Urlaubsrichtlinie“ wurde nach dieser Anfrage geändert, deshalb hat sich nichts geändert. Reiche eine neue Änderung ein, wenn sie noch nötig ist."
+    );
+    expect(read("en", "user-elif")).toContain(
       "Not applied: “Urlaubsrichtlinie” was changed after this request was made, so nothing changed. Submit a new change if it is still needed."
     );
   });
@@ -643,7 +725,7 @@ describe("inbox item of an operation call", () => {
     // A row carries no content: the list is not sent any.
     const { content: _content, ...listed } = newSkill;
     const markup = row({ ...putPreview, asset: listed });
-    expect(markup).toContain("New skill: Elternzeit: häufige Fragen");
+    expect(markup).toContain("New skill by Elif Aydin: Elternzeit: häufige Fragen");
     expect(markup).toContain("Elif Aydin");
     expect(markup).not.toContain("hr-");
     expect(markup).toContain("lucide-book-open");

@@ -172,13 +172,23 @@ function StatusPanel({
 
 /**
  * Says why a link did not open: it led into a workspace the person is no member of, and the page
- * went to their own workspace instead.
+ * went to their own workspace instead. It names the workspace's owners and admins to ask, where
+ * the instance named any.
  */
-export function ClosedWorkspaceLinkBanner({ onDismiss }: { onDismiss(): void }) {
-  const { t } = useTranslation();
+export function ClosedWorkspaceLinkBanner({
+  administrators,
+  onDismiss
+}: {
+  administrators: readonly string[];
+  onDismiss(): void;
+}) {
+  const { locale, t } = useTranslation();
+  const names = new Intl.ListFormat(locale, { type: "disjunction" }).format(administrators);
   return (
     <Banner tone="info" layout="page" className="shrink-0" onDismiss={onDismiss}>
-      {t("collaborationWorkspaceLinkClosed")}
+      {administrators.length > 0
+        ? t("collaborationWorkspaceLinkClosedAsk", { names })
+        : t("collaborationWorkspaceLinkClosed")}
     </Banner>
   );
 }

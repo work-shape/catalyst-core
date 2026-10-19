@@ -328,6 +328,15 @@ export function subscribeBuildScope(listener: () => void): () => void {
 }
 
 /**
+ * Sets Studio to an owner for this tab alone: the one the Skills list opened on by itself, as
+ * the owner Studio was set to had no skills. What Studio remembers stays as it was.
+ */
+export function showBuildScopeInTab(scope: string): void {
+  chosenInTab = scope;
+  for (const listener of scopeListeners) listener();
+}
+
+/**
  * Sets Studio to the owner of an asset whose page the person is taken to, so the page reads it
  * where it is: the workspace that owns it, by its id, or the instance.
  */

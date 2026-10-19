@@ -22,7 +22,7 @@ import { ThreadMessage } from "./assistant-message";
 import { focusComposerAtEnd } from "./composer-focus-request";
 import { DayMarkersProvider, MessageDayMarker } from "./message-day-marker";
 import { useTranslation } from "../../shared/i18n";
-import { useKeepReadingPlace } from "./reading-place";
+import { useFooterKeepsThreadInView, useKeepReadingPlace } from "./reading-place";
 import type { SendBlock } from "./send-block";
 import { useMoveWithPanels } from "../surface/panel-move";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
@@ -171,6 +171,8 @@ export function AssistantThread({
   // The column travels with a panel that opens or closes beside the conversation.
   const columnRef = useMoveWithPanels<HTMLDivElement>();
   useKeepReadingPlace(columnRef);
+  // A notice that appears over the composer moves the thread up instead of covering it.
+  useFooterKeepsThreadInView(columnRef, composerRef);
 
   // An existing conversation stays readable; only the composer is blocked.
   if (noAgentsMessage && !messagesEnabled) {

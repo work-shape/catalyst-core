@@ -178,7 +178,7 @@ conversationTitles:
   model: gpt-5-nano
 guardrails:
   no_personal_data:
-    displayName: No personal data in skills
+    displayName: Keine persönlichen Daten in Skills
     on: approval_request.before_create
     filter:
       kind: skill_change
@@ -188,22 +188,22 @@ guardrails:
       instruction: Check whether the text contains personal data or details about a specific customer, case or person. General rules and obviously fictional examples are allowed.
     outcome: warn
   no_iban_in_assets:
-    displayName: No IBAN in assets
+    displayName: Keine IBAN in Inhalten
     on: asset.before_write
     check:
       kind: pattern
       pattern: '(?i)\bDE\d{2}(?:\s?\d{4}){4}\s?\d{2}\b'
-      reason: Assets hold no bank account numbers. Remove the IBAN and save again.
+      reason: Inhalte dürfen keine Kontonummern enthalten. Entferne die IBAN und speichere noch einmal.
     outcome: block
   # The same rule where an App goes live: an App written before the rule existed, or from a
   # revision it never read, is checked when it is published.
   no_iban_in_apps:
-    displayName: No IBAN in published Apps
+    displayName: Keine IBAN in veröffentlichten Apps
     on: app.before_publish
     check:
       kind: pattern
       pattern: '(?i)\bDE\d{2}(?:\s?\d{4}){4}\s?\d{2}\b'
-      reason: Apps hold no bank account numbers. Remove the IBAN and publish again.
+      reason: Apps dürfen keine Kontonummern enthalten. Entferne die IBAN und veröffentliche noch einmal.
     outcome: block
 usage:
   budget:

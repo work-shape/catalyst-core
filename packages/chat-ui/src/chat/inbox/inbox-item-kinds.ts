@@ -167,6 +167,16 @@ const approvalDecisions: InboxDecisionEntries = [
   { decision: "approve", label: "operations.callApprove" }
 ];
 
+/** An outdated request can only be declined: approving it would apply nothing. */
+const staleDecisions: InboxDecisionEntries = [
+  { decision: "reject", label: "operations.callDecline" }
+];
+
+function operationCallDecisions(item: ApprovalRequestView): InboxDecisionEntries {
+  if (isInboxConfirmation(item)) return confirmationDecisions;
+  return savedSkill(item)?.isStale ? staleDecisions : approvalDecisions;
+}
+
 /**
  * An operation call that waits for another person's approval. A call that saves a skill is
  * named as that skill, new or changed; every other call is an action to approve. The approver
@@ -210,11 +220,16 @@ const operationCall: InboxItemKind = {
   },
   heading(item, t) {
     if (isInboxConfirmation(item)) return confirmationHeading(item, t);
+    const call = parseOperationCallPreview(item.preview);
     const skill = savedSkill(item);
-    if (skill) {
-      return `${savedSkillTitle(skill, t)}: ${skill.title}`;
+    if (call && skill) {
+      // Two requests for one skill differ by who asked, so the heading names them.
+      return t(skill.isNew ? "inbox.skillNewHeading" : "inbox.skillChangeHeading", {
+        actor: call.actor.label,
+        title: skill.title
+      });
     }
-    return parseOperationCallPreview(item.preview) ? t("inbox.kindOperationCall") : undefined;
+    return call ? t("inbox.kindOperationCall") : undefined;
   },
   rowDetail(item) {
     const call = parseOperationCallPreview(item.preview);
@@ -223,7 +238,7 @@ const operationCall: InboxItemKind = {
     return call?.asset ? undefined : call?.operation;
   },
   Body: ({ item }) => createElement(OperationCallBody, { request: item }),
-  decisions: (item) => (isInboxConfirmation(item) ? confirmationDecisions : approvalDecisions)
+  decisions: operationCallDecisions
 };
 
 /**

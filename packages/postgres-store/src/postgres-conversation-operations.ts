@@ -1,13 +1,16 @@
+import { lockActiveConversation, deleteConversation } from "./postgres-conversation-lifecycle";
+export {
+  lockActiveConversation,
+  markLockedConversationTreeDeleted
+} from "./postgres-conversation-lifecycle";
 import {
   AppError,
-  asConversationId,
   createApprovalDecisionMessage,
   createPlatformId,
   type AppendAssistantMessageInput,
   type ApprovalRequest,
   type ChatMessage,
   type ClientInstanceId,
-  type CollaborationWorkspaceId,
   type Conversation,
   type ConversationCreatedAssetInput,
   type ConversationId,
@@ -31,13 +34,11 @@ import {
   configAssetRevisions,
   configAssets,
   conversationCreatedAssets,
-  conversationFollowUps,
   conversationAttachments,
   conversations,
   messages,
   modelProviderContinuations,
-  productUsers,
-  structuredDataResources
+  productUsers
 } from "./schema";
 
 export async function createConversation(
@@ -183,37 +184,6 @@ async function moveLockedConversation(db: PostgresConnection, input: MoveConvers
     throw new AppError("CONFLICT", "Conversation workspace changed during the move");
   }
   return mapConversation(row);
-}
-
-/**
- * Takes the Conversation row lock. Every write that decides whether a Conversation may expire
- * holds it: run acceptance, attachment creation and restore, deletion and expiry. Returns false
- * when the Conversation is not active, or is not in the workspace the caller names. The
- * workspace is a column of the locked row, so it is read again after a wait for the lock: a
- * Conversation that was moved away meanwhile is not locked.
- */
-export async function lockActiveConversation(
-  tx: PostgresTransaction,
-  clientInstanceId: ClientInstanceId,
-  conversationId: ConversationId,
-  inCollaborationWorkspaceId?: CollaborationWorkspaceId
-): Promise<boolean> {
-  const [locked] = await tx
-    .select({ id: conversations.id })
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.clientInstanceId, clientInstanceId),
-        eq(conversations.id, conversationId),
-        eq(conversations.status, "active"),
-        inCollaborationWorkspaceId === undefined
-          ? undefined
-          : eq(conversations.collaborationWorkspaceId, inCollaborationWorkspaceId)
-      )
-    )
-    .for("update")
-    .limit(1);
-  return locked !== undefined;
 }
 
 /**
@@ -596,151 +566,6 @@ async function listRecentMessages(
     .orderBy(desc(messages.createdAt), desc(messages.storageOrdinal))
     .limit(input.limit);
   return rows.map(mapMessage).reverse();
-}
-
-async function deleteConversation(
-  db: PostgresConnection,
-  input: {
-    clientInstanceId: ClientInstanceId;
-    conversationId: ConversationId;
-    deletedAt: string;
-    inCollaborationWorkspaceId?: CollaborationWorkspaceId;
-  }
-): Promise<Conversation> {
-  return db.transaction(async (tx) => {
-    const locked = await lockActiveConversation(
-      tx,
-      input.clientInstanceId,
-      input.conversationId,
-      input.inCollaborationWorkspaceId
-    );
-    if (!locked) throw new AppError("NOT_FOUND", "Conversation is not available");
-    return markLockedConversationTreeDeleted(tx, { ...input, status: "deleted" });
-  });
-}
-
-/**
- * Claims a locked chat Conversation with its run threads (CR-1): the threads are locked in id
- * order after the root, then each is marked deleted as the root is. A thread is never claimed
- * alone: it goes with its root.
- */
-export async function markLockedConversationTreeDeleted(
-  tx: PostgresTransaction,
-  input: Parameters<typeof markLockedConversationDeleted>[1]
-): Promise<Conversation> {
-  const [root] = await tx
-    .select({ kind: conversations.kind })
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.clientInstanceId, input.clientInstanceId),
-        eq(conversations.id, input.conversationId)
-      )
-    );
-  if (root?.kind !== "chat") {
-    throw new AppError("CONFLICT", "A subagent's thread is deleted with its conversation");
-  }
-  const threads = await tx
-    .select({ id: conversations.id })
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.clientInstanceId, input.clientInstanceId),
-        eq(conversations.parentConversationId, input.conversationId),
-        eq(conversations.status, "active")
-      )
-    )
-    .orderBy(asc(conversations.id))
-    .for("update");
-  for (const thread of threads) {
-    await markLockedConversationDeleted(tx, {
-      ...input,
-      conversationId: asConversationId(thread.id)
-    });
-  }
-  return markLockedConversationDeleted(tx, input);
-}
-
-/**
- * Deletes the Conversation's messages and structured data and marks its attachments and the
- * Conversation itself deleted. The caller holds the row lock. Files, artifacts, preview state
- * and the execution workspace stay for the cleanup that follows.
- */
-async function markLockedConversationDeleted(
-  tx: PostgresTransaction,
-  input: {
-    clientInstanceId: ClientInstanceId;
-    conversationId: ConversationId;
-    deletedAt: string;
-    status: Conversation["status"];
-  }
-): Promise<Conversation> {
-  const deletedAt = new Date(input.deletedAt);
-  await tx
-    .update(conversationAttachments)
-    .set({
-      status: "deleted",
-      deletedAt,
-      updatedAt: deletedAt
-    })
-    .where(
-      and(
-        eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-        eq(conversationAttachments.conversationId, input.conversationId),
-        ne(conversationAttachments.status, "deleted")
-      )
-    );
-  await tx
-    .delete(conversationFollowUps)
-    .where(
-      and(
-        eq(conversationFollowUps.clientInstanceId, input.clientInstanceId),
-        eq(conversationFollowUps.conversationId, input.conversationId)
-      )
-    );
-  await tx
-    .delete(messages)
-    .where(
-      and(
-        eq(messages.clientInstanceId, input.clientInstanceId),
-        eq(messages.conversationId, input.conversationId)
-      )
-    );
-  await tx
-    .delete(structuredDataResources)
-    .where(
-      and(
-        eq(structuredDataResources.clientInstanceId, input.clientInstanceId),
-        eq(structuredDataResources.conversationId, input.conversationId)
-      )
-    );
-  await tx
-    .delete(conversationCreatedAssets)
-    .where(
-      and(
-        eq(conversationCreatedAssets.clientInstanceId, input.clientInstanceId),
-        eq(conversationCreatedAssets.conversationId, input.conversationId)
-      )
-    );
-  const [row] = await tx
-    .update(conversations)
-    .set({
-      status: input.status,
-      deletedAt,
-      updatedAt: deletedAt
-    })
-    .where(
-      and(
-        eq(conversations.clientInstanceId, input.clientInstanceId),
-        eq(conversations.id, input.conversationId),
-        eq(conversations.status, "active")
-      )
-    )
-    .returning();
-  if (!row) {
-    throw new AppError("NOT_FOUND", "Conversation is not available");
-  }
-  return mapConversation(row);
 }
 
 export async function touchConversation(

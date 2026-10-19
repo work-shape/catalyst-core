@@ -30,8 +30,8 @@ import type {
 /** The upload surface and source handler use the same refusal in the selected language. */
 export function unsupportedAttachmentMessage(locale: LocaleCode | undefined): string {
   return locale === "de"
-    ? "Diesen Dateityp kannst du hier nicht anhängen. Verwende eine unterstützte Datei, zum Beispiel eine Textdatei."
-    : "You cannot attach this file type here. Use a supported file, such as a text file.";
+    ? "Diesen Dateityp kannst du hier nicht anhängen. Unterstützt werden PDF, Word (DOC/DOCX), JSON, Text (TXT/Markdown/CSV/RTF), Tabellen (XLS/XLSX/XLSM/ODS) und Präsentationen (PPT/PPTX/PPTM/ODP) sowie ODT."
+    : "You cannot attach this file type here. Supported types are PDF, Word (DOC/DOCX), JSON, text (TXT/Markdown/CSV/RTF), spreadsheets (XLS/XLSX/XLSM/ODS), presentations (PPT/PPTX/PPTM/ODP), and ODT.";
 }
 
 const WORKSPACE_SOURCE_ATTACHMENT_KIND = "workspace_source";
@@ -53,6 +53,9 @@ const WORKSPACE_SOURCE_EXTENSIONS = new Set([
   "md",
   "markdown",
   "doc",
+  "docx",
+  "pdf",
+  "json",
   "odp",
   "ods",
   "odt",
@@ -70,6 +73,9 @@ const WORKSPACE_SOURCE_MIME_TYPES = new Map<string, string>([
   ["text/markdown", "markdown"],
   ["text/x-markdown", "markdown"],
   ["application/msword", "doc"],
+  ["application/pdf", "pdf"],
+  ["application/json", "json"],
+  ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"],
   ["application/rtf", "rtf"],
   ["application/vnd.ms-excel", "xls"],
   ["application/vnd.ms-excel.sheet.macroenabled.12", "xlsm"],
@@ -83,37 +89,10 @@ const WORKSPACE_SOURCE_MIME_TYPES = new Map<string, string>([
   ["text/csv", "csv"]
 ]);
 
+/** Picker and upload detection are derived from the same formats. */
 export const WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES = [
-  ".txt",
-  ".md",
-  ".markdown",
-  "text/plain",
-  "text/markdown",
-  "text/x-markdown",
-  ".csv",
-  ".doc",
-  ".odt",
-  ".rtf",
-  ".xls",
-  ".xlsx",
-  ".xlsm",
-  ".ods",
-  ".ppt",
-  ".pptx",
-  ".pptm",
-  ".odp",
-  "text/csv",
-  "application/msword",
-  "application/rtf",
-  "application/vnd.ms-excel",
-  "application/vnd.ms-excel.sheet.macroenabled.12",
-  "application/vnd.oasis.opendocument.spreadsheet",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.ms-powerpoint.presentation.macroenabled.12",
-  "application/vnd.oasis.opendocument.presentation",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.oasis.opendocument.text"
+  ...[...WORKSPACE_SOURCE_EXTENSIONS].map((extension) => `.${extension}`),
+  ...WORKSPACE_SOURCE_MIME_TYPES.keys()
 ];
 
 export interface CreateExecutionWorkspaceSourceAttachmentHandlerInput {
@@ -377,6 +356,16 @@ class ExecutionWorkspaceSourceAttachmentService {
       throw new AppError("VALIDATION_FAILED", unsupportedAttachmentMessage(input.locale));
     }
 
+    if (format === "docx") {
+      const header = input.content.headerBytes;
+      if (header[0] !== 0x50 || header[1] !== 0x4b || header[2] !== 0x03 || header[3] !== 0x04)
+        throw new AppError(
+          "VALIDATION_FAILED",
+          input.locale === "de"
+            ? "Diese DOCX-Datei ist kein lesbares Word-Dokument. Hänge die ursprüngliche DOCX-Datei an."
+            : "This DOCX file is not a readable Word document. Attach the original DOCX file."
+        );
+    }
     const checksum = input.content.checksum;
     const objectKey = createSourceObjectKey({
       clientInstanceId: this.clientInstanceId,
