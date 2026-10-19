@@ -84,22 +84,27 @@ export function rowChangeInputs(change: DataStoreRowChange, t: Translate) {
     const n = index + 1;
     const blocks = [];
     if (key)
-      blocks.push({ key: t("operations.rowKey", { n }), value: lines(key), truncated: false });
+      blocks.push({ key: t("operations.rowKey", { n }), value: lines(key, t), truncated: false });
     if (values) {
       const label = t(key ? "operations.rowNewValues" : "operations.rowValues", { n });
-      blocks.push({ key: label, value: lines(values), truncated: false });
+      blocks.push({ key: label, value: lines(values, t), truncated: false });
     }
     return blocks;
   });
   return [table, ...rows];
 }
 
-function lines(fields: Fields): string {
+/** One `column: value` line per field; a yes-or-no value in the reader's words. */
+function lines(fields: Fields, t: Translate): string {
   return Object.entries(fields)
-    .map(
-      ([column, value]) => `${column}: ${typeof value === "string" ? value : JSON.stringify(value)}`
-    )
+    .map(([column, value]) => `${column}: ${fieldValue(value, t)}`)
     .join("\n");
+}
+
+function fieldValue(value: unknown, t: Translate): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "boolean") return t(value ? "operations.rowYes" : "operations.rowNo");
+  return JSON.stringify(value);
 }
 
 function isFields(value: unknown): value is Fields {

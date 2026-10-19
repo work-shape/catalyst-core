@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import postgres from "postgres";
-import { asAgentRunId, type AgentRun } from "@work-shape/catalyst-core";
+import { asAgentRunId, createPlatformId, type AgentRun } from "@work-shape/catalyst-core";
 import { clientInstanceId, useDataStoreInstance } from "./support/data-store-instance";
 import { injectStartConversationRun } from "./support/chat-server-run-harness";
 import { eventually, required } from "./support/assertions";
@@ -112,11 +112,76 @@ describe("row tools in the platform agent's real conversation path", () => {
           status: decision === "decline" ? "denied" : "done"
         });
         expect(await snapshot()).toEqual(expected);
+        const usage = await world.api.call("data_stores.used_by", {
+          params: { store: "findings" }
+        });
+        expect(usage.statusCode, usage.body).toBe(200);
+        expect(usage.json()).toMatchObject({
+          conversationWriters: { agents: 1, conversations: 1, truncated: false }
+        });
+        expect(JSON.stringify(usage.json())).not.toContain(conversationId);
+
         if (decision === "decline") {
           expect(
             await world.stores.operationRuns.get({ clientInstanceId, id: held.id })
           ).toMatchObject({ status: "denied", decision: { mode: "declined" } });
         }
+      }
+      // A busy store bounds the history before filtering for conversation writers. An older
+      // chat write beyond that slice is not read or counted, and the page is told it is partial.
+      const completed = required(
+        (await world.stores.operationRuns.list({ clientInstanceId })).find(
+          (run) => run.operation === "data_store.findings.insert" && run.status === "done"
+        )
+      );
+      const oldId = createPlatformId<"OperationRunId">("oprun");
+      const oldAt = "2020-01-01T00:00:00.000Z";
+      const oldOrigin = completed.origin;
+      expect(oldOrigin.kind).toBe("agent");
+      if (oldOrigin.kind !== "agent") throw new Error("Expected the completed chat insert");
+      await world.stores.operationRuns.create({
+        ...completed,
+        id: oldId,
+        startedAt: oldAt,
+        idempotencyKey: "retired-store-write",
+        origin: { ...oldOrigin, agentName: "retired-store-agent" }
+      });
+      await world.stores.operationRuns.finish({
+        clientInstanceId,
+        id: oldId,
+        end: { status: "done", finishedAt: oldAt, output: { value: { inserted: 1 } } }
+      });
+      const currentUsage = await world.api.call("data_stores.used_by", {
+        params: { store: "findings" }
+      });
+      expect(currentUsage.statusCode).toBe(200);
+      expect(currentUsage.json()).toMatchObject({
+        conversationWriters: { agents: 1, conversations: 1, truncated: false }
+      });
+      const recent = Array.from({ length: 1_000 }, () => ({
+        ...completed,
+        origin: { kind: "user" as const }
+      }));
+      const listed = vi
+        .spyOn(world.stores.operationRuns, "list")
+        .mockImplementation(async ({ filters }) =>
+          filters?.operation === "data_store.findings.insert" ? [...recent, completed] : []
+        );
+      try {
+        const partial = await world.api.call("data_stores.used_by", {
+          params: { store: "findings" }
+        });
+        expect(partial.statusCode, partial.body).toBe(200);
+        expect(listed).toHaveBeenCalledWith({
+          clientInstanceId,
+          filters: { operation: "data_store.findings.insert", since: expect.any(String) },
+          page: { limit: 1_001 }
+        });
+        expect(partial.json()).toMatchObject({
+          conversationWriters: { agents: 0, conversations: 0, truncated: true }
+        });
+      } finally {
+        listed.mockRestore();
       }
     } finally {
       await sql.end();

@@ -358,8 +358,10 @@ function PrincipalDetail({
           {principal.permissions.map((permission) => (
             <Badge key={permission}>{t(PERMISSION_WORDS[permission].label)}</Badge>
           ))}
+          {/* These are the rights on the configuration; the rights on resources are listed
+              apart, so nothing here says the account has none at all. */}
           {principal.permissions.length === 0 ? (
-            <span className="text-xs text-muted-foreground">{t("apiAccessNoGrants")}</span>
+            <span className="text-caption text-muted-foreground">{t("apiAccessNoGrants")}</span>
           ) : null}
         </div>
         <div className="grid gap-3">

@@ -150,6 +150,8 @@ export const workspaceQueryKeys = {
    */
   agentDraft: (apiBaseUrl: string, authScope: string, agent: string, workspaceId = "") =>
     ["assets", apiBaseUrl, authScope, "agent-draft", agent, workspaceId] as const,
+  /** Every read of the Data Store pages: their state, tables, rows and what uses them. */
+  dataStores: (apiBaseUrl: string) => ["data-store", apiBaseUrl] as const,
   administeredCollaborationWorkspaces: (apiBaseUrl: string, authScope: string) =>
     ["administered-collaboration-workspaces", apiBaseUrl, authScope] as const
 };

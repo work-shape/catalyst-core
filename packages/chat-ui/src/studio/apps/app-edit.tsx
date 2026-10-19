@@ -465,7 +465,8 @@ export function AppEditFrame({
   view?: AppDraftView;
   /**
    * The draft's config. A reading `sql` action adds the line on how the App reads stored data
-   * once published, under the head, so it takes its room from the frame and not the preview.
+   * once published, under the head, so it takes its room from the frame and not the preview,
+   * while the draft is ahead of what is published.
    */
   draftConfig?: unknown;
   /** Files and Actions are among the tabs: the technical details are open. */
@@ -596,7 +597,8 @@ export function AppEditFrame({
               </span>
             </Banner>
           ) : null}
-          <AppStoredDataFact config={draftConfig} />
+          {/* The line speaks of what publishing does: once the draft is live, it is said. */}
+          {ahead ? <AppStoredDataFact config={draftConfig} /> : null}
         </>
       }
     >

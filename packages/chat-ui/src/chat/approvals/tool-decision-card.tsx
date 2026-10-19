@@ -22,11 +22,17 @@ import {
   type AppPublishCall,
   type AppPublishConfirmationAsk
 } from "../../studio/apps/app-publish-confirmation";
+import {
+  useWorkflowPublishConfirmation,
+  workflowPublishCall,
+  type WorkflowPublishCall
+} from "../../studio/workflows/workflow-publish-confirmation";
 import { workspaceRoutePath } from "../../shared/routes";
 import { useApprovalRevisionHost } from "./approval-revision-host";
 import { ApprovalRequestCard } from "./approval-request-card";
 import { formatApprovalDate } from "./approval-request-model";
 import { dataStoreRowChange } from "./data-store-row-change";
+import { knowledgeAddFilesCall, useKnowledgeAddFilesAsk } from "./knowledge-add-files";
 import { CallInputs, RowChangeInputs } from "./operation-call-body";
 import {
   useToolDecisionDecide,
@@ -103,18 +109,38 @@ function ToolConfirmation({
     );
   }
   const shown = run.isPending ? { ...answer, pending: true } : answer;
-  // An agent's publish of an App asks "For whom?" first (SHARE-1).
+  const props = { decision, title, toolName, answer: shown };
+  // An agent's publish of an App asks "For whom?" first (SHARE-1); a Workflow's publish says
+  // what goes live, and a Knowledge Base's add_files which files it adds (ACCEPT-FIX-11 C1).
   const appCall = appPublishCall(decision);
-  return appCall ? (
-    <AppPublishDecisionCard
-      call={appCall}
-      decision={decision}
-      title={title}
-      toolName={toolName}
-      answer={shown}
+  if (appCall) return <AppPublishDecisionCard call={appCall} {...props} />;
+  const workflowCall = workflowPublishCall(decision);
+  if (workflowCall) return <WorkflowPublishDecisionCard call={workflowCall} {...props} />;
+  const addedFiles = knowledgeAddFilesCall(decision);
+  if (addedFiles) return <KnowledgeAddFilesDecisionCard files={addedFiles} {...props} />;
+  return <ToolDecisionCardView {...props} />;
+}
+
+/** The confirmation of an agent's Workflow publish: Allow waits for the sentence on it. */
+function WorkflowPublishDecisionCard({
+  call,
+  ...props
+}: Parameters<typeof ToolDecisionCardView>[0] & { call: WorkflowPublishCall }) {
+  return <ToolDecisionCardView {...props} ask={useWorkflowPublishConfirmation(call)} />;
+}
+
+/** The confirmation of an add_files call: the Knowledge Base and the files by their names. */
+function KnowledgeAddFilesDecisionCard({
+  files,
+  ...props
+}: Parameters<typeof ToolDecisionCardView>[0] & {
+  files: NonNullable<ReturnType<typeof knowledgeAddFilesCall>>;
+}) {
+  return (
+    <ToolDecisionCardView
+      {...props}
+      ask={useKnowledgeAddFilesAsk(files, props.decision.targetTitle)}
     />
-  ) : (
-    <ToolDecisionCardView decision={decision} title={title} toolName={toolName} answer={shown} />
   );
 }
 

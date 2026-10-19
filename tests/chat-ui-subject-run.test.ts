@@ -4,6 +4,8 @@ import { assetToolSentence } from "@work-shape/catalyst-chat-ui/asset-tool-lines
 import {
   assetPageRoute,
   opensInRun,
+  publishedCalls,
+  rowWriteCalls,
   savedDraftCalls,
   standingAssetOpen,
   subjectOpenedInRun,
@@ -403,5 +405,41 @@ describe("the lines of the asset tools", () => {
 
   it("leave every other tool to its own line", () => {
     expect(assetToolSentence({ toolName: "workspace.exec", result: {} }, t)).toBeUndefined();
+  });
+});
+
+// E-1: what the agent made live or wrote while the person watches drops the reads that show it,
+// so the Workflow page, the App and the store's rows follow the conversation.
+describe("the calls of a run that change what pages show", () => {
+  const answered = (toolName: string, id: string, state = "output_available"): SubjectRunPart => ({
+    type: "tool_call",
+    toolCallId: id,
+    toolName,
+    state,
+    output: { ok: true }
+  });
+
+  it("names each publish that answered, and no publish still waiting or refused", () => {
+    expect(
+      publishedCalls([
+        answered("assets.publish", "1"),
+        answered("assets.publish", "2", "approval-requested"),
+        answered("assets.publish", "3", "output_error"),
+        answered("platform.assets.put", "4")
+      ])
+    ).toEqual(["1"]);
+  });
+
+  it("names each row write that answered, and no read or other operation of the store", () => {
+    expect(
+      rowWriteCalls([
+        answered("data_store.findings.insert", "1"),
+        answered("data_store.findings.update", "2"),
+        answered("data_store.findings.delete_rows", "3"),
+        answered("data_store.findings.select", "4"),
+        answered("data_store.findings.insert", "5", "output_error"),
+        answered("knowledge.add_files", "6")
+      ])
+    ).toEqual(["1", "2", "3"]);
   });
 });

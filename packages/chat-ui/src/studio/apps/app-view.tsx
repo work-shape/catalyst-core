@@ -4,7 +4,7 @@ import type { AppPreviewResponse } from "@work-shape/catalyst-api-client";
 import { Button, DropdownMenuItem } from "@work-shape/catalyst-ui";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
-import { workspaceRouteFromPath, workspaceRoutePath } from "../../shared/routes";
+import { workspaceRoutePath } from "../../shared/routes";
 import { useApp, useAppActions, useAppDataSources } from "./app-data";
 import {
   AppDetailsDialog,
@@ -52,21 +52,6 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const showRoute = host?.showRoute;
   const workspaceId = workspace?.id;
 
-  const onShown = useCallback(
-    (preview: AppPreviewResponse) => {
-      setShown(preview);
-      // The App belongs to one workspace. An address that names another is put right.
-      const home = workspaceRouteFromPath(preview.interfacePath);
-      if (
-        home?.kind === "app" &&
-        workspaceId !== undefined &&
-        home.collaborationWorkspaceId !== workspaceId
-      ) {
-        showRoute?.({ ...home, ...(appPath ? { appPath } : {}) }, { replace: true });
-      }
-    },
-    [appPath, showRoute, workspaceId]
-  );
   const onNavigate = useCallback(
     (path: string) => {
       if (workspaceId === undefined) {
@@ -121,7 +106,9 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
             ) : undefined
           }
           onNavigate={onNavigate}
-          onShown={onShown}
+          // ACCEPT-FIX-11 B1: the App stays in the workspace it was opened from, which the
+          // instance let the reader open it in. The address the preview names may be another.
+          onShown={setShown}
         />
       </AppViewFrame>
       {detailsOpen ? (

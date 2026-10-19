@@ -97,8 +97,10 @@ function PublishedDataStorePage({
   const state = read.status === "ready" ? read.data : undefined;
   const conditions = state ? serverConditionsShown(source, state) : [];
   const view = state ? DATA_STORE_STATE_VIEWS[dataStoreStateView(state)] : undefined;
-  // The rows of a store are reached while it is ready, so its tables are read only then.
+  // The rows of a store are reached while it is ready, so its tables are read only then, and
+  // read again at each new migration level.
   const reachable = state?.status === "ready";
+  const level = state?.level;
   const provenance = {
     store: asset.name,
     workspaceId: asset.scope.kind === "workspace" ? asset.scope.workspaceId : undefined,
@@ -181,7 +183,7 @@ function PublishedDataStorePage({
               state === undefined ? (
                 <SkeletonList rows={3} />
               ) : reachable ? (
-                <DataStoreTables store={asset.name} source={source} />
+                <DataStoreTables key={level} store={asset.name} source={source} />
               ) : (
                 <EmptyState layout="inline">{t("dataStores.notReachable")}</EmptyState>
               )
@@ -194,7 +196,7 @@ function PublishedDataStorePage({
               state === undefined ? (
                 <SkeletonList rows={3} />
               ) : reachable ? (
-                <DataStoreRowsSection store={asset.name} source={source} />
+                <DataStoreRowsSection key={level} store={asset.name} source={source} />
               ) : (
                 <EmptyState layout="inline">{t("dataStores.notReachable")}</EmptyState>
               )

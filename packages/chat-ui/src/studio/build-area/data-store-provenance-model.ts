@@ -20,21 +20,65 @@ export function dataStoreFillers(used: DataStoreUsedBy) {
   ];
 }
 
+/**
+ * How many agents in how many conversations wrote rows, counts only: "1 agent in 3
+ * conversations". Nothing where no conversation did. A count the instance cut short is said
+ * as at least that many; cut short before it found any, it says older writes may be missing.
+ */
+export function conversationWritersLine(
+  writers: DataStoreUsedBy["conversationWriters"],
+  t: Translate,
+  locale: string
+): string | undefined {
+  if (writers === undefined) return undefined;
+  if (writers.conversations === 0) {
+    return writers.truncated ? t("dataStores.conversationWritersOlderMissing") : undefined;
+  }
+  const count = (value: number) => new Intl.NumberFormat(locale).format(value);
+  return t(
+    writers.truncated ? "dataStores.conversationWritersAtLeast" : "dataStores.conversationWriters",
+    {
+      agents: t(writers.agents === 1 ? "dataStores.writerAgent" : "dataStores.writerAgents", {
+        count: count(writers.agents)
+      }),
+      conversations: t(
+        writers.conversations === 1
+          ? "dataStores.writerConversation"
+          : "dataStores.writerConversations",
+        { count: count(writers.conversations) }
+      )
+    }
+  );
+}
+
 /** A list of names as the reader's language joins them: "A, B and C", "A, B und C". */
 function joinNames(names: readonly string[], locale: string): string {
   return new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(names);
 }
 
 /**
- * Who reads through one way in, in one line: the workspace that opens it with its number of
- * people, each holder by a grant the reader may be shown, and how many more hold it. The
- * instance admins hold every right by their role; the section says so once, and a line names
- * them only where nobody else reads.
+ * Who reads through one way in, in one line: an App's audience as its publish named it, the
+ * workspace that opens it with its number of people, each holder by a grant the reader may be
+ * shown, and how many more hold it. The instance admins hold every right by their role; the
+ * section says so once, and a line names them only where nobody else reads.
  */
 export function audienceLine(audience: DataStoreAudience, t: Translate, locale: string): string {
   const count = (value: number) => new Intl.NumberFormat(locale).format(value);
   const parts: string[] = [];
-  if (audience.workspace) {
+  // An App shared beyond its workspace reaches the people its publish named, not the members of
+  // the workspace that owns it.
+  if (audience.app?.audience === "instance") {
+    parts.push(
+      t(
+        audience.app.people === 1
+          ? "dataStores.audienceInstanceOne"
+          : "dataStores.audienceInstance",
+        { count: count(audience.app.people) }
+      )
+    );
+  } else if (audience.app?.audience === "self") {
+    parts.push(t("dataStores.audienceSelf"));
+  } else if (audience.workspace) {
     parts.push(
       t(
         audience.workspace.members === 1

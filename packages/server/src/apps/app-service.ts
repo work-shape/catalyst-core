@@ -4,6 +4,7 @@ import {
   AppError,
   asCollaborationWorkspaceId,
   asConversationId,
+  asUserId,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   isPageId,
@@ -358,6 +359,25 @@ export class AppWorkflow {
       // for, whichever revisions share this file set.
       mode: input.mode
     });
+    // Consumption stays in a workspace the viewer can open. An instance audience does not
+    // make the builder's personal workspace visible to its other members.
+    let workspaceId = asCollaborationWorkspaceId(asset.scope.workspaceId);
+    if (input.mode === "published" && asset.appAvailability?.audience === "instance") {
+      const userId = asUserId(getSubjectUserId(caller.user));
+      const member = await this.options.stores.workspaces.getMembership({
+        clientInstanceId: this.options.clientInstanceId,
+        collaborationWorkspaceId: workspaceId,
+        userId
+      });
+      if (!member) {
+        workspaceId = (
+          await this.options.stores.workspaces.ensurePersonalWorkspace({
+            clientInstanceId: this.options.clientInstanceId,
+            userId
+          })
+        ).id;
+      }
+    }
     return {
       url: appContentPath(fileSet.id, token),
       expiresAt: new Date(expiresAt * 1000).toISOString(),
@@ -366,7 +386,7 @@ export class AppWorkflow {
       pageSessionId,
       revision: shown.revision,
       interfacePath: appInterfacePath({
-        workspaceId: asCollaborationWorkspaceId(asset.scope.workspaceId),
+        workspaceId,
         app: asset.name,
         mode: input.mode
       }),

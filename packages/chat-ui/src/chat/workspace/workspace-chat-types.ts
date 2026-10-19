@@ -286,6 +286,11 @@ export interface SelectedChatModel {
   runStarted(response: StartConversationRunResponse): void;
   streamError(conversationId: string, message: string, viewed: boolean): void;
   cancelSelectedRun(): void;
+  /**
+   * Goes on in a private conversation of the same workspace with this text in its composer,
+   * after a build was refused because others read the open one. Settles once it opened.
+   */
+  continuePrivately?(prompt: string): Promise<void>;
 }
 
 export interface ToolDisplayModel {

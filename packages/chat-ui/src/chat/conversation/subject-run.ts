@@ -1,6 +1,7 @@
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
 import {
   DATA_STORE_ASSET_KIND,
+  DATA_STORE_OPERATION_PREFIX,
   SUBJECT_TOOL_PREFIX,
   WORKFLOW_ASSET_KIND
 } from "@work-shape/catalyst-core";
@@ -26,6 +27,10 @@ export const ASSET_OPERATIONS_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}operations`;
 export const APP_SAVE_TOOL_NAME = "app.save";
 /** The former name of `app.save`, whose calls stored conversations still hold. */
 export const FORMER_APP_SAVE_TOOL_NAME = "page.save_as_app";
+/** Makes an App's or a Workflow's draft live once its person allowed it. */
+const ASSET_PUBLISH_TOOL_NAME = "assets.publish";
+/** The verbs of `data_store.<store>.<verb>` that write rows. */
+const ROW_WRITE_VERBS: ReadonlySet<string> = new Set(["insert", "update", "delete_rows"]);
 
 /** The asset a conversation is about. */
 export interface SubjectAsset {
@@ -41,6 +46,8 @@ export interface SubjectRunPart {
   input?: unknown;
   output?: unknown;
   state?: string;
+  /** Why the instance refused the call, where the person can do something about it. */
+  errorReason?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -222,6 +229,83 @@ export function savedDraftCalls(parts: readonly SubjectRunPart[]): string[] {
       ? [part.toolCallId]
       : []
   );
+}
+
+/**
+ * The calls of the run that made a draft live, by their ids: a publish its person allowed and
+ * that answered.
+ */
+export function publishedCalls(parts: readonly SubjectRunPart[]): string[] {
+  return parts.flatMap((part) =>
+    answered(part, ASSET_PUBLISH_TOOL_NAME) !== undefined && part.toolCallId !== undefined
+      ? [part.toolCallId]
+      : []
+  );
+}
+
+/**
+ * The calls of the run that wrote rows of a Data Store and answered, by their ids:
+ * `data_store.<store>.insert`, `.update` and `.delete_rows`.
+ */
+export function rowWriteCalls(parts: readonly SubjectRunPart[]): string[] {
+  return parts.flatMap((part) => {
+    const name = part.toolName ?? "";
+    const verb = name.startsWith(DATA_STORE_OPERATION_PREFIX) ? name.split(".").at(-1) : undefined;
+    return verb !== undefined &&
+      ROW_WRITE_VERBS.has(verb) &&
+      answered(part, name) !== undefined &&
+      part.toolCallId !== undefined
+      ? [part.toolCallId]
+      : [];
+  });
+}
+
+/** The reason of a call refused because others read the conversation it was made in. */
+const SHARED_CONVERSATION_REFUSAL = "subject_conversation_shared";
+
+/**
+ * Whether the run was refused to open or build an asset because members of the workspace read
+ * the conversation (ACCEPT-FIX-11 E3): building goes on in a private conversation.
+ */
+function refusedAsShared(parts: readonly SubjectRunPart[]): boolean {
+  return parts.some(
+    (part) => part.type === "tool_call" && part.errorReason === SHARED_CONVERSATION_REFUSAL
+  );
+}
+
+/** The person's last request in the conversation, which a private conversation takes along. */
+function lastUserRequest(messages: readonly { role: string; text: string }[]): string | undefined {
+  const text = messages.findLast((message) => message.role === "user")?.text.trim();
+  return text === undefined || text === "" ? undefined : text;
+}
+
+/**
+ * The request a private conversation takes along (E3): the person's last request, where the
+ * latest run that answers it was refused because others read the conversation. That is the run
+ * still going, unless it answered an earlier message, or else the last run a message after the
+ * request names. A refusal of an earlier run offers nothing for a later request.
+ */
+export function refusedRequest(input: {
+  messages: readonly { role: string; text: string; runId: string | undefined }[];
+  activeRun: { runId: string; parts: readonly SubjectRunPart[] } | undefined;
+  completedRuns: Readonly<Record<string, { parts: readonly SubjectRunPart[] }>>;
+}): string | undefined {
+  const { messages, activeRun, completedRuns } = input;
+  const request = messages.findLastIndex((message) => message.role === "user");
+  if (request === -1) return undefined;
+  const earlier = new Set(messages.slice(0, request).map((message) => message.runId));
+  const answeredBy = messages
+    .slice(request + 1)
+    .findLast((message) => message.runId !== undefined)?.runId;
+  const latest =
+    activeRun !== undefined && !earlier.has(activeRun.runId)
+      ? activeRun
+      : answeredBy === undefined
+        ? undefined
+        : completedRuns[answeredBy];
+  return latest !== undefined && refusedAsShared(latest.parts)
+    ? lastUserRequest(messages)
+    : undefined;
 }
 
 /** An App the agent's `app.save` made, as its line in the conversation names it (SHARE-1). */

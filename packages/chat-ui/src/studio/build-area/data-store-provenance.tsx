@@ -1,4 +1,4 @@
-import { BookOpen, Database, LayoutGrid, Workflow } from "lucide-react";
+import { BookOpen, Database, LayoutGrid, MessagesSquare, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 import { Chip, EmptyState, List, ListRow } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
@@ -6,6 +6,7 @@ import { DataFlowList } from "./data-flows";
 import { ReadState } from "./data-store-read-state";
 import {
   audienceLine,
+  conversationWritersLine,
   dataStoreFillers,
   fillerLine,
   runsAsLine
@@ -32,7 +33,10 @@ interface ProvenanceProps {
   source: DataStoreSource;
 }
 
-/** "Filled by": each published Workflow and App that adds rows, with where they come from. */
+/**
+ * "Filled by": each published Workflow and App that adds rows, with where they come from, and
+ * how many agents in how many conversations wrote rows.
+ */
 export function DataStoreFillers({ store, workspaceId, source }: ProvenanceProps) {
   const { locale, t } = useTranslation();
   const row = useUsingRow(workspaceId, source);
@@ -48,7 +52,8 @@ export function DataStoreFillers({ store, workspaceId, source }: ProvenanceProps
         const flows = (used.dataFlows?.fills ?? []).filter((flow) => !listed.has(flow.name));
         // The instance counts every hidden App and Workflow that adds rows here, data flows too.
         const hidden = used.hidden.fills;
-        if (fillers.length === 0 && flows.length === 0) {
+        const conversations = conversationWritersLine(used.conversationWriters, t, locale);
+        if (fillers.length === 0 && flows.length === 0 && conversations === undefined) {
           // Nothing is said to fill the store while something the reader may not see does.
           return (
             <EmptyState layout="inline">
@@ -80,6 +85,17 @@ export function DataStoreFillers({ store, workspaceId, source }: ProvenanceProps
                   description: undefined,
                   role: "filled-by"
                 })
+              )}
+              {conversations === undefined ? null : (
+                <ListRow
+                  data-data-store-conversation-writers=""
+                  leading={
+                    <MessagesSquare aria-hidden="true" className="size-4 text-muted-foreground" />
+                  }
+                  title={t("dataStores.filledByConversations")}
+                  description={conversations}
+                  descriptionWraps
+                />
               )}
             </List>
             <HiddenLine count={hidden} />

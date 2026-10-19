@@ -35,7 +35,7 @@ export const apiAccess = defineTranslations({
     apiAccessNeverExpires: "Never expires",
     apiAccessNoCredentials: "No API keys have been created for this service principal.",
     apiAccessNoDescription: "No description",
-    apiAccessNoGrants: "No rights",
+    apiAccessNoGrants: "No configuration rights",
     apiAccessPrincipalsForbidden:
       "You may not see the service principals. That takes the right to manage service principals.",
     apiAccessReadGrant: "View configuration",
@@ -158,7 +158,7 @@ export const apiAccess = defineTranslations({
     apiAccessNeverExpires: "Läuft nie ab",
     apiAccessNoCredentials: "Für dieses Technische Konto wurden noch keine API-Schlüssel erstellt.",
     apiAccessNoDescription: "Keine Beschreibung",
-    apiAccessNoGrants: "Keine Rechte",
+    apiAccessNoGrants: "Keine Rechte an der Konfiguration",
     apiAccessPrincipalsForbidden:
       "Du darfst die Technischen Konten nicht sehen. Dafür braucht es das Recht, Technische Konten zu verwalten.",
     apiAccessReadGrant: "Konfiguration ansehen",

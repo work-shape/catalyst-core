@@ -129,4 +129,31 @@ describe("the head of an App's draft", () => {
     expect(head({ draftRevision: 2, publishedRevision: 1 })).toContain("Draft · revision 2");
     expect(head({ draftRevision: 1 }, "de")).toContain("Entwurf · nicht veröffentlicht");
   });
+
+  it("says what publishing does to stored data only while the draft is not yet published", () => {
+    const reading = {
+      manifest: { actions: [{ name: "list", kind: "sql", dataStore: "kunden", effect: "reading" }] }
+    };
+    const withFact = (revisions: { draftRevision: number; publishedRevision?: number }) =>
+      render(
+        createElement(AppEditFrame, {
+          name: "Fristenübersicht",
+          workspace: { id: "cw_mara", name: "Maras Arbeitsbereich" },
+          rights: ALL,
+          ...revisions,
+          draftConfig: reading,
+          children: null,
+          onBack: noop
+        }),
+        "de"
+      );
+    expect(withFact({ draftRevision: 1 })).toContain('data-testid="app-stored-data-fact"');
+    expect(withFact({ draftRevision: 2, publishedRevision: 1 })).toContain(
+      "Nach dem Veröffentlichen liest diese App"
+    );
+    // Published: the line about "once published" is gone.
+    const published = withFact({ draftRevision: 1, publishedRevision: 1 });
+    expect(published).toContain("Veröffentlicht · Revision 1");
+    expect(published).not.toContain('data-testid="app-stored-data-fact"');
+  });
 });

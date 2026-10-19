@@ -11,6 +11,7 @@ import {
   BuildFrame,
   BuildNavigationProvider,
   dataStoreKindOn,
+  dataStoreStateSettling,
   dataStoreStateView,
   DataStoreValueDialog,
   formatDataStoreSize,
@@ -465,7 +466,7 @@ describe("Data Stores in Build", () => {
     expect(list).not.toContain(">New ");
     expect(list).not.toContain("More actions");
     expect(list).toContain(
-      "Where apps and workflows keep their records. This page shows what each store holds."
+      "Where apps, workflows and agents in conversations keep their records. This page shows what each store holds."
     );
   });
 
@@ -849,6 +850,64 @@ describe("What uses a Data Store", () => {
   });
 });
 
+describe("Rows written from conversations (C-3)", () => {
+  const address = { kindPath: "data-stores", name: "visit-log" };
+  const section = (page: string, id: string) =>
+    page.slice(page.indexOf(`id="${id}"`)).split("</section>")[0] ?? "";
+  const written = (conversationWriters: DataStoreUsedBy["conversationWriters"]) =>
+    ready<DataStoreUsedBy>({
+      ...nothingUses,
+      ...(conversationWriters ? { conversationWriters } : {})
+    });
+
+  it("names agents in conversations as writers by counts only, and the intro says they keep records", () => {
+    const page = render(address, {
+      usedBy: written({ agents: 1, conversations: 3, truncated: false })
+    });
+    const filled = section(page, "filled-by");
+    // Rows came only from chat: the store is not said to be filled by nothing.
+    expect(filled).not.toContain("No published workflow or app adds rows to this store.");
+    expect(filled).toContain('data-data-store-conversation-writers=""');
+    expect(filled).toContain(">Agents in conversations<");
+    expect(filled).toContain(">1 agent in 3 conversations<");
+    expect(page).toContain("Where apps, workflows and agents in conversations keep their records.");
+
+    const german = render(address, {
+      locale: "de",
+      usedBy: written({ agents: 2, conversations: 1, truncated: true })
+    });
+    const gefuellt = section(german, "filled-by");
+    expect(gefuellt).toContain(">Agenten in Unterhaltungen<");
+    expect(gefuellt).toContain(">Mindestens 2 Agenten in 1 Unterhaltung<");
+    expect(german).toContain(
+      "Hier legen Apps, Workflows und Agenten in Unterhaltungen ihre Einträge ab."
+    );
+  });
+
+  it("adds no line where no conversation wrote a row", () => {
+    for (const usedBy of [
+      written(undefined),
+      written({ agents: 0, conversations: 0, truncated: false })
+    ]) {
+      const filled = section(render(address, { usedBy }), "filled-by");
+      expect(filled).not.toContain("data-data-store-conversation-writers");
+      expect(filled).toContain("No published workflow or app adds rows to this store.");
+    }
+  });
+
+  // The instance reads only the latest writes. Cut short before it found any from a
+  // conversation, it knows of none, not that there were none: never "at least 0".
+  it("says older writes may be missing where the count was cut short before finding any", () => {
+    const cut = written({ agents: 0, conversations: 0, truncated: true });
+    const filled = section(render(address, { usedBy: cut }), "filled-by");
+    expect(filled).toContain('data-data-store-conversation-writers=""');
+    expect(filled).toContain(">Older conversation writes may be missing<");
+    expect(filled).not.toContain("At least 0");
+    const gefuellt = section(render(address, { locale: "de", usedBy: cut }), "filled-by");
+    expect(gefuellt).toContain(">Ältere Einträge aus Unterhaltungen fehlen hier möglicherweise<");
+  });
+});
+
 describe("The data Workflows of a Data Store (WF-KIND)", () => {
   const address = { kindPath: "data-stores", name: "visit-log" };
   const flows = (dataFlows: DataStoreUsedBy["dataFlows"]) =>
@@ -943,6 +1002,16 @@ describe("Data Store state", () => {
     expect(formatDataStoreSize(1536, "en")).toBe("1.5 kB");
     expect(formatDataStoreSize(2 * 1024 ** 3, "de")).toMatch(/^2\sGB$/u);
   });
+  it("follows a store while it is set up or a migration waits, and stops once it settled (E-1)", () => {
+    expect(dataStoreStateSettling(storeState("a", { status: "provisioning" }))).toBe(true);
+    expect(dataStoreStateSettling(storeState("a", { lastMigration: { outcome: "pending" } }))).toBe(
+      true
+    );
+    expect(dataStoreStateSettling(storeState("a"))).toBe(false);
+    expect(dataStoreStateSettling(storeState("a", { lastMigration: { outcome: "failed" } }))).toBe(
+      false
+    );
+  });
 });
 
 describe("where an App's data comes from", () => {
@@ -979,6 +1048,45 @@ describe("where an App's data comes from", () => {
       "Zeigt Daten aus „Kunden“, die die App „Entry form“ hinzufügt.",
       "Zeigt Daten aus „Termine“."
     ]);
+  });
+
+  it("words an App's audience as its publish named it, not by the workspace that owns it (E-2)", () => {
+    const { t } = translate("en");
+    const personal = { title: "Personal workspace", members: 1 };
+    const shared = (audience: "self" | "instance", people: number) =>
+      audienceLine(
+        { app: { audience, people }, workspace: personal, holders: [], hiddenHolders: 0 },
+        t,
+        "en"
+      );
+    expect(shared("instance", 12)).toBe("Whole instance (12 people)");
+    expect(shared("instance", 1)).toBe("Whole instance (1 person)");
+    expect(shared("self", 1)).toBe("One selected person");
+    expect(
+      audienceLine(
+        {
+          app: { audience: "instance", people: 12 },
+          workspace: personal,
+          holders: [],
+          hiddenHolders: 0
+        },
+        translate("de").t,
+        "de"
+      )
+    ).toBe("Ganze Instanz (12 Personen)");
+    // An App for its workspace is said by that workspace, as before.
+    expect(
+      audienceLine(
+        {
+          app: { audience: "workspace", people: 14 },
+          workspace: { title: "Kai Spezis", members: 14 },
+          holders: [],
+          hiddenHolders: 0
+        },
+        t,
+        "en"
+      )
+    ).toBe("Everyone in Kai Spezis (14 people)");
   });
 
   it("words an audience by its workspace, its holders and how many more, and the admins only where nobody else reads", () => {
