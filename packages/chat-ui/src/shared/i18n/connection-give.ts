@@ -36,6 +36,8 @@ export const connectionGive = defineTranslations({
       "{author} has an unpublished draft of {agent}. Nothing was changed: the draft is theirs to publish or discard first.",
     "connectionGive.otherDraftNoName":
       "Someone else has an unpublished draft of {agent}. Nothing was changed: the draft is theirs to publish or discard first.",
+    "connectionGive.staleDraft":
+      "Your unpublished draft of {agent} is based on an older published version. Nothing was changed: open {agent} to bring the draft up to date or discard it first.",
     "connectionGive.openAgent": "Open {agent}",
     "connectionGive.held": "{agent} has these tools already.",
     "connectionGive.heldDraft": "Your draft of {agent} has these tools already.",
@@ -89,6 +91,8 @@ export const connectionGive = defineTranslations({
       "{author} hat einen unveröffentlichten Entwurf von {agent}. Es wurde nichts geändert: Den Entwurf veröffentlicht oder verwirft zuerst {author}.",
     "connectionGive.otherDraftNoName":
       "Jemand anderes hat einen unveröffentlichten Entwurf von {agent}. Es wurde nichts geändert: Der Entwurf muss zuerst veröffentlicht oder verworfen werden.",
+    "connectionGive.staleDraft":
+      "Dein unveröffentlichter Entwurf von {agent} beruht auf einer älteren veröffentlichten Version. Es wurde nichts geändert: Öffne {agent} und bring den Entwurf zuerst auf den neuen Stand oder verwirf ihn.",
     "connectionGive.openAgent": "{agent} öffnen",
     "connectionGive.held": "{agent} hat diese Tools schon.",
     "connectionGive.heldDraft": "Dein Entwurf von {agent} hat diese Tools schon.",

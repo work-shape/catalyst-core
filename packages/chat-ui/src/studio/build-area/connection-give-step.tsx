@@ -316,7 +316,7 @@ export function useGiveToAgent(input: {
             <Button variant="outline" onClick={back}>
               {t("connectionGive.back")}
             </Button>
-            {step.plan.status === "other_draft"
+            {step.plan.status === "other_draft" || step.plan.status === "stale_draft"
               ? openAgent(step.plan.agent, step.plan.title)
               : null}
           </>
@@ -376,6 +376,12 @@ function RefusedNotice({
       );
     case "other_draft":
       return <OtherDraftNotice agent={plan.title} author={plan.author} t={t} />;
+    case "stale_draft":
+      return (
+        <Banner layout="line" tone="warning" data-connection-give-stale-draft="">
+          {t("connectionGive.staleDraft", { agent: plan.title })}
+        </Banner>
+      );
     case "failed":
       return <FormNotice tone="error">{plan.message ?? t("connectionGive.failed")}</FormNotice>;
   }

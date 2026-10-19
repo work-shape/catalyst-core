@@ -176,6 +176,23 @@ describe("the give of a Connection's tools to an agent", () => {
     expect(calls.map((call) => call.op)).toEqual(["save", "publish"]);
   });
 
+  it("refuses the reader's own draft that is behind the published agent, and writes nothing", async () => {
+    // A save would base the draft on the published version unseen, and its publish would undo
+    // what was published since: the agent's page says such a draft cannot be published.
+    for (const draft of [
+      { ...draftBy(VIEWER, ["web_fetch"]), baseRevision: 3, stale: true },
+      { ...draftBy(VIEWER, ["web_fetch"]), baseRevision: 3 }
+    ]) {
+      const { source, calls } = fakeSource({ draft });
+      expect(await planGive(source, { agent, tools, viewerId: VIEWER })).toEqual({
+        status: "stale_draft",
+        agent: "assistant",
+        title: "Assistant"
+      });
+      expect(calls).toEqual([]);
+    }
+  });
+
   it("asks nothing where the agent, or the reader's draft, holds every tool already", async () => {
     const held = fakeSource({
       draft: draftBy(

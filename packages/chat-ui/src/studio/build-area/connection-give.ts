@@ -62,6 +62,11 @@ export type GivePlan =
   | { status: "held"; agent: string; title: string; inDraft: boolean }
   /** Somebody else's draft is open: nothing is written. */
   | { status: "other_draft"; agent: string; title: string; author?: string }
+  /**
+   * The reader's own draft is behind the published agent: nothing is written. A save would base
+   * it on the published version unseen, and its publish would undo what was published since.
+   */
+  | { status: "stale_draft"; agent: string; title: string }
   | { status: "failed"; message?: string };
 
 /** What the give did. */
@@ -135,6 +140,9 @@ export async function planGive(
   }
   if (draft && draft.author.userId !== input.viewerId) {
     return { status: "other_draft", agent, title, ...authorOf(draft) };
+  }
+  if (draft && (draft.stale || draft.baseRevision !== live.revision)) {
+    return { status: "stale_draft", agent, title };
   }
   const config = draft ? draft.config : live.config;
   const held = toolNamesOf(config);
