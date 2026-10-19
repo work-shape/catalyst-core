@@ -4,7 +4,7 @@ import {
   type OperationEffect
 } from "@work-shape/catalyst-asset-schemas";
 import type { ManagedArtifactRef, ToolDisplayOutput } from "./files";
-import type { ActingServicePrincipal, AuthenticatedIdentity, RuntimeCallContext } from "./identity";
+import type { AuthenticatedIdentity, OperationDraftContext, RuntimeCallContext } from "./identity";
 import type {
   AgentRunId,
   CollaborationWorkspaceId,
@@ -19,6 +19,7 @@ import type { ToolExecutionRequest, ToolExecutionResult } from "./tool-execution
 import type { ToolDecisionWait } from "./agent-run-resume";
 
 export { IDEMPOTENCY_KEY_MAX_LENGTH, type OperationEffect };
+export type { OperationDraftContext } from "./identity";
 
 /** From the loosest to the strictest. Where several values meet, the strictest wins. */
 export { POLICY_VALUES } from "@work-shape/catalyst-asset-schemas";
@@ -87,34 +88,6 @@ export type OperationOrigin =
    * origin as the run's principal; the steps of that run then call from the origin `workflow`.
    */
   | { kind: "schedule"; scheduleId: string };
-
-/**
- * What a call made by a draft carries (ADR-0031): the draft asset, the revision of it that
- * made the call and the App action or Workflow step that made it. `runOperation()` decides from
- * it where the call goes: a reading call reads live, a changing call is simulated unless "Run
- * live once" was switched on for this action or step of this revision.
- */
-export interface OperationDraftContext {
-  /** The App or the Workflow whose draft makes the call. */
-  asset: { kind: string; id: string; name: string };
-  /** The draft revision that made the call. A switch set for another revision does not apply. */
-  revisionId: string;
-  /** The App action or the Workflow step, by its name. */
-  part: string;
-  /**
-   * A test run of a Workflow draft: the service principal the Workflow runs as. The call is
-   * made as the person testing and allowed only where the principal holds the right too.
-   */
-  boundBy?: ActingServicePrincipal;
-  /** Trusted, derived ceiling of a Workflow-owned draft; never supplied by a request. */
-  boundRights?: readonly { action: string; assetId: string }[];
-  /**
-   * A test run whose start was the tester's own confirmation: they called `workflows.test`
-   * themselves, or confirmed an agent's call of it. A step's `confirm` is then satisfied by
-   * that start, as a person's direct call satisfies it; `approval` still gates the step.
-   */
-  startConfirmed?: boolean;
-}
 
 export interface OperationCall<TInput = unknown> {
   operation: string;
@@ -292,6 +265,7 @@ function originConfirms(origin: OperationOrigin): boolean {
 }
 
 export function operationCallFromToolRequest(input: {
+  draft?: OperationDraftContext;
   request: ToolExecutionRequest;
   actor: AuthenticatedIdentity;
   operation: string;

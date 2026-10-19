@@ -165,3 +165,4 @@ export {
 export { workflowContinuationIssues } from "./continuation-rules";
 
 export { resolveWorkflowNeededRights } from "./needed-rights";
+export { testRunCall } from "./test-run";

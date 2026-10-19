@@ -33,9 +33,16 @@ import { auditForRun } from "./operation-run-recording";
  * principal that bounded it. Refuses a draft context that bounds anything else: only a
  * person's call from a step of a Workflow is bounded.
  */
-export function draftCallOf(call: OperationCall): OperationCall {
+export function draftCallOf(call: OperationCall, workflowAgent = false): OperationCall {
   const boundBy = call.draft?.boundBy;
   if (!boundBy) return call;
+  if (
+    workflowAgent &&
+    call.origin.kind === "agent" &&
+    !isAuthenticatedServicePrincipal(call.actor) &&
+    call.actor.authSource === "workflow_test_run"
+  )
+    return call;
   if (call.origin.kind !== "workflow" || isAuthenticatedServicePrincipal(call.actor)) {
     throw new AppError("INTERNAL", "Only a person's call from a Workflow test run is bounded");
   }
@@ -66,7 +73,7 @@ export async function decideTarget(input: {
   if (!draft || definition.effect === "reading") return "live";
   if (definition.draftTarget) return definition.draftTarget;
   if (!deps.liveOnce || !(await admitted())) return "dry_run";
-  const forRun = call.origin.kind === "workflow" ? call.origin.workflowRunId : undefined;
+  const forRun = call.origin.kind === "workflow" ? call.origin.workflowRunId : draft.workflowRunId;
   const now = deps.now ?? (() => new Date());
   const { taken, firstUse, cleared } = await deps.liveOnce.take({
     clientInstanceId: deps.clientInstanceId,

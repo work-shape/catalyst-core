@@ -1,6 +1,7 @@
 import { workflowFailureNoticeJob } from "./failure-notices";
 import {
   WORKFLOW_ENDED_STATUSES,
+  workflowStepsDeep,
   isWorkflowRunEnded,
   type AuditActor,
   type ClientInstanceId,
@@ -48,7 +49,9 @@ export function createRunEnd(options: {
     if (end.status !== "continued")
       await options.datasetEnd(tx, { ...run, status: end.status }, end.output);
     await cancelWaiting(tx, run);
-    await tx.childAgentRuns.cancelWorkflowAgentRuns({ clientInstanceId, runId: run.id });
+    const definition = await tx.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id });
+    if (definition && workflowStepsDeep(definition.steps).some((step) => step.type === "agent"))
+      await tx.childAgentRuns.cancelWorkflowAgentRuns({ clientInstanceId, runId: run.id });
     await tx.jobs.withdraw(workflowDeadlineJobKind, {
       clientInstanceId,
       dedupeKey: workflowDeadlineKey(run.id)

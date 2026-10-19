@@ -129,6 +129,7 @@ export async function testRunCall(
       correlationId: run.correlationId
     },
     draft: {
+      workflowRunId: run.id,
       asset: { kind: WORKFLOW_ASSET_KIND, id: asset.id, name: asset.name },
       revisionId: run.definitionRevisionId,
       part: stepRun.stepId,

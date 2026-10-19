@@ -23,6 +23,7 @@ import {
   workflowValuePreview,
   type AuthenticatedIdentity,
   type ClientInstanceId,
+  type AuthenticatedUser,
   type JsonObject,
   type JsonValue,
   type NoticeSendInput,
@@ -88,6 +89,7 @@ import { testRunCall } from "./test-run";
 export type StepEnd =
   | {
       kind: "agent";
+      tester?: AuthenticatedUser;
       input: JsonObject;
       principal: import("@work-shape/catalyst-core").WorkflowRunPrincipal;
     }
@@ -685,7 +687,9 @@ export function createStepExecutor(options: StepExecutorOptions) {
               "The Workflow principal is unavailable",
               { systemic: true }
             );
-          return { kind: "agent", input, principal: actor };
+          const tester =
+            run.mode === "test" ? (await testRunCall(stores, run, stepRun)).actor : undefined;
+          return { kind: "agent", input, principal: actor, ...(tester ? { tester } : {}) };
         }
         case "code":
           return await stageCode(attempt, step);

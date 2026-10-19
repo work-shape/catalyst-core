@@ -469,29 +469,6 @@ function StepRunDetails({
               {stepRun.agent.usage.totalTokens.toLocaleString(locale)}
             </KeyValue>
           </KeyValueList>
-          {stepRun.agent.transcript ? (
-            <CodeBlock
-              label={t("workflows.panel.agentTranscript")}
-              code={stepRun.agent.transcript
-                .map((message) => {
-                  const speaker = t(
-                    message.role === "user"
-                      ? "workflows.panel.agentInput"
-                      : message.role === "tool"
-                        ? "workflows.panel.agentToolResult"
-                        : "workflows.panel.agentSpeaker"
-                  );
-                  const calls = message.toolCalls ?? [];
-                  const work = calls
-                    .map((call) => `${call.toolName} ${JSON.stringify(call.input)}`)
-                    .join("\n");
-                  return `${speaker}: ${message.text}${work ? `\n${work}` : ""}`;
-                })
-                .join("\n\n")}
-              lineNumbers={false}
-              maxLines={OUTPUT_PREVIEW_LINES}
-            />
-          ) : null}
         </>
       ) : null}
       {stepRun.loop === undefined ? null : (
@@ -513,6 +490,34 @@ function StepRunDetails({
           output={stepRun.output}
           datasets={[...(stepRun.datasets ?? []), ...(run.runDatasets ?? [])]}
         />
+      ) : null}
+      {stepRun.agent?.transcript ? (
+        <Disclosure defaultOpen>
+          <DisclosureTrigger>{t("workflows.panel.agentTranscript")}</DisclosureTrigger>
+          <DisclosureContent>
+            <CodeBlock
+              label={t("workflows.panel.agentTranscript")}
+              code={stepRun.agent?.transcript
+                .map((message) => {
+                  const speaker = t(
+                    message.role === "user"
+                      ? "workflows.panel.agentInput"
+                      : message.role === "tool"
+                        ? "workflows.panel.agentToolResult"
+                        : "workflows.panel.agentSpeaker"
+                  );
+                  const calls = message.toolCalls ?? [];
+                  const work = calls
+                    .map((call) => `${call.toolName} ${JSON.stringify(call.input)}`)
+                    .join("\n");
+                  return `${speaker}: ${message.text}${work ? `\n${work}` : ""}`;
+                })
+                .join("\n\n")}
+              lineNumbers={false}
+              maxLines={OUTPUT_PREVIEW_LINES}
+            />
+          </DisclosureContent>
+        </Disclosure>
       ) : null}
       {onOpenChild !== undefined && stepRun.childRunId !== undefined ? (
         <Button variant="outline" size="sm" className="justify-self-start" onClick={onOpenChild}>

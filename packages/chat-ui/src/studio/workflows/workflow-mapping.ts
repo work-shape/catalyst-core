@@ -43,6 +43,7 @@ const FAILURE_REASONS: Readonly<Record<string, WorkflowFailureReason>> = {
   GUARDRAIL_BLOCKED: "guardrail",
   DECLINED: "needsApproval",
   operation_would_wait: "needsApproval",
+  confirmation_unattended: "confirmationUnattended",
   principal_inactive: "accountInactive",
   run_as_disabled: "accountInactive",
   tester_missing_right: "testerMissingRight",

@@ -224,6 +224,7 @@ describe("the panel of a step that failed", () => {
     ["FORBIDDEN", "missingRight"],
     ["POLICY_DENIED", "policy"],
     ["operation_would_wait", "needsApproval"],
+    ["confirmation_unattended", "confirmationUnattended"],
     ["principal_inactive", "accountInactive"],
     ["operation_not_found", "operationMissing"],
     ["reference_unresolved", "dataMismatch"],
@@ -820,4 +821,30 @@ describe("Workflow agent step panels (CR-2)", () => {
       expect(hidden).not.toContain("balanced");
     }
   );
+  it("shows a failure before the transcript so the next action stays visible", () => {
+    const markup = panel(
+      "clients",
+      run(),
+      [
+        stepRun({
+          id: "sr_ai",
+          stepId: "clients",
+          stepType: "agent",
+          status: "failed",
+          error: { code: "confirmation_unattended", message: "Unattended" },
+          agent: {
+            runId: "run_ai",
+            status: "failed",
+            usage: { modelCallCount: 1, inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+            transcript: [{ role: "assistant", text: "Private transcript" }]
+          }
+        })
+      ],
+      { workflow: agentWorkflow() }
+    );
+    expect(markup.indexOf("data-failure-happened")).toBeGreaterThan(0);
+    expect(markup.indexOf("data-failure-happened")).toBeLessThan(
+      markup.indexOf("Private transcript")
+    );
+  });
 });

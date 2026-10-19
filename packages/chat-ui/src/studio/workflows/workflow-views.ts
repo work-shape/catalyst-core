@@ -206,6 +206,7 @@ export type WorkflowFailureReason =
   | "policy"
   | "guardrail"
   | "needsApproval"
+  | "confirmationUnattended"
   | "accountInactive"
   | "operationMissing"
   | "dataMismatch"

@@ -26,6 +26,7 @@ import {
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   WORKFLOW_ENDED_STATUSES,
+  workflowStepsDeep,
   type JsonObject,
   type JsonValue,
   type WorkflowCodeOutcome,
@@ -137,11 +138,19 @@ async function readWorkflowRun(
   input: Input<"readRun">
 ): Promise<WorkflowRunView | undefined> {
   const [row] = await db
-    .select({ ...runColumns, preview: previewOf(workflowRuns.output) })
+    .select({
+      ...runColumns,
+      definition: workflowRuns.definition,
+      preview: previewOf(workflowRuns.output)
+    })
     .from(workflowRuns)
     .where(runIs(input));
   if (!row) return undefined;
-  return { ...mapRun(row), ...mapPreview(row.preview) };
+  return {
+    ...mapRun(row),
+    ...mapPreview(row.preview),
+    hasAgentSteps: workflowStepsDeep(row.definition?.steps).some((step) => step.type === "agent")
+  };
 }
 
 async function readWorkflowRunView(
@@ -162,7 +171,11 @@ async function listWorkflowRuns(
   input: Input<"listRuns">
 ): Promise<WorkflowRunView[]> {
   const rows = await db
-    .select({ ...runColumns, preview: previewOf(workflowRuns.output) })
+    .select({
+      ...runColumns,
+      definition: workflowRuns.definition,
+      preview: previewOf(workflowRuns.output)
+    })
     .from(workflowRuns)
     .where(
       and(
@@ -186,6 +199,7 @@ async function listWorkflowRuns(
   return rows.map((row) => ({
     ...mapRun(row),
     ...mapPreview(row.preview),
+    hasAgentSteps: workflowStepsDeep(row.definition?.steps).some((step) => step.type === "agent"),
     failedDescendantCount: counts.get(row.id) ?? 0
   }));
 }

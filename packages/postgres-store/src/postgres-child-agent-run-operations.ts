@@ -135,7 +135,8 @@ export function createPostgresChildAgentRunStore(
           id: createPlatformId<"AgentRunId">("run"),
           clientInstanceId: input.clientInstanceId,
           conversationId: threadId,
-          principalId: input.principal.id,
+          principalId: input.tester ? null : input.principal.id,
+          ...(input.tester ? { ownerUserId: input.tester.id } : {}),
           workflowStepRunId: input.stepRunId,
           inputMessageId,
           agentName: input.title,
@@ -144,14 +145,23 @@ export function createPostgresChildAgentRunStore(
           updatedAt: at,
           correlationId: input.correlationId,
           authorizationContext: {
-            principal: {
-              kind: "service",
-              id: input.principal.id,
-              displayLabel: input.principal.displayLabel,
-              clientInstanceId: input.clientInstanceId,
-              authSource: "workflow_run"
-            },
-            subjectUserId: input.principal.id,
+            principal: input.tester
+              ? {
+                  kind: "user",
+                  id: input.tester.id,
+                  displayLabel: input.tester.displayLabel,
+                  clientInstanceId: input.clientInstanceId,
+                  authSource: input.tester.authSource,
+                  externalUserId: input.tester.externalUserId
+                }
+              : {
+                  kind: "service",
+                  id: input.principal.id,
+                  displayLabel: input.principal.displayLabel,
+                  clientInstanceId: input.clientInstanceId,
+                  authSource: "workflow_run"
+                },
+            subjectUserId: input.tester?.id ?? input.principal.id,
             scopes: []
           }
         })

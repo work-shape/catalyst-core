@@ -70,6 +70,7 @@ export async function startAgentStep(
   end: {
     input: import("@work-shape/catalyst-core").JsonObject;
     principal: import("@work-shape/catalyst-core").WorkflowRunPrincipal;
+    tester?: import("@work-shape/catalyst-core").AuthenticatedUser;
   },
   title: string,
   retainedUntil: string
@@ -79,6 +80,7 @@ export async function startAgentStep(
     runId: run.id,
     stepRunId: stepRun.id,
     principal: end.principal,
+    ...(end.tester ? { tester: end.tester } : {}),
     task: JSON.stringify(end.input),
     title,
     correlationId: run.correlationId,

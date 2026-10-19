@@ -287,7 +287,7 @@ function registerWorkflowRoutes(
       });
       return withConnectionTitles(
         context.access,
-        runs.map((run) => toRunResource(run, includeData))
+        runs.map((run) => toRunResource(run, !run.hasAgentSteps || includeData))
       );
     }
   });
@@ -324,7 +324,9 @@ function registerWorkflowRoutes(
       const run = await runOf(input.runId, mayReadRun(access, actor, origin));
       const resource = toRunResource(
         run,
-        access.authorize(WORKFLOW_ACTIONS.readRunData, await resourceOf(run.workflow)).allowed
+        !run.hasAgentSteps ||
+          (origin.kind === "app" && startedBy(run, actor)) ||
+          access.authorize(WORKFLOW_ACTIONS.readRunData, await resourceOf(run.workflow)).allowed
       );
       const [titled = resource] = await withConnectionTitles(access, [resource]);
       return titled;
@@ -372,7 +374,7 @@ function registerWorkflowRoutes(
         context.access,
         stepRuns.map((step) => {
           const { outputPreview, log, ...summary } = toStepRunResource(step, mayReadData);
-          return mayReadData
+          return !run.hasAgentSteps || mayReadData
             ? { ...summary, ...(outputPreview ? { outputPreview } : {}), ...(log ? { log } : {}) }
             : summary;
         })
@@ -392,7 +394,13 @@ function registerWorkflowRoutes(
         correlationId: context.correlationId
       });
       if (!run) throw new AppError("NOT_FOUND", "There is no such Workflow Run");
-      return toRunResource(run);
+      return toRunResource(
+        run,
+        !run.hasAgentSteps ||
+          (context.origin.kind === "app" && startedBy(run, context.actor)) ||
+          context.access.authorize(WORKFLOW_ACTIONS.readRunData, await resourceOf(run.workflow))
+            .allowed
+      );
     }
   });
 }
@@ -409,6 +417,7 @@ function toRunResource(run: WorkflowRunView, includeData = true) {
     correlationId: _correlation,
     principal,
     outputPreview,
+    hasAgentSteps: _hasAgentSteps,
     datasets,
     ...resource
   } = run;

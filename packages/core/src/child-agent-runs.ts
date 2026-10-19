@@ -78,6 +78,7 @@ export interface ChildAgentRunStore {
     runId: string;
     stepRunId: string;
     principal: import("./identity").WorkflowRunPrincipal;
+    tester?: import("./identity").AuthenticatedUser;
     task: string;
     title: string;
     correlationId: string;

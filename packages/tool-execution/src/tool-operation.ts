@@ -501,6 +501,7 @@ export function createToolOperationRunner(
     try {
       const outcome = await runOperation(
         operationCallFromToolRequest({
+          ...(context.workflowDraft ? { draft: context.workflowDraft } : {}),
           request,
           // The run acts for the person it was started for, with what that start was allowed.
           actor: {

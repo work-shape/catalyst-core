@@ -216,6 +216,8 @@ export function workflowValuePreview(value: JsonValue): WorkflowOutputPreview {
 
 /** A run as a read shows it: no definition and no input, and the result as a preview. */
 export type WorkflowRunView = WorkflowRun & {
+  /** Internal projection policy from the pinned definition; never serialized by the API. */
+  hasAgentSteps?: boolean;
   /** Descendants that failed, reached a limit or contain failed items, excluding this run. */
   failedDescendantCount?: number;
   outputPreview?: WorkflowOutputPreview;

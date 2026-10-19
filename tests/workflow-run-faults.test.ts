@@ -442,27 +442,7 @@ describe("a definition another release stored", () => {
     }));
 
   const cases: [string, () => ReturnType<typeof manifest>][] = [
-    ["collect", () => withLoop({ collect: { step: "send", path: "" } })],
-    [
-      "agent",
-      () =>
-        manifest((base) => ({
-          ...base,
-          steps: base.steps.map((step) =>
-            step.type === "operation"
-              ? {
-                  id: step.id,
-                  name: step.name,
-                  type: "agent",
-                  instructions: "steps/task.md",
-                  input: {},
-                  inputSchema: { type: "object" },
-                  outputSchema: { type: "object" }
-                }
-              : step
-          )
-        }))
-    ]
+    ["collect", () => withLoop({ collect: { step: "send", path: "" } })]
   ];
 
   it.each(cases)(

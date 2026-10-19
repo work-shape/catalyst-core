@@ -80,7 +80,7 @@ export async function runOperation(
   deps: RunOperationDeps,
   runtime: OperationCallRuntime = {}
 ): Promise<OperationOutcome> {
-  const call = draftCallOf(made);
+  const call = draftCallOf(made, runtime.workflowAgent);
   requireModuleOn(call, deps.modules);
   const registered = await deps.registry.resolve(call.operation);
   if (!registered) {

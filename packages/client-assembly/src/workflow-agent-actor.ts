@@ -1,8 +1,8 @@
-import { workflowRunActor } from "@work-shape/catalyst-workflows";
+import { workflowRunActor, testRunCall } from "@work-shape/catalyst-workflows";
 import type { AgentRun, PlatformStores } from "@work-shape/catalyst-core";
 
-/** Uses the acting principal the Workflow run resolved, including its own account (LIVE-1). */
-export async function workflowAgentActor(stores: PlatformStores, run: AgentRun) {
+/** Revalidates the pinned principal and, in draft tests, the tester on every claim/resume. */
+export async function workflowAgentCall(stores: PlatformStores, run: AgentRun) {
   if (!run.workflowStepRunId) return undefined;
   const clientInstanceId = run.clientInstanceId;
   const step = await stores.workflowRuns.getStepRun({
@@ -11,6 +11,20 @@ export async function workflowAgentActor(stores: PlatformStores, run: AgentRun) 
   });
   const workflow =
     step && (await stores.workflowRuns.readRun({ clientInstanceId, id: step.runId }));
-  const actor = workflow && (await workflowRunActor(stores.apiAccess, workflow));
-  return actor && actor.id === run.principalId ? actor : undefined;
+  const principal = workflow && (await workflowRunActor(stores.apiAccess, workflow));
+  if (
+    !workflow ||
+    !step ||
+    !principal ||
+    (workflow.mode !== "test" && principal.id !== run.principalId)
+  )
+    return undefined;
+  if (workflow.mode === "test") {
+    const call = await testRunCall(stores, workflow, step);
+    return call.actor.id === run.ownerUserId ? call : undefined;
+  }
+  return { actor: principal };
+}
+export async function workflowAgentActor(stores: PlatformStores, run: AgentRun) {
+  return (await workflowAgentCall(stores, run))?.actor;
 }

@@ -218,7 +218,7 @@ describe("the definitions a folder holds", () => {
   });
 
   it("refuses by name what the file form holds and this engine does not run", () => {
-    const code = {
+    const agent = {
       id: "check",
       name: "Check",
       type: "agent",
@@ -227,9 +227,9 @@ describe("the definitions a folder holds", () => {
       inputSchema: { type: "object" },
       outputSchema: { type: "object" }
     };
+    expect(refused({ steps: [trigger, agent, output()] })).toEqual([]);
     const inner = [operation("inner")];
     const cases: [Record<string, unknown>, string][] = [
-      [{ steps: [trigger, code, output()] }, "steps[1].type"],
       [
         { steps: [trigger, loop("each", inner, { collect: ref("inner").ref }), output()] },
         "steps[1].collect"

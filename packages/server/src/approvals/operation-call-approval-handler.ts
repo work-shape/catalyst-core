@@ -69,7 +69,7 @@ export interface OperationCallApprovalOptions {
   users: Pick<UserStore, "getUser">;
   workflowAgentActor?(
     runId: import("@work-shape/catalyst-core").AgentRunId
-  ): Promise<import("@work-shape/catalyst-core").WorkflowRunPrincipal | undefined>;
+  ): Promise<import("@work-shape/catalyst-core").AuthenticatedIdentity | undefined>;
   /** Describes the asset a held `assets.put` saves. Without it such a call is shown as any other. */
   assetPreview?: HeldAssetPreviewer;
   /** Where a kind reads what its request is about, outside a decision. */

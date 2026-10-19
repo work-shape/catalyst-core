@@ -30,8 +30,17 @@ const outputSchema = {
 };
 const changed: string[] = [];
 
-type Mode = "valid" | "repair" | "invalid" | "malformed" | "repair_tool" | "confirm" | "approval";
-async function fixture(mode: Mode = "valid", structuredOutput = false) {
+type Mode =
+  | "test"
+  | "plain"
+  | "valid"
+  | "repair"
+  | "invalid"
+  | "malformed"
+  | "repair_tool"
+  | "confirm"
+  | "approval";
+async function fixture(mode: Mode = "valid", structuredOutput = false, tester = "user-1") {
   changed.length = 0;
   const requests: ModelAdapterRequest[] = [];
   const answer = (request: ModelAdapterRequest): ModelCompletion => {
@@ -43,7 +52,9 @@ async function fixture(mode: Mode = "valid", structuredOutput = false) {
     );
     const hasToolResult = request.messages.some((message) => message.role === "tool");
     const call =
-      ((mode === "confirm" || mode === "approval") && !hasToolResult && !repair) ||
+      ((mode === "test" || mode === "confirm" || mode === "approval") &&
+        !hasToolResult &&
+        !repair) ||
       (mode === "repair_tool" && repair);
     return {
       text:
@@ -128,11 +139,13 @@ async function fixture(mode: Mode = "valid", structuredOutput = false) {
   };
   config.infrastructure.models = { local: { provider: "workflow-scripted", model: "local" } };
   const policies: CentralPolicySetting[] =
-    mode === "approval"
-      ? [{ operation: toolName, value: "approval" }]
-      : mode === "confirm"
-        ? [{ operation: toolName, value: "confirm" }]
-        : [];
+    mode === "test"
+      ? [{ operation: toolName, value: "allow" }]
+      : mode === "approval"
+        ? [{ operation: toolName, value: "approval" }]
+        : mode === "confirm"
+          ? [{ operation: toolName, value: "confirm" }]
+          : [];
   const app = await createTestInstance({
     config,
     env: {},
@@ -200,7 +213,10 @@ async function fixture(mode: Mode = "valid", structuredOutput = false) {
     scopeId: connectionAsset.id,
     grantedBy: asUserId(owner.json<{ id: string }>().id)
   });
-  const manifest = {
+  const manifest: Record<string, import("@work-shape/catalyst-core").JsonValue> & {
+    id: string;
+    steps: import("@work-shape/catalyst-core").JsonValue[];
+  } = {
     id: "agent-check",
     name: "Monthly check",
     runAs: "workflow-runner",
@@ -226,6 +242,11 @@ async function fixture(mode: Mode = "valid", structuredOutput = false) {
       }
     ]
   };
+  if (mode === "plain")
+    manifest.steps = [
+      { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+      { id: "result", name: "Result", type: "output", input: { answer: { value: "plain-result" } } }
+    ];
   const address = { kind: "workflow", name: manifest.id };
   const put = await app.call("assets.put", {
     params: address,
@@ -237,10 +258,29 @@ async function fixture(mode: Mode = "valid", structuredOutput = false) {
     payload: { revision: put.json<{ revision: number }>().revision }
   });
   expect(published.statusCode, published.body).toBe(200);
-  const started = await app.call("workflows.start", {
-    params: { workflow: manifest.id },
-    payload: { input: {} }
-  });
+  if (mode === "test" && tester === "reader") {
+    const reader = await app.call("me.get", {}, "reader");
+    await app.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: reader.json<{ id: string }>().id,
+      action: "workflow.write",
+      effect: "allow",
+      scopeKind: "instance",
+      grantedBy: asUserId(owner.json<{ id: string }>().id)
+    });
+  }
+  const started =
+    mode === "test"
+      ? await app.call(
+          "workflows.test",
+          { params: { workflow: manifest.id }, payload: { input: {} } },
+          tester
+        )
+      : await app.call("workflows.start", {
+          params: { workflow: manifest.id },
+          payload: { input: {} }
+        });
   expect(started.statusCode, started.body).toBe(200);
   const runId = started.json<{ id: string }>().id;
   getTestJobs(app).start();
@@ -274,6 +314,29 @@ async function fixture(mode: Mode = "valid", structuredOutput = false) {
 }
 
 describe("Workflow Child Agent Runs (CR-2)", () => {
+  it.each(["user-1", "reader"])(
+    "owns a draft test as %s and never makes a live changing call",
+    async (tester) => {
+      const f = await fixture("test", false, tester);
+      const step = await f.ended("done");
+      const child = required(
+        await f.app.stores.childAgentRuns.readWorkflowAgentRun({
+          clientInstanceId: f.clientInstanceId,
+          stepRunId: step.id
+        })
+      );
+      const person = await f.app.call("me.get", {}, tester);
+      expect(child.ownerUserId).toBe(person.json<{ id: string }>().id);
+      expect(child.authorization?.principal.kind).toBe("user");
+      expect(changed).toEqual([]);
+      const calls = await f.app.stores.operationRuns.list({ clientInstanceId: f.clientInstanceId });
+      const call = required(calls.find((call) => call.operation === toolName));
+      expect(call.actor.kind).toBe("user");
+      expect(call.actor.id).toBe(child.ownerUserId);
+      expect(call.status).toBe(tester === "user-1" ? "done" : "denied");
+    }
+  );
+
   it("executes a published agent step and validates the output, attributing usage to its Workflow", async () => {
     const f = await fixture();
     const step = await f.ended("done");
@@ -349,6 +412,56 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     const run = await f.app.call("workflows.get_run", { params: { runId: f.runId } }, "reader");
     expect(run.statusCode, run.body).toBe(200);
     expect(run.body).not.toContain("validated");
+    await f.app.stores.access.createGrant({
+      clientInstanceId: f.clientInstanceId,
+      holderKind: "user",
+      holderId: readerId,
+      action: "workflow.write",
+      effect: "allow",
+      scopeKind: "instance",
+      grantedBy: asUserId(ownerId)
+    });
+    const cancelled = await f.app.call(
+      "workflows.cancel_run",
+      { params: { runId: f.runId } },
+      "reader"
+    );
+    expect(cancelled.statusCode, cancelled.body).toBe(200);
+    expect(cancelled.body).not.toContain("validated");
+  });
+
+  it("keeps the existing result access of a Workflow without an agent step", async () => {
+    const f = await fixture("plain");
+    await waitUntil(
+      async () =>
+        (
+          await f.app.stores.workflowRuns.readRun({
+            clientInstanceId: f.clientInstanceId,
+            id: f.runId
+          })
+        )?.status === "done",
+      "plain Workflow done"
+    );
+    const reader = await f.app.call("me.get", {}, "reader");
+    const owner = await f.app.call("me.get");
+    await f.app.stores.access.createGrant({
+      clientInstanceId: f.clientInstanceId,
+      holderKind: "user",
+      holderId: reader.json<{ id: string }>().id,
+      action: "workflow.read",
+      effect: "allow",
+      scopeKind: "instance",
+      grantedBy: asUserId(owner.json<{ id: string }>().id)
+    });
+    const response = await f.app.call(
+      "workflows.get_run",
+      { params: { runId: f.runId } },
+      "reader"
+    );
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json<{ outputPreview?: { text: string } }>().outputPreview?.text).toContain(
+      "plain-result"
+    );
   });
 
   it("reads one agent usage through its index in a ledger of 10,000 other calls", async () => {
@@ -439,6 +552,14 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
       const f = await fixture(mode);
       const step = await f.ended("failed");
       expect(step.error?.code).toBe("output_invalid");
+      expect(
+        (
+          await f.app.stores.childAgentRuns.readWorkflowAgentRun({
+            clientInstanceId: f.clientInstanceId,
+            stepRunId: step.id
+          })
+        )?.status
+      ).toBe("failed");
       expect(f.requests).toHaveLength(2);
       expect(f.requests[1]?.tools).toEqual([]);
       await withTestSql(async (sql) => {

@@ -90,6 +90,9 @@ export interface AgentRunJobsOptions {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
   loadCurrentUser(run: AgentRun): Promise<AuthenticatedUser>;
+  loadWorkflowAgentDraft?(
+    run: AgentRun
+  ): Promise<import("@work-shape/catalyst-core").OperationDraftContext | undefined>;
   execute: ExecuteAgentRun;
   /** How many runs this process executes at once. */
   slots: number;
@@ -472,6 +475,9 @@ async function executeClaimedRun(
       });
       const user = await options.loadCurrentUser(run);
       const authorization = requireAuthorization(run, user);
+      const workflowDraft = run.workflowStepRunId
+        ? await options.loadWorkflowAgentDraft?.(run)
+        : undefined;
       const context: RuntimeCallContext = {
         user: { ...user, ...authorization },
         clientInstanceId: run.clientInstanceId,
@@ -485,6 +491,7 @@ async function executeClaimedRun(
         // A subagent never waits for a decision and starts no subagent of its own (CR-1).
         ...(run.parentRunId ? { subagent: true } : {}),
         ...(run.workflowStepRunId ? { workflowAgent: true } : {}),
+        ...(workflowDraft ? { workflowDraft } : {}),
         ...(!run.parentRunId && (scheduled || options.unattended?.(run))
           ? { unattended: true }
           : {})

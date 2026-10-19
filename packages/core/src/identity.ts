@@ -141,6 +141,36 @@ export interface AgentRunWriteFence {
   lease: { jobId: JobId; leaseToken: string };
 }
 
+/**
+ * What a call made by a draft carries (ADR-0031): the draft asset, the revision of it that
+ * made the call and the App action or Workflow step that made it. `runOperation()` decides from
+ * it where the call goes: a reading call reads live, a changing call is simulated unless "Run
+ * live once" was switched on for this action or step of this revision.
+ */
+export interface OperationDraftContext {
+  /** The draft Workflow test that binds a live-once switch across agent tool calls. */
+  workflowRunId?: string;
+  /** The App or the Workflow whose draft makes the call. */
+  asset: { kind: string; id: string; name: string };
+  /** The draft revision that made the call. A switch set for another revision does not apply. */
+  revisionId: string;
+  /** The App action or the Workflow step, by its name. */
+  part: string;
+  /**
+   * A test run of a Workflow draft: the service principal the Workflow runs as. The call is
+   * made as the person testing and allowed only where the principal holds the right too.
+   */
+  boundBy?: ActingServicePrincipal;
+  /** Trusted, derived ceiling of a Workflow-owned draft; never supplied by a request. */
+  boundRights?: readonly { action: string; assetId: string }[];
+  /**
+   * A test run whose start was the tester's own confirmation: they called `workflows.test`
+   * themselves, or confirmed an agent's call of it. A step's `confirm` is then satisfied by
+   * that start, as a person's direct call satisfies it; `approval` still gates the step.
+   */
+  startConfirmed?: boolean;
+}
+
 export interface RuntimeCallContext {
   user: AuthenticatedUser;
   clientInstanceId: ClientInstanceId;
@@ -165,6 +195,8 @@ export interface RuntimeCallContext {
   subagent?: true;
   /** A Workflow agent step: confirmations fail; approvals may pause. */
   workflowAgent?: true;
+  /** A Workflow draft test: calls act as the tester, bounded by its principal. */
+  workflowDraft?: OperationDraftContext;
   /**
    * Set while the call acts for a person who is not present: a scheduled start of an agent
    * (EW-8). A confirmation it asks for waits in that person's Inbox (OP-4b).
