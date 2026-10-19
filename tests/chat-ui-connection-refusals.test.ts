@@ -344,7 +344,10 @@ describe("The key on the Connection page (ACCEPT-FIX-7 C5, C6)", () => {
         }
         if (request.method === "GET" && url.pathname === path("connections.get")) {
           return Response.json(
-            connectionDetail(asset.name, tested ? { health: "ok" } : recordedStates.unauthorized)
+            connectionDetail(asset.name, {
+              ...(tested ? { health: "ok" } : recordedStates.unauthorized),
+              usedByAssets: [{ kind: "workflow", name: "monthly_sync", title: "Monthly sync" }]
+            })
           );
         }
         return undefined;
@@ -396,14 +399,14 @@ describe("The key on the Connection page (ACCEPT-FIX-7 C5, C6)", () => {
     );
   });
 
-  it("removes the key after a warning that names the agents using it, through the save of the definition", async () => {
+  it("removes the key after a warning that names what uses it, through the save of the definition", async () => {
     const { page, puts, button } = await keyPage();
     await act(async () =>
       page.querySelector<HTMLButtonElement>("[data-connection-secret-remove]")?.click()
     );
     const warning = page.querySelector("[data-connection-secret-remove-warning]");
     expect(warning?.textContent).toBe(
-      "The key is deleted and the connection sends no key from now on. Calls of Workflow Assistant and Steuer-Agent and of Workflows that use this connection are refused by a server that asks for a key."
+      "The key is deleted and the connection sends no key from now on. Calls of Workflow Assistant, Steuer-Agent, and Monthly sync (Workflow) are refused by a server that asks for a key."
     );
     expect(puts).toEqual([]);
     const confirm = [...page.querySelectorAll("dialog button, [role=dialog] button")].find(
@@ -435,7 +438,7 @@ describe("The key on the Connection page (ACCEPT-FIX-7 C5, C6)", () => {
     await act(async () => none?.click());
     await vi.waitFor(() =>
       expect(page.querySelector("[data-connection-key-clears]")?.textContent).toContain(
-        "Calls of Workflow Assistant and Steuer-Agent"
+        "Calls of Workflow Assistant, Steuer-Agent, and Monthly sync (Workflow)"
       )
     );
   });

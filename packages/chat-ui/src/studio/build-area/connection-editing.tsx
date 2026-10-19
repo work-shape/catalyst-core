@@ -17,6 +17,7 @@ import {
   ConnectionServerFields
 } from "./connection-form";
 import { ConnectionApprovalList, approveLabel, useApprovalChoice } from "./connection-approval";
+import { usedByNames } from "./connection-used-by";
 import {
   discoveredCandidates,
   selectedCandidates,
@@ -85,10 +86,10 @@ export function ConnectionSettingsEditor({
   /** The settings as the page shows them while nobody edits them. */
   view: ReactNode;
   /**
-   * The agents that carry the Connection's tools, where a key is stored: a change to no key
-   * deletes it (spec CS :373), and the form says whom that stops.
+   * What uses the Connection, where a key is stored: a change to no key deletes it
+   * (spec CS :373), and the form says whom that stops.
    */
-  keyUsers?: ConnectionDetail["usedBy"];
+  keyUsers?: KeyUsers;
 }) {
   const { locale, t } = useTranslation();
   const stored = connectionConfigToForm(asset.config);
@@ -160,17 +161,20 @@ export function ConnectionSettingsEditor({
   );
 }
 
-/** Whom deleting the key stops: the agents that carry the Connection's tools, and Workflows. */
+/** What "Used by" lists: the agents that carry the Connection's tools and the other assets. */
+type KeyUsers = Pick<ConnectionDetail, "usedBy" | "usedByAssets">;
+
+/** Whom deleting the key stops: everything "Used by" lists. */
 function keyRemovalWarning(
-  usedBy: ConnectionDetail["usedBy"],
+  usedBy: KeyUsers,
   locale: string,
   t: TranslationContextValue["t"]
 ): string {
-  const agents = usedBy.map((agent) => agent.title.trim() || agent.agentName);
-  return agents.length === 0
+  const users = usedByNames(usedBy, t);
+  return users.length === 0
     ? t("connections.secretRemoveNoAgents")
     : t("connections.secretRemoveAgents", {
-        agents: new Intl.ListFormat(locale, { type: "conjunction" }).format(agents)
+        users: new Intl.ListFormat(locale, { type: "conjunction" }).format(users)
       });
 }
 
@@ -198,7 +202,7 @@ export function ConnectionSecretEditor({
   removal?: {
     frame: BuildAssetEditorProps;
     config: Record<string, unknown>;
-    usedBy: ConnectionDetail["usedBy"];
+    usedBy: KeyUsers;
   };
 }) {
   const { t } = useTranslation();
@@ -285,7 +289,7 @@ function ConnectionKeyRemoval({
 }: {
   frame: BuildAssetEditorProps;
   config: Record<string, unknown>;
-  usedBy: ConnectionDetail["usedBy"];
+  usedBy: KeyUsers;
   written(): void;
   onOpen(): void;
 }) {

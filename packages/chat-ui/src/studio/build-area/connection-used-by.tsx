@@ -28,6 +28,19 @@ export function usedByCount(detail: ConnectionDetail): number {
   return detail.usedBy.length + (detail.usedByAssets?.length ?? 0);
 }
 
+/** The names "Used by" lists: the agents by title, the other assets by title and kind. */
+export function usedByNames(
+  detail: Pick<ConnectionDetail, "usedBy" | "usedByAssets">,
+  t: (key: TranslationKey) => string
+): string[] {
+  return [
+    ...detail.usedBy.map((agent) => agent.title.trim() || agent.agentName),
+    ...(detail.usedByAssets ?? []).map(
+      (asset) => `${asset.title.trim() || asset.name} (${t(KINDS[asset.kind].label)})`
+    )
+  ];
+}
+
 /**
  * The link of a row, which opens its page here on a plain press and its address on any other.
  * The row puts its content into this element, so it is an `a` itself.

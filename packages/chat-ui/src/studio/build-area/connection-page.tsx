@@ -173,7 +173,7 @@ export function ConnectionPage({
                         source={source}
                         written={written}
                         {...(retest ? { retest } : {})}
-                        removal={{ frame: editing, config, usedBy: read.detail.usedBy }}
+                        removal={{ frame: editing, config, usedBy: read.detail }}
                       />
                     )
                   : undefined
@@ -220,7 +220,7 @@ export function ConnectionPage({
           frame={editing}
           written={written}
           view={<ConnectionSettings config={config} withDescription={false} />}
-          {...(detail?.secret.state === "set" ? { keyUsers: detail.usedBy } : {})}
+          {...(detail?.secret.state === "set" ? { keyUsers: detail } : {})}
         />
       ) : (
         <ConnectionSettings config={config} />

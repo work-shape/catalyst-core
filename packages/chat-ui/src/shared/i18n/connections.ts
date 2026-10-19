@@ -83,9 +83,9 @@ export const connections = defineTranslations({
     "connections.secretRemove": "Remove key",
     "connections.secretRemoveTitle": "Remove the key?",
     "connections.secretRemoveAgents":
-      "The key is deleted and the connection sends no key from now on. Calls of {agents} and of Workflows that use this connection are refused by a server that asks for a key.",
+      "The key is deleted and the connection sends no key from now on. Calls of {users} are refused by a server that asks for a key.",
     "connections.secretRemoveNoAgents":
-      "The key is deleted and the connection sends no key from now on. No agent uses its tools; Workflows that use this connection are refused by a server that asks for a key.",
+      "The key is deleted and the connection sends no key from now on. Nothing you can see uses this connection; its calls are refused by a server that asks for a key.",
     "connections.healthSecretUnreadableNextRuntime":
       "Enter the key again under Credential. Then test again.",
     "connections.healthUnavailableNextRuntime":
@@ -345,9 +345,9 @@ export const connections = defineTranslations({
     "connections.secretRemove": "Schlüssel entfernen",
     "connections.secretRemoveTitle": "Schlüssel entfernen?",
     "connections.secretRemoveAgents":
-      "Der Schlüssel wird gelöscht, und die Verbindung sendet ab jetzt keinen. Aufrufe von {agents} und von Workflows, die diese Verbindung nutzen, lehnt ein Server ab, der einen Schlüssel verlangt.",
+      "Der Schlüssel wird gelöscht, und die Verbindung sendet ab jetzt keinen. Aufrufe von {users} lehnt ein Server ab, der einen Schlüssel verlangt.",
     "connections.secretRemoveNoAgents":
-      "Der Schlüssel wird gelöscht, und die Verbindung sendet ab jetzt keinen. Kein Agent nutzt ihre Tools; Aufrufe von Workflows, die diese Verbindung nutzen, lehnt ein Server ab, der einen Schlüssel verlangt.",
+      "Der Schlüssel wird gelöscht, und die Verbindung sendet ab jetzt keinen. Nichts, was du sehen kannst, nutzt diese Verbindung; ihre Aufrufe lehnt ein Server ab, der einen Schlüssel verlangt.",
     "connections.healthSecretUnreadableNextRuntime":
       "Gib den Schlüssel unter Zugangsdaten erneut ein. Teste danach erneut.",
     "connections.healthUnavailableNextRuntime":
