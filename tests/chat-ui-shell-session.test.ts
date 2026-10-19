@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
+import type { WorkspaceRoute } from "@work-shape/catalyst-chat-ui/shell";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import { startNewAgent } from "@work-shape/catalyst-chat-ui/agents";
 import {
@@ -44,6 +45,32 @@ const nextFor = (session: ShellSession, personId: string | undefined) =>
   shellSessionFor(session, personId, apiBaseUrl, () => new QueryClient());
 
 describe("the session of the shell", () => {
+  it("resets A's route and dock before B can mount, including a host router that answers later (LOWS-D)", () => {
+    const a = sessionOf("usr_a");
+    const b = nextFor(a, "usr_b");
+    const routes: WorkspaceRoute[] = [];
+    const changeRoute = (route: WorkspaceRoute) => {
+      routes.push(route);
+    };
+    const route: WorkspaceRoute = {
+      kind: "new-conversation",
+      collaborationWorkspaceId: "workspace_of_a"
+    };
+    expect(finishSessionChange(b, { route, chat: "conversation_of_a", changeRoute })).toBe(b);
+    expect(routes).toEqual([{ kind: "collaboration-workspace-root" }]);
+    expect(showsWorkspace(b)).toBe(false);
+    // Clearing the route alone still leaves A's dock; the host must acknowledge both.
+    const rootRoute: WorkspaceRoute = { kind: "collaboration-workspace-root" };
+    expect(
+      finishSessionChange(b, { route: rootRoute, chat: "conversation_of_a", changeRoute })
+    ).toBe(b);
+    const shown = finishSessionChange(b, { route: rootRoute, changeRoute });
+    expect(showsWorkspace(shown)).toBe(true);
+    expect(shown.personId).toBe("usr_b");
+    // A first sign-in or an unchanged session preserves an explicitly opened link.
+    expect(finishSessionChange(shown, { route, changeRoute })).toBe(shown);
+  });
+
   it("hears of a query made while a component renders only after that render", async () => {
     const queryClient = new QueryClient();
     let told = 0;
@@ -198,13 +225,21 @@ describe("the session of the shell", () => {
     expect(showsWorkspace(b)).toBe(false);
     expect(requestedBuildStart("agents")).toBeDefined();
 
-    const shown = finishSessionChange(b);
+    const shown = finishSessionChange(b, {
+      route: { kind: "collaboration-workspace-root" },
+      changeRoute: () => undefined
+    });
     expect(showsWorkspace(shown)).toBe(true);
     expect(shown).toEqual({ queryClient: b.queryClient, personId: "usr_b", generation: 1 });
     // The workspace that mounts now starts its New connection dialog and agent page empty.
     expect(requestedBuildStart("agents")).toBeUndefined();
     expect(newConnectionDraft()).toBe("none");
-    expect(finishSessionChange(shown)).toBe(shown);
+    expect(
+      finishSessionChange(shown, {
+        route: { kind: "collaboration-workspace-root" },
+        changeRoute: () => undefined
+      })
+    ).toBe(shown);
   });
 
   it("drops a draft whose read was still on its way when the person changed", async () => {

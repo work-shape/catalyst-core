@@ -1,3 +1,8 @@
+import {
+  defaultWorkspaceRoute,
+  type WorkspaceRoute,
+  type WorkspaceRouteChangeOptions
+} from "./workspace-route";
 import { notifyManager, type QueryClient } from "@tanstack/react-query";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { apiErrorStatus } from "./workspace-utils";
@@ -119,8 +124,21 @@ export function showsWorkspace(session: ShellSession): boolean {
  * Ends the session before `session`, as the shell does before its new workspace mounts, and
  * gives the session to show. A session with nothing to end stays as it is.
  */
-export function finishSessionChange(session: ShellSession): ShellSession {
+export function finishSessionChange(
+  session: ShellSession,
+  address: {
+    route: WorkspaceRoute;
+    chat?: string;
+    changeRoute(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
+  }
+): ShellSession {
   if (session.ended === undefined) return session;
+  // Wait for the host router to acknowledge the reset before B's workspace can mount.
+  // Otherwise its closed-link effect reads A's route with B's memberships.
+  if (address.route.kind !== "collaboration-workspace-root" || address.chat !== undefined) {
+    address.changeRoute(defaultWorkspaceRoute(), { replace: true });
+    return session;
+  }
   endShellSession(session.ended);
   return {
     queryClient: session.queryClient,

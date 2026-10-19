@@ -196,6 +196,16 @@ test("a tab whose browser is signed in as another person without a sign-out forg
   const left = await leaveStateOf(page, tag);
   await page.evaluate(() => document.documentElement.setAttribute("data-session-probe", "kept"));
 
+  const aWorkspaceId = new URL(page.url()).pathname.split("/")[2];
+  expect(aWorkspaceId).toBeTruthy();
+  const foreignWorkspaceReads: string[] = [];
+  page.on("request", (request) => {
+    if (
+      request.method() === "GET" &&
+      new URL(request.url()).pathname === `/api/v1/workspaces/${aWorkspaceId}`
+    )
+      foreignWorkspaceReads.push(request.url());
+  });
   // Another tab of the same browser signs in as B; this tab hears of it when it is shown again.
   const other = await context.newPage();
   await other.bringToFront();
@@ -213,4 +223,8 @@ test("a tab whose browser is signed in as another person without a sign-out forg
   await expect(page.getByRole("button", { name: `${b.displayLabel} account` })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-session-probe", "kept");
   await expectNothingOf(page, left);
+  expect(foreignWorkspaceReads).toEqual([]);
+  await expect(
+    page.getByText("That link leads into a workspace you are not a member of", { exact: false })
+  ).toHaveCount(0);
 });
