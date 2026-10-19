@@ -25,6 +25,20 @@ import { modelContentImages, modelContentText } from "@work-shape/catalyst-model
 import { workspacePreviewImagesInputSchema } from "@work-shape/catalyst-tool-execution";
 
 describe("model context projection", () => {
+  it("keeps refusal codes out of the model's words while retaining the stored error", async () => {
+    const result: ToolExecutionResult = {
+      status: "failed",
+      error: {
+        code: "not_allowed",
+        message: "Du hast hier nicht das nötige Recht. Frag Mara.",
+        details: { reason: "not_granted", action: "skill.write" }
+      }
+    };
+    const projected = await createModelVisibleToolOutput(result, modelContextOptions());
+    expect(projected.text).toContain("Frag Mara");
+    expect(projected.text).not.toMatch(/not_allowed|not_granted|skill.write/u);
+    expect(result.error.code).toBe("not_allowed");
+  });
   it("round-trips assistant web sources and citations through message metadata", () => {
     const metadata = createAssistantFinalMetadata({
       runId: asAgentRunId("run_sources"),

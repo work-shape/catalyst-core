@@ -164,7 +164,7 @@ export function createSkillChangeApprovalHandler(
       return [
         {
           name: "asset.before_write",
-          subject: { kind: "skill", name: skill.name },
+          subject: { kind: "skill", name: skill.name, title: skill.title },
           checkable: () => ({
             name: skill.name,
             content: guardrailFieldOf(guardrailStringsOf(skill))
@@ -186,10 +186,16 @@ export function createSkillChangeApprovalHandler(
       const config = before?.config;
       // Nothing to write back: the revert itself refuses it.
       if (!before || !config) return [];
+      const previous = skillConfigSchema.safeParse(config);
       return [
         {
           name: "asset.before_write",
-          subject: { kind: "skill", id: before.assetId, name: data.skillName },
+          subject: {
+            kind: "skill",
+            id: before.assetId,
+            name: data.skillName,
+            ...(previous.success ? { title: previous.data.title } : {})
+          },
           checkable: () => ({
             name: data.skillName,
             content: guardrailFieldOf(guardrailStringsOf(config))

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { ClientInstanceCapability } from "@work-shape/catalyst-capability-sdk";
 import {
@@ -105,7 +105,7 @@ async function fixture(centralSettings: CentralPolicySetting[] = []) {
     return claim(input);
   };
   /** One conversation with one message to the agent, and the run that answered or paused. */
-  const say = async (text: string, inWorkspaceId?: string) => {
+  const say = async (text: string, inWorkspaceId?: string, locale = "en") => {
     const created = await app.call("conversations.create", {
       payload: {
         title: "Tools",
@@ -116,7 +116,9 @@ async function fixture(centralSettings: CentralPolicySetting[] = []) {
       id: string;
       collaborationWorkspaceId: string;
     }>();
-    const started = await injectStartConversationRun(app, conversationId, text);
+    const started = await injectStartConversationRun(app, conversationId, text, {
+      headers: { "accept-language": locale }
+    });
     await waitUntil(async () => {
       const run = await app.stores.agentRuns.getAgentRun({
         clientInstanceId,
@@ -234,31 +236,39 @@ describe("an agent's tool calls in a chat run", () => {
     await f.app.close();
   });
 
-  it("records a call the person has no right to as a denied run and tells the agent so", async () => {
-    const f = await fixture();
-    const said = await f.say("/tool demo.locked {}");
+  it.each(["en", "de"])(
+    "records a denied call and names who can help the person (%s)",
+    async (locale) => {
+      const f = await fixture();
+      vi.spyOn(f.app.stores.users, "getInstanceAdminName").mockResolvedValue("Mara");
+      const said = await f.say("/tool demo.locked {}", undefined, locale);
 
-    const [run] = await f.runs();
-    expect(run).toMatchObject({
-      operation: "demo.locked",
-      status: "denied",
-      denial: { kind: "forbidden", action: "ref:vault" },
-      origin: { kind: "agent" }
-    });
-    expect(calls).toEqual([]);
-    expect(said.toolMessages).toHaveLength(1);
-    expect(said.toolMessages[0]).toContain("not_allowed");
-    const audit = await f.app.stores.audit.listAuditEvents({
-      clientInstanceId: f.clientInstanceId
-    });
-    expect(
-      audit
-        .filter((event) => event.metadata?.operationRunId === run?.id)
-        .map((event) => `${event.type}:${event.status}`)
-        .sort()
-    ).toEqual(["operation.authorization_checked:denied", "operation.denied:denied"]);
-    await f.app.close();
-  });
+      const [run] = await f.runs();
+      expect(run).toMatchObject({
+        operation: "demo.locked",
+        status: "denied",
+        denial: { kind: "forbidden", action: "ref:vault" },
+        origin: { kind: "agent" }
+      });
+      expect(calls).toEqual([]);
+      expect(said.toolMessages).toHaveLength(1);
+      expect(said.toolMessages[0]).not.toContain("not_allowed");
+      expect(said.toolMessages[0]).toContain(
+        locale === "de" ? "Du hast hier nicht das nötige Recht" : "You do not have the right"
+      );
+      expect(said.toolMessages[0]).toContain("Mara");
+      const audit = await f.app.stores.audit.listAuditEvents({
+        clientInstanceId: f.clientInstanceId
+      });
+      expect(
+        audit
+          .filter((event) => event.metadata?.operationRunId === run?.id)
+          .map((event) => `${event.type}:${event.status}`)
+          .sort()
+      ).toEqual(["operation.authorization_checked:denied", "operation.denied:denied"]);
+      await f.app.close();
+    }
+  );
 
   it("pauses a call an admin set to approval and executes it once approved", async () => {
     const f = await fixture([{ operation: "demo.change", value: "approval" }]);

@@ -17,6 +17,7 @@ import {
   type JobsStore,
   type JsonObject,
   type Logger,
+  type LocaleCode,
   type ManagedArtifactId,
   type ManagedArtifactKind,
   type ManagedArtifactRecord,
@@ -233,6 +234,7 @@ export interface ClientInstanceCapabilityContribution {
 }
 
 export interface UploadDraftAttachmentInput {
+  locale?: LocaleCode;
   conversationId: ConversationId;
   ownerUserId: string;
   filename: string;

@@ -93,7 +93,8 @@ import { createConfigAssetReferences, fastModeModelBindingIds } from "./tool-ref
 import { createToolDefinitions } from "./tools";
 import {
   createExecutionWorkspaceManagedObjectReader,
-  createExecutionWorkspaceSourceAttachmentHandler
+  createExecutionWorkspaceSourceAttachmentHandler,
+  unsupportedAttachmentMessage
 } from "./workspace-source-attachments";
 
 export interface CreateClientInstanceAppInput {
@@ -713,10 +714,7 @@ function createCompositeAttachmentService(
     async uploadDraftAttachment(input) {
       const matchingHandlers = handlers.filter((handler) => handler.acceptsFile(input));
       if (matchingHandlers.length === 0) {
-        throw new AppError(
-          "BAD_REQUEST",
-          "This file type is not supported for uploads in this chat"
-        );
+        throw new AppError("BAD_REQUEST", unsupportedAttachmentMessage(input.locale));
       }
       if (matchingHandlers.length > 1) {
         throw new AppError(

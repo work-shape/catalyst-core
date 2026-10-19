@@ -110,6 +110,7 @@ describe("the tools that find what is on the platform", () => {
   ) {
     const config = createTestConfig({
       toolNames,
+      displayName: { en: "Test Agent", de: "Test-Helfer" },
       // A skill reader listed by the agent must be enabled by the release. Platform-held
       // agents also receive it through their conversation offer.
       tools: toolNames.includes("read_skill") ? [{ name: "read_skill" }] : [],
@@ -153,7 +154,7 @@ describe("the tools that find what is on the platform", () => {
      */
     const conversationOf = async (
       as: string,
-      place: { workspaceId?: string; title?: string } = {}
+      place: { workspaceId?: string; title?: string; locale?: string } = {}
     ) => {
       const payload = {
         title: place.title ?? "Ask",
@@ -163,7 +164,10 @@ describe("the tools that find what is on the platform", () => {
       expect(created.statusCode, created.body).toBe(200);
       const conversation = conversationSchema.parse(created.json());
       const { id } = conversation;
-      const headers = { "x-dev-user-id": as };
+      const headers = {
+        "x-dev-user-id": as,
+        ...(place.locale ? { "accept-language": place.locale } : {})
+      };
       const ask = async (tool: string, input: unknown = {}) => {
         const started = await injectStartConversationRun(
           app,
@@ -185,6 +189,65 @@ describe("the tools that find what is on the platform", () => {
     };
     return { app, conversationOf, clientInstanceId: asClientInstanceId(config.clientInstance.id) };
   }
+
+  it("orients from localized agents and published Apps available in this workspace", async () => {
+    const t = await fixture(false, true);
+    t.app.stores.users.getInstanceAdminName = async () => "Mara";
+    const chat = await t.conversationOf(OWNER, { locale: "de" });
+    const scope = {
+      kind: "workspace" as const,
+      workspaceId: asCollaborationWorkspaceId(chat.collaborationWorkspaceId)
+    };
+    const names = ["offered-app", "draft-app"];
+    await t.app.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId: t.clientInstanceId,
+      baseRevisions: Object.fromEntries(names.map((name) => [`app:${name}`, null])),
+      mutations: names.map((name) => ({
+        type: "upsert" as const,
+        kind: "app",
+        name,
+        scope,
+        config: {
+          name,
+          title: name === "offered-app" ? "Angebote" : "Entwurf",
+          description: "Test",
+          manifest: { id: name, name: "Angebote", kit: "1.0.0", entry: "index.html" }
+        },
+        draft: true
+      }))
+    });
+    const app = await t.app.stores.configAssets.getConfigAsset({
+      clientInstanceId: t.clientInstanceId,
+      kind: "app",
+      name: "offered-app"
+    });
+    if (!app) throw new Error("Missing fixture App");
+    await t.app.stores.configAssets.publishConfigAssetRevision({
+      clientInstanceId: t.clientInstanceId,
+      kind: "app",
+      name: app.name,
+      assetId: app.id,
+      revision: app.revision,
+      revisionId: app.activeRevisionId
+    });
+    const read = z
+      .object({
+        helpContact: z.object({ displayLabel: z.string() }),
+        availableHere: z.object({
+          agents: z.array(z.object({ name: z.string(), title: z.string() })),
+          apps: z.array(z.object({ name: z.string(), title: z.string() })),
+          appsTruncated: z.boolean()
+        })
+      })
+      .parse((await chat("platform.context")).answer);
+    expect(read.helpContact.displayLabel).toBe("Mara");
+    expect(read.availableHere.agents).toContainEqual({ name: "test_agent", title: "Test-Helfer" });
+    expect(read.availableHere.apps).toEqual([{ name: "offered-app", title: "Angebote" }]);
+    const listed = foundSchema.parse(
+      (await chat("platform.assets.list", { kind: "agent" })).answer
+    );
+    expect(listed.assets.find((asset) => asset.name === "test_agent")?.title).toBe("Test-Helfer");
+  });
 
   it("lets an agent in a conversation about nothing read the platform skill, see what the instance has and find the assets its user may read, and nothing of the others", async () => {
     const t = await fixture(true);

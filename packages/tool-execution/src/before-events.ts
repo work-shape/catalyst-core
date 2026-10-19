@@ -2,6 +2,7 @@ import { PLATFORM_ASSET_TOOLS } from "./platform-asset-tools";
 import {
   GUARDRAIL_ASSET_KIND,
   type GuardrailAnswer,
+  type LocaleCode,
   type GuardrailSubject,
   type OperationBeforeEvent,
   type OperationCall,
@@ -146,12 +147,23 @@ function aboutGuardrails(
 /** The refusal a caller reads: which guardrail, about what, and why, never the content. */
 function guardrailRefusalMessage(
   refusing: GuardrailAnswer,
-  answers: readonly SubjectAnswer[]
+  answers: readonly SubjectAnswer[],
+  locale?: LocaleCode
 ): string {
   const subject = answers.find((answer) => answer.guardrails.includes(refusing))?.subject;
-  const about = subject?.name ? ` ${subject.kind} '${subject.name}'` : " the call";
+  const title =
+    typeof subject?.title === "string"
+      ? subject.title
+      : (subject?.title?.[locale ?? "en"] ?? subject?.title?.en ?? subject?.title?.de);
+  const about = title
+    ? locale === "de"
+      ? ` „${title}“`
+      : ` ${subject?.kind.replaceAll("_", " ")} '${title}'`
+    : "";
   const reason = refusing.reason === "" ? "" : `: ${refusing.reason}`;
-  return `Guardrail '${refusing.displayName}' blocked${about}${reason}`;
+  return locale === "de"
+    ? `Die Leitplanke „${refusing.displayName}“ hat die Aktion${about} verhindert${reason}`
+    : `Guardrail '${refusing.displayName}' blocked${about || " the action"}${reason}`;
 }
 
 /** A guardrail as a refusal names it. */
@@ -180,7 +192,11 @@ export function approvalAskedBy(answers: readonly SubjectAnswer[]): GuardrailNam
  * reason; where only a hold refused a read, which cannot wait, the one that asked for the
  * approval is named. An emitter that names no guardrail leaves the event that asked.
  */
-export function guardrailDenial(answers: readonly SubjectAnswer[], event: string): OperationDenial {
+export function guardrailDenial(
+  answers: readonly SubjectAnswer[],
+  event: string,
+  locale?: LocaleCode
+): OperationDenial {
   const named = answers.flatMap((answer) => answer.guardrails);
   const refusing =
     named.find((answer) => answer.outcome === "block") ??
@@ -189,7 +205,9 @@ export function guardrailDenial(answers: readonly SubjectAnswer[], event: string
     ? {
         kind: "guardrail",
         guardrailId: refusing.guardrailName,
-        message: guardrailRefusalMessage(refusing, answers)
+        guardrailTitle: refusing.displayName,
+        ...(refusing.reason ? { guardrailReason: refusing.reason } : {}),
+        message: guardrailRefusalMessage(refusing, answers, locale)
       }
     : { kind: "guardrail", guardrailId: event };
 }

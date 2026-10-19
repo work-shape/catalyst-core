@@ -1,4 +1,4 @@
-import { WORKFLOWS_MODULE, WORKFLOW_KIND, offeredNowhere, type SeedApi } from "./api";
+import { WORKFLOWS_MODULE, WORKFLOW_KIND, type SeedApi } from "./api";
 import { builder, type PersonKey } from "./company";
 import type { SeedStep } from "./step";
 import { readWorkflowFile } from "./workflows";
@@ -28,12 +28,7 @@ export async function seedBuilder(
     createdDrafts.push({ kind: "agent", config });
     created += 1;
   }
-  const { assets } = await root.assetsOverview();
-  const stored = assets.find((asset) => asset.kind === "agent" && asset.name === agent.name);
-  // The seed offers the agent everywhere, leaving an existing availability choice alone.
-  if (stored && (created > 0 || offeredNowhere(stored.availability))) {
-    await root.showAgentEverywhere(agent.name);
-  }
+  // This teaching draft stays on its builder's path until a person offers it in chat.
 
   const module = modules.find((candidate) => candidate.name === WORKFLOWS_MODULE);
   const workflowsOn = module?.enabled === true && module.kinds.includes(WORKFLOW_KIND);

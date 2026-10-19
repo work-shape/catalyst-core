@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { appPublishReview } from "../apps/app-publish-reach";
 import {
   getSubjectUserId,
@@ -12,6 +13,7 @@ import {
   type ConfigAssetRevisionRecord,
   type FileSet,
   type GuardrailFields,
+  type GuardrailSubject,
   type JsonObject,
   type OperationBeforeEvent
 } from "@work-shape/catalyst-core";
@@ -19,7 +21,8 @@ import type { AssetSyncItem } from "@work-shape/catalyst-api-contract";
 import {
   GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
   guardrailFieldOf,
-  guardrailStringsOf
+  guardrailStringsOf,
+  localizedStringSchema
 } from "@work-shape/catalyst-config-schema";
 import type { AssetFileInput } from "../assets/asset-files";
 import { readFileSetFile } from "../pages/page-file-sets";
@@ -38,6 +41,17 @@ import type { AssetWorkflowOptions } from "../types";
 
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 
+const displayTitleSchema = z.object({
+  title: localizedStringSchema.optional(),
+  displayName: localizedStringSchema.optional()
+});
+
+function writeTitle(config: unknown) {
+  const parsed = displayTitleSchema.safeParse(config);
+  const title = parsed.success ? (parsed.data.displayName ?? parsed.data.title) : undefined;
+  return title === undefined ? {} : { title };
+}
+
 /** `asset.before_write` of one asset a call saves, from its definition or its files. */
 export function assetWriteEvent(input: {
   kind: string;
@@ -47,7 +61,7 @@ export function assetWriteEvent(input: {
 }): OperationBeforeEvent {
   return {
     name: "asset.before_write",
-    subject: { kind: input.kind, name: input.name },
+    subject: { kind: input.kind, name: input.name, ...writeTitle(input.config) },
     checkable: () => ({
       name: input.name,
       content: filesField(
@@ -73,11 +87,13 @@ export function fileSetWriteEvent(
     read(): Promise<{ config: JsonObject; fileSet: FileSet } | undefined>;
   }
 ): OperationBeforeEvent {
+  const subject: GuardrailSubject = { kind: input.kind, name: input.name };
   return {
     name: "asset.before_write",
-    subject: { kind: input.kind, name: input.name },
+    subject,
     checkable: async (): Promise<GuardrailFields> => {
       const written = await input.read();
+      if (written) Object.assign(subject, writeTitle(written.config));
       return written
         ? {
             name: input.name,
@@ -104,7 +120,12 @@ export async function revertWriteEvents(
   return [
     {
       name: "asset.before_write",
-      subject: { kind: input.kind, id: revision.assetId, name: input.name },
+      subject: {
+        kind: input.kind,
+        id: revision.assetId,
+        name: input.name,
+        ...writeTitle(revision.config)
+      },
       checkable: async (): Promise<GuardrailFields> => ({
         name: input.name,
         content: await revisionText(options, revision)
@@ -193,7 +214,12 @@ export async function publishEvents(
   return [
     {
       name,
-      subject: { kind: input.kind, id: revision.assetId, name: input.name },
+      subject: {
+        kind: input.kind,
+        id: revision.assetId,
+        name: input.name,
+        ...writeTitle(revision.config)
+      },
       checkable: async (): Promise<GuardrailFields> => ({
         name: input.name,
         content: await revisionText(options, revision),

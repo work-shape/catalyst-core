@@ -98,6 +98,8 @@ export interface OperationApprovalRequests {
 export interface RunOperationDeps {
   clientInstanceId: ClientInstanceId;
   registry: OperationRegistry;
+  /** One active administrator the person can ask after a refused call. */
+  instanceAdminName?(): Promise<string | undefined>;
   /** Resolves a named-right resource to its retained asset identity and owner before authorization. */
   resolveResource(resource: OperationResource | undefined): Promise<{
     resource: OperationResource | undefined;

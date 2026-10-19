@@ -4,11 +4,13 @@ import type {
   ConversationId,
   DraftAttachment,
   ManagedFileId,
+  LocaleCode,
   ManagedObjectDeletionResult
 } from "@work-shape/catalyst-core";
 import { ATTACHMENT_CREATE_OUTCOMES } from "@work-shape/catalyst-core";
 
 export interface UploadDraftAttachmentInput {
+  locale?: LocaleCode;
   conversationId: ConversationId;
   ownerUserId: string;
   filename: string;

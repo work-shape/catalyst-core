@@ -11610,6 +11610,9 @@
                           "subjectName": {
                             "type": "string"
                           },
+                          "subjectTitle": {
+                            "type": "string"
+                          },
                           "convertedFrom": {
                             "type": "string",
                             "const": "require_approval"

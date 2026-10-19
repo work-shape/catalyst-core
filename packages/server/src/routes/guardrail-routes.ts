@@ -5,6 +5,7 @@ import {
 } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  isAppError,
   GUARDRAIL_ACTIONS,
   GUARDRAIL_ASSET_KIND,
   SHIPPED_GUARDRAILS,
@@ -12,11 +13,13 @@ import {
   shippedGuardrail,
   type ActorAccess,
   type OperationAuthorization,
+  type OperationExecutionContext,
   type OperationResource,
   type ShippedGuardrail,
   type ShippedGuardrailSwitch
 } from "@work-shape/catalyst-core";
 import { accessResource, decide } from "../assets/asset-access";
+import { assetTitle } from "../assets/asset-reference-labels";
 import { AssetWorkflow } from "../assets/asset-service";
 import { GuardrailRunner } from "../guardrails/guardrail-runner";
 import { dryRunGuardrail, guardrailUnderTrial, testGuardrail } from "../guardrails/guardrail-trial";
@@ -163,10 +166,50 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
     }
   });
 
+  /** A hit names only the revision this reader may open, in the reader's language. */
+  async function readHitTitle(
+    kind: string,
+    name: string,
+    subjectId: string | undefined,
+    context: OperationExecutionContext
+  ): Promise<string | undefined> {
+    if (!options.configAssets.kinds.get(kind) || options.modules.offModuleOf("kind", kind))
+      return undefined;
+    try {
+      const record = await options.configAssets.store.getConfigAsset({
+        clientInstanceId,
+        kind,
+        name
+      });
+      if (
+        !record ||
+        record.status !== "active" ||
+        (subjectId !== undefined && record.id !== subjectId)
+      )
+        return undefined;
+      const read = await workflow.reads.get(context, {
+        kind,
+        name,
+        ...(record.scope.kind === "workspace" ? { workspaceId: record.scope.workspaceId } : {})
+      });
+      return assetTitle(
+        options.configAssets.kinds.kinds,
+        kind,
+        name,
+        read.config,
+        context.runtime.locale ?? options.config.localization.defaultLocale
+      );
+    } catch (error) {
+      if (isAppError(error) && (error.code === "FORBIDDEN" || error.code === "NOT_FOUND"))
+        return undefined;
+      throw error;
+    }
+  }
+
   route.operation(apiOperations["guardrails.list_hits"], {
     authorize: (input, { access }) => authorizeOn(access, input.name),
     resource: guardrailResource,
-    async execute(input) {
+    async execute(input, context) {
       if (!(await stored(input.name))) {
         throw new AppError("NOT_FOUND", `There is no Guardrail '${input.name}'`);
       }
@@ -179,19 +222,42 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
         }),
         options.stores.guardrails.countHits({ clientInstanceId, guardrailName: input.name })
       ]);
+      const titles = new Map<string, Promise<string | undefined>>();
+      const titleOf = (
+        kind: string,
+        name: string,
+        subjectId?: string
+      ): Promise<string | undefined> => {
+        const key = `${kind}:${name}:${subjectId ?? ""}`;
+        let title = titles.get(key);
+        if (!title) {
+          title = readHitTitle(kind, name, subjectId, context);
+          titles.set(key, title);
+        }
+        return title;
+      };
       // No hit names a person: hits are counted by rule and period, never listed by person.
       return {
-        items: hits.slice(0, GUARDRAIL_HITS_LIMIT).map((hit) => ({
-          id: hit.id,
-          event: hit.event,
-          outcome: hit.outcome,
-          message: hit.message,
-          subjectKind: hit.subjectKind,
-          ...(hit.subjectId === undefined ? {} : { subjectId: hit.subjectId }),
-          ...(hit.subjectName === undefined ? {} : { subjectName: hit.subjectName }),
-          ...(hit.convertedFrom === undefined ? {} : { convertedFrom: hit.convertedFrom }),
-          createdAt: hit.createdAt
-        })),
+        items: await Promise.all(
+          hits.slice(0, GUARDRAIL_HITS_LIMIT).map(async (hit) => {
+            const title =
+              hit.subjectName === undefined
+                ? undefined
+                : await titleOf(hit.subjectKind, hit.subjectName, hit.subjectId);
+            return {
+              id: hit.id,
+              event: hit.event,
+              outcome: hit.outcome,
+              message: hit.message,
+              subjectKind: hit.subjectKind,
+              ...(hit.subjectId === undefined ? {} : { subjectId: hit.subjectId }),
+              ...(hit.subjectName === undefined ? {} : { subjectName: hit.subjectName }),
+              ...(title === undefined ? {} : { subjectTitle: title }),
+              ...(hit.convertedFrom === undefined ? {} : { convertedFrom: hit.convertedFrom }),
+              createdAt: hit.createdAt
+            };
+          })
+        ),
         counts,
         hasMore: hits.length > GUARDRAIL_HITS_LIMIT
       };

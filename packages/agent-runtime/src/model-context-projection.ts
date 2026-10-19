@@ -198,7 +198,11 @@ export async function createModelVisibleToolOutput(
   const content =
     result.status === "success"
       ? stringifyForModel(result.output ?? { status: "success" })
-      : stringifyForModel(result.error);
+      : stringifyForModel(
+          result.error.code === "not_allowed" || result.error.code === "confirmation_required"
+            ? { message: result.error.message }
+            : result.error
+        );
   const bounded = boundModelOutput(content, options);
   if (images === "not_loaded") {
     const summary = summarizeModelVisibleArtifactsNotLoaded(result);

@@ -1,3 +1,4 @@
+import { denialText, type ToolCallNames } from "./tool-refusal-text";
 import {
   AGENTS_RUN_OPERATION,
   AGENT_TOOL_ACTION_PREFIX,
@@ -11,13 +12,11 @@ import {
   PERMISSION_REF_ACTION_PREFIX,
   RUN_AGENT_TOOL_NAME,
   answerAsTool,
-  confirmationRequiredMessage,
   isAppError,
   isAuthenticatedServicePrincipal,
   isDataToolName,
   knowledgeToolCall,
   operationCallFromToolRequest,
-  operationDenialError,
   toErrorEnvelope,
   toolRequestFromOperationCall,
   unknownToJsonValue,
@@ -27,7 +26,6 @@ import {
   type JsonObject,
   type Logger,
   type OperationDefinition,
-  type OperationDenial,
   type OperationEffect,
   type OperationExecutionContext,
   type OperationRegistry,
@@ -287,15 +285,6 @@ function internalFailure(correlationId: string): ToolHandlerFailureResult {
   );
 }
 
-/** What the agent is told about the tool call it made. */
-interface ToolCallNames {
-  toolName: string;
-  agentName: string;
-  correlationId: string;
-  /** The reason a tool's own definition gives for its mode, where it gives one. */
-  policyReason?: string;
-}
-
 /**
  * Projects what a call came to back to the agent that made it as a tool call. A tool that ran
  * answers its own result unchanged. A call that was refused, held or cut off before the tool
@@ -305,9 +294,7 @@ export function toolResultFromOperationResult(
   outcome: Pick<OperationOutcome, "result" | "toolResult">,
   names: ToolCallNames
 ): ToolExecutionResult {
-  if (outcome.toolResult) {
-    return outcome.toolResult;
-  }
+  if (outcome.toolResult) return outcome.toolResult;
   const { result } = outcome;
   switch (result.status) {
     case "done":
@@ -323,7 +310,7 @@ export function toolResultFromOperationResult(
       return { status: "success", output: { status: "running", operationRunId: result.runId } };
     case "denied":
       return result.reason.kind === "policy" && result.reason.reason === "confirmation_required"
-        ? failed("confirmation_required", confirmationRequiredMessage(result.reason.operation), {
+        ? failed("confirmation_required", denialText(result.reason, names), {
             operation: result.reason.operation
           })
         : failed("not_allowed", denialText(result.reason, names));
@@ -345,21 +332,6 @@ export function toolResultFromOperationResult(
     case "dry_run":
       return internalFailure(names.correlationId);
   }
-}
-
-function denialText(denial: OperationDenial, names: ToolCallNames): string {
-  if (denial.kind === "forbidden") {
-    if (denial.action?.startsWith(AGENT_TOOL_ACTION_PREFIX)) {
-      return `Agent '${names.agentName}' is not allowed to use '${names.toolName}'`;
-    }
-    if (denial.action?.startsWith(PERMISSION_REF_ACTION_PREFIX)) {
-      return `User is missing permission '${denial.action.slice(PERMISSION_REF_ACTION_PREFIX.length)}'`;
-    }
-  }
-  if (denial.kind === "policy") {
-    return names.policyReason ?? `Tool '${names.toolName}' is denied by policy`;
-  }
-  return operationDenialError(denial).message;
 }
 
 const forbiddenDetailsSchema = z.object({
@@ -492,7 +464,7 @@ export function createToolOperationRunner(
       return projected.refusal;
     }
     const { request } = projected;
-    const called = await calledTool(request, context.correlationId, tools, dataTools, deps);
+    const called = await calledTool(request, context, tools, dataTools, deps);
     if ("refusal" in called) {
       return called.refusal;
     }
@@ -501,7 +473,8 @@ export function createToolOperationRunner(
       toolName: request.toolName,
       agentName: request.agentName,
       correlationId: context.correlationId,
-      policyReason: tool.policyReason
+      policyReason: tool.policyReason,
+      locale: context.locale
     };
     try {
       const outcome = await runOperation(
@@ -548,6 +521,9 @@ export function createToolOperationRunner(
           expiresAt: result.expiresAt
         };
       }
+      if (result.status === "denied") {
+        names.adminName = await deps.instanceAdminName?.();
+      }
       const answered = toolResultFromOperationResult(outcome, names);
       // The runtime keeps the started subagent's call with the run it waits on.
       return request.toolName === AGENTS_RUN_OPERATION &&
@@ -556,6 +532,8 @@ export function createToolOperationRunner(
         ? { ...answered, privateOutput: { operationRunId: result.runId } }
         : answered;
     } catch (error) {
+      if (isAppError(error) && error.code === "FORBIDDEN")
+        names.adminName = await deps.instanceAdminName?.();
       const refused = refusalBeforeRun(error, names);
       if (!refused) throw error;
       return refused;
@@ -642,12 +620,13 @@ async function knowledgeQueryRequest(
  */
 async function calledTool(
   request: ToolExecutionRequest,
-  correlationId: string,
+  context: Pick<ToolExecutionContext, "correlationId" | "locale">,
   tools: ToolRegistry,
   dataTools: DataToolRunnerOptions | undefined,
   deps: RunOperationDeps
 ): Promise<{ tool: CalledTool } | { refusal: ToolHandlerFailureResult }> {
   const { toolName, agentName } = request;
+  const { correlationId, locale } = context;
   const tool = tools.get(toolName);
   if (tool) {
     return {
@@ -682,7 +661,13 @@ async function calledTool(
         "not_allowed",
         denialText(
           { kind: "forbidden", action, reason: "no_grant" },
-          { toolName, agentName, correlationId }
+          {
+            toolName,
+            agentName,
+            correlationId,
+            locale,
+            adminName: await deps.instanceAdminName?.()
+          }
         ),
         { action }
       )

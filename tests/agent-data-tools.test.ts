@@ -153,7 +153,8 @@ describe("an agent carries data tools", () => {
       status: "failed",
       error: {
         code: "not_allowed",
-        message: `Agent 'other_agent' is not allowed to use '${ECHO}'`,
+        message:
+          "This agent is not set up for this action here. Nothing ran. Ask an instance administrator; no contact person is currently listed.",
         details: { action: `agent_tool:${ECHO}` }
       }
     });

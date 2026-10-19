@@ -347,14 +347,17 @@ describe("the title job and a rename by the user", () => {
     );
   });
 
-  it("asks for the title in the language of the account the conversation belongs to", async () => {
+  it("asks for the conversation language, preserves proper names and falls back to the account language", async () => {
+    const prompt = (await titledConversation(undefined)).prompts.join(" ");
+    expect(prompt).toContain("language of the initial user message");
+    expect(prompt).toContain("never translate proper names");
     // ACCEPT-1c C8: a German account's list showed English titles.
     // The account keeps its language, so the one without a choice goes first.
     expect((await titledConversation(undefined)).prompts).toEqual([
-      expect.stringContaining("Write the headline in English.")
+      expect.stringContaining("If its language is unclear, write in English.")
     ]);
     expect((await titledConversation(undefined, undefined, undefined, "de")).prompts).toEqual([
-      expect.stringContaining("Write the headline in German.")
+      expect.stringContaining("If its language is unclear, write in German.")
     ]);
   });
 

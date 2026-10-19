@@ -3,7 +3,7 @@ import { AppError, getSubjectUserId, type JsonObject } from "@work-shape/catalys
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import { readMultipartFile, stageMultipartFile } from "../http/multipart-upload";
 import type { Route } from "../http/route";
-import { conversationIdParam, requirePathParam } from "./request-context";
+import { conversationIdParam, requirePathParam, resolveRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerDraftAttachmentRoutes(route: Route, options: ChatServerOptions): void {
@@ -35,6 +35,7 @@ export function registerDraftAttachmentRoutes(route: Route, options: ChatServerO
         const service = attachments(options);
         const { attachment, outcome } = await service.uploadDraftAttachment({
           conversationId,
+          locale: resolveRequestLocale(options, request),
           ownerUserId: getSubjectUserId(user),
           filename: file.filename,
           mimeType: file.mimetype,

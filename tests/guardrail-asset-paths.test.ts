@@ -94,7 +94,7 @@ describe("a guardrail on an App written from a Page", () => {
       expect(refused.statusCode).toBe(403);
       expect(refused.json<{ error: { code: string; message: string } }>().error).toMatchObject({
         code: "GUARDRAIL_BLOCKED",
-        message: "Guardrail 'No IBAN in Apps' blocked app 'offers': Apps hold no bank account."
+        message: "Guardrail 'No IBAN in Apps' blocked app 'Offers': Apps hold no bank account."
       });
       const stored = () =>
         t.stores.configAssets.getConfigAsset({
@@ -278,7 +278,7 @@ describe("a guardrail on a file that is no text", () => {
       const put = await t.putApp(t.admin.id, "offers", [...appFiles("Angebot"), hidden]);
       expect(put.statusCode).toBe(403);
       expect(put.json<{ error: { message: string } }>().error.message).toBe(
-        "Guardrail 'No IBAN in assets' blocked app 'offers': Skills hold no bank account."
+        "Guardrail 'No IBAN in assets' blocked the action: Skills hold no bank account."
       );
     } finally {
       await t.close();
@@ -383,7 +383,7 @@ describe("a guardrail on a file that is no text", () => {
       expect(published.statusCode).toBe(403);
       // Nothing about it is temporary: it is not told to try again.
       expect(published.json<{ error: { message: string } }>().error.message).toBe(
-        "Guardrail 'Judged' blocked app 'archive': Check 'judged' could not judge a file that is no text."
+        "Guardrail 'Judged' blocked app 'Offers': Check 'judged' could not judge a file that is no text."
       );
       expect(judged).toBe(1);
       expect((await t.listed("archive")).publishedRevision).toBeUndefined();
@@ -418,7 +418,7 @@ describe("a guardrail before a Data Store is published", () => {
     const published = await publish(world, 1);
     expect(published.statusCode).toBe(403);
     expect(published.json<{ error: { message: string } }>().error.message).toBe(
-      "Guardrail 'No IBAN in Data Stores' blocked data_store 'findings': Stores hold no bank account."
+      "Guardrail 'No IBAN in Data Stores' blocked data store 'Findings': Stores hold no bank account."
     );
     const [hit] = await world.stores.guardrails.listHits({
       clientInstanceId: storeInstanceId,

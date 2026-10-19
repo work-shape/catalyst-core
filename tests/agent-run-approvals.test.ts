@@ -747,7 +747,7 @@ describe("agent approval pause (operations checks 4, 5 and 6)", () => {
       const tool = (await f.messages(said.conversationId)).find(
         (message) => message.role === "tool"
       );
-      expect(tool?.text).toContain("not_allowed");
+      expect(tool?.text).not.toContain("not_allowed");
       expect(tool?.text).toContain(comment ?? "The user declined this call. Nothing ran.");
       expect((await f.messages(said.conversationId)).at(-1)?.text).toContain(comment ?? "declined");
       await f.app.close();
