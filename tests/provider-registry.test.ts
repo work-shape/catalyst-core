@@ -186,7 +186,12 @@ describe("instance startup on the secret resolver", () => {
     );
 
     await mail.transport.deliver(
-      { to: { email: "ada@example.test" }, subject: "Subject", text: "Text", html: "<p>Html</p>" },
+      {
+        to: [{ email: "ada@example.test" }],
+        subject: "Subject",
+        text: "Text",
+        html: "<p>Html</p>"
+      },
       { fromAddress: "noreply@example.test", fromName: "Example", productName: "Example" }
     );
 

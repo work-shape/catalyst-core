@@ -428,24 +428,37 @@ export async function callStepOperation(input: {
           throw new Error(`The reading call of '${operation}' failed for now and is made again`);
         }
       }
+      // The sentence of the error can quote the outside system, and the Operation Run keeps
+      // it. Its reason is one of a fixed list, such as `upstream_conflict` for a 409.
+      const reason = failureReasonSchema.safeParse(result.error.details);
+      const named = reason.success ? reason.data.reason : undefined;
       // A call that carried its key outside and failed for a reason that passes is made
-      // again by the next attempt of the step's job, which counts it. The last attempt fails
-      // the step like every other failure.
+      // again by the next attempt of the step's job, which counts it, and so is a call that
+      // changed nothing for a reason its operation says may pass, such as a mail provider
+      // that could not be reached. The last attempt fails the step like every other failure.
       if (
         changing &&
-        definition.repeatsUnderKey &&
         outcome.run.error?.unexecuted === true &&
+        (definition.repeatsUnderKey ||
+          (named !== undefined && definition.retriedReasons?.includes(named))) &&
         stepRun.attempt < WORKFLOW_STEP_JOB_MAX_ATTEMPTS
       ) {
         throw new Error(`The call of '${operation}' failed for now and is made again`);
       }
-      // The sentence of the error can quote the outside system, and the Operation Run keeps
-      // it. Its reason is one of a fixed list, such as `upstream_conflict` for a 409.
-      const reason = failureReasonSchema.safeParse(result.error.details);
+      if (named === "operation_interrupted") {
+        throw new OperationStepFailure(
+          "operation_interrupted",
+          `The answer to the call of '${operation}' was lost after the call left, so it may or may not have taken effect. It is not made a second time: check what it changed before the Workflow is started again`,
+          trace
+        );
+      }
       throw new OperationStepFailure(
-        stepRun.stepType === "workflow" && reason.success ? reason.data.reason : result.error.code,
-        reason.success
-          ? `The operation '${operation}' failed (${reason.data.reason})`
+        named !== undefined &&
+          (stepRun.stepType === "workflow" || definition.stepFailureReasons?.includes(named))
+          ? named
+          : result.error.code,
+        named !== undefined
+          ? `The operation '${operation}' failed (${named})`
           : `The operation '${operation}' failed`,
         trace
       );
@@ -465,6 +478,19 @@ export async function callStepOperation(input: {
       }
       // The result of work that ends later is the example its operation declares.
       if (definition.completion) return { output: definition.completion.example, ...trace };
+      // An operation that simulates itself answers what it would have done, such as the mail
+      // as it would go out.
+      if (definition.simulate) {
+        const simulated = jsonValueSchema.safeParse(result.output ?? null);
+        if (!simulated.success) {
+          throw new OperationStepFailure(
+            "output_not_json",
+            `The operation '${operation}' answered a value that is not JSON`,
+            trace
+          );
+        }
+        return { output: simulated.data, ...trace };
+      }
       const wouldHaveDone = jsonValueSchema.safeParse(result.input ?? null);
       const output: JsonObject = {
         wouldHaveDone: {

@@ -188,6 +188,12 @@ export interface ChatServerOptions {
     | "createPasswordSetupToken"
     | "completePasswordSetup"
   >;
+  /**
+   * The senders `mail.send` sends as on this instance (MAIL-1): `system` while release config
+   * switches `infrastructure.mail.outbound` on, and none otherwise. A grant of
+   * `mail_sender.use` names one of them, and only while it is registered.
+   */
+  mailSenders?: readonly string[];
   mail?: {
     sender: MailSender;
     /** Public URL of the chat UI; emailed links point here. */

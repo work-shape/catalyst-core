@@ -1,4 +1,10 @@
-import { MAIL_SENDER_USE_ACTION, type PlatformAction } from "@work-shape/catalyst-asset-schemas";
+import {
+  MAIL_RECIPIENT_DOMAINS_ANY,
+  MAIL_SEND_REFUSAL_REASONS,
+  MAIL_SENDER_USE_ACTION,
+  type PlatformAction
+} from "@work-shape/catalyst-asset-schemas";
+import { isAppError } from "./errors";
 
 /**
  * The rights of a mail sender. `use` sends as it, on one sender: the `admin` role holds it,
@@ -71,3 +77,54 @@ export {
   type WorkflowMessageMailParams,
   type WorkflowStepSourceKind
 } from "@work-shape/catalyst-asset-schemas";
+
+// MAIL-1: the rule of recipients and the failures of a call, as every surface reads them.
+
+/**
+ * The failure of a call whose connection to the provider was never made. Nothing left, so the
+ * call changed nothing and the step's attempts make it again.
+ */
+export const MAIL_SEND_UNSENT_REASON = "mail_provider_unreachable";
+
+/**
+ * The failure of a call whose request left and whose answer was lost (a timeout, a 5xx). The
+ * provider takes no idempotency key, so the mail may or may not have gone out, and the call is
+ * never made again.
+ */
+export const MAIL_SEND_INTERRUPTED_REASON = "operation_interrupted";
+
+/** Every reason a call of `mail.send` fails for, which a Workflow step takes as its code. */
+export const MAIL_SEND_FAILURE_REASONS = [
+  ...MAIL_SEND_REFUSAL_REASONS,
+  MAIL_SEND_UNSENT_REASON,
+  MAIL_SEND_INTERRUPTED_REASON
+] as const;
+export type MailSendFailureReason = (typeof MAIL_SEND_FAILURE_REASONS)[number];
+
+/** The domain of an address, lowercase: what the recipient rule and the audit read of it. */
+export function mailDomainOf(address: string): string {
+  return address.slice(address.lastIndexOf("@") + 1).toLowerCase();
+}
+
+/**
+ * Whether `recipientDomains` admits an address of the domain. A listed domain matches exactly,
+ * `*.example.de` its subdomains and not the domain itself, and `*` every domain. An empty list
+ * admits none: then only the people of the instance are mailed.
+ */
+export function mailDomainAllowed(domain: string, recipientDomains: readonly string[]): boolean {
+  const name = domain.toLowerCase();
+  return recipientDomains.some((listed) => {
+    if (listed === MAIL_RECIPIENT_DOMAINS_ANY) return true;
+    if (listed.startsWith("*.")) return name.endsWith(listed.slice(1));
+    return name === listed;
+  });
+}
+
+/** The reason a failed call of `mail.send` names in its details, where it names one. */
+export function mailSendReasonOf(error: unknown): MailSendFailureReason | undefined {
+  if (!isAppError(error)) return undefined;
+  const { details } = error;
+  if (typeof details !== "object" || details === null || !("reason" in details)) return undefined;
+  const { reason } = details;
+  return MAIL_SEND_FAILURE_REASONS.find((known) => known === reason);
+}

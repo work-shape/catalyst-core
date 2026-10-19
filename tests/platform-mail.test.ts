@@ -116,7 +116,7 @@ describe("mail templates", () => {
 
 describe("Mailjet transport", () => {
   const rendered = {
-    to: { email: "ada@example.test", displayLabel: "Ada" },
+    to: [{ email: "ada@example.test", displayLabel: "Ada" }],
     subject: "Subject",
     text: "Text",
     html: "<p>Html</p>"
@@ -170,11 +170,15 @@ describe("Mailjet transport", () => {
 
     expect(await rejecting.deliver(rendered, identity)).toEqual({
       ok: false,
-      reason: "provider_http_401"
+      reason: "provider_http_401",
+      failure: "rejected",
+      providerCode: "http_401"
     });
+    // An error that names no connection that failed may have come after Mailjet took the mail.
     expect(await unreachable.deliver(rendered, identity)).toEqual({
       ok: false,
-      reason: "provider_unreachable"
+      reason: "provider_uncertain",
+      failure: "uncertain"
     });
   });
 });
@@ -340,12 +344,12 @@ describe("password setup by email", () => {
       .mockReturnValue("2026-10-09T12:00:00.000Z");
     try {
       const mail = {
-        to: { email: "ada@example.test" },
+        to: [{ email: "ada@example.test" }],
         subject: "Same",
         text: "Same",
         html: "Same"
       };
-      for (let index = 0; index < 3; index++) await harness.transport.deliver(mail);
+      for (let index = 0; index < 3; index++) await harness.transport.deliver(mail, identity);
       const ids: string[] = [];
       let cursor: string | undefined;
       for (let index = 0; index < 3; index++) {

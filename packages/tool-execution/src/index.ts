@@ -87,6 +87,7 @@ export {
 } from "./operation-policy-call";
 
 export { APP_PUBLISH_TOOL_NAME, createAppPublishTool } from "./app-publish-tool";
+export { MAIL_SEND_TOOL_NAME, createMailSendTool } from "./mail-send-tool";
 
 export {
   KNOWLEDGE_ADD_FILES_TOOL_NAME,

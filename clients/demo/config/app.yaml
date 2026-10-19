@@ -120,6 +120,12 @@ infrastructure:
     appUrl: http://127.0.0.1:5173
     sender:
       fromAddress: noreply@example.test
+    # `mail.send` for Workflows and agents (MAIL-1). Every mail is captured as above; people of
+    # the instance and addresses at example.test are mailed.
+    outbound:
+      enabled: true
+      recipientDomains:
+        - example.test
   objectStorage:
     # The built files of Pages. Shared by the API and the workspace command worker.
     files:

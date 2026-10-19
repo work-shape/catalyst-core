@@ -13,6 +13,7 @@ import { checkPublishedChildren } from "./workflow-child-assets";
 import { workflowAccountRights } from "./workflow-account-rights";
 import {
   createWorkflowLiveCheck,
+  mailSendStepRefusal,
   type PublishReach,
   type WorkflowAssetKind,
   type WorkflowRunAsOptions
@@ -33,7 +34,8 @@ import {
   type ConfigAssetStore,
   type JsonObject,
   type StorePage,
-  type PlatformStores
+  type PlatformStores,
+  type WorkflowManifest
 } from "@work-shape/catalyst-core";
 import {
   WORKFLOW_MANIFEST_MAX_BYTES,
@@ -139,6 +141,11 @@ export function createWorkflowAssetKind(
     /** The modules of the instance: a right of a kind whose module is off is refused. */
     modules?: WorkflowOwnRightsModules;
     /**
+     * Whether the instance has `mail.send` and whom it may mail: a save and a publish refuse a
+     * step on it where it is missing, and a literal recipient outside the rule.
+     */
+    mailSend?: { registered: boolean; recipientDomains: readonly string[] };
+    /**
      * The ceilings of release config and the step slots, which a publish holds a Workflow's
      * `limits` to and the publish question measures a raise by.
      */
@@ -150,6 +157,15 @@ export function createWorkflowAssetKind(
   const runnable = (config: JsonObject | undefined) => {
     const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
     return parsed.ok ? parsed.manifest : undefined;
+  };
+  const assertMailSteps = async (manifest: WorkflowManifest, stores: PlatformStores) => {
+    const refusal = await mailSendStepRefusal(manifest, {
+      clientInstanceId,
+      stores,
+      registered: options.mailSend?.registered ?? false,
+      recipientDomains: options.mailSend?.recipientDomains ?? []
+    });
+    if (refusal) throw refusal;
   };
   // The publish already owns a platform connection. Bind every sourced operation read,
   // including nested resolution by an App action, to its transaction's readers.
@@ -358,6 +374,7 @@ export function createWorkflowAssetKind(
         throw workflowDefinitionRefusal(result.manifest.id, continuation);
       const kindIssues = workflowKindIssues(result.manifest);
       if (kindIssues.length > 0) throw workflowDefinitionRefusal(parsed.name, kindIssues);
+      await assertMailSteps(result.manifest, stores);
       // A limit above the operator's ceiling is refused here, by name, and never clamped.
       const above = workflowLimitIssues(result.manifest, limits);
       if (above.length > 0) throw workflowDefinitionRefusal(parsed.name, above);
@@ -430,6 +447,7 @@ export function createWorkflowAssetKind(
       const parsed = workflowConfigSchema.parse(definition);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      await assertMailSteps(result.manifest, stores);
       await checkChildContracts(
         result.manifest,
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets }),

@@ -5,7 +5,7 @@ import {
 } from "@work-shape/catalyst-asset-schemas";
 import type { ActiveRunSummary, AgentRunProjection } from "./agent-runtime";
 import type { SkillResourceConfig } from "./config";
-import type { AgentRunWriteFence } from "./identity";
+import type { AgentRunWriteFence, AuthenticatedUser } from "./identity";
 import type {
   AgentRunId,
   ClientInstanceId,
@@ -74,6 +74,12 @@ export interface ConversationOffer {
    * platform's tools is told it.
    */
   orientation?: string;
+  /**
+   * Tools the agent's definition lists that the person of the run may not call, such as
+   * `mail.send` without `mail_sender.use` on its sender: they are not offered to the model.
+   * Each call is still decided on its own.
+   */
+  withheldToolNames?: readonly string[];
 }
 
 /** The release skill containing this instance's product documentation. */
@@ -109,6 +115,8 @@ export interface ConversationOfferSource {
     conversationId: ConversationId;
     /** The tools the agent's own definition lists: they decide whether it holds the platform's. */
     agentToolNames: readonly string[];
+    /** The person the run acts for; the tools they may not call are withheld. */
+    user?: AuthenticatedUser;
   }): Promise<ConversationOffer | undefined>;
 }
 

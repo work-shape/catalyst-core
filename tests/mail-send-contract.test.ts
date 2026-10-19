@@ -356,9 +356,8 @@ describe("the right mail_sender.use", () => {
     expect(PRINCIPAL_GRANTABLE_ACTIONS).toContain("mail_sender.use");
   });
 
-  it("has no grant scope until MAIL-1 registers the sender", () => {
-    // MAIL-1 adds it at asset scope only, on one sender: never at instance scope.
-    expect(Object.keys(GRANTABLE_ACTION_SCOPES)).not.toContain("mail_sender.use");
+  it("is granted on one named sender and never at instance scope", () => {
+    expect(GRANTABLE_ACTION_SCOPES["mail_sender.use"]).toEqual(["asset"]);
   });
 
   it("names recipients by the ids notices name them by", () => {

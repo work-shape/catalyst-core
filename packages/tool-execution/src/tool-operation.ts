@@ -50,6 +50,7 @@ import { toolFailureLogRecord } from "./tool-failure-log";
 import type { ToolRegistry } from "./tool-registry";
 import { failed } from "./tool-results";
 import { APP_PUBLISH_TOOL_NAME } from "./app-publish-tool";
+import { MAIL_SEND_TOOL_NAME } from "./mail-send-tool";
 import { WORKFLOW_TEST_TOOL_NAMES } from "./workflow-test-tools";
 import {
   KNOWLEDGE_ADD_FILES_TOOL_NAME,
@@ -201,6 +202,7 @@ export function registerToolOperations(
       WORKFLOW_TEST_TOOL_NAMES.includes(tool.name) ||
       tool.name === RUN_AGENT_TOOL_NAME ||
       tool.name === APP_PUBLISH_TOOL_NAME ||
+      tool.name === MAIL_SEND_TOOL_NAME ||
       tool.name === KNOWLEDGE_ADD_FILES_TOOL_NAME
     )
       continue;

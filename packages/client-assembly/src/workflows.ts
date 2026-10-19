@@ -1,4 +1,5 @@
 import type { StorePage } from "@work-shape/catalyst-core";
+import { outboundMailOf } from "./mail";
 import {
   workflowsConfigSchema,
   type ClientInstanceConfig
@@ -294,7 +295,11 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
                 stepSlots: config.workflows.stepSlots
               },
               ...zone,
-              registry: () => registry
+              registry: () => registry,
+              mailSend: {
+                registered: outboundMailOf(config) !== undefined,
+                recipientDomains: outboundMailOf(config)?.outbound.recipientDomains ?? []
+              }
             })
           ]
         }

@@ -233,6 +233,8 @@ export type OperationResult<TOutput = unknown> =
       status: "dry_run";
       runId: OperationRunId;
       input?: unknown;
+      /** What the operation's own simulation answered (`simulate`), where it has one. */
+      output?: unknown;
       wouldAsk?: "confirmation" | "approval";
     }
   | {

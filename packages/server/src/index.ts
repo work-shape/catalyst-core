@@ -310,6 +310,13 @@ export type {
 
 export * from "./approvals/skill-change-approval-handler";
 export { createNotices, type NoticesOptions } from "./notices/notices";
+export {
+  activePersonOf,
+  mailSendOperation,
+  registerMailSendOperation,
+  type MailSendOperationOptions
+} from "./mail/mail-send-operation";
+export { mailSendStepRefusal, type MailSendStepRule } from "./mail/mail-send-steps";
 export { applyValidatedConfigAssetMutations } from "./assets/config-asset-writer";
 export type { ConfigAssetWriterOptions } from "./assets/config-asset-writer";
 export { createAgentAssetKind } from "./asset-kinds/agent";

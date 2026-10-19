@@ -1,5 +1,6 @@
 import type { AgentToolReference, ConfigAssetValidationRefs } from "@work-shape/catalyst-server";
-import { getEnabledToolNames, type ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { releaseToolNames } from "./mail";
 import {
   REASONING_EFFORTS,
   type ModuleSnapshot,
@@ -32,7 +33,7 @@ export function createConfigAssetReferences(
     }),
     fastModeModelBindingIds: fastModeModelBindingIds(config),
     reasoningEfforts: [...REASONING_EFFORTS],
-    enabledToolNames: agentListableToolNames(getEnabledToolNames(config)),
+    enabledToolNames: agentListableToolNames(releaseToolNames(config)),
     registeredToolNames: modules.modules.flatMap((module) => module.definition?.tools ?? [])
   };
   let described: AgentToolReference[] = [];

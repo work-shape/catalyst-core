@@ -13,6 +13,8 @@ import {
 import {
   AppError,
   LEGACY_PERMISSION_ACTIONS,
+  MAIL_SENDER_SYSTEM,
+  MAIL_SENDER_USE_ACTION,
   PERMISSIONS,
   asClientInstanceId,
   asUserId,
@@ -353,7 +355,11 @@ export function createPostgresAccessStore(
             );
           }
         }
-        if (input.scopeKind === "asset") {
+        // The mail sender `system` is no config asset: it stands without a row, and the grant
+        // write has asked that the instance registers it (MAIL-1).
+        const onSystemSender =
+          input.action === MAIL_SENDER_USE_ACTION && input.scopeId === MAIL_SENDER_SYSTEM;
+        if (input.scopeKind === "asset" && !onSystemSender) {
           // Held until the row is written: the deletion of the asset removes the allows on
           // it and waits for this lock, so a row written beside a delete is removed by it,
           // and none is written for an asset that is already gone. The row of a deleted

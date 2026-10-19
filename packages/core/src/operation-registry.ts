@@ -109,6 +109,12 @@ export interface OperationExecutionContext {
   beforeEvents?: readonly OperationBeforeEvent[];
 }
 
+/** What a simulated call is told (`simulate` of the definition). */
+export type OperationSimulationContext = Pick<
+  OperationExecutionContext,
+  "runId" | "actor" | "origin" | "workspaceId" | "correlationId" | "runtime" | "audit"
+>;
+
 /** What an operation's own check of the caller's right answers. A refusal names the right. */
 export type OperationAuthorization =
   | { allowed: true }
@@ -246,6 +252,31 @@ interface OperationDefinitionBase<Input, Output> {
    * `timeoutMs` is how long the work may take before the run counts as interrupted.
    */
   completion?: OperationAsyncCompletion;
+  /**
+   * What a simulated call answers: a changing call of a draft that goes nowhere (`dry_run`,
+   * ADR-0031), such as a step of a Workflow test run. It changes and sends nothing. It may
+   * refuse the call where the live call would be refused, so a step that would fail live fails
+   * in the test too. Without it a simulated call answers the input it would have been made
+   * with.
+   */
+  simulate?(input: Input, context: OperationSimulationContext): Promise<unknown>;
+  /**
+   * The reasons of a failure (`details.reason` of its error) that a Workflow step takes as its
+   * code in place of the error's code, such as `recipient_not_allowed`.
+   */
+  stepFailureReasons?: readonly string[];
+  /**
+   * The reasons of a failure that changed nothing (`AppError.changedNothing`) and may pass, such
+   * as a connection that could not be made. A Workflow step's attempts make such a call again
+   * under the same key. Every other failure of a changing call ends the step.
+   */
+  retriedReasons?: readonly string[];
+  /**
+   * The account of a Workflow that calls it must hold its right when the Workflow is published,
+   * not only when the step runs: a publish whose account lacks it is refused, and whoever lacks
+   * it cannot give it. `mail.send` sets it: who may be mailed is decided at publish.
+   */
+  rightNeededAtPublish?: true;
   /** Takes items or a dataset and answers OperationBatchResult. Per-item failures do not fail the call.
    * Failure messages name only the invalid field and code, never item values or provider text. */
   batch?: true;

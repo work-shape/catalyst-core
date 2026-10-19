@@ -18,6 +18,7 @@ import {
 import {
   CaptureMailTransport,
   TemplateMailSender,
+  type MailSenderIdentity,
   type MailTransport,
   type RenderedMail
 } from "@work-shape/catalyst-mail";
@@ -61,12 +62,12 @@ class FlakyCapture implements MailTransport {
   readonly capture = new CaptureMailTransport();
   private failed = false;
   constructor(private readonly failFor?: string) {}
-  async deliver(mail: RenderedMail) {
-    if (mail.to.email === this.failFor && !this.failed) {
+  async deliver(mail: RenderedMail, identity: MailSenderIdentity) {
+    if (mail.to[0]?.email === this.failFor && !this.failed) {
       this.failed = true;
       throw new Error(`provider refused ${TITLE}`);
     }
-    return this.capture.deliver(mail);
+    return this.capture.deliver(mail, identity);
   }
 }
 

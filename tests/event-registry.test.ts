@@ -279,16 +279,7 @@ describe("event registry", () => {
     () => {
       const sources = [...packageSources(platformPackages), ...packageSources(capabilityPackages)];
       const names = new Set([...emittedNames(sources), ...emitterNames(sources)]);
-      // Frozen by a contract ticket before the ticket that emits them. That ticket takes them
-      // out of this list: an emitted name left here fails below.
-      const reserved = ["mail.refused", "mail.sent"];
-      expect(reserved.filter((name) => names.has(name))).toEqual([]);
-      expect(
-        registryDifferences(
-          names,
-          Object.keys(EVENTS).filter((name) => !reserved.includes(name))
-        )
-      ).toEqual({ missing: [], unused: [] });
+      expect(registryDifferences(names, Object.keys(EVENTS))).toEqual({ missing: [], unused: [] });
     }
   );
 

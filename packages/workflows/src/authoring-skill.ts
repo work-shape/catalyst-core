@@ -54,7 +54,7 @@ const STEP_REFERENCE: {
     }
   },
   operation: {
-    does: "Calls one operation by its name, as the account the Workflow runs as. Its output is what the operation answered.",
+    does: "Calls one operation by its name, as the account the Workflow runs as. Its output is what the operation answered. `mail.send` sends one e-mail as the instance's system sender and exists only where the instance sends mail: ask `platform.assets.operations` for it by exact `name` before you use it. Its `to`, `cc` and `bcc` take addresses, { user: id } and { workspace: id }; `subject` is one line; `body` is Markdown, where HTML and images are shown as text or dropped. It mails people of the instance and addresses in the domains the instance allows; a literal address outside them is refused at save. Its output holds the counts and the message id, never an address.",
     fields: {
       operation:
         "The full name of the operation, such as `connection.<connection>.<operation>`. Ask `platform.assets.operations` for the names and input schemas; filter by exact `name` or a `prefix` such as `connection.crm.` or `data_store.orders.`. Each page has at most 200 operations: pass `nextCursor` as `cursor` with the same filters until it is absent before concluding an operation does not exist. Do not guess a name. To run another Workflow and wait for its result, use a `workflow` step, not `workflow.<name>.start` here.",
@@ -105,7 +105,7 @@ const STEP_REFERENCE: {
     }
   },
   notify: {
-    does: "Leaves a notice in each active recipient's Inbox. With mail, queues a counts-only digest and a link; no title, text, client name or finding leaves by mail. A test simulates this changing step: its result shows wouldHaveDone with the intended recipients and frozen content; it sends no Inbox item or mail.",
+    does: "Leaves a notice in each active recipient's Inbox. With mail, queues a counts-only digest and a link; no title, text, client name or finding leaves by mail. Use notify to tell people of the instance that something needs them; for an e-mail with content, or to an address outside the instance, use an `operation` step on `mail.send` where the instance has it. A test simulates this changing step: its result shows wouldHaveDone with the intended recipients and frozen content; it sends no Inbox item or mail.",
     fields: {
       to: "Instance user ids under users and Shared Workspace ids under workspaces (their active members). For 'me', use platform.context caller.id. For a name or email, call platform.context with person and use the returned people match; ask which person if ambiguous, never ask the person to type an id. No free e-mail address.",
       channels: "[inbox], or [inbox, mail]. Every notice has an Inbox item.",

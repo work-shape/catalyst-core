@@ -31,7 +31,6 @@ import {
   type ClientInstanceConfig,
   formerReleaseToolWarnings,
   getClientInstanceId,
-  getEnabledToolNames,
   getModelProviderConfigs,
   loadClientInstanceConfigFromFile,
   validateConfigAssetBundle
@@ -44,6 +43,7 @@ import { createWebFetchToolDefinitions } from "@work-shape/catalyst-web-access";
 import {
   createBuiltInToolDefinitions,
   createConsoleWorkspaceCommandTelemetry,
+  createMailSendTool,
   createReadSkillTool,
   createProposeSkillChangeTool,
   createStructuredDataToolDefinitions,
@@ -65,7 +65,15 @@ import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
 import { seedInstance } from "./instance-seed";
 import { shippedSkillNamesOf, shippedSkillsOf } from "./shipped-skills";
-import { createClientInstanceMail, createInstanceNotices } from "./mail";
+import {
+  createClientInstanceMail,
+  createInstanceNotices,
+  mailSendToolRights,
+  mailSendersOf,
+  outboundMailOf,
+  registerInstanceMailSend,
+  releaseToolNames
+} from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
   ClientInstanceCapabilityContribution,
@@ -232,6 +240,7 @@ export async function createClientInstanceApp(
     allowedOrigins,
     standaloneAuth,
     mail: execution.noticeMail,
+    mailSenders: mailSendersOf(config),
     sessionToken,
     serviceAccessToken
   };
@@ -471,6 +480,7 @@ export async function createClientInstanceExecutionAssembly(
     connections,
     dataTools: () => configAssets.dataTools,
     dataToolDescribeTimeoutMs: config.runtime.dataToolDescribeTimeoutMs,
+    toolRights: mailSendToolRights(config),
     policy: {
       instanceDefaults: config.policy.defaults,
       centralSettings: () => operationCalls.deps.policy.centralSettings()
@@ -538,6 +548,7 @@ export async function createClientInstanceExecutionAssembly(
         saveApproval: platformTools.skillSaveApproval
       }),
       ...platformTools.tools,
+      ...(outboundMailOf(config) ? [createMailSendTool()] : []),
       ...(skillPolicy.enabled
         ? [
             createProposeSkillChangeTool({
@@ -554,7 +565,7 @@ export async function createClientInstanceExecutionAssembly(
   });
   assertClientAssemblyValid({ config, tools, approvalRequestHandlers: handlers, modules });
   references.describe(tools);
-  const toolRegistry = platformTools.registry(tools, getEnabledToolNames(config));
+  const toolRegistry = platformTools.registry(tools, releaseToolNames(config));
   const shippedSkills = shippedSkillsOf({
     modules,
     capabilities,
@@ -564,6 +575,12 @@ export async function createClientInstanceExecutionAssembly(
     config,
     registry: infrastructure.registry,
     context: infrastructure.context
+  });
+  registerInstanceMailSend(operationCalls.registry, {
+    config,
+    clientInstanceId,
+    stores: store,
+    mail: noticeMail
   });
   const modulesStarted = await moduleAssembly.start({
     knowledgeFieldExtractor: capabilityContributions.find((part) => part.knowledgeFieldExtractor)
@@ -639,7 +656,7 @@ export async function createClientInstanceExecutionAssembly(
         .filter((binding) => binding.agentSelectable !== false)
         .map((binding) => binding.id),
       fastModeModelBindingIds: fastModeModelBindingIds(config),
-      enabledToolNames: agentListableToolNames(getEnabledToolNames(config))
+      enabledToolNames: agentListableToolNames(releaseToolNames(config))
     }
   });
 

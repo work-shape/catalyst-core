@@ -17,10 +17,12 @@ import {
 import {
   authorizeActor,
   endRun,
+  failRun,
   type OperationEnding,
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
+import { auditForRun } from "./operation-run-recording";
 
 // Calls made by a draft (ADR-0031). Where a call goes is decided here, from the call's draft
 // context and from the called asset, and by no caller, so an App draft, a Workflow test run
@@ -199,13 +201,31 @@ export async function simulateRun(
   context: RunContext,
   policy: PolicyResolution
 ): Promise<OperationEnding> {
-  const { run, definition, call, now } = context;
+  const { run, definition, call, now, deps } = context;
   const wouldAsk: "confirmation" | "approval" | undefined =
     policy.next === "await_confirmation"
       ? "confirmation"
       : policy.next === "await_approval"
         ? "approval"
         : undefined;
+  // An operation that simulates itself answers what it would have done, and refuses where the
+  // live call would be refused: such a refusal fails the simulated call, which changed nothing.
+  let output: unknown;
+  if (definition.simulate) {
+    try {
+      output = await definition.simulate(call.input, {
+        runId: run.id,
+        actor: call.actor,
+        origin: call.origin,
+        ...(call.workspaceId === undefined ? {} : { workspaceId: call.workspaceId }),
+        correlationId: call.correlationId,
+        runtime: context.runtime,
+        audit: auditForRun(deps.audit, run.id, call.correlationId)
+      });
+    } catch (error) {
+      return failRun(context, error, true);
+    }
+  }
   const simulated = await endRun(context, { status: "done", finishedAt: now().toISOString() });
   await context.emit("operation.simulated", "after", {
     status: "success",
@@ -217,6 +237,7 @@ export async function simulateRun(
       runId: run.id,
       // An input that holds a secret is not handed back.
       ...(definition.secret ? {} : { input: call.input }),
+      ...(definition.simulate ? { output } : {}),
       ...(wouldAsk ? { wouldAsk } : {})
     },
     run: simulated

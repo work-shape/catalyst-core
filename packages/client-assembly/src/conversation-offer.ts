@@ -11,6 +11,8 @@ import {
   type DataToolSource,
   SUBJECT_TOOL_PREFIX,
   type ConnectorTypeRegistry,
+  type AccessResource,
+  type Authorizer,
   type ConversationOfferSource,
   type ModuleSnapshot,
   type PlatformStores,
@@ -92,11 +94,35 @@ interface ConversationOfferInput {
   };
   /** Whether this process has a tool: registered, enabled and of no module that is off. */
   hasTool(toolName: string): boolean;
+  /**
+   * The right a person needs to be offered a tool, by tool: a listed tool whose right the
+   * person of the run lacks is withheld from the model. Asked of the instance's authorizer.
+   */
+  toolRights?: Readonly<Record<string, { action: string; resource: AccessResource }>>;
+  authorizer?: () => Authorizer | undefined;
+}
+
+/** The listed tools of a right the person lacks. A run without a person withholds nothing. */
+async function withheldToolNames(
+  input: ConversationOfferInput,
+  agentToolNames: readonly string[],
+  user: Parameters<ConversationOfferSource["offerOf"]>[0]["user"],
+  workspaceId: string
+): Promise<string[]> {
+  const rights = input.toolRights ?? {};
+  const listed = agentToolNames.filter((toolName) => Object.hasOwn(rights, toolName));
+  const authorizer = input.authorizer?.();
+  if (listed.length === 0 || !user || !authorizer) return [];
+  const access = await authorizer.forActor(user, { workspaceId });
+  return listed.filter((toolName) => {
+    const right = rights[toolName];
+    return right !== undefined && !access.authorize(right.action, right.resource).allowed;
+  });
 }
 
 function createConversationOffer(input: ConversationOfferInput): ConversationOfferSource {
   return {
-    async offerOf({ clientInstanceId, conversationId, agentToolNames }) {
+    async offerOf({ clientInstanceId, conversationId, agentToolNames, user }) {
       const conversation = await input.stores.conversations.getConversation(
         clientInstanceId,
         conversationId
@@ -148,8 +174,15 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
               canPause: true
             }).value !== "deny")
       );
+      const withheld = await withheldToolNames(
+        input,
+        agentToolNames,
+        user,
+        conversation.collaborationWorkspaceId
+      );
       return {
         ...(subject ? { subject } : {}),
+        ...(withheld.length > 0 ? { withheldToolNames: withheld } : {}),
         toolNames: [
           ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
           ...(holds ? [...WORKFLOW_TEST_TOOL_NAMES, KNOWLEDGE_ADD_FILES_TOOL_NAME] : []),
@@ -193,7 +226,7 @@ export async function conversationToolNames(
 export function createPlatformTools(
   input: Pick<
     ConversationOfferInput,
-    "stores" | "modules" | "dataTools" | "dataToolDescribeTimeoutMs" | "policy"
+    "stores" | "modules" | "dataTools" | "dataToolDescribeTimeoutMs" | "policy" | "toolRights"
   > & {
     /**
      * The Connections of the instance, where the module `connections` is on: the agent's draft
@@ -202,7 +235,7 @@ export function createPlatformTools(
     connections?: { connectorTypes: ConnectorTypeRegistry } | undefined;
   }
 ) {
-  const attached: { tools?: ToolRegistry } = {};
+  const attached: { tools?: ToolRegistry; authorizer?: Authorizer } = {};
   const platformAssets: PlatformAssetBinding = createPlatformAssetBinding();
   return {
     /**
@@ -211,6 +244,7 @@ export function createPlatformTools(
      * process that runs agents binds it, the API process and an agent-run worker alike.
      */
     bind(options: AssetWorkflowOptions): void {
+      attached.authorizer = options.authorizer;
       platformAssets.bind(createPlatformAssetCalls(options));
     },
     /** What `read_skill` says of a save of the skill it reads, for the person of the call. */
@@ -241,6 +275,8 @@ export function createPlatformTools(
         ? {}
         : { dataToolDescribeTimeoutMs: input.dataToolDescribeTimeoutMs }),
       ...(input.policy ? { policy: input.policy } : {}),
+      ...(input.toolRights ? { toolRights: input.toolRights } : {}),
+      authorizer: () => attached.authorizer,
       hasTool: (toolName) => attached.tools?.has(toolName) ?? false
     }),
     /**

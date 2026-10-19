@@ -1,4 +1,10 @@
-import { createNotices } from "@work-shape/catalyst-server";
+import { createNotices, registerMailSendOperation } from "@work-shape/catalyst-server";
+import {
+  CaptureMailTransport,
+  TemplateMailSender,
+  type MailSenderIdentity,
+  type MailTransport
+} from "@work-shape/catalyst-mail";
 import { StoreBackedAuditRecorder } from "@work-shape/catalyst-core";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -230,7 +236,17 @@ export interface WorkflowFixture extends ConnectionOperationsFixture {
   allow(holder: { kind: "user" | "service_principal"; id: string }, action: string): Promise<void>;
   /** Stores the Connection `crm` with `echo` and `write` exposed to Workflows. */
   seedCrm(): Promise<string>;
+  /** What the capture transport holds, where outbound mail is on and no transport was given. */
+  capturedMail(): ReturnType<CaptureMailTransport["list"]>;
 }
+
+/** The system sender of the fixture's outbound mail. */
+const MAIL_IDENTITY: MailSenderIdentity = {
+  fromAddress: "catalyst@mail.example.test",
+  fromName: "Example Catalyst",
+  productName: "Example Catalyst",
+  frame: { accentColor: "#123456", footer: { en: "Example GmbH\nMusterstrasse 1" } }
+};
 
 export async function workflowFixture(
   options: {
@@ -265,6 +281,11 @@ export async function workflowFixture(
     personalKeys?: true;
     /** Module needed to project platform asset tools through the real agent runner. */
     publishTool?: true;
+    /**
+     * Outbound mail on: `mail.send` with the system sender, its mails rendered in the frame and
+     * handed to the transport given, a capture where none is.
+     */
+    mail?: { recipientDomains: readonly string[]; transport?: MailTransport };
   } = {}
 ): Promise<WorkflowFixture> {
   let workflows: InstanceWorkflows | undefined;
@@ -300,8 +321,13 @@ export async function workflowFixture(
       listGrantScopeAssets: (input) => storesOf().access.listGrantScopeAssets(input)
     },
     ...(options.now ? { now: options.now } : {}),
-    ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone })
+    ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone }),
+    ...(options.mail
+      ? { mailSend: { registered: true, recipientDomains: options.mail.recipientDomains } }
+      : {})
   });
+  const capture = new CaptureMailTransport();
+  const mailTransport = options.mail?.transport ?? capture;
   const t = await fixtureOn(
     (connectionOptions) =>
       setupAccessInstance({
@@ -318,9 +344,19 @@ export async function workflowFixture(
         server(stores, config, kinds) {
           const server = {
             ...connectionOptions.server?.(stores, config, kinds),
-            ...(options.personalKeys ? personalKeyServer(stores) : {})
+            ...(options.personalKeys ? personalKeyServer(stores) : {}),
+            ...(options.mail ? { mailSenders: ["system"] } : {})
           };
           if (!server.operationCalls) throw new Error("The instance built no call path");
+          if (options.mail)
+            registerMailSendOperation(server.operationCalls.registry, {
+              clientInstanceId,
+              stores,
+              sender: new TemplateMailSender(mailTransport, MAIL_IDENTITY),
+              system: { fromAddress: MAIL_IDENTITY.fromAddress, fromName: MAIL_IDENTITY.fromName },
+              recipientDomains: options.mail.recipientDomains,
+              defaultLocale: "en"
+            });
           operationRegistry = server.operationCalls.registry;
           modules = resolveInstanceModules(config, []).snapshot;
           instanceStores = stores;
@@ -390,6 +426,7 @@ export async function workflowFixture(
     ...t,
     workflows: built,
     principal,
+    capturedMail: () => capture.list(),
     worker,
     async finish(runId, given, passes = 200) {
       const jobs = given ?? (own ??= worker());

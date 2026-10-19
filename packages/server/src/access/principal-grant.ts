@@ -1,6 +1,8 @@
 import {
   AppError,
   INSTANCE_ASSET_SCOPE,
+  MAIL_SENDER_RESOURCE_KIND,
+  MAIL_SENDER_USE_ACTION,
   asCollaborationWorkspaceId,
   isPlatformAction,
   isPrincipalGrantableAction,
@@ -23,7 +25,7 @@ import { requireAuthorized } from "./rights-held";
 
 export type PrincipalGrantOptions = Pick<
   ChatServerOptions,
-  "clientInstanceId" | "stores" | "modules" | "configAssets"
+  "clientInstanceId" | "stores" | "modules" | "configAssets" | "mailSenders"
 >;
 
 /** What one grant row names. */
@@ -74,7 +76,10 @@ export async function checkPrincipalGrant(
     throw moduleOffError(module);
   }
   const kind = options.configAssets.kinds.get(kindOfAction(action));
-  if (!kind || !Object.values(kind.actions).some((right) => right === action)) {
+  if (
+    !mailSenderRegistered(options, action) &&
+    (!kind || !Object.values(kind.actions).some((right) => right === action))
+  ) {
     throw refused(
       "action_not_grantable_to_principal",
       `'${action}' cannot be granted on this instance: no asset kind it has loaded registers the right`
@@ -116,14 +121,29 @@ export async function checkPrincipalGrant(
 
 /**
  * Whether the caller may read the asset: every kind's read right is `<kind>.read`. The grant
- * write asks it, and so does what the publish screen of a Workflow shows of an asset.
+ * write asks it, and so does what the publish screen of a Workflow shows of an asset. A mail
+ * sender has no read right: it is seen by whoever may send as it.
  */
 export function maySeeAsset(
   access: Pick<ActorAccess, "authorize">,
   resource: AccessResource
 ): boolean {
+  if (resource.kind === MAIL_SENDER_RESOURCE_KIND)
+    return access.authorize(MAIL_SENDER_USE_ACTION, resource).allowed;
   const read = `${resource.kind ?? ""}.read`;
   return isPlatformAction(read) && access.authorize(read, resource).allowed;
+}
+
+/**
+ * Whether the action is `mail_sender.use` and this instance registers a sender (MAIL-1). The
+ * kind is no asset kind: its one resource is a named sender, `system`, which exists only while
+ * release config switches outbound mail on.
+ */
+function mailSenderRegistered(
+  options: Pick<PrincipalGrantOptions, "mailSenders">,
+  action: string
+): boolean {
+  return action === MAIL_SENDER_USE_ACTION && (options.mailSenders?.length ?? 0) > 0;
 }
 
 /**
@@ -142,13 +162,26 @@ export function grantAssetResource(asset: Omit<GrantScopeAsset, "active">): Acce
   );
 }
 
-/** The active asset of the action's kind an asset grant names. */
+/**
+ * The active asset of the action's kind an asset grant names. A grant of `mail_sender.use`
+ * names one registered sender by its id, `system`: the sender stands in for the asset, and
+ * no other resource takes the right.
+ */
 export async function grantableAsset(
-  options: Pick<PrincipalGrantOptions, "clientInstanceId" | "stores">,
+  options: Pick<PrincipalGrantOptions, "clientInstanceId" | "stores" | "mailSenders">,
   command: Pick<PrincipalGrantCommand, "action" | "scopeId">
 ): Promise<Omit<GrantScopeAsset, "active">> {
   if (command.scopeId === undefined) {
     throw refused("invalid_scope", "An asset grant names an asset id");
+  }
+  if (kindOfAction(command.action) === MAIL_SENDER_RESOURCE_KIND) {
+    if (!options.mailSenders?.includes(command.scopeId)) {
+      throw refused(
+        "invalid_scope",
+        "A grant of mail_sender.use names a sender this instance registers: system"
+      );
+    }
+    return mailSenderGrantAsset(command.scopeId);
   }
   const asset = await options.stores.access.getGrantableAsset({
     clientInstanceId: options.clientInstanceId,
@@ -159,6 +192,11 @@ export async function grantableAsset(
     throw refused("invalid_scope", "The asset is not an active asset of the action's kind");
   }
   return asset;
+}
+
+/** A sender as the grant rules and the evaluator read it: its id stands for kind, name and id. */
+function mailSenderGrantAsset(sender: string): Omit<GrantScopeAsset, "active"> {
+  return { id: sender, kind: MAIL_SENDER_RESOURCE_KIND, name: sender };
 }
 
 /** A service principal an administrator manages: one no owner keeps for itself. */

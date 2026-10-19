@@ -77,8 +77,10 @@ export class TurnLoop {
     const offer = await this.options.conversationOffer?.offerOf({
       clientInstanceId: context.clientInstanceId,
       conversationId: input.conversationId,
-      agentToolNames: listed.toolNames
+      agentToolNames: listed.toolNames,
+      user: context.user
     });
+    const withheld = new Set(offer?.withheldToolNames ?? []);
     const agent = {
       ...listed,
       toolNames: [
@@ -86,7 +88,9 @@ export class TurnLoop {
           ...listed.toolNames.filter((toolName) => !toolName.startsWith(SUBJECT_TOOL_PREFIX)),
           ...(offer?.toolNames ?? [])
         ])
-      ].filter((toolName) => !(context.subagent && isRunAgentCall(toolName)))
+      ].filter(
+        (toolName) => !withheld.has(toolName) && !(context.subagent && isRunAgentCall(toolName))
+      )
     };
     const modelSelection = this.modelInput.getModelSelectionForAgent(
       agent,

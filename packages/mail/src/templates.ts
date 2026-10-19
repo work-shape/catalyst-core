@@ -1,5 +1,16 @@
 import type { LocaleCode } from "@work-shape/catalyst-core";
-import type { MailMessage, MailSenderIdentity, MailTemplate, RenderedMail } from "./types";
+import { escapeHtml } from "./markdown";
+import type {
+  InlineMailImage,
+  MailMessage,
+  MailSenderIdentity,
+  PasswordResetMail,
+  PlatformInvitationMail,
+  RenderedMail,
+  SinglePersonMailMessage,
+  WorkflowNoticeMail
+} from "./types";
+import { renderWorkflowMessage } from "./workflow-message";
 
 interface MailCopy {
   subject: string;
@@ -8,15 +19,17 @@ interface MailCopy {
   footer: string;
 }
 
-type CopyFor<Template extends MailTemplate> = (
+type SinglePersonTemplate = PasswordResetMail | PlatformInvitationMail | WorkflowNoticeMail;
+
+type CopyFor<Template extends SinglePersonTemplate> = (
   params: Template["params"],
   productName: string
 ) => MailCopy;
 
 const copy: {
-  [Id in MailTemplate["template"]]: Record<
+  [Id in SinglePersonTemplate["template"]]: Record<
     LocaleCode,
-    CopyFor<Extract<MailTemplate, { template: Id }>>
+    CopyFor<Extract<SinglePersonTemplate, { template: Id }>>
   >;
 } = {
   "password-reset": {
@@ -75,11 +88,22 @@ const copy: {
   }
 };
 
-export function renderMail(message: MailMessage, identity: MailSenderIdentity): RenderedMail {
+/**
+ * Renders a mail from its template. A mail of `mail.send` is rendered in the instance's frame,
+ * with the logo where it was read (`logo`, as the HTML part refers to it).
+ */
+export function renderMail(
+  message: MailMessage,
+  identity: MailSenderIdentity,
+  logo?: { src: string; image: InlineMailImage }
+): RenderedMail {
+  if (message.template === "workflow-message") {
+    return renderWorkflowMessage(message, identity, logo);
+  }
   const resolved = resolveCopy(message, identity.productName);
   const link = message.params.link;
   return {
-    to: message.to,
+    to: [message.to],
     subject: resolved.subject,
     text: [resolved.intro, `${resolved.action}: ${link}`, resolved.footer].join("\n\n"),
     html: [
@@ -98,7 +122,7 @@ function toSingleLine(value: string): string {
   return value.replace(/[\s\p{Cc}]+/gu, " ").trim();
 }
 
-function resolveCopy(message: MailMessage, productName: string): MailCopy {
+function resolveCopy(message: SinglePersonMailMessage, productName: string): MailCopy {
   switch (message.template) {
     case "password-reset":
       return copy["password-reset"][message.locale](message.params, productName);
@@ -107,12 +131,4 @@ function resolveCopy(message: MailMessage, productName: string): MailCopy {
     case "workflow-notice":
       return copy["workflow-notice"][message.locale](message.params, productName);
   }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, "&amp;")
-    .replace(/</gu, "&lt;")
-    .replace(/>/gu, "&gt;")
-    .replace(/"/gu, "&quot;");
 }

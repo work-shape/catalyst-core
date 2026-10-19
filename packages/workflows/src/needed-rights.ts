@@ -20,7 +20,10 @@ import {
 import { indexWorkflowSteps } from "./definition";
 
 /** What the derivation reads of an operation: the right it asks and what it is asked on. */
-export type NeededRightOperation = Pick<OperationDefinition, "action" | "resource">;
+export type NeededRightOperation = Pick<
+  OperationDefinition,
+  "action" | "resource" | "rightNeededAtPublish"
+>;
 
 /** What the derivation is told beside the definition. */
 export interface WorkflowNeededRightsContext {
@@ -53,7 +56,8 @@ export function workflowOperationNames(
  * name different rights:
  * - a `workflow` step needs `workflow.use` on the child, and the publish is refused without it;
  * - a step or an agent tool that calls an operation needs the right the operation names, on
- *   what it names; a Connection's operation needs `connection.use` on the Connection, and a
+ *   what it names, and the publish is refused without it where the operation says so
+ *   (`rightNeededAtPublish`, such as `mail_sender.use` of `mail.send`); a Connection's operation needs `connection.use` on the Connection, and a
  *   Data Store's `load` needs `data_store.insert`, and `data_store.execute` as well where its
  *   mapping replaces rows or updates them on a conflict, or leaves that to a reference.
  * An operation that does not exist is left out: the definition check refuses it.
@@ -82,7 +86,7 @@ export function workflowNeededRights(
     const operation = context.operations.get(name);
     if (!operation) return;
     for (const right of operationRights(name, operation, input))
-      add(right.action, right.asset, step, "run");
+      add(right.action, right.asset, step, operation.rightNeededAtPublish ? "publish" : "run");
   };
   let agentStep: string | undefined;
   for (const { step } of indexWorkflowSteps(manifest).values()) {

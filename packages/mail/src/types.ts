@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@work-shape/catalyst-core";
+import type { LocaleCode, WorkflowMessageMailParams } from "@work-shape/catalyst-core";
 
 export interface MailRecipient {
   email: string;
@@ -33,15 +33,58 @@ export interface WorkflowNoticeMail {
   };
 }
 
-export type MailTemplate = PasswordResetMail | PlatformInvitationMail | WorkflowNoticeMail;
+/**
+ * A mail of `mail.send`: what its author wrote and mapped, as Markdown, in the instance's frame
+ * (`MailFrame`). Its envelope is the message's: several recipients, cc, bcc, Reply-To and the
+ * display name of the From line.
+ */
+export interface WorkflowMessageMail {
+  template: "workflow-message";
+  params: WorkflowMessageMailParams;
+}
+
+export type MailTemplate =
+  PasswordResetMail | PlatformInvitationMail | WorkflowNoticeMail | WorkflowMessageMail;
 export type MailTemplateId = MailTemplate["template"];
 
-export type MailMessage = MailTemplate & {
+/** A platform mail to one person. */
+export type SinglePersonMailMessage = (
+  PasswordResetMail | PlatformInvitationMail | WorkflowNoticeMail
+) & {
   to: MailRecipient;
   locale: LocaleCode;
 };
 
-export type MailSendResult = { ok: true } | { ok: false; reason: string };
+/** A mail of `mail.send`, with the envelope it was given. `to` holds one recipient or more. */
+export type WorkflowMessageMailMessage = WorkflowMessageMail & {
+  to: readonly MailRecipient[];
+  cc?: readonly MailRecipient[];
+  bcc?: readonly MailRecipient[];
+  replyTo?: MailRecipient;
+  /** The display name on the From line; the address stays the sender's. */
+  fromName?: string;
+  locale: LocaleCode;
+};
+
+export type MailMessage = SinglePersonMailMessage | WorkflowMessageMailMessage;
+
+/**
+ * How a send ended. A failure says whether the mail went out:
+ * - `rejected`: the provider refused it before accepting it (an invalid address, a refused
+ *   sender). `providerCode` is the provider's own code; its text is never kept.
+ * - `unsent`: no connection to the provider could be made. Nothing left, so it may be tried
+ *   again.
+ * - `uncertain`: the request left and its answer was lost (a timeout, a 5xx). The provider
+ *   takes no idempotency key, so the mail may or may not have gone out and is not sent again.
+ */
+export type MailSendResult =
+  | { ok: true; messageId?: string }
+  | {
+      ok: false;
+      reason: string;
+      failure?: "rejected" | "unsent" | "uncertain";
+      providerCode?: string;
+    };
 
 /**
  * Renders and delivers one transactional email. Callers pick a template and typed params;
@@ -49,6 +92,31 @@ export type MailSendResult = { ok: true } | { ok: false; reason: string };
  */
 export interface MailSender {
   send(message: MailMessage, context?: { signal?: AbortSignal }): Promise<MailSendResult>;
+  /**
+   * The mail as it would go out, with its embedded images as `data:` URIs so a preview loads
+   * nothing from a host. Sends nothing.
+   */
+  preview?(message: MailMessage): Promise<RenderedMail>;
+}
+
+/** An image carried inside the mail (`cid:`), never loaded from a host. */
+export interface InlineMailImage {
+  /** The content id the HTML part refers to as `cid:<contentId>`. */
+  contentId: string;
+  contentType: "image/png" | "image/jpeg" | "image/gif";
+  filename: string;
+  content: Uint8Array;
+}
+
+/**
+ * The instance's frame around a mail of `mail.send`: its logo, embedded in the mail, its accent
+ * colour and the operator's legal footer (`infrastructure.mail.outbound.footer`).
+ */
+export interface MailFrame {
+  accentColor: string;
+  /** Read once and kept; nothing where the instance has no logo or it cannot be read. */
+  logo?: () => Promise<InlineMailImage | undefined>;
+  footer?: Partial<Record<LocaleCode, string>>;
 }
 
 export interface MailSenderIdentity {
@@ -57,13 +125,24 @@ export interface MailSenderIdentity {
   replyTo?: string;
   /** Client instance display name used in template copy. */
   productName: string;
+  /** The frame of a mail of `mail.send`. The other templates have none. */
+  frame?: MailFrame;
 }
 
 export interface RenderedMail {
-  to: MailRecipient;
+  /** One recipient or more. The templates of one person have one. */
+  to: readonly MailRecipient[];
+  cc?: readonly MailRecipient[];
+  bcc?: readonly MailRecipient[];
+  /** Where replies go, where the message names one; else the sender's `replyTo`. */
+  replyTo?: MailRecipient;
+  /** The display name of the From line, where the message names one; else the sender's. */
+  fromName?: string;
   subject: string;
   text: string;
   html: string;
+  /** Images the HTML part refers to by `cid:`. */
+  inlineImages?: readonly InlineMailImage[];
 }
 
 /** Provider adapter: delivers one already-rendered mail. */
@@ -75,10 +154,22 @@ export interface MailTransport {
   ): Promise<MailSendResult>;
 }
 
-/** A mail that a provider kept instead of delivering it. */
-export interface CapturedMail extends RenderedMail {
+/**
+ * A mail that a provider kept instead of delivering it. `to` is its first recipient, which is
+ * all a mail to one person has; `recipients` lists every one.
+ */
+export interface CapturedMail {
   id: string;
   sentAt: string;
+  from: { email: string; name: string };
+  to: MailRecipient;
+  recipients: { to: MailRecipient[]; cc: MailRecipient[]; bcc: MailRecipient[] };
+  replyTo?: MailRecipient;
+  subject: string;
+  text: string;
+  html: string;
+  /** The embedded images by content id and type, without their bytes. */
+  inlineImages?: { contentId: string; contentType: string; bytes: number }[];
 }
 
 /** What a mail adapter hands back. */

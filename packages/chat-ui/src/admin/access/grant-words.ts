@@ -18,7 +18,8 @@ export const kindLabelKeys = {
   workflow: "access.kindWorkflow",
   knowledge_base: "access.kindKnowledgeBase",
   data_store: "access.kindDataStore",
-  guardrail: "access.kindGuardrail"
+  guardrail: "access.kindGuardrail",
+  mail_sender: "access.kindMailSender"
 } as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
 
 /** The label of a registered asset kind; nothing for a kind this interface has no name for. */
@@ -114,6 +115,17 @@ export const kindWords: Record<GrantKind, KindWords> = {
     chooseAsset: "access.chooseGuardrail",
     noAssets: "access.noGuardrails",
     assetsLoadFailed: "access.guardrailsLoadFailed"
+  },
+  // `mail_sender.use` is granted on one sender, `system`, while outbound mail is on. It is no
+  // asset kind the dialog lists; a row given through the API is shown and revoked here.
+  mail_sender: {
+    scopeAsset: "access.scopeMailSender",
+    onAsset: "access.scopeOnMailSender",
+    onAssetDescription: "access.scopeOnMailSenderDescription",
+    assetField: "access.grantMailSender",
+    chooseAsset: "access.chooseMailSender",
+    noAssets: "access.noMailSenders",
+    assetsLoadFailed: "access.mailSendersLoadFailed"
   }
 };
 
