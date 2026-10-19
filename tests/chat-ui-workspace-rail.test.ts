@@ -363,6 +363,8 @@ describe("workspace rail conversation titles", () => {
   ] as const)("names the docked conversation's head by the placeholder in %s", (locale, shown) => {
     const dock = {
       conversationId: "conv_new",
+      tab: "build" as const,
+      tryAgent: undefined,
       open: true,
       inFront: false,
       openPage: noop,
@@ -371,7 +373,9 @@ describe("workspace rail conversation titles", () => {
       forget: noop,
       reopen: noop,
       showPage: noop,
-      showChat: noop
+      showChat: noop,
+      showTry: noop,
+      showBuild: noop
     };
     const view = {
       mode: "dock" as const,

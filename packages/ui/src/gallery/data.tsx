@@ -11,7 +11,7 @@ import { KeyValue, KeyValueList, type KeyValueLayout } from "../data/key-value";
 import { List, ListRow, type ListRowSize } from "../data/list-row";
 import { LoadMore } from "../data/load-more";
 import { Pagination } from "../data/pagination";
-import { TimeMarker } from "../data/time-marker";
+import { ListMarker, TimeMarker } from "../data/time-marker";
 import {
   Table,
   TableBody,
@@ -599,7 +599,7 @@ export const dataGallery: GalleryGroup = {
     },
     {
       name: "TimeMarker",
-      components: ["TimeMarker"],
+      components: ["TimeMarker", "ListMarker"],
       render: (text) => (
         <Samples label={text.timeMarkerDays}>
           <div className="grid w-full max-w-md gap-3">
@@ -611,6 +611,7 @@ export const dataGallery: GalleryGroup = {
             <p className="justify-self-end rounded-2xl bg-state-selected px-4 py-2.5 text-body">
               {text.timeMarkerSecond}
             </p>
+            <ListMarker label={text.listMarkerRevision} />
           </div>
         </Samples>
       )

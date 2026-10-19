@@ -578,7 +578,8 @@ export interface WorkspaceCacheActions {
   invalidateConversationResources(conversationId: string): void;
   invalidateTerminalRunObservation(observation: RunObservation): void;
   clearDraftAttachments(conversationId: string): void;
-  cacheRunStarted(response: StartConversationRunResponse): void;
+  /** `listed: false` keeps the conversation out of the rail, as Try's (section 4.7c). */
+  cacheRunStarted(response: StartConversationRunResponse, options?: { listed: boolean }): void;
   invalidateStreamError(conversationId: string): void;
 }
 
@@ -749,12 +750,13 @@ export function useWorkspaceCacheActions(
   );
 
   const cacheRunStarted = useCallback(
-    (response: StartConversationRunResponse) => {
+    (response: StartConversationRunResponse, options?: { listed: boolean }) => {
       cacheStartedRunThread(
         queryClient,
         workspaceQueryKeys.thread(apiBaseUrl, authScope, response.conversation.id),
         response.thread
       );
+      if (options?.listed === false) return;
       updateRailConversations(
         queryClient,
         conversationListCacheKey(

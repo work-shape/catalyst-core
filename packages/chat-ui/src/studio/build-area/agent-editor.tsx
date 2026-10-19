@@ -1,4 +1,5 @@
 import { Send, Star, Undo2 } from "lucide-react";
+import { useAgentTryAction } from "../../chat/dock/agent-try";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { AgentDraft, ConfigAssetReferences } from "@work-shape/catalyst-api-client";
 import {
@@ -191,6 +192,17 @@ export function AgentEditor({
   const dirty = changedFields > 0 || availabilityChanged;
   const latest = draft?.latest;
   const latestRevision = latest === undefined ? undefined : (latest?.revision ?? null);
+  // Try in the dock, for a reader who may change the agent: it runs the draft (section 4.7c).
+  const tryAction = useAgentTryAction(
+    frame.asset !== undefined && draft !== undefined
+      ? {
+          agent: frame.asset.name,
+          title: liveTitle,
+          workspaceId: frame.owner,
+          draftRevision: latestRevision
+        }
+      : undefined
+  );
   const differs = latestRevision !== undefined && latestRevision !== (held?.revision ?? null);
   const busy = draft?.busy;
   // Somebody else wrote the draft, or published or discarded it, while the reader types: the
@@ -646,8 +658,8 @@ export function AgentEditor({
           <AgentUnavailableNotices status={unavailable} />
         </>
       }
-      headActions={
-        onMakeDefault
+      headActions={[
+        ...(onMakeDefault
           ? [
               {
                 label: t("configMakeDefault"),
@@ -657,8 +669,9 @@ export function AgentEditor({
                 }
               }
             ]
-          : undefined
-      }
+          : []),
+        ...(tryAction === undefined ? [] : [tryAction])
+      ]}
       sections={sections.map((section) => ({
         ...section,
         ...(proposed.sections.has(section.id) ? { state: <DraftSectionMark /> } : {}),

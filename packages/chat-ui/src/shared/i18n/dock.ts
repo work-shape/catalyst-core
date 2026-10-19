@@ -34,6 +34,7 @@ export const dock = defineTranslations({
       "Write a skill that turns a meeting transcript into notes with decisions, owners and dates.",
     "dock.newSkillNotesTitle": "Write meeting notes",
     "dock.openFullChat": "Open as full chat",
+    "dock.preview": "Preview",
     "dock.resize": "Resize chat",
     "dock.showChat": "Show chat",
     "dock.showPage": "Show page",
@@ -61,7 +62,16 @@ export const dock = defineTranslations({
     "dock.starterWorkflowTestHint": "A trial run with sample input",
     "dock.starterWorkflowTestPrompt":
       "Run this workflow once as a test with sample input and tell me what each step returned.",
-    "dock.starterWorkflowTestTitle": "Run a test"
+    "dock.starterWorkflowTestTitle": "Run a test",
+    "dock.tabBuild": "Build",
+    "dock.tabs": "Build or try the agent",
+    "dock.tabTry": "Try",
+    "dock.tryDraft": "Running draft revision {revision}",
+    "dock.tryFailed": "Try could not be opened.",
+    "dock.tryLive": "Running the published version",
+    "dock.tryNowDraft": "Now running draft revision {revision}",
+    "dock.tryNowLive": "Now running the published version",
+    "dock.tryOpening": "Opening Try…"
   },
   de: {
     "dock.answerRunning": "eine Antwort läuft",
@@ -92,6 +102,7 @@ export const dock = defineTranslations({
       "Schreib einen Skill, der aus einem Gesprächsmitschnitt ein Protokoll mit Entscheidungen, Zuständigen und Terminen macht.",
     "dock.newSkillNotesTitle": "Protokoll schreiben",
     "dock.openFullChat": "Als ganzen Chat öffnen",
+    "dock.preview": "Vorschau",
     "dock.resize": "Chatbreite ändern",
     "dock.showChat": "Chat anzeigen",
     "dock.showPage": "Seite anzeigen",
@@ -120,6 +131,15 @@ export const dock = defineTranslations({
     "dock.starterWorkflowTestHint": "Ein Probelauf mit Beispieldaten",
     "dock.starterWorkflowTestPrompt":
       "Führe diesen Workflow einmal als Test mit Beispieldaten aus und sag mir, was jeder Schritt zurückgegeben hat.",
-    "dock.starterWorkflowTestTitle": "Testlauf starten"
+    "dock.starterWorkflowTestTitle": "Testlauf starten",
+    "dock.tabBuild": "Bauen",
+    "dock.tabs": "Agent bauen oder ausprobieren",
+    "dock.tabTry": "Ausprobieren",
+    "dock.tryDraft": "Läuft mit Entwurfsrevision {revision}",
+    "dock.tryFailed": "Ausprobieren konnte nicht geöffnet werden.",
+    "dock.tryLive": "Läuft mit der veröffentlichten Version",
+    "dock.tryNowDraft": "Läuft jetzt mit Entwurfsrevision {revision}",
+    "dock.tryNowLive": "Läuft jetzt mit der veröffentlichten Version",
+    "dock.tryOpening": "Ausprobieren wird geöffnet…"
   }
 });

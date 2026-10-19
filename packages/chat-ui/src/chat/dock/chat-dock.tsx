@@ -1,7 +1,18 @@
 import type { AnimationEvent, CSSProperties, ReactNode } from "react";
 import { Maximize2, MessageSquare, PanelRight, X } from "lucide-react";
-import { Button, cn, CountBadge, IconButton, SurfaceHeader } from "@work-shape/catalyst-ui";
+import {
+  Badge,
+  Button,
+  cn,
+  CountBadge,
+  IconButton,
+  SurfaceHeader,
+  Tabs,
+  TabsList,
+  TabsTrigger
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
+import type { DockTab } from "./dock-try";
 
 /**
  * Where the conversation stands: `main`, the chat route's main area; `dock`, the dock beside or
@@ -97,6 +108,8 @@ export function DockHead({
   mark,
   subtitle,
   subjectKind,
+  preview = false,
+  tabs,
   over,
   onShowPage,
   onOpenFullChat,
@@ -107,6 +120,10 @@ export function DockHead({
   subtitle?: string;
   /** The kind of the asset the conversation is about, where the head names it. */
   subjectKind?: string;
+  /** The conversation is Try's: its head marks it "Preview". */
+  preview?: boolean;
+  /** Build and Try on an agent's page, under the head and joined to it. */
+  tabs?: ReactNode;
   over: boolean;
   onShowPage(): void;
   /** Absent while the dock holds no conversation. */
@@ -114,10 +131,14 @@ export function DockHead({
   onClose(): void;
 }) {
   const { t } = useTranslation();
-  return (
+  const head = (
     <SurfaceHeader
       // Below 768 px the button that opens the sidebar floats over the head's start.
-      className="bg-background max-md:ps-[calc(var(--layout-gutter)+var(--layout-header-control))]"
+      className={cn(
+        "bg-background max-md:ps-[calc(var(--layout-gutter)+var(--layout-header-control))]",
+        // The tabs draw the line under the head.
+        tabs !== undefined && "border-b-0"
+      )}
       leading={
         over ? (
           <>
@@ -138,11 +159,20 @@ export function DockHead({
       data-testid="dock-head"
       data-subject-kind={subjectKind}
       actions={
-        onOpenFullChat === undefined ? undefined : (
-          <IconButton label={t("dock.openFullChat")} onClick={onOpenFullChat}>
-            <Maximize2 aria-hidden="true" />
-          </IconButton>
-        )
+        preview || onOpenFullChat !== undefined ? (
+          <>
+            {preview ? (
+              <Badge tone="info" data-testid="dock-preview">
+                {t("dock.preview")}
+              </Badge>
+            ) : null}
+            {onOpenFullChat === undefined ? null : (
+              <IconButton label={t("dock.openFullChat")} onClick={onOpenFullChat}>
+                <Maximize2 aria-hidden="true" />
+              </IconButton>
+            )}
+          </>
+        ) : undefined
       }
       close={
         <IconButton label={t("dock.close")} onClick={onClose}>
@@ -150,6 +180,35 @@ export function DockHead({
         </IconButton>
       }
     />
+  );
+  return tabs === undefined ? (
+    head
+  ) : (
+    <div className="shrink-0">
+      {head}
+      {tabs}
+    </div>
+  );
+}
+
+/**
+ * "Build | Try" under the dock's head on an agent's page (section 4.7c): each tab holds its own
+ * conversation.
+ */
+export function DockTabs({ tab, onSelect }: { tab: DockTab; onSelect(tab: DockTab): void }) {
+  const { t } = useTranslation();
+  return (
+    <Tabs
+      value={tab}
+      onValueChange={(value) => onSelect(value === "try" ? "try" : "build")}
+      className="shrink-0 bg-background px-3 sm:px-4"
+      data-testid="dock-tabs"
+    >
+      <TabsList label={t("dock.tabs")}>
+        <TabsTrigger value="build">{t("dock.tabBuild")}</TabsTrigger>
+        <TabsTrigger value="try">{t("dock.tabTry")}</TabsTrigger>
+      </TabsList>
+    </Tabs>
   );
 }
 

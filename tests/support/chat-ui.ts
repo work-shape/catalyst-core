@@ -145,6 +145,27 @@ export { resolveContextUsage } from "../../packages/chat-ui/src/chat/assistant/c
 export { ModelCard, ModelPicker } from "../../packages/chat-ui/src/chat/assistant/model-picker";
 export { DockedChat } from "../../packages/chat-ui/src/chat/dock/docked-chat";
 export {
+  AgentTryHostProvider,
+  tryRunsOf,
+  useAgentTry,
+  useOfferAgentTry,
+  type AgentTryTarget
+} from "../../packages/chat-ui/src/chat/dock/agent-try";
+export { TryOpening } from "../../packages/chat-ui/src/chat/dock/dock-conversation-pane";
+export {
+  acceptStartedRun,
+  isTryRun,
+  listedOpenThread,
+  tryConversationGone,
+  tryOnPage,
+  tryTurnOf
+} from "../../packages/chat-ui/src/chat/dock/dock-try";
+export { tryRunLines, TryRunsLine } from "../../packages/chat-ui/src/chat/dock/try-run-lines";
+export {
+  useUnreadableDockConversation,
+  useWorkspaceDock
+} from "../../packages/chat-ui/src/chat/workspace/use-workspace-dock";
+export {
   ProductConversationRunTransport,
   startProductConversationRun
 } from "../../packages/chat-ui/src/chat/assistant/product-run-transport";
@@ -391,6 +412,7 @@ export {
   readThreadAgain,
   threadQueryRetry,
   threadRetryDelay,
+  useWorkspaceCacheActions,
   workspaceConfigQueryOptions
 } from "../../packages/chat-ui/src/shared/api/workspace-queries";
 export { workspaceQueryKeys } from "../../packages/chat-ui/src/shared/api/workspace-query-keys";

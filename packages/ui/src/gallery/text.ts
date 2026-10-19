@@ -244,6 +244,8 @@ export interface GalleryText
   timeMarkerToday: string;
   timeMarkerFirst: string;
   timeMarkerSecond: string;
+  /** The `ListMarker` sample: another revision answers from here on. */
+  listMarkerRevision: string;
   stateDraft: string;
   /** What a switched-on `RunLiveOnce` says it covers. */
   liveOnceOn: string;
@@ -519,6 +521,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     timeMarkerToday: "Today 10:47 AM",
     timeMarkerFirst: "Which offers came in this week?",
     timeMarkerSecond: "And which of them are still open?",
+    listMarkerRevision: "Now running draft revision 4",
     stateDraft: "Draft",
     liveOnceOn: "Your next call runs live.",
     stateRunning: "Running",
@@ -792,6 +795,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     timeMarkerToday: "Heute 10:47",
     timeMarkerFirst: "Welche Angebote kamen diese Woche?",
     timeMarkerSecond: "Und welche davon sind noch offen?",
+    listMarkerRevision: "Läuft jetzt mit Entwurfsrevision 4",
     stateDraft: "Entwurf",
     liveOnceOn: "Dein nächster Aufruf läuft live.",
     stateRunning: "Läuft",

@@ -28,3 +28,28 @@ export function TimeMarker({ label, dateTime, className, ...props }: TimeMarkerP
     </div>
   );
 }
+
+export interface ListMarkerProps extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "role"> {
+  /** What changed between the items, such as "Now running draft revision 4". */
+  label: string;
+}
+
+/**
+ * A change between the items of a running list that is not a moment, such as another revision
+ * answering from here on: it looks like a `TimeMarker` and is met as a separator named by it.
+ */
+export function ListMarker({ label, className, ...props }: ListMarkerProps) {
+  return (
+    <div
+      role="separator"
+      aria-label={label}
+      className={cn(
+        "flex justify-center px-1 text-center text-caption text-muted-foreground",
+        className
+      )}
+      {...props}
+    >
+      {label}
+    </div>
+  );
+}

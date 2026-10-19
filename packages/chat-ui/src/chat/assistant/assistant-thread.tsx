@@ -20,6 +20,7 @@ import { RetentionNotice } from "../conversation/retention-notice";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
 import { focusComposerAtEnd } from "./composer-focus-request";
+import { MessageTryRunLine } from "../dock/try-run-lines";
 import { DayMarkersProvider, MessageDayMarker } from "./message-day-marker";
 import { useTranslation } from "../../shared/i18n";
 import { useFooterKeepsThreadInView, useKeepReadingPlace } from "./reading-place";
@@ -247,6 +248,7 @@ export function AssistantThread({
                       {() => (
                         <>
                           <MessageDayMarker />
+                          <MessageTryRunLine />
                           <ThreadMessage
                             conversationRunning={conversationRunning}
                             activeRunId={activeRunId}

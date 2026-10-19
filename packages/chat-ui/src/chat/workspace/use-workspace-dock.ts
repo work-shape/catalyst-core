@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { workspaceRoutePath } from "../../shared/routes";
 import { isConversationGone } from "../conversation/conversation-gone";
+import { tryOnPage, type DockTab, type DockTry } from "../dock/dock-try";
 import { addressDockConversation, dockMotion, type WorkspaceAddress } from "./dock-state";
 import {
   isChatWorkspaceRoute,
@@ -15,14 +17,23 @@ interface DockMemory {
   emptyOpen: boolean;
   /** Where the dock lies over the page: whether it is in front. */
   inFront: boolean;
+  /** Try on an agent's page; the address keeps the Build conversation meanwhile. */
+  trying?: DockTry;
 }
 
 const FRESH_DOCK: DockMemory = { emptyOpen: false, inFront: true };
 
 /** The chat dock of the shell, as the address and the shell's memory say it. */
 export interface WorkspaceDock {
-  /** The conversation the dock holds: the address's, or the one of a dock the person closed. */
+  /**
+   * The conversation the dock holds: Try's on an agent's page, else the address's, or the one
+   * of a dock the person closed.
+   */
   conversationId: string | undefined;
+  /** Build, the dock as on every page, or Try on an agent's page. */
+  tab: DockTab;
+  /** The agent Try runs, while the dock shows Try. */
+  tryAgent: string | undefined;
   /** The dock is shown beside or over the page. */
   open: boolean;
   /** Where the dock lies over the page: whether it is in front of it. */
@@ -43,6 +54,13 @@ export interface WorkspaceDock {
   /** Where the dock lies over the page: puts the page in front, or the dock. */
   showPage(): void;
   showChat(): void;
+  /**
+   * Shows Try with the agent under construction, its conversation where the instance opened it.
+   * The address keeps the Build conversation, so going back to Build finds it as it was.
+   */
+  showTry(agent: string, conversationId: string | undefined): void;
+  /** Shows Build: the address's conversation, the one of a closed dock, or an empty dock. */
+  showBuild(): void;
 }
 
 /**
@@ -66,16 +84,21 @@ export function useWorkspaceDock({
   const addressChat = addressDockConversation({ route, chat });
   const onChatRoute = isChatWorkspaceRoute(route);
   const addressRef = useRef<WorkspaceAddress>({ route, chat: addressChat });
+  const page = workspaceRoutePath(route);
   useLayoutEffect(() => {
     addressRef.current = { route, chat: addressChat };
   }, [addressChat, route]);
   const [memory, setMemory] = useState<DockMemory>(FRESH_DOCK);
+  const tryingRef = useRef<DockTry | undefined>(undefined);
   // The chat route takes its conversation whole; a dock after it starts afresh. A conversation
   // in the address is the dock's, so nothing closed or empty is kept beside it.
   if (onChatRoute && memory !== FRESH_DOCK) {
     setMemory(FRESH_DOCK);
   } else if (addressChat !== undefined && (memory.closed !== undefined || memory.emptyOpen)) {
     setMemory({ ...memory, closed: undefined, emptyOpen: false });
+  } else if (memory.trying !== undefined && tryOnPage(memory.trying, page) === undefined) {
+    // Another page: its dock is Build.
+    setMemory({ ...memory, trying: undefined });
   }
 
   const go = useCallback(
@@ -112,7 +135,14 @@ export function useWorkspaceDock({
   const show = useCallback(
     (conversationId: string | undefined, options?: { replace?: boolean }) => {
       if (conversationId === undefined) {
-        setMemory((current) => ({ ...current, emptyOpen: true, inFront: true }));
+        setMemory((current) => ({ ...current, emptyOpen: true, inFront: true, trying: undefined }));
+      } else if (tryingRef.current?.conversationId === conversationId) {
+        // Try's own conversation started its run: it stays Try's, out of the address.
+        return;
+      } else {
+        setMemory((current) =>
+          current.trying === undefined ? current : { ...current, trying: undefined }
+        );
       }
       go(addressRef.current.route, conversationId, options);
     },
@@ -121,12 +151,22 @@ export function useWorkspaceDock({
 
   const close = useCallback(() => {
     const closed = addressRef.current.chat;
-    setMemory((current) => ({ ...current, closed: closed ?? current.closed, emptyOpen: false }));
+    setMemory((current) => ({
+      ...current,
+      closed: closed ?? current.closed,
+      emptyOpen: false,
+      trying: undefined
+    }));
     go(addressRef.current.route, undefined, { replace: true });
   }, [go]);
 
   const forget = useCallback(() => {
-    setMemory((current) => ({ ...current, closed: undefined, emptyOpen: false }));
+    setMemory((current) => ({
+      ...current,
+      closed: undefined,
+      emptyOpen: false,
+      trying: undefined
+    }));
     go(addressRef.current.route, undefined, { replace: true });
   }, [go]);
 
@@ -145,10 +185,39 @@ export function useWorkspaceDock({
     setMemory((current) => ({ ...current, inFront: true }));
   }, []);
 
+  const showTry = useCallback(
+    (agent: string, conversationId: string | undefined) => {
+      setMemory((current) => ({
+        ...current,
+        inFront: true,
+        trying: { page, agent, conversationId }
+      }));
+    },
+    [page]
+  );
+  const showBuild = useCallback(() => {
+    const buildChat = addressRef.current.chat;
+    setMemory((current) => ({
+      ...current,
+      trying: undefined,
+      // Without a Build conversation the dock stays open, empty, for one to start.
+      emptyOpen: current.emptyOpen || (buildChat === undefined && current.closed === undefined)
+    }));
+    if (buildChat === undefined && closedConversation !== undefined) {
+      go(addressRef.current.route, closedConversation, { replace: true });
+    }
+  }, [closedConversation, go]);
+
+  const trying = tryOnPage(memory.trying, page);
+  useLayoutEffect(() => {
+    tryingRef.current = trying;
+  }, [trying]);
   const dock = useMemo<WorkspaceDock>(
     () => ({
-      conversationId: addressChat ?? memory.closed,
-      open: addressChat !== undefined || memory.emptyOpen,
+      conversationId: trying ? trying.conversationId : (addressChat ?? memory.closed),
+      tab: trying ? "try" : "build",
+      tryAgent: trying?.agent,
+      open: trying !== undefined || addressChat !== undefined || memory.emptyOpen,
       inFront: memory.inFront,
       openPage,
       show,
@@ -156,9 +225,24 @@ export function useWorkspaceDock({
       forget,
       reopen,
       showPage,
-      showChat
+      showChat,
+      showTry,
+      showBuild
     }),
-    [addressChat, close, forget, memory, openPage, reopen, show, showChat, showPage]
+    [
+      addressChat,
+      close,
+      forget,
+      memory,
+      openPage,
+      reopen,
+      show,
+      showBuild,
+      showChat,
+      showPage,
+      showTry,
+      trying
+    ]
   );
 
   return { dock, showRoute };
@@ -185,11 +269,15 @@ export function useUnreadableDockConversation({
 }) {
   const unreadableId =
     docked && dock.open && isConversationGone(error) ? dock.conversationId : undefined;
-  const { show } = dock;
+  const { show, showTry, tryAgent } = dock;
   useEffect(() => {
-    if (unreadableId !== undefined) {
-      keepDraft(unreadableId);
-      show(undefined, { replace: true });
+    if (unreadableId === undefined) return;
+    if (tryAgent !== undefined) {
+      // Try's conversation went with a Publish or a Discard: Try opens a fresh one.
+      showTry(tryAgent, undefined);
+      return;
     }
-  }, [keepDraft, show, unreadableId]);
+    keepDraft(unreadableId);
+    show(undefined, { replace: true });
+  }, [keepDraft, show, showTry, tryAgent, unreadableId]);
 }

@@ -7,7 +7,15 @@ import type { ConversationSubjectState } from "../conversation/use-conversation-
 import { SurfaceSlot } from "../surface/surface-slot";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
-import { ChatColumn, DockHead, DockPage, DockPageAction, type ChatColumnMode } from "./chat-dock";
+import type { AgentTryView, TryRuns } from "./agent-try";
+import {
+  ChatColumn,
+  DockHead,
+  DockPage,
+  DockPageAction,
+  DockTabs,
+  type ChatColumnMode
+} from "./chat-dock";
 import { DockSubjectContext } from "./dock-subject";
 import { useDockArrival, useDockWidth } from "./use-dock-layout";
 
@@ -64,6 +72,7 @@ export function DockedChat({
   dock,
   title,
   agent,
+  agentTry,
   onOpenFullChat,
   children
 }: {
@@ -73,6 +82,8 @@ export function DockedChat({
   title: string | undefined;
   /** The name people read for the conversation's agent. */
   agent: string | undefined;
+  /** Build and Try on an agent's page whose reader may change the agent. */
+  agentTry?: AgentTryView;
   /** Absent while the dock holds no conversation. */
   onOpenFullChat?: () => void;
   children: ReactNode;
@@ -81,6 +92,9 @@ export function DockedChat({
   const { layout } = view;
   const [subject, reportSubject] = useState<ConversationSubjectState>();
   const subjectAgent = subject === undefined ? undefined : agent;
+  const trying = agentTry?.tab === "try" ? agentTry : undefined;
+  const tabs =
+    agentTry === undefined ? undefined : <DockTabs tab={agentTry.tab} onSelect={agentTry.select} />;
   return (
     <ChatColumn
       mode={view.mode}
@@ -90,31 +104,45 @@ export function DockedChat({
       arrival={view.arrival}
       onArrived={view.arrived}
       head={
-        <DockHead
-          title={
-            subjectAgent ??
-            (dock.conversationId === undefined
-              ? t("nav.newChat")
-              : title
-                ? conversationTitle(title, t)
-                : t("dock.chat"))
-          }
-          mark={
-            subjectAgent === undefined ? undefined : (
-              <Avatar kind="agent" size="sm" name={subjectAgent} />
-            )
-          }
-          subtitle={
-            subjectAgent === undefined || subject === undefined
-              ? undefined
-              : `${t("conversationSubjectWorkingOn")} ${subject.title}`
-          }
-          subjectKind={subjectAgent === undefined ? undefined : subject?.subject.kind}
-          over={layout.over}
-          onShowPage={dock.showPage}
-          onOpenFullChat={onOpenFullChat}
-          onClose={dock.close}
-        />
+        trying !== undefined ? (
+          <DockHead
+            title={trying.title}
+            mark={<Avatar kind="agent" size="sm" name={trying.title} />}
+            subtitle={trying.runs === undefined ? undefined : tryRunsText(trying.runs, t)}
+            preview
+            tabs={tabs}
+            over={layout.over}
+            onShowPage={dock.showPage}
+            onClose={dock.close}
+          />
+        ) : (
+          <DockHead
+            tabs={tabs}
+            title={
+              subjectAgent ??
+              (dock.conversationId === undefined
+                ? t("nav.newChat")
+                : title
+                  ? conversationTitle(title, t)
+                  : t("dock.chat"))
+            }
+            mark={
+              subjectAgent === undefined ? undefined : (
+                <Avatar kind="agent" size="sm" name={subjectAgent} />
+              )
+            }
+            subtitle={
+              subjectAgent === undefined || subject === undefined
+                ? undefined
+                : `${t("conversationSubjectWorkingOn")} ${subject.title}`
+            }
+            subjectKind={subjectAgent === undefined ? undefined : subject?.subject.kind}
+            over={layout.over}
+            onShowPage={dock.showPage}
+            onOpenFullChat={onOpenFullChat}
+            onClose={dock.close}
+          />
+        )
       }
       handle={
         <SplitHandle
@@ -131,6 +159,13 @@ export function DockedChat({
       <DockSubjectContext.Provider value={reportSubject}>{children}</DockSubjectContext.Provider>
     </ChatColumn>
   );
+}
+
+/** What Try runs, as its head says it. */
+function tryRunsText(runs: TryRuns, t: ReturnType<typeof useTranslation>["t"]): string {
+  return runs.source === "draft"
+    ? t("dock.tryDraft", { revision: runs.revision })
+    : t("dock.tryLive");
 }
 
 /**

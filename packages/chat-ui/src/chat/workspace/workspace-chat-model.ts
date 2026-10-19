@@ -5,6 +5,7 @@ import {
   type PlatformContext,
   type StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
+import { acceptStartedRun, listedOpenThread } from "../dock/dock-try";
 import { dockKindOfRoute } from "../dock/subject-starters";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -329,9 +330,8 @@ export function useWorkspaceChatModel({
   const messages = selectedConversationId ? controller.messages : [];
   const messagesLoaded = !selectedConversationId || controller.snapshotStatus === "ready";
   // The rail holds the pages a person has loaded. The open conversation may be older than
-  // those, and the thread on screen already holds what its row shows.
-  const openThread =
-    threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
+  // those, and the thread on screen already holds what its row shows. Try's is in no list.
+  const openThread = listedOpenThread(threadQuery.data, selectedConversationId, dock);
   const openConversation = useMemo((): ConversationListItem | undefined => {
     if (
       !openThread ||
@@ -761,13 +761,17 @@ export function useWorkspaceChatModel({
       agentOpens.startedFrom(response.conversation.id, startedFrom);
     }
     newStartedFrom.current = undefined;
-    workspaceCache.cacheRunStarted(response);
-    showCreatedConversation(response.conversation, {
-      replace: route.kind === "new-conversation"
+    // A Try run stays out of Recent and the address, whatever the dock shows by now.
+    acceptStartedRun(response, {
+      cache: (listed) => workspaceCache.cacheRunStarted(response, { listed }),
+      show: () =>
+        showCreatedConversation(response.conversation, {
+          replace: route.kind === "new-conversation"
+        }),
+      list: () => conversationListRefresh.runAccepted(response)
     });
     setNotice(undefined);
     setPrivateStartIn(undefined);
-    conversationListRefresh.runAccepted(response);
   }
 
   function streamError(conversationId: string, message: string, viewed: boolean) {
