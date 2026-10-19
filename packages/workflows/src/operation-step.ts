@@ -2,6 +2,7 @@ import { batchResultError } from "./batch-result";
 import {
   AppError,
   CONNECTION_TRANSIENT_CALL_REASONS,
+  CONNECTION_ACTIONS,
   JobDeferredError,
   isAppError,
   isAuthenticatedServicePrincipal,
@@ -21,6 +22,7 @@ import {
   type OperationTarget,
   type WorkflowManifest,
   type WorkflowRun,
+  type WorkflowRunError,
   type WorkflowStepRun,
   type WorkflowStepRunCall
 } from "@work-shape/catalyst-core";
@@ -76,6 +78,15 @@ export class OperationStepFailure extends WorkflowStepFailure {
     super(code, message, options);
     this.name = "OperationStepFailure";
     this.trace = trace;
+  }
+
+  override toRunError(): WorkflowRunError {
+    return {
+      ...super.toRunError(),
+      ...(this.action === CONNECTION_ACTIONS.use && this.trace.call?.source !== undefined
+        ? { connection: this.trace.call.source }
+        : {})
+    };
   }
 }
 

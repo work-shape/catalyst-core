@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   connectionCallError,
   createPlatformId,
@@ -323,18 +324,29 @@ describe("a loop that continues past a failed item", () => {
     });
     const run = await t.finish((await start(t)).id);
     expect(run.status).toBe("failed");
-    expect(run.error).toMatchObject({ code: "FORBIDDEN", action: "connection.use" });
+    expect(run.error).toMatchObject({
+      code: "FORBIDDEN",
+      action: "connection.use",
+      connection: "crm"
+    });
     // The sentence names who lacks the right: the run's principal, and no person.
     expect(run.error?.message).toBe(
       "The service principal 'workflow-runner', which the Workflow runs as, does not hold the right 'connection.use' to call 'connection.crm.write'. An administrator can grant it to the principal"
     );
+    const listed = await t.expectOk(t.root.id, "workflows.list_runs", {
+      params: { workflow: run.workflow }
+    });
+    const response = apiOperations["workflows.list_runs"].response.schema.parse(listed.json());
+    expect(response.items.find((item) => item.id === run.id)).toMatchObject({
+      error: { connection: "crm" }
+    });
     expect(run.error?.message).not.toContain("person");
     expect(writesOf(t)).toHaveLength(1);
     const stepRuns = await stepRunsOf(t, run.id);
     expect(stepRuns.at(-1)).toMatchObject({
       key: "each_client[1].send",
       status: "failed",
-      error: { code: "FORBIDDEN", action: "connection.use" }
+      error: { code: "FORBIDDEN", action: "connection.use", connection: "crm" }
     });
     expect(stepRuns.find((stepRun) => stepRun.key === "each_client")?.status).toBe("failed");
   });

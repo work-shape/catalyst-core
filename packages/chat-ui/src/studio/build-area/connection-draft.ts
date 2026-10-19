@@ -162,22 +162,28 @@ function take(draft: ConnectionDraft): void {
 
 /**
  * A hook: the draft opened for the page of the Connection `name`, held from its arrival until
- * the page closes it.
+ * the page closes it. `arrival` counts the drafts that arrived while one was shown, so the list
+ * that shows a draft starts again with a newer one instead of keeping the rows it opened with.
  */
 export function useOpenedConnectionDraft(name: string): {
   draft: ConnectionDraft | undefined;
+  arrival: number;
   close(): void;
 } {
   const now = useSyncExternalStore(subscribe, requestedNow, requestedNow);
   const arrived =
     now?.place === "page" && now.draft.connection.name === name ? now.draft : undefined;
-  const [shown, setShown] = useState<ConnectionDraft>();
+  const [shown, setShown] = useState<{ draft: ConnectionDraft; arrival: number }>();
   useEffect(() => {
     if (!arrived) return;
-    setShown(arrived);
+    setShown((current) => ({ draft: arrived, arrival: (current?.arrival ?? 0) + 1 }));
     take(arrived);
   }, [arrived]);
-  return { draft: shown, close: () => setShown(undefined) };
+  return {
+    draft: shown?.draft,
+    arrival: shown?.arrival ?? 0,
+    close: () => setShown(undefined)
+  };
 }
 
 /** A hook: the draft opened for a new Connection, as the New connection dialog starts with it. */

@@ -19,6 +19,7 @@ const holidayFiles = [
     text: `
     create table holidays (person text, starts date, ends date, days integer generated always as (ends - starts + 1) stored, primary key (person, starts));
     create table unkeyed (person text, ends date);
+    create table computed_keys (source integer, id integer generated always as (source + 1) stored primary key, value text);
     create table typed_keys (id integer primary key, value text);
     create table loose (id integer unique, value text);
     create table late (id integer unique deferrable initially deferred);
@@ -107,6 +108,75 @@ export function testDataStoreRowWrites(): void {
       }
     });
 
+    it("updates and deletes using a generated primary key, but never assigns to computed columns", async () => {
+      const { sql, call } = await setup();
+      try {
+        expect(
+          await call("insert", { table: "computed_keys", rows: [{ source: 4, value: "before" }] })
+        ).toMatchObject({ status: "done" });
+        expect(
+          await call("update", {
+            table: "computed_keys",
+            rows: [{ key: { id: 5 }, set: { value: "after" } }]
+          })
+        ).toMatchObject({ status: "done", output: { updated: 1 } });
+        expect([...(await sql`select source, id, value from computed_keys`)]).toEqual([
+          { source: 4, id: 5, value: "after" }
+        ]);
+        expect(
+          await call("update", {
+            table: "computed_keys",
+            rows: [{ key: { id: 5 }, set: { id: 6 } }]
+          })
+        ).toMatchObject({ status: "failed", error: { details: { reason: "column_unknown" } } });
+        expect(
+          await call("delete_rows", { table: "computed_keys", keys: [{ id: 5 }] })
+        ).toMatchObject({ status: "done", output: { deleted: 1 } });
+        expect([...(await sql`select * from computed_keys`)]).toEqual([]);
+      } finally {
+        await sql.end();
+      }
+    });
+
+    it.each(["en", "de"] as const)(
+      "localizes schema refusals for row writes in %s without changing the schema limit",
+      async (locale) => {
+        const { sql, call, snapshot } = await setup();
+        try {
+          for (const verb of ["insert", "update", "delete_rows"] as const) {
+            const input =
+              verb === "insert"
+                ? { table: "x".repeat(64), rows: [alex] }
+                : verb === "update"
+                  ? {
+                      table: "x".repeat(64),
+                      rows: [{ key, set: { ends: "2026-11-05" } }]
+                    }
+                  : { table: "x".repeat(64), keys: [key] };
+            await expect(call(verb, input, locale)).rejects.toMatchObject({
+              code: "VALIDATION_FAILED",
+              message:
+                locale === "de"
+                  ? "Die Eingabe für diesen Aufruf ist ungültig."
+                  : "Operation input is invalid",
+              details: {
+                issues: [
+                  expect.objectContaining({
+                    code: "too_big",
+                    maximum: 63,
+                    message: expect.stringContaining(locale === "de" ? "Zu groß" : "Too big")
+                  })
+                ]
+              }
+            });
+          }
+          expect(await snapshot()).toEqual([]);
+        } finally {
+          await sql.end();
+        }
+      }
+    );
+
     it.each(["en", "de"] as const)(
       "refuses invalid mutations in %s and leaves the table unchanged",
       async (locale) => {
@@ -164,8 +234,8 @@ export function testDataStoreRowWrites(): void {
               {
                 verb,
                 input: input([{ ...key, days: 5 }]),
-                reason: "column_unknown",
-                word: locale === "de" ? "berechnete" : "generated"
+                reason: "primary_key_incomplete",
+                word: locale === "de" ? "genau die Primärschlüsselspalten" : "no other column"
               },
               {
                 verb,

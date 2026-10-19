@@ -21457,6 +21457,9 @@
                         "action": {
                           "type": "string"
                         },
+                        "connection": {
+                          "type": "string"
+                        },
                         "stepRunId": {
                           "type": "string"
                         }
@@ -21831,6 +21834,9 @@
                           "type": "string"
                         },
                         "action": {
+                          "type": "string"
+                        },
+                        "connection": {
                           "type": "string"
                         },
                         "stepRunId": {
@@ -22423,6 +22429,9 @@
                                 "type": "string"
                               },
                               "action": {
+                                "type": "string"
+                              },
+                              "connection": {
                                 "type": "string"
                               },
                               "stepRunId": {
@@ -23235,6 +23244,9 @@
                               "action": {
                                 "type": "string"
                               },
+                              "connection": {
+                                "type": "string"
+                              },
                               "stepRunId": {
                                 "type": "string"
                               }
@@ -23637,6 +23649,9 @@
                           "type": "string"
                         },
                         "action": {
+                          "type": "string"
+                        },
+                        "connection": {
                           "type": "string"
                         },
                         "stepRunId": {
@@ -24064,6 +24079,9 @@
                           "type": "string"
                         },
                         "action": {
+                          "type": "string"
+                        },
+                        "connection": {
                           "type": "string"
                         },
                         "stepRunId": {

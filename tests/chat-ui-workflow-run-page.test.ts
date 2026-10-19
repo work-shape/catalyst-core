@@ -306,13 +306,13 @@ describe("the panel of a step that failed", () => {
       "The workflow may not do this: its account “Booking checks” may not use the Connection “CRM”."
     );
     expect(panel("clients", failed, [refused], admin)).toContain(
-      "Under Settings › API access, give the account “Booking checks” the Connection “CRM” to use, then run the workflow again."
+      "Under Settings › API access, allow the account “Booking checks” to use the Connection “CRM”, then run the workflow again."
     );
     expect(panel("clients", failed, [refused], { ...admin, locale: "de" })).toContain(
       "Der Workflow darf das nicht: Sein Konto „Booking checks“ darf die Verbindung „CRM“ nicht verwenden."
     );
     expect(panel("clients", failed, [refused], { ...admin, locale: "de" })).toContain(
-      "Gib dem Konto „Booking checks“ unter Einstellungen › API-Zugang die Verbindung „CRM“ zum Verwenden und starte den Workflow dann erneut."
+      "Erlaube dem Konto „Booking checks“ unter Einstellungen › API-Zugang, die Verbindung „CRM“ zu verwenden, und starte den Workflow dann erneut."
     );
     // Whoever administers no account is still told to ask, and never told to ask by an admin.
     expect(panel("clients", failed, [refused], member)).toContain(

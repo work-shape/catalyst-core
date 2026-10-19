@@ -464,18 +464,26 @@ export function stepConnection(
 /**
  * What happened, as one sentence. A missing right is named where the instance names it: the
  * action the account of the Workflow does not hold, with the account and the Connection where
- * the screen knows them (C7).
+ * the screen or the failure knows them (C7).
  */
 export function failureHappened(
-  failure: Pick<WorkflowFailure, "reason" | "action" | "workflow"> & { detail?: string },
+  failure: Pick<WorkflowFailure, "reason" | "action" | "connection" | "workflow"> & {
+    detail?: string;
+  },
   t: (key: TranslationKey, values?: Record<string, string>) => string,
-  { account, connection }: FailureNames = {}
+  { account, connection = failure.connection }: FailureNames = {}
 ): string {
   if (failure.workflow !== undefined && failure.reason === "runKeyCycle") {
     return t("workflows.reason.runKeyCycleNamed", { workflow: failure.workflow });
   }
   if (failure.action !== undefined && failure.reason === "missingRight") {
-    if (failure.action === CONNECTION_ACTIONS.use && connection !== undefined) {
+    if (failure.action === CONNECTION_ACTIONS.use) {
+      if (connection === undefined) {
+        // Where the instance names no Connection, the right is still said in words.
+        return account === undefined
+          ? t("workflows.reason.connectionUseOfStep")
+          : t("workflows.reason.connectionUseOfStepNamed", { account });
+      }
       return account === undefined
         ? t("workflows.reason.connectionUse", { connection })
         : t("workflows.reason.connectionUseNamed", { account, connection });
@@ -502,12 +510,15 @@ export function runFailed(run: Pick<WorkflowRunView, "status">): boolean {
 /**
  * Why a run failed, as the one sentence of its page; nothing for a run that did not fail. A
  * failed run whose reason did not arrive says the general sentence, never the instance's own.
+ * A missing right names the account the run itself acted as.
  */
 export function runFailedBecause(
-  run: Pick<WorkflowRunView, "status" | "failure">,
+  run: Pick<WorkflowRunView, "status" | "failure" | "runsAs">,
   t: (key: TranslationKey, values?: Record<string, string>) => string
 ): string | undefined {
-  return runFailed(run) ? failureHappened(run.failure ?? { reason: "other" }, t) : undefined;
+  return runFailed(run)
+    ? failureHappened(run.failure ?? { reason: "other" }, t, { account: run.runsAs })
+    : undefined;
 }
 
 /**
@@ -515,11 +526,11 @@ export function runFailedBecause(
  * to give the missing right, never to ask an administrator (C7).
  */
 export function failureAdvice(
-  failure: Pick<WorkflowFailure, "reason" | "action">,
+  failure: Pick<WorkflowFailure, "reason" | "action" | "connection">,
   t: (key: TranslationKey, values?: Record<string, string>) => string,
   {
     account,
-    connection,
+    connection = failure.connection,
     administers,
     place
   }: FailureNames & { administers: boolean; place: string }

@@ -84,6 +84,8 @@ interface ErrorResource {
   message: string;
   /** On a refused call: the action the account of the Workflow would have needed. */
   action?: string;
+  /** On a refused `connection.use`: the Connection the step called. */
+  connection?: string;
 }
 
 interface TimesResource {
@@ -113,6 +115,8 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   mode?: (typeof WORKFLOW_RUN_MODES)[number];
   status: WorkflowRunStatus;
   startedBy: { id: string; label: string };
+  /** The account the run acts as. */
+  principal?: { displayLabel: string };
   /** On a child run: the id of the Workflow of the run that started it. */
   parentWorkflow?: string;
   /** The run key its start gave the run. */
@@ -184,6 +188,7 @@ function toFailure(error: ErrorResource | undefined) {
       reason: FAILURE_REASONS[error.code] ?? "other",
       detail: error.message,
       ...(error.action === undefined ? {} : { action: error.action }),
+      ...(error.connection === undefined ? {} : { connection: error.connection }),
       ...(workflow === undefined ? {} : { workflow })
     }
   };
@@ -263,6 +268,7 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     // A run its schedule or another run started names no person.
     startedBy:
       run.trigger === "manual" ? { id: run.startedBy.id, name: run.startedBy.label } : undefined,
+    ...(run.principal === undefined ? {} : { runsAs: run.principal.displayLabel }),
     ...times(run),
     ...toFailure(run.error),
     ...toOutput(run.outputPreview),

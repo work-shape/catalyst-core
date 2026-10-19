@@ -226,6 +226,8 @@ export interface WorkflowFailure {
   detail: string;
   /** On a missing right: the action the account of the Workflow does not hold. */
   action?: string;
+  /** On a refused `connection.use`: the Connection the step called, where the instance names it. */
+  connection?: string;
   /** On a run key held in the call chain: the name of the Workflow the step would start. */
   workflow?: string;
 }
@@ -270,6 +272,11 @@ export interface WorkflowRunView {
   stopping: boolean;
   /** Who started it. A run its schedule started names nobody. */
   startedBy: { id: string; name: string } | undefined;
+  /**
+   * The account the run acted as, by its label, where the instance names it. It is the run's
+   * own, so a later change of the Workflow's account leaves the runs before it as they were.
+   */
+  runsAs?: string;
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;

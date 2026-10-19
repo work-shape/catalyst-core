@@ -736,19 +736,25 @@ describe("what a run says about how it ended", () => {
       error: { code: "FORBIDDEN", message: "may not", action: "connection.use" }
     }).failure;
     expect(failure).toMatchObject({ reason: "missingRight", action: "connection.use" });
+    // The right to use a Connection reads in plain words, never as its technical name.
     expect(failure && failureHappened(failure, t)).toBe(
-      "The workflow may not do this: its account lacks the right “connection.use”."
+      "The workflow may not do this: its account may not use the Connection that one of its steps calls."
     );
-    expect(failure && failureHappened(failure, de)).toContain("„connection.use“");
+    expect(failure && failureHappened(failure, de)).not.toContain("connection.use");
+    // Any other right is named.
+    expect(failureHappened({ reason: "missingRight", action: "workflow.start" }, t)).toBe(
+      "The workflow may not do this: its account lacks the right “workflow.start”."
+    );
     // A refusal that names no action keeps the sentence without one.
     expect(failureHappened({ reason: "missingRight" }, t)).toBe(t("workflows.reason.missingRight"));
+    // The run's page names the account the run acted as.
     expect(
       page({
         ...run,
         status: "failed",
         error: { code: "FORBIDDEN", message: "may not", action: "connection.use" }
       })
-    ).toContain("lacks the right “connection.use”");
+    ).toContain("its account “Workflow runner” may not use the Connection");
   });
 
   it("names the Workflow whose run key is held in the step's own call chain, and nothing else", () => {
