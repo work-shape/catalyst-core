@@ -110,6 +110,17 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "data-store-reads-after-delete",
+    reason:
+      "The store-page test deletes its store and reaches the list. Reads invalidated by that " +
+      "delete can answer 404 before the detail unmounts; the test asserts the asset is gone.",
+    matches: requestAnswered(404),
+    path: /^\/api\/v1\/data-stores\/store-pages-[a-f0-9]{8}(?:\/(?:rows|used-by|describe))?$/u,
+    tests: [
+      "a Data Store's later draft is published, edited with the agent and deleted from its page"
+    ]
+  },
+  {
     name: "data-store-delete-in-use",
     reason:
       "The store-page test deliberately deletes a referenced store, asserts its 422 refusal, " +

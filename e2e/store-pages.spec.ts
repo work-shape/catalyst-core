@@ -379,6 +379,7 @@ test("a Data Store's later draft is published, edited with the agent and deleted
     // The store is retired: its asset is gone, though its rows stay on the server.
     expect((await page.request.get(address)).ok()).toBe(false);
   } finally {
+    await page.goto("about:blank");
     await page.unrouteAll({ behavior: "ignoreErrors" });
     for (const url of [agentAddress, otherAddress, address]) {
       const left = await page.request.get(url);
@@ -648,6 +649,7 @@ test.describe("the page and the row of a Knowledge Base", () => {
         }
       }
     } finally {
+      await page.goto("about:blank");
       await page.unrouteAll({ behavior: "ignoreErrors" });
       for (const grantId of grants) {
         await requestWithOrigin(
