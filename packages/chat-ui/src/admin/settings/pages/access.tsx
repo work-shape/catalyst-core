@@ -80,7 +80,7 @@ export function AccessPage() {
       retry: false
     }))
   });
-  const kindAssets: Partial<Record<GrantKind, GrantChoices>> = Object.fromEntries(
+  const assetChoices: Partial<Record<GrantKind, GrantChoices>> = Object.fromEntries(
     grantKinds.map((kind, index) => {
       const query = kindAssetQueries[index];
       const loaded =
@@ -121,6 +121,8 @@ export function AccessPage() {
       ];
     })
   );
+  // Builder and Publisher name a workspace, never an asset.
+  const kindAssets = { ...assetChoices, workspace: { items: [], failed: false } };
   const namesWorkspaces = grantsNameWorkspaces(furtherKinds, grantsQuery.data ?? []);
   // The Check tab asks about every kind the instance has. Agents and skills come with the
   // agent configuration; the assets of any other kind are listed once the kind is chosen.

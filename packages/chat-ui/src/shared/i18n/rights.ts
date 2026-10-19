@@ -36,6 +36,8 @@ export const rights = defineTranslations({
     "rights.actionServicePrincipalsManage": "Manage service principals",
     "rights.actionAgentModelsManage": "Manage agent model settings",
     "rights.actionAssetsRelease": "Push configuration releases",
+    "rights.actionBuilder": "Builder",
+    "rights.actionPublisher": "Publisher",
     "rights.actionUnknown": "A right this version does not know"
   },
   de: {
@@ -66,6 +68,8 @@ export const rights = defineTranslations({
     "rights.actionServicePrincipalsManage": "Technische Konten verwalten",
     "rights.actionAgentModelsManage": "Modelleinstellungen der Agenten verwalten",
     "rights.actionAssetsRelease": "Konfiguration per Release einspielen",
+    "rights.actionBuilder": "Builder",
+    "rights.actionPublisher": "Publisher",
     "rights.actionUnknown": "Ein Recht, das diese Version nicht kennt"
   }
 });

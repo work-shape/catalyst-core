@@ -103,7 +103,10 @@ export const ACTIONS = [
   // Their keys stay with `api_access.manage`.
   "service_principals.manage",
   "agent_models.manage",
-  "assets.release"
+  "assets.release",
+  // The two bundles of a workspace: one row each, expanded by the evaluator (`bundleCarries`).
+  "builder",
+  "publisher"
 ] as const;
 
 export type PlatformAction = (typeof ACTIONS)[number];

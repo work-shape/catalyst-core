@@ -70,17 +70,21 @@ describe("permissions", () => {
       "api_access.manage",
       "service_principals.manage",
       "agent_models.manage",
-      "assets.release"
+      "assets.release",
+      "builder",
+      "publisher"
     ]);
     // The rights of a Connection, an App, a Workflow, a Data Store, a Knowledge Base, a Guardrail
-    // and a mail sender came after the legacy keys, as did the right over service principals: no
-    // key names one, so nobody holds one through the legacy column.
+    // and a mail sender came after the legacy keys, as did the right over service principals and
+    // the two bundles: no key names one, so nobody holds one through the legacy column.
     const unkeyed = (action: string) =>
       /^(?:connection|app|workflow|data_store|knowledge_base|guardrail|mail_sender)\./u.test(
         action
       ) ||
       action === "service_principals.manage" ||
-      action === "agent.publish";
+      action === "agent.publish" ||
+      action === "builder" ||
+      action === "publisher";
     const keyed = ACTIONS.filter((action) => !unkeyed(action));
     expect(keyed).toHaveLength(14);
     for (const action of ACTIONS.filter(unkeyed)) {
@@ -178,7 +182,10 @@ describe("permissions", () => {
       "users.manage",
       "usage.view",
       "audit.view",
-      "service_principals.manage"
+      "service_principals.manage",
+      // Instance admins hold Builder and Publisher in every workspace by default [P36].
+      "builder",
+      "publisher"
     ]);
     expect(ROLE_DEFAULT_ACTIONS.superadmin).toEqual(
       ACTIONS.filter((action) => action !== "assets.release")

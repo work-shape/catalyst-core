@@ -113,11 +113,13 @@ describe("the vocabulary of Connection rights", () => {
     expect(GRANTABLE_ACTION_SCOPES["mail_sender.use"]).toEqual(["asset"]);
     for (const action of GRANTABLE_ACTIONS) {
       const scopes: readonly string[] = GRANTABLE_ACTION_SCOPES[action];
+      // Builder and Publisher are held in one workspace (WS-BUILD-1).
+      const bundle = action === "builder" || action === "publisher";
       expect(scopes.includes("workspace"), action).toBe(
-        /^(?:agent|skill|app|data_store|guardrail)\./u.test(action)
+        bundle || /^(?:agent|skill|app|data_store|guardrail)\./u.test(action)
       );
       expect(scopes.includes("instance"), action).toBe(
-        !/^(?:agent|skill)\./u.test(action) &&
+        !bundle && !/^(?:agent|skill)\./u.test(action) &&
           action !== "workflow.read_run_data" &&
           action !== "mail_sender.use"
       );

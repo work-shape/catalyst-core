@@ -44,8 +44,16 @@ function checkedVerbs(actions: CheckedKind["actions"]): { verb: AccessVerb; acti
  * here without a list of this page's own; the page then owes it its words, which the label
  * tables of the Rights tab are typed to ask for.
  */
-export type GrantKind = GrantableAction extends `${infer Kind}.${string}` ? Kind : never;
-export type GrantVerb = GrantableAction extends `${string}.${infer Verb}` ? Verb : never;
+export type GrantKind = KindOf<GrantableAction>;
+export type GrantVerb = VerbOf<GrantableAction>;
+
+/**
+ * A bundle of a workspace, Builder or Publisher, is an action without a kind: the page offers it
+ * as a verb of the kind `workspace`, which only one workspace is the place of.
+ */
+const BUNDLE_KIND = "workspace";
+type KindOf<Action> = Action extends `${infer Kind}.${string}` ? Kind : typeof BUNDLE_KIND;
+type VerbOf<Action> = Action extends `${string}.${infer Verb}` ? Verb : Action;
 
 /**
  * The order the page lists the verbs in: from seeing to changing to removing. It is the one
@@ -60,11 +68,13 @@ const GRANT_VERB_RANK: Record<GrantVerb, number> = {
   publish: 5,
   delete: 6,
   read_run_data: 7,
-  records: 8
+  records: 8,
+  builder: 9,
+  publisher: 10
 };
 
 function isGrantKind(kind: string): kind is GrantKind {
-  return GRANTABLE_ACTIONS.some((action) => action.startsWith(`${kind}.`));
+  return kind === BUNDLE_KIND || GRANTABLE_ACTIONS.some((action) => action.startsWith(`${kind}.`));
 }
 
 function isGrantVerb(verb: string): verb is GrantVerb {
@@ -81,7 +91,7 @@ interface GrantRight {
 /** Every right core writes a grant row for, the kinds in core's order and each kind's verbs in the page's. */
 const GRANT_RIGHTS: readonly GrantRight[] = GRANTABLE_ACTIONS.flatMap((action) => {
   const dot = action.indexOf(".");
-  const kind = action.slice(0, dot);
+  const kind = dot < 0 ? BUNDLE_KIND : action.slice(0, dot);
   const verb = action.slice(dot + 1);
   return isGrantKind(kind) && isGrantVerb(verb) ? [{ action, kind, verb }] : [];
 });

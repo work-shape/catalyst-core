@@ -144,6 +144,45 @@ export interface AccessResource {
  */
 export const WORKSPACE_MEMBER_ACTIONS = ["app.use"] as const satisfies readonly PlatformAction[];
 
+/**
+ * The verbs each bundle of a workspace carries on every kind: Builder reads and writes,
+ * Publisher publishes. Neither deletes.
+ */
+const WORKSPACE_BUNDLE_VERBS: Readonly<Record<string, readonly string[]>> = {
+  builder: ["read", "write"],
+  publisher: ["publish"]
+};
+
+/**
+ * Publishes no bundle carries. A guardrail stops other people's work, so who sets one is an
+ * instance admin's grant. A Workflow's publish joins the Publisher bundle only after the publish
+ * review (DT-1b), once a workspace can own a Workflow (build plan, gate of 2026-10-14).
+ */
+const BUNDLE_EXCLUDED_ACTIONS: readonly string[] = ["guardrail.publish", "workflow.publish"];
+
+/**
+ * Whether a row of the action gives the right asked for: its own action, or a bundle held in a
+ * workspace. A workspace row covers only what that workspace owns, so the kinds a bundle reaches
+ * are the ones the kind registry lets a workspace own, a kind a later release adds included,
+ * without a new row.
+ */
+function rowGives(
+  row: { action: string; scopeKind: PermissionGrant["scopeKind"] },
+  action: string
+): boolean {
+  if (row.action === action) return true;
+  const verbs = WORKSPACE_BUNDLE_VERBS[row.action];
+  if (
+    row.scopeKind !== "workspace" ||
+    verbs === undefined ||
+    BUNDLE_EXCLUDED_ACTIONS.includes(action)
+  ) {
+    return false;
+  }
+  const dot = action.indexOf(".");
+  return dot > 0 && verbs.includes(action.slice(dot + 1));
+}
+
 export type AccessSource = (typeof ACCESS_SOURCES)[number];
 
 export type AccessDecision =
@@ -461,7 +500,7 @@ export function explainAccessEntries(
   resource: AccessResource | undefined
 ): AccessExplanation {
   const covering = entries.filter(
-    (entry) => entry.action === action && entryCovers(entry, resource)
+    (entry) => rowGives(entry, action) && entryCovers(entry, resource)
   );
   const deny = covering.find((entry) => entry.effect === "deny");
   if (deny) {
@@ -609,7 +648,7 @@ export function createActorAccess(
       (keyScopes === undefined || personalApiKeyNamesAction(keyScopes, action)) &&
       persisted.grants.some(
         (grant) =>
-          grant.action === action &&
+          rowGives(grant, action) &&
           grant.effect === "allow" &&
           scopeKinds.includes(grant.scopeKind)
       ),
@@ -618,7 +657,8 @@ export function createActorAccess(
         ? LEGACY_PERMISSION_ACTIONS[action]
         : [action];
       return listAccessEntries(holder, persisted).filter(
-        (entry) => entry.effect === "deny" && actions.includes(entry.action)
+        (entry) =>
+          entry.effect === "deny" && actions.some((candidate) => rowGives(entry, candidate))
       );
     }
   };

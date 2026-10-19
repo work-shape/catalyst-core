@@ -19,7 +19,8 @@ export const kindLabelKeys = {
   knowledge_base: "access.kindKnowledgeBase",
   data_store: "access.kindDataStore",
   guardrail: "access.kindGuardrail",
-  mail_sender: "access.kindMailSender"
+  mail_sender: "access.kindMailSender",
+  workspace: "access.kindWorkspace"
 } as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
 
 /** The label of a registered asset kind; nothing for a kind this interface has no name for. */
@@ -126,6 +127,12 @@ export const kindWords: Record<GrantKind, KindWords> = {
     chooseAsset: "access.chooseMailSender",
     noAssets: "access.noMailSenders",
     assetsLoadFailed: "access.mailSendersLoadFailed"
+  },
+  // Builder and Publisher are granted in one workspace only: the asset words name no choice
+  // the dialog offers.
+  workspace: {
+    ...configAssetWords,
+    scopeAsset: "access.scopeWorkspace"
   }
 };
 
@@ -153,7 +160,9 @@ export const rightSentenceKeys: Partial<Record<GrantableAction, TranslationKey>>
   "knowledge_base.publish": "access.actionPublishKnowledgeBaseDescription",
   "knowledge_base.delete": "access.actionDeleteKnowledgeBaseDescription",
   "data_store.execute": "access.actionExecuteDataStoreDescription",
-  "guardrail.publish": "access.actionPublishGuardrailDescription"
+  "guardrail.publish": "access.actionPublishGuardrailDescription",
+  builder: "access.actionBuilderDescription",
+  publisher: "access.actionPublisherDescription"
 };
 
 /**

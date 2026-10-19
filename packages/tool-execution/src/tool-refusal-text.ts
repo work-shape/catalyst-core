@@ -185,7 +185,9 @@ const OWN_ACTION_WORDS: Record<OwnWordAction, Words> = {
   "assets.release": {
     en: "push configuration releases",
     de: "Konfiguration per Release einspielen"
-  }
+  },
+  builder: { en: "build in this workspace", de: "Builder" },
+  publisher: { en: "publish in this workspace", de: "Publisher" }
 };
 
 function isOwnWordAction(action: PlatformAction): action is OwnWordAction {

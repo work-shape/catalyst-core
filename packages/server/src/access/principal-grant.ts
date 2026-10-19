@@ -217,7 +217,9 @@ export async function findAdministrablePrincipal(
 
 /** The asset kind an action is a right of: `agent` of `agent.read`. */
 export function kindOfAction(action: string): string {
-  return action.slice(0, action.indexOf("."));
+  // A bundle, Builder or Publisher, names no kind.
+  const dot = action.indexOf(".");
+  return dot < 0 ? "" : action.slice(0, dot);
 }
 
 export function refused(reason: string, message: string): AppError {

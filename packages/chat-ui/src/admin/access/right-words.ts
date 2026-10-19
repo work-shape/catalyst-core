@@ -52,7 +52,9 @@ const ownActionKeys: Record<Exclude<PlatformAction, VerbAction>, TranslationKey>
   "api_access.manage": "rights.actionApiAccessManage",
   "service_principals.manage": "rights.actionServicePrincipalsManage",
   "agent_models.manage": "rights.actionAgentModelsManage",
-  "assets.release": "rights.actionAssetsRelease"
+  "assets.release": "rights.actionAssetsRelease",
+  builder: "rights.actionBuilder",
+  publisher: "rights.actionPublisher"
 };
 
 /** A label starts with a capital, wherever its sentence put the verb. */

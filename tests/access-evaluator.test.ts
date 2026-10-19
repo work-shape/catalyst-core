@@ -481,3 +481,79 @@ describe("resource use through workspace availability (AVAIL-1)", () => {
     }
   );
 });
+
+describe("workspace bundles (WS-BUILD-1)", () => {
+  const inWorkspace: AccessResource = { kind: "agent", assetId: "asset-1", workspaceId: "kai" };
+  const builder = grant({ action: "builder", scopeKind: "workspace", scopeId: "kai" });
+  const publisher = grant({ action: "publisher", scopeKind: "workspace", scopeId: "kai" });
+
+  it("lets Builder read and write every kind its workspace owns, and nothing elsewhere", () => {
+    for (const kind of ["agent", "skill", "app", "data_store", "knowledge_base", "guardrail"]) {
+      for (const verb of ["read", "write"]) {
+        const action = `${kind}.${verb}`;
+        expect(decide({ grants: [builder], action, resource: inWorkspace })).toEqual(
+          allowedByGrant
+        );
+        expect(
+          decide({ grants: [builder], action, resource: { ...inWorkspace, workspaceId: "other" } })
+        ).toEqual(noGrant);
+        expect(decide({ grants: [builder], action, resource: instanceResource })).toEqual(noGrant);
+      }
+    }
+  });
+
+  it("gives Builder no delete, no publish, no approve and no use", () => {
+    for (const action of ["agent.delete", "agent.publish", "skill.approve", "app.use"]) {
+      expect(decide({ grants: [builder], action, resource: inWorkspace })).toEqual(noGrant);
+    }
+  });
+
+  it("lets Publisher publish what its workspace owns, never a guardrail or a Workflow", () => {
+    for (const action of ["agent.publish", "app.publish", "data_store.publish"]) {
+      expect(decide({ grants: [publisher], action, resource: inWorkspace })).toEqual(
+        allowedByGrant
+      );
+    }
+    for (const action of ["guardrail.publish", "workflow.publish", "agent.write", "app.delete"]) {
+      expect(decide({ grants: [publisher], action, resource: inWorkspace })).toEqual(noGrant);
+    }
+  });
+
+  it("reaches a kind a later release lets a workspace own without a new row (check 35)", () => {
+    // No workspace owns a Workflow yet; once one does, its asset carries the workspace.
+    const workflow: AccessResource = { kind: "workflow", assetId: "wf-1", workspaceId: "kai" };
+    expect(decide({ grants: [builder], action: "workflow.write", resource: workflow })).toEqual(
+      allowedByGrant
+    );
+  });
+
+  it("carries nothing from a bundle row outside a workspace", () => {
+    const outside: Partial<PermissionGrant>[] = [scopes.instance, scopes.asset];
+    for (const scope of outside) {
+      const row = grant({ action: "builder", ...scope });
+      expect(decide({ grants: [row], resource: inWorkspace })).toEqual(noGrant);
+    }
+  });
+
+  it("lets a deny on one agent refuse a Builder there and nowhere else (check 34)", () => {
+    const grants = [
+      builder,
+      grant({ action: "agent.write", effect: "deny", scopeKind: "asset", scopeId: "asset-1" })
+    ];
+    expect(decide({ grants, resource: inWorkspace })).toEqual(denied);
+    expect(decide({ grants, resource: { ...inWorkspace, assetId: "asset-2" } })).toEqual(
+      allowedByGrant
+    );
+  });
+
+  it("answers held rows and denials through the bundle", () => {
+    const access = createActorAccess(holder(), persisted([builder]));
+    expect(access.holdsGrantAt("agent.write", ["workspace"])).toBe(true);
+    expect(access.holdsGrantAt("agent.delete", ["workspace"])).toBe(false);
+    const refused = createActorAccess(holder(), persisted([{ ...builder, effect: "deny" }]));
+    expect(refused.denials("skill.write")).toEqual([
+      expect.objectContaining({ action: "builder", scopeId: "kai" })
+    ]);
+    expect(refused.authorize("skill.write", inWorkspace)).toEqual(denied);
+  });
+});

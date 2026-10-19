@@ -72,18 +72,27 @@ function rights(props: Partial<ComponentProps<typeof GrantsTab>>, locale: "en" |
   );
 }
 
+/** A bundle, Builder or Publisher, is offered as a verb of the kind `workspace`. */
+const actionOf = (kind: string, verb: string) => (kind === "workspace" ? verb : `${kind}.${verb}`);
+
 describe("what the Access page offers", () => {
   it("is every kind core writes a grant row for, with every action of it", () => {
-    const kindsOfCore = [...new Set(GRANTABLE_ACTIONS.map((action) => action.split(".")[0]))];
+    const kindsOfCore = [
+      ...new Set(
+        GRANTABLE_ACTIONS.map((action) =>
+          action.includes(".") ? action.split(".")[0] : "workspace"
+        )
+      )
+    ];
     expect(GRANT_KINDS).toEqual(kindsOfCore);
 
     const offered = GRANT_KINDS.flatMap((kind) =>
-      grantVerbs(kind).map((verb) => `${kind}.${verb}`)
+      grantVerbs(kind).map((verb) => actionOf(kind, verb))
     );
     expect([...offered].sort()).toEqual([...GRANTABLE_ACTIONS].sort());
     for (const action of GRANTABLE_ACTIONS) {
       const parts = splitGrantableAction(action);
-      expect([action, parts && `${parts.kind}.${parts.verb}`]).toEqual([action, action]);
+      expect([action, parts && actionOf(parts.kind, parts.verb)]).toEqual([action, action]);
     }
   });
 
@@ -91,7 +100,7 @@ describe("what the Access page offers", () => {
     for (const kind of GRANT_KINDS) {
       for (const scopeKind of grantScopeKinds(kind)) {
         for (const verb of grantVerbs(kind)) {
-          const action = GRANTABLE_ACTIONS.find((candidate) => candidate === `${kind}.${verb}`);
+          const action = GRANTABLE_ACTIONS.find((candidate) => candidate === actionOf(kind, verb));
           const scopes: readonly string[] = action ? GRANTABLE_ACTION_SCOPES[action] : [];
           expect([kind, verb, scopeKind, scopes.includes(scopeKind)]).toEqual([
             kind,

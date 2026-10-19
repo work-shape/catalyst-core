@@ -67,5 +67,9 @@ export const GRANTABLE_ACTION_SCOPES = {
   // Sending as one sender of the instance (MAIL-1): granted on that one sender, `system`, and
   // never on all of them, so a later sender is not reached by a grant given for `system`. A
   // grant names a sender the instance registers, so none is written while outbound mail is off.
-  "mail_sender.use": ["asset"]
+  "mail_sender.use": ["asset"],
+  // Builder and Publisher are held in one Shared Workspace, with or without membership, and
+  // cover what it owns (`rowGives` in `permissions.ts`).
+  builder: ["workspace"],
+  publisher: ["workspace"]
 } as const satisfies Partial<Record<PlatformAction, readonly GrantScopeKind[]>>;

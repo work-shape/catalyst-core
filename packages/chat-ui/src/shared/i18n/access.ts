@@ -172,6 +172,11 @@ export const access = defineTranslations({
     "access.kindDataStore": "Data stores",
     "access.kindGuardrail": "Guardrails",
     "access.kindMailSender": "E-mail senders",
+    "access.kindWorkspace": "Building in a workspace",
+    "access.actionBuilderDescription":
+      "View and edit everything the workspace owns, also what it gets later, and build and try there in private conversations. Deletes nothing. No membership needed: a Builder who is no member sees none of the workspace's conversations.",
+    "access.actionPublisherDescription":
+      "Publish what the workspace owns. Guardrails and Workflows are not included.",
     "access.scopeConnection": "Connection {name}",
     "access.scopeWorkspace": "Workspace {name}",
     "access.scopeOnConnection": "On one connection",
@@ -476,6 +481,11 @@ export const access = defineTranslations({
     "access.kindDataStore": "Datenspeicher",
     "access.kindGuardrail": "Leitplanken",
     "access.kindMailSender": "E-Mail-Absender",
+    "access.kindWorkspace": "Bauen in einem Arbeitsbereich",
+    "access.actionBuilderDescription":
+      "Alles ansehen und bearbeiten, was dem Arbeitsbereich gehört, auch was später dazukommt, und dort in privaten Unterhaltungen bauen und ausprobieren. Löscht nichts. Ohne Mitgliedschaft: wer Builder, aber nicht Mitglied ist, sieht keine Unterhaltung des Arbeitsbereichs.",
+    "access.actionPublisherDescription":
+      "Veröffentlichen, was dem Arbeitsbereich gehört. Leitplanken und Workflows gehören nicht dazu.",
     "access.scopeConnection": "Verbindung {name}",
     "access.scopeWorkspace": "Arbeitsbereich {name}",
     "access.scopeOnConnection": "An einer Verbindung",
