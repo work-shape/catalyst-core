@@ -39,10 +39,36 @@ test("an agent's sections are an outline right of the content: its mark follows 
   const outline = page.getByRole("navigation", { name: "On this page" });
   const current = outline.locator("[aria-current]");
   const head = page.locator("header").filter({ has: page.getByRole("heading", { level: 1 }) });
+  // The language switch of the texts, on the bar that stays pinned under the head.
+  const textsIn = page.getByRole("radiogroup", { name: "Texts in" });
+  const bar = page.locator("[data-page-bar]").filter({ has: textsIn });
+  // How far a heading stands below everything pinned at the top: the head and the bar under it.
   const below = async (name: string) => {
-    const headBox = await head.boundingBox();
+    const pinned = [await head.boundingBox(), await bar.boundingBox()];
     const box = await heading(name).boundingBox();
-    return headBox && box ? box.y - (headBox.y + headBox.height) : Number.NaN;
+    if (!box || pinned.some((pin) => !pin)) {
+      return Number.NaN;
+    }
+    return box.y - Math.max(...pinned.map((pin) => (pin ? pin.y + pin.height : 0)));
+  };
+  // The switch is in view right under the head, nothing covers it, and it switches the texts
+  // and back. Playwright's click refuses an element another one covers.
+  const expectSwitchUsable = async () => {
+    await expect(textsIn).toBeInViewport();
+    const headBox = await head.boundingBox();
+    const barBox = await bar.boundingBox();
+    if (!headBox || !barBox) {
+      throw new Error("The head or the language bar has no box.");
+    }
+    expect(Math.abs(barBox.y - (headBox.y + headBox.height))).toBeLessThanOrEqual(1);
+    const radios = textsIn.getByRole("radio");
+    await expect(radios).toHaveCount(2);
+    const shown = (await radios.nth(0).getAttribute("aria-checked")) === "true" ? 0 : 1;
+    await radios.nth(1 - shown).click();
+    await expect(radios.nth(1 - shown)).toBeChecked();
+    await radios.nth(shown).click();
+    await expect(radios.nth(shown)).toBeChecked();
+    await expect(textsIn).toBeInViewport();
   };
 
   // The column left of the content is free, and the outline is to the right of it at the page's
@@ -65,13 +91,16 @@ test("an agent's sections are an outline right of the content: its mark follows 
   await expect(page.getByRole("navigation", { name: "Kinds in Studio" })).toHaveCount(0);
   await expect(current).toHaveText("Overview");
 
-  // A click scrolls the section up to the page's head and hands its heading the focus.
+  // A click scrolls the section up under the page's head and the language bar, and hands its
+  // heading the focus. The switch stays where it was, in view and usable.
+  await expect(bar).toHaveCount(1);
   await outline.getByRole("link", { name: /^Tools/u }).click();
   await expect(current).toHaveText(/^Tools/u);
   await expect.poll(() => below("Tools")).toBeLessThan(40);
   await expect.poll(() => below("Tools")).toBeGreaterThanOrEqual(0);
   await expect(heading("Tools")).toBeFocused();
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
+  await expectSwitchUsable();
 
   // A title above its fields is larger than their labels, so it is not taken for one.
   const fontSize = (element: Element) => getComputedStyle(element).fontSize;
@@ -165,6 +194,8 @@ test("an agent's sections are an outline right of the content: its mark follows 
   await scrollPage("end");
   await expect(current).toHaveText("Available in");
   await expect(current).toHaveCount(1);
+  // At the end of the page the switch is still pinned in view.
+  await expectSwitchUsable();
 
   // On a phone it is one line above the content that names the section in view.
   await page.setViewportSize(NARROW);
@@ -183,11 +214,10 @@ test("an agent's sections are an outline right of the content: its mark follows 
     .locator("option")
     .filter({ hasText: /^Tools/u })
     .textContent();
-  // The head has two lines here and is taller than the library's measure for a head of one.
-  // The section rests under the head as tall as it is, not under the measure.
-  expect((await head.boundingBox())?.height).toBeGreaterThan(64);
+  // The section rests under the head and language bar as tall as they are on this screen.
   await choice.selectOption({ label: tools ?? "" });
   await expect.poll(() => below("Tools")).toBeLessThan(40);
   expect(await below("Tools")).toBeGreaterThanOrEqual(0);
+  await expectSwitchUsable();
   await expectNoSidewaysScroll(page);
 });
