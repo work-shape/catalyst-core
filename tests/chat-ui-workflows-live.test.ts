@@ -757,6 +757,16 @@ describe("what a run says about how it ended", () => {
     ).toContain("its account “Workflow runner” may not use the Connection");
   });
 
+  it("names the right a tester lacks in words, never as its technical name", () => {
+    const failure = { reason: "testerMissingRight", action: "connection.use" } as const;
+    expect(failureHappened(failure, t)).toBe(
+      "You may not do this: a test run acts as you, and you lack the right “Use connections”."
+    );
+    expect(failureHappened(failure, de)).toBe(
+      "Du darfst das nicht: Ein Testlauf handelt als du, und dir fehlt das Recht „Verbindungen verwenden“."
+    );
+  });
+
   it("names the Workflow whose run key is held in the step's own call chain, and nothing else", () => {
     const cycle = {
       code: "run_key_cycle",
