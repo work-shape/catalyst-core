@@ -70,7 +70,7 @@ export interface OperationCallApprovalOptions {
   /** Describes the asset a held `assets.put` saves. Without it such a call is shown as any other. */
   assetPreview?: HeldAssetPreviewer;
   /** Where a kind reads what its request is about, outside a decision. */
-  configAssets: Pick<ConfigAssetStore, "getConfigAsset">;
+  configAssets: Pick<ConfigAssetStore, "getConfigAsset" | "getConfigAssetRevision">;
   /**
    * The kinds of held call, for a request of another kind that is about the same subject: a
    * confirmation in the Inbox of a publish shows and checks the publish as its kind does.
@@ -114,6 +114,22 @@ export function createOperationCallApprovalHandler(
       ? undefined
       : options.subjectKinds?.find((kind) => kind.kind === call.subjectKind));
 
+  /** Whether the asset had a revision after `revision` by `at`: a later save, or a deletion. */
+  const movedBefore = async (
+    kind: string,
+    name: string,
+    revision: number | null,
+    at: string
+  ): Promise<boolean> => {
+    const next = await options.configAssets.getConfigAssetRevision({
+      clientInstanceId,
+      kind,
+      name,
+      revision: (revision ?? 0) + 1
+    });
+    return next !== undefined && Date.parse(next.createdAt) <= Date.parse(at);
+  };
+
   return {
     kind: held?.kind ?? OPERATION_CALL_APPROVAL_KIND,
     requiredPermission: held?.requiredPermission ?? "operations.approve",
@@ -141,6 +157,16 @@ export function createOperationCallApprovalHandler(
               context.status === "pending" ? undefined : frozen
             )
           : undefined;
+      // A request that ended unapplied while its asset had already moved on stays named as
+      // outdated, so its comparison keeps saying whose version it shows (ACCEPT-2e).
+      const outdated =
+        asset !== undefined &&
+        asset.beforeWithheld !== true &&
+        frozen?.requestedRevision !== undefined &&
+        context.status !== "pending" &&
+        context.status !== "approved" &&
+        context.decidedAt !== undefined &&
+        (await movedBefore(frozen.kind, frozen.name, frozen.requestedRevision, context.decidedAt));
       // What the call is about, while it waits.
       const about = subjectKindOf(call);
       const review =
@@ -167,7 +193,7 @@ export function createOperationCallApprovalHandler(
       return toJsonObject({
         ...previewOf(call),
         ...(target.success ? { targetTitle: target.data.title } : {}),
-        ...(asset ? { asset } : {}),
+        ...(asset ? { asset: outdated ? { ...asset, isStale: true } : asset } : {}),
         ...(review ? { review } : {})
       });
     },

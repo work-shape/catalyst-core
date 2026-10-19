@@ -58,6 +58,8 @@ export interface ApprovalRequestContext {
   transaction?: ApprovalTransactionStores;
   /** Given to `preview` alone. */
   viewer?: ApprovalPreviewViewer;
+  /** Given to `preview` alone: when an ended request was decided, where someone decided it. */
+  decidedAt?: string;
 }
 
 /** What a kind says about a request that can no longer apply. */

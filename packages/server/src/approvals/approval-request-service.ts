@@ -573,7 +573,8 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
         : access.authorize(handler.requiredPermission, resourceOfRequest(handler, request)).allowed;
     const preview = await handler.preview(handler.validate(request.payload), {
       ...this.handlerContext(request, context),
-      viewer
+      viewer,
+      ...(request.decision ? { decidedAt: request.decision.decidedAt } : {})
     });
     if (
       request.status === "pending" &&

@@ -221,6 +221,52 @@ describe("the preview of a held asset save", () => {
     expect((await t.stored("skill", "kai-leave"))?.config?.content).toBe("A newer policy");
   });
 
+  it("ACCEPT-2e: keeps an outdated request named outdated after it is rejected", async () => {
+    const { t, holding, hold, preview } = await setup();
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "skill", name: "kai-leave" },
+      payload: { config: skill("kai-leave", stored) }
+    });
+    holding("assets.put");
+    const outdatedId = await hold("assets.put", "skill", "kai-leave", {
+      config: skill("kai-leave", changed),
+      expectedRevision: 1
+    });
+    const currentId = await hold("assets.put", "skill", "kai-leave", {
+      config: skill("kai-leave", changed),
+      expectedRevision: 1
+    });
+    // The current request is rejected while its revision still stands: it was never outdated.
+    await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId: currentId },
+      payload: { decision: "reject" }
+    });
+    holding();
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "skill", name: "kai-leave" },
+      payload: { config: skill("kai-leave", "A newer policy"), expectedRevision: 1 }
+    });
+    expect((await preview(t.admin.id, outdatedId)).asset.isStale).toBe(true);
+    await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId: outdatedId },
+      payload: { decision: "reject" }
+    });
+
+    for (const reader of [t.admin.id, t.kai.id]) {
+      const item = (
+        await t.expectOk(reader, "approval_requests.get", { params: { requestId: outdatedId } })
+      ).json();
+      expect(item.status).toBe("rejected");
+      expect(item.preview.asset.isStale).toBe(true);
+      // Still the version Kai saw beside his proposal, never the later save.
+      expect(JSON.stringify(item.preview.asset.content)).toContain(OLD_PARAGRAPH);
+      expect(JSON.stringify(item.preview.asset.content)).not.toContain("A newer policy");
+      expect(JSON.stringify(item)).not.toContain("requestedRevision");
+    }
+    const never = (await preview(t.admin.id, currentId)).asset;
+    expect(never.isStale).toBeUndefined();
+  });
+
   it("ACCEPT-2b E6: names only visible active people with the approval right", async () => {
     const { t, holding, hold } = await setup();
     const workspaceId = await t.sharedWorkspace("Approval team");

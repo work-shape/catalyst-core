@@ -57,6 +57,8 @@ interface HeldAssetPreview {
   isNew?: boolean;
   /** Stored only: what the frozen call said about existence for list rows. */
   requestedNew?: boolean;
+  /** Stored only: the revision the requester saw, `null` for a creation. */
+  requestedRevision?: number | null;
   /** A skill's text: all of it for a new one, otherwise what differs from the stored one. */
   content?: ReturnType<typeof createSkillRevisionPreview>;
   /** A skill's description as the call saves it. */
@@ -147,7 +149,12 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
     if (!mayRead) return { ...named, beforeWithheld: true };
     const stored = inScope?.status === "active" ? inScope : undefined;
     if (frozen) {
-      const { requestedNew: _requestedNew, beforeWithheld: _withheld, ...retained } = frozen;
+      const {
+        requestedNew: _requestedNew,
+        requestedRevision: _requestedRevision,
+        beforeWithheld: _withheld,
+        ...retained
+      } = frozen;
       return { ...retained, ...named };
     }
     const isNew = stored === undefined;
@@ -224,6 +231,7 @@ export const heldAssetPreviewSchema = z.object({
   workspaceId: z.string().optional(),
   isNew: z.boolean().optional(),
   requestedNew: z.boolean().optional(),
+  requestedRevision: z.number().nullable().optional(),
   description: z.string().optional(),
   previous: z
     .object({ title: z.string().optional(), description: z.string().optional() })
@@ -292,6 +300,12 @@ export async function heldAssetIsStale(
   const revision =
     row?.status === "active" && assetScopesEqual(row.scope, scope) ? row.revision : null;
   return revision !== parsed.data.expectedRevision;
+}
+
+/** The revision the frozen call was made against: `null` creates, none for an older call. */
+export function heldAssetRequestedRevision(input: JsonValue): number | null | undefined {
+  const parsed = inputSchema.safeParse(input);
+  return parsed.success ? parsed.data.expectedRevision : undefined;
 }
 
 /** What the frozen call itself says about existence, without reading the stored asset. */

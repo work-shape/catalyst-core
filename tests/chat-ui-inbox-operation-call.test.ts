@@ -596,6 +596,33 @@ describe("inbox item of an operation call", () => {
     expect(decidedRow).not.toContain("assets.put");
   });
 
+  // ACCEPT-2e: once an outdated request was declined, its decided view went back to "Bisher/Neu".
+  it("keeps the comparison labels of an outdated request after it is declined", () => {
+    const declined = (locale: "de" | "en") =>
+      call(
+        {
+          summary: "assets.put",
+          status: "rejected",
+          canDecide: false,
+          payload: { runId: "opr_1", inputRemoved: true },
+          preview: {
+            ...putPreview,
+            inputs: [],
+            inputFieldCount: 0,
+            inputRemoved: true,
+            asset: { ...changedSkill, isStale: true }
+          }
+        },
+        locale
+      );
+    expect(declined("de")).toContain("Version, die Elif Aydin gesehen hat");
+    expect(declined("de")).toContain("Vorschlag von Elif Aydin");
+    expect(declined("de")).not.toMatch(/>Bisher<\/span>/u);
+    expect(declined("en")).toMatch(
+      /Version Elif Aydin saw<\/span>.*Krankmeldung ab dem dritten Tag\./u
+    );
+  });
+
   // ACCEPT-FIX-9 E7: an outdated request offered Approve without a word, although approving
   // applies nothing. ACCEPT-2d C-2: it then still offered Approve, its comparison read as a
   // revert of the newer text, and the requester was told to ask themselves.

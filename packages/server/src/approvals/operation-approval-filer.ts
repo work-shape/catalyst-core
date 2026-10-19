@@ -16,6 +16,7 @@ import { z } from "zod";
 import {
   HELD_ASSET_OPERATION,
   heldAssetRequestedNew,
+  heldAssetRequestedRevision,
   type HeldAssetPreviewer
 } from "./held-asset-preview";
 import {
@@ -169,7 +170,11 @@ export function createOperationApprovalFiler(
           inList: false
         });
         if (asset)
-          payload.asset = toJsonObject({ ...asset, requestedNew: heldAssetRequestedNew(input) });
+          payload.asset = toJsonObject({
+            ...asset,
+            requestedNew: heldAssetRequestedNew(input),
+            requestedRevision: heldAssetRequestedRevision(input)
+          });
       }
       const request = await createWithinLimits(() =>
         options.creator.createRequest(
