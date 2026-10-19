@@ -186,3 +186,83 @@ describe("the rule over a workspace", () => {
     ).toEqual({ allowed: true });
   });
 });
+
+// The review of WS-BUILD-1: Builder in a workspace was asked as the bundle alone, so a giver
+// denied `agent.write` on an agent the workspace owns gave Builder there, and its holder wrote
+// the agent. Each case fails without the bundle's actions in `denials` (`permissions.ts`).
+describe("a bundle given in a workspace", () => {
+  const inside = (t: Awaited<ReturnType<typeof setup>>) => {
+    if (t.workspaceId === undefined) throw new Error("Missing workspace");
+    return t.workspaceId;
+  };
+  const editAgent = (t: Awaited<ReturnType<typeof setup>>, userId: string) =>
+    t.call(userId, "assets.put", {
+      params: { kind: "agent", name: "kai-secret" },
+      payload: {
+        config: agent("kai-secret", { instructions: "Edited" }),
+        workspaceId: t.workspaceId
+      }
+    });
+
+  it("is refused to a giver denied an action it carries on an asset inside, and nothing is written", async () => {
+    const t = await setup(true);
+    await t.grant(t.admin.id, "agent.write", { assetId: t.secret }, "deny");
+    expect((await editAgent(t, t.admin.id)).statusCode).toBe(403);
+    // The direct right is refused as before, and the bundle that carries it now as well.
+    await t.expectRefused(
+      t.admin.id,
+      "permissions.grant",
+      inWorkspace(t.kai.id, "agent.write", t.workspaceId),
+      t.forbidden("agent.write", "denied")
+    );
+    const refused = await t.expectRefused(
+      t.admin.id,
+      "permissions.grant",
+      inWorkspace(t.kai.id, "builder", t.workspaceId),
+      t.forbidden("builder", "denied")
+    );
+    expect(refused.message).toBe(
+      `'agent.write' on the agent 'kai-secret' is denied to this call, and the right in the workspace '${t.workspaceId}' reaches it: 'Kai' would hold it. Only a holder of a right gives or lends it`
+    );
+    expect(await t.stores.access.listGrants({ clientInstanceId, holderId: t.kai.id })).toEqual([]);
+    expect((await editAgent(t, t.kai.id)).statusCode).toBe(403);
+    // Both refusals are audited as refused calls, as the direct grant's is; no row is granted.
+    const events = await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 });
+    expect(
+      events.filter(
+        (event) =>
+          event.type === "operation.denied" && event.metadata?.operation === "permissions.grant"
+      )
+    ).toHaveLength(2);
+    expect(
+      events.filter(
+        (event) => event.type === "permission.granted" && event.metadata?.holderId === t.kai.id
+      )
+    ).toEqual([]);
+
+    // Publisher carries `agent.publish`, which the giver is not denied: it is given.
+    await t.grant(t.kai.id, "publisher", { workspaceId: inside(t) });
+    // The superadmin holds no deny and gives Builder; its holder then writes the agent.
+    await t.expectOk(
+      t.root.id,
+      "permissions.grant",
+      inWorkspace(t.kai.id, "builder", t.workspaceId)
+    );
+    expect((await editAgent(t, t.kai.id)).statusCode).toBe(200);
+  });
+
+  it("refuses Publisher to a giver denied a publish inside, and gives a bundle where the deny lies outside", async () => {
+    const t = await setup(true);
+    await t.grant(t.admin.id, "agent.publish", { assetId: t.secret }, "deny");
+    await t.expectRefused(
+      t.admin.id,
+      "permissions.grant",
+      inWorkspace(t.kai.id, "publisher", t.workspaceId),
+      t.forbidden("publisher", "denied")
+    );
+    // Builder carries no publish, and another workspace owns nothing the deny names.
+    await t.grant(t.kai.id, "builder", { workspaceId: inside(t) });
+    const elsewhere = await t.sharedWorkspace("Elsewhere");
+    await t.grant(t.lena.id, "publisher", { workspaceId: elsewhere });
+  });
+});

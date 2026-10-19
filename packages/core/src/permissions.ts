@@ -170,15 +170,15 @@ function rowGives(
   row: { action: string; scopeKind: PermissionGrant["scopeKind"] },
   action: string
 ): boolean {
-  if (row.action === action) return true;
-  const verbs = WORKSPACE_BUNDLE_VERBS[row.action];
-  if (
-    row.scopeKind !== "workspace" ||
-    verbs === undefined ||
-    BUNDLE_EXCLUDED_ACTIONS.includes(action)
-  ) {
-    return false;
-  }
+  return (
+    row.action === action || (row.scopeKind === "workspace" && bundleCarries(row.action, action))
+  );
+}
+
+/** Whether the bundle carries the action on what its workspace owns: one of its verbs on a kind. */
+function bundleCarries(bundle: string, action: string): boolean {
+  const verbs = WORKSPACE_BUNDLE_VERBS[bundle];
+  if (verbs === undefined || BUNDLE_EXCLUDED_ACTIONS.includes(action)) return false;
   const dot = action.indexOf(".");
   return dot > 0 && verbs.includes(action.slice(dot + 1));
 }
@@ -233,7 +233,10 @@ export interface ActorAccess {
    * holder and decides no call: a covering deny is not read.
    */
   holdsGrantAt(action: string, scopeKinds: readonly PermissionGrant["scopeKind"][]): boolean;
-  /** The holder's denies of the action (of a legacy key, of its actions), wherever they lie. */
+  /**
+   * The holder's denies of the action, wherever they lie; of a legacy key or a bundle, the
+   * denies of every action it carries.
+   */
   denials(action: string): readonly AccessEntry[];
 }
 
@@ -656,9 +659,14 @@ export function createActorAccess(
       const actions: readonly string[] = isPermission(action)
         ? LEGACY_PERMISSION_ACTIONS[action]
         : [action];
+      // A bundle is refused where any action it carries is: whoever gives Builder in a
+      // workspace would otherwise hand on a write they are denied on an asset inside it.
       return listAccessEntries(holder, persisted).filter(
         (entry) =>
-          entry.effect === "deny" && actions.some((candidate) => rowGives(entry, candidate))
+          entry.effect === "deny" &&
+          actions.some(
+            (candidate) => rowGives(entry, candidate) || bundleCarries(candidate, entry.action)
+          )
       );
     }
   };
