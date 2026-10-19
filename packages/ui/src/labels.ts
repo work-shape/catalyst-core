@@ -3,6 +3,43 @@
  * object, such as an icon button's label, is a prop of the component that shows it.
  */
 export interface UiLabels {
+  changeNew: string;
+  changeChanged: string;
+  changeRemoved: string;
+  changeUnsaved: string;
+  valueSource: string;
+  valueFixed: string;
+  valuePicked: string;
+  chooseValue: string;
+  fieldName: string;
+  fieldKind: string;
+  fieldDescription: string;
+  addField: string;
+  moveUp: string;
+  moveDown: string;
+  scheduleFrequency: string;
+  scheduleHour: string;
+  scheduleDay: string;
+  scheduleWeekday: string;
+  scheduleWeek: string;
+  scheduleMonth: string;
+  scheduleTime: string;
+  scheduleMinute: string;
+  scheduleZone: string;
+  scheduleDays: string;
+  scheduleMonthDay: string;
+  monday: string;
+  tuesday: string;
+  wednesday: string;
+  thursday: string;
+  friday: string;
+  saturday: string;
+  sunday: string;
+  fieldText: string;
+  fieldNumber: string;
+  fieldRecord: string;
+  fieldRecords: string;
+  moveHere: string;
   close: string;
   cancel: string;
   dismiss: string;
@@ -67,6 +104,45 @@ export interface UiLabels {
 }
 
 export const uiLabelsEn: UiLabels = {
+  fieldText: "Text",
+  fieldNumber: "Number",
+  fieldRecord: "Record",
+  fieldRecords: "List of records",
+  moveHere: "Move here",
+
+  changeNew: "New",
+  changeChanged: "Changed",
+  changeRemoved: "Removed",
+  changeUnsaved: "Not saved",
+  valueSource: "Value source",
+  valueFixed: "Fixed",
+  valuePicked: "From a step",
+  chooseValue: "Choose a value",
+  fieldName: "Name",
+  fieldKind: "Kind",
+  fieldDescription: "Description",
+  addField: "Add field",
+  moveUp: "Move up",
+  moveDown: "Move down",
+  scheduleFrequency: "Repeats",
+  scheduleHour: "Every hour",
+  scheduleDay: "Every day",
+  scheduleWeekday: "Every weekday",
+  scheduleWeek: "Every week",
+  scheduleMonth: "Every month",
+  scheduleTime: "At",
+  scheduleMinute: "Minute of the hour",
+  scheduleZone: "Time zone",
+  scheduleDays: "On these days",
+  scheduleMonthDay: "Day of the month",
+  monday: "Monday",
+  tuesday: "Tuesday",
+  wednesday: "Wednesday",
+  thursday: "Thursday",
+  friday: "Friday",
+  saturday: "Saturday",
+  sunday: "Sunday",
+
   close: "Close",
   cancel: "Cancel",
   dismiss: "Dismiss",
@@ -114,6 +190,45 @@ export const uiLabelsEn: UiLabels = {
 };
 
 export const uiLabelsDe: UiLabels = {
+  fieldText: "Text",
+  fieldNumber: "Zahl",
+  fieldRecord: "Datensatz",
+  fieldRecords: "Liste von Datensätzen",
+  moveHere: "Hierher verschieben",
+
+  changeNew: "Neu",
+  changeChanged: "Geändert",
+  changeRemoved: "Entfernt",
+  changeUnsaved: "Nicht gespeichert",
+  valueSource: "Wertquelle",
+  valueFixed: "Fest",
+  valuePicked: "Aus einem Schritt",
+  chooseValue: "Wert auswählen",
+  fieldName: "Name",
+  fieldKind: "Art",
+  fieldDescription: "Beschreibung",
+  addField: "Feld hinzufügen",
+  moveUp: "Nach oben",
+  moveDown: "Nach unten",
+  scheduleFrequency: "Wiederholt sich",
+  scheduleHour: "Jede Stunde",
+  scheduleDay: "Jeden Tag",
+  scheduleWeekday: "Jeden Werktag",
+  scheduleWeek: "Jede Woche",
+  scheduleMonth: "Jeden Monat",
+  scheduleTime: "Um",
+  scheduleMinute: "Minute der Stunde",
+  scheduleZone: "Zeitzone",
+  scheduleDays: "An diesen Tagen",
+  scheduleMonthDay: "Tag des Monats",
+  monday: "Montag",
+  tuesday: "Dienstag",
+  wednesday: "Mittwoch",
+  thursday: "Donnerstag",
+  friday: "Freitag",
+  saturday: "Samstag",
+  sunday: "Sonntag",
+
   close: "Schließen",
   cancel: "Abbrechen",
   dismiss: "Ausblenden",

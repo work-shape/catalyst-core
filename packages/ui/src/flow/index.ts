@@ -28,3 +28,6 @@ export type {
   FlowGraphNode,
   FlowStatus
 } from "./flow-types";
+
+export { FlowInsertPoint, type FlowInsertPointProps } from "./flow-insert-point";
+export type { FlowChange } from "./flow-types";

@@ -17,6 +17,7 @@ import type { UiLabels } from "../labels";
 import { RegistryIcon } from "../status/registry-icon";
 import { useUiLabels } from "../ui-root";
 import { FlowEdge, flowEdgePath, type FlowEdgeEnd } from "./flow-edge";
+import { flowChangeLabels } from "./flow-change";
 import { FlowGroup } from "./flow-group";
 import type { FlowPoint, FlowSize } from "./flow-layout";
 import { flowHandleClassName, FlowNode, flowStatusPresentations } from "./flow-node";
@@ -136,7 +137,12 @@ function FrameHandles({ ends }: { ends: NodeEnds }) {
 
 function accessibleName(item: FlowGraphNode | FlowGraphGroup, labels: UiLabels): string {
   const word = flowStatusPresentations[item.status ?? "idle"].label;
-  return [item.eyebrow, item.title, word === undefined ? undefined : labels[word]]
+  return [
+    item.eyebrow,
+    item.title,
+    word === undefined ? undefined : labels[word],
+    item.change === undefined ? undefined : labels[flowChangeLabels[item.change]]
+  ]
     .filter((part) => part !== undefined && part !== "")
     .join(", ");
 }
@@ -157,6 +163,8 @@ function StepNode({ id, data }: NodeProps<StepRfNode>) {
       eyebrow={item.eyebrow}
       title={item.title}
       summary={item.summary}
+      change={item.change}
+      oldSummary={item.oldSummary}
       chip={
         item.chip === undefined ? undefined : (
           <>
@@ -243,6 +251,8 @@ function GroupNode({ id, data }: NodeProps<GroupRfNode>) {
       eyebrow={item.eyebrow}
       title={item.title}
       summary={item.summary}
+      change={item.change}
+      oldSummary={item.oldSummary}
       progress={
         counts === undefined && words.length === 0 ? undefined : (
           <>

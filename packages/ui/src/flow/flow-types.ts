@@ -5,6 +5,8 @@
 export type FlowStatus =
   "idle" | "running" | "waiting" | "done" | "doneWithFailures" | "failed" | "skipped";
 
+export type FlowChange = "new" | "changed" | "removed" | "unsaved";
+
 /** What a connector says: nothing, that it was taken, that it is being taken, or that it was not. */
 export type FlowEdgeState = "rest" | "done" | "active" | "skipped";
 
@@ -52,6 +54,9 @@ interface FlowItemBase {
   title: string;
   /** One sentence on what the part does. */
   summary?: string;
+  change?: FlowChange;
+  /** The published sentence, shown struck through for a changed item. */
+  oldSummary?: string;
   status?: FlowStatus;
   action?: FlowAction;
 }

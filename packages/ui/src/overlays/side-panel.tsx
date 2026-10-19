@@ -46,6 +46,10 @@ export interface SidePanelProps extends Omit<HTMLAttributes<HTMLElement>, "title
   /** Called by the close button and by Escape while the focus is in the panel. */
   onClose(): void;
   children: ReactNode;
+  /** Stays below the scrolling body, such as a SaveBar. */
+  footer?: ReactNode;
+  /** A form sheet uses 92% of its container height. */
+  tall?: boolean;
 }
 
 const placements: Record<SidePanelMode, string> = {
@@ -78,6 +82,8 @@ export function SidePanel({
   mode = "auto",
   onClose,
   children,
+  footer,
+  tall = false,
   className,
   onKeyDown,
   ...props
@@ -105,9 +111,12 @@ export function SidePanel({
       tabIndex={-1}
       data-slot="side-panel"
       data-placement={placement}
+      data-tall={tall ? "" : undefined}
       className={cn(
         "pointer-events-auto absolute z-20 flex min-h-0 animate-in flex-col overflow-hidden bg-background text-foreground shadow-overlay duration-(--duration-open) outline-none fade-in motion-reduce:animate-none",
         placements[placement],
+        tall && placement === "sheet" && "h-[92%]",
+        tall && placement === "auto" && "max-[600px]:h-[92%]",
         className
       )}
       onKeyDown={close}
@@ -160,6 +169,11 @@ export function SidePanel({
             {children}
           </TabsContent>
         </Tabs>
+      )}
+      {footer === undefined ? null : (
+        <div data-slot="side-panel-footer" className="shrink-0 border-t bg-background">
+          {footer}
+        </div>
       )}
     </aside>
   );

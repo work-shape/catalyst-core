@@ -3,7 +3,8 @@ import type { HTMLAttributes, KeyboardEvent, ReactNode, Ref } from "react";
 import { cn } from "../cn";
 import { useUiLabels } from "../ui-root";
 import { FlowHead, flowStatusPresentations } from "./flow-node";
-import type { FlowStatus } from "./flow-types";
+import { flowChangeFrames } from "./flow-change";
+import type { FlowChange, FlowStatus } from "./flow-types";
 
 // A group's line is dashed, so a status colours it at full strength where a node's is soft.
 const groupFrames: Record<FlowStatus, string> = {
@@ -23,6 +24,8 @@ export interface FlowGroupProps extends Omit<HTMLAttributes<HTMLDivElement>, "ti
   eyebrow?: ReactNode;
   title: ReactNode;
   summary?: ReactNode;
+  change?: FlowChange;
+  oldSummary?: ReactNode;
   /** Under the summary: how far the group is, as a `Progress` with its line of counts. */
   progress?: ReactNode;
   /** A control at the end of the head's content. */
@@ -54,6 +57,8 @@ export function FlowGroup({
   eyebrow,
   title,
   summary,
+  change,
+  oldSummary,
   progress,
   action,
   status = "idle",
@@ -73,7 +78,7 @@ export function FlowGroup({
   const labels = useUiLabels("FlowGroup");
   const presentation = flowStatusPresentations[status];
   const statusWord = presentation.label === undefined ? undefined : labels[presentation.label];
-  const head = { icon, accent, eyebrow, title };
+  const head = { icon, accent, eyebrow, title, change };
   const fold =
     onCollapsedChange === undefined ? null : (
       <button
@@ -116,13 +121,17 @@ export function FlowGroup({
       tabIndex={onOpen === undefined ? undefined : 0}
       data-slot="flow-group"
       data-status={status}
+      data-change={change}
       data-selected={selected ? "" : undefined}
       data-collapsed={collapsed ? "" : undefined}
       className={cn(
         "relative flex w-61 flex-col rounded-xl border-[1.5px] border-dashed bg-background/55 text-left text-body text-foreground outline-offset-2 focus-visible:focus-ring",
         groupFrames[status],
+        change !== undefined && flowChangeFrames[change],
         selected && "focus-ring",
-        status === "skipped" && "opacity-55",
+        (status === "skipped" || change === "removed") && "opacity-55",
+        change === "removed" &&
+          "[&_[data-slot=flow-title]]:line-through [&_[data-slot=flow-summary]]:line-through",
         className
       )}
       onKeyDown={open}
@@ -140,6 +149,11 @@ export function FlowGroup({
       >
         <div className={cn("grid min-w-0 px-3 pt-3 pb-3", compact && "invisible")}>
           <FlowHead {...head} end={fold} />
+          {change === "changed" && oldSummary !== undefined ? (
+            <del data-slot="flow-old-summary" className="pt-1.5 text-caption text-muted-foreground">
+              {oldSummary}
+            </del>
+          ) : null}
           {summary === undefined ? null : (
             <p data-slot="flow-summary" className="pt-1.5 text-caption text-muted-foreground">
               {summary}

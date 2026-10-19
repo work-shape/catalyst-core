@@ -1,6 +1,9 @@
 /** The gallery's text for the canvas entries and the side panel. */
 export interface FlowGalleryText {
   groupFlow: string;
+  flowChanges: string;
+  sidePanelEditing: string;
+  scheduleIncomplete: string;
   flowLinear: string;
   flowRun: string;
   flowLarge: string;
@@ -98,6 +101,9 @@ export interface FlowGalleryText {
 export const flowGalleryText: Record<"en" | "de", FlowGalleryText> = {
   en: {
     groupFlow: "Canvas",
+    flowChanges: "Change marks",
+    sidePanelEditing: "Editing in a side panel",
+    scheduleIncomplete: "Choose at least one day, a time and a time zone.",
     flowLinear: "A linear graph that is only described, with a loop as a group",
     flowRun: "Something that runs: statuses, counts, a selected node and its panel",
     flowLarge: "A large graph: a condition, a parallel block, a loop and a subflow",
@@ -194,6 +200,9 @@ export const flowGalleryText: Record<"en" | "de", FlowGalleryText> = {
   },
   de: {
     groupFlow: "Canvas",
+    flowChanges: "Änderungsmarkierungen",
+    sidePanelEditing: "Bearbeiten im Seitenbereich",
+    scheduleIncomplete: "Wähle mindestens einen Tag, eine Uhrzeit und eine Zeitzone.",
     flowLinear: "Ein linearer Graph, nur beschrieben, mit einer Schleife als Gruppe",
     flowRun: "Etwas, das läuft: Status, Zähler, ein ausgewählter Knoten und sein Panel",
     flowLarge: "Ein großer Graph: Bedingung, paralleler Block, Schleife und Unterablauf",

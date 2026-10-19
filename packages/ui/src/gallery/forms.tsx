@@ -1,3 +1,4 @@
+import { editingFormsEntries } from "./editing-forms";
 import { Search, Send } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
@@ -218,6 +219,7 @@ function noop(): void {
 export const formsGallery: GalleryGroup = {
   id: "forms",
   entries: [
+    ...editingFormsEntries,
     {
       name: "Input",
       components: ["Input"],

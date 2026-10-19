@@ -1,3 +1,4 @@
+import { editingFlowEntries } from "./editing-flow";
 import { useState, type ReactNode } from "react";
 import { Button } from "../actions/button";
 import { KeyValue, KeyValueList } from "../data/key-value";
@@ -523,7 +524,10 @@ const flowEntries: readonly GalleryEntry[] = [
   }
 ];
 
-export const flowGallery: GalleryGroup = { id: "flow", entries: flowEntries };
+export const flowGallery: GalleryGroup = {
+  id: "flow",
+  entries: [...editingFlowEntries, ...flowEntries]
+};
 
 /** The side panel alone, in a box that stands for its container, in both placements. */
 export function SidePanelSamples({ text }: { text: GalleryText }) {

@@ -5,7 +5,8 @@ import { Spinner } from "../feedback/spinner";
 import type { UiLabels } from "../labels";
 import { IconTile } from "../status/icon-tile";
 import { useUiLabels } from "../ui-root";
-import type { FlowEdgeState, FlowStatus } from "./flow-types";
+import { flowChangeFrames, flowChangeLabels } from "./flow-change";
+import type { FlowChange, FlowEdgeState, FlowStatus } from "./flow-types";
 
 interface StatusPresentation {
   /** The word for the status. `idle` has none. */
@@ -109,10 +110,20 @@ export interface FlowHeadProps {
   /** At the head's end, such as the control that folds a group. */
   end?: ReactNode;
   compact?: boolean;
+  change?: FlowChange;
 }
 
 /** The first line of a node and of a group: an icon tile, the type and the title. */
-export function FlowHead({ icon, accent = false, eyebrow, title, end, compact }: FlowHeadProps) {
+export function FlowHead({
+  icon,
+  accent = false,
+  eyebrow,
+  title,
+  end,
+  compact,
+  change
+}: FlowHeadProps) {
+  const labels = useUiLabels("FlowHead");
   return (
     <div
       data-slot="flow-head"
@@ -142,6 +153,14 @@ export function FlowHead({ icon, accent = false, eyebrow, title, end, compact }:
           {title}
         </span>
       </div>
+      {change === undefined ? null : (
+        <span
+          data-slot="flow-change"
+          className="shrink-0 rounded-md bg-primary-soft px-1.5 py-0.5 text-caption font-medium text-primary-soft-foreground"
+        >
+          {labels[flowChangeLabels[change]]}
+        </span>
+      )}
       {end}
     </div>
   );
@@ -157,6 +176,8 @@ export interface FlowNodeProps extends Omit<HTMLAttributes<HTMLDivElement>, "tit
   title: ReactNode;
   /** One sentence on what the node does. */
   summary?: ReactNode;
+  change?: FlowChange;
+  oldSummary?: ReactNode;
   /** A small named object, with its icon before the name. */
   chip?: ReactNode;
   /** A control under the summary. */
@@ -193,6 +214,8 @@ export function FlowNode({
   eyebrow,
   title,
   summary,
+  change,
+  oldSummary,
   chip,
   action,
   rows,
@@ -219,7 +242,7 @@ export function FlowNode({
   // A node with rows ends with its rows: its status is in the corner and in its name.
   const showsFooter =
     footer !== undefined || meta !== undefined || (statusWord !== undefined && !hasRows);
-  const head = { icon, accent, eyebrow, title };
+  const head = { icon, accent, eyebrow, title, change };
 
   // The whole anatomy stays in the frame when it is compact, hidden, so the frame keeps the
   // size a layout was made for. The compact line lies over it.
@@ -227,6 +250,11 @@ export function FlowNode({
     <div data-slot="flow-main" className="relative">
       <div className={cn("grid min-w-0 px-3 pt-3", compact && "invisible")}>
         <FlowHead {...head} />
+        {change === "changed" && oldSummary !== undefined ? (
+          <del data-slot="flow-old-summary" className="pt-1.5 text-caption text-muted-foreground">
+            {oldSummary}
+          </del>
+        ) : null}
         {summary === undefined ? null : (
           <p data-slot="flow-summary" className="pt-1.5 text-caption text-muted-foreground">
             {summary}
@@ -275,13 +303,16 @@ export function FlowNode({
       tabIndex={onOpen === undefined ? undefined : 0}
       data-slot="flow-node"
       data-status={status}
+      data-change={change}
       data-selected={selected ? "" : undefined}
       data-compact={compact ? "" : undefined}
       className={cn(
         "relative isolate w-54 rounded-lg text-left text-body text-foreground outline-offset-2 focus-visible:focus-ring",
         selected && "focus-ring",
         onOpen !== undefined && "cursor-pointer",
-        skipped && "opacity-55",
+        (skipped || change === "removed") && "opacity-55",
+        change === "removed" &&
+          "[&_[data-slot=flow-title]]:line-through [&_[data-slot=flow-summary]]:line-through",
         className
       )}
       onClick={(event) => {
@@ -306,8 +337,12 @@ export function FlowNode({
         className={cn(
           "relative rounded-lg border bg-background transition-[border-color,box-shadow] duration-(--duration-color)",
           presentation.frame,
+          change !== undefined && flowChangeFrames[change],
           skipped ? "" : "shadow-raised",
-          onOpen !== undefined && status === "idle" && "hover:border-input-strong"
+          onOpen !== undefined &&
+            status === "idle" &&
+            change === undefined &&
+            "hover:border-input-strong"
         )}
       >
         {main}
