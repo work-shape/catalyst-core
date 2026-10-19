@@ -5,6 +5,7 @@ import {
 } from "@work-shape/catalyst-postgres-connector";
 import { z } from "zod";
 import { readTables } from "./catalog";
+import { readUniqueIndexes } from "./unique-indexes";
 import { quoteIdentifier } from "./server";
 import { storeSizeBytes } from "./size";
 import { changeWhole, reclaim, storeFull, type StoreVerb } from "./verbs";
@@ -64,6 +65,14 @@ function mutation(verb: "update" | "delete_rows"): StoreVerb {
           "This table has no primary key. Add one with a migration before changing rows.",
           "Diese Tabelle hat keinen Primärschlüssel. Füge ihn mit einer Migration hinzu, bevor du Datensätze änderst."
         );
+      // Assigning a source column also changes a generated primary key. Reuse the catalog's
+      // dependency list rather than parsing the generation expression.
+      const keyColumns = new Set(primary.map((column) => column.name));
+      if (verb === "update" && primary.some((column) => column.generated)) {
+        for (const index of await readUniqueIndexes(runtime.server.executor, target, table.name)) {
+          if (index.primary_key) for (const name of index.needs) keyColumns.add(name);
+        }
+      }
       const columns = new Map(table.columns.map((column) => [column.name, column]));
       for (const { key, set } of changes) {
         for (const name of [...Object.keys(key), ...Object.keys(set)]) {
@@ -85,7 +94,7 @@ function mutation(verb: "update" | "delete_rows"): StoreVerb {
             "Each key must give every primary-key column and no other column, with no null value.",
             "Jeder Schlüssel muss genau die Primärschlüsselspalten angeben, keine davon leer."
           );
-        if (primary.some((column) => column.name in set))
+        if (Object.keys(set).some((name) => keyColumns.has(name)))
           return refuse(
             "key_column_in_set",
             "A primary-key column cannot be changed in set.",
