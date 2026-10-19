@@ -5,7 +5,7 @@ import { removeAgentProposal } from "./postgres-agent-proposal-operations";
 import { chunksOf, type WrittenAsset } from "./config-asset-batch";
 import { writeAgentDraft, consumeAgentDraft, carryAgentSkillChange } from "./agent-draft-mutations";
 import { keysetFilter } from "./paging";
-import { and, asc, desc, eq, inArray, like, max, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, max, or, sql } from "drizzle-orm";
 import {
   AppError,
   INSTANCE_ASSET_SCOPE,
