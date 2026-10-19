@@ -15,7 +15,9 @@ export function resolveDataScope(
   dimension: string
 ): DataScope {
   const rows = assignments.filter((row) => row.dimension === dimension);
-  const denied = rows.filter((row) => row.effect === "deny");
+  const denied = rows.filter(
+    (row) => row.effect === "deny" && (row.values === "all" || row.values.length > 0)
+  );
   if (denied.some((row) => row.values === "all")) return [];
   const allowed = rows.filter((row) => row.effect === "allow");
   // An all allowance with individual exceptions cannot be represented as a finite set.

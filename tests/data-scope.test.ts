@@ -37,6 +37,14 @@ describe("the data scope resolver", () => {
       )
     ).toEqual([]);
   });
+  it("restores all values when the person's last revocation is cleared", () => {
+    expect(
+      resolveDataScope(
+        [assignment({ values: "all" }), assignment({ effect: "deny", values: [] })],
+        "mandant"
+      )
+    ).toBe("all");
+  });
   it("has no implicit all, even for an admin, and an inactive holder sees no data", () => {
     const holder = {
       kind: "user" as const,

@@ -112,7 +112,6 @@ async function resolveUserIdentity(
             permissionRefs: input.permissionRefs,
             status: "active",
             createdAt: now,
-            ...(input.groups ? { groups: [...input.groups] } : {}),
             updatedAt: now,
             lastAuthenticatedAt: now
           })
