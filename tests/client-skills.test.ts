@@ -68,9 +68,11 @@ describe("client skills", () => {
         }
       });
       if (result.status !== "failed") throw new Error("Expected skill refusal");
+      // PR-382 L3: it says in plain words where the skill is changed, naming no tools.
       expect(result.error.message).toContain(
-        locale === "de" ? "eigene Unterhaltung" : "private conversation"
+        locale === "de" ? "in Studio auf der Seite des Skills" : "in Studio on the skill's page"
       );
+      expect(result.error.message).not.toMatch(/Werkzeug|tool|read_skill|platform\./u);
       expect(result.error.message).toContain(
         locale === "de" ? "Es wurde nichts geändert" : "Nothing was changed"
       );

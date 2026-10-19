@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Copy, History, Lock, SearchX, Send, Trash2 } from "lucide-react";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import {
@@ -61,6 +62,18 @@ export function NewAssetPage({
   const scope = source.scopeOf?.(entry.kind);
   const Editor = entry.Editor;
   const create = useCreate({ entry, start, source, onCreated });
+  // Whether the reader's create waits for an approval, asked as the create dialog asks of the
+  // name: the save bar says so before the create, as it does on an existing asset's page.
+  const owner = scope?.kind === "workspace" ? scope.workspaceId : "";
+  const check = useQuery({
+    queryKey: ["asset-create-approval", entry.kind, owner, start.name],
+    queryFn: () => source.checkName(entry.kind, start.name),
+    gcTime: 0,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    retry: false
+  });
+  const createApproval = check.data?.available ? check.data.saveApproval : undefined;
   return (
     <Editor
       page={page.page}
@@ -69,6 +82,7 @@ export function NewAssetPage({
       notice={null}
       asset={undefined}
       start={start}
+      {...(createApproval ? { createApproval } : {})}
       canWrite
       instanceWrite={source.rights.instanceWrite}
       {...(scope?.kind === "workspace" ? { owner: scope.workspaceId } : {})}

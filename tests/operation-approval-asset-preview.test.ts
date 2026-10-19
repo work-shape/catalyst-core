@@ -85,6 +85,85 @@ describe("the preview of a held asset save", () => {
     expect((await read()).saveApproval).toBeUndefined();
   });
 
+  it("PR-382 M1: the name check of a new skill predicts the approval its create waits for", async () => {
+    const { t, holding, hold } = await setup();
+    const workspaceId = await t.sharedWorkspace("Visible approvers");
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: workspaceId,
+      userId: t.kai.id,
+      role: "member"
+    });
+    const name = "kai-new-policy";
+    const check = async () =>
+      (
+        await t.expectOk(t.kai.id, "assets.check_name", {
+          params: { kind: "skill" },
+          payload: { name }
+        })
+      ).json();
+    expect(await check()).toEqual({ available: true });
+    holding("assets.put");
+    expect(await check()).toEqual({
+      available: true,
+      saveApproval: { approverNames: [t.admin.displayLabel] }
+    });
+    // The create the page then makes is held, as the check said.
+    const requestId = await hold("assets.put", "skill", name, { config: skill(name, stored) });
+    expect(requestId).not.toBe("");
+    expect(await t.stored("skill", name)).toBeUndefined();
+  });
+
+  it("PR-382 L7: names only people who can decide the request, not a workspace-scoped approver", async () => {
+    const { t, holding, hold } = await setup();
+    const workspaceId = await t.sharedWorkspace("Team skills");
+    for (const user of [t.kai, t.lena]) {
+      await t.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: workspaceId,
+        userId: user.id,
+        role: "member"
+      });
+    }
+    await t.grant(t.kai.id, "skill.write", { workspaceId });
+    await t.grant(t.kai.id, "skill.read", { workspaceId });
+    // Lena holds the approval right in the workspace that owns the skill, as a row no grant
+    // dialog writes. The request of a held call is decided on the instance: she cannot decide it.
+    await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.lena.id,
+      action: "operations.approve",
+      effect: "allow",
+      scopeKind: "workspace",
+      scopeId: workspaceId,
+      grantedBy: t.admin.id
+    });
+    holding("assets.put");
+    const name = "team-policy";
+    const checked = (
+      await t.expectOk(t.kai.id, "assets.check_name", {
+        params: { kind: "skill" },
+        payload: { name, workspaceId }
+      })
+    ).json();
+    expect(checked.saveApproval).toEqual({ approverNames: [t.admin.displayLabel] });
+    const requestId = await hold("assets.put", "skill", name, {
+      config: skill(name, stored),
+      workspaceId
+    });
+    const decided = await t.call(t.lena.id, "approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    // She is not shown the request to decide.
+    expect(decided.statusCode).toBe(404);
+    await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+  });
+
   it("ACCEPT-2b E4: keeps the original skill comparison after approval for requester and approver", async () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {

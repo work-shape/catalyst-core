@@ -26,7 +26,7 @@ import { readTables, rowsOf } from "./catalog";
 import { validateConstraintNames } from "./constraint-errors";
 import { dataStoreDefinitionSchema } from "./definition";
 import { databaseFailureError } from "./failures";
-import { rowWriteDatabaseFailure } from "./row-write-failures";
+import { rowWriteDatabaseFailure, rowWriteOutcomeUnknown } from "./row-write-failures";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 import type { DataStoreRuntime } from "./runtime";
 import { asStoreRole } from "./roles";
@@ -338,19 +338,24 @@ async function runVerb(
             },
             cause
           );
-    const rowFailure = ["insert", "update", "delete_rows"].includes(verb.verb)
-      ? await rowWriteDatabaseFailure(
-          runtime.server.executor,
-          {
-            ...runtime.server.asRole(record, "app", runtime.stores.connections),
-            ...(signal ? { signal } : {})
-          },
-          checked,
-          input,
-          verb.verb,
-          context.runtime.locale ?? runtime.defaultLocale
-        )
-      : undefined;
+    const writesRows = ["insert", "update", "delete_rows"].includes(verb.verb);
+    // Without a key nothing tells a second call that the first one stored its rows.
+    const rowFailure =
+      writesRows && unknown && keyed === undefined
+        ? rowWriteOutcomeUnknown(context.runtime.locale ?? runtime.defaultLocale)
+        : writesRows
+          ? await rowWriteDatabaseFailure(
+              runtime.server.executor,
+              {
+                ...runtime.server.asRole(record, "app", runtime.stores.connections),
+                ...(signal ? { signal } : {})
+              },
+              checked,
+              input,
+              verb.verb,
+              context.runtime.locale ?? runtime.defaultLocale
+            )
+          : undefined;
     const failure =
       rowFailure ??
       (cause instanceof AppError

@@ -5,6 +5,9 @@ import {
   type LocaleCode
 } from "@work-shape/catalyst-core";
 
+/** The read of an asset by its kind and name, a skill this agent does not hold among them. */
+const PLATFORM_ASSET_GET_TOOL = `${SUBJECT_TOOL_PREFIX}get`;
+
 /**
  * The platform's rules, the opening of every agent's system prompt. They ship with the release
  * and nobody on an instance edits them.
@@ -74,8 +77,13 @@ export function createSystemInstructions(
     options.agentSkillChangesEnabled &&
     options.agentToolNames?.includes("propose_skill_change")
   ) {
+    // read_skill reads only this agent's skills, which are also the only ones it may propose a
+    // change to; any other skill is read with the asset read, where the agent holds it.
+    const otherSkillRead = options.agentToolNames?.includes(PLATFORM_ASSET_GET_TOOL)
+      ? ` Read any other skill with ${PLATFORM_ASSET_GET_TOOL}, naming kind 'skill' and its name; you cannot propose a change to it, so say who may change it.`
+      : " You cannot read or propose a change to any other skill; say who may change it.";
     sections.push(
-      "Skill change proposals:\nRead the skill with read_skill first. Use propose_skill_change for one small, exact change per call. Skills are shared by all users: never include personal or customer-specific data. In your reply, explain what would change and that it needs a person's approval. A proposal is not active until approved."
+      `Skill change proposals:\nA proposal changes one of your own skills or creates a new one. Read your skill with read_skill first.${otherSkillRead} Use propose_skill_change for one small, exact change per call. Skills are shared by all users: never include personal or customer-specific data. In your reply, explain what would change and that it needs a person's approval. A proposal is not active until approved.`
     );
   }
 

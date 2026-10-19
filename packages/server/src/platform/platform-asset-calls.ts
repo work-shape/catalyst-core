@@ -517,6 +517,22 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       return opened;
     },
 
+    async skillSaveApproval(context, name) {
+      // A skill's name is unique on the instance: its row says which owner it is saved in.
+      const row = await options.configAssets.store.getConfigAsset({
+        clientInstanceId: options.clientInstanceId,
+        kind: "skill",
+        name
+      });
+      if (row === undefined) return undefined;
+      const call = await callOf(context);
+      return workflow.reads.saveApprovalAt(call, {
+        kind: "skill",
+        name,
+        ...(row.scope.kind === "workspace" ? { workspaceId: row.scope.workspaceId } : {})
+      });
+    },
+
     async get(context, named) {
       const conversation = await conversationOf(context);
       const asset = named ?? conversation.subject;

@@ -6,6 +6,7 @@ import {
   type AuthenticatedUser,
   type AccessResource
 } from "@work-shape/catalyst-core";
+import { OPERATION_CALL_APPROVAL_KIND } from "@work-shape/catalyst-tool-execution";
 import { resourceOfRequest } from "./approval-request-service";
 import type { ChatServerOptions } from "../types";
 
@@ -31,8 +32,23 @@ export async function visibleApproverNames(
   );
 }
 
-/** The same deciding people before a request exists, for an authorized save preview. */
-export async function visibleApproverNamesFor(
+/**
+ * The people who may decide the request a held call files, named before it exists: the right
+ * and the resource of the `operation_call` kind, as its decision checks them. That kind's
+ * request names no resource, so a grant scoped to the asset's workspace decides nothing and
+ * names nobody.
+ */
+export async function heldCallApproverNames(
+  options: Pick<ChatServerOptions, "authorizer" | "clientInstanceId" | "stores" | "operationCalls">,
+  user: AuthenticatedUser
+): Promise<string[]> {
+  const handler = options.operationCalls?.approvalRequestHandlers.get(OPERATION_CALL_APPROVAL_KIND);
+  if (!handler || handler.resourceOf) return [];
+  return visibleApproverNamesFor(options, user, handler.requiredPermission);
+}
+
+/** The deciding people of a right on a resource, before or after a request exists. */
+async function visibleApproverNamesFor(
   options: Pick<ChatServerOptions, "authorizer" | "clientInstanceId" | "stores">,
   user: AuthenticatedUser,
   permission: string,

@@ -53,7 +53,7 @@ export function createProposeSkillChangeTool(options: {
     icon: "skill",
     effect: "changing",
     description:
-      "Propose one small, exact skill change per call. Read the skill with read_skill first. A new skill is one create_skill operation, optionally followed by create_resource operations for its supporting files, for example references/checklist.md. Never include personal or customer-specific data: skills are shared by all users. Tell the user in your reply what would change and that it needs a person's approval; it is not active until approved.",
+      "Propose one small, exact skill change per call, to one of this agent's own skills or as a new skill. Read the skill with read_skill first; any other skill is read with platform.assets.get, where this agent holds it, and cannot be changed by a proposal. A new skill is one create_skill operation, optionally followed by create_resource operations for its supporting files, for example references/checklist.md. Never include personal or customer-specific data: skills are shared by all users. Tell the user in your reply what would change and that it needs a person's approval; it is not active until approved.",
     permission: { mode: "allow" },
     inputSchema: proposeSkillChangeInputSchema,
     // The guardrails on asset writes answer the skill as the change would write it, as they

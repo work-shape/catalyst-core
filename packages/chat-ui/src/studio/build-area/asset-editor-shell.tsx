@@ -193,7 +193,7 @@ export function AssetEditorShell({
   const waiting = waitingNotice(outcome);
   // Where the reader's save would wait for an approval, the save bar says so before the save,
   // with who decides, as the instance names them.
-  const approvers = asset?.saveApproval?.approverNames;
+  const approvers = (asset ? asset.saveApproval : frame.createApproval)?.approverNames;
   const approvalHint =
     approvers === undefined
       ? undefined

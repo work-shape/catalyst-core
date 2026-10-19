@@ -235,6 +235,15 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls, AppSaveCalls
     conversationId: ConversationId,
     input: PlatformAssetPut
   ): Promise<readonly OperationBeforeEvent[]>;
+  /**
+   * Whether a save of the skill `name` by the person of `context` files a request, and who may
+   * decide it: `saveApproval` of `get`, for a skill the agent reads with `read_skill`. Nothing
+   * where that person may not save it or a save applies at once.
+   */
+  skillSaveApproval(
+    context: ToolExecutionContext,
+    name: string
+  ): Promise<{ approverNames: string[] } | undefined>;
   listOperations(
     context: ToolExecutionContext,
     audience: PlatformOperationsAudience,
@@ -278,6 +287,7 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       putPolicyFloor: (conversationId, input) => required().putPolicyFloor(conversationId, input),
       putBeforeEvents: (conversationId, config) =>
         required().putBeforeEvents(conversationId, config),
+      skillSaveApproval: (context, name) => required().skillSaveApproval(context, name),
       listOperations: (context, audience, input) =>
         required().listOperations(context, audience, input),
       readContext: (context, input) => required().readContext(context, input),
@@ -537,7 +547,7 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
         "A draft save changes nothing that runs: it publishes nothing and starts nothing, and the published revision stays what it is until a person publishes the draft. That is why it runs on your call without a confirmation, unless an administrator set it stricter. When the person asks to publish an App or Workflow, call assets.publish to offer their confirmation; nothing goes live before their click.",
         "Send the whole config and, as 'expectedRevision', the revision you read. A kind written as files, such as a Data Store, is sent as 'files' instead: every file of the asset, its manifest among them, as a read of it lists them. Answers the new draft revision; or the issues the definition is refused for, with nothing saved; or REVISION_CONFLICT where somebody saved since you read: read again, apply your change to what is there now and save with the new revision.",
         "For an existing agent, every Build conversation and author shares one pending draft. The live agent stays unchanged until a person publishes the draft. Send the live 'revision' as 'expectedRevision' and the 'draftRevision' as 'expectedDraftRevision', null when no draft is pending. A draft conflict identifies its current revision, last author and change time: read again and apply your change to the shared draft before saving.",
-        "Creating an agent or skill normally waits for the person's confirmation of the exact call. A configured approval policy can instead file a request. Nothing is written before the required decision, and it is live only after a successful save. Report the workspaceId from the successful result as the actual owner; a name prefix never selects an owner or workspace. A new agent stays unavailable: direct the person to Studio > Agents > the agent > Available in > Selected workspaces, select the requested workspace and Save changes (German: Studio > Agenten > Verfügbar in > Ausgewählte Arbeitsbereiche > Änderungen speichern). Never report that it is available before this step.",
+        "Creating an agent or skill waits for the person's confirmation of the exact call, unless an administrator's setting asks an approval. Where platform.context lists createApproval on the skill kind, creating a skill files a request and creates nothing until one of createApproval.approverNames approves it: say so and name them. Nothing is written before the required decision, and it is live only after a successful save. Report the workspaceId from the successful result as the actual owner; a name prefix never selects an owner or workspace. A new agent stays unavailable: direct the person to Studio > Agents > the agent > Available in > Selected workspaces, select the requested workspace and Save changes (German: Studio > Agenten > Verfügbar in > Ausgewählte Arbeitsbereiche > Änderungen speichern). Never report that it is available before this step.",
         "A skill that exists is refused: the person changes it on the skill's page. Read it first and explain the exact outcome in saveApproval, including its approverNames when approval is required. Say what you would change, never that it has already changed.",
         `To make a new asset, leave 'expectedRevision' out and name its 'kind' and 'name'. That save creates a Workflow or a Data Store as a draft (a Data Store with its first migration among its files), or an agent or a skill. In a conversation that is about no asset yet it becomes the asset the conversation is about and the person is taken to its page. An agent made so is offered to nobody until a person makes it available on its page. Read ${PLATFORM_ASSET_TOOLS.get.name} of a similar asset first where you do not know the shape of the kind's config. For a new agent leave model settings out unless the person explicitly requests a model change; never copy modelBindingId, provider or model from the example. Add read_skill whenever skillNames is nonempty.`,
         "You may also create one while the conversation is about another asset, such as the Workflow or the Data Store an App needs: say first what you create and why, in a sentence such as \"Dafür legen wir zuerst den Workflow an.\" Such a draft stays beside the asset the conversation is about: the answer has 'besideSubject', the conversation stays about that asset and the person stays on the page they are on, offered a link to the new draft. Build what an App needs first and the App last.",

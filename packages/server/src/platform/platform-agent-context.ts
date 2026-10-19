@@ -14,6 +14,7 @@ import type { AssetCall } from "../assets/asset-access";
 import { AssetWorkflow } from "../assets/asset-service";
 import type { AssetWorkflowOptions } from "../types";
 import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
+import { ownerOf } from "../conversations/platform-asset-subject";
 import { readPlatformContext } from "./platform-context";
 import { workflowAuthoringContext } from "./workflow-authoring-context";
 
@@ -39,9 +40,10 @@ export async function readAgentPlatformContext(
     requestedLocale: context.locale
   });
   const available = workspace && (await getWorkspaceAssetSnapshot(options, workspace));
+  const { reads } = new AssetWorkflow(options);
   const apps =
     workspace && options.modules.isEnabled("apps")
-      ? await new AssetWorkflow(options).reads.list(
+      ? await reads.list(
           call,
           { kind: "app", workspaceId: workspace.id, locale, forUse: true },
           { limit: PLATFORM_ASSET_LIST_MAX + 1 }
@@ -104,11 +106,25 @@ export async function readAgentPlatformContext(
       timeZoneDefaulted: options.config.clientInstance.timeZone === undefined
     },
     modules: options.modules.modules.filter((module) => module.enabled).map(({ name }) => name),
-    kinds: kinds.map((kind) => ({
-      kind: kind.kind,
-      plural: kind.plural,
-      hasDraft: kind.lifecycle === "draft_published"
-    })),
+    kinds: await Promise.all(
+      kinds.map(async (kind) => {
+        // What a create in this conversation meets: the owner it lands in, a name in no
+        // Namespace, as the orientation asks a new asset to be named.
+        const createApproval = conversation
+          ? await reads.saveApprovalAt(call, {
+              kind: kind.kind,
+              name: "",
+              ...ownerOf(kind, conversation)
+            })
+          : undefined;
+        return {
+          kind: kind.kind,
+          plural: kind.plural,
+          hasDraft: kind.lifecycle === "draft_published",
+          ...(createApproval ? { createApproval } : {})
+        };
+      })
+    ),
     actions: ofExisting(read.actions),
     assetActions: ofExisting(read.assetActions),
     workspaces,

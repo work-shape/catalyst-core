@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  AppError,
+  toErrorEnvelope,
   createOperationRegistry,
   createPlatformId,
   dataStoreOperationName,
@@ -10,6 +12,27 @@ import {
 import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { accessOf } from "./support/access";
 import { manifest, refusal, useDataStoreWorld } from "./support/data-store-world";
+
+// A connection lost while a write was being kept: the next change commits, then fails.
+const commit = vi.hoisted(() => ({ failsNext: false }));
+vi.mock("@work-shape/catalyst-postgres-connector", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@work-shape/catalyst-postgres-connector")>();
+  return {
+    ...original,
+    createPostgresExecutor: (
+      ...input: Parameters<typeof original.createPostgresExecutor>
+    ): ReturnType<typeof original.createPostgresExecutor> => {
+      const executor = original.createPostgresExecutor(...input);
+      const change: typeof executor.change = async (...call) => {
+        const result = await executor.change(...call);
+        if (!commit.failsNext) return result;
+        commit.failsNext = false;
+        throw new original.PostgresExecutorError("unavailable");
+      };
+      return { ...executor, change };
+    }
+  };
+});
 
 const MARKER = "private-row-value";
 const migration = {
@@ -199,7 +222,7 @@ describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", ()
       { state: "40P01", reason: "busy", de: "gerade ausgelastet", en: "is busy right now" },
       {
         state: "08006",
-        code: "INTERNAL",
+        code: "CONFLICT",
         reason: "unavailable",
         de: "nicht erreichbar",
         en: "cannot be reached"
@@ -237,6 +260,12 @@ describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", ()
         expect(JSON.stringify(rejected)).not.toMatch(
           /SQLSTATE|private-row-value|\d{2}[0-9A-Z]{3}/u
         );
+        // PR-382 L4: the sentence reaches the person; an INTERNAL answer would replace it.
+        const answered = toErrorEnvelope(
+          new AppError(rejected.code, rejected.message, rejected.details, { exposeMessage: true }),
+          "row-refusals"
+        );
+        expect(answered.error.message, `${entry.state} ${locale}`).toContain(entry[locale]);
       }
     }
     // An abort while the database still works on the write: the executor's own cancellation.
@@ -286,12 +315,46 @@ describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", ()
     });
     expect(await refusal(call(world, "update", update, undefined, "en"))).toMatchObject({
       message:
-        "A value of this row is still referenced in „Code“ (Text). Change those references first, or keep the value."
+        'A value of this row is still referenced in "Code" (Text). Change those references first, or keep the value.'
     });
     // Pointing a row at a value that does not exist keeps its own advice.
     const missing = { table: "code_uses", rows: [{ key: { id: 1 }, set: { code: "Z" } }] };
     expect(await refusal(call(world, "update", missing, undefined, "de"))).toMatchObject({
       message: expect.stringContaining("den es nicht gibt")
     });
+  });
+
+  it("PR-382 L4: tells a call without a key whose commit failed to check before writing again", async () => {
+    const world = await published("commit-unknown", [manifest(), migration]);
+    const advice = { de: "vielleicht schon gespeichert", en: "may already be stored" };
+    for (const locale of ["de", "en"] as const) {
+      commit.failsNext = true;
+      const rejected = await refusal(
+        call(
+          world,
+          "insert",
+          { table: "parents", rows: [{ id: locale === "de" ? 2 : 3 }] },
+          undefined,
+          locale
+        )
+      );
+      expect(rejected, locale).toMatchObject({
+        code: "CONFLICT",
+        message: expect.stringContaining(advice[locale]),
+        details: { reason: "outcome_unknown" }
+      });
+      expect(rejected.message).not.toMatch(/try again|erneut/u);
+    }
+    // It was right to say so: the rows were kept.
+    expect(
+      await call(world, "query", { sql: "select count(*)::integer as count from parents" })
+    ).toMatchObject({ rows: [{ count: 3 }] });
+    // Under a key the store itself answers a second call, so trying again stays the advice.
+    commit.failsNext = true;
+    const keyed = await refusal(
+      call(world, "insert", { table: "parents", rows: [{ id: 4 }] }, "commit-unknown-key", "en")
+    );
+    expect(keyed).toMatchObject({ details: { reason: "unavailable" } });
+    expect(keyed.message).toContain("Try again later");
   });
 });

@@ -42,7 +42,8 @@ function label(column: DataStoreColumn, locale: LocaleCode): string {
   const title = column.name
     .replace(/[_-]+/gu, " ")
     .replace(/^./u, (letter) => letter.toLocaleUpperCase(locale));
-  return `„${title}“ (${type}${list ? (locale === "de" ? ", Liste" : ", list") : ""})`;
+  const kind = `${type}${list ? (locale === "de" ? ", Liste" : ", list") : ""}`;
+  return locale === "de" ? `„${title}“ (${kind})` : `"${title}" (${kind})`;
 }
 
 type Outage = "timeout" | "busy" | "cancelled" | "unavailable" | "permission" | "schema_changed";
@@ -94,6 +95,21 @@ const OUTAGE_COPY: Readonly<Record<Outage, { en: string; de: string }>> = {
 };
 
 /**
+ * A row write that failed while its transaction was being kept, without an idempotency key:
+ * the rows may be stored, and writing them again may store them twice.
+ */
+export function rowWriteOutcomeUnknown(locale?: string): AppError {
+  return new AppError(
+    "CONFLICT",
+    locale === "de"
+      ? "Das Schreiben ist beim Speichern fehlgeschlagen. Die Datensätze sind vielleicht schon gespeichert: Prüfe die Tabelle, bevor du sie noch einmal schreibst."
+      : "The write failed while it was being stored. The rows may already be stored: check the table before you write them again.",
+    { reason: "outcome_unknown" },
+    { exposeMessage: true }
+  );
+}
+
+/**
  * Row writes have no caller-authored SQL to diagnose. After rollback, explain a refusal in
  * the person's language. Other verbs retain their author-facing database diagnostics.
  */
@@ -111,10 +127,17 @@ export async function rowWriteDatabaseFailure(
   const language = locale === "de" ? "de" : "en";
   const code = describeDatabaseFailure(error, "The write").code;
   // The database did not judge the rows: say what to do next, and ask the catalog nothing.
+  // An INTERNAL answer loses its message on the way out, so an outage is a CONFLICT, as an
+  // unavailable Connection is; a timeout keeps its own code.
   const outage = outageReason(error);
   if (outage) {
     const message = OUTAGE_COPY[outage][language];
-    return new AppError(code, message, { reason: outage }, { exposeMessage: true });
+    return new AppError(
+      code === "INTERNAL" ? "CONFLICT" : code,
+      message,
+      { reason: outage },
+      { exposeMessage: true }
+    );
   }
   const state = error.sqlState;
   const reason =
@@ -232,7 +255,8 @@ export async function rowWriteDatabaseFailure(
       "Die Datenbank konnte diese Datensätze nicht annehmen. Prüfe die Vorgaben der Tabelle und versuche es erneut."
   };
   return new AppError(
-    code,
+    // The database refused the rows: an INTERNAL answer would lose the sentence on the way out.
+    code === "INTERNAL" ? "VALIDATION_FAILED" : code,
     (language === "de" ? de : en)[reason] ?? "",
     { reason },
     { exposeMessage: true }

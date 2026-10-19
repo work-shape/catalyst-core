@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { ConfigAssetSource, ConversationOfferSource } from "@work-shape/catalyst-core";
+import type {
+  ConfigAssetSource,
+  ConversationOfferSource,
+  ToolExecutionContext
+} from "@work-shape/catalyst-core";
 import { createSkillSourceVersion } from "./skill-source-version";
 import {
   defineTool,
@@ -54,13 +58,22 @@ const readSkillOutputSchema = z.object({
       })
     )
     .optional(),
-  sourceVersion: z.string()
+  sourceVersion: z.string(),
+  saveApproval: z.object({ approverNames: z.array(z.string()) }).optional()
 });
 
 export interface ReadSkillToolOptions {
   assetSource: ConfigAssetSource;
   /** Which skills the platform ships to a conversation, beside those its agent lists. */
   conversationOffer?: ConversationOfferSource;
+  /**
+   * Whether a save of the skill by the person the agent acts for files a request, and who may
+   * decide it, as a read of the asset answers it. Without it a read says nothing of a save.
+   */
+  saveApproval?(
+    context: ToolExecutionContext,
+    name: string
+  ): Promise<{ approverNames: string[] } | undefined>;
 }
 
 export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefinition {
@@ -75,7 +88,7 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
     icon: "skill",
     effect: "reading",
     description:
-      "Read the root instructions or one listed text resource for an available client skill. Read the root first, then load only relevant resources from its manifest.",
+      "Read the root instructions or one listed text resource for an available client skill. Read the root first, then load only relevant resources from its manifest. It reads only the skills of this agent and of this conversation. When the root read has saveApproval, a save of the skill by this person files a request and changes nothing until one of saveApproval.approverNames approves it; without it, a save this person may make applies immediately.",
     inputSchema: readSkillInputSchema,
     outputSchema: readSkillOutputSchema,
     async execute(input, context) {
@@ -105,8 +118,8 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         return toolFailed(
           "not_allowed",
           context.locale === "de"
-            ? "Dieser Agent hat diesen Skill nicht in seinen Anleitungen. Eine Person, die den Agenten bearbeiten darf, kann ihn dort hinzufügen. Um den Skill zu bearbeiten, öffne eine eigene Unterhaltung über ihn und lies ihn mit den Asset-Werkzeugen. In einer geteilten Unterhaltung können diese kein anderes Asset öffnen. Es wurde nichts geändert."
-            : "This agent does not have this skill in its instructions. Someone who may edit the agent can add it there. To edit the skill, open a private conversation about it and read it with the asset tools. In a shared conversation those cannot open another asset. Nothing was changed."
+            ? "Dieser Agent hat diesen Skill nicht und kann ihn hier nicht lesen. Eine Person, die den Agenten bearbeiten darf, kann ihm den Skill geben. Wer den Skill bearbeiten darf, ändert ihn in Studio auf der Seite des Skills. Es wurde nichts geändert."
+            : "This agent does not have this skill and cannot read it here. Someone who may edit the agent can give it the skill. Whoever may edit the skill changes it in Studio on the skill's page. Nothing was changed."
         );
       }
 
@@ -150,6 +163,7 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
           }
         );
       }
+      const saveApproval = await options.saveApproval?.(context, skill.name);
       const resources = [...(skill.resources ?? [])]
         .sort((left, right) => left.path.localeCompare(right.path))
         .map((resource) => ({ path: resource.path, mediaType: resource.mediaType }));
@@ -160,7 +174,8 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
           description: skill.description,
           content: skill.content,
           ...(resources.length ? { resources } : {}),
-          sourceVersion
+          sourceVersion,
+          ...(saveApproval ? { saveApproval } : {})
         },
         {
           auditSummary: {

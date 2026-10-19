@@ -532,7 +532,11 @@ export async function createClientInstanceExecutionAssembly(
         ? createWebFetchToolDefinitions({ config: config.webAccess.fetch })
         : []),
       ...createDataSourceTools({ dataSources }),
-      createReadSkillTool({ assetSource, conversationOffer }),
+      createReadSkillTool({
+        assetSource,
+        conversationOffer,
+        saveApproval: platformTools.skillSaveApproval
+      }),
       ...platformTools.tools,
       ...(skillPolicy.enabled
         ? [

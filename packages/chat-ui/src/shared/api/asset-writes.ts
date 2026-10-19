@@ -14,7 +14,11 @@ export interface DependencyConsent {
 
 /** What the instance says of a name a create would take. */
 export type NameCheckAnswer =
-  | { available: true }
+  | {
+      available: true;
+      /** The reader's create of the name waits for an approval by one of these people. */
+      saveApproval?: { approverNames: string[] };
+    }
   | { available: false; reason: (typeof ASSET_NAME_REFUSAL_REASONS)[number]; message: string };
 
 /** Asks the instance whether a new asset of a kind could take the name. */

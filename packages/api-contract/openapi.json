@@ -29940,18 +29940,7 @@
             }
           },
           "saveApproval": {
-            "type": "object",
-            "properties": {
-              "approverNames": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "required": [
-              "approverNames"
-            ]
+            "$ref": "#/components/schemas/SaveApproval"
           },
           "updatedAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -30929,6 +30918,9 @@
               "available": {
                 "type": "boolean",
                 "const": true
+              },
+              "saveApproval": {
+                "$ref": "#/components/schemas/SaveApproval"
               }
             },
             "required": [
@@ -37247,6 +37239,20 @@
           "features",
           "agents",
           "ui"
+        ]
+      },
+      "SaveApproval": {
+        "type": "object",
+        "properties": {
+          "approverNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "approverNames"
         ]
       },
       "SendAdministeredUserInvitationResponse": {

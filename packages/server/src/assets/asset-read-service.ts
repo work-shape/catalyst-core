@@ -43,7 +43,8 @@ import type { AssetWorkflowOptions } from "../types";
 import { assetTitle } from "./asset-reference-labels";
 import { unavailablePublishNarrative } from "../publish-narrative/publish-narrator";
 import { createPlatformAssetPolicy } from "../platform/platform-asset-policy";
-import { visibleApproverNamesFor } from "../approvals/visible-approvers";
+import { heldCallApproverNames } from "../approvals/visible-approvers";
+import { HELD_ASSET_OPERATION } from "../approvals/held-asset-preview";
 
 /**
  * Who is told of an agent's pending draft: a holder of `agent.write` on it, and the holder of
@@ -82,6 +83,39 @@ export class AssetReadWorkflow {
   constructor(options: AssetWorkflowOptions, host: AssetReadHost) {
     this.options = options;
     this.host = host;
+  }
+
+  /**
+   * Whether the caller's save of `target`, a create of a name not stored yet included, files a
+   * request rather than taking effect, and who may decide it: the policy the save meets and the
+   * people its request would name. Nothing where the caller may not write it or a save applies
+   * at once.
+   */
+  async saveApproval(
+    call: Pick<AssetCall, "actor" | "access">,
+    target: AssetTarget
+  ): Promise<{ approverNames: string[] } | undefined> {
+    if (
+      target.kind.kind !== "skill" ||
+      isAuthenticatedServicePrincipal(call.actor) ||
+      !call.access.authorize(target.kind.actions.write, target.resource).allowed
+    ) {
+      return undefined;
+    }
+    const floor = await createPlatformAssetPolicy(this.options, this.host).centralFloor(
+      [HELD_ASSET_OPERATION],
+      target.address
+    );
+    if (floor !== "approval") return undefined;
+    return { approverNames: await heldCallApproverNames(this.options, call.actor) };
+  }
+
+  /** `saveApproval` of the asset at `address`, read for its caller. */
+  async saveApprovalAt(
+    call: Pick<AssetCall, "actor" | "access">,
+    address: AssetAddress
+  ): Promise<{ approverNames: string[] } | undefined> {
+    return this.saveApproval(call, await this.host.target(address));
   }
 
   /** Instance availability permits consumption from another workspace, while every right
@@ -304,23 +338,7 @@ export class AssetReadWorkflow {
     // What the caller may do here, decided as each write decides it, so the page offers no
     // action the instance refuses and hides none it allows (AD-4).
     const allowed = allowedOn(target.kind, call, target.resource);
-    const saveApproval =
-      target.kind.kind === "skill" &&
-      allowed.includes("write") &&
-      !isAuthenticatedServicePrincipal(call.actor) &&
-      (await createPlatformAssetPolicy(this.options, this.host).centralFloor(
-        ["assets.put"],
-        address
-      )) === "approval"
-        ? {
-            approverNames: await visibleApproverNamesFor(
-              this.options,
-              call.actor,
-              "operations.approve",
-              target.resource
-            )
-          }
-        : undefined;
+    const saveApproval = await this.saveApproval(call, target);
     return {
       ...(saveApproval ? { saveApproval } : {}),
       ...(agentStatus ?? {}),

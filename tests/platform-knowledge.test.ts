@@ -212,7 +212,14 @@ describe("the platform's knowledge of an agent", () => {
     expect(offer.orientation).toContain(
       "someone who may approve skill changes decides it in the Inbox (Eingang), and nothing changes before"
     );
-    expect(offer.orientation).toContain("An asset read or open can return saveApproval.");
+    expect(offer.orientation).toContain(
+      "An asset read or open, and read_skill, can return saveApproval."
+    );
+    // PR-382 M1: a skill's create says what it meets, read from platform.context.
+    expect(offer.orientation).toContain(
+      "unless the skill kind in platform.context has createApproval: then the create files a request"
+    );
+    expect(offer.orientation).not.toContain("may instead file a request");
     expect(offer.orientation).toContain(
       "name the people in saveApproval.approverNames as the approvers"
     );

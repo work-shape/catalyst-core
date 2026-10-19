@@ -13,7 +13,8 @@ import {
   type ConnectorTypeRegistry,
   type ConversationOfferSource,
   type ModuleSnapshot,
-  type PlatformStores
+  type PlatformStores,
+  type ToolExecutionContext
 } from "@work-shape/catalyst-core";
 import {
   KNOWLEDGE_ADD_FILES_TOOL_NAME,
@@ -212,6 +213,9 @@ export function createPlatformTools(
     bind(options: AssetWorkflowOptions): void {
       platformAssets.bind(createPlatformAssetCalls(options));
     },
+    /** What `read_skill` says of a save of the skill it reads, for the person of the call. */
+    skillSaveApproval: (context: ToolExecutionContext, name: string) =>
+      platformAssets.calls.skillSaveApproval(context, name),
     tools: [
       ...createPlatformDiscoveryTools(platformAssets.calls),
       ...createPlatformAssetTools(platformAssets.calls),

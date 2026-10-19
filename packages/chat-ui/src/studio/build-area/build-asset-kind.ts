@@ -61,6 +61,11 @@ export interface BuildAssetEditorProps {
   start: BuildAssetStart | undefined;
   /** The reader may change the asset. Without it the page is read-only. */
   canWrite: boolean;
+  /**
+   * The reader's create of a new asset waits for an approval by one of these people, as the
+   * instance answers it for the name and the owner. An existing asset says so itself.
+   */
+  createApproval?: { approverNames: string[] };
   /** Why the reader may not change the asset, for the notice of a read-only page. */
   readOnlyReason?: string;
   /** Saving waits for the reader's answer to a notice, such as a conflict. */

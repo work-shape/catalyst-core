@@ -685,6 +685,26 @@ describe("skill change tool and wiring policy", () => {
     });
     expect(content.includes("Skill change proposals:")).toBe(enabled && toolPresent);
   });
+  // PR-382 L3: read_skill reads only the agent's own skills. Another skill is read with the
+  // asset read where the agent holds it, never with read_skill.
+  it.each([
+    [["propose_skill_change", "platform.assets.get"], true],
+    [["propose_skill_change"], false]
+  ])(
+    "points the read of another skill at the read that answers it, for tools %j",
+    (tools, gets) => {
+      const content = createSystemInstructions("Help", "en", {
+        agentSkillChangesEnabled: true,
+        agentToolNames: tools
+      });
+      expect(content).toContain("A proposal changes one of your own skills or creates a new one.");
+      expect(content).toContain("Read your skill with read_skill first.");
+      expect(content.includes("Read any other skill with platform.assets.get")).toBe(gets);
+      expect(content.includes("You cannot read or propose a change to any other skill")).toBe(
+        !gets
+      );
+    }
+  );
   it("registers the built-in handler and tool in the execution assembly", async () => {
     const config = createTestConfig({
       tools: [{ name: "read_skill" }, { name: "propose_skill_change" }]

@@ -136,6 +136,10 @@ export async function mountBuildPage(
   reader: {
     user?: ApiUser;
     put?: BuildSource["writes"]["put"];
+    /** The instance's answer to a name check, which a new asset's page also asks. */
+    checkName?: BuildSource["checkName"];
+    /** The instance lets people change skills. */
+    skillEditing?: boolean;
     /** Opens the kind's list instead of the asset's page, and records where the page goes. */
     list?: { opened: { kindPath?: string; name?: string }[] };
   } = {}
@@ -150,7 +154,19 @@ export async function mountBuildPage(
       return Response.json(contextWithKnowledge());
     return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
   };
-  const settings = buildPageSettings(fetchImpl, reader.user, editableAgentFields);
+  const built = buildPageSettings(fetchImpl, reader.user, editableAgentFields);
+  const settings: SettingsPageContextValue = reader.skillEditing
+    ? {
+        ...built,
+        config: {
+          ...built.config,
+          features: {
+            ...built.config.features,
+            configAssets: { ...built.config.features.configAssets, allowSkillEditing: true }
+          }
+        }
+      }
+    : built;
   const source: BuildSource = {
     kinds: [{ kind: asset.kind, canCreate: true, canDelete: true }],
     rights: resolveBuildRights({ permissions: ["config_assets.write"] }, platformContext()),
@@ -167,7 +183,7 @@ export async function mountBuildPage(
     }),
     useAsset: () => ({ status: "ready", asset, loadedAt: 1, reload: async () => "loaded" }),
     exists: async () => true,
-    checkName: async () => ({ available: true }),
+    checkName: reader.checkName ?? (async () => ({ available: true })),
     writes: {
       put: reader.put ?? (async () => ({ revision: 1 })),
       readFiles: async () => [],

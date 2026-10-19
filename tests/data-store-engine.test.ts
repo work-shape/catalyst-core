@@ -314,7 +314,7 @@ describe("a Data Store on Postgres", () => {
     expect(await refusal(call(world, "insert", rerun))).toMatchObject({
       code: "VALIDATION_FAILED",
       message:
-        "A value in „Run id“ (Text), „Client id“ (Text), „Rule id“ (Text) already exists. Use a different value."
+        'A value in "Run id" (Text), "Client id" (Text), "Rule id" (Text) already exists. Use a different value.'
     });
     expect(await refusal(call(world, "insert", { ...rerun, onConflict: "fail" }))).toMatchObject({
       details: { reason: "unique" }
@@ -565,7 +565,7 @@ describe("a Data Store on Postgres", () => {
       details: { reason: "database_refusal" }
     });
     expect(type.message).toBe(
-      "A value does not fit „Revision“ (Integer). Check its type and try again."
+      'A value does not fit "Revision" (Integer). Check its type and try again.'
     );
     expect(
       await refusal(call(world, "insert", { table: "bookings", rows: [finding(1)] }))

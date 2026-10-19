@@ -63,6 +63,91 @@ describe("a conversation about a Workflow", () => {
     expect(page.saveApproval.approverNames).toEqual([]);
   });
 
+  it("PR-382 M2: read_skill carries the save-approval fact of the skill page for the reading person", async () => {
+    let holding = false;
+    const t = await createAssetToolsFixture("in_process", ["skillNames"], {
+      skillTool: true,
+      centralPolicySettings: () =>
+        holding ? [{ operation: "assets.put", value: "approval", assetKind: "skill" }] : []
+    });
+    const named = { kind: "skill", name: "read-fact" };
+    await t.ok(
+      t.app.call("assets.put", {
+        params: named,
+        payload: {
+          config: {
+            name: named.name,
+            title: "Read fact",
+            description: "A synthetic skill",
+            content: "# Skill"
+          },
+          expectedRevision: null
+        }
+      })
+    );
+    // The agent of the conversation holds the skill, as its published definition lists it.
+    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(undefined))).json());
+    const agent = { kind: "agent", name: "test_agent" };
+    const live = z
+      .object({ revision: z.number(), config: z.record(z.string(), z.unknown()) })
+      .parse((await t.ok(t.app.call("assets.get", { params: agent }))).json());
+    const draft = z.object({ draftRevision: z.number() }).parse(
+      (
+        await t.ok(
+          t.app.call("assets.put", {
+            params: agent,
+            payload: {
+              config: { ...live.config, skillNames: [named.name] },
+              expectedRevision: live.revision,
+              expectedDraftRevision: null
+            }
+          })
+        )
+      ).json()
+    );
+    await t.ok(
+      t.app.call("assets.publish", {
+        params: agent,
+        payload: { revision: live.revision, draftRevision: draft.draftRevision }
+      })
+    );
+    const readSkill = async () =>
+      z
+        .object({ content: z.string(), saveApproval: z.unknown().optional() })
+        .parse(await t.call(id, "read_skill", { name: named.name })).saveApproval;
+    expect(await readSkill()).toBeUndefined();
+    holding = true;
+    const page = z
+      .object({ saveApproval: z.object({ approverNames: z.array(z.string()) }) })
+      .parse((await t.ok(t.app.call("assets.get", { params: named }))).json());
+    expect(await readSkill()).toEqual(page.saveApproval);
+  });
+
+  it("PR-382 M1: platform.context says a skill's create waits for an approval before it is made", async () => {
+    let holding = false;
+    const t = await createAssetToolsFixture("in_process", [], {
+      centralPolicySettings: () =>
+        holding ? [{ operation: "assets.put", value: "approval", assetKind: "skill" }] : []
+    });
+    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(undefined))).json());
+    const kinds = async () =>
+      z
+        .object({
+          kinds: z.array(
+            z.object({ kind: z.string(), createApproval: z.unknown().optional() }).loose()
+          )
+        })
+        .parse(await t.call(id, "platform.context")).kinds;
+    const skillKind = async () => (await kinds()).find((kind) => kind.kind === "skill");
+    expect((await skillKind())?.createApproval).toBeUndefined();
+    holding = true;
+    expect((await skillKind())?.createApproval).toEqual({ approverNames: [] });
+    // A kind the setting does not name is created as before.
+    expect(
+      (await kinds()).find((kind) => kind.kind === "workflow")?.createApproval
+    ).toBeUndefined();
+  });
+
   beforeAll(() => {
     // The demo provider paces every word of its tool-result echo by 20 ms. These tests
     // exercise asset tools, not token animation: keep its real completion, without pacing.

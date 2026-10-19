@@ -604,11 +604,17 @@ export class AssetWorkflow {
     return validateAssetDefinition(this.options, call, input);
   }
 
-  /** Whether a create would take the name, asked with the right a create asks. Writes nothing. */
+  /**
+   * Whether a create would take the name, asked with the right a create asks, and whether the
+   * caller's create would wait for an approval. Writes nothing.
+   */
   async checkName(call: AssetCall, input: AssetAddress) {
     const target = await this.target(input);
     call.access.require(target.kind.actions.write, target.resource);
-    return nameCheckOf(target);
+    const check = nameCheckOf(target);
+    if (!check.available) return check;
+    const saveApproval = await this.reads.saveApproval(call, target);
+    return saveApproval ? { ...check, saveApproval } : check;
   }
 
   sync(call: AssetCall, input: AssetSyncInput) {

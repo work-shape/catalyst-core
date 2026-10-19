@@ -87,4 +87,14 @@ describe("the demo's agent on what a skill change does", () => {
     );
     expect(learning).not.toContain("that approval is still needed");
   });
+
+  // PR-382 L3: read_skill reads only the agent's own skills; the agent was sent to it for every
+  // skill and failed on one it does not hold.
+  it("reads a skill it does not hold with the asset read, not with read_skill", () => {
+    expect(learning).toContain("Read your skill with read_skill first.");
+    expect(learning).toContain(
+      "Read any other skill with platform.assets.get, naming kind skill and its name"
+    );
+    expect(learning).not.toContain("Read the affected skill with read_skill first.");
+  });
 });

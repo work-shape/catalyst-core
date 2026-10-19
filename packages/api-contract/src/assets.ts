@@ -196,6 +196,9 @@ export const publishNarrativeSchema = z.object({
   warnings: z.array(z.string())
 });
 
+/** A save by the caller that waits for an approval, and up to three people who may decide it. */
+export const saveApprovalSchema = z.object({ approverNames: z.array(z.string()) });
+
 export const assetSchema = z.object({
   id: z.string(),
   kind: z.string(),
@@ -265,7 +268,7 @@ export const assetSchema = z.object({
    * as the instance's policy asks. Names up to three people the caller shares a workspace with
    * who may decide it; none where none is known. Left out where a save takes effect at once.
    */
-  saveApproval: z.object({ approverNames: z.array(z.string()) }).optional(),
+  saveApproval: saveApprovalSchema.optional(),
   updatedAt: timestampSchema
 });
 
@@ -513,7 +516,14 @@ export const checkAssetNameRequestSchema = z.object({
  * `name_taken` is the id of another asset; `message` says which rule or which id, in English.
  */
 export const checkAssetNameResponseSchema = z.discriminatedUnion("available", [
-  z.object({ available: z.literal(true) }),
+  z.object({
+    available: z.literal(true),
+    /**
+     * A create of the name by the caller files a request and takes effect once it is approved,
+     * as `saveApproval` of a read of the asset says. Left out where a create takes effect at once.
+     */
+    saveApproval: saveApprovalSchema.optional()
+  }),
   z.object({
     available: z.literal(false),
     reason: z.enum(ASSET_NAME_REFUSAL_REASONS),
