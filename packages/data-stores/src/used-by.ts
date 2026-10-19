@@ -91,6 +91,8 @@ const usedByOutputSchema = z.object({
     })
     .optional(),
   dataFlows: workflowDataFlowsSchema.optional(),
+  /** The published agents carrying row tools of the store that the caller may read. */
+  agents: z.array(usingSchema).optional(),
   /** The published Apps that use the store, with who opens them, and that the caller may be shown. */
   apps: z.array(usingSchema.extend({ audience: audienceSchema })),
   /** The published Workflows that use the store and that the caller may be shown. */
@@ -112,6 +114,7 @@ const usedByOutputSchema = z.object({
   readers: audienceSchema,
   /** How many more use it that the caller may not be shown. Nothing of them is told. */
   hidden: z.object({
+    agents: z.number().int().optional(),
     apps: z.number().int(),
     workflows: z.number().int(),
     knowledgeBases: z.number().int(),
@@ -248,6 +251,35 @@ function workflowUse(
   return use && { ...use, ...(manifest.runAs === undefined ? {} : { runAs: manifest.runAs }) };
 }
 
+const agentUseSchema = z.object({
+  displayName: z
+    .union([z.string(), z.object({ en: z.string().optional(), de: z.string().optional() })])
+    .optional(),
+  toolNames: z.array(z.string())
+});
+
+/** A published agent carries row tools; a draft alone never gives it access to a store. */
+function agentUse(
+  asset: ConfigAssetRecord,
+  store: string,
+  locale: DataStoreRuntime["defaultLocale"]
+): StoreUse | undefined {
+  const parsed = agentUseSchema.safeParse(asset.publishedConfig);
+  if (!parsed.success) return undefined;
+  const { displayName, toolNames } = parsed.data;
+  const prefix = `${DATA_STORE_OPERATION_PREFIX}${store}.`;
+  const rowTools = toolNames.filter(
+    (name) =>
+      name.startsWith(prefix) &&
+      DATA_STORE_OPERATION_VERBS.some((verb) => name === `${prefix}${verb}`)
+  );
+  const title =
+    typeof displayName === "string"
+      ? displayName
+      : (displayName?.[locale] ?? displayName?.en ?? displayName?.de ?? asset.name);
+  return useOfOperations(rowTools, store, title);
+}
+
 const knowledgeBaseConfigSchema = z.object({
   title: z.string().optional(),
   backend: z.object({ dataStore: z.string() })
@@ -274,10 +306,11 @@ async function usedBy(
       kind,
       limit: DATA_STORE_USED_BY_MAX_ASSETS + 1
     });
-  const [apps, workflows, knowledgeBases] = await Promise.all([
+  const [apps, workflows, knowledgeBases, agents] = await Promise.all([
     published(APP.kind),
     published(WORKFLOW_ASSET_KIND),
-    published(KNOWLEDGE_BASE_ASSET_KIND)
+    published(KNOWLEDGE_BASE_ASSET_KIND),
+    published("agent")
   ]);
   /**
    * Splits the assets that use the store into the ones the caller is shown and a count. The
@@ -303,6 +336,9 @@ async function usedBy(
     }
     return { shown, hidden: hiddenUses.length, hiddenUses };
   };
+  const usingAgents = sorted(agents, (asset) => agentUse(asset, name, runtime.defaultLocale), [
+    "agent.read"
+  ]);
   const usingApps = sorted(apps, (asset) => appUse(asset, name), [APP.read, APP.use]);
   const usingWorkflows = sorted(workflows, (asset) => workflowUse(asset, name), [
     WORKFLOW_ACTIONS.read,
@@ -380,6 +416,7 @@ async function usedBy(
   const dataFlows = workflowDataFlows(workflows, { kind: "data_store", name }, access);
   return {
     ...(dataFlows ? { dataFlows } : {}),
+    ...(usingAgents.shown.length > 0 ? { agents: usingAgents.shown.map(using) } : {}),
     apps: appsShown,
     ...(chatWriters.conversations > 0 || chatWriters.truncated
       ? { conversationWriters: chatWriters }
@@ -398,6 +435,7 @@ async function usedBy(
     knowledgeBases: knowledgeBasesShown,
     readers,
     hidden: {
+      ...(usingAgents.hidden > 0 ? { agents: usingAgents.hidden } : {}),
       apps: usingApps.hidden,
       workflows: usingWorkflows.hidden,
       knowledgeBases: usingKnowledgeBases.hidden,
@@ -411,7 +449,7 @@ async function usedBy(
         usingKnowledgeBases.hidden
     },
     truncated:
-      Math.max(apps.length, workflows.length, knowledgeBases.length) >
+      Math.max(apps.length, workflows.length, knowledgeBases.length, agents.length) >
         DATA_STORE_USED_BY_MAX_ASSETS || audiences.truncated()
   };
 }

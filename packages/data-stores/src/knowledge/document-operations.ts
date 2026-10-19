@@ -89,7 +89,15 @@ const documentSchema = z.object({
 const listOutputSchema = z.object({
   documents: z.array(documentSchema),
   /** Present while more documents follow: pass it as `cursor` for the next page. */
-  nextCursor: z.string().optional()
+  nextCursor: z.string().optional(),
+  /** Retained document totals and ingestion state, returned on the first page. */
+  summary: z
+    .object({
+      count: z.number().int(),
+      state: z.enum(KNOWLEDGE_DOCUMENT_STATES),
+      lastIngestedAt: z.string().optional()
+    })
+    .optional()
 });
 
 /** The Knowledge Base the operations serve. */
@@ -129,6 +137,7 @@ export function listDocumentsOperation(
       });
       const filesById = new Map(copies.map((copy) => [String(copy.id), copy]));
       return {
+        ...(page.summary ? { summary: page.summary } : {}),
         documents: page.documents.map((document) => ({
           ...document,
           ...(document.failureCode === "knowledge_file_too_many_pages"

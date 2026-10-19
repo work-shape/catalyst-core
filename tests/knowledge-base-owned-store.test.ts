@@ -347,6 +347,59 @@ describe("the store a Knowledge Base owns", () => {
     ).toHaveLength(1);
   });
 
+  it("summarizes every retained document on the first page, including ingestion beyond that page", async () => {
+    const instance = await start(true, undefined, undefined, undefined, { documents: true });
+    const record = await published(instance, documents({ methods: ["keyword"] }));
+    const summary = async () => {
+      const response = await instance.api.call("knowledge_bases.list_documents", {
+        params: { knowledgeBase: KB },
+        query: { limit: "1" }
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      return z
+        .object({
+          documents: z.array(z.unknown()),
+          summary: z.object({
+            count: z.number(),
+            state: z.string(),
+            lastIngestedAt: z.string().optional()
+          })
+        })
+        .parse(response.json());
+    };
+    expect((await summary()).summary).toEqual({ count: 0, state: "indexed" });
+    await inDatabase(record.location.database, async (sql) => {
+      for (const [index, state] of ["extracted", "pending", "failed", "extracted"].entries()) {
+        const hash = String(index + 1).repeat(64);
+        await sql`insert into catalyst_kb.contents (sha256, format, state, updated_at)
+          values (${hash}, 'txt', ${state}, ${`2026-10-0${index + 1}T12:00:00Z`})`;
+        await sql`insert into catalyst_kb.documents
+          (id, managed_file_id, content_sha256, title, file_name, added_at, withdrawn_at)
+          values (${`doc-${index}`}, ${`file-${index}`}, ${hash}, 'Document', 'document.txt',
+          ${`2026-10-0${index + 1}T12:00:00Z`}, ${index === 3 ? "2026-10-05T12:00:00Z" : null})`;
+      }
+    });
+    const page = await summary();
+    expect(page.documents).toHaveLength(1);
+    expect(page.summary).toEqual({
+      count: 3,
+      state: "failed",
+      lastIngestedAt: "2026-10-01T12:00:00.000Z"
+    });
+    await inDatabase(record.location.database, async (sql) => {
+      await sql`update catalyst_kb.documents set withdrawn_at = now() where id = 'doc-2'`;
+    });
+    expect((await summary()).summary).toMatchObject({ count: 2, state: "pending" });
+    await inDatabase(record.location.database, async (sql) => {
+      await sql`update catalyst_kb.contents set state = 'extracted', updated_at = '2026-10-06T12:00:00Z' where state = 'pending'`;
+    });
+    expect((await summary()).summary).toEqual({
+      count: 2,
+      state: "indexed",
+      lastIngestedAt: "2026-10-06T12:00:00.000Z"
+    });
+  });
+
   it("is dropped with every row and role when the Knowledge Base is deleted", async () => {
     const instance = await start(true, undefined, undefined, undefined, { embedding: true });
     const record = await published(instance, documents());

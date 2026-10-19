@@ -10,6 +10,9 @@ import {
 import { z } from "zod";
 import { knowledgeBaseDefinitionSchema } from "./knowledge/definition";
 import { readStores } from "./operations";
+import { appUse } from "./used-by";
+import { assetResource } from "./store-audience";
+import { DATA_STORE_USED_BY_MAX_ASSETS } from "./workflow-data-flows";
 import type { DataStoreRuntime } from "./runtime";
 
 // The list of the stores of an instance, for the screen that lists them.
@@ -26,7 +29,8 @@ const listedStoreSchema = z.object({
   tableCount: z.number().int().optional(),
   rowEstimate: z.number().int().optional(),
   measuredAt: z.string().optional(),
-  ownedBy: z.object({ knowledgeBase: z.string() }).optional()
+  ownedBy: z.object({ knowledgeBase: z.string() }).optional(),
+  apps: z.array(z.object({ name: z.string(), title: z.string() })).optional()
 });
 
 type ListedStore = z.infer<typeof listedStoreSchema>;
@@ -99,20 +103,42 @@ export async function listDataStores(
   runtime: DataStoreRuntime,
   access: ActorAccess
 ): Promise<{ items: ListedStore[]; truncated: boolean }> {
-  const { stores, owned, truncated } = await readStores(runtime);
+  const [{ stores, owned, truncated }, apps] = await Promise.all([
+    readStores(runtime),
+    runtime.stores.configAssets.listPublishedConfigAssets({
+      clientInstanceId: runtime.clientInstanceId,
+      kind: "app",
+      limit: DATA_STORE_USED_BY_MAX_ASSETS + 1
+    })
+  ]);
+  // One bounded read for the whole list. An unreadable App reveals neither its name nor a count.
+  const visibleApps = apps
+    .slice(0, DATA_STORE_USED_BY_MAX_ASSETS)
+    .filter(
+      (asset) =>
+        asset.status === "active" &&
+        ["app.read", "app.use"].some(
+          (right) => access.authorize(right, assetResource(asset)).allowed
+        )
+    );
   return {
     items: [
       ...stores
         .filter((store) => access.authorize(DATA_STORE_ACTIONS.read, store.resource).allowed)
-        .map(({ record, definition }) =>
-          listedStoreSchema.parse({
+        .map(({ record, definition }) => {
+          const using = visibleApps.flatMap((asset) => {
+            const use = appUse(asset, record.name);
+            return use ? [{ name: asset.name, title: use.title }] : [];
+          });
+          return listedStoreSchema.parse({
             ...measured(record),
             title: definition.title,
+            ...(using.length > 0 ? { apps: using } : {}),
             ...(definition.description === undefined ? {} : { description: definition.description })
-          })
-        ),
+          });
+        }),
       ...(await ownedStores(runtime, access, owned))
     ],
-    truncated
+    truncated: truncated || apps.length > DATA_STORE_USED_BY_MAX_ASSETS
   };
 }

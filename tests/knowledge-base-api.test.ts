@@ -96,6 +96,90 @@ describe("a Knowledge Base on a Data Store", () => {
     expect(made.statusCode, made.body).toBe(200);
   }
 
+  it("names only readable published agents assigned to this Knowledge Base", async () => {
+    const instance = await start(true, undefined, developmentAuth, undefined, true);
+    await published(instance);
+    async function agent(name: string, bases: string[], publish: boolean) {
+      const key = `agent:${name}`;
+      const written = await instance.stores.configAssets.applyConfigAssetMutations({
+        clientInstanceId,
+        baseRevisions: { [key]: null },
+        mutations: [
+          {
+            type: "upsert",
+            kind: "agent",
+            name,
+            draft: true,
+            config: {
+              name,
+              displayName: { de: `Agent ${name}` },
+              instructions: "Help",
+              toolNames: [],
+              knowledgeBases: bases
+            }
+          }
+        ]
+      });
+      if (!publish) return;
+      const revision = required(written.revisions[key]);
+      const stored = required(
+        await instance.stores.configAssets.getConfigAssetRevision({
+          clientInstanceId,
+          kind: "agent",
+          name,
+          revision
+        })
+      );
+      await instance.stores.configAssets.publishConfigAssetRevision({
+        clientInstanceId,
+        kind: "agent",
+        name,
+        assetId: required(written.assetIds[key]),
+        revision,
+        revisionId: stored.id
+      });
+    }
+    await agent("using-knowledge", [KB], true);
+    await agent("draft-knowledge", [KB], false);
+    await agent("other-knowledge", [`${KB}-other`], true);
+    const read = (headers: Record<string, string> = {}) =>
+      instance.api.call("knowledge_bases.get", { params: { knowledgeBase: KB }, headers });
+    const shown = await read();
+    expect(shown.statusCode, shown.body).toBe(200);
+    expect(shown.json()).toMatchObject({
+      agents: [{ name: "using-knowledge", title: "Agent using-knowledge" }]
+    });
+    expect(shown.body).not.toContain("draft-knowledge");
+    expect(shown.body).not.toContain("other-knowledge");
+    // Resolve the development-auth member, then grant only the Knowledge Base read.
+    expect((await read(asMember)).statusCode).toBe(403);
+    const member = required(
+      (await instance.stores.operationRuns.list({ clientInstanceId })).find(
+        (run) => run.actor.label === "member-1"
+      )
+    ).actor;
+    const asset = required(
+      await instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: KNOWLEDGE_BASE_ASSET_KIND,
+        name: KB
+      })
+    );
+    const granted = await instance.api.call("permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: member.id,
+        action: KNOWLEDGE_BASE_ACTIONS.read,
+        scopeKind: "asset",
+        scopeId: asset.id
+      }
+    });
+    expect(granted.statusCode, granted.body).toBe(200);
+    const hidden = await read(asMember);
+    expect(hidden.statusCode, hidden.body).toBe(200);
+    expect(hidden.body).not.toContain("using-knowledge");
+  });
+
   it("derives filling and processing data Workflows from published steps without keeping reverse links", async () => {
     const world = await start(true, undefined, undefined, undefined, true);
     await published(world);

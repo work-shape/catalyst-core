@@ -73,6 +73,9 @@ const knowledgeQueryResponseSchema = z.object({
 });
 
 const knowledgeStateResponseSchema = z.object({
+  /** Published agents using this Knowledge Base that the caller may read. */
+  agents: z.array(z.object({ name: z.string(), title: z.string() })).optional(),
+  agentsTruncated: z.boolean().optional(),
   dataFlows: workflowDataFlowsSchema.optional(),
   /** Due ingestion has no reporting worker. Omitted for a structured Knowledge Base. */
   processingWaiting: z.boolean().optional(),
@@ -171,7 +174,15 @@ const knowledgeListDocumentsResponseSchema = z.object({
     })
   ),
   /** Present while more documents follow. */
-  nextCursor: z.string().optional()
+  nextCursor: z.string().optional(),
+  /** Retained document totals and ingestion state, returned on the first page. */
+  summary: z
+    .object({
+      count: z.number().int(),
+      state: z.enum(KNOWLEDGE_DOCUMENT_STATES),
+      lastIngestedAt: z.string().optional()
+    })
+    .optional()
 });
 
 const knowledgeSearchRequestSchema = z.strictObject({

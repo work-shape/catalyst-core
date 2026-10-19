@@ -155,7 +155,9 @@ const dataStoreListResponseSchema = z.object({
        * The Knowledge Base whose documents the store keeps, which made it and drops it. Such a
        * store has no migrations of its own and no App binds it.
        */
-      ownedBy: z.object({ knowledgeBase: z.string() }).optional()
+      ownedBy: z.object({ knowledgeBase: z.string() }).optional(),
+      /** Published Apps using this store that the caller may read or use. */
+      apps: z.array(z.object({ name: z.string(), title: z.string() })).optional()
     })
   ),
   /** More stores exist than one list reads. */
@@ -242,6 +244,8 @@ const dataStoreUsedByResponseSchema = z.object({
     .object({ agents: z.number().int(), conversations: z.number().int(), truncated: z.boolean() })
     .optional(),
   dataFlows: workflowDataFlowsSchema.optional(),
+  /** The published agents carrying row tools that the caller may read. */
+  agents: z.array(usingAssetSchema).optional(),
   /** The published Apps whose `sql` actions name the store, as far as the caller is shown them. */
   apps: z.array(usingAssetSchema.extend({ audience: dataStoreAudienceSchema })),
   /** The published Workflows whose operation steps call the store. */
@@ -267,6 +271,7 @@ const dataStoreUsedByResponseSchema = z.object({
   readers: dataStoreAudienceSchema,
   /** How many more use it that the caller is not shown. */
   hidden: z.object({
+    agents: z.number().int().optional(),
     apps: z.number().int(),
     workflows: z.number().int(),
     knowledgeBases: z.number().int(),

@@ -1,6 +1,7 @@
 import { extractFieldsOperation } from "./field-extraction";
 import { workflowDataFlowsSchema } from "@work-shape/catalyst-core";
-import { readWorkflowDataFlows } from "../workflow-data-flows";
+import { DATA_STORE_USED_BY_MAX_ASSETS, readWorkflowDataFlows } from "../workflow-data-flows";
+import { assetResource } from "../store-audience";
 import { sourceOperation } from "./source-operations";
 import {
   isAppError,
@@ -84,6 +85,8 @@ const tableCheckSchema = z.object({ name: z.string(), readable: z.boolean() });
 
 /** The state of one Knowledge Base as its page reads it. */
 const stateOutputSchema = z.object({
+  agents: z.array(z.object({ name: z.string(), title: z.string() })).optional(),
+  agentsTruncated: z.boolean().optional(),
   dataFlows: workflowDataFlowsSchema.optional(),
   processingWaiting: z.boolean().optional(),
   /** The formats this instance reads into a Knowledge Base that keeps documents. */
@@ -281,6 +284,13 @@ function queryOperation(
   };
 }
 
+const agentKnowledgeSchema = z.object({
+  displayName: z
+    .union([z.string(), z.object({ en: z.string().optional(), de: z.string().optional() })])
+    .optional(),
+  knowledgeBases: z.array(z.string()).optional()
+});
+
 function stateOperation(
   runtime: KnowledgeRuntime,
   knowledgeBase: PublishedKnowledgeBase
@@ -301,6 +311,27 @@ function stateOperation(
         clientInstanceId: runtime.clientInstanceId,
         assetId: knowledgeBase.asset.id
       });
+      const publishedAgents = await runtime.stores.configAssets.listPublishedConfigAssets({
+        clientInstanceId: runtime.clientInstanceId,
+        kind: "agent",
+        limit: DATA_STORE_USED_BY_MAX_ASSETS + 1
+      });
+      const agents = publishedAgents.slice(0, DATA_STORE_USED_BY_MAX_ASSETS).flatMap((asset) => {
+        if (
+          asset.status !== "active" ||
+          !context.access.authorize("agent.read", assetResource(asset)).allowed
+        )
+          return [];
+        const config = agentKnowledgeSchema.safeParse(asset.publishedConfig);
+        if (!config.success || !config.data.knowledgeBases?.includes(knowledgeBase.asset.name))
+          return [];
+        const label = config.data.displayName;
+        const title =
+          typeof label === "string"
+            ? label
+            : (label?.[runtime.defaultLocale] ?? label?.en ?? label?.de ?? asset.name);
+        return [{ name: asset.name, title }];
+      });
       const dataFlows = await readWorkflowDataFlows(
         runtime.stores,
         runtime.clientInstanceId,
@@ -309,7 +340,9 @@ function stateOperation(
       );
       const withFlows = async (state: CheckedKnowledgeState | undefined) => ({
         ...(await stateOf(runtime, knowledgeBase, state)),
-        ...(dataFlows ? { dataFlows } : {})
+        ...(dataFlows ? { dataFlows } : {}),
+        ...(agents.length > 0 ? { agents } : {}),
+        ...(publishedAgents.length > DATA_STORE_USED_BY_MAX_ASSETS ? { agentsTruncated: true } : {})
       });
       if (kept) return withFlows(kept);
       // Nothing kept: it was never checked, or its store was being made when it was. A store

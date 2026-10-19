@@ -956,7 +956,11 @@ export interface KnowledgeDocumentStore {
   listDocuments(
     input: { limit: number; cursor?: string },
     signal?: AbortSignal
-  ): Promise<{ documents: KnowledgeDocumentEntry[]; nextCursor?: string }>;
+  ): Promise<{
+    documents: KnowledgeDocumentEntry[];
+    nextCursor?: string;
+    summary?: { count: number; state: KnowledgeDocumentState; lastIngestedAt?: string };
+  }>;
   /**
    * The failed contents of the named documents not withdrawn: what a retry puts back, read
    * before it does so that their stored extraction failures are gone first.

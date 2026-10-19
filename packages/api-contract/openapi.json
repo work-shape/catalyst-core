@@ -9154,6 +9154,24 @@
                             "required": [
                               "knowledgeBase"
                             ]
+                          },
+                          "apps": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "title"
+                              ]
+                            }
                           }
                         },
                         "required": [
@@ -10880,6 +10898,57 @@
                         "truncated"
                       ]
                     },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "reads": {
+                            "type": "boolean"
+                          },
+                          "writes": {
+                            "type": "boolean"
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "connection": {
+                                  "type": "string"
+                                },
+                                "knowledgeBase": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "title"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "title",
+                          "reads",
+                          "writes",
+                          "sources"
+                        ]
+                      }
+                    },
                     "apps": {
                       "type": "array",
                       "items": {
@@ -11263,6 +11332,11 @@
                     "hidden": {
                       "type": "object",
                       "properties": {
+                        "agents": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
                         "apps": {
                           "type": "integer",
                           "minimum": -9007199254740991,
@@ -16240,6 +16314,27 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "title"
+                        ]
+                      }
+                    },
+                    "agentsTruncated": {
+                      "type": "boolean"
+                    },
                     "dataFlows": {
                       "type": "object",
                       "properties": {
@@ -16476,6 +16571,27 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "title"
+                        ]
+                      }
+                    },
+                    "agentsTruncated": {
+                      "type": "boolean"
+                    },
                     "dataFlows": {
                       "type": "object",
                       "properties": {
@@ -16881,6 +16997,31 @@
                     },
                     "nextCursor": {
                       "type": "string"
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "indexed",
+                            "failed"
+                          ]
+                        },
+                        "lastIngestedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "state"
+                      ]
                     }
                   },
                   "required": [
