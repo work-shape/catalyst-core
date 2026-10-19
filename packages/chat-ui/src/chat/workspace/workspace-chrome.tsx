@@ -211,6 +211,10 @@ export function StagingBanner({ environment }: { environment: string }) {
  * selector. It is a solid band, which ends where a surface beside it begins, so nothing that
  * scrolls passes under the controls. Outside a conversation it gives way to a pinned detail head,
  * which is a band of its own: the controls float over its start.
+ *
+ * Its fade reaches 1rem below the band. At rest nothing stands under the band or the fade: a
+ * thread starts 5rem down, and a page starts below the band in a narrow window. Only what has
+ * scrolled up passes under them.
  */
 export function WorkspaceChrome({
   agentDisplay,
@@ -248,8 +252,16 @@ export function WorkspaceChrome({
       data-beside-surface={besideSurface ? "" : undefined}
       className={cn(
         "pointer-events-none absolute top-0 left-0 z-40 flex h-(--layout-header) min-w-0 items-center gap-2 bg-background px-4 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-gradient-to-b after:from-background after:to-transparent after:content-['']",
+        // Outside a conversation the header holds only the button that opens the drawer, so
+        // from 768 px up it holds nothing and is gone: a page's title line there is 56 px down,
+        // where the band and its fade would cover it.
+        !conversation && "md:hidden",
+        // A pinned detail head, and a sub-rail whose area name stands beside that button, are
+        // bands of their own.
         !conversation &&
           "group-has-[[data-page-head][data-variant=detail]]/workspace-content:bg-transparent group-has-[[data-page-head][data-variant=detail]]/workspace-content:after:hidden",
+        !conversation &&
+          "group-has-[[data-subrail-title]]/workspace-content:bg-transparent group-has-[[data-subrail-title]]/workspace-content:after:hidden",
         // Beside a surface the header is a band like the surface's own: one line runs across
         // the window, and the thread scrolls under the band, not under the controls.
         // The fade starts below the border so it cannot paint over that line.

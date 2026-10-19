@@ -177,13 +177,30 @@ describe("agent chip in the header", () => {
       "group-has-[[data-page-head][data-variant=detail]]/workspace-content:bg-transparent";
     const elsewhere = header(renderHeader({ conversation: false, showAgentSelector: false }));
 
-    // A list or a Settings page scrolls under the band as a conversation does.
+    // In a narrow window a list scrolls under the band as a conversation does.
     expect(elsewhere).toContain("bg-background");
     expect(elsewhere).toContain(givesWay);
     expect(elsewhere).toContain(
       "group-has-[[data-page-head][data-variant=detail]]/workspace-content:after:hidden"
     );
     expect(header(renderHeader())).not.toContain(givesWay);
+  });
+
+  // Fails with the band on every page at every width: from 768 px up the band and its fade
+  // covered a page's title line, 56 px down, and the sub-rail's area name; at 390 px the band
+  // covered that area name beside the sidebar button.
+  it("leaves a page outside a conversation from 768 px up, and gives way to a sub-rail's area name", () => {
+    const header = (markup: string) => /<header[^>]*>/u.exec(markup)?.[0] ?? "";
+    const elsewhere = header(renderHeader({ conversation: false, showAgentSelector: false }));
+    const conversation = header(renderHeader());
+
+    expect(elsewhere).toMatch(/\bmd:hidden\b/u);
+    expect(conversation).not.toMatch(/\bmd:hidden\b/u);
+    expect(elsewhere).toContain(
+      "group-has-[[data-subrail-title]]/workspace-content:bg-transparent"
+    );
+    expect(elsewhere).toContain("group-has-[[data-subrail-title]]/workspace-content:after:hidden");
+    expect(conversation).not.toContain("data-subrail-title");
   });
 
   it("stays empty while the start page shows the agent", () => {
