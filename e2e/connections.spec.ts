@@ -236,7 +236,7 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
         .getByRole("list", { name: "Verbindungen", exact: true })
         .getByRole("listitem")
         .filter({ has: rowLink });
-      for (const chip of ["mcp", "Aktiv"]) {
+      for (const chip of ["MCP-Server", "Aktiv"]) {
         await expect(germanRow.getByText(chip, { exact: true })).toBeVisible();
       }
       await expect(germanRow.getByText("Instanz", { exact: true })).toHaveCount(0);
