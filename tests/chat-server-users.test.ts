@@ -10,7 +10,8 @@ import {
   StoreBackedAuditRecorder,
   asClientInstanceId,
   asManagedFileId,
-  asUserId
+  asUserId,
+  USER_DISABLED_REASON
 } from "@work-shape/catalyst-core";
 
 import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
@@ -115,6 +116,18 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(unknownUser.statusCode).toBe(401);
+
+    // A disabled person is told why by a reason the interface words for them (ACCEPT-FIX-13 C4).
+    const disabled = await app.call("users.update", {
+      params: { userId: (normalMe.json() as { id: string }).id },
+      payload: { status: "disabled" }
+    });
+    expect(disabled.statusCode).toBe(200);
+    const disabledMe = await app.call("me.get", { headers: { "x-dev-user-id": "user-1" } });
+    expect(disabledMe.statusCode).toBe(403);
+    expect(disabledMe.json()).toMatchObject({
+      error: { code: "FORBIDDEN", details: { reason: USER_DISABLED_REASON } }
+    });
 
     await app.close();
   });

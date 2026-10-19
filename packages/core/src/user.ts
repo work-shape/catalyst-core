@@ -176,6 +176,9 @@ export function createUserId(): UserId {
   return createPlatformId<"UserId">("usr");
 }
 
+/** The `reason` of the refusal of a disabled user, which the interface words for them. */
+export const USER_DISABLED_REASON = "user_disabled";
+
 /**
  * Refuses a user who may not act. A user being deleted is answered like someone who is not
  * signed in, so the interface ends the session; a disabled user is told so.
@@ -185,7 +188,7 @@ export function requireUsableUser(status: UserRecordStatus): void {
     throw new AppError("UNAUTHENTICATED", "User account is being deleted");
   }
   if (status !== "active") {
-    throw new AppError("FORBIDDEN", "User is disabled");
+    throw new AppError("FORBIDDEN", "User is disabled", { reason: USER_DISABLED_REASON });
   }
 }
 
