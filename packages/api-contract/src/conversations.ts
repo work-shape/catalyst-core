@@ -506,6 +506,7 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     operationRunId: z.string(),
     operationId: z.string(),
     mode: toolDecisionModeSchema,
+    targetTitle: z.string().optional(),
     inputPreview: z.unknown(),
     expiresAt: timestampSchema
   }),
@@ -620,6 +621,7 @@ const toolCallDecisionSchema = z.object({
   operationRunId: z.string(),
   operationId: z.string(),
   mode: toolDecisionModeSchema,
+  targetTitle: z.string().optional(),
   inputPreview: z.unknown(),
   expiresAt: timestampSchema
 });

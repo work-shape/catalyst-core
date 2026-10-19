@@ -63,12 +63,19 @@ export function isInboxConfirmation(request: {
   );
 }
 
-/** The whole input of a held call as the request keeps it, as text. Nothing once it is removed. */
-export function operationCallFullInput(payload: unknown): string | undefined {
+/** The input of a held call as the request froze it. Nothing once it is removed. */
+export function operationCallFrozenInput(payload: unknown): unknown {
   if (!isRecord(payload) || payload.inputRemoved === true || !("input" in payload)) {
     return undefined;
   }
-  return typeof payload.input === "string" ? payload.input : JSON.stringify(payload.input, null, 2);
+  return payload.input;
+}
+
+/** The whole input of a held call as the request keeps it, as text. Nothing once it is removed. */
+export function operationCallFullInput(payload: unknown): string | undefined {
+  const input = operationCallFrozenInput(payload);
+  if (input === undefined) return undefined;
+  return typeof input === "string" ? input : JSON.stringify(input, null, 2);
 }
 
 /** The kind of asset whose content the item shows. */
@@ -178,6 +185,8 @@ export interface OperationCallPreview {
   inputRemoved: boolean;
   /** After this moment the call expires unexecuted. */
   expiresAt?: string;
+  /** The title of what the call acts on, as the server named it while the call waits. */
+  targetTitle?: string;
   /** What the call saves, where it is a save of an asset that still waits. */
   asset?: OperationCallAsset;
   /** What a held publish makes live, for one opened request that still waits. */
@@ -217,6 +226,7 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
   }
   const workspaceId = readText(preview.workspaceId);
   const expiresAt = readText(preview.expiresAt);
+  const targetTitle = readText(preview.targetTitle);
   const asset = parseAsset(preview.asset);
   const review = parseReview(preview.review);
   const inputs = Array.isArray(preview.inputs)
@@ -237,6 +247,7 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
     heldByRule: standingRules.includes(readText(preview.heldBy) ?? ""),
     heldByFloor: preview.heldBy === "policy_floor",
     ...(preview.mode === "confirmation" ? { confirmation: true as const } : {}),
+    ...(targetTitle ? { targetTitle } : {}),
     ...(asset ? { asset } : {}),
     ...(review ? { review } : {}),
     ...(workspaceId ? { workspaceId } : {}),

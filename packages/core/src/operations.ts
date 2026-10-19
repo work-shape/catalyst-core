@@ -206,6 +206,7 @@ export type OperationResult<TOutput = unknown> =
     }
   | {
       status: "pending_confirmation";
+      targetTitle?: string;
       runId: OperationRunId;
       expiresAt: ISODateString;
       preview: unknown;
@@ -215,6 +216,7 @@ export type OperationResult<TOutput = unknown> =
     }
   | {
       status: "pending_approval";
+      targetTitle?: string;
       runId: OperationRunId;
       approvalRequestId: string;
       expiresAt: ISODateString;

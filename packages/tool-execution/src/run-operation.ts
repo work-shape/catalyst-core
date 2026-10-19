@@ -648,6 +648,7 @@ async function holdForConfirmation(context: RunContext): Promise<OperationEnding
   return {
     result: {
       status: "pending_confirmation",
+      ...(context.resource?.title ? { targetTitle: context.resource.title } : {}),
       runId: run.id,
       expiresAt,
       preview: call.input,
@@ -702,6 +703,7 @@ async function holdInInbox(
   return {
     result: {
       status: "pending_confirmation",
+      ...(context.resource?.title ? { targetTitle: context.resource.title } : {}),
       runId: run.id,
       expiresAt,
       preview: call.input,

@@ -500,15 +500,15 @@ describe("a Data Store on Postgres", () => {
 
   it("bounds a batch by rows and bytes and a result by rows and bytes", async () => {
     const world = await published("limits");
-    const operation = required(
-      await world.dataStores.operationSource.resolve(dataStoreOperationName("findings", "insert"))
-    );
     const batch = (count: number, overrides: JsonObject = {}) =>
       Array.from({ length: count }, (_, index) => finding(index, overrides));
 
-    expect(operation.inputSchema.safeParse({ table: "findings", rows: batch(1_001) }).success).toBe(
-      false
-    );
+    expect(
+      await refusal(call(world, "insert", { table: "findings", rows: batch(1_001) }))
+    ).toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: { reason: "rows_too_many" }
+    });
     expect(
       await refusal(
         call(world, "insert", {

@@ -288,6 +288,7 @@ export function pauseRun(
       toolName: toolCall.toolName,
       operationRunId: waiting.operationRunId,
       operationId: waiting.operationId,
+      ...(waiting.targetTitle ? { targetTitle: waiting.targetTitle } : {}),
       mode: waiting.mode,
       inputPreview: waiting.frozenInput,
       expiresAt: waiting.expiresAt

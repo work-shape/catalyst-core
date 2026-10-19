@@ -140,6 +140,7 @@ export const rightSentenceKeys: Partial<Record<GrantableAction, TranslationKey>>
   "knowledge_base.write": "access.actionWriteKnowledgeBaseDescription",
   "knowledge_base.publish": "access.actionPublishKnowledgeBaseDescription",
   "knowledge_base.delete": "access.actionDeleteKnowledgeBaseDescription",
+  "data_store.execute": "access.actionExecuteDataStoreDescription",
   "guardrail.publish": "access.actionPublishGuardrailDescription"
 };
 

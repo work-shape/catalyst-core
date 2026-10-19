@@ -193,6 +193,87 @@ describe("the confirmation card", () => {
     expect(markup).toMatch(/Läuft ab am 16\.10\.2026/u);
   });
 
+  it("asks what a Data Store row write changes and lists each row's key and values (RECORDS-AGENT)", () => {
+    // The title is the one the run named the call's target with: the store's own.
+    const rowWrite = (
+      verb: string,
+      inputPreview: unknown,
+      targetTitle = "Holiday requests"
+    ): ToolDecision => ({
+      ...waiting,
+      operationId: `data_store.ds_7f3a.${verb}`,
+      ...(targetTitle ? { targetTitle } : {}),
+      inputPreview
+    });
+    const summaryOf = (markup: string) =>
+      /data-testid="operation-call-summary"[^>]*>([^<]*)</u.exec(markup)?.[1];
+    const alex = { employee: "Alex", starts_on: "2026-11-02", ends_on: "2026-11-06" };
+
+    const insert = renderView(rowWrite("insert", { table: "holiday_requests", rows: [alex] }));
+    expect(summaryOf(insert)).toBe("Add 1 row to Holiday requests?");
+    expect(insert).toMatch(/data-input-key="Table"[\s\S]*?holiday_requests/u);
+    expect(insert).toMatch(
+      /data-input-key="Row 1"[\s\S]*employee: Alex[\s\S]*ends_on: 2026-11-06/u
+    );
+    expect(insert).not.toContain("ds_7f3a");
+    expect(
+      summaryOf(
+        renderView(
+          rowWrite("insert", { table: "holiday_requests", rows: [alex, alex] }, "Urlaubsanträge"),
+          {},
+          "de"
+        )
+      )
+    ).toBe("2 Datensätze zu Urlaubsanträge hinzufügen?");
+
+    const update = rowWrite("update", {
+      table: "holiday_requests",
+      rows: [{ key: { id: 7 }, set: { ends_on: "2026-11-05" } }]
+    });
+    expect(summaryOf(renderView(update))).toBe("Change 1 row in Holiday requests?");
+    const german = renderView(update, {}, "de");
+    expect(summaryOf(german)).toBe("1 Datensatz in Holiday requests ändern?");
+    expect(german).toMatch(/data-input-key="Tabelle"[\s\S]*?holiday_requests/u);
+    expect(german).toMatch(/data-input-key="Datensatz 1, Schlüssel"[\s\S]*id: 7/u);
+    expect(german).toMatch(/data-input-key="Datensatz 1, neue Werte"[\s\S]*ends_on: 2026-11-05/u);
+
+    const removal = rowWrite("delete_rows", {
+      table: "holiday_requests",
+      keys: [{ id: 7 }, { id: 8 }]
+    });
+    expect(summaryOf(renderView(removal))).toBe("Delete 2 rows from Holiday requests?");
+    // Without the store's title the question names the table, and still not the id.
+    const untitled = rowWrite(
+      "delete_rows",
+      { table: "holiday_requests", keys: [{ id: 7 }, { id: 8 }] },
+      ""
+    );
+    expect(summaryOf(renderView(untitled, {}, "de"))).toBe(
+      "2 Datensätze aus holiday_requests löschen?"
+    );
+
+    // Not a row write, or not its shape: the input field by field, with no question.
+    for (const decision of [
+      waiting,
+      rowWrite("query", { table: "holiday_requests", rows: [alex] }),
+      rowWrite("delete_rows", { table: "holiday_requests", keys: [] })
+    ]) {
+      expect(renderView(decision)).not.toContain('data-testid="operation-call-summary"');
+    }
+
+    // The question stands once on the card, in either language.
+    for (const decision of [
+      rowWrite("insert", { table: "holiday_requests", rows: [alex] }),
+      update,
+      removal
+    ]) {
+      for (const locale of ["en", "de"] as const) {
+        const markup = renderView(decision, {}, locale);
+        expect(markup.match(/data-testid="operation-call-summary"/gu)).toHaveLength(1);
+      }
+    }
+  });
+
   it("says what the person answered and offers nothing more until the run records it", () => {
     const denied = renderView(waiting, {
       decided: { decision: "decline", reason: "Not this customer." }

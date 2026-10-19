@@ -67,6 +67,7 @@ export function createOperationApprovalFiler(
       run,
       call,
       heldInput,
+      resource,
       runtime,
       expiresAt,
       policySource,
@@ -177,7 +178,7 @@ export function createOperationApprovalFiler(
           {
             kind,
             // The name of the operation. The Inbox words the item in the reader's language.
-            summary: run.operation,
+            summary: resource?.title ?? run.operation,
             payload: toJsonObject(payload),
             // Only the person the call acts for sees and decides their confirmation.
             ...(confirmation ? { addresseeUserId: actor.id } : {}),

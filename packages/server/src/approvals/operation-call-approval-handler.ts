@@ -1,5 +1,6 @@
 import {
   AppError,
+  DATA_STORE_OPERATION_PREFIX,
   approvalExecutionOf,
   asUserId,
   isAppError,
@@ -49,6 +50,7 @@ import {
   type OperationCallPayload
 } from "./operation-call-payload";
 import { PUBLISH_APPROVAL_KINDS } from "./publish-approval";
+import { z } from "zod";
 
 /**
  * The approval kinds of a call that waits for another person: `operation_call`, and the kinds
@@ -145,8 +147,26 @@ export function createOperationCallApprovalHandler(
         about && call.subject && context.status === "pending"
           ? await about.review(call.subject, context.viewer?.inList ?? false, context.viewer)
           : undefined;
+      const [storeName, verb, ...rest] = call.operation.startsWith(DATA_STORE_OPERATION_PREFIX)
+        ? call.operation.slice(DATA_STORE_OPERATION_PREFIX.length).split(".")
+        : [];
+      const store =
+        context.status === "pending" &&
+        !call.inputRemoved &&
+        storeName &&
+        rest.length === 0 &&
+        verb &&
+        ["insert", "update", "delete_rows"].includes(verb)
+          ? await options.configAssets.getConfigAsset({
+              clientInstanceId,
+              kind: "data_store",
+              name: storeName
+            })
+          : undefined;
+      const target = z.object({ title: z.string() }).safeParse(store?.publishedConfig);
       return toJsonObject({
         ...previewOf(call),
+        ...(target.success ? { targetTitle: target.data.title } : {}),
         ...(asset ? { asset } : {}),
         ...(review ? { review } : {})
       });

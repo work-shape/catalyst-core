@@ -93,6 +93,13 @@ Three rules always hold:
 
 An App shows data in two ways: live from an outside system, or from its Data Store. A Data Store is filled by Workflows, by the App's own actions that add rows, and by people with the right to add rows. The two ways follow different rules. The numbers in the picture are the four decisions on the way.
 
+People can be granted `data_store.read`, `data_store.insert` and `data_store.execute` on one
+store, on the stores a workspace owns, or on the instance. `insert` adds rows; `execute`
+changes or removes rows with `update` and `delete_rows`. Editing or publishing a definition
+(`data_store.write` and `data_store.publish`) gives no row right. Admins hold row rights by
+default; Builder and Publisher do not. An agent acts with its person's rights, and merely
+being offered a tool grants none. Row writes ask for confirmation under the ordinary policy.
+
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 680 384" role="img" aria-labelledby="rx-f2-title rx-f2-desc">
 <title id="rx-f2-title">Where an App gets its data, and who sees it</title>
