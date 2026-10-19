@@ -57,7 +57,10 @@ export class ExecutionWorkspaceCleanupWorkflow {
 }
 
 export async function cleanupExecutionWorkspaceForConversation(
-  options: ChatServerOptions,
+  options: Pick<
+    ChatServerOptions,
+    "clientInstanceId" | "stores" | "auditRecorder" | "executionWorkspaceCleanup"
+  >,
   input: {
     conversationId: ConversationId;
     deletedAt: string;

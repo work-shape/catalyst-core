@@ -6,7 +6,7 @@ import {
   type CollaborationWorkspaceId,
   type Conversation
 } from "@work-shape/catalyst-core";
-import { and, asc, eq, ne, notExists, or } from "drizzle-orm";
+import { and, asc, eq, ne, notExists } from "drizzle-orm";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapConversation } from "./rows";
 import {
@@ -155,12 +155,7 @@ export async function deleteConversation(
               tx
                 .select({ id: agentTryConversations.conversationId })
                 .from(agentTryConversations)
-                .where(
-                  or(
-                    eq(agentTryConversations.conversationId, conversations.id),
-                    eq(agentTryConversations.buildConversationId, conversations.id)
-                  )
-                )
+                .where(eq(agentTryConversations.conversationId, conversations.id))
             )
           )
         )

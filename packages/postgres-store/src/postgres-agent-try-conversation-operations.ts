@@ -1,18 +1,14 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   AppError,
-  asCollaborationWorkspaceId,
   asConversationId,
   type AgentTryConversationStore,
   type ConversationId
 } from "@work-shape/catalyst-core";
-import {
-  createConversation,
-  requireActiveConversationLock
-} from "./postgres-conversation-operations";
+import { createConversation } from "./postgres-conversation-operations";
 import { type PostgresConnection } from "./postgres-database";
 import { mapConversation } from "./rows";
-import { agentTryConversations, conversations } from "./schema";
+import { agentTryConversations, conversations, configAssets } from "./schema";
 
 type Input<Method extends keyof AgentTryConversationStore> = Parameters<
   AgentTryConversationStore[Method]
@@ -24,36 +20,29 @@ async function openTryConversation(
   db: PostgresConnection,
   input: Input<"open">
 ): ReturnType<AgentTryConversationStore["open"]> {
-  const { clientInstanceId, buildConversationId, agentId } = input;
+  const { clientInstanceId, createdByUserId, agentId } = input;
   return db.transaction(async (tx) => {
-    // The lock a deletion of the Build conversation takes too: it either comes first and the
-    // Build conversation is gone here, or it comes after and its cleanup finds the link.
-    await requireActiveConversationLock(tx, clientInstanceId, buildConversationId);
-    const [build] = await tx
-      .select({
-        workspaceId: conversations.collaborationWorkspaceId,
-        subjectKind: conversations.subjectKind,
-        subjectName: conversations.subjectName,
-        tryOf: agentTryConversations.buildConversationId
-      })
-      .from(conversations)
-      .leftJoin(agentTryConversations, eq(agentTryConversations.conversationId, conversations.id))
-      .where(eq(conversations.id, buildConversationId))
+    // Keep an asset deletion from passing an open that has already read the agent.
+    const [agent] = await tx
+      .select({ id: configAssets.id })
+      .from(configAssets)
+      .where(
+        and(
+          eq(configAssets.clientInstanceId, clientInstanceId),
+          eq(configAssets.id, agentId),
+          eq(configAssets.kind, "agent"),
+          eq(configAssets.status, "active")
+        )
+      )
+      .for("share")
       .limit(1);
-    // Only a conversation about the agent is its Build conversation, and a Try conversation is
-    // tried in, never built in. Any other is answered as a missing one.
-    if (
-      !build ||
-      build.workspaceId === null ||
-      build.tryOf !== null ||
-      build.subjectKind !== input.agent.kind ||
-      build.subjectName !== input.agent.name
-    ) {
-      throw notAvailable();
-    }
-
+    if (!agent) throw notAvailable();
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["agent-try", clientInstanceId, agentId, createdByUserId])}, 0))`
+    );
     const current = and(
-      eq(agentTryConversations.buildConversationId, buildConversationId),
+      eq(agentTryConversations.clientInstanceId, clientInstanceId),
+      eq(agentTryConversations.createdByUserId, createdByUserId),
       eq(agentTryConversations.agentId, agentId),
       isNull(agentTryConversations.replacedAt)
     );
@@ -73,7 +62,7 @@ async function openTryConversation(
 
     const conversation = await createConversation(tx, {
       clientInstanceId,
-      collaborationWorkspaceId: asCollaborationWorkspaceId(build.workspaceId),
+      collaborationWorkspaceId: input.collaborationWorkspaceId,
       createdByUserId: input.createdByUserId,
       createdByExternalUserId: input.createdByExternalUserId,
       visibility: "private",
@@ -83,7 +72,7 @@ async function openTryConversation(
     await tx.insert(agentTryConversations).values({
       conversationId: conversation.id,
       clientInstanceId,
-      buildConversationId,
+      createdByUserId,
       agentId,
       createdAt: new Date(conversation.createdAt)
     });
@@ -101,10 +90,7 @@ async function listTryConversations(
     .where(
       and(
         eq(agentTryConversations.clientInstanceId, input.clientInstanceId),
-        input.buildConversationId === undefined
-          ? undefined
-          : eq(agentTryConversations.buildConversationId, input.buildConversationId),
-        input.agentId === undefined ? undefined : eq(agentTryConversations.agentId, input.agentId)
+        eq(agentTryConversations.agentId, input.agentId)
       )
     );
   return rows.map((row) => asConversationId(row.id));
@@ -128,6 +114,19 @@ export function createPostgresAgentTryConversationStore(
   db: PostgresConnection
 ): AgentTryConversationStore {
   return {
+    get: async (input) => {
+      const [row] = await db
+        .select({ agentId: agentTryConversations.agentId })
+        .from(agentTryConversations)
+        .where(
+          and(
+            eq(agentTryConversations.clientInstanceId, input.clientInstanceId),
+            eq(agentTryConversations.conversationId, input.conversationId)
+          )
+        )
+        .limit(1);
+      return row;
+    },
     open: (input) => openTryConversation(db, input),
     list: (input) => listTryConversations(db, input),
     remove: (input) => removeTryConversation(db, input)

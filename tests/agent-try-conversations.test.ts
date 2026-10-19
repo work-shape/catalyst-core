@@ -1,4 +1,8 @@
-import { asConversationId, scheduleDedupeKey } from "@work-shape/catalyst-core";
+import {
+  asConversationId,
+  asCollaborationWorkspaceId,
+  scheduleDedupeKey
+} from "@work-shape/catalyst-core";
 import { DeterministicModelProvider } from "@work-shape/catalyst-model-provider";
 import { expireConversationsJob } from "@work-shape/catalyst-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -8,11 +12,7 @@ import { createAssetToolsFixture, OTHER } from "./support/platform-asset-tools";
 import { getTestJobs } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 
-// The Try conversation beside a Build conversation on an agent's page (TRY-1b,
-// navigation-and-layout.md 4.7c, check NAV 32): one per Build conversation and agent, opened by
-// whoever may decide on the agent's proposal, never in a conversation list, its usage marked
-// `preview`, and deleted on Apply, on Discard and with its Build conversation while its audit
-// and usage events stay.
+// Try belongs to one agent and person, independently of Build (Navigation check 43).
 
 const AGENT = { kind: "agent", name: "test_agent" };
 const openSchema = z.object({
@@ -21,7 +21,6 @@ const openSchema = z.object({
 });
 const idSchema = z.object({ id: z.string() });
 const listSchema = z.object({ items: z.array(z.object({ id: z.string() })) });
-const errorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
 const auditRowSchema = z.object({
   type: z.string(),
   actor: z.object({ externalUserId: z.string().optional() }).loose().nullable(),
@@ -40,14 +39,12 @@ describe("the Try conversation of an agent", () => {
   });
   afterAll(() => vi.restoreAllMocks());
 
-  async function fixture(options: { filesStore?: boolean } = {}) {
+  async function fixture(options: { filesStore?: boolean; allowAgentDeletion?: boolean } = {}) {
     // A person may change an agent's instructions outside a release, and nothing else.
     const t = await createAssetToolsFixture("in_process", ["instructions"], options);
-    const address = (conversationId: string) => ({
-      params: { name: AGENT.name, conversationId }
-    });
-    const open = (conversationId: string, as?: string) =>
-      t.app.call("agents.try.open", address(conversationId), as);
+    const address = () => ({ params: { name: AGENT.name } });
+    const open = (_conversationId: string, as?: string) =>
+      t.app.call("agents.try.open", address(), as);
     const opened = async (conversationId: string) =>
       openSchema.parse((await t.ok(open(conversationId))).json()).conversation.id;
     /** A Build conversation about the agent; `plain`, about no asset. */
@@ -132,7 +129,7 @@ describe("the Try conversation of an agent", () => {
     };
   }
 
-  it("opens one per Build conversation and agent, shows it in no list and marks its usage preview", async () => {
+  it("opens one per person and agent, shows it in no list and marks its usage preview", async () => {
     const t = await fixture();
     const build = await t.converse();
     const response = openSchema.parse((await t.ok(t.open(build))).json());
@@ -156,15 +153,11 @@ describe("the Try conversation of an agent", () => {
     expect(buildUsage.length).toBeGreaterThan(0);
     expect(buildUsage.some(Boolean)).toBe(false);
 
-    // A Try conversation is tried in, never built in.
-    expect((await t.open(tried)).statusCode).toBe(404);
+    expect(await t.opened(await t.converse())).toBe(tried);
   }, 120_000);
 
-  it("opens only for who may write the agent, beside their own Build conversation", async () => {
+  it("opens only for who may write the agent", async () => {
     const t = await fixture();
-    const build = await t.converse();
-    // Another person's Build conversation is answered as missing.
-    expect((await t.open(build, OTHER)).statusCode).toBe(404);
     // Who may read the agent and not write it does not open one beside their own conversation.
     const own = await t.converse(OTHER, true);
     await t.aboutAgent(own);
@@ -195,28 +188,43 @@ describe("the Try conversation of an agent", () => {
     expect(
       await t.app.stores.agentTryConversations.list({
         clientInstanceId: t.clientInstanceId,
-        buildConversationId: asConversationId(own)
+        agentId: agent?.id ?? ""
       })
-    ).toEqual([]);
+    ).not.toContain(own);
   }, 120_000);
 
-  it("refuses a conversation about no agent as a missing one", async () => {
+  it("opens without a Build conversation and isolates two writers", async () => {
     const t = await fixture();
-    const plain = await t.converse(undefined, true);
-    const refused = await t.open(plain);
-    const missing = await t.open("conv_missing");
-    expect(refused.statusCode).toBe(404);
-    // The same answer as for a conversation that does not exist: nothing tells them apart.
-    expect(errorSchema.parse(refused.json()).error).toEqual({
-      ...errorSchema.parse(missing.json()).error,
-      code: "NOT_FOUND"
+    const first = await t.opened("unused");
+    const other = await t.converse(OTHER, true);
+    const person = await t.app.stores.conversations.getConversation(
+      t.clientInstanceId,
+      asConversationId(other)
+    );
+    const agent = await t.app.stores.configAssets.getConfigAsset({
+      clientInstanceId: t.clientInstanceId,
+      ...AGENT
     });
-    // Once the conversation is about the agent, it is its Build conversation.
-    await t.aboutAgent(plain);
-    await t.ok(t.open(plain));
+    await t.ok(
+      t.app.call("permissions.grant", {
+        payload: {
+          holderKind: "user",
+          holderId: person?.createdByUserId,
+          action: "agent.write",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: agent?.id
+        }
+      })
+    );
+    const second = openSchema.parse((await t.ok(t.open("unused", OTHER))).json()).conversation.id;
+    expect(second).not.toBe(first);
+    expect(openSchema.parse((await t.ok(t.open("unused", OTHER))).json()).conversation.id).toBe(
+      second
+    );
   }, 120_000);
 
-  it("goes with an Apply and with a Discard, keeping its audit and usage, and opens anew after", async () => {
+  it("goes with Publish and Discard, keeping its audit and usage, and opens anew after", async () => {
     const t = await fixture();
     const before = await t.live();
     const build = await t.converse();
@@ -278,16 +286,24 @@ describe("the Try conversation of an agent", () => {
     expect(await t.status(build)).toBe("active");
   }, 120_000);
 
-  it("goes with its Build conversation", async () => {
-    const t = await fixture();
+  it("survives deletion of Build and goes with deletion of its agent", async () => {
+    const t = await fixture({ allowAgentDeletion: true });
     const build = await t.converse();
     const tried = await t.opened(build);
     await t.ok(t.app.call("conversations.delete", { params: { conversationId: build } }));
+    expect(await t.status(tried)).toBe("active");
+    expect(await t.opened(await t.converse())).toBe(tried);
+    await t.ok(
+      t.app.call("assets.delete", {
+        params: AGENT,
+        payload: { expectedRevision: (await t.live()).revision }
+      })
+    );
     expect(await t.status(tried)).toBe("deleted");
     expect(await t.linked(tried)).toBe(false);
     expect(await t.deletions(tried)).toEqual([
       expect.objectContaining({
-        metadata: expect.objectContaining({ requestedBy: "build_conversation_deleted" })
+        metadata: expect.objectContaining({ requestedBy: "agent_deleted" })
       })
     ]);
   }, 120_000);
@@ -373,9 +389,9 @@ describe("the Try conversation of an agent", () => {
     });
     const { conversation } = await t.app.stores.agentTryConversations.open({
       clientInstanceId: t.clientInstanceId,
-      buildConversationId: asConversationId(build),
+      collaborationWorkspaceId:
+        person?.collaborationWorkspaceId ?? asCollaborationWorkspaceId("missing"),
       agentId: agent?.id ?? "",
-      agent: AGENT,
       createdByUserId: person?.createdByUserId ?? "",
       createdByExternalUserId: OTHER,
       title: "Try",

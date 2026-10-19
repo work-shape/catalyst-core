@@ -1,7 +1,7 @@
 import {
   AppError,
   addDays,
-  asConversationId,
+  asCollaborationWorkspaceId,
   auditActorFromIdentity,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
@@ -9,23 +9,17 @@ import {
   type AuthenticatedIdentity,
   type Conversation
 } from "@work-shape/catalyst-core";
+import { ConversationWorkflow } from "./conversation-service";
 import { AssetWorkflow } from "../assets/asset-service";
 const PROPOSED_KIND = "agent";
 import type { AssetCall } from "../assets/asset-access";
 import { deleteTryConversations } from "../deletion/conversation-cleanup";
 import type { ChatServerOptions } from "../types";
 
-// The Try conversation of an agent page (TRY-1b; navigation-and-layout.md 4.7c). Beside the
-// Build conversation, in which the agent proposes changes to an agent, the person tries the
-// agent in a conversation of its own. No list shows it and its usage is marked `preview`, both
-// by its link in the store. It goes when the person applies or discards the proposal, and with
-// its Build conversation; its audit and usage events stay. Who may open it is who may decide
-// on the proposal: the write right on the agent.
-
-/** The agent and the person's own Build conversation a call names. */
+/** The agent alone identifies a person's Try conversation. */
 interface TryAddress {
   name: string;
-  conversationId: string;
+  workspaceId?: string;
 }
 
 const unavailable = () => new AppError("NOT_FOUND", "Conversation is not available");
@@ -38,46 +32,23 @@ export class TryConversations {
   }
 
   async authorize(actor: AuthenticatedIdentity, access: ActorAccess, input: TryAddress) {
-    const conversation = await this.options.stores.conversations.getConversation(
-      this.options.clientInstanceId,
-      asConversationId(input.conversationId)
-    );
-    if (
-      isAuthenticatedServicePrincipal(actor) ||
-      conversation?.status !== "active" ||
-      conversation.createdByUserId !== getSubjectUserId(actor)
-    )
-      throw unavailable();
-    const agent = await this.options.configAssets.store.getConfigAsset({
-      clientInstanceId: this.options.clientInstanceId,
-      kind: "agent",
-      name: input.name
-    });
-    if (
-      !agent ||
-      (agent.scope.kind === "workspace" &&
-        agent.scope.workspaceId !== conversation.collaborationWorkspaceId)
-    )
-      throw unavailable();
+    if (isAuthenticatedServicePrincipal(actor)) throw unavailable();
     return new AssetWorkflow(this.options).authorizeWrite(access, {
       kind: "agent",
       name: input.name,
-      ...(agent.scope.kind === "workspace" ? { workspaceId: agent.scope.workspaceId } : {})
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {})
     });
   }
 
-  /**
-   * The Try conversation of the agent beside the Build conversation, made where there is none:
-   * a second open answers the same one. The caller's right was asked on the agent and their
-   * own Build conversation.
-   */
+  /** Opens the person's private preview independently of any Build conversation. */
   async open(call: AssetCall, input: TryAddress): Promise<Conversation> {
     const { actor } = call;
     if (isAuthenticatedServicePrincipal(actor)) throw unavailable();
     const agent = await this.options.configAssets.store.getConfigAsset({
       clientInstanceId: this.options.clientInstanceId,
       kind: PROPOSED_KIND,
-      name: input.name
+      name: input.name,
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {})
     });
     if (agent?.status !== "active") {
       throw new AppError(
@@ -87,11 +58,16 @@ export class TryConversations {
         { exposeMessage: true }
       );
     }
+    const workspace = await new ConversationWorkflow(this.options).resolveTargetWorkspace(
+      actor,
+      agent.scope.kind === "workspace"
+        ? asCollaborationWorkspaceId(agent.scope.workspaceId)
+        : undefined
+    );
     const { conversation, created } = await this.options.stores.agentTryConversations.open({
       clientInstanceId: this.options.clientInstanceId,
-      buildConversationId: asConversationId(input.conversationId),
+      collaborationWorkspaceId: workspace.id,
       agentId: agent.id,
-      agent: { kind: PROPOSED_KIND, name: agent.name },
       createdByUserId: getSubjectUserId(actor),
       createdByExternalUserId: actor.externalUserId,
       title: `Try ${agent.name}`,
@@ -110,7 +86,7 @@ export class TryConversations {
         metadata: {
           retainedUntil: conversation.retainedUntil,
           preview: true,
-          buildConversationId: input.conversationId
+          agentId: agent.id
         }
       });
     }

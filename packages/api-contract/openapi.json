@@ -311,10 +311,10 @@
         "x-catalyst-rate-class": "write"
       }
     },
-    "/api/v1/agents/{name}/try/{conversationId}": {
+    "/api/v1/agents/{name}/try": {
       "post": {
         "operationId": "agents.try.open",
-        "summary": "Open the Try conversation of an agent beside a Build conversation, made where there is none",
+        "summary": "Open the private Try conversation of this agent and person",
         "tags": [
           "Agents"
         ],
@@ -340,11 +340,12 @@
             }
           },
           {
-            "name": "conversationId",
-            "in": "path",
-            "required": true,
+            "name": "workspaceId",
+            "in": "query",
+            "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             }
           },
           {

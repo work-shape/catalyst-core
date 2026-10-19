@@ -9,6 +9,17 @@ import {
 import { deleteConversationPages } from "../pages/page-file-sets";
 import { OPERATION_CALL_APPROVAL_KIND } from "@work-shape/catalyst-tool-execution";
 import type { ChatServerOptions } from "../types";
+
+type CleanupOptions = Pick<
+  ChatServerOptions,
+  | "clientInstanceId"
+  | "stores"
+  | "auditRecorder"
+  | "pages"
+  | "attachments"
+  | "executionWorkspaceCleanup"
+  | "approvalRequests"
+>;
 import { endHeldOperationCalls } from "../approvals/operation-call-approval-handler";
 import { cleanupExecutionWorkspaceForConversation } from "./workspace-cleanup";
 
@@ -33,7 +44,7 @@ export type ConversationDataCleanupOutcome =
  * Conversation may be deleted. Safe to repeat.
  */
 async function cleanUpConversationData(
-  options: ChatServerOptions,
+  options: CleanupOptions,
   conversationId: ConversationId,
   deletedAt: string
 ): Promise<ConversationDataDeletionTotals> {
@@ -56,7 +67,7 @@ const RUN_CANCELLED_WITH_CONVERSATION = "The conversation of this run was delete
  * A parent's end cancels its open subagents too; one that ended meanwhile needs no request.
  */
 async function cancelRunsOfConversation(
-  options: ChatServerOptions,
+  options: CleanupOptions,
   rootConversationId: ConversationId
 ): Promise<void> {
   const runs = await options.stores.agentRuns.listAgentRunsInProgress({
@@ -81,20 +92,10 @@ async function cancelRunsOfConversation(
 }
 
 async function cleanUpOneConversation(
-  options: ChatServerOptions,
+  options: CleanupOptions,
   conversationId: ConversationId,
   deletedAt: string
 ): Promise<ConversationDataDeletionTotals> {
-  // A Build conversation's Try conversations go with it.
-  await deleteTryConversations(
-    options,
-    { buildConversationId: conversationId },
-    {
-      deletedAt,
-      requestedBy: "build_conversation_deleted",
-      correlationId: createPlatformId("corr")
-    }
-  );
   const objects = options.attachments
     ? await options.attachments.deleteConversationAttachments({ conversationId, deletedAt })
     : undefined;
@@ -126,7 +127,7 @@ async function cleanUpOneConversation(
  * run, so neither the held input nor Inbox history outlives the deleted Conversation.
  */
 async function deleteOperationRunsOfConversation(
-  options: ChatServerOptions,
+  options: CleanupOptions,
   conversationId: ConversationId
 ): Promise<void> {
   const { clientInstanceId } = options;
@@ -153,7 +154,7 @@ async function deleteOperationRunsOfConversation(
  * the deletion.
  */
 export async function attemptConversationDataCleanup(
-  options: ChatServerOptions,
+  options: CleanupOptions,
   conversationId: ConversationId,
   deletedAt: string
 ): Promise<ConversationDataCleanupOutcome> {
@@ -177,18 +178,17 @@ export async function attemptConversationDataCleanup(
   }
 }
 
-/** Why a Try conversation was deleted: its proposal was settled, or its Build conversation went. */
-type TryConversationDeletionReason =
-  "draft_published" | "draft_discarded" | "build_conversation_deleted";
+/** Why a Try conversation was deleted: its draft was settled or its agent deleted. */
+type TryConversationDeletionReason = "draft_published" | "draft_discarded" | "agent_deleted";
 
 /**
- * Deletes the Try conversations of a Build conversation, or the one of an agent: claims each
+ * Deletes all Try conversations of an agent: claims each
  * that is still active and cleans it up. A cleanup that fails is left to the retention job,
  * which the link of the Try conversation leads to it. Each claim is audited.
  */
 export async function deleteTryConversations(
-  options: ChatServerOptions,
-  of: { buildConversationId?: ConversationId; agentId?: string },
+  options: CleanupOptions,
+  of: { agentId: string },
   deletion: {
     deletedAt: string;
     requestedBy: TryConversationDeletionReason;
@@ -245,7 +245,7 @@ export interface PendingCleanupScope {
  * audited. Safe to repeat.
  */
 export async function retryPendingConversationCleanup(
-  options: ChatServerOptions,
+  options: CleanupOptions,
   input: PendingCleanupScope & { limit: number; deletedAt: string }
 ): Promise<ConversationCleanupRetrySummary> {
   const summary: ConversationCleanupRetrySummary = { completedCount: 0, cleanupPendingCount: 0 };

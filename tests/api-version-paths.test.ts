@@ -62,7 +62,7 @@ describe("the operation catalog", () => {
         "access_tokens.exchange  POST /api/v1/auth/access-token",
         "agents.draft.discard  POST /api/v1/agents/:name/draft/discard",
         "agents.draft.get  GET /api/v1/agents/:name/draft",
-        "agents.try.open  POST /api/v1/agents/:name/try/:conversationId",
+        "agents.try.open  POST /api/v1/agents/:name/try",
         "api_credentials.create  POST /api/v1/instance/service-principals/:servicePrincipalId/credentials",
         "api_credentials.revoke  POST /api/v1/instance/api-credentials/:credentialId/revoke",
         "app_content.files.get  GET /app-content/*",

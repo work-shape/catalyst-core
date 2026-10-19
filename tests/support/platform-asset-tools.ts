@@ -139,13 +139,15 @@ export async function createAssetToolsFixture(
     filesStore = false,
     publishTool = false,
     skillTool = false,
-    centralPolicySettings
+    centralPolicySettings,
+    allowAgentDeletion = false
   }: {
     filesStore?: boolean;
     publishTool?: boolean;
     /** The release names `read_skill` and the agent lists it, for a skill the agent holds. */
     skillTool?: boolean;
     centralPolicySettings?: () => CentralPolicySetting[];
+    allowAgentDeletion?: boolean;
   } = {}
 ): Promise<AssetToolsFixture> {
   // No release names `read_skill` here: the skill of a subject is readable all the same.
@@ -179,6 +181,7 @@ export async function createAssetToolsFixture(
   if (publishTool) config.executionWorkspaces.enabled = true;
   config.administration.agentConfiguration.enabled = true;
   config.administration.agentConfiguration.allowSkillEditing = true;
+  config.administration.agentConfiguration.allowAgentDeletion = allowAgentDeletion;
   config.administration.agentConfiguration.editableAgentFields = editableAgentFields;
   if (filesStore) {
     const root = await mkdtemp(join(tmpdir(), "catalyst-asset-tools-files-"));

@@ -1,3 +1,4 @@
+import { deleteTryConversations } from "../deletion/conversation-cleanup";
 import { authorizeAgentDependencies } from "./agent-dependency-availability";
 import { validateAssetDefinition } from "./asset-validation";
 import { createAgentWithDependencies } from "./agent-creation";
@@ -558,6 +559,19 @@ export class AssetWorkflow {
       { previous: target.asset?.config, config: undefined }
     );
     const revision = allocatedRevision(result, kind.kind, name);
+    if (kind.kind === "agent" && target.asset) {
+      await deleteTryConversations(
+        this.options,
+        { agentId: target.asset.id },
+        {
+          deletedAt: new Date().toISOString(),
+          requestedBy: "agent_deleted",
+          correlationId: call.correlationId,
+          actor: auditActorFromIdentity(call.actor)
+        }
+      );
+    }
+
     await recordCommitted(this.options, call, [
       () =>
         recordAssetEvent(call, "config_asset.deleted", {
