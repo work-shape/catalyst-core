@@ -23,9 +23,10 @@ import { settingsUser } from "./chat-ui-settings-fixtures";
 import { CONDITION_WAIT_MS } from "./support/assertions";
 
 // ACCEPT-2d C-5: Mara opened Skills on "Personal", empty, because an asset she had opened there
-// once had set Studio's owner for good. A list now opens on the owner Studio is set to when that
-// has some of the kind, otherwise on the first owner offered that has; a pick of the reader's is
-// kept, and an owner Studio was only taken to is not kept for the next visit.
+// had set Studio's owner. The Skills list now opens on the owner Studio is set to when that has
+// skills, otherwise on the first owner offered that has, for this tab alone: what Studio
+// remembers stays as it was. A pick of the reader's is kept. Every other list opens where Studio
+// is set, and an owner Studio is taken to on the way to an asset is remembered across a reload.
 
 const PERSONAL = "cw_personal";
 const STORAGE_KEY = "vivd-catalyst:build-scope";
@@ -63,10 +64,17 @@ function skill(name: string, workspaceId: string | undefined) {
 async function mountSkills(
   held: { instance: string[]; personal: string[] },
   /** The list Studio opens on. */
-  startOn: "skills" | "agents" = "skills"
+  startOn: "skills" | "agents" = "skills",
+  options: {
+    /** The instance's agents; the Personal Workspace holds none. */
+    agents?: string[];
+    /** The skill whose page Studio opens on, by its address alone. */
+    open?: string;
+  } = {}
 ) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const reads: { owner: string; limit: string | null }[] = [];
+  const agentReads: string[] = [];
   const context = {
     ...platformContext([], instanceActions(permissions)),
     workspaces: [
@@ -85,7 +93,25 @@ async function mountSkills(
     if (url.pathname === apiOperations["platform.context.get"].path) {
       return Response.json(context);
     }
-    if (listedKind(request, url) === "agent") return Response.json({ items: [] });
+    if (listedKind(request, url) === "agent") {
+      const workspaceId = url.searchParams.get("workspaceId") ?? undefined;
+      agentReads.push(workspaceId ?? "instance");
+      const names = workspaceId === undefined ? (options.agents ?? []) : [];
+      return Response.json({
+        items: names.map((name) => ({ ...skill(name, workspaceId), kind: "agent" }))
+      });
+    }
+    const asset = /^\/api\/v1\/assets\/skill\/([^/]+)$/u.exec(url.pathname);
+    if (request.method === "GET" && asset) {
+      const workspaceId = url.searchParams.get("workspaceId") ?? undefined;
+      const names = workspaceId === PERSONAL ? held.personal : held.instance;
+      return names.includes(asset[1] ?? "")
+        ? Response.json({
+            ...skill(asset[1] ?? "", workspaceId),
+            config: { name: asset[1], description: "Notes", instructions: "Write notes." }
+          })
+        : Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
+    }
     if (listedKind(request, url) === "skill") {
       const workspaceId = url.searchParams.get("workspaceId") ?? undefined;
       reads.push({ owner: workspaceId ?? "instance", limit: url.searchParams.get("limit") });
@@ -105,7 +131,7 @@ async function mountSkills(
       BuildNavigationProvider,
       {
         value: {
-          location: { kindPath },
+          location: { kindPath, ...(options.open ? { name: options.open } : {}) },
           open: () => undefined,
           href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
         }
@@ -147,7 +173,7 @@ async function mountSkills(
       )
     );
   });
-  return { reads, go: (kindPath: string) => act(async () => go(kindPath)) };
+  return { reads, agentReads, go: (kindPath: string) => act(async () => go(kindPath)) };
 }
 
 /** Picks an owner in the list's scope picker. */
@@ -193,6 +219,8 @@ describe("the owner Studio's Skills list opens on", () => {
     await until(() => expect(shown("house-style")).toBe(true));
     // The empty list of the Personal Workspace was never read, so it never showed.
     expect(pageReads(page.reads)).toEqual(["instance"]);
+    // The opening chose for this tab alone: what Studio remembers is unchanged.
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBe(PERSONAL);
   });
 
   it("stays the owner Studio is set to when that has some", async () => {
@@ -232,11 +260,43 @@ describe("the owner Studio's Skills list opens on", () => {
     expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Personal");
     expect(shown("house-style")).toBe(false);
   });
+});
 
-  it("is not kept for the next visit when Studio was only taken to an owner", () => {
+describe("an owner Studio is taken to", () => {
+  /** Studio's state as a reload finds it: the module read anew from what the browser kept. */
+  async function reloaded() {
+    vi.resetModules();
+    const fresh = await import("@work-shape/catalyst-chat-ui/build-area");
+    return fresh.readLastBuildScope();
+  }
+
+  it("on the way to an asset's page is remembered across a reload", async () => {
     window.localStorage.setItem(STORAGE_KEY, "instance");
     showOwnerInStudio(PERSONAL);
     expect(readLastBuildScope()).toBe(PERSONAL);
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBe("instance");
+    expect(await reloaded()).toBe(PERSONAL);
+  });
+
+  it("where the page found its asset in another owner is remembered across a reload", async () => {
+    showOwnerInStudio(undefined);
+    await mountSkills({ instance: [], personal: ["my-notes"] }, "skills", { open: "my-notes" });
+
+    await until(() => expect(window.localStorage.getItem(STORAGE_KEY)).toBe(PERSONAL));
+    expect(await reloaded()).toBe(PERSONAL);
+  });
+});
+
+describe("a list other than Skills", () => {
+  it("opens where Studio is set, even where that owner has none of the kind", async () => {
+    window.localStorage.setItem(STORAGE_KEY, PERSONAL);
+    const page = await mountSkills({ instance: [], personal: [] }, "agents", {
+      agents: ["helper"]
+    });
+
+    await until(() => expect(page.agentReads).toContain(PERSONAL));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Personal");
+    expect(page.agentReads).not.toContain("instance");
+    expect(shown("helper")).toBe(false);
   });
 });

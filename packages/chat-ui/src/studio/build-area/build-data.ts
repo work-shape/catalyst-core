@@ -307,11 +307,16 @@ export function useBuildSource(): BuildSource {
       const owner = inScope(kind);
       // A Namespace is a prefix among the instance's own assets alone.
       const prefix = owner.workspaceId === undefined ? filter.namespace : undefined;
-      // The first time a list opens, an owner without any of the kind would show an empty list
+      // The first time the Skills list opens, an owner without skills would show an empty list
       // where another owner has some: the list opens on the owner in Studio when it has some,
       // otherwise on the first owner offered that has, and reads nothing before that is known.
+      // Every other list opens where Studio is set.
       const opening =
-        scopedKinds.has(kind) && !picked && !opened.has(kind) && otherScopes.length > 0;
+        kind === "skill" &&
+        scopedKinds.has(kind) &&
+        !picked &&
+        !opened.has(kind) &&
+        otherScopes.length > 0;
       const firstWithItems = useQuery({
         queryKey: [...assetsKey, "opening-scope", kind, buildScopeValue(scope)],
         enabled: opening,
@@ -432,8 +437,7 @@ export function useBuildSource(): BuildSource {
       });
       const foundIn = elsewhere.data;
       useEffect(() => {
-        // The page was taken to the owner: the list keeps the reader's own choice for later.
-        if (typeof foundIn === "string") showBuildScopeInTab(foundIn);
+        if (typeof foundIn === "string") storeLastBuildScope(foundIn);
       }, [foundIn]);
       // What was read stays the page's asset while it is read again and after a read that
       // failed: only a newer answer replaces it. The page would otherwise lose what was typed.

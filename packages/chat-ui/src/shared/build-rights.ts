@@ -328,8 +328,8 @@ export function subscribeBuildScope(listener: () => void): () => void {
 }
 
 /**
- * Sets Studio to an owner for this tab alone: one Studio was taken to rather than one the
- * reader chose. The next visit starts from the reader's own choice again.
+ * Sets Studio to an owner for this tab alone: the one the Skills list opened on by itself, as
+ * the owner Studio was set to had no skills. What Studio remembers stays as it was.
  */
 export function showBuildScopeInTab(scope: string): void {
   chosenInTab = scope;
@@ -341,5 +341,5 @@ export function showBuildScopeInTab(scope: string): void {
  * where it is: the workspace that owns it, by its id, or the instance.
  */
 export function showOwnerInStudio(workspaceId: string | undefined): void {
-  showBuildScopeInTab(workspaceId ?? INSTANCE_SCOPE_VALUE);
+  storeLastBuildScope(workspaceId ?? INSTANCE_SCOPE_VALUE);
 }
