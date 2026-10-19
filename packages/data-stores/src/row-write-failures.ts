@@ -78,7 +78,11 @@ export async function rowWriteDatabaseFailure(
                 : "database_refusal";
   let columns: DataStoreColumn[] = [];
   try {
-    const [table] = await readTables(executor, target, parsed.data.table);
+    const [table] = await readTables(
+      executor,
+      target,
+      error.constraint?.table ?? parsed.data.table
+    );
     if (table) {
       const constraint = error.constraint;
       if (constraint?.table === table.name) {
@@ -140,7 +144,10 @@ export async function rowWriteDatabaseFailure(
   const en: Record<string, string> = {
     required: `A value is required in ${field}. Fill it in and try again.`,
     unique: `A value in ${field} already exists. Use a different value.`,
-    reference: `A value in ${field} refers to a row that does not exist. Choose an existing row.`,
+    reference:
+      verb === "delete_rows"
+        ? `A row is still referenced in ${field}. Remove those references first, or keep the row.`
+        : `A value in ${field} refers to a row that does not exist. Choose an existing row.`,
     too_long: `A value in ${field} is too long. Shorten it and try again.`,
     out_of_range: `A value in ${field} is outside the allowed range. Check it and try again.`,
     invalid_value: `A value does not fit ${field}. Check its type and try again.`,
@@ -150,7 +157,10 @@ export async function rowWriteDatabaseFailure(
   const de: Record<string, string> = {
     required: `In ${field} ist ein Wert erforderlich. Fülle ihn aus und versuche es erneut.`,
     unique: `Ein Wert in ${field} ist bereits vorhanden. Verwende einen anderen Wert.`,
-    reference: `Ein Wert in ${field} verweist auf einen Datensatz, den es nicht gibt. Wähle einen vorhandenen Datensatz.`,
+    reference:
+      verb === "delete_rows"
+        ? `Ein Datensatz wird in ${field} noch verwendet. Entferne zuerst die Verweise oder behalte den Datensatz.`
+        : `Ein Wert in ${field} verweist auf einen Datensatz, den es nicht gibt. Wähle einen vorhandenen Datensatz.`,
     too_long: `Ein Wert in ${field} ist zu lang. Kürze ihn und versuche es erneut.`,
     out_of_range: `Ein Wert in ${field} liegt außerhalb des erlaubten Bereichs. Prüfe ihn und versuche es erneut.`,
     invalid_value: `Ein Wert passt nicht zu ${field}. Prüfe den Typ und versuche es erneut.`,

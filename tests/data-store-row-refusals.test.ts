@@ -121,7 +121,7 @@ describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", ()
 
   it("names required, unique, foreign-key, length and range refusals in German without database codes", async () => {
     const world = await published("constraints-de", [manifest(), migration]);
-    await call(world, "insert", { table: "refusals", rows: [{ unique_number: 1 }] });
+    await call(world, "insert", { table: "refusals", rows: [{ unique_number: 1, parent: 1 }] });
     const cases = [
       { row: { required: null }, field: "Required", type: "Ganzzahl", reason: "erforderlich" },
       {
@@ -162,5 +162,8 @@ describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", ()
     await expect(
       call(world, "delete_rows", { table: "refusals", keys: [{ id: MARKER }] }, undefined, "de")
     ).rejects.toMatchObject({ message: expect.stringContaining("„Id“ (Ganzzahl)") });
+    await expect(
+      call(world, "delete_rows", { table: "parents", keys: [{ id: 1 }] }, undefined, "de")
+    ).rejects.toMatchObject({ message: expect.stringContaining("„Parent“ (Ganzzahl)") });
   });
 });
