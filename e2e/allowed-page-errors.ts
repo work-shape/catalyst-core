@@ -103,7 +103,7 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "Chromium's own log line: these tests open a workspace that does not exist or was just " +
       "deleted, the instance answers 404 and the page falls back, which they assert.",
     matches: requestAnswered(404),
-    path: /^\/api\/v1\/(?:conversations|workspaces\/cw_not_a_workspace\/agents)$/u,
+    path: /^\/api\/v1\/(?:conversations|workspaces\/cw_not_a_workspace(?:\/agents)?)$/u,
     tests: [
       "collaboration workspaces scope navigation, settings, and discovery",
       "collaboration workspace settings delete a workspace and fall back to personal"
