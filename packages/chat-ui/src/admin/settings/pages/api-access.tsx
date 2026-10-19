@@ -1,10 +1,11 @@
 // @rights-screen: included in the rights wording guard.
 import { useQueries } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { listAll, type ServicePrincipalDetail } from "@work-shape/catalyst-api-client";
+import type { ServicePrincipalDetail } from "@work-shape/catalyst-api-client";
 import { Banner, Section } from "@work-shape/catalyst-ui";
 import { loadFailure } from "../../access/access-model";
 import {
+  listGrantChoiceAssets,
   useEffectivePermissionsQuery,
   usePrincipalGrantMutations,
   usePrincipalGrantsQuery
@@ -171,6 +172,7 @@ function PrincipalRightsOnInstance({
   detail: ServicePrincipalDetail;
   canMutate: boolean;
 }) {
+  const { locale } = useTranslation();
   const { apiBaseUrl, authScope, client, user } = useSettingsPage();
   const api = { apiBaseUrl, authScope, client };
   const { principal } = detail;
@@ -180,8 +182,9 @@ function PrincipalRightsOnInstance({
   // One list per kind, shared with the Access page: the names of the rows and the dialog's choices.
   const resourceQueries = useQueries({
     queries: kinds.map(({ kind }) => ({
-      queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", kind],
-      queryFn: () => listAll((paging) => client.assets.list({ params: { kind }, query: paging })),
+      queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", kind, locale],
+      queryFn: () =>
+        listGrantChoiceAssets(client, { kind, owners: ["instance"], workspaceIds: [], locale }),
       retry: false
     }))
   });

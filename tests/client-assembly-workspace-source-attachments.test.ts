@@ -190,13 +190,26 @@ describe("execution workspace source attachments", () => {
         fixture.handler.uploadDraftAttachment({
           conversationId: fixture.conversation.id,
           ownerUserId: "user-1",
+          locale: "de",
+          filename: "kaputt.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          content: uploadContent(new TextEncoder().encode("kaputt"))
+        })
+      ).rejects.toMatchObject({
+        message:
+          "Diesen Dateityp kannst du hier nicht anhängen. Verwende eine unterstützte Datei, zum Beispiel eine Textdatei."
+      });
+      await expect(
+        fixture.handler.uploadDraftAttachment({
+          conversationId: fixture.conversation.id,
+          ownerUserId: "user-1",
           filename: "archive.zip",
           mimeType: "application/zip",
           content: uploadContent(new TextEncoder().encode("zip"))
         })
       ).rejects.toMatchObject({
         code: "VALIDATION_FAILED",
-        message: "This file type is not supported for workspace artifact uploads"
+        message: "You cannot attach this file type here. Use a supported file, such as a text file."
       });
 
       await expect(
@@ -323,11 +336,25 @@ describe("execution workspace source attachments", () => {
         contentType: "application/zip",
         content: "zip"
       });
+      const german = await uploadFile(app, conversation.id, {
+        filename: "kaputt.docx",
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        content: "kaputt",
+        locale: "de"
+      });
+      expect(german.statusCode).toBe(400);
+      expect(german.json()).toMatchObject({
+        error: {
+          message:
+            "Diesen Dateityp kannst du hier nicht anhängen. Verwende eine unterstützte Datei, zum Beispiel eine Textdatei."
+        }
+      });
       expect(unsupported.statusCode).toBe(400);
       expect(unsupported.json()).toMatchObject({
         error: {
           code: "BAD_REQUEST",
-          message: "This file type is not supported for uploads in this chat"
+          message:
+            "You cannot attach this file type here. Use a supported file, such as a text file."
         }
       });
 
@@ -1169,6 +1196,7 @@ async function uploadFile(
     filename: string;
     contentType: string;
     content: string;
+    locale?: string;
   }
 ) {
   const multipart = createMultipartFilePayload({
@@ -1177,7 +1205,7 @@ async function uploadFile(
   });
   return server.call("conversations.draft_attachments.upload", {
     params: { conversationId: conversationId },
-    headers: multipart.headers,
+    headers: { ...multipart.headers, ...(input.locale ? { "accept-language": input.locale } : {}) },
     payload: multipart.payload
   });
 }

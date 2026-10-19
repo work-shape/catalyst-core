@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { translations, type TranslationKey } from "./i18n/translations";
 
@@ -38,6 +38,16 @@ export function TranslationProvider({
 
 export function useTranslation(): TranslationContextValue {
   return useContext(TranslationContext);
+}
+
+/**
+ * Marks the document with the language the interface shows, so a screen reader and the
+ * browser read it in that language. Only an entry that owns its document asks for it.
+ */
+export function useDocumentLanguage(locale: LocaleCode, ownsDocument: boolean | undefined): void {
+  useEffect(() => {
+    if (ownsDocument) document.documentElement.lang = locale;
+  }, [locale, ownsDocument]);
 }
 
 function normalizeUiLocale(value: string | undefined): LocaleCode | undefined {

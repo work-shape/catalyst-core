@@ -106,7 +106,11 @@ export async function resolveGuardedPolicy(
     policy,
     denial:
       policy.source === "guardrail"
-        ? guardrailDenial(answers, definition.events?.before ?? "operation.before_call")
+        ? guardrailDenial(
+            answers,
+            definition.events?.before ?? "operation.before_call",
+            context.runtime.locale
+          )
         : policyDenial(policy, definition.name)
   };
 }

@@ -46,12 +46,15 @@ interface UsageLoadProblem {
 
 export function UsageView({
   usage,
-  error
+  error,
+  agentLabel = () => undefined
 }: {
   /** Absent while the summary loads. */
   usage: UsageSummary | undefined;
   /** Why the summary could not be loaded. */
   error?: UsageLoadProblem;
+  /** The display name of an agent by its id, in the person's language. */
+  agentLabel?: (agentName: string) => string | undefined;
 }) {
   const i18n = useTranslation();
   const { t, locale } = i18n;
@@ -218,7 +221,7 @@ export function UsageView({
                           <TableCellDetail>{formatTime(event.createdAt, locale)}</TableCellDetail>
                         </TableCell>
                         <TableCell className="break-words">
-                          {usageCaller(event, t)}
+                          {usageCaller(event, t, agentLabel)}
                           <TableCellDetail>
                             {event.billedAsFast
                               ? t("settings.usageModelFast", { model: event.model })

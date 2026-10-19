@@ -16,6 +16,7 @@ import {
   draftAuthorLabel,
   readDraftRefusal,
   type AgentDraftSource,
+  type ConnectionToolsRead,
   type BuildAssetEditorProps
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -101,8 +102,13 @@ function agentPage(
   draft: AgentDraftSource | undefined,
   {
     locale = "en",
-    frame: frameOverrides = {}
-  }: { locale?: LocaleCode; frame?: Partial<BuildAssetEditorProps> } = {}
+    frame: frameOverrides = {},
+    connectionTools
+  }: {
+    locale?: LocaleCode;
+    frame?: Partial<BuildAssetEditorProps>;
+    connectionTools?: ConnectionToolsRead;
+  } = {}
 ): string {
   return renderToStaticMarkup(
     createElement(
@@ -116,6 +122,7 @@ function agentPage(
         editableAgentFields: ["instructions", "skillNames"],
         canManageAgentModels: false,
         skillChoice: { options: [{ name: "tax-review", title: "Tax review" }], onSearch: noop },
+        ...(connectionTools === undefined ? {} : { connectionTools: { read: connectionTools } }),
         ...(draft === undefined ? {} : { draft })
       })
     )
@@ -156,6 +163,36 @@ describe("the agent page with a draft", () => {
     expect(markup).toMatch(
       /Draft revision 2, saved by Ana Writer on .+? 2026, .+?, is not live\. Everyone who uses “Assistant” gets the published version until the draft is published\./u
     );
+  });
+
+  it("names a published tool of a Connection by the Connection's title and the operation in words", () => {
+    const tool = "connection.ledger.listClients";
+    const markup = agentPage(source(draftOf(drafted)), {
+      frame: {
+        asset: {
+          id: "asset_agent",
+          kind: "agent",
+          name: "assistant",
+          scope: { kind: "instance" },
+          revision: 3,
+          config: { ...live, toolNames: [tool] },
+          updatedAt: "2026-10-17T01:00:00.000Z"
+        }
+      },
+      connectionTools: {
+        status: "ready",
+        connections: [
+          {
+            name: "ledger",
+            title: "Ledger",
+            tools: [{ toolName: tool, operation: "listClients", effect: "reading" }]
+          }
+        ]
+      }
+    });
+    const published = /data-published-field="toolNames"[\s\S]*?<\/p>/u.exec(markup)?.[0] ?? "";
+    expect(published).toContain("Ledger: List clients");
+    expect(published).not.toContain(tool);
   });
 
   it("carries a short draft badge, and the banner names the author and the time", () => {

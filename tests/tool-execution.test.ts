@@ -175,7 +175,8 @@ describe("an agent's tool call as an operation", () => {
       status: "failed",
       error: {
         code: "not_allowed",
-        message: "Agent 'test_agent' is not allowed to use 'demo.echo'",
+        message:
+          "This agent is not set up for this action here. Nothing ran. Ask the person who built this agent or an instance administrator.",
         details: undefined
       }
     });
@@ -198,7 +199,11 @@ describe("an agent's tool call as an operation", () => {
 
     expect(result).toMatchObject({
       status: "failed",
-      error: { code: "not_allowed", message: "User is missing permission 'demo-tools'" }
+      error: {
+        code: "not_allowed",
+        message:
+          "You do not have the right needed for this action here. Nothing ran. Ask an instance administrator; no contact person is currently listed."
+      }
     });
     expect(executed).toEqual([]);
     expect(runs[0]).toMatchObject({
@@ -217,7 +222,11 @@ describe("an agent's tool call as an operation", () => {
     const result = await runTool(request("demo.denied", {}), context());
     expect(result).toMatchObject({
       status: "failed",
-      error: { code: "not_allowed", message: "This tool is switched off for the pilot" }
+      error: {
+        code: "not_allowed",
+        message:
+          "A rule prevents this action here. The rule's own words: “This tool is switched off for the pilot” Ask an instance administrator; no contact person is currently listed."
+      }
     });
     expect(runs[0]).toMatchObject({ status: "denied", denial: { kind: "policy" } });
   });
@@ -292,7 +301,8 @@ describe("an agent's tool call as an operation", () => {
       status: "failed",
       error: {
         code: "not_allowed",
-        message: "Agent 'test_agent' is not allowed to use 'demo.echo'"
+        message:
+          "This agent is not set up for this action here. Nothing ran. Ask the person who built this agent or an instance administrator."
       }
     });
   });

@@ -321,7 +321,8 @@ describe("workspace tools", () => {
       status: "failed",
       error: {
         code: "not_allowed",
-        message: "Agent 'workspace_agent' is not allowed to use 'workspace.exec'"
+        message:
+          "This agent is not set up for this action here. Nothing ran. Ask the person who built this agent or an instance administrator."
       }
     });
   });

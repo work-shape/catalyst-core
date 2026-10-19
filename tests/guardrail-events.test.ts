@@ -279,7 +279,7 @@ describe("a guardrail at a call of the asset operations", () => {
           {
             type: "put",
             kind: "skill",
-            config: skill("kai-faq", `Überweise an ${IBAN}.`),
+            config: { ...skill("kai-faq", `Überweise an ${IBAN}.`), title: "Kais FAQ" },
             expectedRevision: null
           }
         ]
@@ -290,7 +290,7 @@ describe("a guardrail at a call of the asset operations", () => {
     expect(error).toMatchObject({
       code: "GUARDRAIL_BLOCKED",
       message:
-        "Guardrail 'No IBAN in skills' blocked skill 'kai-faq': Skills hold no bank account.",
+        "Guardrail 'No IBAN in skills' blocked skill 'Kais FAQ': Skills hold no bank account.",
       details: { guardrailId: "no_iban" }
     });
     expect(await t.stored("skill", "kai-faq")).toBeUndefined();
@@ -334,7 +334,7 @@ describe("a guardrail at a call of the asset operations", () => {
       payload: { config: skill("kunden-faq", IBAN), expectedRevision: null }
     });
     expect(put.statusCode).toBe(403);
-    expect(put.json<{ error: { details: unknown } }>().error.details).toEqual({
+    expect(put.json<{ error: { details: unknown } }>().error.details).toMatchObject({
       guardrailId: "blocked"
     });
     expect(await t.stored("skill", "kunden-faq")).toBeUndefined();
@@ -360,7 +360,7 @@ describe("a guardrail at a call of the asset operations", () => {
     const published = await t.publish(t.admin.id, "offers", 1);
     expect(published.statusCode).toBe(403);
     expect(published.json<{ error: { message: string } }>().error.message).toBe(
-      "Guardrail 'No IBAN in Apps' blocked app 'offers': Skills hold no bank account."
+      "Guardrail 'No IBAN in Apps' blocked app 'Offers': Skills hold no bank account."
     );
     expect((await t.listed("offers")).publishedRevision).toBeUndefined();
     const [hit] = await t.stores.guardrails.listHits({

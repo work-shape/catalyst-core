@@ -763,7 +763,11 @@ describe("tool calls and permission references", () => {
     ]) {
       expect(await authorize(actor)).toMatchObject({
         status: "failed",
-        error: { code: "not_allowed", message: "User is missing permission 'demo-tools'" }
+        error: {
+          code: "not_allowed",
+          message:
+            "You do not have the right needed for this action here. Nothing ran. Ask an instance administrator; no contact person is currently listed."
+        }
       });
     }
 

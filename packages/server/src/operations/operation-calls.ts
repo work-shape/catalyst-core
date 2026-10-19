@@ -130,6 +130,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     : undefined;
   const deps: RunOperationDeps = {
     clientInstanceId,
+    instanceAdminName: () => options.stores.users.getInstanceAdminName({ clientInstanceId }),
     // What every call resolves its operation through, when it is made and when it is executed
     // after an approval. A call of a Connection operation that came from a frame of an App is
     // asked there whether its App still stands and its caller may still use it.

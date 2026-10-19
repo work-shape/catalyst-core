@@ -15,13 +15,17 @@ const REGION_LABELS: Record<string, TranslationKey> = {
   global: "settings.usageRegionGlobal"
 };
 
-/** Who made the call: the agent of a run, or what the product made the call for. */
+/**
+ * Who made the call: the agent of a run by the name people know it by, or what the product made
+ * the call for. An agent the instance no longer offers keeps its id.
+ */
 export function usageCaller(
   event: UsageSummary["recentEvents"][number],
-  t: TranslationContextValue["t"]
+  t: TranslationContextValue["t"],
+  agentLabel: (agentName: string) => string | undefined
 ): string {
   const label = event.purpose === undefined ? undefined : PURPOSE_LABELS[event.purpose];
-  return label ? t(label) : event.agentName;
+  return label ? t(label) : (agentLabel(event.agentName) ?? event.agentName);
 }
 
 /** A region this version has no name for is shown as it was recorded. */

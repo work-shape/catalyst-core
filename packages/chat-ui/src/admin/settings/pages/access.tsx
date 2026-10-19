@@ -11,6 +11,7 @@ import type { GrantChoices } from "../../access/grants-tab";
 import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from "@work-shape/catalyst-ui";
 import { CheckTab, GrantsTab, NamespacesTab } from "../../access";
 import {
+  listGrantChoiceAssets,
   useAccessMutations,
   useEffectivePermissionsQuery,
   useNamespacesQuery,
@@ -33,7 +34,7 @@ import { useSettingsPage } from "../../../shared/settings-page-context";
  * a right can be given on, and what one person may do with one asset. Each tab gets its data from here and shows it.
  */
 export function AccessPage() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { apiBaseUrl, authScope, client, user } = useSettingsPage();
   const api = { apiBaseUrl, authScope, client };
   const [checkedHolderId, setCheckedHolderId] = useState<string | undefined>();
@@ -64,24 +65,16 @@ export function AccessPage() {
         ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
         "choice",
         kind,
+        locale,
         ...sharedWorkspaceIds
       ],
-      queryFn: async () => {
-        const owners = ownersOf(kind);
-        const lists = await Promise.all([
-          ...(owners.includes("instance")
-            ? [listAll((paging) => client.assets.list({ params: { kind }, query: paging }))]
-            : []),
-          ...(owners.includes("workspace")
-            ? sharedWorkspaceIds.map((workspaceId) =>
-                listAll((paging) =>
-                  client.assets.list({ params: { kind }, query: { ...paging, workspaceId } })
-                )
-              )
-            : [])
-        ]);
-        return lists.flat();
-      },
+      queryFn: () =>
+        listGrantChoiceAssets(client, {
+          kind,
+          owners: ownersOf(kind),
+          workspaceIds: sharedWorkspaceIds,
+          locale
+        }),
       enabled: contextQuery.data !== undefined,
       retry: false
     }))
@@ -135,9 +128,11 @@ export function AccessPage() {
     checkedKind !== "skill" &&
     Boolean(contextQuery.data?.kinds.some((kind) => kind.kind === checkedKind));
   const checkedKindAssetsQuery = useQuery({
-    queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", checkedKind],
+    queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", checkedKind, locale],
     queryFn: () =>
-      listAll((paging) => client.assets.list({ params: { kind: checkedKind }, query: paging })),
+      listAll((paging) =>
+        client.assets.list({ params: { kind: checkedKind }, query: { ...paging, locale } })
+      ),
     enabled: checkedOtherKind,
     retry: false
   });

@@ -27,7 +27,8 @@ export interface LocalUploadingAttachment {
   filename: string;
   byteSize: number;
   mimeType?: string;
-  status: "uploading";
+  /** A file waits in the composer of a new conversation and uploads once the message is sent. */
+  status: "uploading" | "staged";
 }
 
 export function AssistantComposer({
@@ -424,7 +425,7 @@ function DraftAttachmentList({
       mimeType: attachment.mimeType,
       byteSize: attachment.byteSize,
       status: attachment.status,
-      removable: false,
+      removable: attachment.status === "staged",
       retryable: false
     })),
     ...attachments.map((attachment) => ({
@@ -532,7 +533,7 @@ function attachmentAttentionRank(status: AttachmentChipStatus): number {
   if (status === "failed" || status === "unsupported") {
     return 0;
   }
-  return status === "ready" || status === "deleted" ? 2 : 1;
+  return status === "ready" || status === "staged" || status === "deleted" ? 2 : 1;
 }
 
 function attachmentFadeMask(overflow: { above: boolean; below: boolean }): string | undefined {

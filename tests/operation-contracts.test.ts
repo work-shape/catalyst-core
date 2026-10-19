@@ -329,7 +329,13 @@ describe("operation contracts", () => {
             | "confirmation_required";
           guardrail?: { id: string; label: string; reason?: string };
         }
-      | { kind: "guardrail"; guardrailId: string; message?: string }
+      | {
+          kind: "guardrail";
+          guardrailId: string;
+          message?: string;
+          guardrailTitle?: string;
+          guardrailReason?: string;
+        }
       | { kind: "declined"; by: string; comment?: string }
     >();
     expectTypeOf<OperationResult<string>>().toEqualTypeOf<

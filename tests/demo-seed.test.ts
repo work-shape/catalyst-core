@@ -159,6 +159,21 @@ describe("the demo seed on the fixture instance", () => {
     ]);
   });
 
+  it("keeps Kai's teaching draft out of ordinary workspace agent pickers", async () => {
+    const { client, assetSummaries } = seeded().before;
+    expect(
+      assetSummaries.find((asset) => asset.kind === "agent" && asset.name === builder.agent.name)
+        ?.availability?.mode
+    ).not.toBe("all");
+    const workspaces = await listAll((query) => client.workspaces.list({ query }));
+    for (const workspace of workspaces) {
+      const agents = await listAll((query) =>
+        client.workspaces.agents.list({ params: { collaborationWorkspaceId: workspace.id }, query })
+      );
+      expect(agents.map((agent) => agent.name)).not.toContain(builder.agent.name);
+    }
+  });
+
   it("pushes the company assets and records the prepared builder draft", async () => {
     const { client, defaultAgentName } = seeded().before;
     // The instance's own two agents are there as well, and one of them stays the default, and
@@ -178,7 +193,12 @@ describe("the demo seed on the fixture instance", () => {
     // The company's eight and the one Kai Berger made.
     expect(assets.filter((asset) => asset.kind === "agent")).toHaveLength(9);
     expect(assets.filter((asset) => asset.kind === "skill")).toHaveLength(7);
-    expect(assets.filter((asset) => asset.kind === "agent" && asset.shown !== "all")).toEqual([]);
+    expect(
+      assets.filter(
+        (asset) =>
+          asset.kind === "agent" && asset.name !== builder.agent.name && asset.shown !== "all"
+      )
+    ).toEqual([]);
     expect(
       assets
         .filter((asset) => asset.revision !== 1)

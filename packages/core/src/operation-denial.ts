@@ -49,7 +49,13 @@ export type OperationDenial =
        */
       guardrail?: { id: string; label: string; reason?: string };
     }
-  | { kind: "guardrail"; guardrailId: string; message?: string }
+  | {
+      kind: "guardrail";
+      guardrailId: string;
+      message?: string;
+      guardrailTitle?: string;
+      guardrailReason?: string;
+    }
   | { kind: "declined"; by: string; comment?: string };
 
 /** The error a refused call answers with: `403` and a code that names what refused it. */
@@ -100,7 +106,9 @@ export function operationDenialError(denial: OperationDenial): AppError {
           );
     case "guardrail":
       return new AppError("GUARDRAIL_BLOCKED", denial.message ?? "A guardrail blocked the call", {
-        guardrailId: denial.guardrailId
+        guardrailId: denial.guardrailId,
+        ...(denial.guardrailTitle === undefined ? {} : { guardrailTitle: denial.guardrailTitle }),
+        ...(denial.guardrailReason === undefined ? {} : { guardrailReason: denial.guardrailReason })
       });
     case "declined":
       return new AppError("DECLINED", "The call was declined", {

@@ -206,7 +206,7 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       await expect(row).not.toContainText(connection.name);
       // The explanation stands above the rows as it stood above the empty list.
       await expect(main.getByText(DESCRIPTION_EN, { exact: true })).toBeVisible();
-      for (const chip of ["mcp", "Enabled"]) {
+      for (const chip of ["MCP server", "Enabled"]) {
         await expect(row.getByText(chip, { exact: true })).toBeVisible();
       }
       // One chip says whose a row is, and only a workspace's: an instance Connection has none.
@@ -236,7 +236,7 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
         .getByRole("list", { name: "Verbindungen", exact: true })
         .getByRole("listitem")
         .filter({ has: rowLink });
-      for (const chip of ["mcp", "Aktiv"]) {
+      for (const chip of ["MCP-Server", "Aktiv"]) {
         await expect(germanRow.getByText(chip, { exact: true })).toBeVisible();
       }
       await expect(germanRow.getByText("Instanz", { exact: true })).toHaveCount(0);

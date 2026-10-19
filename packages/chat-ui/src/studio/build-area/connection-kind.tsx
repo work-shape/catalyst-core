@@ -3,6 +3,7 @@ import { connectionCategory } from "../../shared/connection-facts";
 import type { BuildAsset, BuildAssetKind } from "./build-asset-kind";
 import { ConnectionCreateDialog } from "./connection-create-dialog";
 import { ConnectionAssetEditor } from "./connection-editor";
+import { connectorTypeLabel } from "./connection-form";
 import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 
 /**
@@ -62,9 +63,7 @@ export const connectionKind: BuildAssetKind = {
     return (
       <>
         {typeof connectorType === "string" ? (
-          <Chip size="sm">
-            <code className="font-mono">{connectorType}</code>
-          </Chip>
+          <Chip size="sm">{connectorTypeLabel(connectorType, t)}</Chip>
         ) : null}
         {typeof enabled === "boolean" ? (
           <Badge tone={enabled ? "success" : "neutral"} dot>

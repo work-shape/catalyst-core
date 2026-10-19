@@ -1,3 +1,4 @@
+import type { LocalizedStringConfig } from "./config";
 import type { JsonObject } from "./json";
 
 // The before-events guardrails answer at and what an operation hands them, apart from the rest
@@ -31,6 +32,8 @@ export interface GuardrailSubject {
   id?: string;
   /** The asset's name or the operation's. */
   name?: string;
+  /** The authored display title, used in a refusal rather than the internal name. */
+  title?: LocalizedStringConfig;
 }
 
 /**

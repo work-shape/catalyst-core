@@ -3,12 +3,24 @@ import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactN
 import { cn } from "../cn";
 import { useOverlayContainer } from "../ui-root";
 
+/** The layer an anchored overlay sits on, and how it goes. */
+const anchoredLeavingLayerClassName =
+  "z-(--layer-popover) outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95";
+
 /** The layer an anchored overlay sits on, and how it comes and goes. */
-const anchoredLayerClassName =
-  "z-(--layer-popover) outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95";
+const anchoredLayerClassName = `${anchoredLeavingLayerClassName} data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95`;
+
+const raisedSurfaceClassName =
+  "rounded-lg border bg-popover text-popover-foreground shadow-overlay";
 
 /** The raised surface of an anchored overlay: popover, menu and picker share it. */
-export const anchoredPanelClassName = `${anchoredLayerClassName} rounded-lg border bg-popover text-popover-foreground shadow-overlay`;
+export const anchoredPanelClassName = `${anchoredLayerClassName} ${raisedSurfaceClassName}`;
+
+/**
+ * The raised surface for a list that opens over form fields, such as a picker in a dialog. It
+ * shows whole from its first frame: a panel that fades in lets the fields under it read through.
+ */
+export const anchoredListPanelClassName = `${anchoredLeavingLayerClassName} ${raisedSurfaceClassName}`;
 
 /** The distance an anchored overlay keeps from the viewport edge when it flips or shifts. */
 export const ANCHORED_COLLISION_PADDING = 8;

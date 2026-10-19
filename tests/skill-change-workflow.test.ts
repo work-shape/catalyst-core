@@ -186,7 +186,7 @@ describe("skill change approval workflow", () => {
         error: {
           code: "GUARDRAIL_BLOCKED",
           message:
-            "Guardrail 'No IBAN in skills' blocked skill 'review': Skills hold no bank account."
+            "Guardrail 'No IBAN in skills' blocked skill 'Review': Skills hold no bank account."
         }
       }
     });

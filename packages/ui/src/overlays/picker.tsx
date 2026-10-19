@@ -22,7 +22,7 @@ import { Spinner } from "../feedback/spinner";
 import { useScrollEdgeFade } from "../scroll-edge-fade";
 import { useOverlayContainer, useUiLabels } from "../ui-root";
 import { menuGroupHeadingClassName, menuRowClassName } from "./dropdown-menu";
-import { ANCHORED_COLLISION_PADDING, anchoredPanelClassName } from "./popover";
+import { ANCHORED_COLLISION_PADDING, anchoredListPanelClassName } from "./popover";
 
 export interface PickerOption {
   value: string;
@@ -383,7 +383,7 @@ export function Picker(props: PickerProps) {
             sideOffset={6}
             collisionPadding={ANCHORED_COLLISION_PADDING}
             className={cn(
-              anchoredPanelClassName,
+              anchoredListPanelClassName,
               "flex max-h-[min(22rem,var(--radix-popover-content-available-height))] w-76 max-w-(--radix-popover-content-available-width) flex-col overflow-hidden",
               className
             )}

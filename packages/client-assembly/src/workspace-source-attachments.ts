@@ -13,6 +13,7 @@ import {
   type ConversationId,
   type DraftAttachment,
   type JsonObject,
+  type LocaleCode,
   type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedObjectDeletionResult,
@@ -25,6 +26,13 @@ import type {
   ClientInstanceAttachmentHandler,
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
+
+/** The upload surface and source handler use the same refusal in the selected language. */
+export function unsupportedAttachmentMessage(locale: LocaleCode | undefined): string {
+  return locale === "de"
+    ? "Diesen Dateityp kannst du hier nicht anhängen. Verwende eine unterstützte Datei, zum Beispiel eine Textdatei."
+    : "You cannot attach this file type here. Use a supported file, such as a text file.";
+}
 
 const WORKSPACE_SOURCE_ATTACHMENT_KIND = "workspace_source";
 const WORKSPACE_SOURCE_METADATA_SOURCE = "execution_workspace_source";
@@ -346,6 +354,7 @@ class ExecutionWorkspaceSourceAttachmentService {
   }
 
   async uploadDraftAttachment(input: {
+    locale?: LocaleCode;
     conversationId: ConversationId;
     ownerUserId: string;
     filename: string;
@@ -365,10 +374,7 @@ class ExecutionWorkspaceSourceAttachmentService {
     }
     const format = detectWorkspaceSourceFileFormat(input.filename, input.mimeType);
     if (!format) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        "This file type is not supported for workspace artifact uploads"
-      );
+      throw new AppError("VALIDATION_FAILED", unsupportedAttachmentMessage(input.locale));
     }
 
     const checksum = input.content.checksum;

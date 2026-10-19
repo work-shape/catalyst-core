@@ -110,6 +110,66 @@ const auditOf = (type: string) =>
   );
 
 describe("a guardrail written as an asset", () => {
+  it("names blocked saves and guardrail hits by readable display title without exposing it to other readers", async () => {
+    const t = await instance();
+    const name = "konten-review";
+    const config = { ...skill(name), title: "Kontenprüfung" };
+    expect(
+      (
+        await t.call(t.admin.id, "assets.put", {
+          params: { kind: "skill", name },
+          payload: { config }
+        })
+      ).statusCode
+    ).toBe(200);
+    await t.enforce(
+      "title-rule",
+      guardrail("title-rule", {
+        displayName: "Keine Kontonummern",
+        check: {
+          kind: "pattern",
+          pattern: ibanPattern,
+          reason: "Bankkonten sind hier nicht erlaubt."
+        }
+      })
+    );
+    const blocked = await t.call(t.admin.id, "assets.put", {
+      headers: { "accept-language": "de" },
+      params: { kind: "skill", name },
+      payload: { config: { ...config, content: IBAN } }
+    });
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json()).toMatchObject({
+      error: {
+        message:
+          "Die Leitplanke „Keine Kontonummern“ hat die Aktion „Kontenprüfung“ verhindert: Bankkonten sind hier nicht erlaubt.",
+        details: {
+          guardrailTitle: "Keine Kontonummern",
+          guardrailReason: "Bankkonten sind hier nicht erlaubt."
+        }
+      }
+    });
+    const hits = await t.call(t.admin.id, "guardrails.list_hits", {
+      params: { name: "title-rule" }
+    });
+    expect(hits.statusCode, hits.body).toBe(200);
+    expect(hits.json()).toMatchObject({
+      items: [{ subjectName: name, subjectTitle: "Kontenprüfung" }]
+    });
+    const target = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "skill",
+      name
+    });
+    if (!target) throw new Error("Missing fixture skill");
+    await t.grant(t.admin.id, "skill.read", { assetId: target.id }, "deny");
+    const restricted = await t.call(t.admin.id, "guardrails.list_hits", {
+      params: { name: "title-rule" }
+    });
+    expect(restricted.statusCode, restricted.body).toBe(200);
+    expect(JSON.stringify(restricted.json())).not.toContain("Kontenprüfung");
+  });
+
   // Fails without the change: a guardrail could not be written, or a draft enforced.
   it("blocks nothing as a draft, enforces once published, and stops when unpublished", async () => {
     const t = await instance();

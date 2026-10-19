@@ -93,20 +93,28 @@ export class AssetReadWorkflow {
    */
   async list(
     call: AssetCall,
-    input: { kind: string; prefix?: string; text?: string; workspaceId?: string; locale?: string },
+    input: {
+      kind: string;
+      prefix?: string;
+      text?: string;
+      workspaceId?: string;
+      locale?: string;
+      forUse?: true;
+    },
     page: StorePage | undefined
   ) {
     const kind = this.host.kind(input.kind);
     // Names and descriptions in the reader's language where the instance offers it.
     const locale = resolveConfigLocale(this.options.config.localization, {
-      requestedLocale: input.locale
+      requestedLocale: input.locale ?? call.runtime?.locale
     });
     const scope = scopeOf(input.workspaceId);
     const [after] = page?.after ?? [];
     // Whoever reads the asset is shown all of it; a holder of the use right its published view.
     const reads = (resource: AssetTarget["resource"]) =>
-      call.access.authorize(kind.actions.read, resource).allowed ||
-      readsAssetDraft(kind, call.access, resource);
+      input.forUse !== true &&
+      (call.access.authorize(kind.actions.read, resource).allowed ||
+        readsAssetDraft(kind, call.access, resource));
     const [namespaces, defaultName, records] = await Promise.all([
       this.namespaces(scope),
       this.defaultName(kind, scope),
@@ -128,13 +136,22 @@ export class AssetReadWorkflow {
                     reads(accessResource(asset.kind, asset.name, asset.scope, asset.id)) ||
                       kind.lifecycle === "active"
                       ? revisions.active
-                      : revisions.published
+                      : revisions.published,
+                    locale
                   ).title
               }
             }),
         afterName: typeof after === "string" ? after : undefined,
         limit: page?.limit ?? DEFAULT_ASSET_LIST_LIMIT,
-        readable: (asset) => listedTo(kind, call.access, asset)
+        readable: (asset) =>
+          input.forUse
+            ? asset.published === true &&
+              kind.actions.use !== undefined &&
+              call.access.authorize(
+                kind.actions.use,
+                accessResource(asset.kind, asset.name, asset.scope, asset.id, asset.appAvailability)
+              ).allowed
+            : listedTo(kind, call.access, asset)
       })
     ]);
     const draftSummaries = await this.options.stores.agentProposals.summaries({

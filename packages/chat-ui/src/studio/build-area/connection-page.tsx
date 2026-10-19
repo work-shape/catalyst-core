@@ -7,6 +7,9 @@ import {
   Banner,
   Button,
   Chip,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   EmptyState,
   InlineError,
   KeyValue,
@@ -20,7 +23,7 @@ import {
   SkeletonList
 } from "@work-shape/catalyst-ui";
 import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { agentKind } from "./agent-kind";
 import { usePageShown } from "./asset-editor-shell";
 import type {
@@ -39,6 +42,7 @@ import {
   waitsForDiscovery,
   type DiscoveryWait
 } from "./connection-form-model";
+import { authSchemeLabel, connectorTypeLabel } from "./connection-form";
 import { ConnectionOperations, EditableOperations } from "./connection-operations";
 import { PersonContextSection } from "./connection-person-context";
 import { RestToolsSection } from "./connection-rest-tools";
@@ -393,41 +397,64 @@ export function ConnectionPage({
   );
 }
 
-/** What the definition says of how the Connection reaches its system. No setting is a credential. */
+/** The settings a person reads by a name in words. Any other keeps its key. */
+const SETTING_LABELS = new Map<string, TranslationKey>([
+  ["url", "connections.url"],
+  ["baseUrl", "connectionCreate.baseUrl"],
+  ["testPath", "connectionCreate.testPath"],
+  ["headerName", "connections.headerName"],
+  ["headers", "connectionCreate.headers"],
+  ["personContextHeader", "connectionCreate.personContextHeader"]
+]);
+
+/**
+ * What the definition says of how the Connection reaches its system, in words. The ids of its
+ * type and its authentication stand under Technical details. No setting is a credential.
+ */
 function ConnectionSettings({ config }: { config: Record<string, unknown> }) {
   const { t } = useTranslation();
   const description = textOf(config, "description");
+  const connectorType = textOf(config, "connectorType") ?? "";
+  const authScheme = textOf(config, "authScheme") ?? "";
   return (
-    <KeyValueList>
-      <KeyValue label={t("connections.connectorType")}>
-        <code className="font-mono text-code">{textOf(config, "connectorType")}</code>
-      </KeyValue>
-      <KeyValue label={t("connections.authScheme")}>
-        <code className="font-mono text-code">{textOf(config, "authScheme")}</code>
-      </KeyValue>
-      {description ? (
-        <KeyValue label={t("connections.descriptionLabel")} foldable>
-          {description}
+    <div className="grid min-w-0 gap-3">
+      <KeyValueList>
+        <KeyValue label={t("connections.connectorType")}>
+          {connectorTypeLabel(connectorType, t)}
         </KeyValue>
-      ) : null}
-      {settingsOf(config).map(([key, value]) => (
-        <KeyValue
-          key={key}
-          label={
-            // This key is too long for the label column; its human label wraps.
-            key === "personContextHeader" ? (
-              t("connectionCreate.personContextHeader")
-            ) : (
-              <code className="font-mono">{key}</code>
-            )
-          }
-        >
-          <code className="font-mono text-code">
-            {typeof value === "string" ? value : JSON.stringify(value)}
-          </code>
-        </KeyValue>
-      ))}
-    </KeyValueList>
+        <KeyValue label={t("connections.authScheme")}>{authSchemeLabel(authScheme, t)}</KeyValue>
+        {description ? (
+          <KeyValue label={t("connections.descriptionLabel")} foldable>
+            {description}
+          </KeyValue>
+        ) : null}
+        {settingsOf(config).map(([key, value]) => {
+          const label = SETTING_LABELS.get(key);
+          return (
+            <KeyValue
+              key={key}
+              label={label === undefined ? <code className="font-mono">{key}</code> : t(label)}
+            >
+              <code className="font-mono text-code">
+                {typeof value === "string" ? value : JSON.stringify(value)}
+              </code>
+            </KeyValue>
+          );
+        })}
+      </KeyValueList>
+      <Disclosure data-connection-technical="">
+        <DisclosureTrigger>{t("connectionCreate.details")}</DisclosureTrigger>
+        <DisclosureContent>
+          <KeyValueList>
+            {Object.entries({ connectorType, authScheme }).map(([key, value]) => (
+              <KeyValue key={key} label={<code className="font-mono">{key}</code>}>
+                <code className="font-mono text-code">{value}</code>
+              </KeyValue>
+            ))}
+          </KeyValueList>
+        </DisclosureContent>
+      </Disclosure>
+    </div>
   );
 }
 

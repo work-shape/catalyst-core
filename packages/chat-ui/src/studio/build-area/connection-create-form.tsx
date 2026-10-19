@@ -1,5 +1,6 @@
 import { CONNECTION_ASSET_KIND, assetAddressFromName } from "@work-shape/catalyst-core";
 import {
+  Banner,
   Field,
   FormNotice,
   Input,
@@ -56,6 +57,7 @@ export function ConnectionCreateForm({
   busy,
   steps,
   detailsOpen = false,
+  saved,
   onChange
 }: {
   fields: CreateFields;
@@ -70,6 +72,11 @@ export function ConnectionCreateForm({
   steps: readonly { step: ConnectStep; state: ConnectStepState }[];
   /** "Technical details" starts open, as for a form filled with an id or headers to look at. */
   detailsOpen?: boolean;
+  /**
+   * The Connection was saved by an earlier Verbinden that then failed: it is in the list
+   * already. Whether Cancel offers to discard it.
+   */
+  saved?: { discardable: boolean };
   onChange(next: CreateFields): void;
 }) {
   const { t } = useTranslation();
@@ -226,6 +233,13 @@ export function ConnectionCreateForm({
             />
           ))}
         </Steps>
+      ) : null}
+      {saved ? (
+        <Banner layout="line" data-connection-create-saved="">
+          {t(saved.discardable ? "connectionCreate.savedDiscardable" : "connectionCreate.saved", {
+            name: fields.title.trim()
+          })}
+        </Banner>
       ) : null}
       {errors.general ? (
         <FormNotice tone="error" data-connection-create-error="">

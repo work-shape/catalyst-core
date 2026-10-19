@@ -16,8 +16,7 @@ import {
   type AppSaveInput,
   type AppSaved,
   type PlatformAssetCalls,
-  type PlatformAssetPut,
-  type PlatformAssetFound
+  type PlatformAssetPut
 } from "@work-shape/catalyst-tool-execution";
 import {
   DRAFT_CHANGED_ELSEWHERE,
@@ -37,8 +36,7 @@ import { listCallableOperations } from "./platform-callable-operations";
 import { authorizePlatformAssetPut } from "./platform-asset-preflight";
 import { assetTitle } from "../assets/asset-reference-labels";
 import { createPlatformAssetPolicy } from "./platform-asset-policy";
-import { readPlatformContext } from "./platform-context";
-import { workflowAuthoringContext } from "./workflow-authoring-context";
+import { readAgentPlatformContext, listAgentVisibleAssets } from "./platform-agent-context";
 import {
   CREATED_FROM_CHAT,
   accessOf,
@@ -740,84 +738,23 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     },
 
     async readContext(context, input) {
-      const call = await callOf(context);
-      const read = await readPlatformContext(options, call);
-      const kinds = existingKinds();
-      const existing = new Set<string>(kinds.flatMap((kind) => Object.values(kind.actions)));
-      const ofExisting = (actions: string[]) => actions.filter((action) => existing.has(action));
-      return {
-        ...(await workflowAuthoringContext(
-          options,
-          call,
-          input,
-          options.modules.isEnabled("workflows")
-        )),
-        instance: {
-          name: read.instance.name,
-          timeZone: options.config.clientInstance.timeZone ?? "UTC",
-          timeZoneDefaulted: options.config.clientInstance.timeZone === undefined
-        },
-        modules: options.modules.modules.filter((module) => module.enabled).map(({ name }) => name),
-        kinds: kinds.map((kind) => ({
-          kind: kind.kind,
-          plural: kind.plural,
-          hasDraft: kind.lifecycle === "draft_published"
-        })),
-        actions: ofExisting(read.actions),
-        assetActions: ofExisting(read.assetActions),
-        workspaces: read.workspaces.flatMap((workspace) => {
-          const actions = ofExisting(workspace.actions);
-          return actions.length > 0 ? [{ ...workspace, actions }] : [];
-        }),
-        namespaces: read.namespaces.flatMap((namespace) => {
-          const actions = ofExisting(namespace.actions);
-          return actions.length > 0 ? [{ ...namespace, actions }] : [];
-        })
-      };
+      return readAgentPlatformContext(
+        options,
+        await callOf(context),
+        context,
+        await conversationOfCall(context),
+        input
+      );
     },
 
     async listAssets(context, input) {
-      const conversation = await conversationOfCall(context);
-      const call = await callOf(context);
-      const kinds = existingKinds().filter(
-        (kind) => input.kind === undefined || kind.kind === input.kind
+      return listAgentVisibleAssets(
+        options,
+        await callOf(context),
+        context,
+        await conversationOfCall(context),
+        input
       );
-      if (kinds.length === 0) {
-        throw new AppError(
-          "NOT_FOUND",
-          `This platform has no kind '${input.kind}'. platform.context lists the kinds it has`,
-          { reason: "unknown_kind" },
-          { exposeMessage: true }
-        );
-      }
-      // What the instance owns, and what the workspace of the conversation owns.
-      const workspaces = [undefined, conversation?.collaborationWorkspaceId];
-      const assets: PlatformAssetFound[] = [];
-      for (const kind of kinds) {
-        for (const workspaceId of workspaces) {
-          const room = PLATFORM_ASSET_LIST_MAX - assets.length;
-          // One more than there is room for says whether the list is cut.
-          const listed = await workflow.reads.list(
-            call,
-            {
-              kind: kind.kind,
-              ...(input.text === undefined ? {} : { text: input.text }),
-              ...(workspaceId === undefined ? {} : { workspaceId })
-            },
-            { limit: room + 1 }
-          );
-          for (const asset of listed.slice(0, room)) {
-            assets.push({
-              kind: asset.kind,
-              name: asset.name,
-              title: asset.title,
-              ...(asset.description === undefined ? {} : { description: asset.description })
-            });
-          }
-          if (listed.length > room) return { assets, truncated: true };
-        }
-      }
-      return { assets, truncated: false };
     },
 
     async listFiles(context, input) {

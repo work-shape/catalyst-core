@@ -3644,20 +3644,32 @@ test("a plain user finds only their own pages in the Settings rail", async ({
   const users = await page.request.get(`${apiBaseUrl}/api/v1/instance/users`);
   expect(users.status()).toBe(403);
 
-  // An instance page the user may not open leads away: to the chat, or to the workspace
-  // this user manages when an earlier test left them one.
+  // A known page stays at the address that was opened and explains the missing right.
   await page.goto("/settings/instance/users");
-  await expect(page).toHaveURL(awayFromInstancePagesPattern);
+  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
+  await expect(
+    page.getByText("You cannot open this page: it needs a right you do not have.", { exact: false })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open your profile", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Users", level: 1 })).toHaveCount(0);
 
-  for (const path of ["/admin/usage", "/settings/instance/access"]) {
+  for (const [path, canonical] of [
+    ["/admin/usage", "/settings/instance/usage"],
+    ["/settings/instance/access", "/settings/instance/access"]
+  ] as const) {
     await page.goto(path);
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
-    await expect(page).toHaveURL(awayFromInstancePagesPattern);
+    await expect(page).toHaveURL(new URL(canonical, page.url()).href);
+    await expect(
+      page.getByRole("button", { name: "Open your profile", exact: true })
+    ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toHaveCount(0);
     await expect(page.getByRole("tab", { name: /^Namespaces/u })).toHaveCount(0);
     await expect(rail.getByRole("group", { name: "Instance" })).toHaveCount(0);
   }
+
+  await page.getByRole("button", { name: "Open your profile", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
 
   // With too little room beside the content the rail is a select above it.
   await page.setViewportSize({ width: 760, height: 800 });
@@ -4726,8 +4738,6 @@ function legacyConversationPath(conversationId: string): string {
 }
 
 const collaborationWorkspaceUrlPattern = /\/w\/[^/]+$/u;
-/** Where a closed Instance page sends a plain user: the chat, or a workspace they manage. */
-const awayFromInstancePagesPattern = /\/w\/[^/]+$|\/settings\/workspace\/general$/u;
 const collaborationWorkspaceConversationUrlPattern = /\/w\/[^/]+\/c\/[^/]+$/u;
 
 function conversationUrlPattern(conversationId: string): RegExp {

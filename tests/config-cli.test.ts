@@ -1066,7 +1066,7 @@ skills:
     });
     expect(exitCode).toBe(1);
     expect(stderr.join("")).toContain(
-      "Guardrail 'No IBAN in skills' blocked skill 'kunden-faq': Skills hold no bank account."
+      "Guardrail 'No IBAN in skills' blocked skill 'Kunden-FAQ': Skills hold no bank account."
     );
     expect(stderr.join("")).not.toContain("3704 0044");
     expect(

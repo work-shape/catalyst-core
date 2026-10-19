@@ -377,6 +377,34 @@ describe("Studio refusals", () => {
     ]);
   });
 
+  it.each(["en", "de"] as const)(
+    "names a blocking guardrail by its title in %s, with its author's reason (ACCEPT-FIX-10 E8)",
+    (locale) => {
+      const { t: translate } = createTranslationContext(locale);
+      const blocked = (details: Record<string, unknown>) =>
+        refusalsOf(
+          readBuildRefusal(
+            refusal("GUARDRAIL_BLOCKED", "Guardrail 'no-iban' blocked skill 'report'", details),
+            translate,
+            locale
+          ),
+          undefined
+        );
+      const reason = "Assets hold no bank account numbers.";
+      expect(
+        blocked({ guardrailId: "no-iban", guardrailTitle: "Keine IBAN", guardrailReason: reason })
+      ).toEqual([
+        locale === "en"
+          ? `The guardrail “Keine IBAN” stopped this change. ${reason}`
+          : `Die Leitplanke „Keine IBAN“ hat diese Änderung verhindert. ${reason}`
+      ]);
+      // Without a title the instance's sentence stands as it came.
+      expect(blocked({ guardrailId: "no-iban" })).toEqual([
+        "Guardrail 'no-iban' blocked skill 'report'"
+      ]);
+    }
+  );
+
   it("answers a write over a newer revision as a conflict, with no sentence of its own", () => {
     const outcome = readBuildRefusal(
       refusal("REVISION_CONFLICT", "Config agent 'tax' is not at the revision the call names", {

@@ -170,6 +170,19 @@ function StatusPanel({
   );
 }
 
+/**
+ * Says why a link did not open: it led into a workspace the person is no member of, and the page
+ * went to their own workspace instead.
+ */
+export function ClosedWorkspaceLinkBanner({ onDismiss }: { onDismiss(): void }) {
+  const { t } = useTranslation();
+  return (
+    <Banner tone="info" layout="page" className="shrink-0" onDismiss={onDismiss}>
+      {t("collaborationWorkspaceLinkClosed")}
+    </Banner>
+  );
+}
+
 /** Says on every page that this instance is the test environment. Other environments show nothing. */
 export function StagingBanner({ environment }: { environment: string }) {
   const { t } = useTranslation();

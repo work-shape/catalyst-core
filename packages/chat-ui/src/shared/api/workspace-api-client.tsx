@@ -3,10 +3,11 @@ import {
   useContext,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode
 } from "react";
-import { createApiClient, type ApiClient } from "@work-shape/catalyst-api-client";
+import { createApiClient, type ApiClient, type LocaleCode } from "@work-shape/catalyst-api-client";
 
 interface WorkspaceApiClientContextValue {
   apiBaseUrl: string;
@@ -18,6 +19,8 @@ interface WorkspaceApiClientContextValue {
    * one outside the schema this interface was built with: it runs another release.
    */
   interfaceOutdated: boolean;
+  /** Sets the language every request asks the server to answer in: the interface's. */
+  setLocale(locale: LocaleCode): void;
 }
 
 const WorkspaceApiClientContext = createContext<WorkspaceApiClientContextValue | undefined>(
@@ -36,6 +39,8 @@ export function WorkspaceApiClientProvider({
   children: ReactNode;
 }) {
   const [interfaceOutdated, setInterfaceOutdated] = useState(false);
+  // The interface's language, which the client reads at each request.
+  const locale = useRef<LocaleCode | undefined>(undefined);
   const requests = useMemo(
     () => ({ controller: new AbortController(), ended: false }),
     [apiBaseUrl, getToken, token]
@@ -56,6 +61,9 @@ export function WorkspaceApiClientProvider({
       get signal() {
         return requests.controller.signal;
       },
+      get locale() {
+        return locale.current;
+      },
       onUnknownOperation: () => setInterfaceOutdated(true),
       onResponseMismatch: () => setInterfaceOutdated(true),
       ...(resolvedGetToken ? { getToken: resolvedGetToken } : {})
@@ -71,7 +79,10 @@ export function WorkspaceApiClientProvider({
           if (!requests.ended) requests.controller = new AbortController();
         };
       },
-      interfaceOutdated
+      interfaceOutdated,
+      setLocale: (next) => {
+        locale.current = next;
+      }
     }),
     [apiBaseUrl, client, interfaceOutdated, requests]
   );
@@ -81,6 +92,12 @@ export function WorkspaceApiClientProvider({
       {children}
     </WorkspaceApiClientContext.Provider>
   );
+}
+
+/** Makes every request of the workspace's client ask for answers in `locale`. */
+export function useRequestLocale(locale: LocaleCode): void {
+  const setLocale = useContext(WorkspaceApiClientContext)?.setLocale;
+  useLayoutEffect(() => setLocale?.(locale), [setLocale, locale]);
 }
 
 /** The client of the conversation's workspace, or undefined outside one. */

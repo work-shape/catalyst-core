@@ -122,7 +122,11 @@ export type {
   KnowledgeRead,
   KnowledgeSearchAnswer
 } from "./knowledge-base-source";
-export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";
+export {
+  connectionToolTitle,
+  connectionToolsView,
+  type ConnectionToolsRead
+} from "./connection-tools";
 export { toggleToolName } from "./tool-group";
 export {
   heldToolCount,

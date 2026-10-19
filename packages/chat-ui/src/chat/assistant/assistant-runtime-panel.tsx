@@ -120,6 +120,7 @@ function AssistantRuntimePane({
     attachmentAccept,
     changeDraft: onDraftChange,
     selectFiles: onFilesSelected,
+    sendStagedFiles,
     removeDraftAttachment: onRemoveDraftAttachment,
     retryDraftAttachment: onRetryDraftAttachment,
     messageSubmitted: onMessageSubmitted,
@@ -215,17 +216,21 @@ function AssistantRuntimePane({
 
       setRootSubmitPendingIfActive(true);
       setRootSubmitError(undefined);
-      void startProductConversationRun({
-        agentName: selectedAgentName,
-        modelBindingId: selectedModelBindingId,
-        reasoningEffort: requestedReasoningEffort,
-        client,
-        collaborationWorkspaceId,
-        conversationId: undefined,
-        idempotencyKey: createRunIdempotencyKey(),
-        locale,
-        text: trimmedText
-      })
+      // Files waiting in the composer go to the conversation made for them as the message is sent.
+      void sendStagedFiles()
+        .then((conversationId) =>
+          startProductConversationRun({
+            agentName: selectedAgentName,
+            modelBindingId: selectedModelBindingId,
+            reasoningEffort: requestedReasoningEffort,
+            client,
+            collaborationWorkspaceId,
+            conversationId,
+            idempotencyKey: createRunIdempotencyKey(),
+            locale,
+            text: trimmedText
+          })
+        )
         .then((response) => {
           if (!activeRef.current) {
             return;
@@ -263,6 +268,7 @@ function AssistantRuntimePane({
       selectedModelBindingId,
       selectedConversationId,
       sendDisabledReason,
+      sendStagedFiles,
       setRootSubmitPendingIfActive,
       startComposerRef
     ]

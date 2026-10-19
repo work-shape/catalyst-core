@@ -106,8 +106,7 @@ function isJsonObject(value: unknown): value is JsonObject {
 const TITLE_LANGUAGES: Record<LocaleCode, string> = { en: "English", de: "German" };
 
 /**
- * The model call that names a conversation, in the language of the one it belongs to: the list
- * of their conversations is read in that language, whatever language the first message used.
+ * Names the conversation in the language used in it, falling back to the account language.
  */
 export function createTitlePrompt(
   firstUserMessage: ChatMessage,
@@ -121,8 +120,9 @@ export function createTitlePrompt(
         "Infer the conversation topic from the initial user message only.",
         "The title should describe the overall likely conversation, not quote or answer the user message.",
         "Use 3 to 7 words.",
-        `Write the headline in ${TITLE_LANGUAGES[locale]}.`,
-        "Do not include names, addresses, emails, phone numbers, bank details, exact salary amounts, IDs, or other personal data.",
+        `Write the headline in the language of the initial user message. If its language is unclear, write in ${TITLE_LANGUAGES[locale]}.`,
+        "Keep organization, business and client names exactly as written; never translate proper names.",
+        "Do not include private individuals’ names, addresses, emails, phone numbers, bank details, exact salary amounts, IDs, or other personal data.",
         "If the content is sensitive, use a generic topic label.",
         "Return only the headline text."
       ].join(" ")

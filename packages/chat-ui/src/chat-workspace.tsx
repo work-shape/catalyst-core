@@ -15,7 +15,12 @@ import { CollaborationWorkspaceSelector } from "./shared/collaboration-workspace
 import { canManageUsers, canViewAudit } from "./shared/governance";
 import { ControlPlaneRoutes } from "./admin/control-plane/control-plane-routes";
 import { DockedChat, DockedPage, useChatDockView } from "./chat/dock/docked-chat";
-import { createTranslationContext, TranslationProvider, useTranslation } from "./shared/i18n";
+import {
+  createTranslationContext,
+  TranslationProvider,
+  useDocumentLanguage,
+  useTranslation
+} from "./shared/i18n";
 import { AppsArea, isAppsRoute } from "./studio/apps/apps-area";
 import { AppsHostProvider, type AppsHost } from "./studio/apps/apps-host";
 import { WorkflowsArea, isWorkflowsRoute } from "./studio/workflows/workflows-area";
@@ -60,6 +65,7 @@ import { RouteNotFound } from "./chat/workspace/route-not-found";
 import { UserMenu } from "./chat/workspace/user-menu";
 import {
   ConfigCheckPanel,
+  ClosedWorkspaceLinkBanner,
   OutdatedInterfaceNotice,
   SessionCheckPanel,
   StagingBanner,
@@ -69,6 +75,7 @@ import { WorkspaceRail } from "./chat/workspace/workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./shared/workspace-route";
 import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./chat/workspace/workspace-chat-model";
 import { WorkspaceProviders } from "./chat/workspace/workspace-providers";
+import { useRequestLocale } from "./shared/api/workspace-api-client";
 import { useWorkspaceShortcuts } from "./chat/workspace/workspace-shortcuts";
 
 // The Workflow screens on sample data: a page for whoever may open the UI library, loaded
@@ -245,6 +252,9 @@ function ChatWorkspaceContent({
     () => createTranslationContext(model.config.activeLocale, labelOverrides),
     [model.config.activeLocale, labelOverrides]
   );
+
+  useDocumentLanguage(model.config.activeLocale, manageDocumentTitle);
+  useRequestLocale(model.config.activeLocale);
 
   // The login panel resolves its own mode from the public branding and reports that instead.
   useEffect(() => {
@@ -491,6 +501,9 @@ function ChatWorkspaceContent({
         </SkipLink>
         <OutdatedInterfaceNotice />
         <StagingBanner environment={model.config.config.clientInstance.environment} />
+        {model.collaborationWorkspace.closedLinkLeftHere ? (
+          <ClosedWorkspaceLinkBanner onDismiss={model.collaborationWorkspace.dismissClosedLink} />
+        ) : null}
         <div className="flex min-h-0 flex-1">
           <WorkspaceRail
             config={model.config.config}

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +8,7 @@ import { ApiError } from "@work-shape/catalyst-api-client";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
+  buildAssetKinds,
   ConnectionCreateFlow,
   openConnectionDraft,
   readBuildRefusal,
@@ -27,6 +29,14 @@ import { settingsUser } from "./chat-ui-settings-fixtures";
 // server's sentence, `egress_denied: … release config … 'egress.allowPublicHttps: true'`, in
 // English to everybody. The reader is told what happened and who changes it in their language;
 // only an operator, who changes release config, gets the server's sentence under Details.
+
+const createDefaults = {
+  namespaces: [],
+  mayNameFreely: true,
+  checkName: async () => ({ available: true as const }),
+  remove: async () => undefined,
+  mayDelete: () => true
+};
 
 const target = { protocol: "https" as const, host: "api.exampledata.com", port: 443 };
 
@@ -76,8 +86,15 @@ const INVALID_ADDRESS = refusalOf([
   }
 ]);
 
-/** Connects a new Connection in German that the instance refuses with `error`. */
-async function connectRefused(error: ApiError, roles?: string[]): Promise<HTMLElement> {
+/**
+ * Connects a new Connection in German that the instance refuses with `error`, or, without
+ * one, saves and then tests as `tested` says.
+ */
+async function connectRefused(
+  error: ApiError | undefined,
+  roles?: string[],
+  tested: "ready" | "unauthorized" = "ready"
+): Promise<HTMLElement> {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const read = readConnectionDraft({
     output: {
@@ -95,7 +112,7 @@ async function connectRefused(error: ApiError, roles?: string[]): Promise<HTMLEl
     mayTest: () => true,
     useDetail: () => ({ status: "loading" }),
     readDetail: async () => connectionDetail("exampledata"),
-    test: async () => ({ status: "ready", testedAt: "2026-10-18T10:00:00.000Z" }),
+    test: async () => ({ status: tested, testedAt: "2026-10-18T10:00:00.000Z" }),
     setSecret: async () => undefined,
     discover: async () => undefined,
     useTest: () => ({ run: { status: "idle" }, start: () => undefined }),
@@ -107,14 +124,11 @@ async function connectRefused(error: ApiError, roles?: string[]): Promise<HTMLEl
   };
   const flow = createElement(ConnectionCreateFlow, {
     source,
-    namespaces: [],
-    mayNameFreely: true,
-    checkName: async () => ({ available: true as const }),
+    ...createDefaults,
     put: async () => {
-      throw error;
+      if (error) throw error;
+      return { revision: 1 };
     },
-    remove: async () => undefined,
-    mayDelete: () => true,
     onClose: () => undefined,
     onCreated: () => undefined
   });
@@ -192,8 +206,20 @@ describe("A refused new Connection", () => {
       expect(page.textContent).not.toContain("egress");
       expect(page.querySelector("[data-refusal-detail]")).toBeNull();
       expect(page.textContent?.split("Netzwerkregel des Betreibers").length).toBe(2);
+      // Nothing was saved, so nothing is said to be in the list.
+      expect(page.querySelector("[data-connection-create-saved]")).toBeNull();
     }
   );
+
+  it("says that a Connection saved before its key was refused is in the list already (ACCEPT-FIX-10 C11)", async () => {
+    const page = await connectRefused(undefined, undefined, "unauthorized");
+    await vi.waitFor(() =>
+      expect(page.textContent).toContain("Der Server hat den Schlüssel abgelehnt.")
+    );
+    expect(page.querySelector("[data-connection-create-saved]")?.textContent).toBe(
+      "Exampledata ist schon gespeichert und steht in der Liste, noch ohne Tools. Korrigiere das Feld und verbinde erneut, oder brich ab, um sie zu verwerfen."
+    );
+  });
 
   it("says in German how an address is written, with the instance's sentence for an admin", async () => {
     const page = await connectRefused(INVALID_ADDRESS, ["user", "admin"]);
@@ -468,5 +494,120 @@ describe("A discovered tool on the Connection page (ACCEPT-FIX-7 C10)", () => {
     expect(puts[0]?.operations).toEqual([
       expect.objectContaining({ name: "read_wiki", effect: "reading", enabled: true })
     ]);
+  });
+});
+
+// ACCEPT-FIX-10 C11, found in the browser: the instance answers a refused key with a
+// successful `connections.test` whose status is `unauthorized`. The dialog of the Build area,
+// on the instance's real answers, keeps its form open, says the key was refused and that the
+// Connection is saved, and never says it connected.
+describe("A new REST API whose key the server refuses, on the instance's answers", () => {
+  it.each(["en", "de"] as const)("stays open at the key in %s", async (locale) => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      const url = new URL(request.url);
+      if (url.pathname === apiOperations["platform.context.get"].path)
+        return Response.json(platformContext([], ["connection.write"]));
+      const call = /^\/api\/v1\/connections\/([^/]+)(?:\/(secret|test))?$/u.exec(url.pathname);
+      if (call?.[2] === "secret" && request.method === "PUT") {
+        calls.push("set_secret");
+        return Response.json({ state: "set", version: 1 });
+      }
+      if (call?.[2] === "test" && request.method === "POST") {
+        calls.push("test");
+        return Response.json({ status: "unauthorized", testedAt: "2026-10-19T10:00:00.000Z" });
+      }
+      if (call && call[2] === undefined && request.method === "GET")
+        return Response.json(connectionDetail(decodeURIComponent(call[1] ?? "")));
+      return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
+    };
+    const connectionKind = buildAssetKinds.find((kind) => kind.kind === "connection");
+    if (!connectionKind || !("CreateDialog" in connectionKind) || !connectionKind.CreateDialog)
+      throw new Error("Connections have a create dialog");
+    const CreateDialog = connectionKind.CreateDialog;
+    const puts: unknown[] = [];
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mounted.push(root);
+    await act(async () =>
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
+          createElement(
+            SettingsPageProvider,
+            { value: buildPageSettings(fetchImpl, settingsUser({ roles: ["user", "admin"] })) },
+            createElement(
+              UiRoot,
+              { mode: "light", labels: uiLabelsEn },
+              createElement(
+                TranslationProvider,
+                { locale, children: null },
+                createElement(CreateDialog, {
+                  ...createDefaults,
+                  put: async (input) => {
+                    puts.push(input);
+                    return { revision: puts.length };
+                  },
+                  onClose: () => calls.push("closed"),
+                  onCreated: () => calls.push("created")
+                })
+              )
+            )
+          )
+        )
+      )
+    );
+    const dialog = () => document.body;
+    await act(async () =>
+      dialog().querySelector<HTMLElement>('[data-connection-type="http_api"] button')?.click()
+    );
+    const type = async (input: HTMLInputElement | null | undefined, value: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+          input,
+          value
+        );
+        input?.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    const form = dialog().querySelector("[data-connection-create-form]");
+    await type(
+      form?.querySelector<HTMLInputElement>('input[type="text"], input:not([type])'),
+      "Prüfung falscher Schlüssel"
+    );
+    await type(
+      form?.querySelector<HTMLInputElement>('[data-connection-field="url"]'),
+      "http://127.0.0.1:5830"
+    );
+    await type(
+      form?.querySelector<HTMLInputElement>('[data-connection-field="secret"]'),
+      "sk-wrong"
+    );
+    await vi.waitFor(() =>
+      expect(dialog().querySelector<HTMLButtonElement>("[data-connection-connect]")?.disabled).toBe(
+        false
+      )
+    );
+    await act(async () =>
+      dialog().querySelector<HTMLButtonElement>("[data-connection-connect]")?.click()
+    );
+    await vi.waitFor(() =>
+      expect(dialog().querySelector("[data-connection-create-saved]")).not.toBeNull()
+    );
+    expect(calls).toEqual(["set_secret", "test"]);
+    expect(dialog().querySelector("[data-connection-create-form]")).not.toBeNull();
+    expect(dialog().querySelector("[data-connection-connected]")).toBeNull();
+    const { t } = createTranslationContext(locale);
+    expect(dialog().textContent).toContain(t("connectionCreate.errorKey"));
+    expect(dialog().querySelector("[data-connection-create-saved]")?.textContent).toBe(
+      t("connectionCreate.savedDiscardable", { name: "Prüfung falscher Schlüssel" })
+    );
+    // The refused key is not kept in the field.
+    expect(
+      dialog().querySelector<HTMLInputElement>('[data-connection-field="secret"]')?.value
+    ).toBe("");
   });
 });

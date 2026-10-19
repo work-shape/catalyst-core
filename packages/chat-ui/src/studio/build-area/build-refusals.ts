@@ -84,6 +84,9 @@ interface RefusalDetails {
   /** The limit a refusal names, and what the write had of it. */
   limit?: number;
   actual?: number;
+  /** The guardrail that blocked the write, by its title, and its reason as its author wrote it. */
+  guardrailTitle?: string;
+  guardrailReason?: string;
   issues: RefusalIssue[];
 }
 
@@ -199,6 +202,8 @@ export function readRefusalDetails(error: unknown): RefusalDetails {
     folder: text(details, "folder"),
     limit: number(details, "limit"),
     actual: number(details, "actual"),
+    guardrailTitle: text(details, "guardrailTitle"),
+    guardrailReason: text(details, "guardrailReason"),
     issues: (Array.isArray(issues) ? issues : []).flatMap((issue: unknown) => {
       const message = text(issue, "message");
       const path = field(issue, "path");
@@ -272,6 +277,13 @@ export function readBuildRefusal(
     });
   }
   const details = readRefusalDetails(error);
+  // A guardrail is named by its title in the reader's language, with its author's reason.
+  if (apiErrorCode(error) === "GUARDRAIL_BLOCKED" && details.guardrailTitle !== undefined) {
+    const blocked = t("guardrails.blockedChange", { name: details.guardrailTitle });
+    return refused({
+      message: details.guardrailReason ? `${blocked} ${details.guardrailReason}` : blocked
+    });
+  }
   if (details.reason === "person_context_app_unavailable") {
     return refused({ message: t("connections.personContextAppUnavailable") });
   }
