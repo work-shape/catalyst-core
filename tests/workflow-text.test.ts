@@ -159,7 +159,7 @@ describe("the reference check of each part at save and publish", () => {
     name: "mail.send",
     effect: "changing",
     auth: "principal",
-    action: null,
+    action: "mail_sender.use",
     scope: null,
     timeoutMs: 1000,
     inputSchema: mailSendInputSchema,
