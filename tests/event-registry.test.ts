@@ -174,9 +174,19 @@ function emittedNames(sources: readonly string[]): Set<string> {
       const declaration = owner(call);
       const key = declaration ? callableKey(declaration) : undefined;
       if (!declaration || !key) continue;
-      for (const value of eventValues(call)) {
+      // A wrapper may pass its parameter unchanged to another wrapper which reads a field
+      // from it (upsert -> upsertAsset -> recordAssetEvent). Keep that field path while
+      // following the parameter; valuesAt resolves the literals at the eventual call site.
+      const forwarded = eventArguments(call).flatMap(({ index, path }) => {
+        const argument = call.arguments[index];
+        return argument ? [{ value: argument, path }] : [];
+      });
+      for (const { value, path: suffix } of [
+        ...eventValues(call).map((value) => ({ value, path: [] as string[] })),
+        ...forwarded
+      ]) {
         let root = value;
-        const path: string[] = [];
+        const path: string[] = [...suffix];
         while (ts.isPropertyAccessExpression(root)) {
           path.unshift(root.name.text);
           root = root.expression;
@@ -367,6 +377,25 @@ describe("event registry", () => {
       "subject.queued",
       "subject.started"
     ]);
+  });
+
+  it("follows field forwarding through an asset-style method and function", () => {
+    const names = emittedNames([
+      `
+      function recordAssetEvent(call, type) { call.audit.record({ type }); }
+      function upsertAsset(options, call, target, config, write) {
+        recordAssetEvent(call, write.audit);
+      }
+      class AssetWorkflow {
+        upsert(call, target, config, write) {
+          return upsertAsset(this.options, call, target, config, write);
+        }
+        revert() { this.upsert(call, target, config, { audit: "config_asset.reverted" }); }
+      }
+      const unrelated = { audit: "subject.not_emitted" };
+    `
+    ]);
+    expect([...names]).toEqual(["config_asset.reverted"]);
   });
 
   it("requires the writing Operation Run in row-write event payloads", () => {
