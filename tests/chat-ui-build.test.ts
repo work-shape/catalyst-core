@@ -405,7 +405,7 @@ describe("Studio frame", () => {
 
     expect(list).toContain('<option value="connections" selected="">Connections</option>');
     expect(list).toContain(">CRM<");
-    for (const chip of [">mcp<", ">postgres<", "Enabled", "Disabled"]) {
+    for (const chip of [">MCP server<", ">postgres<", "Enabled", "Disabled"]) {
       expect(list, chip).toContain(chip);
     }
     // One chip says whose a row is: the frame's, never a second one of the kind.

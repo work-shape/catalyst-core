@@ -171,7 +171,8 @@ describe("a policy on assets.put and the agent's save", () => {
       const before = await t.revision();
       t.settings.push(setting);
       const { events, answer } = await t.save("Under deny");
-      expect(`${events}${answer ?? ""}`).toContain("denied by policy");
+      expect(`${events}${answer ?? ""}`).toContain("A rule prevents this action here.");
+      expect(answer ?? "").toContain("Ask an instance administrator, for example Owner.");
       expect(answer ?? "").not.toContain('"saved":true');
       expect(await t.revision()).toBe(before);
     },
@@ -203,7 +204,7 @@ describe("a policy on assets.put and the agent's save", () => {
     const t = await fixture();
     t.settings.push({ operation: "assets.put", value: "deny", assetKind: WORKFLOW_ASSET_KIND });
     const denied = await t.firstSave("year-end");
-    expect(denied.said).toContain("denied by policy");
+    expect(denied.said).toContain("A rule prevents this action here.");
     expect(denied.stored).toBeUndefined();
 
     t.settings.splice(0);

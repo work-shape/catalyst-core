@@ -206,7 +206,7 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       await expect(row).not.toContainText(connection.name);
       // The explanation stands above the rows as it stood above the empty list.
       await expect(main.getByText(DESCRIPTION_EN, { exact: true })).toBeVisible();
-      for (const chip of ["mcp", "Enabled"]) {
+      for (const chip of ["MCP server", "Enabled"]) {
         await expect(row.getByText(chip, { exact: true })).toBeVisible();
       }
       // One chip says whose a row is, and only a workspace's: an instance Connection has none.
