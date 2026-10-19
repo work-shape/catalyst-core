@@ -680,6 +680,72 @@ describe("The rows of a Data Store", () => {
     expect(german).not.toMatch(/>(?:true|false)</u);
   });
 
+  it("writes dates the way the reader's language does, never as ISO text (ACCEPT-2e)", () => {
+    const rows = ready({
+      ...visitRows,
+      columns: [
+        { name: "mandant", type: "text", nativeType: "text" },
+        { name: "frist", type: "date", nativeType: "date" }
+      ],
+      rows: [{ at: "at_1", values: { mandant: "Bäckerei Sommer", frist: "2026-12-15" } }]
+    });
+
+    const german = render(address, { locale: "de", rows });
+    expect(german).toContain(">15.12.2026<");
+    expect(german).not.toContain("2026-12-15");
+    expect(render(address, { rows })).toContain(">Dec 15, 2026<");
+  });
+
+  it("names a column's type in the reader's words, and the database's name only where it differs (ACCEPT-2e)", () => {
+    const german = render(address, {
+      locale: "de",
+      schema: ready({
+        ...schema,
+        tables: [
+          {
+            name: "fristen",
+            rowEstimate: 3,
+            columns: [
+              {
+                name: "id",
+                type: "integer",
+                nativeType: "bigint",
+                nullable: false,
+                primaryKey: true
+              },
+              {
+                name: "mandant",
+                type: "text",
+                nativeType: "text",
+                nullable: false,
+                primaryKey: false
+              },
+              {
+                name: "erledigt",
+                type: "boolean",
+                nativeType: "boolean",
+                nullable: false,
+                primaryKey: false
+              },
+              { name: "frist", type: "date", nativeType: "date", nullable: true, primaryKey: false }
+            ]
+          }
+        ]
+      })
+    });
+    const typeOf = (column: string) =>
+      german.slice(german.indexOf(`data-data-store-column="${column}"`)).split("</tr>")[0] ?? "";
+
+    expect(typeOf("id")).toContain(">Ganzzahl");
+    expect(typeOf("id")).toContain(">bigint<");
+    expect(typeOf("mandant")).toContain(">Text");
+    expect(typeOf("mandant")).not.toContain(">text<");
+    expect(typeOf("erledigt")).toContain(">Ja oder nein");
+    expect(typeOf("erledigt")).not.toContain("boolean");
+    expect(typeOf("frist")).toContain(">Datum");
+    expect(typeOf("frist")).not.toContain(">date<");
+  });
+
   it("shows a cut value by its first characters and a value read by no page as not read, each with the button that reads it whole", () => {
     const page = render(address);
     expect(page).toContain('data-data-store-cut="text"');

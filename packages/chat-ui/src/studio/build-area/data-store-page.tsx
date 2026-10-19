@@ -29,6 +29,7 @@ import { useTranslation } from "../../shared/i18n";
 import { usePageShown } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import {
+  columnTypeView,
   DATA_STORE_CONDITION_LABELS,
   DATA_STORE_STATE_VIEWS,
   dataStoreStateView,
@@ -454,12 +455,7 @@ function DataStoreColumns({ table }: { table: DataStoreTable }) {
               </span>
               {column.comment ? <TableCellDetail>{column.comment}</TableCellDetail> : null}
             </TableCell>
-            <TableCell>
-              {column.type}
-              <TableCellDetail>
-                <code className="font-mono">{column.nativeType}</code>
-              </TableCellDetail>
-            </TableCell>
+            <ColumnTypeCell column={column} />
             <TableCell>
               {t(column.nullable ? "dataStores.columnNullableYes" : "dataStores.columnNullableNo")}
             </TableCell>
@@ -479,5 +475,19 @@ function DataStoreColumns({ table }: { table: DataStoreTable }) {
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+/** A column's type in the reader's words, with the database's name below where it says more. */
+function ColumnTypeCell({ column }: { column: { type: string; nativeType: string } }) {
+  const { t } = useTranslation();
+  const { label, native } = columnTypeView(column);
+  const code = native === undefined ? null : <code className="font-mono">{native}</code>;
+  if (label === undefined) return <TableCell>{code}</TableCell>;
+  return (
+    <TableCell>
+      {label.list ? t("dataStores.typeList", { type: t(label.key) }) : t(label.key)}
+      {code === null ? null : <TableCellDetail>{code}</TableCellDetail>}
+    </TableCell>
   );
 }

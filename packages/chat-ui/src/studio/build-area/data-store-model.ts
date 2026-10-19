@@ -1,6 +1,7 @@
 import type { ApiClient, LocaleCode } from "@work-shape/catalyst-api-client";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../../shared/i18n";
+import { formatMomentShort } from "../../shared/locale-format";
 
 /** The state of one Data Store, as `data_stores.get` answers it. */
 export type DataStoreState = Awaited<ReturnType<ApiClient["data_stores"]["get"]>>;
@@ -110,4 +111,44 @@ export function wholeValueText(value: unknown): string | undefined {
     return undefined;
   }
   return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
+/**
+ * A date or a moment of a row as the reader's language writes it: "15.12.2026" in German. A
+ * date is a day of the calendar, so it is read in UTC and never moves by the reader's zone.
+ * Any other value, and a value that is no such date, has none.
+ */
+export function cellDateText(value: unknown, type: string, locale: LocaleCode): string | undefined {
+  if (typeof value !== "string" || (type !== "date" && type !== "timestamp")) return undefined;
+  if (Number.isNaN(Date.parse(value))) return undefined;
+  return type === "date"
+    ? new Date(value).toLocaleDateString(locale, { dateStyle: "medium", timeZone: "UTC" })
+    : formatMomentShort(value, locale);
+}
+
+const COLUMN_TYPE_LABELS: Readonly<Record<string, TranslationKey>> = {
+  text: "dataStores.typeText",
+  integer: "dataStores.typeInteger",
+  number: "dataStores.typeNumber",
+  boolean: "dataStores.typeBoolean",
+  date: "dataStores.typeDate",
+  timestamp: "dataStores.typeTimestamp"
+};
+
+/**
+ * A column's type in the reader's words, and the database's name for it only where that says
+ * more: "Ganzzahl" over `bigint`, but "Text" alone where the database says `text` too. A type
+ * the product has no word for is named by the database alone.
+ */
+export function columnTypeView(column: { type: string; nativeType: string }): {
+  label?: { key: TranslationKey; list: boolean };
+  native?: string;
+} {
+  const list = column.type.endsWith("[]");
+  const key = COLUMN_TYPE_LABELS[list ? column.type.slice(0, -2) : column.type];
+  if (key === undefined) return { native: column.nativeType };
+  return {
+    label: { key, list },
+    ...(column.nativeType === column.type ? {} : { native: column.nativeType })
+  };
 }

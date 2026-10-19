@@ -18,7 +18,7 @@ import {
   TabsTrigger
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
-import { cellText, DATA_STORE_CELL_WIDTH, wholeValueText } from "./data-store-model";
+import { cellDateText, cellText, DATA_STORE_CELL_WIDTH, wholeValueText } from "./data-store-model";
 import { ReadState } from "./data-store-read-state";
 import type { DataStoreSource, DataStoreValuePlace } from "./data-store-source";
 
@@ -293,12 +293,12 @@ export function DataStoreValueDialog({
 
 /** One value of a row. A long one is cut and shows whole on demand; `null` is named as such. */
 function RowCell({ value, type }: { value: unknown; type: string }) {
-  const { t } = useTranslation();
-  // A yes-or-no value in the reader's words, as the confirmation of a row write says it.
+  const { locale, t } = useTranslation();
+  // A yes-or-no value and a date in the reader's words, as the confirmation of a row write says them.
   const text =
     typeof value === "boolean"
       ? t(value ? "dataStores.valueTrue" : "dataStores.valueFalse")
-      : cellText(value);
+      : (cellDateText(value, type, locale) ?? cellText(value));
   if (text === undefined) {
     return (
       <TableCell align={alignOf(type)} className="text-muted-foreground">
