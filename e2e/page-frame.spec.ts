@@ -45,12 +45,15 @@ test("every page's title line starts under the frame's top room, and the area's 
     const head = page.locator('header[data-variant="list"]').filter({ has: heading });
     expect(await top(head), path).toBe(PAGE_TOP);
     expect(await middle(heading), path).toBe(titleLineMiddle);
+    // Nothing floats over a page here: no band and no fade over its title line.
+    expect(await bandCovers(page), path).toBeLessThanOrEqual(await top(heading));
     const areaName = page.locator("[data-subrail-title]");
     if (area === undefined) {
       await expect(areaName, path).toHaveCount(0);
     } else {
       await expect(areaName, path).toHaveText(area);
       expect(await middle(areaName), path).toBe(titleLineMiddle);
+      expect(await bandCovers(page), path).toBeLessThanOrEqual(await top(areaName));
     }
   }
 });
@@ -110,6 +113,8 @@ test("in a narrow window the area's name stands beside the sidebar button, over 
     const select = page.getByRole("combobox", { name: pages });
     expect(await top(select), path).toBeGreaterThanOrEqual(HEADER);
     expect(await top(heading), path).toBeGreaterThan((await box(select)).y + 36);
+    // The rail's line is a band of its own: the sidebar button's band gives way to it.
+    expect(await bandCovers(page), path).toBeLessThanOrEqual(await top(areaName));
   }
 
   // A page without a rail starts its title line a step under the band.
@@ -118,6 +123,8 @@ test("in a narrow window the area's name stands beside the sidebar button, over 
   await expect(inbox).toBeVisible();
   const head = page.locator('header[data-variant="list"]').filter({ has: inbox });
   expect(await top(head)).toBe(HEADER + PAGE_TOP_NARROW);
+  // The band and its fade end above the title line; only what scrolls up passes under them.
+  expect(await bandCovers(page)).toBeLessThanOrEqual(await top(inbox));
 });
 
 /** A name longer than any head has room for beside its actions. */
@@ -406,6 +413,26 @@ async function box(
 
 async function top(locator: Locator): Promise<number> {
   return Math.round((await box(locator)).y);
+}
+
+/**
+ * How far down the band over the main area paints, with the fade under it: 0 where neither is
+ * drawn. Fails with a band or fade over a title line that rests under them.
+ */
+function bandCovers(page: Page): Promise<number> {
+  return page
+    .locator("#workspace-content > header")
+    .first()
+    .evaluate((band) => {
+      const style = getComputedStyle(band);
+      if (style.display === "none") return 0;
+      const { bottom } = band.getBoundingClientRect();
+      const fade = getComputedStyle(band, "::after");
+      if (fade.display !== "none" && fade.content !== "none") {
+        return Math.round(bottom + Number.parseFloat(fade.height));
+      }
+      return style.backgroundColor === "rgba(0, 0, 0, 0)" ? 0 : Math.round(bottom);
+    });
 }
 
 /** The height of an element's middle line in the window. */

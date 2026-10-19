@@ -301,9 +301,20 @@ async function scrollMainArea(page: Page): Promise<void> {
   });
 }
 
-// Fails with the band on every page: it covered a pinned detail head, its name and its actions.
-// A list or a Settings page, whose head scrolls away, keeps the band, so nothing passes under
-// the sidebar button.
+/** Whether the fade under the band is drawn, for what scrolls up under the band. */
+function fadeDrawn(page: Page): Promise<boolean> {
+  return page
+    .locator("#workspace-content > header")
+    .first()
+    .evaluate((band) => {
+      const fade = getComputedStyle(band, "::after");
+      return fade.display !== "none" && fade.backgroundImage !== "none";
+    });
+}
+
+// Fails with the band on every page: it covered a pinned detail head, its name and its actions,
+// and the area name a Settings page's sub-rail shows beside the sidebar button. A list, whose
+// head scrolls away, keeps the band and its fade, so nothing passes under the sidebar button.
 test("the band under the sidebar button gives way to a pinned head and stays over a list", async ({
   page
 }) => {
@@ -314,13 +325,16 @@ test("the band under the sidebar button gives way to a pinned head and stays ove
   const workspace = /\/w\/([^/]+)/u.exec(page.url())?.[1] ?? "";
   for (const variant of shotsDir ? variants : [deLight]) {
     const [locale, theme] = variant;
-    for (const [name, path] of [
-      ["apps-list", `/w/${workspace}/apps`],
-      ["settings-users", "/settings/instance/users"]
+    for (const [name, path, band] of [
+      ["apps-list", `/w/${workspace}/apps`, true],
+      // The sub-rail's line with the area's name is the band of a Settings page.
+      ["settings-users", "/settings/instance/users", false]
     ] as const) {
       await show(page, path, variant, 390);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      expect(await bandDrawn(page), path).toBe(true);
+      expect(await bandDrawn(page), path).toBe(band);
+      expect(await fadeDrawn(page), path).toBe(band);
+      if (!band) await expect(page.locator("[data-subrail-title]"), path).toBeVisible();
       // A short window, so the page has something to scroll.
       await page.setViewportSize({ width: 390, height: 560 });
       await scrollMainArea(page);

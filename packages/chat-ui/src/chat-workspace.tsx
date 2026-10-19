@@ -573,8 +573,9 @@ function ChatWorkspaceContent({
               agents={model.config.config.agents}
               agentDisplay={agentChipDisplayFor(model.config.config.ui)}
               // An App takes the whole main area, and so do a Workflow and a Studio page: the
-              // band gives way to the pinned head they stand under, which it would cover. A list
-              // or a Settings page scrolls under the band like a conversation.
+              // band gives way to the pinned head they stand under, which it would cover, and so
+              // does it to a sub-rail that names its area. In a narrow window a list scrolls
+              // under the band like a conversation; from 768 px up a page has no band.
               conversation={onChatRoute}
               // Only beside a conversation does a surface share the main area with the band.
               surfaceBesideWidth={onChatRoute ? chatSurface.besideWidth : 0}
