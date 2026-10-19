@@ -1,3 +1,4 @@
+import { testDataStoreRowWrites } from "./support/data-store-row-cases";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -10,6 +11,10 @@ import {
   DATA_STORE_OPERATION_SCOPES,
   DATA_STORE_OPERATION_VERBS,
   asUserId,
+  asAgentRunId,
+  asConversationId,
+  asToolCallId,
+  resolvePolicy,
   dataStoreOperationName,
   type AuthenticatedUser,
   type DataStoreOperationVerb,
@@ -56,7 +61,7 @@ describe("a Data Store on an assembled instance", () => {
     return runOperation(
       {
         operation: dataStoreOperationName("findings", verb),
-        effect: verb === "insert" || verb === "load" ? "changing" : "reading",
+        effect: ["insert", "update", "delete_rows", "load"].includes(verb) ? "changing" : "reading",
         input,
         actor,
         origin: { kind: "user" },
@@ -350,6 +355,31 @@ describe("a Data Store on an assembled instance", () => {
     expect(await outcome("insert", insert)).toBe("done");
   });
 
+  it("pauses an agent insert for confirmation under the ordinary instance defaults", async () => {
+    const instance = await start(true);
+    await publishStore(instance);
+    const definition = required(
+      await instance.execution.operationCalls.registry.resolve("data_store.findings.insert")
+    );
+    expect(
+      resolvePolicy({
+        definition,
+        origin: {
+          kind: "agent",
+          agentRunId: asAgentRunId("run_probe"),
+          conversationId: asConversationId("conv_probe"),
+          agentName: "platform",
+          toolCallId: asToolCallId("call_probe"),
+          toolName: definition.name
+        },
+        instanceDefaults: instance.execution.operationCalls.deps.policy.instanceDefaults,
+        centralSettings: [],
+        callerCanConfirm: false,
+        canPause: true
+      })
+    ).toMatchObject({ value: "confirm", next: "await_confirmation", deliver: "conversation" });
+  });
+
   it("declares for each verb the scope, the caller, the effect and the right the contract names, and no policy of its own", async () => {
     const instance = await start(true);
     await publishStore(instance);
@@ -385,7 +415,7 @@ describe("a Data Store on an assembled instance", () => {
       DATA_STORE_OPERATION_SCOPES.describe,
       DATA_STORE_OPERATION_SCOPES.preview_rows
     ]);
-    const { read, insert } = DATA_STORE_ACTIONS;
+    const { read, insert, execute } = DATA_STORE_ACTIONS;
     // A read is recorded every time. No verb names a policy of its own: what a changing call
     // waits for is the instance's to say, for every caller.
     expect(declared).toEqual([
@@ -396,6 +426,24 @@ describe("a Data Store on an assembled instance", () => {
         "principal",
         "changing",
         insert,
+        false,
+        undefined
+      ],
+      [
+        "update",
+        DATA_STORE_OPERATION_SCOPES.update,
+        "principal",
+        "changing",
+        execute,
+        false,
+        undefined
+      ],
+      [
+        "delete_rows",
+        DATA_STORE_OPERATION_SCOPES.delete_rows,
+        "principal",
+        "changing",
+        execute,
         false,
         undefined
       ],
@@ -553,6 +601,8 @@ describe("a Data Store on an assembled instance", () => {
     expect(tools.map((tool) => [tool.name, tool.effect])).toEqual([
       ["data_store.findings.query", "reading"],
       ["data_store.findings.insert", "changing"],
+      ["data_store.findings.update", "changing"],
+      ["data_store.findings.delete_rows", "changing"],
       ["data_store.findings.describe", "reading"],
       ["data_store.findings.preview_rows", "reading"]
     ]);
@@ -715,3 +765,5 @@ describe("a Data Store on an assembled instance", () => {
     expect(again.json<ErrorBody>().error.details).toMatchObject({ reason: "data_store_id_held" });
   });
 });
+
+testDataStoreRowWrites();

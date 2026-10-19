@@ -105,7 +105,7 @@
     },
     ".": {
       "entry": [
-        "tests/**/*.test.ts",
+        "tests/**/*.{test,live}.ts",
         "tests/probes/**/*.probe.ts",
         "e2e/**/*.ts",
         "scripts/**/*.mjs",

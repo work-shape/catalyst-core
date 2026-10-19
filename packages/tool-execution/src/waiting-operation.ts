@@ -372,7 +372,7 @@ async function admitAgain(
   // waited is refused here, and a source that is down is never asked about it.
   const { origin } = waiting.call;
   if (origin.kind === "agent" && isDataToolName(origin.toolName)) {
-    const listed = (await deps.agentToolNames?.(origin.agentName)) ?? [];
+    const listed = (await deps.agentToolNames?.(origin.agentName, origin.conversationId)) ?? [];
     if (!listed.includes(origin.toolName)) {
       const ended = await endWaiting(
         deniedEnd(

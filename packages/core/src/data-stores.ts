@@ -4,6 +4,8 @@ import {
   DATA_STORE_SCALAR_TYPES
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
+import { DATA_STORE_OPERATION_PREFIX } from "./data-store-operation-names";
+
 import type { AssetKindActions, AssetScope } from "./asset-kinds";
 import type { DataStoreRecord } from "./data-store-records";
 import { AppError, isAppError, type AppErrorCode } from "./errors";
@@ -24,12 +26,17 @@ export const DATA_STORE_ASSET_KIND = "data_store";
 export const DATA_STORE_MANIFEST_FILE = "store.yaml";
 
 /**
+ * The prefix of every operation on the rows of one Data Store: `data_store.<id>.<verb>`. The
+ * id holds no dot. It is singular. Operations that manage Data Stores have a two-part name in
+ * the plural, such as `data_stores.publish`.
+ */
+export { DATA_STORE_OPERATION_PREFIX } from "./data-store-operation-names";
+
+/**
  * The rights of the kind. `write` changes the definition and its migrations. `insert` adds
- * rows and changes nothing of the definition: it is what the service principal of a Workflow
- * is granted, so a run that stores findings cannot edit a migration. `execute` is reserved for
- * changing statements other than an insert and is asked by nothing yet. The kind has no `use`: a
- * person reaches the rows through an App, whose `app.use` is checked. Spec: One data store
- * primitive, scope.
+ * rows without changing the definition. `execute` changes or removes rows through `update`,
+ * `delete_rows`, or a changing `load`. People and service principals hold these row rights
+ * separately from definition rights. An App checks `app.use` for its named actions.
  */
 export const DATA_STORE_ACTIONS = {
   read: "data_store.read",
@@ -40,13 +47,6 @@ export const DATA_STORE_ACTIONS = {
   execute: "data_store.execute",
   records: "data_store.records"
 } as const satisfies AssetKindActions & { insert: string; execute: string; records: string };
-
-/**
- * The prefix of every operation on the rows of one Data Store: `data_store.<id>.<verb>`. The
- * id holds no dot. It is singular. Operations that manage Data Stores have a two-part name in
- * the plural, such as `data_stores.publish`.
- */
-export const DATA_STORE_OPERATION_PREFIX = "data_store.";
 
 /**
  * What an operation of one Data Store does, and the right on that store it needs. `query` runs
@@ -63,6 +63,8 @@ export const DATA_STORE_OPERATION_PREFIX = "data_store.";
 export const DATA_STORE_OPERATION_VERBS = [
   "query",
   "insert",
+  "update",
+  "delete_rows",
   "load",
   "records.propose",
   "describe",
@@ -75,6 +77,8 @@ export type DataStoreOperationVerb = (typeof DATA_STORE_OPERATION_VERBS)[number]
 export const DATA_STORE_OPERATION_RIGHTS = {
   query: DATA_STORE_ACTIONS.read,
   insert: DATA_STORE_ACTIONS.insert,
+  update: DATA_STORE_ACTIONS.execute,
+  delete_rows: DATA_STORE_ACTIONS.execute,
   load: DATA_STORE_ACTIONS.insert,
   "records.propose": DATA_STORE_ACTIONS.records,
   describe: DATA_STORE_ACTIONS.read,
@@ -89,6 +93,8 @@ export const DATA_STORE_OPERATION_RIGHTS = {
 export const DATA_STORE_OPERATION_SCOPES = {
   query: "data_store_rows:read",
   insert: "data_store_rows:write",
+  update: "data_store_rows:write",
+  delete_rows: "data_store_rows:write",
   load: "data_store_rows:write",
   "records.propose": "data_store_rows:write",
   describe: "config_assets:read",

@@ -150,6 +150,18 @@ describe("the platform's knowledge of an agent", () => {
     expect(offer.orientation).not.toContain("Wissensdatenbank");
   });
 
+  it("keeps truncated row reads and draft rows honest in the offered guidance", async () => {
+    const offer = await offerFor(PLATFORM_TOOLS);
+    expect(offer.orientation).toContain(
+      "a migration that creates its table with a primary key and no rows"
+    );
+    expect(offer.orientation).toContain(
+      "If query says truncated, say so and page with an ordered query"
+    );
+    expect(offer.orientation).toContain("a truncated answer cannot prove absence");
+    expect(offer.orientation).toContain("it is not a row editor");
+  });
+
   it("offers connection drafting to platform agents by default only while Connections is enabled", async () => {
     const offered = await offerFor(PLATFORM_TOOLS, undefined, true);
     expect(offered.toolNames).toContain("platform.connections.draft_tools");

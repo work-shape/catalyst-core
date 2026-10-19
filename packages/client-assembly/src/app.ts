@@ -465,7 +465,17 @@ export async function createClientInstanceExecutionAssembly(
     });
     approvalRequestHandlers.set(handler.kind, handler);
   }
-  const platformTools = createPlatformTools({ stores: store, modules, connections });
+  const platformTools = createPlatformTools({
+    stores: store,
+    modules,
+    connections,
+    dataTools: () => configAssets.dataTools,
+    dataToolDescribeTimeoutMs: config.runtime.dataToolDescribeTimeoutMs,
+    policy: {
+      instanceDefaults: config.policy.defaults,
+      centralSettings: () => operationCalls.deps.policy.centralSettings()
+    }
+  });
   const { conversationOffer } = platformTools;
   const { authorizer, operationCalls, approvalRequestCreator } = createInstanceOperationCalls({
     clientInstanceId,

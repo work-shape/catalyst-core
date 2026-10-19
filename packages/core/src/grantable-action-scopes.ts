@@ -33,9 +33,11 @@ export const GRANTABLE_ACTION_SCOPES = {
   "app.write": ["workspace", "asset", "instance"],
   "app.publish": ["workspace", "asset", "instance"],
   "app.delete": ["workspace", "asset", "instance"],
-  // A Data Store's definition, as its App's: on what one workspace owns, on one Data Store or on
-  // all of them. Its rows (`insert`, `execute`) are reached through an App or a principal.
+  // Definition and row rights are granted separately, on one store, what a workspace owns,
+  // or the instance. Editing or publishing a definition grants no right to write rows.
   "data_store.read": ["workspace", "asset", "instance"],
+  "data_store.insert": ["workspace", "asset", "instance"],
+  "data_store.execute": ["workspace", "asset", "instance"],
   "data_store.write": ["workspace", "asset", "instance"],
   "data_store.publish": ["workspace", "asset", "instance"],
   "data_store.delete": ["workspace", "asset", "instance"],

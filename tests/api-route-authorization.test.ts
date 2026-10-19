@@ -57,6 +57,8 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
   "knowledge_bases.remove_documents": { documentIds: ["missing"] },
   "data_stores.query": { sql: "select 1" },
   "data_stores.insert": { table: "missing", rows: [{ id: 1 }] },
+  "data_stores.update": { table: "missing", rows: [{ key: { id: 1 }, set: { value: "test" } }] },
+  "data_stores.delete_rows": { table: "missing", keys: [{ id: 1 }] },
   "service_principals.create": { displayLabel: "Service" },
   "service_principals.update": { displayLabel: "Service" },
   "api_credentials.create": { name: "Credential" },

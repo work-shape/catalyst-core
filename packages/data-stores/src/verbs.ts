@@ -134,10 +134,12 @@ export async function changeWhole<Result extends JsonObject>(
 }
 
 /** The refusal of rows for a store that is at its size limit, or that they would take past it. */
-export function storeFull(record: DataStoreRecord, sizeBytes: number): AppError {
+export function storeFull(record: DataStoreRecord, sizeBytes: number, locale?: string): AppError {
   return new AppError(
     "CONFLICT",
-    `The Data Store '${record.name}' holds ${sizeBytes} bytes and its size limit is ${record.sizeLimitBytes} bytes (sizeLimit). No rows are added until it is smaller or the limit is raised; reading keeps working.`,
+    locale === "de"
+      ? `Der Datenspeicher '${record.name}' belegt ${sizeBytes} Bytes und seine Größenbegrenzung liegt bei ${record.sizeLimitBytes} Bytes (sizeLimit). Es werden keine Datensätze geschrieben, bis er kleiner ist oder die Grenze erhöht wird. Lesen ist weiterhin möglich.`
+      : `The Data Store '${record.name}' holds ${sizeBytes} bytes and its size limit is ${record.sizeLimitBytes} bytes (sizeLimit). No rows are written until it is smaller or the limit is raised; reading keeps working.`,
     { reason: "data_store_size_limit", limit: record.sizeLimitBytes, actual: sizeBytes }
   );
 }
