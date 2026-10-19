@@ -58,9 +58,17 @@ export async function reconcileBuiltInRoles(session: Queries): Promise<void> {
     [known]
   );
   for (const row of retired) {
-    await audit(session, row.client_instance_id, row.holder_id, {
-      removedFromProduct: [row.action]
-    });
+    await appendAuditEvent(
+      {
+        type: "role.reconciled",
+        clientInstanceId: row.client_instance_id,
+        roleId: row.holder_id,
+        metadata: {
+          removedFromProduct: [row.action]
+        }
+      },
+      session
+    );
   }
   const stored = await session.unsafe<StoredBuiltInRole[]>(
     "select client_instance_id, id, default_actions, pending_actions from roles where built_in order by client_instance_id, id"
@@ -92,7 +100,15 @@ export async function reconcileBuiltInRoles(session: Queries): Promise<void> {
         role.client_instance_id,
         role.id
       ]);
-      await audit(session, role.client_instance_id, role.id, { edited: false, added, removed });
+      await appendAuditEvent(
+        {
+          type: "role.reconciled",
+          clientInstanceId: role.client_instance_id,
+          roleId: role.id,
+          metadata: { edited: false, added, removed }
+        },
+        session
+      );
       continue;
     }
     const pending = withChanges(pendingKnown, added, removed);
@@ -101,7 +117,15 @@ export async function reconcileBuiltInRoles(session: Queries): Promise<void> {
        where client_instance_id = $1 and id = $2`,
       [role.client_instance_id, role.id, JSON.stringify(release), JSON.stringify(pending)]
     );
-    await audit(session, role.client_instance_id, role.id, { edited: true, added, removed });
+    await appendAuditEvent(
+      {
+        type: "role.reconciled",
+        clientInstanceId: role.client_instance_id,
+        roleId: role.id,
+        metadata: { edited: true, added, removed }
+      },
+      session
+    );
   }
 }
 
@@ -136,21 +160,26 @@ function withChanges(
   return next;
 }
 
-async function audit(
-  session: Queries,
-  clientInstanceId: string,
-  roleId: string,
-  metadata: Record<string, unknown>
+/** A `role.reconciled` audit event on the migration session; the step has no actor. */
+async function appendAuditEvent(
+  event: {
+    type: "role.reconciled";
+    clientInstanceId: string;
+    roleId: string;
+    metadata: Record<string, unknown>;
+  },
+  session: Queries
 ): Promise<void> {
   await session.unsafe(
     `insert into audit_events (id, client_instance_id, type, status, subject, correlation_id, created_at, metadata)
-     values ($1, $2, 'role.reconciled', 'success', $3, $4, now(), $5::text::jsonb)`,
+     values ($1, $2, $3, 'success', $4, $5, now(), $6::text::jsonb)`,
     [
       createPlatformId("audit"),
-      clientInstanceId,
-      roleId,
+      event.clientInstanceId,
+      event.type,
+      event.roleId,
       createPlatformId("corr"),
-      JSON.stringify({ roleId, ...metadata })
+      JSON.stringify({ roleId: event.roleId, ...event.metadata })
     ]
   );
 }
