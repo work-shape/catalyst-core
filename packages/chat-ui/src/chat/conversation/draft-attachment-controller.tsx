@@ -40,7 +40,9 @@ export interface DraftAttachmentController {
   onFilesSelected(files: File[]): void;
   /**
    * The first message of a new conversation is sent: makes the conversation, uploads the files
-   * waiting in the composer and answers once they are ready. Answers nothing without such files.
+   * waiting in the composer and answers once they are ready. Without such files it answers the
+   * conversation an earlier send made, until `clearConversationUploads` acknowledges its message,
+   * and otherwise nothing.
    */
   sendStagedFiles(): Promise<string | undefined>;
   onRemoveDraftAttachment(attachmentId: string): void;
@@ -72,7 +74,8 @@ export function useDraftAttachmentController(
   >([]);
   // Files picked before the first message wait here: a conversation is made only when it is sent.
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
-  // The conversation a failed first send made: the next send goes on in it.
+  // The conversation a first send made, until its message was submitted: a send that failed,
+  // in its files or in its message, goes on in it.
   const stagedConversation = useRef<CreatedConversation | undefined>(undefined);
   const ended = useRef(false);
   useEffect(() => {
@@ -90,6 +93,11 @@ export function useDraftAttachmentController(
     stagedConversation.current = undefined;
     setStagedFiles([]);
   }, [input.collaborationWorkspaceId]);
+  // The start page is left for a conversation: a later start page makes its own, even where
+  // the message's submission was never acknowledged here.
+  useEffect(() => {
+    if (input.selectedConversationId) stagedConversation.current = undefined;
+  }, [input.selectedConversationId]);
   // Removal settles after later renders, so it reads the uploads and callback of that moment.
   const latest = useRef({ input, localUploadingAttachments, stagedFiles });
   latest.current = { input, localUploadingAttachments, stagedFiles };
@@ -163,7 +171,8 @@ export function useDraftAttachmentController(
   async function sendStagedFiles(): Promise<string | undefined> {
     const staged = latest.current.stagedFiles;
     if (staged.length === 0) {
-      return undefined;
+      // A failed send's conversation takes the message, also once its files were all taken out.
+      return stagedConversation.current?.id;
     }
     const restage = (uploaded: ReadonlyMap<string, string> = new Map()) =>
       setStagedFiles((current) =>
@@ -182,8 +191,13 @@ export function useDraftAttachmentController(
           restage();
           throw error;
         }));
-    // A conversation made while the person moved to another workspace is not held for theirs.
-    if (stagedWorkspace.current === input.collaborationWorkspaceId) {
+    // Read again after the wait: a conversation made while the person moved to another
+    // workspace, or opened a conversation, is not held for the next start page.
+    const now = latest.current.input;
+    if (
+      now.collaborationWorkspaceId === input.collaborationWorkspaceId &&
+      now.selectedConversationId === undefined
+    ) {
       stagedConversation.current = conversation;
     }
     const queryKey = workspaceQueryKeys.draftAttachments(
@@ -227,7 +241,6 @@ export function useDraftAttachmentController(
         throw error;
       }
     );
-    stagedConversation.current = undefined;
     setStagedFiles([]);
     queryClient.setQueryData(queryKey, attachments);
     const blocked = getSendBlockedReason(attachments, []);
@@ -350,6 +363,8 @@ export function useDraftAttachmentController(
   }
 
   function clearConversationUploads(conversationId: string) {
+    // Called once the conversation's message was submitted: the start page lets it go.
+    if (stagedConversation.current?.id === conversationId) stagedConversation.current = undefined;
     setLocalUploadingAttachments((currentAttachments) =>
       currentAttachments.filter((attachment) => attachment.conversationId !== conversationId)
     );

@@ -46,7 +46,13 @@ type Controller = ReturnType<typeof useDraftAttachmentController>;
 
 /** `refusals` uploads are refused before one is taken; files stay `processing` for good if set. */
 async function startPage(
-  server: { refusals?: number; processing?: boolean; refusedFile?: string } = {}
+  server: {
+    refusals?: number;
+    processing?: boolean;
+    refusedFile?: string;
+    /** The answer to the conversation's create waits for this. */
+    createHeld?: Promise<void>;
+  } = {}
 ) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const calls: string[] = [];
@@ -63,6 +69,7 @@ async function startPage(
       }
       if (!files) {
         calls.push("create conversation");
+        await server.createHeld;
         return Response.json(conversation);
       }
       calls.push(`${method === "POST" ? "upload" : "list"} files of ${url.pathname.split("/")[4]}`);
@@ -85,13 +92,13 @@ async function startPage(
   });
   const shown = vi.fn();
   let controller: Controller | undefined;
-  function Probe({ workspace }: { workspace: string }) {
+  function Probe({ workspace, selected }: { workspace: string; selected?: string }) {
     controller = useDraftAttachmentController({
       enabled: true,
       apiBaseUrl: "https://chat.example.com",
       authScope: "staged-test",
       client,
-      selectedConversationId: undefined,
+      selectedConversationId: selected,
       collaborationWorkspaceId: workspace,
       isAuthenticated: true,
       createConversationForFiles: () =>
@@ -103,7 +110,7 @@ async function startPage(
   }
   const root = createRoot(document.createElement("div"));
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const render = (workspace: string) =>
+  const render = (workspace: string, selected?: string) =>
     act(async () => {
       root.render(
         createElement(
@@ -111,7 +118,7 @@ async function startPage(
           { client: queryClient },
           createElement(TranslationProvider, {
             locale: "de",
-            children: createElement(Probe, { workspace })
+            children: createElement(Probe, { workspace, ...(selected ? { selected } : {}) })
           })
         )
       );
@@ -122,6 +129,17 @@ async function startPage(
     calls,
     shown,
     openWorkspace: render,
+    /** Sends staged files, or none, as the start page does before it starts the message. */
+    send: async () => {
+      let conversationId: string | undefined;
+      await act(async () => {
+        conversationId = await controller?.sendStagedFiles();
+      });
+      return conversationId;
+    },
+    /** What the workspace does once the message of the conversation was submitted. */
+    submitted: (conversationId: string) =>
+      act(async () => controller?.clearConversationUploads(conversationId)),
     unmount: () => act(() => root.unmount())
   };
 }
@@ -301,6 +319,104 @@ describe("files attached before the first message", () => {
       await page.unmount();
     }
   });
+
+  it("leave a failed send's conversation to the message once they are all taken out", async () => {
+    // Removing every file after a failed send left that conversation empty, and the text-only
+    // message then made a second one.
+    const page = await startPage({ refusedFile: "Vertrag.docx" });
+    try {
+      const docx = new File(["content"], "Vertrag.docx", { type: "application/msword" });
+      await act(async () => page.controller()?.onFilesSelected([pdf(), docx]));
+      await act(async () => {
+        await page
+          .controller()
+          ?.sendStagedFiles()
+          .catch(() => undefined);
+      });
+      for (const file of page.controller()?.visibleUploadingAttachments ?? []) {
+        await act(async () => page.controller()?.onRemoveDraftAttachment(file.id));
+      }
+      expect(page.controller()?.visibleUploadingAttachments).toEqual([]);
+      await vi.waitFor(() => expect(page.calls).toContain("remove attachment_Perso.pdf"), {
+        timeout: CONDITION_WAIT_MS
+      });
+
+      expect(await page.send()).toBe("conv_files");
+      // The text message failed to start: its retry goes to the same conversation.
+      expect(await page.send()).toBe("conv_files");
+      expect(page.calls.filter((call) => call === "create conversation")).toHaveLength(1);
+
+      // The message was submitted: the next start page makes its own.
+      await page.submitted("conv_files");
+      expect(await page.send()).toBeUndefined();
+    } finally {
+      await page.unmount();
+    }
+  });
+
+  it("keep their conversation for a retry when the message fails to start after the upload", async () => {
+    const page = await startPage();
+    try {
+      await act(async () => page.controller()?.onFilesSelected([pdf()]));
+      expect(await page.send()).toBe("conv_files");
+      // The message's start failed; the files are in the conversation, the composer is empty.
+      expect(page.controller()?.visibleUploadingAttachments).toEqual([]);
+      // Another conversation's message says nothing about this one.
+      await page.submitted("conv_other");
+      expect(await page.send()).toBe("conv_files");
+      expect(page.calls.filter((call) => call === "create conversation")).toHaveLength(1);
+
+      await page.submitted("conv_files");
+      expect(await page.send()).toBeUndefined();
+      expect(page.calls.filter((call) => call === "create conversation")).toHaveLength(1);
+    } finally {
+      await page.unmount();
+    }
+  });
+
+  it("let their conversation go once the start page is left for a conversation", async () => {
+    // A message that started after its page was gone is never acknowledged on the start page.
+    const page = await startPage();
+    try {
+      await act(async () => page.controller()?.onFilesSelected([pdf()]));
+      expect(await page.send()).toBe("conv_files");
+      await page.openWorkspace("cw_personal", "conv_files");
+      await page.openWorkspace("cw_personal");
+      expect(await page.send()).toBeUndefined();
+    } finally {
+      await page.unmount();
+    }
+  });
+
+  it.each([
+    ["a conversation opens", "cw_personal", "conv_elsewhere"],
+    ["another workspace opens", "cw_nordlicht", undefined]
+  ] as const)(
+    "are not held for the next start page when %s while theirs is made",
+    async (_move, workspace, selected) => {
+      let answerCreate = () => {};
+      const createHeld = new Promise<void>((resolve) => {
+        answerCreate = resolve;
+      });
+      const page = await startPage({ createHeld });
+      try {
+        await act(async () => page.controller()?.onFilesSelected([pdf()]));
+        const sent = page.controller()?.sendStagedFiles();
+        await vi.waitFor(() => expect(page.calls).toContain("create conversation"), {
+          timeout: CONDITION_WAIT_MS
+        });
+        await page.openWorkspace(workspace, selected);
+        await act(async () => {
+          answerCreate();
+          await sent;
+        });
+        await page.openWorkspace(workspace);
+        expect(await page.send()).toBeUndefined();
+      } finally {
+        await page.unmount();
+      }
+    }
+  );
 
   it("are let go with a failed send's conversation when the person opens another workspace", async () => {
     // Sending again after the switch would put the files in the old workspace's conversation

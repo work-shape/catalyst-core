@@ -7,3 +7,5 @@ section: Fixed
 - **Demo:** Fresh seeds keep Kai’s teaching draft out of agent pickers. Existing availability choices are preserved when re-seeding.
 
 - **Review follow-up:** Subagents pass the operation that still needs confirmation back to their parent, while replies to the person keep technical ids out. Tool refusals name the right in plain language and explain who can help. Guardrail hit summaries follow the reader's language.
+
+- **First-message retries:** A failed staged send keeps its conversation until a message is accepted, including retries after all staged files are removed or after the first-message request fails.
