@@ -104,15 +104,15 @@ async function missingDependencies(
     const kind = options.configAssets.kinds.get(reference.kind);
     if (!kind) continue;
     const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
-    const shown =
-      kind.lifecycle === "draft_published" &&
-      !call.access.authorize(kind.actions.read, resource).allowed
-        ? asset.publishedConfig
-        : asset.config;
-    const label = shown
-      ? kind.summarize(shown, call.runtime?.locale ?? options.config.localization.defaultLocale)
-          .title
-      : undefined;
+    const locale = call.runtime?.locale ?? options.config.localization.defaultLocale;
+    const readable =
+      reference.kind !== "knowledge_base" ||
+      call.access.authorize(kind.actions.read, resource).allowed;
+    const label = readable
+      ? kind.summarize(asset.config, locale).title
+      : locale === "de"
+        ? "Wissensbasis"
+        : "Knowledge Base";
     missing.push({
       asset,
       current,

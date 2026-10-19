@@ -151,6 +151,8 @@ export interface UserStore {
   }): Promise<UserRecord[]>;
   /** Most recently signed-in active instance admin; excludes accounts being deleted and seeds. */
   getInstanceAdminName(input: { clientInstanceId: ClientInstanceId }): Promise<string | undefined>;
+  /** Contact for API access and model bindings, which require the superadmin role. */
+  getSuperadminName(input: { clientInstanceId: ClientInstanceId }): Promise<string | undefined>;
   createUser(input: CreateUserInput): Promise<UserRecord>;
   /** Refuses with `userInDeletionError` when the deletion of the user was requested. */
   updateUser(input: UpdateUserInput): Promise<UserRecord>;

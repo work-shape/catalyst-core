@@ -17300,7 +17300,7 @@
     "/api/v1/knowledge-bases/{knowledgeBase}/documents/{documentId}/content": {
       "get": {
         "operationId": "knowledge_bases.open_document",
-        "summary": "Open an original source document with knowledge_base.use; removed documents are unavailable",
+        "summary": "Open an original source document with knowledge_base.use; a cited document is opened in the context of its conversation's workspace; removed documents are unavailable",
         "tags": [
           "Knowledge Bases"
         ],
@@ -17331,6 +17331,15 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
             }
           }
         ],
@@ -17374,9 +17383,6 @@
           }
         },
         "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "knowledge_base.use"
-        ],
         "x-catalyst-rate-class": "read"
       }
     },

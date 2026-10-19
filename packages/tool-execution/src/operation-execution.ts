@@ -98,7 +98,7 @@ export interface OperationApprovalRequests {
 export interface RunOperationDeps {
   clientInstanceId: ClientInstanceId;
   registry: OperationRegistry;
-  /** Resolves a named-right resource to its retained asset identity and owner before authorization. */
+  /** Resolves a declared resource to its retained asset identity and owner before authorization. */
   resolveResource(resource: OperationResource | undefined): Promise<{
     resource: OperationResource | undefined;
     /** Answered only after the caller holds the kind-level right. */

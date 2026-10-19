@@ -189,9 +189,20 @@ describe("agent dependency availability (AVAIL-1)", () => {
       draft: {
         dependencyAvailability: {
           missing: [
-            { kind: "knowledge_base", canMakeAvailable: false },
+            { kind: "knowledge_base", displayName: "Knowledge Base", canMakeAvailable: false },
             { kind: "connection", canMakeAvailable: false }
           ]
+        }
+      }
+    });
+    const restrictedGerman = await instance.api.call("agents.draft.get", {
+      params: { name: "berater" },
+      headers: { "x-dev-user-id": "member-1", "accept-language": "de" }
+    });
+    expect(restrictedGerman.json()).toMatchObject({
+      draft: {
+        dependencyAvailability: {
+          missing: [{ kind: "knowledge_base", displayName: "Wissensbasis" }, { kind: "connection" }]
         }
       }
     });

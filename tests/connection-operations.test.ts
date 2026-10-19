@@ -109,6 +109,17 @@ describe("a call of a Connection's operation", () => {
     expect((await ask(t.lena)).result).toMatchObject({ status: "denied" });
   });
 
+  it("gives localized use-right help once, without a redundant English refusal (AVAIL-1b)", async () => {
+    const t = await fixture();
+    await t.seed("crm");
+    expect(await t.operationCalls.deps.useRightRefusal?.("connection.use", "en")).toBe(
+      "You do not have permission to use this Connection. Ask an instance admin."
+    );
+    expect(await t.operationCalls.deps.useRightRefusal?.("knowledge_base.use", "de")).toBe(
+      "Dir fehlt das Recht, diese Wissensbasis zu verwenden. Frag einen Instanz-Admin. Diese Abfrage wurde deshalb nicht ausgeführt."
+    );
+  });
+
   it("refuses a resumed call when this workspace loses availability even while another workspace keeps it (AVAIL-1)", async () => {
     const t = await fixture();
     await t.seed("crm", {

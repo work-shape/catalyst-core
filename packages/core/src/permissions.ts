@@ -180,6 +180,8 @@ export interface AccessStore {
 
 export interface ActorAccess {
   authorize(action: string, resource?: AccessResource): AccessDecision;
+  /** Rights that may be handed on: excludes membership and availability, preserving denies and key scopes. */
+  authorizeTransfer(action: string, resource?: AccessResource): AccessDecision;
   /** Throws FORBIDDEN with the action and reason. */
   require(action: string, resource?: AccessResource): void;
   /**
@@ -480,16 +482,29 @@ function evaluateRegisteredAction(
  * legacy key or a registered action; any covering deny refuses; any covering allow permits;
  * otherwise nothing grants it. A legacy key stands for all of its actions at instance scope.
  */
-export function evaluateAccess(input: {
+interface AccessEvaluationInput {
   holder: AccessHolder;
   persisted: PersistedAccess;
   action: string;
   resource?: AccessResource;
-}): AccessDecision {
+}
+
+export function evaluateAccess(input: AccessEvaluationInput): AccessDecision {
+  return evaluateAccessEntries(input, listAccessEntries(input.holder, input.persisted));
+}
+
+/** Membership and availability authorize use in place, never the transfer of a lasting right. */
+export function transferableAccessEntries(entries: readonly AccessEntry[]): AccessEntry[] {
+  return entries.filter((entry) => entry.source !== "membership");
+}
+
+function evaluateAccessEntries(
+  input: AccessEvaluationInput,
+  entries: readonly AccessEntry[]
+): AccessDecision {
   if (!input.persisted.holderActive) {
     return { allowed: false, reason: "holder_inactive" };
   }
-  const entries = listAccessEntries(input.holder, input.persisted);
   if (input.action.startsWith(PERMISSION_REF_ACTION_PREFIX)) {
     // A reference has one source, the holder's own list. No role, row or deny names one.
     return entries.some((entry) => entry.source === "legacy_ref" && entry.action === input.action)
@@ -546,8 +561,11 @@ export function createActorAccess(
   persisted: PersistedAccess,
   keyScopes?: readonly string[]
 ): ActorAccess {
-  const authorize = (action: string, resource?: AccessResource): AccessDecision => {
-    const decision = evaluateAccess({ holder, persisted, action, resource });
+  const decide = (
+    decision: AccessDecision,
+    action: string,
+    resource?: AccessResource
+  ): AccessDecision => {
     if (!decision.allowed || keyScopes === undefined || decision.source === "legacy_ref") {
       // A reference names a tool the holder may use, which a key neither widens nor narrows.
       return decision;
@@ -557,8 +575,23 @@ export function createActorAccess(
       ? decision
       : { allowed: false, reason: "outside_key_scope" };
   };
+  const authorize: ActorAccess["authorize"] = (action, resource) =>
+    decide(evaluateAccess({ holder, persisted, action, resource }), action, resource);
   return {
     authorize,
+    authorizeTransfer(action, resource) {
+      const transferable = transferableAccessEntries(listAccessEntries(holder, persisted));
+      // Availability is permission to use here, never authority to give a lasting right away.
+      const { appAvailability: _availability, ...target } = resource ?? {};
+      return decide(
+        evaluateAccessEntries(
+          { holder, persisted, action, resource: resource === undefined ? undefined : target },
+          transferable
+        ),
+        action,
+        resource
+      );
+    },
     require(action, resource) {
       const decision = authorize(action, resource);
       if (!decision.allowed) {
@@ -582,35 +615,6 @@ export function createActorAccess(
         (entry) => entry.effect === "deny" && actions.includes(entry.action)
       );
     }
-  };
-}
-
-/**
- * The rights of a call in a test run of a Workflow draft (ADR-0031): the person testing,
- * bounded by the service principal the Workflow runs as. An action is allowed only where both
- * hold it, so a test lends nobody the principal's grants and does not pass where the live run
- * would fail. A refusal on the principal's side names the principal.
- */
-export function boundedActorAccess(
-  tester: ActorAccess,
-  principal: ActorAccess,
-  boundBy: { id: string; label: string }
-): ActorAccess {
-  return {
-    authorize(action, resource) {
-      const own = tester.authorize(action, resource);
-      return own.allowed ? principal.authorize(action, resource) : own;
-    },
-    require(action, resource) {
-      tester.require(action, resource);
-      const bound = principal.authorize(action, resource);
-      if (!bound.allowed) {
-        throw operationDenialError({ kind: "forbidden", action, reason: bound.reason, boundBy });
-      }
-    },
-    holdsGrantAt: (action, scopeKinds) =>
-      tester.holdsGrantAt(action, scopeKinds) && principal.holdsGrantAt(action, scopeKinds),
-    denials: (action) => [...tester.denials(action), ...principal.denials(action)]
   };
 }
 

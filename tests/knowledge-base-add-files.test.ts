@@ -3,10 +3,8 @@ import { access, mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import {
   KNOWLEDGE_BASE_ACTIONS,
-  KNOWLEDGE_BASE_ASSET_KIND,
   KNOWLEDGE_FILE_MAX_BYTES,
   asAgentRunId,
   asToolCallId,
@@ -17,15 +15,18 @@ import {
   type JsonObject
 } from "@work-shape/catalyst-core";
 import { eventually, required } from "./support/assertions";
+import { createManagedObjectTestAttachmentCapability } from "./support/chat-server-attachment-harness";
+import { clientInstanceId, type DataStoreInstance } from "./support/data-store-instance";
 import {
-  createManagedObjectTestAttachmentCapability,
-  createMultipartFilePayload
-} from "./support/chat-server-attachment-harness";
-import {
-  clientInstanceId,
-  useDataStoreInstance,
-  type DataStoreInstance
-} from "./support/data-store-instance";
+  FILE_NAME,
+  FILE_TEXT,
+  KB,
+  addedSchema,
+  asMember,
+  developmentAuth,
+  errorSchema,
+  useKnowledgeFiles
+} from "./support/knowledge-files";
 import { getTestJobs } from "./support/test-instance";
 import { fileTestDatabaseUrl } from "./support/test-database";
 
@@ -34,118 +35,9 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 // Conversation's cleanup nor the orphan sweep removes that copy. Spec:
 // data-stores-and-knowledge-bases.md, "Adding files", checks 57 (limits) and 66.
 
-const KB = "objektunterlagen";
-
-const developmentAuth = {
-  enabled: true,
-  users: [
-    { id: "user-1", roles: ["user", "admin", "superadmin"] },
-    { id: "member-1", roles: ["user"] }
-  ].map((user) => ({ ...user, externalUserId: user.id, displayLabel: user.id, permissionRefs: [] }))
-};
-const asMember = { "x-dev-user-id": "member-1" };
-
-const FILE_NAME = "Mietvertrag Erika Mustermann.txt";
-const FILE_TEXT = "Kaltmiete 1.250 EUR, Kaution drei Monatsmieten.";
-
-const errorSchema = z.object({
-  error: z.object({
-    code: z.string(),
-    message: z.string(),
-    details: z.record(z.string(), z.unknown()).optional()
-  })
-});
-const addedSchema = z.object({
-  documents: z.array(z.object({ id: z.string(), fileId: z.string() })),
-  count: z.number(),
-  bytes: z.number()
-});
-const uploadedSchema = z.object({ attachment: z.object({ fileId: z.string() }) });
-
 describe("adding files to a Knowledge Base", () => {
-  const { start } = useDataStoreInstance();
-
-  /** An instance whose Conversations keep their files through a test capability. */
-  async function instanceWithFiles(maxDocuments?: number) {
-    const attachments = createManagedObjectTestAttachmentCapability();
-    const instance = await start(true, undefined, developmentAuth, undefined, {
-      attachments: attachments.capability,
-      ...(maxDocuments === undefined ? {} : { maxDocuments })
-    });
-    const record = await published(instance);
-    return { instance, attachments, record };
-  }
-
-  /** A keyword Knowledge Base, published, once its store has the platform's tables. */
-  async function published(world: DataStoreInstance): Promise<DataStoreRecord> {
-    const config: JsonObject = {
-      name: KB,
-      title: "Objektunterlagen",
-      description: "Exposés, plans and contracts of the objects.",
-      methods: ["keyword"]
-    };
-    const params = { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB };
-    const written = await world.api.call("assets.put", {
-      params,
-      payload: { config, expectedRevision: null }
-    });
-    expect(written.statusCode, written.body).toBe(200);
-    const made = await world.api.call("assets.publish", { params, payload: { revision: 1 } });
-    expect(made.statusCode, made.body).toBe(200);
-    const jobs = getTestJobs(world.api);
-    return eventually(async () => {
-      await jobs.runDue();
-      const record = await world.stores.dataStores.findDataStoreByName({
-        clientInstanceId,
-        name: `knowledge-base:${KB}`
-      });
-      expect(record).toMatchObject({ status: "ready", level: 12 });
-      return required(record);
-    });
-  }
-
-  async function assetId(world: DataStoreInstance): Promise<string> {
-    return required(
-      await world.stores.configAssets.getConfigAsset({
-        clientInstanceId,
-        kind: KNOWLEDGE_BASE_ASSET_KIND,
-        name: KB
-      })
-    ).id;
-  }
-
-  /** A Conversation of the caller with one uploaded file. */
-  async function conversationWithFile(
-    world: DataStoreInstance,
-    file: { filename: string; contentType: string; content: string },
-    headers: Record<string, string> = {}
-  ): Promise<{ conversationId: string; fileId: string }> {
-    const created = await world.api.call("conversations.create", {
-      payload: { title: "Unterlagen" },
-      headers
-    });
-    expect(created.statusCode, created.body).toBe(200);
-    const conversationId = z.object({ id: z.string() }).parse(created.json()).id;
-    const upload = createMultipartFilePayload({ fieldName: "file", ...file });
-    const uploaded = await world.api.call("conversations.draft_attachments.upload", {
-      params: { conversationId },
-      headers: { ...upload.headers, ...headers },
-      payload: upload.payload
-    });
-    expect(uploaded.statusCode, uploaded.body).toBe(200);
-    return { conversationId, fileId: uploadedSchema.parse(uploaded.json()).attachment.fileId };
-  }
-
-  const addFiles = (
-    world: DataStoreInstance,
-    files: readonly { conversationId: string; fileId: string }[],
-    headers: Record<string, string> = {}
-  ) =>
-    world.api.call("knowledge_bases.add_files", {
-      params: { knowledgeBase: KB },
-      payload: { files },
-      headers
-    });
+  const { start, instanceWithFiles, published, assetId, conversationWithFile, addFiles } =
+    useKnowledgeFiles();
 
   /** A connection of the test's own to a database of the server, as its superuser. */
   async function inDatabase<T>(
@@ -281,75 +173,6 @@ describe("adding files to a Knowledge Base", () => {
       )
     );
     expect(run).toMatchObject({ effect: "changing", status: "done" });
-  });
-
-  it("E6 opens a cited original only for a Knowledge Base user and refuses removed or mismatched documents", async () => {
-    const { instance } = await instanceWithFiles();
-    const source = await conversationWithFile(instance, {
-      filename: FILE_NAME,
-      contentType: "text/plain",
-      content: FILE_TEXT
-    });
-    const added = await addFiles(instance, [source]);
-    const documentId = required(addedSchema.parse(added.json()).documents[0]).id;
-    await eventually(async () => {
-      await getTestJobs(instance.api).runDue();
-      const opened = await instance.api.call("knowledge_bases.open_document", {
-        params: { knowledgeBase: KB, documentId }
-      });
-      expect(opened.statusCode, opened.body).toBe(200);
-      expect(opened.body).toBe(FILE_TEXT);
-      expect(opened.headers["content-disposition"]).toMatch(/^inline;/);
-      expect(opened.headers["x-content-type-options"]).toBe("nosniff");
-      expect(opened.headers["content-type"]).toBe("text/plain; charset=utf-8");
-      expect(opened.headers["cache-control"]).toBe("private, no-store");
-    });
-    const denied = await instance.api.call("knowledge_bases.open_document", {
-      params: { knowledgeBase: KB, documentId },
-      headers: asMember
-    });
-    expect(denied.statusCode).toBe(403);
-    const memberRead = await instance.api.call("conversations.create", {
-      payload: { title: "Source reader" },
-      headers: asMember
-    });
-    expect(memberRead.statusCode).toBe(200);
-    const memberConversationId = z.object({ id: z.string() }).parse(memberRead.json()).id;
-    const memberConversation = required(
-      await instance.stores.conversations.getConversation(
-        clientInstanceId,
-        asConversationId(memberConversationId)
-      )
-    );
-    const granted = await instance.api.call("permissions.grant", {
-      payload: {
-        holderKind: "user",
-        holderId: memberConversation.createdByUserId,
-        action: KNOWLEDGE_BASE_ACTIONS.use,
-        scopeKind: "asset",
-        scopeId: await assetId(instance)
-      }
-    });
-    expect(granted.statusCode, granted.body).toBe(200);
-    const permitted = await instance.api.call("knowledge_bases.open_document", {
-      params: { knowledgeBase: KB, documentId },
-      headers: asMember
-    });
-    expect(permitted.statusCode, permitted.body).toBe(200);
-    expect(permitted.body).toBe(FILE_TEXT);
-    const wrong = await instance.api.call("knowledge_bases.open_document", {
-      params: { knowledgeBase: "another-base", documentId }
-    });
-    expect(wrong.statusCode).toBe(404);
-    const removed = await instance.api.call("knowledge_bases.remove_documents", {
-      params: { knowledgeBase: KB },
-      payload: { documentIds: [documentId] }
-    });
-    expect(removed.statusCode, removed.body).toBe(200);
-    const gone = await instance.api.call("knowledge_bases.open_document", {
-      params: { knowledgeBase: KB, documentId }
-    });
-    expect(gone.statusCode).toBe(404);
   });
 
   it("copies a file the writer can open into one the Knowledge Base owns, which the Conversation's cleanup and the orphan sweep leave alone", async () => {

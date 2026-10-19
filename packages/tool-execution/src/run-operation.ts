@@ -155,8 +155,7 @@ export async function runOperation(
   }
   const idempotencyKey = readIdempotencyKey(call, definition);
   const declared = definition.resource(input);
-  const resolved =
-    definition.action === null ? { resource: declared } : await deps.resolveResource(declared);
+  const resolved = await deps.resolveResource(declared);
   const { resource } = resolved;
   const now = deps.now ?? (() => new Date());
   const actor = runActor(call);

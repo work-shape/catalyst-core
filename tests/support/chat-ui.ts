@@ -103,6 +103,7 @@ export {
   rememberRecentlyActiveAssistantRunId
 } from "../../packages/chat-ui/src/chat/assistant/recently-active-runs";
 export { AssistantSourcePart } from "../../packages/chat-ui/src/chat/assistant/assistant-source-part";
+export { AttachmentContentProvider } from "../../packages/chat-ui/src/chat/files/attachment-content";
 export {
   AssistantThread,
   ThreadStartBlock,

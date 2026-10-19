@@ -62,10 +62,23 @@ describe("Settings admin contact", () => {
         authSource: "contact-test",
         externalUserId: "mara",
         displayLabel: "Mara",
+        roles: ["superadmin"],
+        permissionRefs: [],
+        permissions: []
+      });
+      await app.stores.users.resolveUserIdentity({
+        clientInstanceId,
+        authSource: "contact-test",
+        externalUserId: "ordinary-admin",
+        displayLabel: "An ordinary admin",
         roles: ["admin"],
         permissionRefs: [],
         permissions: []
       });
+      // General use-right help can name an admin; API access and model settings need a superadmin.
+      expect(await app.stores.users.getInstanceAdminName({ clientInstanceId })).toBe(
+        "An ordinary admin"
+      );
       const me = await app.call("me.get", {});
       expect(me.statusCode).toBe(200);
       expect(me.json()).toMatchObject({ displayLabel: "A member", instanceAdminName: "Mara" });
