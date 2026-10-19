@@ -78,7 +78,9 @@ export function approvalRequestState(
     ? {
         status: "ready",
         request: query.data,
-        ...(query.settlingStopped ? { onRefresh: () => void query.refetch() } : {})
+        ...(query.settlingStopped
+          ? { onRefresh: () => void query.refetch().catch(() => undefined) }
+          : {})
       }
     : isApprovalRequestNotFound(query.error)
       ? { status: "not-found" }
