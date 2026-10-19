@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { type CollaborationWorkspaceId } from "@work-shape/catalyst-core";
+import { asConversationId, type CollaborationWorkspaceId } from "@work-shape/catalyst-core";
 import {
   agent,
   clientInstanceId,
@@ -28,6 +28,13 @@ describe("a Builder and Publisher who is no member of the workspace", () => {
       payload: { title: "Team talk", collaborationWorkspaceId: t.workspaceId }
     });
     membersConversation = conversationSchema.parse(created.json()).id;
+    // Sent, so that a member's list shows it: the one the builder must not see.
+    await t.stores.conversations.appendMessage({
+      clientInstanceId,
+      conversationId: asConversationId(membersConversation),
+      role: "user",
+      text: "For the team"
+    });
     expectStatus(await putApp(t.admin.id, "offers", t.workspaceId), 200);
     expectStatus(await putApp(t.admin.id, "offers-other", other), 200);
   });
@@ -120,17 +127,22 @@ describe("a Builder and Publisher who is no member of the workspace", () => {
     // The workspace shares new conversations by default; a non-member's stays its own.
     expect(conversation.visibility).toBe("private");
     expectStatus(await readMessages(ownConversation), 200);
-    // Unsent, it is listed to nobody yet, the builder included.
+    await t.stores.conversations.appendMessage({
+      clientInstanceId,
+      conversationId: asConversationId(ownConversation),
+      role: "user",
+      text: "Build an agent"
+    });
     const listed = await listConversations(t.workspaceId);
-    expect(listSchema.parse(listed.json()).items.map((item) => item.id)).toEqual([]);
+    expect(listSchema.parse(listed.json()).items.map((item) => item.id)).toEqual([ownConversation]);
 
     // Kai, a member, does not see it.
     const kaisList = await t.expectOk(t.kai.id, "conversations.list", {
       query: { collaborationWorkspaceId: t.workspaceId }
     });
-    expect(listSchema.parse(kaisList.json()).items.map((item) => item.id)).not.toContain(
-      ownConversation
-    );
+    expect(listSchema.parse(kaisList.json()).items.map((item) => item.id)).toEqual([
+      membersConversation
+    ]);
     // Nothing opens in a workspace it holds no bundle in.
     const elsewhere = await t.call(t.lena.id, "conversations.create", {
       payload: { title: "Build", collaborationWorkspaceId: other }
@@ -213,6 +225,15 @@ describe("the build limits of a workspace", () => {
         }
       })
     ]);
+  });
+
+  it("stay out of what the workspace's members are answered", async () => {
+    const shown = await t.expectOk(t.root.id, "workspaces.get", {
+      params: { collaborationWorkspaceId: team }
+    });
+    expect(shown.json()).toMatchObject({ id: team, name: "Kai Spezis" });
+    expect(shown.json()).not.toHaveProperty("allowedToolNames");
+    expect(shown.json()).not.toHaveProperty("allowedModelBindingIds");
   });
 
   it("refuse every writer an agent of the workspace outside them, naming the list", async () => {
