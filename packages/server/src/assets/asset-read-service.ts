@@ -225,21 +225,15 @@ export class AssetReadWorkflow {
       const namespace = findNamespaceOfAssetName(namespaces, record.name);
       const resource = accessResource(record.kind, record.name, record.scope, record.id);
       const allowed = allowedOn(kind, call, resource);
-      const published = !reads(resource)
-        ? this.publishedSummary(kind, record, namespace?.prefix, locale)
-        : undefined;
-      const summary = published ?? summarizeAsset(kind, record.name, record.config, locale);
+      if (!reads(resource)) {
+        return { ...this.publishedSummary(kind, record, namespace?.prefix, locale), allowed };
+      }
+      const summary = summarizeAsset(kind, record.name, record.config, locale);
+      // Health is a `connection.read` field; use holders see the published summary only.
       const attributes =
         kind.kind === "connection"
           ? { ...summary.attributes, health: health.get(record.id) ?? "unknown" }
           : summary.attributes;
-      if (published) {
-        return {
-          ...published,
-          ...(attributes === undefined ? {} : { attributes }),
-          allowed
-        };
-      }
       return {
         id: record.id,
         kind: record.kind,

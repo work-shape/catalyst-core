@@ -342,7 +342,7 @@ describe("a right on a Connection", () => {
       kind: "connection",
       name: "alpha",
       title: "Connection alpha",
-      attributes: { connectorType: "fixture", origin: "release", enabled: true, health: "unknown" },
+      attributes: { connectorType: "fixture", origin: "release", enabled: true },
       scope: { kind: "instance" },
       allowed: [],
       revision: expect.any(Number),
