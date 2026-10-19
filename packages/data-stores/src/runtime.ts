@@ -53,6 +53,7 @@ export interface DataStoreDatasetReader {
 export interface DataStoreRuntime {
   /** Instance content locale until Knowledge Bases support a content-language setting. */
   defaultLocale: LocaleCode;
+  scopes?: import("@work-shape/catalyst-core").DataScopes;
   clientInstanceId: ClientInstanceId;
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;

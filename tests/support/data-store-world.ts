@@ -140,7 +140,8 @@ export function useDataStoreWorld(prefix: string) {
     limits: Partial<Parameters<typeof createDataStores>[0]["limits"]> = {},
     databaseUrl = db.databaseUrl,
     datasets?: DatasetReader,
-    recordFailures?: Parameters<typeof createDataStores>[0]["recordFailures"]
+    recordFailures?: Parameters<typeof createDataStores>[0]["recordFailures"],
+    scopes?: Parameters<typeof createDataStores>[0]["scopes"]
   ) {
     const clientInstanceId = db.clientInstance(label);
     const logged: unknown[] = [];
@@ -162,6 +163,7 @@ export function useDataStoreWorld(prefix: string) {
     const start = (stores: PlatformStores) => {
       const dataStores = createDataStores({
         defaultLocale: "en",
+        ...(scopes ? { scopes } : {}),
         clientInstanceId,
         stores,
         databaseUrl,

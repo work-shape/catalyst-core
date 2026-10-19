@@ -1,3 +1,6 @@
+import { requireScopeBindings } from "@work-shape/catalyst-core";
+import { bindViewerScopes } from "../scoped-tables";
+import { compiledNamedQuery } from "./named-query";
 import { z } from "zod";
 import {
   AppError,
@@ -121,7 +124,19 @@ export function createDataStoreKnowledgeBackend(
       const store = await storeOf(runtime, stores, target.dataStore);
       // The publisher hands the store's rows to whoever holds the Knowledge Base's `use`. A
       // store the publisher may not read is not named to them: the check refuses it as missing.
-      if (store) access.require(DATA_STORE_ACTIONS.read, store.resource);
+      if (store) {
+        access.require(DATA_STORE_ACTIONS.read, store.resource);
+        for (const query of target.queries ?? []) {
+          const compiled = compiledNamedQuery(query);
+          requireScopeBindings(compiled.statement, store.definition.tables, query.name);
+        }
+        if (Object.keys(store.definition.tables ?? {}).length && !target.queries?.length)
+          throw new AppError(
+            "VALIDATION_FAILED",
+            "A Knowledge Base on scoped tables requires named queries",
+            { reason: "scoped_sql_refused" }
+          );
+      }
       const result = await check(stores, target, undefined);
       if (result.status !== "ok") {
         const missing = result.tables.filter((table) => !table.readable).map(({ name }) => name);
@@ -163,17 +178,28 @@ export function createDataStoreKnowledgeBackend(
       await dropReader(runtime, stores.connections, target.assetId, signal);
     },
 
-    async query(target, statement, signal) {
+    async query(target, statement, signal, viewer) {
       const reached = await reachableStore(runtime, runtime.stores, target);
       if ("problem" in reached) throw unavailable(reached.problem);
       const { record } = reached.store;
+      if (Object.keys(reached.store.definition.tables ?? {}).length && !viewer?.namedQuery)
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "Free SQL on scoped tables is refused. Use a published named query.",
+          { reason: "scoped_sql_refused" }
+        );
+      if (viewer?.namedQuery)
+        requireScopeBindings(statement.sql, reached.store.definition.tables, target.name);
+      const bound = viewer?.namedQuery
+        ? bindViewerScopes(statement.sql, statement.parameters, viewer.access)
+        : statement;
       const read = async () =>
         rowsOf(
           await runtime.server.executor.query({
             ...runtime.server.asReader(record, target.assetId, runtime.stores.connections),
             ...(signal ? { signal } : {}),
-            sql: statement.sql,
-            ...(statement.parameters ? { parameters: statement.parameters } : {})
+            sql: bound.sql,
+            ...(bound.parameters ? { parameters: bound.parameters } : {})
           })
         );
       try {

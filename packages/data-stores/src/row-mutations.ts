@@ -1,3 +1,4 @@
+import { scopePredicate, requireScopedRows } from "./scoped-tables";
 import { AppError, type JsonObject } from "@work-shape/catalyst-core";
 import {
   POSTGRES_STATEMENT_TIMEOUT_MS,
@@ -48,6 +49,19 @@ function mutation(verb: "update" | "delete_rows"): StoreVerb {
       const locale = context?.runtime.locale ?? runtime.defaultLocale;
       boundRowWrite("rows" in input ? input.rows : input.keys, locale);
       refuseRecordManagedTable(store, input.table, locale);
+      for (const { set } of changes) {
+        for (const column of Object.values(store.definition.tables?.[input.table]?.scope ?? {})) {
+          if (Object.hasOwn(set, column))
+            requireScopedRows(store.definition.tables, input.table, [set], context?.access);
+        }
+      }
+      const filter = scopePredicate(
+        store.definition.tables,
+        input.table,
+        context?.access,
+        1,
+        "stored"
+      );
       const refuse = (reason: string, en: string, de: string): never => {
         throw rowWriteRefusal(reason, en, de, locale);
       };
@@ -151,8 +165,8 @@ function mutation(verb: "update" | "delete_rows"): StoreVerb {
             // remove a checked row before its change; any later refusal rolls the whole call back.
             for (const { key } of changes) {
               const matched = await sql.run(
-                `select 1 as matched from ${relation} as stored, pg_catalog.jsonb_to_record($1::pg_catalog.jsonb) as given(${keyTypes}) where ${where} for update of stored`,
-                [JSON.stringify(key)]
+                `select 1 as matched from ${relation} as stored, pg_catalog.jsonb_to_record($1::pg_catalog.jsonb) as given(${keyTypes}) where (${where}) and (${filter.condition}) for update of stored`,
+                [JSON.stringify(key), ...filter.parameters]
               );
               if (matched.length !== 1)
                 reject(

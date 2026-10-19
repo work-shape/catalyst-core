@@ -150,6 +150,7 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
   };
   const dataStores = createDataStores({
     defaultLocale: parts.config.localization.defaultLocale,
+    ...(parts.config.scopes ? { scopes: parts.config.scopes } : {}),
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
     databaseUrl: await secrets.resolve(PLATFORM_SECRET_NAMES.databaseUrl),

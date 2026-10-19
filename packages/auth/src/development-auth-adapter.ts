@@ -13,6 +13,7 @@ export interface DevelopmentAuthUser {
   displayLabel: string;
   email?: string;
   emailVerified?: boolean;
+  groups?: readonly string[];
   roles: string[];
   permissionRefs: string[];
   permissions?: string[];

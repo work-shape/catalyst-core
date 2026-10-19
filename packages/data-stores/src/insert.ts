@@ -1,3 +1,4 @@
+import { requireScopedRows } from "./scoped-tables";
 import {
   POSTGRES_STATEMENT_TIMEOUT_MS,
   PostgresExecutorError
@@ -153,6 +154,7 @@ export const insert: StoreVerb = {
     boundRowWrite(input.rows, locale);
     refuseRecordManagedTable(store, input.table, locale);
     const { record } = store;
+    requireScopedRows(store.definition.tables, input.table, input.rows, context?.access);
     const columns = sharedColumns(input.rows, locale);
     const rows = JSON.stringify(input.rows);
     const [table] = await readTables(runtime.server.executor, target, input.table);

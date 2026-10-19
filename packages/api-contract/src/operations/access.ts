@@ -1,3 +1,5 @@
+import { dataScopesSchema, scopeAssignmentInputSchema } from "@work-shape/catalyst-asset-schemas";
+import { z } from "zod";
 import { listQuerySchema } from "../shared";
 import {
   createNamespaceRequestSchema,
@@ -16,6 +18,42 @@ import { defineOperation, defineRegisteredOperation, json, page } from "./define
 // The three reads are plain.
 
 export const accessOperations = {
+  "scope_assignments.list": defineOperation({
+    id: "scope_assignments.list",
+    method: "GET",
+    path: "/api/v1/instance/access/scope-assignments",
+    summary: "Read the declared data scope and one holder's assignments",
+    tag: "Access",
+    auth: "user",
+    scope: "user_admin:read",
+    requires: ["users.manage"],
+    effect: "reading",
+    query: scopeAssignmentInputSchema.pick({ holderKind: true, holderId: true }),
+    response: json(
+      z.object({
+        dimensions: dataScopesSchema,
+        assignments: z.array(scopeAssignmentInputSchema),
+        effective: z.record(z.string(), z.union([z.literal("all"), z.array(z.string())])).optional()
+      })
+    ),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "scope_assignments.set": defineRegisteredOperation({
+    id: "scope_assignments.set",
+    method: "PUT",
+    path: "/api/v1/instance/access/scope-assignments",
+    summary: "Replace one holder's data scope values or revocations; never grants a right",
+    tag: "Access",
+    auth: "user",
+    scope: "user_admin:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    body: scopeAssignmentInputSchema,
+    response: json(scopeAssignmentInputSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
   "permissions.grant": defineRegisteredOperation({
     id: "permissions.grant",
     method: "POST",

@@ -13,6 +13,7 @@ import {
   PRINCIPAL_HOLDER_KINDS,
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
+import { resolveDataScope, type DataScope, type ScopeAssignmentInput } from "./data-scope";
 import { AppError } from "./errors";
 import { GRANTABLE_ACTION_SCOPES } from "./grantable-action-scopes";
 import { isAuthenticatedServicePrincipal, type AuthenticatedIdentity } from "./identity";
@@ -159,6 +160,7 @@ export type WorkspaceUseAssetKind = (typeof WORKSPACE_USE_ASSET_KINDS)[number];
 export interface PersistedAccess {
   holderActive: boolean;
   grants: PermissionGrant[];
+  scopeAssignments?: readonly ScopeAssignmentInput[];
   /**
    * The workspaces the holder is a member of. The evaluator reads a membership as the rights
    * of `WORKSPACE_MEMBER_ACTIONS` on what the workspace owns, so no check of a membership
@@ -179,6 +181,8 @@ export interface AccessStore {
 }
 
 export interface ActorAccess {
+  /** No implicit all for an administrator: data assignments are independent of rights. */
+  scopeOf(dimension: string): DataScope;
   authorize(action: string, resource?: AccessResource): AccessDecision;
   /** Rights that may be handed on: excludes membership and availability, preserving denies and key scopes. */
   authorizeTransfer(action: string, resource?: AccessResource): AccessDecision;
@@ -578,6 +582,8 @@ export function createActorAccess(
   const authorize: ActorAccess["authorize"] = (action, resource) =>
     decide(evaluateAccess({ holder, persisted, action, resource }), action, resource);
   return {
+    scopeOf: (dimension) =>
+      persisted.holderActive ? resolveDataScope(persisted.scopeAssignments ?? [], dimension) : [],
     authorize,
     authorizeTransfer(action, resource) {
       const transferable = transferableAccessEntries(listAccessEntries(holder, persisted));
@@ -669,6 +675,14 @@ export interface GrantScopeAsset {
 
 /** The store behind grants and Namespaces: the evaluator's port plus the administration writes. */
 export interface AccessAdministrationStore extends AccessStore, RightsLock {
+  listScopeAssignments(input: {
+    clientInstanceId: ClientInstanceId;
+    holderKind: ScopeAssignmentInput["holderKind"];
+    holderId: string;
+  }): Promise<ScopeAssignmentInput[]>;
+  setScopeAssignment(
+    input: ScopeAssignmentInput & { clientInstanceId: ClientInstanceId }
+  ): Promise<void>;
   /** Non-admin people who inherit use through availability, with their own rows for the evaluator. */
   listAvailabilityMembers(input: {
     clientInstanceId: ClientInstanceId;

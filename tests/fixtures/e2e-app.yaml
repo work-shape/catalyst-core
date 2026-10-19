@@ -1,4 +1,6 @@
 version: 1
+scopes:
+  mandant: { label: Mandant, valueType: text }
 clientInstance:
   id: demo-e2e
   displayName: Demo E2E Client Instance

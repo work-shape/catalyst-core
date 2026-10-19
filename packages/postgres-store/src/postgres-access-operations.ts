@@ -24,6 +24,7 @@ import {
   type PersistedAccess,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
+import { scopeAssignments } from "./schema/dataScopes";
 import { keysetFilter } from "./paging";
 import type { PostgresConnection } from "./postgres-database";
 import { lockRights } from "./rights-lock";
@@ -77,11 +78,19 @@ export function createPostgresAccessStore(
     },
 
     async loadPersistedAccess(input) {
+      const scopeRows = sql<NonNullable<PersistedAccess["scopeAssignments"]>>`coalesce((
+        select jsonb_agg(jsonb_build_object('dimension', a.dimension, 'holderKind', a.holder_kind,
+          'holderId', a.holder_id, 'effect', a.effect, 'values', a.values))
+        from scope_assignments a where a.client_instance_id = ${input.clientInstanceId}
+          and ((a.holder_kind = ${input.holder.kind} and a.holder_id = ${input.holder.id})
+            or (${input.holder.kind === "user"} and a.holder_kind = 'group' and a.holder_id in (select jsonb_array_elements_text(u.groups) from product_users u where u.client_instance_id = ${input.clientInstanceId} and u.id = ${input.holder.id})))
+      ), '[]'::jsonb)`;
       const [holder, grantRows] = await Promise.all([
         input.holder.kind === "user"
           ? db
               .select({
                 // A user whose deletion was requested holds nothing any more.
+                scopeAssignments: scopeRows,
                 status: sql<string>`case when ${productUsers.deletionRequestedAt} is null
                   then ${productUsers.status} else 'deleting' end`,
                 // The holder's memberships, read with the holder: one index range, and no
@@ -115,6 +124,7 @@ export function createPostgresAccessStore(
           : db
               // A service principal is a member of no workspace.
               .select({
+                scopeAssignments: scopeRows,
                 status: servicePrincipals.status,
                 memberWorkspaceIds: sql<string[]>`'{}'::text[]`,
                 availableAssets: sql<NonNullable<PersistedAccess["availableAssets"]>>`'[]'::jsonb`
@@ -149,10 +159,71 @@ export function createPostgresAccessStore(
             ? []
             : grantRows.map(mapGrant),
         memberWorkspaceIds: holder[0]?.memberWorkspaceIds ?? [],
-        availableAssets: holder[0]?.availableAssets ?? []
+        availableAssets: holder[0]?.availableAssets ?? [],
+        scopeAssignments: holder[0]?.scopeAssignments ?? []
       };
     },
 
+    async listScopeAssignments({ clientInstanceId, holderKind, holderId }) {
+      return db
+        .select({
+          dimension: scopeAssignments.dimension,
+          holderKind: scopeAssignments.holderKind,
+          holderId: scopeAssignments.holderId,
+          effect: scopeAssignments.effect,
+          values: scopeAssignments.values
+        })
+        .from(scopeAssignments)
+        .where(
+          and(
+            eq(scopeAssignments.clientInstanceId, clientInstanceId),
+            eq(scopeAssignments.holderKind, holderKind),
+            eq(scopeAssignments.holderId, holderId)
+          )
+        );
+    },
+    async setScopeAssignment(input) {
+      if (input.holderKind === "user") {
+        const [holder] = await db
+          .select({ status: productUsers.status, deleting: productUsers.deletionRequestedAt })
+          .from(productUsers)
+          .where(
+            and(
+              eq(productUsers.clientInstanceId, input.clientInstanceId),
+              eq(productUsers.id, input.holderId)
+            )
+          )
+          .limit(1);
+        if (!holder || holder.status !== "active" || holder.deleting)
+          throw new AppError("NOT_FOUND", "Active user not found");
+      } else if (input.holderKind === "service_principal") {
+        const [holder] = await db
+          .select({ status: servicePrincipals.status })
+          .from(servicePrincipals)
+          .where(
+            and(
+              eq(servicePrincipals.clientInstanceId, input.clientInstanceId),
+              eq(servicePrincipals.id, input.holderId)
+            )
+          )
+          .limit(1);
+        if (!holder || holder.status !== "active")
+          throw new AppError("NOT_FOUND", "Active service principal not found");
+      }
+      await db
+        .insert(scopeAssignments)
+        .values(input)
+        .onConflictDoUpdate({
+          target: [
+            scopeAssignments.clientInstanceId,
+            scopeAssignments.holderKind,
+            scopeAssignments.holderId,
+            scopeAssignments.dimension,
+            scopeAssignments.effect
+          ],
+          set: { values: input.values }
+        });
+    },
     async listAvailabilityMembers(input) {
       const order = [sql`${productUsers.displayLabel} COLLATE "C"`, productUsers.id];
       const members = await db

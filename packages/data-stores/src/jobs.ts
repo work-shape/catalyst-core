@@ -465,6 +465,7 @@ async function migrate(
           current,
           migration,
           {
+            tables: migration === pending.at(-1) ? latest?.definition.tables : undefined,
             secretRows: stores.connections,
             ledgerKey: ledger,
             superuser,

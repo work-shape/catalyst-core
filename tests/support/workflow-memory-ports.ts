@@ -97,6 +97,7 @@ export const unusedJobsStore: JobsStore = {
   retry: unsupported
 };
 export const unusedActorAccess: ActorAccess = {
+  scopeOf: unsupported,
   authorize: unsupported,
   authorizeTransfer: unsupported,
   require: unsupported,

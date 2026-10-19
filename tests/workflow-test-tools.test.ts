@@ -98,6 +98,7 @@ async function fixture() {
     correlationId: "correlation",
     runtime: {},
     access: {
+      scopeOf: () => "all",
       authorize: () => ({ allowed: true, source: "grant" }),
       authorizeTransfer: () => ({ allowed: true, source: "grant" }),
       require: () => undefined,
@@ -253,7 +254,11 @@ describe("the agent projections of Workflow testing", () => {
       {
         ...context,
         resource: undefined,
-        access: { ...context.access, authorize }
+        access: {
+          scopeOf: () => "all",
+          ...context.access,
+          authorize
+        }
       }
     );
     expect(decision).toMatchObject({ allowed: false, action: "workflow.write" });

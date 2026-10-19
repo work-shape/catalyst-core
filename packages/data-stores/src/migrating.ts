@@ -1,6 +1,8 @@
+import { checkScopedColumns, type ScopedTables } from "./scoped-tables";
 import { createHmac, randomBytes } from "node:crypto";
 import { z } from "zod";
 import {
+  AppError,
   isAppError,
   type ConnectionsStore,
   type DataStoreAppliedMigration,
@@ -135,6 +137,7 @@ export async function applyMigration(
     superuser: boolean;
     sizeLimitBytes: number;
     records?: readonly DataStoreRecordsRule[];
+    tables?: ScopedTables;
   },
   signal: AbortSignal
 ): Promise<void> {
@@ -162,6 +165,7 @@ export async function applyMigration(
         await sql.run(OWN_SEARCH_PATH);
         try {
           await checkRecordsKeys(sql, held.records);
+          await checkScopedColumns(sql, held.tables);
         } catch (error) {
           if (isAppError(error) && error.code === "VALIDATION_FAILED") {
             refuse(new DataStoreMigrationRefusal("record_key_invalid", { message: error.message }));
@@ -203,5 +207,51 @@ export async function applyMigration(
   });
   if (!rolesAreUnchanged(record, held.superuser, after.rows)) {
     throw new DataStoreMigrationRefusal("migration_changed_role", { applied: true });
+  }
+}
+
+// A publish checks scoped DDL on the existing store under a short deadline, always rolling it back.
+const SCOPED_PUBLISH_CHECK_TIMEOUT_MS = 15_000;
+
+export async function checkScopedMigrations(
+  server: DataStoreServer,
+  record: StoreDatabase,
+  migrations: readonly DataStoreMigration[],
+  tables: ScopedTables | undefined,
+  previous: ScopedTables | undefined,
+  secrets: ConnectionsStore
+): Promise<void> {
+  let checked = false;
+  let refusal: unknown;
+  try {
+    await server.executor.change(
+      {
+        ...server.asRole(record, "migration", secrets),
+        timeoutMs: SCOPED_PUBLISH_CHECK_TIMEOUT_MS
+      },
+      async (sql) => {
+        try {
+          for (const migration of migrations) {
+            await sql.script(heldInTransaction(migration.sql));
+            await sql.run(OWN_SEARCH_PATH);
+            await checkScopedColumns(sql, previous);
+          }
+          await checkScopedColumns(sql, tables);
+        } catch (error) {
+          refusal = error;
+          throw error;
+        }
+        checked = true;
+        throw new Error("Scoped DDL checked; roll back the preview");
+      }
+    );
+  } catch (error) {
+    if (checked) return;
+    if (isAppError(refusal)) throw refusal;
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "The migration cannot be published: its scoped tables could not be verified. Check the migration on the store's current schema.",
+      { reason: "scope_migration_invalid" }
+    );
   }
 }

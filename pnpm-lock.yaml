@@ -749,6 +749,9 @@ importers:
 
   packages/data-stores:
     dependencies:
+      '@work-shape/catalyst-app-build':
+        specifier: workspace:*
+        version: link:../app-build
       '@work-shape/catalyst-connections':
         specifier: workspace:*
         version: link:../connections

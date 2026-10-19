@@ -224,6 +224,8 @@ describe("the operation catalog", () => {
         "platform.docs.get  GET /api/v1/context/docs",
         "platform.references.get  GET /api/v1/context/references",
         "ready.get  GET /ready",
+        "scope_assignments.list  GET /api/v1/instance/access/scope-assignments",
+        "scope_assignments.set  PUT /api/v1/instance/access/scope-assignments",
         "service_principals.create  POST /api/v1/instance/service-principals",
         "service_principals.list  GET /api/v1/instance/service-principals",
         "service_principals.update  PATCH /api/v1/instance/service-principals/:servicePrincipalId",
@@ -466,6 +468,8 @@ describe("a running instance", () => {
     // Then the queued follow-ups of a conversation, the change proposal of an agent and the
     // Try conversation beside it.
     const added: readonly ApiOperationName[] = [
+      "scope_assignments.list",
+      "scope_assignments.set",
       "openapi.get",
       "docs.get",
       "operations.get_run",

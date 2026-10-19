@@ -25,6 +25,7 @@ export * from "./schema/jobs";
 export * from "./schema/operationRuns";
 export * from "./schema/liveOnceSwitches";
 export * from "./schema/access";
+export * from "./schema/dataScopes";
 export * from "./schema/infrastructure";
 export * from "./schema/pages";
 export * from "./schema/connections";
@@ -60,6 +61,7 @@ import { approvalRequests } from "./schema/approvals";
 import { platformJobs } from "./schema/jobs";
 import { operationRuns } from "./schema/operationRuns";
 import { liveOnceRuns, liveOnceSwitches } from "./schema/liveOnceSwitches";
+import { scopeAssignments } from "./schema/dataScopes";
 import { permissionGrants, namespaces } from "./schema/access";
 import { infrastructureCheckState } from "./schema/infrastructure";
 import { pages, fileSets, pageBuilds, appUserStorage } from "./schema/pages";
@@ -127,6 +129,7 @@ export const schema = {
   liveOnceSwitches,
   liveOnceRuns,
   permissionGrants,
+  scopeAssignments,
   namespaces,
   infrastructureCheckState,
   pages,

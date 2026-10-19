@@ -193,6 +193,7 @@ const dataStoreRowsPageResponseSchema = z.object({
   ),
   /** What `after` takes for the next page. Missing behind the last row. */
   next: z.string().optional(),
+  scopeUnassigned: z.string().optional(),
   valueMaxChars: z.number().int()
 });
 

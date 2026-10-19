@@ -1,3 +1,4 @@
+import { scopeAssignments } from "./schema/dataScopes";
 import { randomBytes } from "node:crypto";
 import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import {
@@ -259,6 +260,15 @@ async function deleteServicePrincipal(
           eq(permissionGrants.clientInstanceId, input.clientInstanceId),
           eq(permissionGrants.holderKind, "service_principal"),
           eq(permissionGrants.holderId, input.servicePrincipalId)
+        )
+      );
+    await tx
+      .delete(scopeAssignments)
+      .where(
+        and(
+          eq(scopeAssignments.clientInstanceId, input.clientInstanceId),
+          eq(scopeAssignments.holderKind, "service_principal"),
+          eq(scopeAssignments.holderId, input.servicePrincipalId)
         )
       );
     return mapServicePrincipal(row, permissions);

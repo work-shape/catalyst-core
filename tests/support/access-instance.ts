@@ -288,6 +288,7 @@ export interface AccessInstance {
 }
 
 export interface AccessInstanceOptions {
+  scopes?: import("@work-shape/catalyst-core").DataScopes;
   /** What the operation layer asks beside the rights: policy and events. */
   operations?: TestServerOptions["operations"];
   /** Tools an agent may name beside the two of the config, such as `read_skill`. */
@@ -328,7 +329,10 @@ export async function setupAccessInstance(
   options: AccessInstanceOptions = {}
 ): Promise<AccessInstance> {
   const { operations, furtherToolNames = [], editingLimits = {}, furtherKinds = [] } = options;
-  const config = configWith(editingLimits, options.modules, options.modelBindings);
+  const config = {
+    ...configWith(editingLimits, options.modules, options.modelBindings),
+    ...(options.scopes ? { scopes: options.scopes } : {})
+  };
   const validationRefs = {
     modelProviderIds: ["local"],
     modelBindingIds: ["plain", "other"],

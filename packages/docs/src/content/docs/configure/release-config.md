@@ -1269,7 +1269,13 @@ Keep the client (Mandant) on every per-client row and in every reader:
 - App `sql` reads use those per-client tables. Do not put a structured Knowledge Base with free SQL on these stores.
 - Say who an App or Workflow is for when it serves only part of the firm. Everyone in that audience must be allowed to see every client the Connection's outside account sees. Limit that account in the outside system to the agreed clients.
 
-Table `scope` in `store.yaml`, config `scopes` and operation declaration `scope` are reserved and refused at save. App SQL validation refuses the parameter name `scope` and the bindings `$viewer.scope`, `$viewer.scope_all` and `$viewer.groups`. Use an ordinary parameter such as `mandant_nr`. These rules do not filter anything per person.
+Declare one text data scope with `scopes: { mandant: { label: Mandant, valueType: text } }`. On **Instance > Access > Data access**, give people, identity groups and service accounts their values, or all values. Administrators need an explicit assignment too. Group membership is read from the current stored identity for personal API keys as well as browser sessions; a person's revocation wins. Assignments carry no row contents and their audit events record counts only. Account deletion removes direct assignments. This feature introduces no outside provider or document retention change.
+
+A store marks each scoped table as `tables: { findings: { scope: { mandant: mandant_nr } } }`. The column must be `text NOT NULL`. Inserts and loads must supply an assigned value; previews, paged rows and single-value reads filter by the caller. A direct query on a scoped store may select the columns of one table; joins, expressions and aggregates use an authored App action or a named Knowledge Base query. Workflow operations read with their service account's assignment.
+
+An App SQL action or a named query uses `WHERE $viewer.scope_all('mandant') OR mandant_nr = ANY($viewer.scope('mandant'))`. The platform binds both values from the current caller, never from browser parameters. Publishing refuses a missing scope binding. A Knowledge Base declares `queries: [{ name: findings, file: queries/findings.sql }]`; `catalyst knowledge-base put <name> --from kb.yaml` reads those SQL files, including their `-- @param` headers, into the versioned definition. Call it with `{ query: 'findings', parameters: { ... } }`. Free SQL on a scoped Knowledge Base is refused even for an all-values holder.
+
+Connection-operation `scope` is still reserved for SCOPE-2. `$viewer.groups` and a caller parameter named `scope` remain refused. Connection output, conversation audiences and document passage filtering follow in SCOPE-2 to SCOPE-4; scoped tables do not replace those gates.
 
 ## Config Is Not A Secret Store
 

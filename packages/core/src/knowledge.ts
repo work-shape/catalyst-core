@@ -268,6 +268,7 @@ export interface DataStoreKnowledgeTarget {
   /** The id of the Data Store whose tables it describes. */
   dataStore: string;
   tables: readonly { name: string }[];
+  queries?: readonly { name: string; file: string; sql: string }[];
 }
 
 /**
@@ -335,7 +336,8 @@ export interface KnowledgeBackend<Target extends KnowledgeBaseTarget = Knowledge
   query(
     target: Target,
     statement: DataStoreStatement,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    viewer?: { access: ActorAccess; namedQuery: boolean }
   ): Promise<DataStoreRows>;
   /**
    * Writes the rows of documents added to the Knowledge Base, and of their contents where the

@@ -1,3 +1,4 @@
+import { requireScopedRows } from "./scoped-tables";
 import {
   PostgresExecutorError,
   type PostgresChangeStatements
@@ -81,6 +82,29 @@ export const load: StoreVerb = {
   async run({ runtime, store, target, keyed, context }, call) {
     const input = dataStoreLoadInputSchema.parse(call);
     const { record } = store;
+    for (const [dimension, column] of Object.entries(
+      store.definition.tables?.[input.table]?.scope ?? {}
+    )) {
+      if (context?.access.scopeOf(dimension) !== "all") {
+        if (
+          (input.onConflict === "update" && !input.key?.includes(column)) ||
+          (input.replace &&
+            (!input.replace.by.includes(column) || input.replace.values === undefined))
+        )
+          throw new AppError(
+            "VALIDATION_FAILED",
+            "A scoped load must include its scope column in its update key and explicit replacement values",
+            { reason: "scoped_load_key_required" }
+          );
+        if (input.replace?.values)
+          requireScopedRows(
+            store.definition.tables,
+            input.table,
+            [input.replace.values],
+            context?.access
+          );
+      }
+    }
     const limits = runtime.limits.load ?? DATA_STORE_LOAD_DEFAULT_LIMITS;
     const stepId = context?.origin.kind === "workflow" ? context.origin.stepRunId : undefined;
     const replay = async (sql: Pick<PostgresChangeStatements, "run">) => {
@@ -277,6 +301,21 @@ export const load: StoreVerb = {
             };
             for await (const rows of reader.read(input.dataset, target.signal, context)) {
               for (const row of rows) {
+                requireScopedRows(
+                  store.definition.tables,
+                  input.table,
+                  [
+                    input.columns
+                      ? Object.fromEntries(
+                          Object.entries(input.columns).map(([field, column]) => [
+                            column,
+                            row[field] ?? null
+                          ])
+                        )
+                      : row
+                  ],
+                  context?.access
+                );
                 statements ??= statementsOf(input, table, typeOf, Object.keys(row), keyMayBeEmpty);
                 counts.rows += 1;
                 if (counts.rows > limits.rows) throw tooLarge("ROWS", counts.rows, limits);

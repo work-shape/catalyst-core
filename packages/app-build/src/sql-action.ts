@@ -1,4 +1,5 @@
 import {
+  viewerScopeBindings,
   DATA_STORE_INSERT_CONFLICT_MODES,
   DATA_STORE_SCALAR_TYPES,
   OPERATION_EFFECTS
@@ -94,6 +95,12 @@ export function compileSqlStatement(
   text: string,
   effect: (typeof OPERATION_EFFECTS)[number]
 ): CompiledSqlStatement {
+  let viewerBindings: ReturnType<typeof viewerScopeBindings> = [];
+  try {
+    viewerBindings = viewerScopeBindings(text);
+  } catch {
+    /* The statement reader below reports malformed SQL with its original line. */
+  }
   const lines = text.split("\n");
   const faults: SqlActionFault[] = [];
   const parameters: (SqlActionParameter & { optional: boolean })[] = [];
@@ -141,6 +148,18 @@ export function compileSqlStatement(
   let form = "";
   let index = 0;
   while (index < body.length) {
+    const viewer = viewerBindings.find(
+      (binding) =>
+        binding.start ===
+        lines.slice(0, headerLines).join("\n").length + (headerLines ? 1 : 0) + index
+    );
+    if (viewer) {
+      const end = index + viewer.end - viewer.start;
+      statement += body.slice(index, end);
+      form += "true";
+      index = end;
+      continue;
+    }
     const span = readSpan(body, index);
     if ("fault" in span) {
       faults.push({ message: span.fault, line: lineAt(index) });

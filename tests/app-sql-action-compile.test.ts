@@ -85,25 +85,14 @@ describe("the statement files of a Page", () => {
     }
   });
 
-  it.each(["scope", "scope_all"])(
-    "refuses $viewer.%s with the later slice named, even when viewer is declared",
-    async (name) => {
-      // Declaring viewer defeats the old undeclared-parameter error. Removing the new
-      // guard then builds this statement, so the test proves the reservation itself.
-      expect(
-        await faultsOf(`-- @param viewer text\nselect $viewer.${name}('mandant') from findings`)
-      ).toEqual([
-        {
-          file: "actions/list.sql",
-          code: "action_invalid",
-          line: 2,
-          message: expect.stringMatching(
-            new RegExp(`'\\$viewer\\.${name}' is reserved.*SCOPE-1.*SCOPE-2`, "u")
-          )
-        }
-      ]);
-    }
-  );
+  it.each(["scope", "scope_all"])("compiles $viewer.%s as a server-owned binding", async (name) => {
+    const action = await compiled(`select $viewer.${name}('mandant') from findings`);
+    expect(action.statement).toBe(`select $viewer.${name}('mandant') from findings`);
+    expect(action.parameters).toEqual([]);
+    expect(() =>
+      appActionInputAsZod(action.input.schema).parse({ viewer: ["another-client"] })
+    ).toThrow();
+  });
 
   it("refuses the dropped $viewer.groups instead of compiling it as a caller parameter", async () => {
     expect(await faultsOf("-- @param viewer text\nselect $viewer.groups from findings")).toEqual([

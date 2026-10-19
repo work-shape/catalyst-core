@@ -22,7 +22,7 @@ import type {
   UsageSafeguardsConfig,
   WebAccessConfig
 } from "@work-shape/catalyst-core";
-import { AGENT_EDITABLE_FIELDS } from "@work-shape/catalyst-core";
+import { dataScopesSchema, AGENT_EDITABLE_FIELDS } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { developmentAuthConfigSchema, standaloneAuthConfigSchema } from "./auth-schema";
 import {
@@ -406,8 +406,7 @@ function isTimeZoneName(name: string): boolean {
 }
 
 export const clientInstanceConfigSchema = z.object({
-  /** Reserved until row-level data scope is enforced; never silently discard it. */
-  scopes: z.never({ error: "'scopes' is reserved for data scope (SCOPE-1)" }).optional(),
+  scopes: dataScopesSchema.optional(),
   version: z.literal(1).default(1),
   clientInstance: z.object({
     id: z.string().min(1),

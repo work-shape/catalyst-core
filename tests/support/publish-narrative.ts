@@ -71,6 +71,7 @@ const PEOPLE: Record<string, string> = { usr_anna: "Anna Berg", usr_ben: "Ben Ku
 
 const allowed: AccessDecision = { allowed: true, source: "grant" };
 export const everything: ActorAccess = {
+  scopeOf: () => "all",
   authorize: () => allowed,
   authorizeTransfer: () => allowed,
   require: () => undefined,

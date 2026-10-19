@@ -1,3 +1,4 @@
+import { DataScopes } from "../../access/data-scopes";
 // @rights-screen: included in the rights wording guard.
 import { useState } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
@@ -161,6 +162,7 @@ export function AccessPage() {
           <TabsTrigger value="grants" count={grantsQuery.data?.length}>
             {t("access.tabGrants")}
           </TabsTrigger>
+          <TabsTrigger value="data-scopes">{t("access.scopeTab")}</TabsTrigger>
           <TabsTrigger value="check">{t("access.tabCheck")}</TabsTrigger>
         </TabsList>
         <TabsContent value="namespaces" className="pt-5">
@@ -208,6 +210,9 @@ export function AccessPage() {
             onGrant={(requests) => mutations.grant.mutateAsync(requests)}
             onRevoke={(grantId) => mutations.revoke.mutateAsync(grantId)}
           />
+        </TabsContent>
+        <TabsContent value="data-scopes" className="pt-5">
+          <DataScopes client={client} userId={user.id} users={usersQuery.data} />
         </TabsContent>
         <TabsContent value="check" className="pt-5">
           <CheckTab

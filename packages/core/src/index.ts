@@ -6,6 +6,8 @@ export * from "./artifact-preview-lifecycle";
 export * from "./asset-address";
 export * from "./attached-file-titles";
 export * from "./errors";
+export * from "./data-scope";
+export * from "./viewer-scope-sql";
 export * from "./ids";
 export * from "./follow-ups";
 export * from "./follow-up-store";

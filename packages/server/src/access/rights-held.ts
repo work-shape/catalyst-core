@@ -77,6 +77,15 @@ function within(now: ActorAccess, admitted: ActorAccess): ActorAccess {
     return decision.allowed ? admitted.authorize(action, resource) : decision;
   };
   return {
+    scopeOf(dimension) {
+      const current = now.scopeOf(dimension);
+      const before = admitted.scopeOf(dimension);
+      return current === "all"
+        ? before
+        : before === "all"
+          ? current
+          : current.filter((value) => before.includes(value));
+    },
     authorize,
     authorizeTransfer(action, resource) {
       const decision = now.authorizeTransfer(action, resource);

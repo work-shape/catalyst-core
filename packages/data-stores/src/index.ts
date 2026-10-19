@@ -210,6 +210,7 @@ export interface DataStores {
 export function createDataStores(input: {
   /** Instance content locale until Knowledge Bases support a content-language setting. */
   defaultLocale: LocaleCode;
+  scopes?: import("@work-shape/catalyst-core").DataScopes;
   clientInstanceId: ClientInstanceId;
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;
@@ -240,6 +241,7 @@ export function createDataStores(input: {
   });
   const runtime: DataStoreRuntime = {
     defaultLocale: input.defaultLocale,
+    ...(input.scopes ? { scopes: input.scopes } : {}),
     clientInstanceId,
     stores,
     server,

@@ -17,3 +17,4 @@ export * from "./data-store-records";
 export * from "./usage-limits";
 export * from "./workflow-text";
 export * from "./mail-send";
+export * from "./data-scope";

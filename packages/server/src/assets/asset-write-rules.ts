@@ -178,6 +178,7 @@ export function accessOfSyncCredential(
       ? { allowed: false, reason: "no_grant" }
       : access.authorize(action, resource);
   return {
+    scopeOf: (dimension) => access.scopeOf(dimension),
     authorize,
     authorizeTransfer: (action, resource) =>
       action === RELEASE_ACTION

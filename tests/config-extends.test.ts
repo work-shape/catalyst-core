@@ -42,21 +42,23 @@ async function writeFixtures(files: Record<string, string>): Promise<string> {
 }
 
 describe("config file extends", () => {
-  it("refuses config scopes at parse and file load with SCOPE-1 instead of dropping it", async () => {
+  it("loads one declared data scope and refuses malformed or multiple dimensions", async () => {
     const root = await writeFixtures({ "app.yaml": baseConfig });
     try {
       const base = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
-      for (const scopes of [
-        { mandant: { label: "Mandant", valueType: "text" } },
-        {},
+      const scopes = { mandant: { label: "Mandant", valueType: "text" } };
+      expect(parseClientInstanceConfig({ ...base, scopes }).scopes).toEqual(scopes);
+      await writeFile(join(root, "app.yaml"), `${baseConfig}scopes: ${JSON.stringify(scopes)}\n`);
+      expect((await loadClientInstanceConfigFromFile(join(root, "app.yaml"))).scopes).toEqual(
+        scopes
+      );
+      for (const invalid of [
         null,
-        false
+        false,
+        { mandant: { label: "Mandant", valueType: "number" } },
+        { ...scopes, team: scopes.mandant }
       ]) {
-        expect(() => parseClientInstanceConfig({ ...base, scopes })).toThrow(/scopes.*SCOPE-1/u);
-        await writeFile(join(root, "app.yaml"), `${baseConfig}scopes: ${JSON.stringify(scopes)}\n`);
-        await expect(loadClientInstanceConfigFromFile(join(root, "app.yaml"))).rejects.toThrow(
-          /scopes.*SCOPE-1/u
-        );
+        expect(() => parseClientInstanceConfig({ ...base, scopes: invalid })).toThrow();
       }
     } finally {
       await rm(root, { recursive: true, force: true });

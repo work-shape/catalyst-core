@@ -1,4 +1,6 @@
 import { assertStoreUnused } from "./used-by";
+import { checkScopedMigrations } from "./migrating";
+import { dataStoreDefinitionSchema } from "./definition";
 import {
   AppError,
   DATA_STORE_ASSET_KIND,
@@ -18,12 +20,22 @@ import { enqueueStoreJob } from "./store-job-kinds";
  * still held by a retired store.
  */
 export async function publishDataStore(
-  runtime: Pick<DataStoreRuntime, "clientInstanceId" | "server" | "limits">,
+  runtime: Pick<DataStoreRuntime, "clientInstanceId" | "server" | "limits" | "scopes">,
   stores: PlatformStores,
   input: { storeId: string; revision: number; definition: DataStoreDefinition }
 ): Promise<void> {
   const { clientInstanceId, server, limits } = runtime;
   const { storeId, definition } = input;
+  for (const table of Object.values(definition.tables ?? {})) {
+    for (const dimension of Object.keys(table.scope)) {
+      if (!runtime.scopes?.[dimension])
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Data scope '${dimension}' is not declared in release config`,
+          { reason: "scope_dimension_unknown" }
+        );
+    }
+  }
   const asset = await stores.configAssets.getConfigAsset({
     clientInstanceId,
     kind: DATA_STORE_ASSET_KIND,
@@ -61,6 +73,23 @@ export async function publishDataStore(
   // in the migration transaction, never the old catalog while DDL is still queued.
   if (definition.migrations.length === (current?.level ?? 0)) {
     await checkRecordsCatalog(server, current, definition.records);
+  }
+  if (current?.status === "ready" && Object.keys(definition.tables ?? {}).length) {
+    const before = await stores.configAssets.getConfigAssetRevision({
+      clientInstanceId,
+      kind: DATA_STORE_ASSET_KIND,
+      name: definition.name,
+      revision: current.targetRevision
+    });
+    const previous = dataStoreDefinitionSchema.safeParse(before?.config);
+    await checkScopedMigrations(
+      server,
+      current,
+      definition.migrations.filter((migration) => migration.number > current.level),
+      definition.tables,
+      previous.success ? previous.data.tables : undefined,
+      stores.connections
+    );
   }
   const now = new Date().toISOString();
   const names = server.namesOf(storeId);

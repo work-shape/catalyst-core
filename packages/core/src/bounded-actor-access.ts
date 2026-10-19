@@ -13,6 +13,15 @@ export function boundedActorAccess(
   boundBy: { id: string; label: string }
 ): ActorAccess {
   return {
+    scopeOf(dimension) {
+      const own = tester.scopeOf(dimension);
+      const bound = principal.scopeOf(dimension);
+      return own === "all"
+        ? bound
+        : bound === "all"
+          ? own
+          : own.filter((value) => bound.includes(value));
+    },
     authorize(action, resource) {
       const own = tester.authorize(action, resource);
       return own.allowed ? principal.authorize(action, resource) : own;

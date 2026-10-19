@@ -80,6 +80,37 @@ async function readDefinition(path: string): Promise<Record<string, unknown>> {
     throw new Error(`'${file}' holds no definition: its top level is not a mapping.`);
   }
   const config = { ...definitionOfShown(definition) };
+  if (Array.isArray(config.queries)) {
+    if (config.queries.length > 50)
+      throw new Error("A Knowledge Base holds at most 50 named queries");
+    const base = await realpath(dirname(file));
+    for (const query of config.queries) {
+      if (
+        !isMapping(query) ||
+        typeof query.file !== "string" ||
+        !/^queries\/[a-z][a-z0-9_]{0,62}\.sql$/u.test(query.file)
+      )
+        throw new Error("A named query names queries/<name>.sql inside the Knowledge Base folder");
+      const queryPath = await realpath(resolve(base, query.file)).catch((error: unknown) => {
+        if (
+          typeof query.sql === "string" &&
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "ENOENT"
+        )
+          return undefined;
+        throw error;
+      });
+      if (queryPath === undefined) continue;
+      const local = relative(base, queryPath);
+      if (local === ".." || local.startsWith(`..${sep}`))
+        throw new Error("A named query must be inside the Knowledge Base folder");
+      if ((await stat(queryPath)).size > 12288)
+        throw new Error("A named query exceeds the SQL file byte limit");
+      query.sql = await readFile(queryPath, "utf8");
+    }
+  }
   if (Array.isArray(config.documentTypes)) {
     const base = await realpath(dirname(file));
     for (const type of config.documentTypes) {

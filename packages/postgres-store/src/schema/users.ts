@@ -22,6 +22,7 @@ export const productUsers = pgTable(
     clientInstanceId: text("client_instance_id").notNull(),
     displayLabel: text("display_label").notNull(),
     email: text("email"),
+    groups: jsonb("groups").$type<string[]>().notNull().default([]),
     roles: jsonb("roles").$type<UserRecord["roles"]>().notNull(),
     permissionRefs: jsonb("permission_refs").$type<string[]>().notNull(),
     permissions: jsonb("permissions").$type<string[]>().notNull().default([]),

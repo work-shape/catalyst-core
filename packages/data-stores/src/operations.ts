@@ -1,3 +1,4 @@
+import { scopePredicate } from "./scoped-tables";
 import { recordsPropose } from "./records/propose";
 import { query, rowsSchema } from "./query";
 import {
@@ -105,15 +106,17 @@ const previewRows: StoreVerb = {
   inputSchema: previewInputSchema,
   outputSchema: rowsSchema,
   use: `Answers the first rows of one table, at most ${DATA_STORE_PREVIEW_ROW_LIMIT}, in no promised order. Use it to see what rows of a table look like; use query for anything that selects or counts.`,
-  async run({ runtime, target }, call) {
+  async run({ runtime, target, store, context }, call) {
     const input = previewInputSchema.parse(call);
+    const filter = scopePredicate(store.definition.tables, input.table, context?.access);
     const [table] = await readTables(runtime.server.executor, target, input.table);
     if (!table) throw tableUnknown(input.table);
     return rowsOf(
       await runtime.server.executor.query({
         ...target,
         limits: { ...target.limits, maxRows: input.limit },
-        sql: `select * from public.${quoteIdentifier(table.name)}`
+        sql: `select * from public.${quoteIdentifier(table.name)} where ${filter.condition}`,
+        parameters: filter.parameters
       })
     );
   }

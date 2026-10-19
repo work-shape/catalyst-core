@@ -3,6 +3,23 @@ import { defineTranslations } from "./translation-area";
 
 export const access = defineTranslations({
   en: {
+    "access.scopeTab": "Data access",
+    "access.scopeHolderKind": "Who receives the assignment?",
+    "access.scopePerson": "Person",
+    "access.scopeGroup": "Group",
+    "access.scopePrincipal": "Service account",
+    "access.scopeHolder": "Account or group",
+    "access.scopesLoadFailed": "Assignments could not be loaded.",
+    "access.scopeUnassigned": "No {scope} is assigned to you.",
+    "access.scopeValues": "Values, separated by commas",
+    "access.scopeAll": "All values",
+    "access.scopeAssigned": "Assigned",
+    "access.scopeRevoked": "Revoked",
+    "access.scopeSave": "Save assignment",
+    "access.scopesSaveFailed": "The assignment could not be saved.",
+    "access.scopesSaved": "Assignment saved.",
+    "access.scopesNone": "No data scope is configured.",
+
     "access.description":
       "Give a person rights on agents, skills and other assets, and check what a person may do.",
     "access.tabs": "Parts of Access",
@@ -281,6 +298,23 @@ export const access = defineTranslations({
       "A deny on an asset does not take away instance-wide rights: with them a person can still export the asset or set an agent as the default."
   },
   de: {
+    "access.scopeTab": "Datenzugriff",
+    "access.scopeHolderKind": "Wer erhält die Zuordnung?",
+    "access.scopePerson": "Person",
+    "access.scopeGroup": "Gruppe",
+    "access.scopePrincipal": "Technisches Konto",
+    "access.scopeHolder": "Konto oder Gruppe",
+    "access.scopesLoadFailed": "Die Zuordnungen konnten nicht geladen werden.",
+    "access.scopeUnassigned": "Ihnen ist kein {scope} zugeordnet",
+    "access.scopeValues": "Werte, durch Komma getrennt",
+    "access.scopeAll": "Alle Werte",
+    "access.scopeAssigned": "Zugeordnet",
+    "access.scopeRevoked": "Entzogen",
+    "access.scopeSave": "Zuordnung speichern",
+    "access.scopesSaveFailed": "Die Zuordnung konnte nicht gespeichert werden.",
+    "access.scopesSaved": "Zuordnung gespeichert.",
+    "access.scopesNone": "Es ist kein Datenbereich eingerichtet.",
+
     "access.description":
       "Gib einer Person Rechte an Agenten, Skills und anderen Assets und prüfe, was eine Person darf.",
     "access.tabs": "Abschnitte der Zugriffsseite",

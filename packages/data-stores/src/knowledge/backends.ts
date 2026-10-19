@@ -34,9 +34,9 @@ export function createKnowledgeBackend(
       target.backend === "dataStore"
         ? dataStore.retire(stores, target, signal)
         : builtin.retire(stores, target, signal),
-    query: (target, statement, signal) =>
+    query: (target, statement, signal, viewer) =>
       target.backend === "dataStore"
-        ? dataStore.query(target, statement, signal)
+        ? dataStore.query(target, statement, signal, viewer)
         : builtin.query(target, statement, signal),
     addDocuments: (target, input, signal) =>
       target.backend === "dataStore"

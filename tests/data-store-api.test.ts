@@ -93,7 +93,7 @@ describe("a Data Store on an assembled instance", () => {
     retries: world.execution.modulesStarted.jobRetries.map((retry) => retry.kind.kind)
   });
 
-  it("refuses store.yaml table scope at save with SCOPE-1 and keeps ownership scope working", async () => {
+  it("refuses malformed scoped table metadata and keeps ownership scope working", async () => {
     const world = await start(true);
     for (const scope of ["mandant", { mandant: "mandant_nr" }, null, false]) {
       const response = await put(world, [
@@ -109,7 +109,7 @@ describe("a Data Store on an assembled instance", () => {
           details: {
             issues: expect.arrayContaining([
               expect.objectContaining({
-                message: expect.stringMatching(/table.*scope.*SCOPE-1/u),
+                message: expect.stringContaining("tables"),
                 path: ["store.yaml", "tables"]
               })
             ])

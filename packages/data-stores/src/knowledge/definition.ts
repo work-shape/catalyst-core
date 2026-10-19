@@ -165,7 +165,20 @@ const definitionFieldsSchema = z.strictObject({
         "'schedule' is withdrawn. A synced source is kept current by its daily Workflow '<Knowledge Base> abgleichen' and by background updates about every 15 minutes. Remove 'schedule'."
     })
     .optional(),
-  queries: later("queries", "DS-6a, named queries"),
+  queries: z
+    .array(
+      z.strictObject({
+        name: z.string().regex(/^[a-z][a-z0-9_]{0,62}$/u),
+        file: z.string().regex(/^queries\/[a-z][a-z0-9_]{0,62}\.sql$/u),
+        sql: z.string().min(1).max(12288)
+      })
+    )
+    .max(50)
+    .refine(
+      (queries) => new Set(queries.map((query) => query.name)).size === queries.length,
+      "A named query is declared once"
+    )
+    .optional(),
   filters: later("filters", "DS-6b, declared filters")
 });
 
@@ -257,6 +270,7 @@ export function knowledgeTargetOf(
         assetId,
         name: definition.name,
         dataStore: definition.backend.dataStore,
+        ...(definition.queries ? { queries: definition.queries } : {}),
         tables: definition.tables
       }
     : { backend: "builtin", assetId, name: definition.name, methods: definition.methods };

@@ -1,3 +1,4 @@
+import { scopeAssignments } from "./schema/dataScopes";
 import { findAdminContact } from "./postgres-admin-contact";
 import { keysetFilter } from "./paging";
 import {
@@ -106,10 +107,12 @@ async function resolveUserIdentity(
             clientInstanceId: input.clientInstanceId,
             displayLabel: input.displayLabel,
             email: input.email ?? null,
+            groups: [...(input.groups ?? [])],
             roles: input.roles,
             permissionRefs: input.permissionRefs,
             status: "active",
             createdAt: now,
+            ...(input.groups ? { groups: [...input.groups] } : {}),
             updatedAt: now,
             lastAuthenticatedAt: now
           })
@@ -129,6 +132,7 @@ async function resolveUserIdentity(
         const [updatedUser] = await tx
           .update(productUsers)
           .set({
+            ...(input.groups ? { groups: [...input.groups] } : {}),
             updatedAt: now,
             lastAuthenticatedAt: now
           })
@@ -170,6 +174,7 @@ async function resolveUserIdentity(
             displayLabel: input.displayLabel,
             email: input.email ?? null,
             emailVerified: input.emailVerified ?? false,
+            ...(input.groups ? { groups: [...input.groups] } : {}),
             updatedAt: now,
             lastAuthenticatedAt: now
           }
@@ -240,7 +245,14 @@ async function refreshLinkedSignIn(tx: PostgresTransaction, input: ResolveUserId
   requireUsableUser(mapUserRecord(user, [], []).status);
 
   const now = new Date();
-  await tx.update(productUsers).set({ updatedAt: now, lastAuthenticatedAt: now }).where(userWhere);
+  await tx
+    .update(productUsers)
+    .set({
+      ...(input.groups ? { groups: [...input.groups] } : {}),
+      updatedAt: now,
+      lastAuthenticatedAt: now
+    })
+    .where(userWhere);
   const [identity] = await tx
     .update(userIdentities)
     .set({
@@ -490,6 +502,15 @@ async function deleteUser(db: PostgresConnection, input: DeleteUserInput): Promi
           eq(permissionGrants.clientInstanceId, input.clientInstanceId),
           eq(permissionGrants.holderKind, "user"),
           eq(permissionGrants.holderId, input.userId)
+        )
+      );
+    await tx
+      .delete(scopeAssignments)
+      .where(
+        and(
+          eq(scopeAssignments.clientInstanceId, input.clientInstanceId),
+          eq(scopeAssignments.holderKind, "user"),
+          eq(scopeAssignments.holderId, input.userId)
         )
       );
     return tx

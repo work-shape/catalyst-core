@@ -41,22 +41,34 @@ const knowledgeOpenDocumentQuerySchema = z.object({
   conversationId: z.string().min(1).optional()
 });
 
-const knowledgeQueryRequestSchema = z.strictObject({
-  /** One read-only SELECT or WITH statement with positional placeholders. */
-  sql: z.string().min(1),
-  /** A bare value, or a value with the type it is bound as. Never part of the statement. */
-  parameters: z
-    .array(
-      z.union([
-        valueSchema,
-        z.strictObject({
-          type: z.enum(SCALAR_TYPES.flatMap((type) => [type, `${type}[]`] as const)),
-          value: valueSchema
-        })
+const knowledgeQueryRequestSchema = z
+  .strictObject({
+    sql: z.string().min(1).max(20000).optional(),
+    query: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]{0,62}$/u)
+      .optional(),
+    parameters: z
+      .union([
+        z
+          .array(
+            z.union([
+              valueSchema,
+              z.strictObject({
+                type: z.enum(SCALAR_TYPES.flatMap((type) => [type, `${type}[]`] as const)),
+                value: valueSchema
+              })
+            ])
+          )
+          .max(100),
+        z.record(z.string(), valueSchema)
       ])
-    )
-    .optional()
-});
+      .optional()
+  })
+  .refine(
+    (input) => (input.sql === undefined) !== (input.query === undefined),
+    "Give either sql or a named query"
+  );
 
 const knowledgeQueryResponseSchema = z.object({
   /** `type` is the product's name of the type, `nativeType` the database's. */

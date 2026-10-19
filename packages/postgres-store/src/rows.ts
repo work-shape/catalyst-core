@@ -607,6 +607,7 @@ export function mapUserRecord(
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     displayLabel: row.displayLabel,
     email: row.email ?? undefined,
+    ...(row.groups.length ? { groups: row.groups } : {}),
     roles: row.roles,
     permissionRefs: row.permissionRefs,
     permissions,

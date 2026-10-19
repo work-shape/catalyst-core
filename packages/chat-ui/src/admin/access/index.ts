@@ -39,3 +39,5 @@ export {
 
 export { grantOptions } from "./grant-options";
 export { listGrantChoiceAssets } from "./access-queries";
+
+export { DataScopes } from "./data-scopes";

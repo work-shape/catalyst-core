@@ -834,6 +834,11 @@ export const EVENTS = {
   // A changing call of a draft that was not made and answered what it would have done.
   "operation.simulated": { ...OPERATION_AUDIT, name: "operation.simulated" },
   "operation.started": { ...OPERATION_AUDIT, name: "operation.started" },
+  "scope_assignment.changed": {
+    ...LEGACY_AUDIT,
+    name: "scope_assignment.changed",
+    subject: "scope_assignment"
+  },
   "permission.granted": {
     ...LEGACY_AUDIT,
     name: "permission.granted",

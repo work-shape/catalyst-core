@@ -1,3 +1,4 @@
+import { scopePredicate } from "./scoped-tables";
 import type { PostgresParameter } from "@work-shape/catalyst-postgres-connector";
 import { AppError, DATA_STORE_PREVIEW_ROW_LIMIT, type JsonObject } from "@work-shape/catalyst-core";
 import { z } from "zod";
@@ -63,6 +64,7 @@ const rowsOutputSchema = z.object({
   ),
   /** What `after` takes for the next page. Left out behind the last row. */
   next: z.string().optional(),
+  scopeUnassigned: z.string().optional(),
   valueMaxChars: z.number().int()
 });
 
@@ -189,6 +191,13 @@ export const rows: StoreRead = {
     const ordered = await orderedTable(call, input.table);
     const { table, stored, key } = ordered;
     const from = input.after === undefined ? undefined : placed(ordered, placeOf(input.after), ">");
+    const filter = scopePredicate(
+      call.store.definition.tables,
+      table.name,
+      call.context?.access,
+      from?.parameters.length ?? 0,
+      "stored"
+    );
     const physical = key.length === 0;
     const column = (name: string) => `page.${quoteIdentifier(name)}`;
     // Names of this statement's own that no column of the table has: the part of the table a
@@ -202,7 +211,7 @@ export const rows: StoreRead = {
       ? "stored.tableoid, stored.ctid"
       : key.map(({ column: name }) => `stored.${quoteIdentifier(name)}`).join(", ");
     const found = `select stored.*, stored.tableoid::pg_catalog.oid as ${part}, stored.ctid as ${place}
-      from ${stored} as stored ${from ? `where ${from.condition}` : ""}
+      from ${stored} as stored where (${from ? from.condition : "true"}) and (${filter.condition})
       order by ${order} limit ${input.limit + 1}`;
     // Then each value is cut where the database holds it. A text is read up to one character
     // past what a page answers, which reads the beginning of a long one and not the rest.
@@ -238,7 +247,7 @@ export const rows: StoreRead = {
       // One row more than the page says whether a row follows it.
       limits: { ...call.target.limits, maxRows: input.limit + 1 },
       sql: `select ${selected.join(", ")} from (${found}) as page order by ${pageOrder}`,
-      ...(from ? { parameters: from.parameters } : {})
+      parameters: [...(from?.parameters ?? []), ...filter.parameters]
     });
     const page = read.rows.slice(0, input.limit).map((row: JsonObject) => {
       const cut = table.columns.flatMap(({ name }, index) =>
@@ -264,6 +273,14 @@ export const rows: StoreRead = {
     const last = page.at(-1);
     return {
       table: table.name,
+      ...(filter.unassigned
+        ? {
+            scopeUnassigned:
+              call.runtime.scopes?.[
+                Object.keys(call.store.definition.tables?.[table.name]?.scope ?? {})[0] ?? ""
+              ]?.label ?? "data"
+          }
+        : {}),
       columns: table.columns.map(({ name, type, nativeType }) => ({ name, type, nativeType })),
       order: physical
         ? { by: "physical" as const }
@@ -291,12 +308,19 @@ export const value: StoreRead = {
       );
     }
     const at = placed(ordered, placeOf(input.at), "=");
+    const filter = scopePredicate(
+      call.store.definition.tables,
+      ordered.table.name,
+      call.context?.access,
+      at.parameters.length,
+      "stored"
+    );
     const read = await call.runtime.server.executor.query({
       ...call.target,
       limits: { ...call.target.limits, maxRows: 1 },
       sql: `select stored.${quoteIdentifier(column.name)} as "v" from ${ordered.stored} as stored
-        where ${at.condition}`,
-      parameters: at.parameters
+        where (${at.condition}) and (${filter.condition})`,
+      parameters: [...at.parameters, ...filter.parameters]
     });
     const [row] = read.rows;
     if (!row) {

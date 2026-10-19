@@ -72,6 +72,13 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
     action: "agent.write",
     scopeKind: "instance"
   },
+  "scope_assignments.set": {
+    dimension: "mandant",
+    holderKind: "user",
+    holderId: "scope-user",
+    effect: "allow",
+    values: ["101"]
+  },
   "namespaces.create": { prefix: "team-", displayName: "Team" },
   "namespaces.update": { displayName: "Team" }
 };

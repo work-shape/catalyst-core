@@ -1,9 +1,12 @@
+import { compiledNamedQuery } from "./named-query";
+import { knowledgeQueryInputSchema, namedQueryStatement } from "./named-query";
 import { extractFieldsOperation } from "./field-extraction";
 import { workflowDataFlowsSchema } from "@work-shape/catalyst-core";
 import { DATA_STORE_USED_BY_MAX_ASSETS, readWorkflowDataFlows } from "../workflow-data-flows";
 import { assetResource } from "../store-audience";
 import { sourceOperation } from "./source-operations";
 import {
+  AppError,
   isAppError,
   knowledgeIndexJob,
   knowledgeSyncJob,
@@ -255,18 +258,30 @@ function queryOperation(
     action: KNOWLEDGE_BASE_ACTIONS.use,
     scope: "data_store_rows:read",
     auth: "principal",
-    inputSchema: queryInputSchema,
+    inputSchema: knowledgeQueryInputSchema,
     outputSchema: queryOutputSchema,
     resource: () => knowledgeBase.resource,
     module: KNOWLEDGE_MODULE,
     timeoutMs: RUN_TIMEOUT_MS,
     async execute(input, context) {
-      const statement = queryInputSchema.parse(input);
+      const asked = knowledgeQueryInputSchema.parse(input);
+      const named =
+        asked.query === undefined
+          ? undefined
+          : definition.queries?.find((query) => query.name === asked.query);
+      if (asked.query !== undefined && !named)
+        throw new AppError("VALIDATION_FAILED", "The Knowledge Base has no such named query", {
+          reason: "named_query_unknown"
+        });
+      const statement = named
+        ? namedQueryStatement(named, z.record(z.string(), z.json()).parse(asked.parameters ?? {}))
+        : queryInputSchema.parse(asked);
       try {
         const rows = await runtime.backend.query(
           knowledgeTargetOf(definition, knowledgeBase.asset.id),
           statement,
-          context.runtime.signal
+          context.runtime.signal,
+          { access: context.access, namedQuery: named !== undefined }
         );
         return {
           ...rows,
@@ -568,7 +583,16 @@ export function createKnowledgeOperationSource(runtime: KnowledgeRuntime): Opera
 function knowledgeBaseSection({ definition }: StructuredKnowledgeBase): string {
   return [
     `- ${definition.name} ("${definition.title}"): ${definition.description}`,
-    ...definition.tables.map((table) => `  - table ${table.name}: ${table.description}`)
+    ...definition.tables.map((table) => `  - table ${table.name}: ${table.description}`),
+    ...(definition.queries ?? []).map((query) => {
+      const parameters = compiledNamedQuery(query)
+        .parameters.map(
+          (parameter) =>
+            `${parameter.name}: ${parameter.type}${parameter.optional ? " (optional)" : ""}`
+        )
+        .join(", ");
+      return `  - named query ${query.name}${parameters ? `; parameters: ${parameters}` : "; no parameters"}`;
+    })
   ].join("\n");
 }
 
@@ -581,6 +605,7 @@ function searchableSection({ definition }: PublishedKnowledgeBase): string {
 /** What the agent is told of the one tool: when to use it and how. */
 const KNOWLEDGE_QUERY_TOOL_USE = [
   "Answers questions from the Knowledge Bases assigned to you. Each describes tables of a database; you read their rows with one read-only SQL statement per call.",
+  'Where named queries are listed, send their name under "query" and their declared values as a "parameters" object. Scoped tables refuse free SQL; viewer scope values come from the platform.',
   "Use it whenever a question is about what one of them holds, before you answer from what you know yourself, and answer from the rows it returns.",
   'Name the Knowledge Base under "knowledgeBase" by its id. Send one SELECT or WITH statement in PostgreSQL syntax under "sql". Put every value into "parameters" and refer to it as $1, $2 and so on; never write a value into the SQL.',
   'The tables are in the schema "public". Their descriptions below say what a row is. Read the exact columns and types with the same tool before you rely on them, for example: select column_name, data_type from information_schema.columns where table_name = $1.',
@@ -604,7 +629,7 @@ const KNOWLEDGE_SEARCH_TOOL_USE = [
 
 const queryInputJsonSchema: JsonObject = z
   .record(z.string(), z.json())
-  .parse(z.toJSONSchema(queryInputSchema, { target: "draft-07", io: "input" }));
+  .parse(z.toJSONSchema(knowledgeQueryInputSchema, { target: "draft-07", io: "input" }));
 
 const searchInputJsonSchema: JsonObject = z
   .record(z.string(), z.json())
@@ -623,7 +648,8 @@ function knowledgeToolInputJsonSchema(knowledgeBases: readonly string[]): JsonOb
       },
       ...properties
     },
-    required: ["knowledgeBase", "sql"],
+    required: ["knowledgeBase"],
+    oneOf: [{ required: ["sql"] }, { required: ["query"] }],
     additionalProperties: false
   };
 }

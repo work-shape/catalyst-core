@@ -35,6 +35,7 @@ export interface UserRecord {
   clientInstanceId: ClientInstanceId;
   displayLabel: string;
   email?: string;
+  groups?: readonly string[];
   roles: UserRole[];
   permissionRefs: string[];
   permissions: string[];
@@ -59,6 +60,7 @@ export interface ResolveUserIdentityInput {
   displayLabel: string;
   email?: string;
   emailVerified?: boolean;
+  groups?: readonly string[];
   roles: UserRole[];
   permissionRefs: string[];
   permissions: string[];
@@ -204,6 +206,7 @@ export function authenticatedUserFromRecord(input: {
     externalUserId: input.identity.externalUserId,
     displayLabel: input.user.displayLabel,
     email: input.user.email,
+    ...(input.user.groups ? { groups: input.user.groups } : {}),
     roles: input.user.roles,
     permissionRefs: input.user.permissionRefs,
     permissions: input.user.permissions,

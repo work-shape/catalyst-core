@@ -11,6 +11,7 @@ import {
   type DataStoreAppliedMigration,
   type JsonObject
 } from "@work-shape/catalyst-core";
+import { scopedTablesSchema } from "./scoped-tables";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
@@ -47,10 +48,7 @@ const manifestSchema = z.strictObject({
   id: z.string(),
   records: z.array(dataStoreRecordsRuleSchema).optional(),
   scope: scopeSchema.optional(),
-  /** Table metadata is not read yet; a data scope must never appear to be enforced. */
-  tables: z
-    .never({ error: "'tables', including table 'scope', is reserved for data scope (SCOPE-1)" })
-    .optional(),
+  tables: scopedTablesSchema.optional(),
   name: z.string().min(1).max(DATA_STORE_TITLE_MAX_CHARS).optional(),
   description: z.string().max(DATA_STORE_DESCRIPTION_MAX_CHARS).optional(),
   sizeLimit: z
@@ -79,6 +77,7 @@ export const dataStoreDefinitionSchema = z
     scope: scopeSchema.optional(),
     sizeLimitBytes: z.number().int().positive().optional(),
     records: z.array(dataStoreRecordsRuleSchema).optional(),
+    tables: scopedTablesSchema.optional(),
     migrations: z.array(migrationSchema).max(DATA_STORE_MAX_MIGRATIONS)
   })
   .superRefine((definition, context) => {
@@ -241,6 +240,7 @@ export function readDataStoreFiles(
   if (!manifest || issues.length > 0) throw refused(issues);
   const definition = dataStoreDefinitionSchema.safeParse({
     name: manifest.id,
+    ...(manifest.tables ? { tables: manifest.tables } : {}),
     ...(manifest.records === undefined ? {} : { records: manifest.records }),
     title: manifest.name ?? manifest.id,
     ...(manifest.description === undefined ? {} : { description: manifest.description }),

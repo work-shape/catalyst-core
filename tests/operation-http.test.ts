@@ -208,6 +208,7 @@ describe("operation over HTTP: who checks the right", () => {
     const authorizer: Authorizer = {
       forActor: () =>
         Promise.resolve({
+          scopeOf: () => [],
           authorize: (action) => {
             asked.push(action);
             return { allowed: false, reason: "denied" };

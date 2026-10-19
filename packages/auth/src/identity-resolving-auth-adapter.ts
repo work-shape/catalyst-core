@@ -38,6 +38,7 @@ export class IdentityResolvingAuthAdapter implements AuthAdapter {
       displayLabel: claims.displayLabel,
       email: claims.email,
       emailVerified: claims.emailVerified,
+      groups: claims.groups,
       roles: claims.roles,
       permissionRefs: claims.permissionRefs,
       permissions: claims.permissions ?? [],

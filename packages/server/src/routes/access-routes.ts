@@ -1,3 +1,11 @@
+import { requireManageableHolder } from "../access/grant-holder-rules";
+import { withRightsHeld } from "../access/rights-held";
+import {
+  auditActorFromUser,
+  asUserId,
+  resolveDataScope,
+  type PlatformStores
+} from "@work-shape/catalyst-core";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
@@ -21,6 +29,87 @@ import type { ChatServerOptions } from "../types";
  */
 export function registerAccessRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new AccessWorkflow(options);
+  const requireHolder = async (
+    stores: PlatformStores,
+    actor: AuthenticatedUser,
+    holder: { holderKind: string; holderId: string }
+  ) => {
+    if (holder.holderKind !== "user") return;
+    const person = await stores.users.getUser({
+      clientInstanceId: options.clientInstanceId,
+      userId: asUserId(holder.holderId)
+    });
+    if (!person) throw new AppError("NOT_FOUND", "User not found");
+    requireManageableHolder(actor, person);
+  };
+  route(apiOperations["scope_assignments.list"], async ({ query, user }) => {
+    await requireHolder(options.stores, personOf(user), query);
+    const assignments = await options.stores.access.listScopeAssignments({
+      clientInstanceId: options.clientInstanceId,
+      ...query
+    });
+    const persisted =
+      query.holderKind === "group"
+        ? undefined
+        : await options.stores.access.loadPersistedAccess({
+            clientInstanceId: options.clientInstanceId,
+            holder: { kind: query.holderKind, id: query.holderId }
+          });
+    const inherited =
+      query.holderKind === "group"
+        ? assignments
+        : persisted?.holderActive
+          ? (persisted.scopeAssignments ?? [])
+          : [];
+    const effective: Record<string, "all" | string[]> = {};
+    for (const dimension of Object.keys(options.config.scopes ?? {})) {
+      const scope = resolveDataScope(inherited, dimension);
+      effective[dimension] = scope === "all" ? scope : [...scope];
+    }
+    return { dimensions: options.config.scopes ?? {}, assignments, effective };
+  });
+  route.operation(apiOperations["scope_assignments.set"], {
+    resource: ({ holderKind, holderId }) => ({ kind: holderKind, id: holderId }),
+    changeClass: "reversible",
+    async execute(input, context) {
+      const actor = personOf(context.actor);
+      if (!options.config.scopes?.[input.dimension])
+        throw new AppError("VALIDATION_FAILED", "This data scope is not declared", {
+          reason: "scope_dimension_unknown"
+        });
+      await withRightsHeld(
+        options,
+        {
+          actor,
+          access: context.access,
+          ...(input.holderKind === "user" ? { userId: input.holderId } : {})
+        },
+        async (held) => {
+          held.access.require("users.manage");
+          await requireHolder(held.options.stores, held.actor, input);
+          await held.options.stores.access.setScopeAssignment({
+            ...input,
+            clientInstanceId: options.clientInstanceId
+          });
+        }
+      );
+      await context.audit.record({
+        type: "scope_assignment.changed",
+        actor: auditActorFromUser(actor),
+        status: "success",
+        subject: input.holderId,
+        correlationId: context.correlationId,
+        metadata: {
+          dimension: input.dimension,
+          holderKind: input.holderKind,
+          effect: input.effect,
+          all: input.values === "all",
+          valueCount: input.values === "all" ? 0 : input.values.length
+        }
+      });
+      return input;
+    }
+  });
   const { kinds } = options.configAssets;
   const grant = apiOperations["permissions.grant"];
   const revoke = apiOperations["permissions.revoke"];

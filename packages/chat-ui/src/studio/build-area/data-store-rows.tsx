@@ -99,7 +99,11 @@ function DataStoreRowsView({
         failedAction={from ? toStart : undefined}
         rows={4}
       >
-        {({ columns, rows, order, next }, renewing) => {
+        {({ columns, rows, order, next, scopeUnassigned }, renewing) => {
+          if (scopeUnassigned)
+            return (
+              <Banner tone="info">{t("access.scopeUnassigned", { scope: scopeUnassigned })}</Banner>
+            );
           const passed = (renewing ? from?.before : from?.passed) ?? 0;
           const orderText =
             order.by === "key"
