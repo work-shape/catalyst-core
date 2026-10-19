@@ -261,7 +261,7 @@ export function addFilesOperation(
     auth: "principal",
     inputSchema: addFilesInputSchema,
     outputSchema: addFilesOutputSchema,
-    resource: () => knowledgeBase.resource,
+    resource: () => ({ ...knowledgeBase.resource, title: knowledgeBase.definition.title }),
     module: "knowledge",
     timeoutMs: KNOWLEDGE_ADD_FILES_TIMEOUT_MS,
     async execute(input, context) {

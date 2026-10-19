@@ -143,6 +143,8 @@ export type AgentRunProjectionPart =
       state: (typeof TOOL_CALL_STATES)[number];
       output?: unknown;
       errorText?: string;
+      /** The fixed recovery the host offers for an asset in a shared transcript. */
+      errorReason?: "subject_conversation_shared";
       /** While the state is `waiting_for_decision`: what the person is asked to decide. */
       decision?: Omit<ToolDecisionRequested, "toolCallId" | "toolName">;
       /** On a `run_agent` call that started its subagent: the subagent, for its card. */
@@ -172,6 +174,8 @@ export interface AgentRunProjection {
     state: (typeof TOOL_CALL_STATES)[number];
     output?: unknown;
     errorText?: string;
+    /** The fixed recovery the host offers for an asset in a shared transcript. */
+    errorReason?: "subject_conversation_shared";
     decision?: Omit<ToolDecisionRequested, "toolCallId" | "toolName">;
     subagent?: SubagentRef;
   }>;

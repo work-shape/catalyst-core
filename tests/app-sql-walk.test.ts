@@ -139,4 +139,126 @@ describe("an App on a Data Store, from its folder to a member's row", () => {
       reason: { kind: "forbidden", action: "data_store.read" }
     });
   });
+  it("ACCEPT-FIX-11 B-1: an instance App owned by one person's workspace opens for another member and reads its stored data", async () => {
+    const owner = await t.stores.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: t.admin.id
+    });
+    const viewer = await t.stores.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: t.lena.id
+    });
+    await t.publishStore(
+      "personal-ledger",
+      [{ ...manifest(), text: "id: personal-ledger\nname: Personal ledger\n" }, init],
+      owner.id
+    );
+    const inserted = await t.invoke(
+      t.admin,
+      "data_store.personal-ledger.insert",
+      {
+        table: "findings",
+        rows: [
+          {
+            run_id: "shared",
+            client_id: "Nordlicht",
+            rule_id: "deadline",
+            revision: 1,
+            severity: "info"
+          }
+        ]
+      },
+      { effect: "changing", origin: { kind: "user" } }
+    );
+    expect(inserted.result.status).toBe("done");
+    expectStatus(
+      await t.call(t.admin.id, "assets.put", {
+        params: { kind: "app", name: "personal-ledger-app" },
+        payload: {
+          workspaceId: owner.id,
+          files: findingsApp({
+            id: "personal-ledger-app",
+            marker: "shared data",
+            store: "personal-ledger"
+          })
+        }
+      }),
+      200
+    );
+    expectStatus(
+      await t.call(t.admin.id, "assets.publish", {
+        params: { kind: "app", name: "personal-ledger-app" },
+        payload: { workspaceId: owner.id, revision: 1, audience: "instance" }
+      }),
+      200
+    );
+    const preview = await t.call(t.lena.id, "apps.preview", {
+      params: { app: "personal-ledger-app" },
+      payload: { mode: "published" }
+    });
+    expectStatus(preview, 200);
+    expect(z.looseObject({ interfacePath: z.string() }).parse(preview.json()).interfacePath).toBe(
+      `/w/${viewer.id}/apps/personal-ledger-app`
+    );
+    expectStatus(
+      await t.call(t.lena.id, "assets.get", {
+        params: { kind: "app", name: "personal-ledger-app" },
+        query: { workspaceId: viewer.id }
+      }),
+      200
+    );
+    const sources = await t.call(t.lena.id, "data_stores.app_sources", {
+      query: { app: "personal-ledger-app" }
+    });
+    expectStatus(sources, 200);
+    expect(sources.json()).toMatchObject({
+      stores: [{ name: "personal-ledger", title: "Personal ledger" }]
+    });
+    const frame = await t.openApp(t.lena.id, "published", "personal-ledger-app");
+    const read = await t.callAction(t.lena.id, frame, "list_findings", { limit: 10, offset: 0 });
+    expectStatus(read, 200);
+    expect(resultSchema.parse(read.json())).toMatchObject({
+      status: "done",
+      result: { rows: [{ client_id: "Nordlicht" }] }
+    });
+    // Stored data follows the App audience, while the store and the owner's transcript stay private.
+    expect(
+      (await t.invoke(t.lena, "data_store.personal-ledger.query", { sql: "select 1" })).result
+        .status
+    ).toBe("denied");
+    expect(
+      await t.stores.workspaces.getMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: owner.id,
+        userId: t.lena.id
+      })
+    ).toBeUndefined();
+
+    const operation = await t.dataStores.operationSource.resolve(
+      "data_store.personal-ledger.used_by"
+    );
+    expect(operation).toBeDefined();
+    // The ordinary operation path provides the page's provenance, including the published audience.
+    const usage = await t.invoke(t.admin, "data_store.personal-ledger.used_by", {});
+    expect(usage.result).toMatchObject({
+      status: "done",
+      output: {
+        apps: [
+          {
+            audience: {
+              app: {
+                audience: "instance",
+                people: await t.stores.users.countActiveUsers({ clientInstanceId })
+              },
+              holders: [],
+              hiddenHolders: 0
+            }
+          }
+        ]
+      }
+    });
+    if (usage.result.status === "done") {
+      expect(JSON.stringify(usage.result.output)).not.toContain("Personal workspace");
+    }
+  });
 });

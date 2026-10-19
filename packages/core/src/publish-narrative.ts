@@ -1,3 +1,4 @@
+import type { AppAudience } from "./app-audience";
 import type { ActorAccess } from "./permissions";
 
 // The plain sentence a publish question opens with (PUBQ-1), and what the stored-data module
@@ -19,6 +20,8 @@ export interface PublishNarrative {
  * role and hold no grant row, so they are never counted and always have access.
  */
 export interface PublishNarrativeAudience {
+  /** A published App audience, independent of its owning workspace. */
+  app?: { audience: AppAudience; people: number };
   /** The workspace that owns it, whose members use it by being members. */
   workspace?: { title: string; members: number };
   /** How many hold its use by a grant row, shown to the reader or not. Holders, not people. */

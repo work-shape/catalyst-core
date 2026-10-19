@@ -1,4 +1,5 @@
 import {
+  APP_AUDIENCES,
   GRANT_HOLDER_KINDS,
   WORKSPACE_MEMBER_ACTIONS,
   asCollaborationWorkspaceId,
@@ -35,6 +36,8 @@ const holderSchema = z.object({
 });
 
 export const audienceSchema = z.object({
+  /** The published App audience; ownership alone does not say who may use it. */
+  app: z.object({ audience: z.enum(APP_AUDIENCES), people: z.number().int() }).optional(),
   /** The workspace that owns the asset, whose members hold its use by being members. */
   workspace: z.object({ title: z.string(), members: z.number().int() }).optional(),
   /** Who holds the right by a grant row and may be shown to the caller. */
@@ -71,6 +74,7 @@ export function assetResource(asset: ConfigAssetRecord): AccessResource {
     kind: asset.kind,
     name: asset.name,
     assetId: asset.id,
+    ...(asset.appAvailability ? { appAvailability: asset.appAvailability } : {}),
     ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
   };
 }
@@ -85,6 +89,7 @@ export function createAudienceReader(
   const workspaces = new Map<string, Promise<Audience["workspace"]>>();
   const titles = new Map<string, Promise<string>>();
   let truncated = false;
+  let instancePeople: Promise<number> | undefined;
 
   const rowsOf = (action: string) => {
     let rows = grants.get(action);
@@ -152,6 +157,14 @@ export function createAudienceReader(
 
   return {
     async of(action, resource) {
+      const app = action === "app.use" ? resource.appAvailability : undefined;
+      if (app && app.audience !== "workspace") {
+        const people =
+          app.audience === "self"
+            ? 1
+            : await (instancePeople ??= stores.users.countActiveUsers({ clientInstanceId }));
+        return { app: { audience: app.audience, people }, holders: [], hiddenHolders: 0 };
+      }
       const rows = await rowsOf(action);
       // A holder holds the right where its own rows allow it and none of them denies it, as the
       // evaluator decides for one holder.
@@ -191,6 +204,7 @@ export function createAudienceReader(
           : undefined;
       return {
         ...(workspace ? { workspace } : {}),
+        ...(app ? { app: { audience: app.audience, people: workspace?.members ?? 0 } } : {}),
         holders,
         hiddenHolders: holding.length - holders.length
       };

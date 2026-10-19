@@ -1,5 +1,6 @@
 import { workflowDataFlowsSchema } from "@work-shape/catalyst-asset-schemas";
 import {
+  APP_AUDIENCES,
   DATA_STORE_CONDITIONS,
   DATA_STORE_INSERT_CONFLICT_MODES,
   DATA_STORE_MIGRATION_OUTCOMES,
@@ -214,6 +215,7 @@ const dataStoreSourceSchema = z.object({
  * its right by a grant row. Admins hold every right by their role and are not listed.
  */
 const dataStoreAudienceSchema = z.object({
+  app: z.object({ audience: z.enum(APP_AUDIENCES), people: z.number().int() }).optional(),
   workspace: z.object({ title: z.string(), members: z.number().int() }).optional(),
   /** The holders by a grant row, named only to a caller who administers users. */
   holders: z.array(
@@ -236,6 +238,9 @@ const usingAssetSchema = z.object({
 });
 
 const dataStoreUsedByResponseSchema = z.object({
+  conversationWriters: z
+    .object({ agents: z.number().int(), conversations: z.number().int(), truncated: z.boolean() })
+    .optional(),
   dataFlows: workflowDataFlowsSchema.optional(),
   /** The published Apps whose `sql` actions name the store, as far as the caller is shown them. */
   apps: z.array(usingAssetSchema.extend({ audience: dataStoreAudienceSchema })),

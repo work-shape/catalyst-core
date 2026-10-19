@@ -424,6 +424,38 @@ describe("PUBQ-1 the publish question's sentence", () => {
     }
   });
 
+  it.each([
+    ["en", "instance", "everyone in the instance"],
+    ["de", "instance", "alle in der Instanz"],
+    ["en", "self", "the person it is shared with"],
+    ["de", "self", "die Person, mit der sie geteilt ist"]
+  ] as const)(
+    "ACCEPT-FIX-11 E-2: %s names the published %s audience instead of ownership",
+    async (locale, audience, expected) => {
+      const narrative = await narrator({
+        stored: {
+          ...storedData,
+          appRevision: () =>
+            Promise.resolve({
+              audience: { app: { audience, people: 2 }, holders: 0 },
+              stores: [],
+              truncated: false
+            })
+        }
+      }).narrate({
+        kind: "app",
+        name: "findings",
+        scope: workspaceScope,
+        revision: 2,
+        config: { title: "Findings", manifest: { actions: [] } },
+        locale,
+        access: everything
+      });
+      expect(narrative?.summary).toContain(expected);
+      expect(narrative?.summary).not.toMatch(/admins only|nur Instanz-Admins|Personal workspace/u);
+    }
+  );
+
   it("names holders alone in the case the sentence asks for, and never as others", async () => {
     const narrate = (locale: LocaleCode, holders: number) =>
       narrator({

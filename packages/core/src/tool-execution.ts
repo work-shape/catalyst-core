@@ -119,6 +119,8 @@ export interface ToolHandlerSuccessResult<TOutput = unknown> {
 }
 
 export interface ToolHandlerFailureResult {
+  /** Host-only recovery; omitted from the error text sent to the model. */
+  recovery?: "private_conversation";
   status: "failed" | "cancelled" | "timed_out";
   error: ToolExecutionError;
   auditSummary?: AuditSafeSummary;
