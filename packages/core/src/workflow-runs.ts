@@ -200,11 +200,15 @@ export interface WorkflowOutputPreview {
   truncated: boolean;
 }
 
-/** A value as JSON text, cut at `WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS` and marked where cut. */
+/**
+ * A value as JSON text, cut at `WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS` and marked where cut. The cut
+ * never splits a surrogate pair: a lone half is no text Postgres stores.
+ */
 export function workflowValuePreview(value: JsonValue): WorkflowOutputPreview {
   const text = JSON.stringify(value);
-  const truncated = text.length > WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS;
-  return { text: truncated ? text.slice(0, WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS) : text, truncated };
+  if (text.length <= WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS) return { text, truncated: false };
+  const cut = text.slice(0, WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS);
+  return { text: /[\uD800-\uDBFF]$/u.test(cut) ? cut.slice(0, -1) : cut, truncated: true };
 }
 
 /** A run as a read shows it: no definition and no input, and the result as a preview. */

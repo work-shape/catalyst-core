@@ -105,7 +105,15 @@ describe("WF-PANEL-1a the input of a step run", () => {
     expect(stored.map((row) => row.input)).toEqual(CLIENTS.map(() => null));
   });
 
-  it("stores only the preview, cut and marked as cut", async () => {
+  it.each([
+    { name: "a plain text", text: "x".repeat(4_000), kept: `{"text":"${"x".repeat(1_991)}` },
+    // The cut would split the emoji's surrogate pair, which Postgres refuses to store.
+    {
+      name: "an emoji at the bound",
+      text: `${"x".repeat(1_990)}😀tail`,
+      kept: `{"text":"${"x".repeat(1_990)}`
+    }
+  ])("stores only the preview of $name, cut and marked as cut", async ({ text, kept }) => {
     const definitions = publishedDefinitions();
     const manifest = notifyClients();
     definitions.publish({
@@ -118,7 +126,7 @@ describe("WF-PANEL-1a the input of a step run", () => {
           name: "Large input",
           type: "operation",
           operation: "connection.crm.write",
-          input: { text: { value: "x".repeat(4_000) } }
+          input: { text: { value: text } }
         },
         { id: "result", name: "Result", type: "output", input: {} }
       ]
@@ -131,11 +139,12 @@ describe("WF-PANEL-1a the input of a step run", () => {
     );
     t.setBehaviour(() => Promise.resolve({ ok: true }));
     const run = await t.finish((await start(t)).id);
+    expect(run.status).toBe("done");
     const [row] = await withTestSql(
       (sql) => sql`select input from workflow_step_runs where run_id = ${run.id}
         and step_id = 'large'`
     );
-    const preview = { text: `{"text":"${"x".repeat(1_991)}`, truncated: true };
+    const preview = { text: kept, truncated: true };
     expect(row?.input).toEqual({ preview });
     const step = (await stepRunsAs(t, t.root.id, run.id)).find((step) => step.key === "large");
     expect(step?.inputPreview).toEqual(preview);
