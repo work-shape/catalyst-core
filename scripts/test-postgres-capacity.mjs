@@ -28,9 +28,20 @@ export const TEST_WORKER_ADMIN_CONNECTIONS = 1;
 /** Postgres keeps `superuser_reserved_connections` free of ordinary roles: 3 by default. */
 export const SERVER_RESERVED_CONNECTIONS = 3;
 
-/** The test files Vitest runs side by side when nothing limits it: one core stays free. */
-export function defaultTestWorkers() {
+/** The test files this machine can run side by side: one core stays free. */
+export function machineTestWorkers() {
   return Math.max(availableParallelism() - 1, 1);
+}
+
+/**
+ * The test files Vitest runs side by side when nothing limits it: CATALYST_TEST_WORKERS when it
+ * is set, as `pnpm check:local` sets it for a suite that runs beside the other checks and the
+ * workspace's heavy queue sets it for runs that share the machine, otherwise
+ * `machineTestWorkers()`.
+ */
+export function defaultTestWorkers() {
+  const set = Number(process.env.CATALYST_TEST_WORKERS);
+  return Number.isInteger(set) && set >= 1 ? set : machineTestWorkers();
 }
 
 /**

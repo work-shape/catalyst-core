@@ -80,7 +80,10 @@ pnpm test:e2e
 pnpm test:e2e:chat-state
 ```
 
-`pnpm check:local` is `pnpm check` with a throwaway Postgres 17 container of its own; it needs Docker.
+`pnpm check:local` runs the steps of `pnpm check` with a throwaway Postgres 17 container of its own;
+it needs Docker. After the build it runs the other steps side by side, each line led by its step's name,
+and repeats the output of every failed step at the end. `CHECK_LOCAL_SERIAL=1` runs them one after
+another, and `CATALYST_TEST_WORKERS` sets how many test files the suite runs at once.
 
 `pnpm check:images` builds the API and UI images of the demo client in the layout of a deployment's
 build workspace, where only the client and what it depends on is installed, and keeps no image. It
