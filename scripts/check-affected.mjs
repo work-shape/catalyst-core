@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
+import postgres from "postgres";
 import ts from "typescript";
 import {
   affectedPackages,
@@ -11,6 +12,11 @@ import {
   packageDirectory,
   qualityScopes
 } from "./affected-selection.mjs";
+import {
+  connectionsForWorkers,
+  defaultTestWorkers,
+  workersForConnections
+} from "./test-postgres-capacity.mjs";
 
 const started = Date.now();
 const root = process.cwd();
@@ -118,6 +124,33 @@ console.log(selected.join("\n") || "No affected packages");
 if (process.argv.includes("--list")) {
   console.log(testsToRun.join("\n"));
   process.exit(0);
+}
+// A test Postgres with too few connections makes Vitest run fewer test files at once, down to
+// two on Postgres's default of 100, and a run of many files then takes hours. Refuse it before
+// anything is built, with the command that starts one of the right size.
+const testUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
+if (testsToRun.length && testUrl) {
+  const wanted = Math.min(defaultTestWorkers(), testsToRun.length);
+  const sql = postgres(testUrl, { max: 1, connect_timeout: 5, onnotice() {} });
+  const maxConnections = await sql`select setting from pg_settings where name = 'max_connections'`
+    .then(([row]) => Number(row?.setting))
+    // A server that cannot be asked fails the tests, which say why.
+    .catch(() => Number.NaN)
+    .finally(() => sql.end({ timeout: 5 }).catch(() => undefined));
+  const room = workersForConnections(maxConnections);
+  if (Number.isInteger(maxConnections) && room < wanted) {
+    const image = readFileSync("docker/postgres/pinned-image", "utf8")
+      .split("\n")
+      .find((line) => line.trim() !== "" && !line.startsWith("#"))
+      ?.trim();
+    console.error(
+      `check:affected: the test Postgres has max_connections ${maxConnections}, room for ${room} of the ${wanted} test files this run starts at once. ` +
+        `Start it with max_connections ${connectionsForWorkers(wanted)}:\n` +
+        `  docker run --detach --publish 127.0.0.1::5432 --env POSTGRES_USER=catalyst --env POSTGRES_PASSWORD=local-check --env POSTGRES_DB=catalyst_test ${image} -c max_connections=${connectionsForWorkers(wanted)}\n` +
+        `or run pnpm check:local, which starts one of that size, or set CATALYST_TEST_WORKERS=${room} to run fewer at once.`
+    );
+    process.exit(1);
+  }
 }
 const temp = mkdtempSync(join(tmpdir(), "catalyst-affected-"));
 try {

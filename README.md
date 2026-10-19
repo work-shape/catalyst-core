@@ -66,6 +66,8 @@ builds or lint.
 Docs and change files alone select no packages. Use `pnpm check:affected --list` to inspect the
 selection, or `AFFECTED_BASE=<ref>` for a different comparison base. The full integration and
 browser checks still run in the landing batch.
+Before it builds anything, it refuses a test Postgres whose `max_connections` has too little room for
+the test files it would run at once, and prints the `docker run` command for one of the right size.
 
 Useful checks:
 
