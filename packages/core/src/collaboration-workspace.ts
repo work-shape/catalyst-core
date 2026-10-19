@@ -34,6 +34,13 @@ export interface CollaborationWorkspace {
   emoji: string | null;
   accentColor: WorkspaceAccentColor | null;
   personalUserId: UserId | null;
+  /**
+   * The build limits of a Shared Workspace: the tools and the model bindings the agents it owns
+   * may use. A list that is not set adds no limit to the instance's own; an empty one allows
+   * nothing. An instance admin sets them (WS-BUILD-1).
+   */
+  allowedToolNames?: string[];
+  allowedModelBindingIds?: string[];
   createdAt: ISODateString;
   updatedAt: ISODateString;
 }
@@ -93,6 +100,9 @@ export interface UpdateWorkspaceInput {
   defaultConversationVisibility?: ConversationVisibility;
   emoji?: string | null;
   accentColor?: WorkspaceAccentColor | null;
+  /** A list left out is kept; `null` lifts the limit. */
+  allowedToolNames?: string[] | null;
+  allowedModelBindingIds?: string[] | null;
 }
 
 /**

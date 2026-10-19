@@ -35,6 +35,7 @@ import {
   type ConfigAssetRecord,
   type InitialAgentAvailability,
   type JsonObject,
+  type CollaborationWorkspace,
   type Namespace,
   type OperationAuthorization,
   type RuntimeCallContext
@@ -565,12 +566,45 @@ export async function findChangedAgentRefusals(
   const namespaces = await options.stores.access.listNamespaceRecords({
     clientInstanceId: options.clientInstanceId
   });
+  // A write has one owner: the workspace whose build limits bind the agents it owns.
+  const owner =
+    toolTargets.scope.workspaceId === undefined
+      ? undefined
+      : await options.stores.workspaces.getWorkspace(
+          options.clientInstanceId,
+          toolTargets.scope.workspaceId
+        );
   for (const { agent } of changed) {
     const namespace = findNamespaceOfAssetName(namespaces, agent.name);
-    const error = namespace && namespaceListRefusal(access, namespace, agent);
+    const error =
+      (namespace && buildLimitRefusal(access, namespaceLimits(namespace), agent)) ??
+      (owner && buildLimitRefusal(access, workspaceLimits(owner), agent));
     if (error) refusals.push({ agentName: agent.name, error });
   }
   return { namespaces, modelIssues, refusals, warnings };
+}
+
+/** Lists that bind an agent, with the place a refusal names. */
+interface BuildLimits extends Pick<Namespace, "allowedToolNames" | "allowedModelBindingIds"> {
+  /** "Namespace 'kai-'" or "workspace 'Kai Spezis'". */
+  place: string;
+  details: { namespace: string } | { workspaceId: string; workspace: string };
+}
+
+function namespaceLimits(namespace: Namespace): BuildLimits {
+  return {
+    ...namespace,
+    place: `Namespace '${namespace.prefix}'`,
+    details: { namespace: namespace.prefix }
+  };
+}
+
+function workspaceLimits(workspace: CollaborationWorkspace): BuildLimits {
+  return {
+    ...workspace,
+    place: `workspace '${workspace.name}'`,
+    details: { workspaceId: workspace.id, workspace: workspace.name }
+  };
 }
 
 /** Throws the first refusal of `findChangedAgentRefusals`: the model issues before the lists. */
@@ -598,22 +632,22 @@ function invalidAssetSet(issues: readonly string[]): AppError {
   });
 }
 
-function namespaceListRefusal(
+function buildLimitRefusal(
   access: ActorAccess,
-  namespace: Namespace,
+  limits: BuildLimits,
   agent: AgentConfig
 ): AppError | undefined {
-  const allowedToolNames = namespace.allowedToolNames;
+  const allowedToolNames = limits.allowedToolNames;
   const toolName =
     allowedToolNames && agent.toolNames.find((name) => !allowedToolNames.includes(name));
   if (toolName !== undefined) {
-    return new AppError(
-      "FORBIDDEN",
-      `Tool '${toolName}' is not allowed in Namespace '${namespace.prefix}'`,
-      { reason: "tool_not_allowed", toolName, namespace: namespace.prefix }
-    );
+    return new AppError("FORBIDDEN", `Tool '${toolName}' is not allowed in ${limits.place}`, {
+      reason: "tool_not_allowed",
+      toolName,
+      ...limits.details
+    });
   }
-  const allowedModelBindingIds = namespace.allowedModelBindingIds;
+  const allowedModelBindingIds = limits.allowedModelBindingIds;
   const modelBindingId =
     allowedModelBindingIds &&
     [
@@ -623,8 +657,8 @@ function namespaceListRefusal(
   if (modelBindingId !== undefined) {
     return new AppError(
       "FORBIDDEN",
-      `Model binding '${modelBindingId}' is not allowed in Namespace '${namespace.prefix}'`,
-      { reason: "model_not_allowed", modelBindingId, namespace: namespace.prefix }
+      `Model binding '${modelBindingId}' is not allowed in ${limits.place}`,
+      { reason: "model_not_allowed", modelBindingId, ...limits.details }
     );
   }
   // Without a binding the agent runs the provider it names or the instance default, which
@@ -636,8 +670,8 @@ function namespaceListRefusal(
   ) {
     return new AppError(
       "FORBIDDEN",
-      `An agent in Namespace '${namespace.prefix}' must select a model binding the Namespace allows`,
-      { reason: "model_binding_required", namespace: namespace.prefix }
+      `An agent in ${limits.place} must select a model binding allowed there`,
+      { reason: "model_binding_required", ...limits.details }
     );
   }
   return undefined;

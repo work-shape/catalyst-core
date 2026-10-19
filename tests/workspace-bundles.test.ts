@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { type CollaborationWorkspaceId } from "@work-shape/catalyst-core";
-import { agent, clientInstanceId, errorSchema } from "./support/access-instance";
+import {
+  agent,
+  clientInstanceId,
+  errorSchema,
+  setupAccessInstance,
+  type AccessInstance
+} from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 
 // WS-BUILD-1: Builder and Publisher in a workspace, one row each, held without membership
@@ -159,3 +165,104 @@ describe("a Builder and Publisher who is no member of the workspace", () => {
     expect((await listConversations(t.workspaceId)).statusCode).toBe(404);
   });
 });
+
+describe("the build limits of a workspace", () => {
+  let t: AccessInstance;
+  let team: CollaborationWorkspaceId;
+  beforeAll(async () => {
+    t = await setupAccessInstance();
+    team = await t.sharedWorkspace("Kai Spezis");
+    await t.grant(t.kai.id, "builder", { workspaceId: team });
+  });
+  afterAll(async () => {
+    await t.instance.close();
+  });
+
+  const setLimits = (userId: string, body: Record<string, unknown>) =>
+    t.call(userId, "workspaces.limits.update", {
+      params: { collaborationWorkspaceId: team },
+      payload: body
+    });
+  const put = (userId: string, name: string, overrides: Record<string, unknown>) =>
+    t.call(userId, "assets.put", {
+      params: { kind: "agent", name },
+      payload: { config: agent(name, overrides), expectedRevision: null, workspaceId: team }
+    });
+
+  it("are set by an instance admin alone, with known entries, as an audit event", async () => {
+    const limits = { allowedToolNames: ["known.tool"], allowedModelBindingIds: ["plain"] };
+    expect((await setLimits(t.kai.id, limits)).statusCode).toBe(403);
+    expect(refusalOf(await setLimits(t.admin.id, { allowedToolNames: ["nope.tool"] }))).toEqual({
+      reason: "unknown_tool",
+      toolName: "nope.tool"
+    });
+    const set = await t.expectOk(t.admin.id, "workspaces.limits.update", {
+      params: { collaborationWorkspaceId: team },
+      payload: limits
+    });
+    expect(set.json()).toEqual({ id: team, name: "Kai Spezis", ...limits });
+    const listed = await t.expectOk(t.admin.id, "workspaces.limits.list");
+    expect(listSchema.parse(listed.json()).items.filter((item) => item.id === team)).toEqual([
+      { id: team, name: "Kai Spezis", ...limits }
+    ]);
+    const events = await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 });
+    expect(
+      events.filter(
+        (event) => event.type === "collaboration_workspace.updated" && event.subject === team
+      )
+    ).toEqual([
+      expect.objectContaining({
+        metadata: {
+          changedFields: ["allowedToolNames", "allowedModelBindingIds"],
+          restrictsTools: true,
+          restrictsModels: true
+        }
+      })
+    ]);
+  });
+
+  it("refuse every writer an agent of the workspace outside them, naming the list", async () => {
+    const named = { workspaceId: team, workspace: "Kai Spezis" };
+    // Choosing a model is the instance admin's right; the Builder is held to the tools.
+    const builders = await put(t.kai.id, "kai-tool", { toolNames: ["second.tool"] });
+    expect([builders.statusCode, refusalOf(builders)]).toEqual([
+      403,
+      { reason: "tool_not_allowed", toolName: "second.tool", ...named }
+    ]);
+    const tool = await put(t.admin.id, "admin-tool", { toolNames: ["second.tool"] });
+    expect([tool.statusCode, refusalOf(tool)]).toEqual([
+      403,
+      { reason: "tool_not_allowed", toolName: "second.tool", ...named }
+    ]);
+    // Who manages models, a superadmin here, is held to the model list.
+    const model = await put(t.root.id, "root-model", {
+      modelProviderId: undefined,
+      modelBindingId: "other"
+    });
+    expect([model.statusCode, refusalOf(model)]).toEqual([
+      403,
+      { reason: "model_not_allowed", modelBindingId: "other", ...named }
+    ]);
+    expectStatus(
+      await put(t.root.id, "within", {
+        toolNames: ["known.tool"],
+        modelProviderId: undefined,
+        modelBindingId: "plain"
+      }),
+      200
+    );
+    // An agent of the instance is not bound by the workspace's lists.
+    expectStatus(await t.putAgent(t.admin.id, "house", { toolNames: ["second.tool"] }), 200);
+  });
+
+  it("add no limit once lifted", async () => {
+    await t.expectOk(t.admin.id, "workspaces.limits.update", {
+      params: { collaborationWorkspaceId: team },
+      payload: { allowedToolNames: null, allowedModelBindingIds: null }
+    });
+    expectStatus(await put(t.kai.id, "lifted", { toolNames: ["second.tool"] }), 200);
+  });
+});
+function refusalOf(response: { json(): unknown }) {
+  return errorSchema.parse(response.json()).error.details;
+}

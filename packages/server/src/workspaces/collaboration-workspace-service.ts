@@ -623,8 +623,10 @@ export class CollaborationWorkspaceWorkflow {
     workspace: CollaborationWorkspace,
     access: WorkspaceAccess
   ): Promise<WorkspaceListItem> {
+    // The build limits are the instance admin's, on Instance > Workspaces.
+    const { allowedToolNames: _tools, allowedModelBindingIds: _models, ...settings } = workspace;
     return {
-      ...workspace,
+      ...settings,
       role: access.role,
       membershipRole: access.membershipRole,
       pendingAccessRequestCount: await this.countPendingAccessRequests(

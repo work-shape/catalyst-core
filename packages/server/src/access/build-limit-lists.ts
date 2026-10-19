@@ -1,19 +1,22 @@
 import { AppError } from "@work-shape/catalyst-core";
 
-/** The lists a Namespace may restrict its agents to. `null` lifts a restriction. */
-export interface NamespaceListsCommand {
+/**
+ * The lists a Namespace or a Shared Workspace may restrict its agents to: its build limits.
+ * `null` lifts a restriction.
+ */
+export interface BuildLimitListsCommand {
   allowedToolNames?: string[] | null;
   allowedModelBindingIds?: string[] | null;
 }
 
 /**
- * The lists as a Namespace keeps them, each entry once. An entry must exist on this instance:
- * an enabled tool, a known model binding.
+ * The lists as a Namespace or a workspace keeps them, each entry once. An entry must exist on
+ * this instance: an enabled tool, a known model binding.
  */
-export function namespaceLists(
+export function buildLimitLists(
   refs: { enabledToolNames: readonly string[]; modelBindingIds: readonly string[] },
-  command: NamespaceListsCommand
-): NamespaceListsCommand {
+  command: BuildLimitListsCommand
+): BuildLimitListsCommand {
   const unknownTool = command.allowedToolNames?.find(
     (name) => !refs.enabledToolNames.includes(name)
   );

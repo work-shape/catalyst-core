@@ -114,24 +114,24 @@ export const namespacePrefixSchema = z
   .regex(NAMESPACE_PREFIX_PATTERN);
 
 /**
- * Keeps one Namespace record small. An instance registers tens of tools and model bindings; a
- * longer list is refused as a validation error that names this limit.
+ * Keeps one Namespace or workspace record small. An instance registers tens of tools and model
+ * bindings; a longer list is refused as a validation error that names this limit.
  */
-export const NAMESPACE_ALLOWLIST_MAX_ENTRIES = 500;
+export const BUILD_LIMIT_LIST_MAX_ENTRIES = 500;
 
-/** `null` does not restrict; an empty list allows nothing. */
-const namespaceAllowlistSchema = z
+/** A build limit: `null` does not restrict; an empty list allows nothing. */
+const buildLimitListSchema = z
   .array(z.string().min(1))
-  .max(NAMESPACE_ALLOWLIST_MAX_ENTRIES, {
-    message: `A Namespace allowlist holds at most ${NAMESPACE_ALLOWLIST_MAX_ENTRIES} entries`
+  .max(BUILD_LIMIT_LIST_MAX_ENTRIES, {
+    message: `A list of tools or model bindings holds at most ${BUILD_LIMIT_LIST_MAX_ENTRIES} entries`
   })
   .nullable();
 
 export const namespaceSchema = z.object({
   prefix: z.string(),
   displayName: z.string(),
-  allowedToolNames: namespaceAllowlistSchema,
-  allowedModelBindingIds: namespaceAllowlistSchema,
+  allowedToolNames: buildLimitListSchema,
+  allowedModelBindingIds: buildLimitListSchema,
   /** Left out when the user who registered it is hidden from the caller. */
   createdBy: z.string().optional(),
   createdAt: timestampSchema
@@ -147,15 +147,32 @@ export const namespaceUsageSchema = namespaceSchema.extend({
 export const createNamespaceRequestSchema = z.object({
   prefix: namespacePrefixSchema,
   displayName: z.string().trim().min(1).max(120),
-  allowedToolNames: namespaceAllowlistSchema.optional(),
-  allowedModelBindingIds: namespaceAllowlistSchema.optional()
+  allowedToolNames: buildLimitListSchema.optional(),
+  allowedModelBindingIds: buildLimitListSchema.optional()
 });
 
 /** The prefix is fixed. A list left out is kept as it is. */
 export const updateNamespaceRequestSchema = z.object({
   displayName: z.string().trim().min(1).max(120).optional(),
-  allowedToolNames: namespaceAllowlistSchema.optional(),
-  allowedModelBindingIds: namespaceAllowlistSchema.optional()
+  allowedToolNames: buildLimitListSchema.optional(),
+  allowedModelBindingIds: buildLimitListSchema.optional()
+});
+
+/**
+ * A Shared Workspace with its build limits: the tools and model bindings the agents it owns may
+ * use (WS-BUILD-1). An instance admin sets them; a workspace owner cannot.
+ */
+export const workspaceBuildLimitsSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  allowedToolNames: buildLimitListSchema,
+  allowedModelBindingIds: buildLimitListSchema
+});
+
+/** A list left out is kept as it is; `null` lifts it. */
+export const updateWorkspaceBuildLimitsRequestSchema = z.object({
+  allowedToolNames: buildLimitListSchema.optional(),
+  allowedModelBindingIds: buildLimitListSchema.optional()
 });
 
 export type PermissionGrantRow = z.infer<typeof permissionGrantSchema>;
@@ -164,3 +181,7 @@ export type EffectivePermissions = z.infer<typeof effectivePermissionsSchema>;
 export type NamespaceWithUsage = z.infer<typeof namespaceUsageSchema>;
 export type CreateNamespaceRequest = z.input<typeof createNamespaceRequestSchema>;
 export type UpdateNamespaceRequest = z.input<typeof updateNamespaceRequestSchema>;
+export type WorkspaceBuildLimits = z.infer<typeof workspaceBuildLimitsSchema>;
+export type UpdateWorkspaceBuildLimitsRequest = z.input<
+  typeof updateWorkspaceBuildLimitsRequestSchema
+>;

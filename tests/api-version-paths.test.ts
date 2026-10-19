@@ -263,6 +263,8 @@ describe("the operation catalog", () => {
         "workspaces.ensure_personal  POST /api/v1/workspaces/personal",
         "workspaces.files.list  GET /api/v1/workspaces/:collaborationWorkspaceId/files",
         "workspaces.get  GET /api/v1/workspaces/:collaborationWorkspaceId",
+        "workspaces.limits.list  GET /api/v1/instance/access/workspaces",
+        "workspaces.limits.update  PATCH /api/v1/instance/access/workspaces/:collaborationWorkspaceId",
         "workspaces.list  GET /api/v1/workspaces",
         "workspaces.member_candidates.list  GET /api/v1/workspaces/:collaborationWorkspaceId/member-candidates",
         "workspaces.members.add  POST /api/v1/workspaces/:collaborationWorkspaceId/members",
@@ -585,7 +587,9 @@ describe("a running instance", () => {
       "agents.draft.discard",
       "agents.try.open",
       "conversations.subagents.list",
-      "connections.disconnect"
+      "connections.disconnect",
+      "workspaces.limits.list",
+      "workspaces.limits.update"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

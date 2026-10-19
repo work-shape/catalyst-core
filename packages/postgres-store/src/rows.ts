@@ -162,6 +162,10 @@ export function mapCollaborationWorkspace(
     emoji: row.emoji,
     accentColor: row.accentColor,
     personalUserId: row.personalUserId ? asUserId(row.personalUserId) : null,
+    ...(row.allowedToolNames === null ? {} : { allowedToolNames: row.allowedToolNames }),
+    ...(row.allowedModelBindingIds === null
+      ? {}
+      : { allowedModelBindingIds: row.allowedModelBindingIds }),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };

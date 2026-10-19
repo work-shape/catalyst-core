@@ -10,7 +10,9 @@ import {
   namespaceSchema,
   namespaceUsageSchema,
   permissionGrantSchema,
-  updateNamespaceRequestSchema
+  updateNamespaceRequestSchema,
+  updateWorkspaceBuildLimitsRequestSchema,
+  workspaceBuildLimitsSchema
 } from "../access";
 import { defineOperation, defineRegisteredOperation, json, page } from "./define-operation";
 
@@ -153,6 +155,36 @@ export const accessOperations = {
     effect: "changing",
     body: updateNamespaceRequestSchema,
     response: json(namespaceSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  "workspaces.limits.list": defineOperation({
+    id: "workspaces.limits.list",
+    method: "GET",
+    path: "/api/v1/instance/access/workspaces",
+    summary: "List the Shared Workspaces with the tools and model bindings their agents may use",
+    tag: "Access",
+    auth: "user",
+    scope: "user_admin:read",
+    requires: ["users.manage"],
+    effect: "reading",
+    query: listQuerySchema,
+    response: page(workspaceBuildLimitsSchema, ["id"], false),
+    errors: [],
+    rateClass: "read"
+  }),
+  "workspaces.limits.update": defineRegisteredOperation({
+    id: "workspaces.limits.update",
+    method: "PATCH",
+    path: "/api/v1/instance/access/workspaces/:collaborationWorkspaceId",
+    summary: "Change the tools and model bindings the agents of a Shared Workspace may use",
+    tag: "Access",
+    auth: "user",
+    scope: "user_admin:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    body: updateWorkspaceBuildLimitsRequestSchema,
+    response: json(workspaceBuildLimitsSchema),
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),

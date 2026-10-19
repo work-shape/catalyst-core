@@ -18,6 +18,8 @@ import {
   type ActorAccess,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
+  type CollaborationWorkspace,
+  type CollaborationWorkspaceId,
   type GrantScopeAsset,
   type HeldRight,
   type JsonObject,
@@ -41,7 +43,7 @@ import {
   seesPrincipals
 } from "./grant-holder-rules";
 import { authorizeHeldRightsWithin } from "./held-rights-within";
-import { namespaceLists, type NamespaceListsCommand } from "./namespace-lists";
+import { buildLimitLists, type BuildLimitListsCommand } from "./build-limit-lists";
 import { rightAtScope, scopeAssets } from "./person-rights";
 import { assetRight, type PrincipalRightsOptions } from "./principal-rights";
 import {
@@ -439,9 +441,9 @@ export class AccessWorkflow {
   async createNamespace(
     actor: AuthenticatedUser,
     context: AccessCallContext,
-    command: { prefix: string; displayName: string } & NamespaceListsCommand
+    command: { prefix: string; displayName: string } & BuildLimitListsCommand
   ): Promise<Namespace> {
-    const lists = namespaceLists(this.options.configAssets.validationRefs, command);
+    const lists = buildLimitLists(this.options.configAssets.validationRefs, command);
     const namespace = await this.options.stores.access.createNamespace({
       clientInstanceId: this.options.clientInstanceId,
       prefix: command.prefix,
@@ -465,13 +467,13 @@ export class AccessWorkflow {
   async updateNamespace(
     actor: AuthenticatedUser,
     context: AccessCallContext,
-    command: { prefix: string; displayName?: string } & NamespaceListsCommand
+    command: { prefix: string; displayName?: string } & BuildLimitListsCommand
   ): Promise<Namespace> {
     const namespace = await this.options.stores.access.updateNamespace({
       clientInstanceId: this.options.clientInstanceId,
       prefix: command.prefix,
       ...(command.displayName === undefined ? {} : { displayName: command.displayName }),
-      ...namespaceLists(this.options.configAssets.validationRefs, command)
+      ...buildLimitLists(this.options.configAssets.validationRefs, command)
     });
     if (!namespace) {
       throw new AppError("NOT_FOUND", "Namespace not found");
@@ -484,6 +486,37 @@ export class AccessWorkflow {
       namespaceAuditMetadata(namespace)
     );
     return namespace;
+  }
+
+  /** The Shared Workspaces with their build limits, as Instance > Workspaces lists them. */
+  async listWorkspaceLimits(): Promise<CollaborationWorkspace[]> {
+    const workspaces = await this.options.stores.workspaces.listSharedWorkspaces({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    return workspaces.toSorted((left, right) => left.name.localeCompare(right.name));
+  }
+
+  /**
+   * Sets the build limits of a Shared Workspace: what the agents it owns may use, checked at
+   * every write of one of them (`asset-write-rules.ts`). A Personal Workspace has none.
+   */
+  async updateWorkspaceLimits(
+    actor: AuthenticatedUser,
+    context: AccessCallContext,
+    command: { collaborationWorkspaceId: CollaborationWorkspaceId } & BuildLimitListsCommand
+  ): Promise<CollaborationWorkspace> {
+    const lists = buildLimitLists(this.options.configAssets.validationRefs, command);
+    const workspace = await this.options.stores.workspaces.updateWorkspace({
+      clientInstanceId: this.options.clientInstanceId,
+      collaborationWorkspaceId: command.collaborationWorkspaceId,
+      ...lists
+    });
+    await this.record(actor, context, "collaboration_workspace.updated", workspace.id, {
+      changedFields: Object.keys(lists),
+      restrictsTools: workspace.allowedToolNames !== undefined,
+      restrictsModels: workspace.allowedModelBindingIds !== undefined
+    });
+    return workspace;
   }
 
   listNamespaces(): Promise<NamespaceUsage[]> {

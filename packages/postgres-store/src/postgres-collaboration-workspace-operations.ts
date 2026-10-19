@@ -147,6 +147,9 @@ async function updateWorkspace(
     input.collaborationWorkspaceId
   );
   if (workspace.kind === "personal") {
+    if (input.allowedToolNames !== undefined || input.allowedModelBindingIds !== undefined) {
+      throw new AppError("VALIDATION_FAILED", "A Personal Workspace has no build limits");
+    }
     if (input.name !== undefined) {
       throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot be renamed");
     }
@@ -170,6 +173,10 @@ async function updateWorkspace(
   }
   if (input.emoji !== undefined) set.emoji = input.emoji;
   if (input.accentColor !== undefined) set.accentColor = input.accentColor;
+  if (input.allowedToolNames !== undefined) set.allowedToolNames = input.allowedToolNames;
+  if (input.allowedModelBindingIds !== undefined) {
+    set.allowedModelBindingIds = input.allowedModelBindingIds;
+  }
   const [row] = await db
     .update(collaborationWorkspaces)
     .set(set)

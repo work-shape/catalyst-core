@@ -13,11 +13,13 @@ import {
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  asCollaborationWorkspaceId,
   isAuthenticatedServicePrincipal,
   type ActorAccess,
   type AssetKindRegistry,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
+  type CollaborationWorkspace,
   type Namespace,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
@@ -27,8 +29,8 @@ import { requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 /**
- * Governance records. The five changing operations are operations of the registry: each call
- * is an Operation Run, and the caller's right is asked before the policy. The three reads are
+ * Governance records. The six changing operations are operations of the registry: each call
+ * is an Operation Run, and the caller's right is asked before the policy. The four reads are
  * plain routes.
  */
 export function registerAccessRoutes(route: Route, options: ChatServerOptions): void {
@@ -222,6 +224,27 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
     }
   });
 
+  route(apiOperations["workspaces.limits.list"], async () =>
+    (await workflow.listWorkspaceLimits()).map(workspaceLimitsView)
+  );
+
+  route.operation(apiOperations["workspaces.limits.update"], {
+    resource: ({ collaborationWorkspaceId }) => ({
+      kind: "collaboration_workspace",
+      id: collaborationWorkspaceId
+    }),
+    changeClass: "reversible",
+    execute: async ({ collaborationWorkspaceId, ...lists }, context) =>
+      workspaceLimitsView(
+        await workflow.updateWorkspaceLimits(personOf(context.actor), context, {
+          collaborationWorkspaceId: asCollaborationWorkspaceId(
+            requirePathParam(collaborationWorkspaceId, "Missing workspace id")
+          ),
+          ...lists
+        })
+      )
+  });
+
   route(apiOperations["namespaces.list"], async ({ user }) => {
     const hidden = await workflow.hiddenUserIds(user);
     return (await workflow.listNamespaces()).map((namespace) => ({
@@ -242,6 +265,16 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
       );
     }
   });
+}
+
+/** A workspace as Instance > Workspaces shows it: its name and its build limits. */
+function workspaceLimitsView(workspace: CollaborationWorkspace) {
+  return {
+    id: workspace.id,
+    name: workspace.name,
+    allowedToolNames: workspace.allowedToolNames ?? null,
+    allowedModelBindingIds: workspace.allowedModelBindingIds ?? null
+  };
 }
 
 /**

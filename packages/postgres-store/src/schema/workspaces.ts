@@ -3,6 +3,7 @@ import {
   check,
   foreignKey,
   index,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -32,6 +33,9 @@ export const collaborationWorkspaces = pgTable(
     emoji: text("emoji"),
     accentColor: text("accent_color").$type<CollaborationWorkspace["accentColor"]>(),
     personalUserId: text("personal_user_id"),
+    /** The build limits of a Shared Workspace; null adds no limit (WS-BUILD-1). */
+    allowedToolNames: jsonb("allowed_tool_names").$type<string[]>(),
+    allowedModelBindingIds: jsonb("allowed_model_binding_ids").$type<string[]>(),
     /** Set when the deletion of the workspace was accepted. It is closed from then on. */
     deletionRequestedAt: timestamp("deletion_requested_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
