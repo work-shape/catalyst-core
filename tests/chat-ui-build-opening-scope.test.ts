@@ -83,7 +83,7 @@ async function mountSkills(
         name: "Felix Pahlke",
         kind: "personal" as const,
         member: true,
-        actions: ["skill.read", "skill.write"]
+        actions: ["skill.read", "skill.write", "agent.read", "agent.write"]
       }
     ]
   };
@@ -139,6 +139,9 @@ async function mountSkills(
       createElement(Studio)
     );
   }
+  const settings = buildPageSettings(fetchImpl, settingsUser({ permissions }));
+  const configAssets = { ...settings.config.features.configAssets, allowAgentCreation: true };
+  const features = { ...settings.config.features, configAssets };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   host = document.createElement("div");
   document.body.append(host);
@@ -151,7 +154,7 @@ async function mountSkills(
         { client: queryClient },
         createElement(
           SettingsPageProvider,
-          { value: buildPageSettings(fetchImpl, settingsUser({ permissions })) },
+          { value: { ...settings, config: { ...settings.config, features } } },
           createElement(
             UiRoot,
             { mode: "light", labels: uiLabelsEn },
@@ -221,6 +224,38 @@ describe("the owner Studio's Skills list opens on", () => {
     expect(pageReads(page.reads)).toEqual(["instance"]);
     // The opening chose for this tab alone: what Studio remembers is unchanged.
     expect(window.localStorage.getItem(STORAGE_KEY)).toBe(PERSONAL);
+  });
+
+  it("holds for Skills alone: Agents then opens where Studio is set (ACCEPT-2e C-1)", async () => {
+    window.localStorage.setItem(STORAGE_KEY, PERSONAL);
+    const page = await mountSkills({ instance: ["house-style"], personal: [] });
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Instance"));
+    await until(() => expect(shown("house-style")).toBe(true));
+
+    await page.go("agents");
+
+    await until(() => expect(page.agentReads).toContain(PERSONAL));
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Personal"));
+    expect(page.agentReads).not.toContain("instance");
+    expect(readLastBuildScope()).toBe(PERSONAL);
+    // A new agent starts where Studio is set, under the Personal Workspace's own name.
+    await act(async () =>
+      [...document.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent === "New agent")
+        ?.click()
+    );
+    await until(() =>
+      expect(document.querySelector("dialog, [role=dialog]")?.textContent).toContain(
+        "Personal workspace"
+      )
+    );
+    expect(document.querySelector("dialog, [role=dialog]")?.textContent).not.toContain(
+      "Felix Pahlke"
+    );
+    // Back on Skills, the list still shows the owner it opened on.
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    await page.go("skills");
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Instance"));
   });
 
   it("stays the owner Studio is set to when that has some", async () => {

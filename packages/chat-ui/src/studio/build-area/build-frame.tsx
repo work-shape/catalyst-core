@@ -265,7 +265,7 @@ export function BuildFrame({
   // A new asset and a copy start where the dialog says: of a kind that starts in the workspace,
   // in the one the reader works in, or in the workspace of the scope, where the reader is a
   // member; made in one the reader is no member of, it starts hidden.
-  const scope = source.scoped?.(entry.kind) ? source.scope : undefined;
+  const scope = source.scopeOf?.(entry.kind);
   const scopeWorkspace =
     scope?.kind === "workspace"
       ? source.rights.workspaces.find((candidate) => candidate.id === scope.workspaceId)
@@ -276,7 +276,14 @@ export function BuildFrame({
           workspace:
             scope?.kind === "workspace"
               ? scopeWorkspace?.member
-                ? { id: scopeWorkspace.id, name: scopeWorkspace.name }
+                ? {
+                    id: scopeWorkspace.id,
+                    name: buildWorkspaceName(
+                      source.rights,
+                      scopeWorkspace.id,
+                      t("collaborationWorkspacePersonalName")
+                    )
+                  }
                 : undefined
               : workspace,
           mayChooseAll: source.rights.instanceWrite
@@ -492,7 +499,7 @@ function BuildList({
   const [now] = useState(() => new Date());
   const settledText = useSettledText(view.text);
   const list = source.useList(entry.kind, { text: settledText, namespace: view.namespace });
-  const scope = source.scoped?.(entry.kind) ? source.scope : undefined;
+  const scope = source.scopeOf?.(entry.kind);
   const scopes = scope && source.chooseScope ? buildScopes(source.rights) : [];
   const workspaceName = (id: string) =>
     buildWorkspaceName(source.rights, id, t("build.scopePersonal"));

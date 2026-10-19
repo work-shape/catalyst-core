@@ -58,6 +58,7 @@ export function NewAssetPage({
   onCreated(name: string): void;
 }) {
   const { source } = page;
+  const scope = source.scopeOf?.(entry.kind);
   const Editor = entry.Editor;
   const create = useCreate({ entry, start, source, onCreated });
   return (
@@ -70,9 +71,7 @@ export function NewAssetPage({
       start={start}
       canWrite
       instanceWrite={source.rights.instanceWrite}
-      {...(source.scoped?.(entry.kind) && source.scope?.kind === "workspace"
-        ? { owner: source.scope.workspaceId }
-        : {})}
+      {...(scope?.kind === "workspace" ? { owner: scope.workspaceId } : {})}
       onUnsavedChange={page.onUnsavedChange}
       save={(config, write) =>
         create(

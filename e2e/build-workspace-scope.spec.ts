@@ -98,3 +98,48 @@ test("an agent made in a workspace's Studio scope is the workspace's, listed wit
     await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/workspaces/${workspaceId}`);
   }
 });
+
+// ACCEPT-2e C-1: the Skills list opened on the instance by itself, because the workspace Studio
+// was set to had no skills. That carried over: Agents and New agent in the same tab then worked
+// in the instance too. The Skills list's own opening holds for Skills alone.
+test("Skills opening on the instance leaves Agents and New agent where Studio is set", async ({
+  page
+}) => {
+  const workspaceName = `Opening scope ${test.info().retry}`;
+  const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+    data: { ...superadminUser, rememberMe: true }
+  });
+  expect(signedIn.ok()).toBe(true);
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+    data: { name: workspaceName }
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const workspaceId = idSchema.parse(await created.json()).id;
+  try {
+    // Studio is set to the workspace, which owns no skills, and remembers it.
+    await page.goto("/build/agents");
+    await page.getByRole("button", { name: /^Scope: / }).click();
+    await page.getByRole("option", { name: workspaceName }).click();
+    await expect(page.getByRole("button", { name: `Scope: ${workspaceName}` })).toBeVisible();
+
+    // A new visit opens Skills on the instance, whose shipped skills it lists.
+    await page.goto("/build/skills");
+    await expect(page.getByRole("button", { name: "Scope: Instance" })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Skills" })).toBeVisible();
+
+    // Agents in the same tab is still where Studio is set, and so is a new agent.
+    const kinds = page.getByRole("navigation", { name: "Kinds in Studio" });
+    await kinds.getByRole("button", { name: "Agents", exact: true }).click();
+    await expect(page).toHaveURL((url) => url.pathname === "/build/agents");
+    await expect(page.getByRole("button", { name: `Scope: ${workspaceName}` })).toBeVisible();
+    await page.getByRole("button", { name: "New agent", exact: true }).click();
+    const create = page.getByRole("dialog", { name: "New agent", exact: true });
+    await expect(
+      create.getByRole("combobox", { name: "Available in" }).locator("option:checked")
+    ).toHaveText(workspaceName);
+    await create.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(create).toBeHidden();
+  } finally {
+    await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/workspaces/${workspaceId}`);
+  }
+});
