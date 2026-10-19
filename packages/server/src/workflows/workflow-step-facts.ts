@@ -1,7 +1,6 @@
 import type { Asset } from "@work-shape/catalyst-api-contract";
 import { workflowStepsDeep, type ActorAccess, type JsonObject } from "@work-shape/catalyst-core";
 import { z } from "zod";
-import { getModelProviderConfigs } from "@work-shape/catalyst-config-schema";
 import { jsonSchemaOf } from "../platform/platform-callable-operations";
 import { operationTarget, workflowFacts } from "../publish-narrative/narrative-facts";
 import { accessResource } from "../assets/asset-access";
@@ -68,16 +67,18 @@ export async function workflowStepFacts(
     let pending = operations.get(name);
     if (!pending) {
       pending = (async (): Promise<OperationFact> => {
-        // Use the narrative's parsing of Connection and Data Store names; the remaining
-        // registered data operations use the same kind/id/verb naming convention.
+        // Use the narrative's parsing of Connection and Data Store names. An operation of one
+        // Knowledge Base or Workflow is `<prefix>.<name>.<verb>`; a name of two parts, such as
+        // the tool `knowledge.search`, is an operation of the release and names no source.
         const target = operationTarget(name);
         const parts = name.split(".");
+        const sourced = parts.length >= 3;
         const kind: NonNullable<StepFacts[string]["source"]>["kind"] =
           target.kind === "connection" || target.kind === "data_store"
             ? target.kind
-            : parts[0] === "knowledge"
+            : sourced && parts[0] === "knowledge"
               ? "knowledge_base"
-              : parts[0] === "workflow"
+              : sourced && parts[0] === "workflow"
                 ? "workflow"
                 : "other";
         const sourceName =
@@ -125,16 +126,8 @@ export async function workflowStepFacts(
     } else if (step.type === "trigger") {
       facts[step.id] = { ...schedule, tools };
     } else if (step.type === "agent") {
-      const provider = getModelProviderConfigs(options.config)[0];
-      const binding = options.config.modelBindings.find(
-        (binding) =>
-          binding.kind !== "embedding" &&
-          binding.providerId === provider?.id &&
-          (binding.model ?? provider?.model) === provider?.model
-      );
-      facts[step.id] = {
-        ...(provider ? { model: binding?.label ?? provider.model } : {})
-      };
+      // Only what the step declares: the binding it runs on is CR-2's to tell, not guessed here.
+      facts[step.id] = typeof step.model === "string" ? { model: step.model } : {};
     }
   }
   return facts;

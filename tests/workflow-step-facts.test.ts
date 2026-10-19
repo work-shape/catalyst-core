@@ -174,19 +174,12 @@ describe("WF-PANEL-1a facts of the Workflow revision read", () => {
       resolve: async (name) => definitions.get(name),
       list: async () => ({ operations: [], truncated: [] })
     });
-    t.operationCalls.registry.addSource({
-      resolve: async (name) => definitions.get(name),
-      list: async () => ({ operations: [], truncated: [] })
-    });
-    t.operationCalls.registry.addSource({
-      resolve: async (name) => definitions.get(name),
-      list: async () => ({ operations: [], truncated: [] })
-    });
     await store(t, "workflow", address.name, {
       name: address.name,
       manifest: definition([
         op("store", "data_store.findings.query"),
         op("kb", "knowledge.files.search"),
+        op("kb_tool", "knowledge.search"),
         op("start_child", "workflow.child.start"),
         op("missing", "connection.crm.missing"),
         op("removed", "connection.removed.missing"),
@@ -200,6 +193,8 @@ describe("WF-PANEL-1a facts of the Workflow revision read", () => {
       available: true
     });
     expect(stepFacts?.kb?.source).toEqual({ kind: "knowledge_base", title: "Company files" });
+    // The one search tool of every Knowledge Base is an operation, and names none of them.
+    expect(stepFacts?.kb_tool?.source).toEqual({ kind: "other" });
     expect(stepFacts?.start_child?.source).toEqual({ kind: "workflow", title: "Child workflow" });
     expect(stepFacts?.child).toMatchObject({ title: "Child workflow", published: true });
     expect(stepFacts?.removed).toEqual({ source: { kind: "connection" }, available: false });
@@ -238,10 +233,14 @@ describe("WF-PANEL-1a facts of the Workflow revision read", () => {
     });
     expect((await read(t, t.root.id, "published")).stepFacts?.draft_only).toBeUndefined();
     expect((await read(t)).stepFacts?.draft_only?.available).toBe(true);
-    expect((await read(t)).stepFacts?.start?.nextDueAt).toBe("2026-10-24T06:00:00.000Z");
+    // The draft starts by hand; the zone shown is still that of the published schedule.
+    expect((await read(t)).stepFacts?.start).toMatchObject({
+      timeZone: "Europe/Berlin",
+      nextDueAt: "2026-10-24T06:00:00.000Z"
+    });
   });
 
-  it("keeps AI facts to the instance default model", async () => {
+  it("names no model the AI step does not declare", async () => {
     const t = await ready();
     await store(t, "workflow", address.name, {
       name: address.name,
@@ -260,7 +259,7 @@ describe("WF-PANEL-1a facts of the Workflow revision read", () => {
         ["connection.crm.echo"]
       )
     });
-    expect((await read(t)).stepFacts?.ai).toEqual({ model: "local" });
+    expect((await read(t)).stepFacts?.ai).toEqual({});
   });
 
   it("keeps step paths on list reasons and validate/put issues", async () => {

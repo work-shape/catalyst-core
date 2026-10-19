@@ -336,17 +336,16 @@ export class AssetReadWorkflow {
       : undefined;
     const stepFacts =
       target.kind.kind === "workflow"
-        ? await workflowStepFacts(this.options, content.config, asset.name, call.access, {
-            timeZone:
-              target.kind.readSchedule?.(content.config).timeZone ??
-              this.options.config.clientInstance.timeZone ??
-              "UTC",
-            ...(asset.publishedConfig
-              ? {
-                  nextDueAt: target.kind.readSchedule?.(asset.publishedConfig).nextDueAt
-                }
-              : {})
-          })
+        ? await workflowStepFacts(
+            this.options,
+            content.config,
+            asset.name,
+            call.access,
+            // The zone and the next due time both of the published revision, which is what runs.
+            (asset.publishedConfig
+              ? target.kind.readSchedule?.(asset.publishedConfig)
+              : undefined) ?? { timeZone: this.options.config.clientInstance.timeZone ?? "UTC" }
+          )
         : undefined;
     const agentStatus =
       target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;
