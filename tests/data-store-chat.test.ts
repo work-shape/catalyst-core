@@ -142,7 +142,6 @@ describe("row tools in the platform agent's real conversation path", () => {
       await world.stores.operationRuns.create({
         ...completed,
         id: oldId,
-        createdAt: oldAt,
         startedAt: oldAt,
         idempotencyKey: "retired-store-write",
         origin: { ...oldOrigin, agentName: "retired-store-agent" }
