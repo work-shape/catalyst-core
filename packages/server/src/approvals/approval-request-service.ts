@@ -602,7 +602,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     // Lists need only the summary. An opened comparison withheld by the kind must not leak
     // its proposed content through the executable input or the technical field preview.
     const withholdInput =
-      viewer.inList || (isJsonObject(preview.asset) && preview.asset.beforeWithheld === true);
+      viewer.inList ||
+      (request.payload.operation === "assets.put" &&
+        (!isJsonObject(preview.asset) || preview.asset.beforeWithheld === true));
     if (withholdInput && "inputs" in preview) {
       preview.inputs = [];
       preview.inputFieldCount = 0;
