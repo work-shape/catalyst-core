@@ -403,4 +403,42 @@ export const product = { namespaceId: "example" };
     );
     expect(measure("types:tests")).toContain("typescript/test-errors tests/type-error.test.ts");
   });
+
+  it("checks every test group with shared ambient types and counts imported errors once", () => {
+    const before = measure("types:tests");
+    const fixtures: Record<string, string> = Object.fromEntries(
+      Array.from({ length: 151 }, (_, index) => [
+        `tests/group-${String(index).padStart(3, "0")}.ts`,
+        'export { wrong } from "./type-error.test";\nexport const ambient: string = groupGlobal;\n'
+      ])
+    );
+    fixtures["tests/zzz-ambient.ts"] =
+      "export {};\ndeclare global { const groupGlobal: string; }\n";
+    fixtures["tests/zzz-last.ts"] = 'export const last: boolean = "wrong";\n';
+    try {
+      write(fixtures);
+      expect(measure("types:tests")).toEqual(
+        [...before, "typescript/test-errors tests/zzz-last.ts"].sort()
+      );
+    } finally {
+      for (const file of Object.keys(fixtures)) rmSync(join(directory, file), { force: true });
+    }
+  });
+
+  it("returns every finding when a test group writes more than a pipe buffer", () => {
+    const file = "tests/many-errors.test.ts";
+    try {
+      write({
+        [file]: Array.from(
+          { length: 1000 },
+          (_, index) => `export const wrong${index}: number = "text";`
+        ).join("\n")
+      });
+      expect(
+        measure("types:tests").filter((finding) => finding === `typescript/test-errors ${file}`)
+      ).toHaveLength(1000);
+    } finally {
+      rmSync(join(directory, file), { force: true });
+    }
+  });
 });

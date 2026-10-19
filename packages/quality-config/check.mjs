@@ -29,15 +29,18 @@ const inScope = (file) =>
 const formatted = "js,jsx,mjs,cjs,ts,tsx,mts,cts,json,css,scss,html,yml,yaml".split(",");
 
 // The type checks and each part of the lint keep whole TypeScript programs in memory. Measured
-// on 12 October 2026: the type check of the tests needs 2.2 GB, the largest part of the lint
+// on 12 October 2026: the type check of the tests needed 2.2 GB, the largest part of the lint
 // and the type check of the packages 1.5 GB each. Node sizes its heap by the machine: 4 GB on
 // a runner with 16 GB of memory, 2 GB on one with 8 GB, where first the lint and later the
 // type check of the tests ran out of memory. On a smaller heap than this every target starts
 // itself again with this one, so no caller has to set it and no target is left on the
 // machine's default. It is the ceiling: a target that nears it is split, as the lint was.
-// On 19 October 2026 the type check of the tests passed 4 GB on a batch of four PRs; 6 GB holds
-// it until it is split like the lint.
+// On 19 October 2026 the type check of the tests passed 4 GB on a batch of four PRs. 6 GB holds
+// it, and like the lint the tests are now checked in bounded root-file groups in separate
+// processes; imported dependencies and ambient declarations remain in each.
 const heapMegabytes = 6144;
+const testFilesPerProcess = 150;
+const testPartFlag = "--types-part=";
 if (
   getHeapStatistics().heap_size_limit < heapMegabytes * 1024 * 1024 &&
   !process.execArgv.some((argument) => argument.startsWith("--max-old-space-size"))
@@ -422,39 +425,82 @@ if (target === "aliases") {
   };
   for (const file of sources) if (!order.has(file)) visit(file);
 } else if (target === "types:packages" || target === "types:tests") {
-  const configs =
-    target === "types:tests"
-      ? ["tsconfig.tests.json"]
-      : files.filter(
-          (file) =>
-            inScope(file) &&
-            /^(?:packages|clients)\/[^/]+\/tsconfig\.json$/.test(file) &&
-            readJson(`${dirname(file)}/package.json`).scripts?.typecheck?.startsWith("tsc ")
-        );
-  const seen = new Set();
-  for (const config of configs) {
-    const parsed = parseProject(config);
-    const program = ts.createProgram(parsed.fileNames, {
-      ...parsed.options,
-      noEmit: true,
-      noUnusedLocals: true,
-      noUnusedParameters: true
-    });
-    for (const diagnostic of [...parsed.errors, ...ts.getPreEmitDiagnostics(program)]) {
-      const file = diagnostic.file?.fileName ?? config;
-      const position = diagnostic.file?.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
-      const place = position ? `${position.line + 1}:${position.character + 1} ` : "";
-      const detail = `${place}TS${diagnostic.code}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")}`;
-      // A file shared by several compiler projects reports its findings once.
-      const key = `${file}:${detail}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const rule = [6133, 6138, 6192, 6196].includes(diagnostic.code)
-        ? "typescript/unused"
-        : target === "types:tests"
-          ? "typescript/test-errors"
-          : "typescript/package-errors";
-      report(rule, file, detail);
+  const ownTestPart = process.argv.find((argument) => argument.startsWith(testPartFlag));
+  if (target === "types:tests" && !ownTestPart) {
+    const parsed = parseProject("tsconfig.tests.json");
+    const seen = new Set();
+    for (let index = 0; index < Math.ceil(parsed.fileNames.length / testFilesPerProcess); index++) {
+      const result = run(
+        process.execPath,
+        [...process.execArgv, ...process.argv.slice(1), `${testPartFlag}${index}`],
+        [0]
+      );
+      /** @type {Finding[]} */
+      const part = JSON.parse(result.stdout);
+      for (const finding of part) {
+        const key = `${finding.file}:${finding.detail}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        findings.push(finding);
+      }
+    }
+  } else {
+    const configs =
+      target === "types:tests"
+        ? ["tsconfig.tests.json"]
+        : files.filter(
+            (file) =>
+              inScope(file) &&
+              /^(?:packages|clients)\/[^/]+\/tsconfig\.json$/.test(file) &&
+              readJson(`${dirname(file)}/package.json`).scripts?.typecheck?.startsWith("tsc ")
+          );
+    const seen = new Set();
+    for (const config of configs) {
+      const parsed = parseProject(config);
+      const index = ownTestPart ? Number(ownTestPart.slice(testPartFlag.length)) : undefined;
+      const roots =
+        index === undefined
+          ? parsed.fileNames
+          : [
+              ...parsed.fileNames.slice(
+                index * testFilesPerProcess,
+                (index + 1) * testFilesPerProcess
+              ),
+              ...parsed.fileNames.filter((file) => {
+                const source = readFileSync(file, "utf8");
+                return (
+                  file.endsWith(".d.ts") ||
+                  /\bdeclare\s+(?:global|module)\b/.test(source) ||
+                  !ts.isExternalModule(ts.createSourceFile(file, source, ts.ScriptTarget.Latest))
+                );
+              })
+            ];
+      const program = ts.createProgram(roots, {
+        ...parsed.options,
+        noEmit: true,
+        noUnusedLocals: true,
+        noUnusedParameters: true
+      });
+      for (const diagnostic of [...parsed.errors, ...ts.getPreEmitDiagnostics(program)]) {
+        const file = diagnostic.file?.fileName ?? config;
+        const position = diagnostic.file?.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
+        const place = position ? `${position.line + 1}:${position.character + 1} ` : "";
+        const detail = `${place}TS${diagnostic.code}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")}`;
+        // A file shared by several compiler projects reports its findings once.
+        const key = `${file}:${detail}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const rule = [6133, 6138, 6192, 6196].includes(diagnostic.code)
+          ? "typescript/unused"
+          : target === "types:tests"
+            ? "typescript/test-errors"
+            : "typescript/package-errors";
+        report(rule, file, detail);
+      }
+    }
+    if (ownTestPart) {
+      await new Promise((done) => process.stdout.write(JSON.stringify(findings), done));
+      process.exit(0);
     }
   }
 } else throw new Error(`Unknown quality target: ${target}`);
