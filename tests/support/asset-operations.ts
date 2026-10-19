@@ -42,14 +42,18 @@ export interface NamespaceHolderInstance extends AccessInstance {
 }
 
 /** Existing legacy-scoped sync protocol shared by current compatibility tests. */
-export const prepareSyncPrefix = (t: AccessInstance, prefix: string) => t.createNamespace(prefix);
+export const prepareSyncPrefix = (
+  t: AccessInstance,
+  prefix: string
+): ReturnType<AccessInstance["call"]> => t.createNamespace(prefix);
 export const syncAssetsAtPrefix = (
   t: AccessInstance,
   userId: string,
   prefix: string,
   items: unknown[],
   headers = {}
-) => t.call(userId, "assets.sync", { payload: { namespace: prefix, items }, headers });
+): ReturnType<AccessInstance["call"]> =>
+  t.call(userId, "assets.sync", { payload: { namespace: prefix, items }, headers });
 
 /** Kai holds every right on agents and the write right on skills in `kai-`; Lena holds nothing. */
 export async function setupNamespaceHolder(

@@ -7,7 +7,7 @@ This page is for the administrators of a Catalyst instance. It all comes down to
 
 ## Two questions
 
-**Who are you?** A person who signs in. A person who is a member of a workspace also gets what is shared there. A Workflow runs as a technical account that it names; a Superadmin creates that account on the API access page. An agent has none: it acts with the rights of the person it works for, and a tool on an agent adds no right.
+**Who are you?** A person who signs in. A person who is a member of a workspace also gets what is shared there. A Workflow runs as a technical account. By default it gets its own when it is first published, with only the rights its steps need, and only rights the person publishing holds themselves. A Workflow can instead name an existing shared account. An agent has none: it acts with the rights of the person it works for, and a tool on an agent adds no right.
 
 **What may you do?** A right is an action in a place, for example "use the accounting Connection". The place is one workspace, one item, or the whole instance. A role bundles rights; the three roles User, Admin and Superadmin are fixed. A right is given to a person, to a Workflow's technical account, or comes with a role.
 
@@ -204,7 +204,7 @@ being offered a tool grants none. Row writes ask for confirmation under the ordi
 
 1. **Catalyst decides who may reach the outside system.** The App calls the Connection as Anna. Anna needs the right to use the Connection herself; the App lends her none. The operation must also list Apps under **Callable by** ("Aufrufbar durch").
 2. **The outside system decides what it shows.** It answers with what the account the Connection signed in with may see there.
-3. **The Workflow runs as its technical account,** whether a person or a schedule starts it. It can do only what that account may. Whoever publishes it decides what gets copied. A test run of a draft is different: it acts as the person testing, and can do only what both that person and the Workflow's account may.
+3. **The Workflow runs as its technical account,** whether a person or a schedule starts it. It can do only what that account may. Whoever publishes it decides what gets copied. A test run of a draft is different: it acts as the person testing, and can do only what both that person and the Workflow's account may. For a Workflow with its own account, that means the rights the draft's steps need, even before the first publish.
 4. **Whoever may open the App sees what its queries show.** For an App in a workspace, these are the workspace's members, and the instance's administrators.
 
 So two rules apply:

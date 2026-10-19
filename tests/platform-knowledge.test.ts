@@ -286,6 +286,14 @@ const generator = fileURLToPath(
 );
 
 describe("the shipped skill platform-docs", () => {
+  it("teaches the Workflow's own account and the draft's derived ceiling", () => {
+    const guide = platformDocsSkill.resources?.find(
+      (resource) => resource.path === "references/how-it-works/rights.md"
+    )?.content;
+    expect(guide).toContain("By default it gets its own when it is first published");
+    expect(guide).toContain("rights the draft's steps need, even before the first publish");
+    expect(guide).not.toContain("a Superadmin creates that account");
+  });
   it("tells an agent asked for a Google font to carry fonts and libraries locally or use the kit", () => {
     const guide = platformDocsSkill.resources?.find(
       (resource) => resource.path === "references/apps/build.md"
