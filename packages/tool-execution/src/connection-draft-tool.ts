@@ -12,6 +12,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import { z } from "zod";
+import { CONNECTION_OFFER_TOOL_NAME } from "./connection-offer-tool";
 
 // The agent's draft of the tools of a REST API, as a card in the conversation (CS-5c). The agent
 // reads a vendor's API description and declares the operations; this tool checks them as a save
@@ -370,7 +371,8 @@ export function createConnectionDraftTool(input: {
       "Write each operation as one GET request that only reads: its name, a description an agent can act on, the path with its parameters and the query parameters, each with a JSON Schema.",
       "The tool checks the operations as a save of the Connection would, and answers either every issue, which you fix before you call it again, or the draft, which the person sees as a card in this conversation. From the card they open the Connection's approval list and approve the tools; nothing is saved before that, and you never save a Connection.",
       "Never ask for a key and never put one into the draft: the person enters it on the Connection's page. A header or parameter that carries a credential, a fixed value in a parameter's schema ('default', 'const', 'examples', 'example', a singleton 'enum'), a method other than GET and the effect 'changing' are refused.",
-      "After a draft, tell the person in one sentence to review the tools on the card and approve what they need."
+      "After a draft, tell the person in one sentence to review the tools on the card and approve what they need.",
+      `Once they say they approved them, offer the tools to an agent with ${CONNECTION_OFFER_TOOL_NAME} where you hold it: no agent can call them before.`
     ].join(" "),
     inputSchema,
     outputSchema,

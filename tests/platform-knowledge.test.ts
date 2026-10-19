@@ -67,6 +67,7 @@ async function offerFor(
     [
       stand("read_skill"),
       stand("platform.connections.draft_tools"),
+      stand("platform.connections.offer_to_agent"),
       stand("workspace.open"),
       stand("workspace.write_file"),
       ...platform.tools
@@ -176,6 +177,20 @@ describe("the platform's knowledge of an agent", () => {
       (await offerFor(["read_skill"], { kind: "connection", name: "crm" }, true)).toolNames
     ).toContain("platform.connections.draft_tools");
     expect(offered.orientation).toContain("never dump HTTP or YAML");
+  });
+
+  // CS-5d: approved tools reach no agent before it is given them. The offer of that give goes
+  // with the drafting, and the orientation says the person's confirmation publishes the agent.
+  it("offers the give of a Connection's tools to an agent with the drafting", async () => {
+    const offered = await offerFor(PLATFORM_TOOLS, undefined, true);
+    expect(offered.toolNames).toContain("platform.connections.offer_to_agent");
+    expect((await offerFor(PLATFORM_TOOLS)).toolNames).not.toContain(
+      "platform.connections.offer_to_agent"
+    );
+    expect(
+      (await offerFor(["read_skill"], { kind: "connection", name: "crm" }, true)).toolNames
+    ).toContain("platform.connections.offer_to_agent");
+    expect(offered.orientation).toContain("an agent can call them only after it is given them");
   });
 
   // ACCEPT-2c C-4: German replies said "technischer Primärschlüssel", "App-ID" and

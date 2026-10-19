@@ -204,6 +204,10 @@ for (const locale of LOCALES) {
         rows.slice(0, 4).map((row) => row.getAttribute("data-approval-tool") ?? "")
       );
       await dialog.locator("[data-connection-approve]").click();
+      // Approved for agents, the dialog offers the give to an agent (CS-5d); Done leaves it.
+      await expect(dialog.locator("[data-connection-approved]")).toContainText("4");
+      await expect(dialog.locator("[data-connection-give]")).toBeVisible();
+      await dialog.locator("[data-connection-approved-done]").click();
 
       // One write with the four approved; the page holds them and offers the two others.
       await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
@@ -283,6 +287,8 @@ for (const locale of LOCALES) {
       await checkParameterEnums(row, locale);
       await shoot(page, locale, "rest-approve");
       await dialog.locator("[data-connection-approve]").click();
+      await expect(dialog.locator("[data-connection-give]")).toBeVisible();
+      await dialog.locator("[data-connection-approved-done]").click();
 
       await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
       await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();
@@ -527,6 +533,8 @@ for (const locale of LOCALES) {
       // Opened again and approved, the one approval is the one save.
       await card.locator("[data-connection-draft-open]").click();
       await dialog.locator("[data-connection-approve]").click();
+      await dialog.locator("[data-connection-approved-done]").click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();
       expect(existingWrites).toEqual(["PUT /api/v1/assets/connection/:name"]);
 
@@ -560,6 +568,7 @@ for (const locale of LOCALES) {
         "POST /api/v1/connections/:name/test"
       ]);
       await create.locator("[data-connection-approve]").click();
+      await create.locator("[data-connection-approved-done]").click();
       // The chat beside the page stays open: its conversation is in the address.
       await expect(page).toHaveURL(new RegExp(`/build/connections/${fresh}(?:\\?|$)`, "u"));
       await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();

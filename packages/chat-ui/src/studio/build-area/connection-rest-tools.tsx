@@ -23,6 +23,11 @@ import {
 import { useOpenedConnectionDraft, type ConnectionDraft } from "./connection-draft";
 import { connectionConfigToForm, withApprovedOperations } from "./connection-form-model";
 import type { ConnectionSource } from "./connection-source";
+import {
+  ConnectionApprovedBody,
+  useGiveToAgent,
+  type ConnectionGiveHost
+} from "./connection-give-step";
 
 // How the operations of a REST API come in: it names none itself, so a person pastes them as
 // YAML, or asks the agent beside the page to draft them from the API's description. Either way
@@ -153,14 +158,20 @@ export function readPaste(
  * it opens at the list, and discarding the draft closes it.
  */
 function AddToolsDialog({
+  name,
   title,
   drafted,
+  give: giveHost,
   onClose,
   approve
 }: {
+  /** The Connection's id. */
+  name: string;
   /** The Connection's own title: a draft's intro names it, never the agent's title. */
   title: string;
   drafted?: ConnectionDraft;
+  /** Gives the approved tools to an agent from the done state (CS-5d). */
+  give?: ConnectionGiveHost;
   onClose(): void;
   /** Saves the approved operations with the surfaces. Answers what refused them, or nothing. */
   approve(
@@ -176,8 +187,18 @@ function AddToolsDialog({
   );
   const [saving, setSaving] = useState(false);
   const [refusals, setRefusals] = useState<string[]>();
+  /** Approved: how many, and whether the steps of the give are open. */
+  const [approved, setApproved] = useState<{ count: number; giving: boolean }>();
   const approval = useApprovalChoice(drafted?.operations ?? []);
   const chosen = candidates ? selectedCandidates(candidates, approval.choice.selected) : [];
+  const give = useGiveToAgent({
+    host: giveHost,
+    enabled: approved?.giving === true,
+    connection: name,
+    connectionTitle: title,
+    onBack: () => setApproved((current) => current && { ...current, giving: false }),
+    onClose
+  });
 
   const review = () => {
     const read = readPaste(text, t);
@@ -192,14 +213,48 @@ function AddToolsDialog({
   const save = () => {
     setSaving(true);
     setRefusals(undefined);
-    approve(chosen, [...approval.choice.surfaces])
+    const surfaces = [...approval.choice.surfaces];
+    approve(chosen, surfaces)
       .then((refused) => {
-        if (refused === undefined) onClose();
-        else setRefusals(refused);
+        if (refused !== undefined) setRefusals(refused);
+        // Where agents may use them, the done state offers them to one.
+        else if (giveHost && surfaces.includes("agent"))
+          setApproved({ count: chosen.length, giving: false });
+        else onClose();
       })
       .catch(() => undefined)
       .finally(() => setSaving(false));
   };
+
+  if (approved) {
+    return (
+      <Dialog
+        open
+        title={approved.giving ? give.title : t("connectionCreate.approveHeading")}
+        onClose={() => {
+          if (!give.busy) onClose();
+        }}
+        footer={
+          approved.giving ? (
+            give.footer
+          ) : (
+            <Button data-connection-approved-done="" onClick={onClose}>
+              {t("connectionGive.done")}
+            </Button>
+          )
+        }
+      >
+        {approved.giving ? (
+          give.body
+        ) : (
+          <ConnectionApprovedBody
+            count={approved.count}
+            onGive={() => setApproved({ ...approved, giving: true })}
+          />
+        )}
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog
@@ -324,8 +379,10 @@ export function RestToolsSection({
           // A draft opened over a paste in progress, or over an earlier draft, starts its own
           // dialog.
           key={opened.draft ? `drafted:${opened.arrival}` : "pasted"}
+          name={asset.name}
           title={title}
           {...(opened.draft ? { drafted: opened.draft } : {})}
+          {...(source.give ? { give: source.give } : {})}
           onClose={() => {
             setPasting(false);
             opened.close();

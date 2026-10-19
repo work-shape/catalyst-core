@@ -49,6 +49,11 @@ const BuildNavigationContext = createContext<BuildNavigation | undefined>(undefi
 
 export const BuildNavigationProvider = BuildNavigationContext.Provider;
 
+/** The way around Build, or nothing outside it, as in a dialog shown beside a conversation. */
+export function useOptionalBuildNavigation(): BuildNavigation | undefined {
+  return useContext(BuildNavigationContext);
+}
+
 export function useBuildNavigation(): BuildNavigation {
   const value = useContext(BuildNavigationContext);
   if (!value) {

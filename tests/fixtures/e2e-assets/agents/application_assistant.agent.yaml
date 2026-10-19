@@ -24,6 +24,7 @@ toolNames:
   - platform.assets.put
   - platform.assets.operations
   - platform.connections.draft_tools
+  - platform.connections.offer_to_agent
 initialPrompts:
   - title: Find review risks
     prompt: List the most important application or document review risks I should check first.

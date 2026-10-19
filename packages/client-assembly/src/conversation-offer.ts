@@ -27,7 +27,9 @@ import {
   WORKSPACE_OPEN_TOOL_NAME,
   createAppSaveTool,
   createConnectionDraftTool,
+  createConnectionOfferTool,
   CONNECTION_DRAFT_TOOL_NAME,
+  CONNECTION_OFFER_TOOL_NAME,
   createPlatformAssetBinding,
   createPlatformAssetTools,
   createPlatformDiscoveryTools,
@@ -186,7 +188,9 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         toolNames: [
           ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
           ...(holds ? [...WORKFLOW_TEST_TOOL_NAMES, KNOWLEDGE_ADD_FILES_TOOL_NAME] : []),
-          ...(holds || subject?.kind === "connection" ? [CONNECTION_DRAFT_TOOL_NAME] : []),
+          ...(holds || subject?.kind === "connection"
+            ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]
+            : []),
           ...appToolNames(input.hasTool),
           ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
         ]
@@ -263,7 +267,8 @@ export function createPlatformTools(
             createConnectionDraftTool({
               connectorTypes: input.connections.connectorTypes,
               connectorType: HTTP_API_CONNECTOR_TYPE
-            })
+            }),
+            createConnectionOfferTool()
           ]
         : [])
     ],

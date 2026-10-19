@@ -12,6 +12,7 @@ import { collaborationWorkspace } from "./collaboration-workspace";
 import { common } from "./common";
 import { configAssets } from "./config-assets";
 import { connectionCreate } from "./connection-create";
+import { connectionGive } from "./connection-give";
 import { connectionSignIn } from "./connection-sign-in";
 import { connections } from "./connections";
 import { conversation } from "./conversation";
@@ -57,6 +58,7 @@ export const translations = combineTranslations(common)
   .and(collaborationWorkspace)
   .and(configAssets)
   .and(connectionCreate)
+  .and(connectionGive)
   .and(connectionSignIn)
   .and(connections)
   .and(conversation)

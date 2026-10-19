@@ -212,7 +212,8 @@ describe("the tools the agent page is told of", () => {
           "read_skill",
           "propose_skill_change",
           "platform.assets.put",
-          "platform.connections.draft_tools"
+          "platform.connections.draft_tools",
+          "platform.connections.offer_to_agent"
         ])
       );
       const untold = tools

@@ -17,6 +17,11 @@ import {
   readConnectionDraft
 } from "../../studio/build-area/connection-draft";
 import { ConnectionDraftCard } from "../../studio/build-area/connection-draft-card";
+import {
+  CONNECTION_OFFER_TOOL_NAME,
+  ConnectionGiveCard,
+  readConnectionOffer
+} from "../../studio/build-area/connection-give-card";
 import { PageSaveCard } from "../../studio/pages/page-card";
 import { isOpenToolName } from "../../studio/pages/page-save";
 import { ApprovalRequestCard } from "../approvals/approval-request-card";
@@ -190,6 +195,15 @@ export function ToolCallPart({
       : undefined;
   if (connectionDraft) {
     return <ConnectionDraftCard draft={connectionDraft} />;
+  }
+
+  // The agent's offer of a Connection's tools: a card whose button gives them to an agent.
+  const connectionOffer =
+    toolName === CONNECTION_OFFER_TOOL_NAME && state === "completed"
+      ? readConnectionOffer(result)
+      : undefined;
+  if (connectionOffer) {
+    return <ConnectionGiveCard offer={connectionOffer} />;
   }
 
   if (approvalRequest) {

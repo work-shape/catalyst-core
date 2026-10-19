@@ -5,6 +5,10 @@ import {
   CONNECTION_DRAFT_TOOL_NAME,
   readConnectionDraft
 } from "../../studio/build-area/connection-draft";
+import {
+  CONNECTION_OFFER_TOOL_NAME,
+  readConnectionOffer
+} from "../../studio/build-area/connection-give-card";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
 import { appSavedByCall, standingAssetOpen } from "../conversation/subject-run";
 import { isOpenToolName, readPageSave } from "../../studio/pages/page-save";
@@ -230,8 +234,11 @@ function isConnectionDraftCard(part: {
 }): boolean {
   return (
     part.type === "tool-call" &&
-    part.toolName === CONNECTION_DRAFT_TOOL_NAME &&
-    readConnectionDraft(part.result) !== undefined
+    ((part.toolName === CONNECTION_DRAFT_TOOL_NAME &&
+      readConnectionDraft(part.result) !== undefined) ||
+      // The offer of a Connection's tools to an agent is how the person gives them: it stays.
+      (part.toolName === CONNECTION_OFFER_TOOL_NAME &&
+        readConnectionOffer(part.result) !== undefined))
   );
 }
 

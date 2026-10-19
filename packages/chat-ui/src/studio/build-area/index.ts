@@ -48,6 +48,21 @@ export {
   ConnectionDraftHostProvider,
   connectionDraftHost
 } from "./connection-draft-card";
+export * from "./connection-give";
+export {
+  ConnectionApprovedBody,
+  useGiveToAgent,
+  type ConnectionGiveHost
+} from "./connection-give-step";
+export {
+  CONNECTION_OFFER_TOOL_NAME,
+  ConnectionGiveCard,
+  ConnectionGiveCardHostProvider,
+  ConnectionGiveCardView,
+  readConnectionOffer,
+  type ConnectionGiveCardHost,
+  type ConnectionOffer
+} from "./connection-give-card";
 export { ConnectionEditor } from "./connection-editor";
 export * from "./connection-form-model";
 export * from "./connection-sign-in-model";

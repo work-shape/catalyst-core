@@ -12,6 +12,7 @@ import {
 } from "@work-shape/catalyst-config-schema";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
+  CONNECTION_OFFER_TOOL_NAME,
   APP_PUBLISH_TOOL_NAME,
   PLATFORM_ASSET_TOOLS
 } from "@work-shape/catalyst-tool-execution";
@@ -118,8 +119,9 @@ const connectionsModule = defineModule({
     "connections.list_tools"
   ],
   kinds: ["connection"],
-  // The agent's draft of a REST API's tools checks them against the instance's Connector types.
-  tools: [CONNECTION_DRAFT_TOOL_NAME],
+  // The agent's draft of a REST API's tools checks them against the instance's Connector types;
+  // its offer of a Connection's tools to an agent is a card the person confirms.
+  tools: [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME],
   jobKinds: [
     "connection.discover",
     "connection_setup_sessions.sweep",

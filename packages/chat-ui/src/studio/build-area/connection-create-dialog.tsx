@@ -65,6 +65,7 @@ import {
   readPaste
 } from "./connection-rest-tools";
 import { useConnectionSource, type ConnectionSource } from "./connection-source";
+import { ConnectionApprovedBody, useGiveToAgent } from "./connection-give-step";
 
 // The New connection dialog (CS-5a 2/2): pick what to connect, give it a name, its address and
 // its key, press Verbinden, and choose which of its tools agents, Apps and Workflows may use.
@@ -85,11 +86,21 @@ type Stage =
   | { step: "add" }
   | { step: "paste"; error?: string }
   /** Declared operations to approve: pasted, or `drafted` by the agent in the chat. */
-  | { step: "review"; candidates: ApprovalCandidate[]; drafted?: true };
+  | { step: "review"; candidates: ApprovalCandidate[]; drafted?: true }
+  /**
+   * Approved (CS-5d): how many, and where agents may use them, the line that gives them to an
+   * agent.
+   */
+  | { step: "approved"; count: number; forAgents: boolean }
+  /** The tools go to an agent: the steps of the give. */
+  | { step: "give"; count: number };
 
 export function ConnectionCreateDialog(props: BuildCreateDialogProps) {
   return <ConnectionCreateFlow {...props} source={useConnectionSource()} />;
 }
+
+/** The exposure that lets agents call an approved operation. */
+const AGENT_SURFACE = "agent";
 
 /** How often the dialog reads the Connection while the tools of a signed-in server are read. */
 const SIGNED_IN_READ_MS = 1_000;
@@ -367,21 +378,46 @@ export function ConnectionCreateFlow({
       approval.choice.selected,
       approval.choice.effects
     );
-    const config = withApprovedOperations(written.current, chosen, [...approval.choice.surfaces]);
+    const surfaces = [...approval.choice.surfaces];
+    const config = withApprovedOperations(written.current, chosen, surfaces);
     setBusy(true);
     setRefusals(undefined);
     try {
-      await put({ name, config, expectedRevision: revision });
-      onCreated(name);
+      memory.current = {
+        ...memory.current,
+        revision: (await put({ name, config, expectedRevision: revision })).revision
+      };
+      written.current = config;
+      setBusy(false);
+      // Where agents may use them, the done state offers them to one; else the page opens.
+      if (source.give && surfaces.includes(AGENT_SURFACE)) {
+        setStage({ step: "approved", count: chosen.length, forAgents: true });
+      } else {
+        onCreated(name);
+      }
     } catch (error) {
       setBusy(false);
       setRefusals(approvalRefusals(error, config, t));
     }
   };
 
+  const give = useGiveToAgent({
+    host: source.give,
+    enabled: stage.step === "give",
+    connection: name,
+    connectionTitle: title,
+    onBack: () =>
+      setStage({
+        step: "approved",
+        count: stage.step === "give" ? stage.count : 0,
+        forAgents: true
+      }),
+    onClose: () => onCreated(name)
+  });
+
   /** Closes the dialog: before a Connection exists, after it connected, or asking to discard it. */
   const close = () => {
-    if (busy) return;
+    if (busy || give.busy) return;
     if (!created) {
       onClose();
       return;
@@ -440,7 +476,10 @@ export function ConnectionCreateFlow({
         return t("connectionCreate.pasteHeading");
       case "tools":
       case "review":
+      case "approved":
         return t("connectionCreate.approveHeading");
+      case "give":
+        return give.title;
     }
   })();
   const connectedLine = t(
@@ -611,6 +650,17 @@ export function ConnectionCreateFlow({
             <RefusalDetail detail={refusals?.detail} />
           </div>
         );
+      case "approved": {
+        const { count } = stage;
+        return (
+          <ConnectionApprovedBody
+            count={count}
+            {...(stage.forAgents ? { onGive: () => setStage({ step: "give", count }) } : {})}
+          />
+        );
+      }
+      case "give":
+        return give.body;
     }
   }
 
@@ -685,6 +735,14 @@ export function ConnectionCreateFlow({
             </Button>
           </>
         );
+      case "approved":
+        return (
+          <Button data-connection-approved-done="" onClick={() => onCreated(name)}>
+            {t("connectionGive.done")}
+          </Button>
+        );
+      case "give":
+        return give.footer;
       case "tools":
       case "review": {
         const { candidates } = stage;

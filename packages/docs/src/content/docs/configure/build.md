@@ -39,6 +39,7 @@ The rights this needs:
 | Create a Connection, enter or replace its key, test it, accept its operations | `connection.write`, which the administrator role holds; the Access page does not grant it            |
 | Delete a Connection                                                           | `connection.delete`, which the administrator role holds                                              |
 | Give an agent a tool of the Connection                                        | `agent.write` on the agent, and `connection.read` to see the Connection in the agent's Tools section |
+| Give an agent the approved tools with **Give to an agent**                     | `agent.write` and `agent.publish` on the agent, and `connection.read`                                |
 | Have an agent call the tool                                                   | `connection.use` for the person the agent works for: an agent acts with that person's rights         |
 
 The administrator role holds every right on Connections. Beside the rights, the operator must have turned the module [`connections`](/configure/modules/#connections) on, listed the server's host in [`egress.allow`](/configure/release-config/#egress) and set a [Secret Store key](/configure/release-config/#secret-store-keys); without the host on the list the save is refused with `egress_denied`. A Connection that comes from the release config is read-only on the instance, and its credential comes from the instance's environment.
@@ -46,6 +47,10 @@ The administrator role holds every right on Connections. Beside the rights, the 
 ## Giving an agent the tools of a Connection
 
 The **Tools** section of an agent's page lists the instance's own tools under **Instance tools** and then, under **Connections**, one group for each Connection you may read (`connection.read`). A group holds a check box for each operation that agents may call and that is enabled and ready, with its description and whether it reads or changes. Ticking a box gives the agent the tool `connection.<name>.<operation>`. A group with more than 12 operations starts folded and shows how many of its operations the agent holds, and so does every group the agent holds nothing of when there are more than 6 groups.
+
+**Give to an agent** (German: **Einem Agenten geben**) gives all of a Connection's approved tools to one agent in one step. It is offered after you approve operations that agents may call, in the **New connection** dialog and on the Connection's page, and on a card in a conversation when an agent that holds `platform.connections.offer_to_agent` offers it. It lists only the instance's agents you may change and publish. Before anything changes, it names the agent and the tools, and your confirmation publishes the agent as one new revision with them added: rights, approval policy and audit are those of a publish on the agent's page. Every conversation with the agent, the one you are in included, can use the tools from its next message.
+
+If another person has an unpublished draft of the agent, the give is refused and names them. Nothing is written, and **Open** leads to the agent's page. If you have a draft of your own, the tools are added to it, and it is published only if you tick **Publish the whole draft now**, which publishes your other changes with them. A publish an approval policy holds waits in the Inbox.
 
 A tool the agent already holds whose Connection or operation is gone, switched off, not offered to agents or not visible to you stays on the page in a group **No longer available** at the end of the section. Saving keeps it until you remove it. At run time the agent goes on without such a tool.
 

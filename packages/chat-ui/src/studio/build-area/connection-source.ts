@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type {
   ConnectionDetail,
   ConnectionOAuthStart,
@@ -18,6 +18,9 @@ import {
   useServicePrincipalsQuery,
   useWorkspaceUsersQuery
 } from "../../shared/api/workspace-queries";
+import { invalidateOfferedAgents } from "../../shared/api/agent-placement-mutations";
+import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
+import { AGENTS_BUILD_PATH, useOptionalBuildNavigation } from "../../shared/build-route";
 import { canManageServicePrincipals, canManageUsers } from "../../shared/governance";
 import { workspaceRoutePath } from "../../shared/routes";
 import { useSettingsPage } from "../../shared/settings-page-context";
@@ -26,6 +29,8 @@ import { instanceSentence, PendingApprovalError } from "./build-refusals";
 import { waitsForDiscovery, type DiscoveryWait } from "./connection-form-model";
 import { useAvailabilityChoice, type AvailabilityFrame } from "./asset-availability";
 import type { AvailabilityChoice } from "./asset-availability-fields";
+import { connectionGiveSource } from "./connection-give";
+import type { ConnectionGiveHost } from "./connection-give-step";
 
 /** The action that lets a person test a Connection. */
 const CONNECTION_WRITE_ACTION = "connection.write";
@@ -144,6 +149,11 @@ export interface ConnectionSource {
   /** A hook: the test of this page. */
   useTest(name: string): { run: ConnectionTestRun; start(): void };
   /**
+   * Gives the approved tools to an agent after "Freigeben" (CS-5d). Absent where the place
+   * offers no give: the done state then has no line for it.
+   */
+  give?: ConnectionGiveHost;
+  /**
    * A hook: the people and service principals with a right to use this one Connection. A
    * service principal is among them for a reader who is shown service principals.
    */
@@ -187,6 +197,22 @@ export function useConnectionSource(): ConnectionSource {
   const context = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
   const seesPrincipals = seesHolders && canManageServicePrincipals(context.data);
   const detailKey = (name: string) => ["connection-detail", apiBaseUrl, authScope, name];
+  const navigation = useOptionalBuildNavigation();
+  const giveSource = useMemo(() => connectionGiveSource(client), [client]);
+  const give: ConnectionGiveHost = {
+    source: giveSource,
+    viewerId: user.id,
+    ...(navigation
+      ? { openAgent: (name: string) => navigation.open({ kindPath: AGENTS_BUILD_PATH, name }) }
+      : {}),
+    given: () => {
+      // The agent's page, its draft and the lists of offered agents read what was published.
+      queryClient
+        .invalidateQueries({ queryKey: workspaceQueryKeys.assets(apiBaseUrl, authScope) })
+        .catch(() => undefined);
+      invalidateOfferedAgents(queryClient, apiBaseUrl, authScope).catch(() => undefined);
+    }
+  };
   const personContextKey = (name: string, subject: PersonContextSubject) => [
     "connection-person-context",
     apiBaseUrl,
@@ -196,6 +222,7 @@ export function useConnectionSource(): ConnectionSource {
     subject.id
   ];
   return {
+    give,
     useAvailability: (frame) => useAvailabilityChoice(frame, "connection"),
     // The right is held on every Connection of the instance or in the Connection's Namespace.
     mayTest: ({ namespace }) =>
