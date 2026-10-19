@@ -97,6 +97,7 @@ export const unusedJobsStore: JobsStore = {
 };
 export const unusedActorAccess: ActorAccess = {
   authorize: unsupported,
+  authorizeTransfer: unsupported,
   require: unsupported,
   holdsGrantAt: unsupported,
   denials: unsupported

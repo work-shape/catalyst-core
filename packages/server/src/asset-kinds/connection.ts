@@ -281,7 +281,7 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     }),
     references: () => [],
     holdsInstanceDefault: false,
-    hasWorkspaceAvailability: false,
+    hasWorkspaceAvailability: true,
     prepareInteractiveUpsert: ({ current, next, principalId }) =>
       withServerFields(current, next, principalId),
     // An earlier revision may name a handle the Connection no longer has: its secret is stored

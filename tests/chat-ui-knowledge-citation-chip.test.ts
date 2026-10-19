@@ -3,16 +3,22 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createApiClient } from "@work-shape/catalyst-api-client";
 import { apiOperations, buildApiPath } from "@work-shape/catalyst-api-contract";
 import type { KnowledgeCitationSource } from "@work-shape/catalyst-core";
 import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
 import { UiRoot, uiLabelsDe, uiLabelsEn } from "@work-shape/catalyst-ui";
-import { AssistantSourcePart, WorkspaceApiClientProvider } from "./support/chat-ui";
+import {
+  AssistantSourcePart,
+  AttachmentContentProvider,
+  WorkspaceApiClientProvider
+} from "./support/chat-ui";
 
 // ACCEPT-FIX-8, E6: a cited Knowledge Base passage is a chip "file name, p. 3", never the raw
 // [K1]. It reads nothing until clicked; a click reads the file through the API with the
 // reader's session or token and opens it at the page. A removed source says so and opens no
-// tab. An origin link is a second chip where the passage has one.
+// tab. An origin link is a second chip where the passage has one. A chip in an open
+// conversation names it, so the reader opens the source in that conversation's workspace.
 
 const API = "https://api.example.test";
 const CONTENT =
@@ -56,7 +62,11 @@ const hotel: KnowledgeCitationSource = {
   page: 3
 };
 
-function show(source: KnowledgeCitationSource, locale: "en" | "de" = "en") {
+function show(
+  source: KnowledgeCitationSource,
+  locale: "en" | "de" = "en",
+  conversationId?: string
+) {
   const part = {
     type: "source",
     sourceType: "document",
@@ -78,7 +88,13 @@ function show(source: KnowledgeCitationSource, locale: "en" | "de" = "en") {
           createElement(
             WorkspaceApiClientProvider,
             { apiBaseUrl: API, children: null },
-            createElement(AssistantSourcePart, part)
+            conversationId === undefined
+              ? createElement(AssistantSourcePart, part)
+              : createElement(AttachmentContentProvider, {
+                  client: createApiClient({ baseUrl: API }),
+                  selectedConversationId: conversationId,
+                  children: createElement(AssistantSourcePart, part)
+                })
           )
         )
       )
@@ -115,6 +131,27 @@ describe("the chip of a cited Knowledge Base passage", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(CONTENT);
     expect(openMock).toHaveBeenCalledWith("blob:catalyst/source-1#page=3", "_blank");
     expect(label()?.getAttribute("data-knowledge-source-state")).toBe("idle");
+  });
+
+  it("names the open conversation in the request, in English and German", async () => {
+    fetchMock.mockImplementation(
+      async () =>
+        new Response("Hotel: 145 € je Nacht", { headers: { "content-type": "text/plain" } })
+    );
+    for (const [locale, words] of [
+      ["en", "reiserichtlinie.md, p. 3"],
+      ["de", "reiserichtlinie.md, S. 3"]
+    ] as const) {
+      fetchMock.mockClear();
+      show(hotel, locale, "conv_reise");
+      expect(label()?.textContent).toBe(words);
+      await act(async () => chip()?.click());
+      await settle();
+      const requested = new URL(String(fetchMock.mock.calls[0]?.[0]));
+      expect(requested.origin + requested.pathname).toBe(CONTENT);
+      expect(requested.searchParams.get("conversationId")).toBe("conv_reise");
+      act(() => root.render(null));
+    }
   });
 
   it("says a removed source is no longer available, opens no tab and offers no click, in English and German", async () => {

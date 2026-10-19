@@ -257,7 +257,7 @@ export const configAssetSummarySchema = z.object({
   name: z.string(),
   revision: z.number().int().positive(),
   updatedAt: timestampSchema,
-  // Agents only. An agent without availability is hidden in every workspace.
+  // Workspace availability of kinds that support it; no record grants no workspace use.
   availability: agentAvailabilitySchema.optional()
 });
 

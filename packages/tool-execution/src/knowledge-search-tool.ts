@@ -58,7 +58,7 @@ type Passage = z.infer<typeof passageSchema>;
 /** Why a Knowledge Base was not searched, as the agent reads it. */
 interface Skipped {
   knowledgeBase: string;
-  reason: "no_access" | "not_searchable" | "unavailable" | "failed";
+  reason: "permission_missing" | "not_searchable" | "unavailable" | "failed";
   message: string;
 }
 
@@ -182,11 +182,11 @@ export async function runKnowledgeSearch(
     if (answer.status !== "success") {
       skipped.push({
         knowledgeBase,
-        reason: answer.error.code === "not_allowed" ? "no_access" : "failed",
-        message:
-          answer.error.code === "not_allowed"
-            ? "The person you act for may not search it (knowledge_base.use)."
-            : answer.error.message
+        reason:
+          answer.error.code === "permission_missing" || answer.error.code === "not_allowed"
+            ? "permission_missing"
+            : "failed",
+        message: answer.error.message
       });
       continue;
     }
@@ -201,6 +201,9 @@ export async function runKnowledgeSearch(
     }
     lists.push(output.data.passages);
   }
+  // A permission refusal is never an empty search or a business result.
+  const refused = skipped.find((entry) => entry.reason === "permission_missing");
+  if (refused && lists.length === 0) return failed("permission_missing", refused.message);
   const merged = fuseByReciprocalRank(
     lists,
     (passage) => `${passage.knowledgeBase}\u0000${passage.ref}`

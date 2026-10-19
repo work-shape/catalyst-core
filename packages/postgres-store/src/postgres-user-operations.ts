@@ -1,6 +1,8 @@
+import { findAdminContact } from "./postgres-admin-contact";
 import { keysetFilter } from "./paging";
 import {
   AppError,
+  asUserId,
   type AuditEvent,
   type AuditEventInput,
   type ClientInstanceId,
@@ -22,7 +24,7 @@ import {
   userInDeletionError,
   type UserStore
 } from "@work-shape/catalyst-core";
-import { and, desc, eq, inArray, isNotNull, isNull, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql as drizzleSql } from "drizzle-orm";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
 import {
@@ -335,7 +337,7 @@ async function createUser(db: PostgresConnection, input: CreateUserInput): Promi
     if (!row) throw new AppError("INTERNAL", "Failed to create user");
     await ensurePersonalWorkspaceInTransaction(tx, {
       clientInstanceId: input.clientInstanceId,
-      userId: row.id as UserRecord["id"]
+      userId: asUserId(row.id)
     });
     await writeLegacyPermissionList(tx, {
       clientInstanceId: input.clientInstanceId,
@@ -733,29 +735,10 @@ export function createPostgresUsersStore(db: PostgresConnection): UserStore {
     async listUsers(input: Parameters<UserStore["listUsers"]>[0]): Promise<UserRecord[]> {
       return listUsers(db, input);
     },
-    async getInstanceAdminName({ clientInstanceId }) {
-      // The existing product_users_client_idx bounds the lookup to this instance. Read only
-      // the name: listUsers also loads identities and grants that help text must not need.
-      const [admin] = await db
-        .select({ displayLabel: productUsers.displayLabel })
-        .from(productUsers)
-        .where(
-          and(
-            eq(productUsers.clientInstanceId, clientInstanceId),
-            drizzleSql`${productUsers.roles} ?| array['admin', 'superadmin']`,
-            eq(productUsers.status, "active"),
-            isNull(productUsers.deletionRequestedAt),
-            isNotNull(productUsers.lastAuthenticatedAt)
-          )
-        )
-        .orderBy(
-          desc(productUsers.lastAuthenticatedAt),
-          drizzleSql`${productUsers.displayLabel} COLLATE "C"`,
-          drizzleSql`${productUsers.id} COLLATE "C"`
-        )
-        .limit(1);
-      return admin?.displayLabel;
-    },
+    getInstanceAdminName: ({ clientInstanceId }) =>
+      findAdminContact(db, clientInstanceId, ["superadmin", "admin"]),
+    getSuperadminName: ({ clientInstanceId }) =>
+      findAdminContact(db, clientInstanceId, ["superadmin"]),
     async createUser(input: CreateUserInput): Promise<UserRecord> {
       return createUser(db, input);
     },

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   FOUND_FILE_KINDS,
+  COLLABORATION_WORKSPACE_KINDS,
+  type CollaborationWorkspaceKind,
   type FoundFile,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
@@ -51,10 +53,18 @@ export interface PlatformContextRead {
   modules: string[];
   /** The kinds of asset that exist here: those of a module that is off are not among them. */
   kinds: { kind: string; plural: string; hasDraft: boolean }[];
-  /** The rights the person holds on every asset of a kind, such as `workflow.write`. */
+  /** The rights the person holds on instance-owned assets of a kind, such as `workflow.write`. */
   actions: string[];
   /** The read rights the person holds on some assets of a kind only. */
   assetActions: string[];
+  /** Visible workspaces and the rights the person holds on their assets. */
+  workspaces: {
+    id: string;
+    name: string;
+    kind: CollaborationWorkspaceKind;
+    member: boolean;
+    actions: string[];
+  }[];
   /** The Namespaces the person holds a right in, with those rights. */
   namespaces: { prefix: string; displayName: string; actions: string[] }[];
 }
@@ -134,6 +144,15 @@ const contextOutputSchema = z.object({
   kinds: z.array(z.object({ kind: z.string(), plural: z.string(), hasDraft: z.boolean() })),
   actions: z.array(z.string()),
   assetActions: z.array(z.string()),
+  workspaces: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      kind: z.enum(COLLABORATION_WORKSPACE_KINDS),
+      member: z.boolean(),
+      actions: z.array(z.string())
+    })
+  ),
   namespaces: z.array(
     z.object({ prefix: z.string(), displayName: z.string(), actions: z.array(z.string()) })
   )
@@ -182,7 +201,7 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
       effect: context.effect,
       description: [
         "Read what this instance can do and what the user may do on it: the modules that are on, the kinds of asset that exist (agent, skill, workflow, app, data_store, knowledge_base, connection, as far as they are on), and the user's rights.",
-        "'actions' are rights on every asset of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'namespaces' are rights on the assets whose names start with a prefix.",
+        "'actions' are rights on instance-owned assets of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'workspaces' names visible workspaces and the rights on their assets, including scoped writes such as 'skill.write'. A missing write in 'actions' does not mean the user cannot write in a workspace: check that workspace's actions. 'namespaces' are rights on the assets whose names start with a prefix.",
         "Call it before you say whether something can be built here or whether the user may change it. availableHere lists the published agents and Apps offered in this conversation’s workspace. Use their titles, never internal names. An asset found through platform.assets.list may be editable but unavailable to use here; never offer it as an available agent or App.",
         "For a new Workflow, choose runAs only from workflowPrincipals: these are Workflow accounts this user may publish, never integration or release accounts. If exactly one is offered, use it without asking. If empty, explain that a Workflow account without an API key is created under Settings > API access; never guess a principal name. Schedules use instance.timeZone; if timeZoneDefaulted, say that UTC is the instance default. Store the intended IANA timeZone on each schedule trigger; never shift the wall clock into UTC yourself. caller identifies the person you act for: use caller.id to notify 'me', without asking them for an id. Give person to resolve a recipient by name or email within this user's directory rights. An empty result means no known match; ask for a clearer name, never an internal id. If several match, ask which person by name/email."
       ].join(" "),

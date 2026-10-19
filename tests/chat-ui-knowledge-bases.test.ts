@@ -14,6 +14,7 @@ import {
   requestBuildStart,
   resolveBuildRights,
   startedKnowledgeBaseForm,
+  type AvailabilityChoice,
   type BuildAsset,
   type BuildSource,
   type KnowledgeBaseSource,
@@ -132,7 +133,8 @@ function render(
     state = needsAttention,
     locale = "en",
     workflows,
-    settings
+    settings,
+    availability
   }: {
     newAsset?: boolean;
     state?: KnowledgeBaseState;
@@ -141,6 +143,8 @@ function render(
     workflows?: WorkflowsHost;
     /** The page sits in the settings page of an instance with this config. */
     settings?: SettingsPageContextValue;
+    /** Where agents can use it, as the instance answers it to a reader who may change it. */
+    availability?: AvailabilityChoice;
   } = {}
 ): string {
   const name = newAsset ? undefined : asset.name;
@@ -171,7 +175,11 @@ function render(
       revisions: async () => ({ items: [] })
     }
   };
-  const planted = knowledgeBaseKindOn(() => ({ ...source, useState: () => ready(state) }));
+  const planted = knowledgeBaseKindOn(() => ({
+    ...source,
+    useState: () => ready(state),
+    ...(availability === undefined ? {} : { useAvailability: () => availability })
+  }));
   const kinds = buildAssetKinds.map((kind) => (kind.kind === "knowledge_base" ? planted : kind));
   const page = createElement(
     TranslationProvider,
@@ -244,6 +252,27 @@ describe("Knowledge Bases in Build", () => {
     expect(page).toContain("Check now");
     expect(page).toContain("select * from findings limit 20");
     expect(page).toContain("Say what the rows are about");
+  });
+
+  // AVAIL-1: agents can use a Knowledge Base in the workspaces it is available in.
+  it("says where agents can use it, saved with the page and applied at once", () => {
+    const section = (page: string) =>
+      /<section[^>]*id="availability">.*?<\/section>/su.exec(page)?.[0] ?? "";
+    const available = section(
+      render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
+        availability: {
+          saved: { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] },
+          workspaces: [{ id: "ws_sales", name: "Sales", createdAt: "2026-06-27T00:00:00.000Z" }],
+          save: async () => undefined
+        }
+      })
+    );
+
+    expect(available).toContain("where agents can answer from this knowledge base");
+    expect(available).toContain("but not open its settings or change it");
+    expect(available).toContain("Sales");
+    expect(available).toContain("With nothing selected, agents cannot use it in any workspace.");
+    expect(section(render(knowledgeBase({ revision: 2, publishedRevision: 2 })))).toBe("");
   });
 
   it("asks for a publish before it shows a check or a test query", () => {

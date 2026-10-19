@@ -1,6 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { AgentDraft, OperationOutcome } from "@work-shape/catalyst-api-client";
+import type {
+  AgentAvailability,
+  AgentDraft,
+  OperationOutcome
+} from "@work-shape/catalyst-api-client";
 import { invalidateOfferedAgents } from "../../shared/api/agent-placement-mutations";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { useTranslation } from "../../shared/i18n";
@@ -80,9 +84,18 @@ export interface AgentDraftSource {
   }): AgentDraft;
   /**
    * Publish and Discard of the draft revision the page shows. Each reads the agent again once
-   * it is made.
+   * it is made. A publish may also make what the draft uses available where the agent is: in
+   * the workspaces the reader reviewed, `expectedAvailability`, which the instance compares with
+   * the agent's availability now and refuses where it changed.
    */
-  decide(kind: DraftDecision, revision: number): Promise<void>;
+  decide(
+    kind: DraftDecision,
+    revision: number,
+    options?: {
+      makeDependenciesAvailable: boolean;
+      expectedAvailability: AgentAvailability | null;
+    }
+  ): Promise<void>;
   /** The decision on its way. */
   busy: DraftDecision | undefined;
   /** What the last decision answered, while it is about the draft on the page. */
@@ -137,7 +150,7 @@ export function useAgentDraft(input: {
   const latest = !reads ? null : query.isPending ? undefined : (query.data ?? null);
   const reread = () => queryClient.invalidateQueries({ queryKey });
 
-  const decide = async (kind: DraftDecision, revision: number) => {
+  const decide: AgentDraftSource["decide"] = async (kind, revision, options) => {
     if (agent === undefined) return;
     setBusy(kind);
     setAnswered(undefined);
@@ -146,7 +159,16 @@ export function useAgentDraft(input: {
         kind === "publish"
           ? client.assets.publish({
               params: { kind: "agent", name: agent },
-              body: { revision, ...scope }
+              body: {
+                revision,
+                ...scope,
+                ...(options?.makeDependenciesAvailable
+                  ? {
+                      makeDependenciesAvailable: true,
+                      expectedAvailability: options.expectedAvailability
+                    }
+                  : {})
+              }
             })
           : client.agents.draft.discard({
               params: { name: agent },

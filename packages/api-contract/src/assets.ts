@@ -1,5 +1,6 @@
 import {
   APP_AUDIENCES,
+  WORKSPACE_USE_ASSET_KINDS,
   ASSET_ACCESS_VERBS,
   ASSET_NAME_REFUSAL_REASONS,
   ASSET_SYNC_CHANGE_TYPES
@@ -99,6 +100,21 @@ const isDefaultSchema = z.literal(true).optional();
  * Whoever may not read the draft is answered the published view: `revision` and
  * `publishedRevision` both name the published revision, and `draftRevision` is left out.
  */
+/** Dependencies whose use is missing in one or more of the agent's workspaces. */
+export const dependencyAvailabilitySchema = z.object({
+  /** The workspaces reviewed by the publisher; a later change must be read again. */
+  availability: agentAvailabilitySchema.nullable().optional(),
+  missing: z.array(
+    z.object({
+      kind: z.enum(WORKSPACE_USE_ASSET_KINDS),
+      name: z.string(),
+      displayName: z.string(),
+      canMakeAvailable: z.boolean()
+    })
+  ),
+  administrators: z.array(z.string())
+});
+
 export const agentDraftSummarySchema = z.object({
   revision: revisionNumberSchema,
   baseRevision: revisionNumberSchema,
@@ -228,6 +244,8 @@ export const assetSchema = z.object({
    * out where none is stored: such an asset is hidden in every workspace.
    */
   availability: agentAvailabilitySchema.optional(),
+  dependencyAvailability: dependencyAvailabilitySchema.optional(),
+  canSetAvailability: z.boolean().optional(),
   /** Only on agent reads. The stored config stays intact; these references cannot run. */
   unavailableTools: z.array(unavailableToolSchema).optional(),
   unavailableSkills: z.array(unavailableSkillSchema).optional(),
@@ -271,11 +289,16 @@ export const assetRevisionSelectorSchema = z
   .string()
   .regex(/^(?:draft|published|[1-9]\d{0,8})$/u, "draft, published, or a revision number");
 
+const queryBooleanSchema = z.enum(["true", "false"]);
+
 export const getAssetQuerySchema = assetScopeQuerySchema.extend({
+  availabilityMode: agentAvailabilitySchema.shape.mode.optional(),
+  availabilityPersonalWorkspaces: queryBooleanSchema.optional(),
+  availabilityWorkspaceIds: z.string().optional(),
   audience: appAudienceSchema.optional(),
   revision: assetRevisionSelectorSchema.optional(),
   /** `true` adds the source files of the revision, for a kind whose revisions hold files. */
-  files: z.enum(["true", "false"]).optional()
+  files: queryBooleanSchema.optional()
 });
 
 const filePathSchema = nameText(z.string().min(1).max(FILE_SET_MAX_PATH_CHARS));
@@ -344,6 +367,8 @@ export const assetWriteResponseSchema = z.object({
 });
 
 export const publishAssetRequestSchema = z.object({
+  makeDependenciesAvailable: z.boolean().optional(),
+  expectedAvailability: agentAvailabilitySchema.nullable().optional(),
   audience: appAudienceSchema.optional(),
   /** Confirmation of the Knowledge Base processing count and cost; stale reviews are refused. */
   confirmProcessing: z
@@ -440,6 +465,9 @@ export const setAssetDefaultResponseSchema = z.object({
 });
 
 export const setAssetAvailabilityRequestSchema = z.object({
+  /** Required with dependency consent: refuse a definition changed since it was reviewed. */
+  expectedRevision: revisionNumberSchema.optional(),
+  makeDependenciesAvailable: z.boolean().optional(),
   mode: agentAvailabilitySchema.shape.mode,
   // Both apply to `selected` only and are ignored for `all`.
   personalWorkspaces: z.boolean().optional(),

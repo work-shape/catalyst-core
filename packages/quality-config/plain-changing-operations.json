@@ -171,6 +171,7 @@
     "conversations.thread.get": "conversation_access",
     "docs.get": "own",
     "health.get": "public",
+    "instance.workspaces.list": "asset_right",
     "me.api_keys.list": "own",
     "me.connect_codes.get": "own",
     "me.delete": "own",

@@ -87,7 +87,8 @@ export function ConnectionPage({
   actions,
   notice,
   source,
-  editing
+  editing,
+  availability
 }: Omit<BuildAssetViewProps, "kinds"> & {
   /** The frame's actions for the head: History, and Delete where the reader may delete. */
   actions?: BuildHeadActions;
@@ -95,6 +96,8 @@ export function ConnectionPage({
   notice?: ReactNode;
   source: ConnectionSource;
   editing?: BuildAssetEditorProps;
+  /** Where agents can use the Connection, for a reader who may change it. */
+  availability?: ReactNode;
 }) {
   const { t } = useTranslation();
   usePageShown(page, "asset");
@@ -298,6 +301,16 @@ export function ConnectionPage({
             body: detail ? <ConnectionAgents usedBy={detail.usedBy} /> : <SkeletonList rows={2} />
           }
         ]),
+    ...(availability
+      ? [
+          {
+            id: "availability",
+            label: t("configAvailability"),
+            description: t("configAvailabilityConnectionDescription"),
+            body: availability
+          }
+        ]
+      : []),
     // Who was given this Connection is shown to who is shown rights at all.
     ...(holders.status === "hidden"
       ? []

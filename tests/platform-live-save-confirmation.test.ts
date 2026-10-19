@@ -2,12 +2,13 @@ import { PLATFORM_TOOL_NAMES } from "@work-shape/catalyst-client-assembly";
 import {
   asAgentRunId,
   asClientInstanceId,
+  asUserId,
   type CentralPolicySetting
 } from "@work-shape/catalyst-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { required, waitUntil } from "./support/assertions";
-import { injectStartConversationRun } from "./support/chat-server-run-harness";
+import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createToolCallingModel, TOOL_CALLING_MODEL_PROVIDER } from "./support/held-model";
 import { createTestInstance, getTestJobs, type TestInstance } from "./support/test-instance";
@@ -69,7 +70,7 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
     const created = await instance.call("conversations.create", { payload: { title: "Build" } });
     expect(created.statusCode, created.body).toBe(200);
     const conversation = z
-      .object({ id: z.string(), collaborationWorkspaceId: z.string() })
+      .object({ id: z.string(), collaborationWorkspaceId: z.string(), createdByUserId: z.string() })
       .parse(created.json());
     return { instance, clientInstanceId, conversation };
   }
@@ -164,6 +165,124 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
       ).toBeUndefined();
     }
   );
+
+  it("carries workspace-only skill.write to the agent and reaches live-save confirmation", async () => {
+    const t = await fixture([], ["user"]);
+    const { instance, clientInstanceId } = t;
+    const owner = asUserId(t.conversation.createdByUserId);
+    const team = await instance.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Writing team",
+      defaultConversationVisibility: "private",
+      creatorUserId: owner
+    });
+    const created = await instance.call("conversations.create", {
+      payload: { title: "Create a skill", collaborationWorkspaceId: team.id }
+    });
+    expect(created.statusCode, created.body).toBe(200);
+    const conversation = z
+      .object({ id: z.string(), collaborationWorkspaceId: z.string() })
+      .parse(created.json());
+    const hidden = await instance.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Hidden team",
+      creatorUserId: owner
+    });
+    const readOnly = await instance.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Read-only team",
+      creatorUserId: owner
+    });
+    for (const [scopeId, action, effect] of [
+      [conversation.collaborationWorkspaceId, "skill.read", "allow"],
+      [conversation.collaborationWorkspaceId, "skill.write", "allow"],
+      [readOnly.id, "skill.read", "allow"],
+      [readOnly.id, "skill.write", "deny"]
+    ] as const) {
+      await instance.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: owner,
+        action,
+        effect,
+        scopeKind: "workspace",
+        scopeId,
+        grantedBy: owner
+      });
+    }
+    const contextRun = await injectStartConversationRun(
+      instance,
+      conversation.id,
+      "/tool platform.context {}"
+    );
+    await drainRunEvents(instance, conversation.id, contextRun.run.id);
+    const messages = z
+      .object({ items: z.array(z.object({ role: z.string(), text: z.string() })) })
+      .parse(
+        (
+          await instance.call("conversations.messages.list", {
+            params: { conversationId: conversation.id }
+          })
+        ).json()
+      );
+    const context = z
+      .object({
+        actions: z.array(z.string()),
+        workspaces: z.array(
+          z.object({ id: z.string(), name: z.string(), actions: z.array(z.string()) })
+        )
+      })
+      .parse(JSON.parse(required(messages.items.find((row) => row.role === "tool")).text));
+    expect(context.actions).not.toContain("skill.write");
+    expect(context.workspaces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: conversation.collaborationWorkspaceId,
+          actions: ["skill.read", "skill.write"]
+        }),
+        { id: readOnly.id, name: "Read-only team", actions: ["skill.read"] }
+      ])
+    );
+    expect(context.workspaces.map((workspace) => workspace.id)).not.toContain(hidden.id);
+
+    // The deterministic agent path consumes the projected context, then requests the save.
+    // The real model's interpretation remains S14's separate acceptance check.
+    const workspace = required(
+      context.workspaces.find((row) => row.id === conversation.collaborationWorkspaceId)
+    );
+    expect(workspace.actions).toContain("skill.write");
+    const name = "cover-policy";
+    const started = await injectStartConversationRun(
+      instance,
+      conversation.id,
+      `/tool platform.assets.put ${JSON.stringify({
+        kind: "skill",
+        name,
+        config: { name, title: "Cover policy", description: "Sample", content: "Ask for cover." }
+      })}`
+    );
+    const runId = asAgentRunId(started.run.id);
+    await waitUntil(async () => {
+      const run = await instance.stores.agentRuns.getAgentRun({ clientInstanceId, runId });
+      return run?.status === "waiting_for_decision" || run?.status === "completed";
+    }, "the scoped skill save settles or waits for confirmation");
+    const calls = (await instance.stores.operationRuns.list({ clientInstanceId })).filter(
+      (row) => row.origin.kind === "agent" && row.origin.agentRunId === runId
+    );
+    expect(calls).toEqual([
+      expect.objectContaining({ status: "pending_confirmation", operation: "platform.assets.put" })
+    ]);
+    expect(
+      await instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "skill",
+        name
+      })
+    ).toBeUndefined();
+  });
 
   it.each(["skill", "agent"])(
     "writes a new %s once after Allow, never before, even under central allow",

@@ -276,9 +276,9 @@ export class PersonalApiKeysWorkflow {
     for (const scope of scopes) {
       const held =
         scope.namespace === undefined
-          ? access.authorize(scope.action).allowed ||
+          ? access.authorizeTransfer(scope.action).allowed ||
             access.holdsGrantAt(scope.action, ["namespace", "asset", "workspace"])
-          : access.authorize(scope.action, { name: scope.namespace }).allowed;
+          : access.authorizeTransfer(scope.action, { name: scope.namespace }).allowed;
       if (!held) {
         throw new AppError(
           "VALIDATION_FAILED",

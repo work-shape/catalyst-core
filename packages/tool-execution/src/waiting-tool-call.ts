@@ -5,7 +5,7 @@ import {
   type ToolDecisionRunner,
   type ToolExecutionResult
 } from "@work-shape/catalyst-core";
-import type { RunOperationDeps } from "./operation-execution";
+import { isUseRightAction, type RunOperationDeps } from "./operation-execution";
 import { toolResultFromOperationResult } from "./tool-operation";
 import { failed } from "./tool-results";
 import { executeConfirmedOperation, type ApprovedOperationEnd } from "./waiting-operation";
@@ -72,6 +72,12 @@ export function createDecidedToolCallRunner(callDeps: RunOperationDeps): ToolDec
             }
           });
     if (!end) return failed("handler_failed", "The approved call is not available. Nothing ran.");
+    const denial =
+      end.outcome?.result.status === "denied" ? end.outcome.result.reason : end.run?.denial;
+    if (denial?.kind === "forbidden" && isUseRightAction(denial.action)) {
+      const message = await callDeps.useRightRefusal?.(denial.action, context.locale);
+      if (message) return failed("permission_missing", message);
+    }
     return decidedToolResult(end, {
       toolName: request.toolName,
       agentName: request.agentName,

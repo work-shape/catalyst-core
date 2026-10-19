@@ -2807,6 +2807,38 @@
             }
           },
           {
+            "name": "availabilityMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "selected"
+              ]
+            }
+          },
+          {
+            "name": "availabilityPersonalWorkspaces",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "availabilityWorkspaceIds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "audience",
             "in": "query",
             "required": false,
@@ -3155,6 +3187,9 @@
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -3592,10 +3627,13 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -16037,9 +16075,6 @@
           }
         },
         "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "agent.write"
-        ],
         "x-catalyst-rate-class": "read"
       }
     },
@@ -17268,7 +17303,7 @@
     "/api/v1/knowledge-bases/{knowledgeBase}/documents/{documentId}/content": {
       "get": {
         "operationId": "knowledge_bases.open_document",
-        "summary": "Open an original source document with knowledge_base.use; removed documents are unavailable",
+        "summary": "Open an original source document with knowledge_base.use; a cited document is opened in the context of its conversation's workspace; removed documents are unavailable",
         "tags": [
           "Knowledge Bases"
         ],
@@ -17299,6 +17334,15 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
             }
           }
         ],
@@ -17342,9 +17386,6 @@
           }
         },
         "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "knowledge_base.use"
-        ],
         "x-catalyst-rate-class": "read"
       }
     },
@@ -26753,6 +26794,9 @@
           "config": {
             "$ref": "#/components/schemas/ConfigAssetConfig"
           },
+          "dependencyAvailability": {
+            "$ref": "#/components/schemas/DependencyAvailability"
+          },
           "author": {
             "type": "object",
             "properties": {
@@ -29549,6 +29593,12 @@
           },
           "availability": {
             "$ref": "#/components/schemas/AgentAvailability"
+          },
+          "dependencyAvailability": {
+            "$ref": "#/components/schemas/DependencyAvailability"
+          },
+          "canSetAvailability": {
+            "type": "boolean"
           },
           "unavailableTools": {
             "type": "array",
@@ -32710,6 +32760,61 @@
           "ok"
         ]
       },
+      "DependencyAvailability": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentAvailability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "knowledge_base",
+                    "connection"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "canMakeAvailable": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "name",
+                "displayName",
+                "canMakeAvailable"
+              ]
+            }
+          },
+          "administrators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "missing",
+          "administrators"
+        ]
+      },
       "DiscardAgentDraftRequest": {
         "type": "object",
         "properties": {
@@ -35829,6 +35934,19 @@
       "PublishAssetRequest": {
         "type": "object",
         "properties": {
+          "makeDependenciesAvailable": {
+            "type": "boolean"
+          },
+          "expectedAvailability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentAvailability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "audience": {
             "$ref": "#/components/schemas/AppAudience"
           },
@@ -36929,6 +37047,14 @@
       "SetAssetAvailabilityRequest": {
         "type": "object",
         "properties": {
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "makeDependenciesAvailable": {
+            "type": "boolean"
+          },
           "mode": {
             "type": "string",
             "enum": [

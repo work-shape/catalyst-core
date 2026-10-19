@@ -51,6 +51,7 @@ import {
   type PlatformEventContext,
   type PlatformEventEmitter,
   type PlatformEventName,
+  type PlatformEventPhase,
   type PolicyDefaults,
   type PolicySource,
   type ToolExecutionResult
@@ -95,12 +96,20 @@ export interface OperationApprovalRequests {
   }): Promise<{ approvalRequestId: string } | undefined>;
 }
 
+/** The use rights whose refusal is worded for the person: they reach a resource through an agent. */
+const USE_RIGHT_ACTIONS = ["knowledge_base.use", "connection.use"] as const;
+export type UseRightAction = (typeof USE_RIGHT_ACTIONS)[number];
+
+export function isUseRightAction(action: string | undefined): action is UseRightAction {
+  return USE_RIGHT_ACTIONS.some((use) => use === action);
+}
+
 export interface RunOperationDeps {
   clientInstanceId: ClientInstanceId;
   registry: OperationRegistry;
   /** One active administrator the person can ask after a refused call. */
   instanceAdminName?(): Promise<string | undefined>;
-  /** Resolves a named-right resource to its retained asset identity and owner before authorization. */
+  /** Resolves a declared resource to its retained asset identity and owner before authorization. */
   resolveResource(resource: OperationResource | undefined): Promise<{
     resource: OperationResource | undefined;
     /** Answered only after the caller holds the kind-level right. */
@@ -135,6 +144,12 @@ export interface RunOperationDeps {
     agentName: string,
     conversationId?: ConversationId
   ): readonly string[] | Promise<readonly string[]>;
+  /** Plain, localized help for missing resource use rights, read only after a refusal. */
+  useRightRefusal?(action: UseRightAction, locale?: string): Promise<string>;
+  /** The persisted workspace of an agent conversation, never chosen by its tool input. */
+  conversationWorkspace?(
+    conversationId: ConversationId
+  ): Promise<CollaborationWorkspaceId | undefined>;
   /**
    * Whether a person is a member of a workspace now. Asked before a call that waited for an
    * approval is executed in a workspace, for an agent's call and for an operation whose right
@@ -238,7 +253,7 @@ export interface RunContext {
   now(): Date;
   emit(
     name: PlatformEventName,
-    phase: "before" | "after",
+    phase: PlatformEventPhase,
     payload?: JsonObject,
     /** What a before-event's guardrails read, and the subject where it is not the call's. */
     before?: Pick<PlatformEventContext, "checkable" | "filterBy" | "aboutGuardrails"> & {

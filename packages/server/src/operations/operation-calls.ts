@@ -160,6 +160,18 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     liveOnce: options.stores.liveOnceSwitches,
     modules: options.modules,
     agentToolNames: options.agentToolNames,
+    conversationWorkspace: async (id) =>
+      (await options.stores.conversations.getConversation(clientInstanceId, id))
+        ?.collaborationWorkspaceId,
+    useRightRefusal: async (action, locale) => {
+      const admin = await options.stores.users.getInstanceAdminName({ clientInstanceId });
+      if ((locale ?? options.config.localization.defaultLocale) === "de") {
+        const asset = action === "connection.use" ? "diese Verbindung" : "diese Wissensbasis";
+        return `Dir fehlt das Recht, ${asset} zu verwenden. ${admin ? `Frag einen Instanz-Admin, zum Beispiel ${admin}.` : "Frag einen Instanz-Admin."} Diese Abfrage wurde deshalb nicht ausgeführt.`;
+      }
+      const asset = action === "connection.use" ? "this Connection" : "this Knowledge Base";
+      return `You do not have permission to use ${asset}. ${admin ? `Ask an instance admin, for example ${admin}.` : "Ask an instance admin."}`;
+    },
     workspaceMember: async ({ userId, workspaceId }) =>
       (await options.stores.workspaces.getMembership({
         clientInstanceId,

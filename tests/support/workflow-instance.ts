@@ -254,6 +254,8 @@ export async function workflowFixture(
     events?: (stores: PlatformStores) => PlatformEventEmitter;
     /** Personal API keys on: a request with an access token acts as the key's owner. */
     personalKeys?: true;
+    /** Module needed to project platform asset tools through the real agent runner. */
+    publishTool?: true;
   } = {}
 ): Promise<WorkflowFixture> {
   let workflows: InstanceWorkflows | undefined;
@@ -296,6 +298,9 @@ export async function workflowFixture(
         furtherKinds: [...(connectionOptions.furtherKinds ?? []), ...(fromAssets ? [kind] : [])],
         modules: {
           ...connectionOptions.modules,
+          ...(options.publishTool
+            ? { assetManagement: { enabled: true }, apps: { enabled: true } }
+            : {}),
           ...(options.moduleOn === false ? {} : { workflows: { enabled: true } }),
           ...(options.personalKeys ? { personalApiKeys: { enabled: true } } : {})
         },

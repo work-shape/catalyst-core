@@ -27,8 +27,8 @@ export type ConfigAssetKind = string;
 export type AgentAvailabilityMode = (typeof AGENT_AVAILABILITY_MODES)[number];
 
 /**
- * Where an agent may be used. Availability is an access rule: an agent without an availability
- * record is hidden everywhere.
+ * Where an asset may be used. The existing agent shape is shared by Connections and Knowledge
+ * Bases; without a record, none of them receives workspace availability.
  */
 export interface AgentAvailability {
   mode: AgentAvailabilityMode;
@@ -741,11 +741,13 @@ export interface ConfigAssetStore {
     conversationId: ConversationId;
     folder: string;
   }): Promise<AssetCheckout | undefined>;
-  /** Availability of every active agent that has a record, keyed by agent name. */
+  /** Availability of active assets of one kind that have a record, keyed by name. */
   listAgentAvailability(input: {
     clientInstanceId: ClientInstanceId;
     /** Only this agent's record, for a read of one agent that must not load every other. */
     agentName?: string;
+    /** Defaults to agent for existing callers; all available asset kinds share the table. */
+    kind?: string;
   }): Promise<Map<string, AgentAvailability>>;
   /**
    * Rejects hiding the instance default agent, which must stay `all`. Moves the version of the
@@ -754,6 +756,8 @@ export interface ConfigAssetStore {
   setAgentAvailability(input: {
     clientInstanceId: ClientInstanceId;
     agentName: string;
+    kind?: string;
+    expectedRevision?: number;
     availability: AgentAvailability;
     /**
      * What the change was decided against. Given, the store compares under the lock of the

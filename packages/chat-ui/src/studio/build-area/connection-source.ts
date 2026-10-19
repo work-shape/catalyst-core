@@ -23,6 +23,8 @@ import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
 import { waitsForDiscovery, type DiscoveryWait } from "./connection-form-model";
+import { useAvailabilityChoice, type AvailabilityFrame } from "./asset-availability";
+import type { AvailabilityChoice } from "./asset-availability-fields";
 
 /** The action that lets a person test a Connection. */
 const CONNECTION_WRITE_ACTION = "connection.write";
@@ -129,6 +131,11 @@ export interface ConnectionSource {
   /** A hook: the name of a person by id, where the reader is shown people. */
   usePersonName?(userId: string | undefined): string | undefined;
   /**
+   * A hook: where agents can use it, for a reader who may change what belongs to the whole
+   * instance. Absent where the page offers no availability.
+   */
+  useAvailability?(frame: AvailabilityFrame): AvailabilityChoice | undefined;
+  /**
    * Opens the chat dock beside the page with a new conversation and this request in its
    * composer, to send or change. Absent where the page has no dock.
    */
@@ -188,6 +195,7 @@ export function useConnectionSource(): ConnectionSource {
     subject.id
   ];
   return {
+    useAvailability: (frame) => useAvailabilityChoice(frame, "connection"),
     // The right is held on every Connection of the instance or in the Connection's Namespace.
     mayTest: ({ namespace }) =>
       (context.data?.actions.includes(CONNECTION_WRITE_ACTION) ?? false) ||

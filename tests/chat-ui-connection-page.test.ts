@@ -765,9 +765,9 @@ describe("Connection page", () => {
     );
   });
 
-  it("has no section on who may use it for a reader who is not shown rights", () => {
+  it("has no section on additional use rights for a reader who is not shown rights", () => {
     const markup = renderPage();
-    expect(markup).not.toContain("Who may use it");
+    expect(markup).not.toContain("Additional use rights");
     expect(markup).not.toContain('id="access"');
   });
 
@@ -796,7 +796,7 @@ describe("Connection page", () => {
       }
     });
     expect(markup).toContain('id="access"');
-    expect(markup).toContain(">Who may use it<");
+    expect(markup).toContain(">Additional use rights<");
     const person = /<li[^>]*data-holder-kind="person".*?<\/li>/su.exec(markup)?.[0] ?? "";
     const service =
       /<li[^>]*data-holder-kind="service_principal".*?<\/li>/su.exec(markup)?.[0] ?? "";
@@ -812,12 +812,18 @@ describe("Connection page", () => {
     expect(service).not.toContain("monthly-check");
   });
 
-  it("says that nobody was given the Connection by itself", () => {
+  // The list holds rights on the Connection itself; workspace members use it through Available
+  // in, so an empty list never reads as "nobody may use it".
+  it("says the list holds additional rights only, and that members use it through Available in", () => {
     const markup = renderPage({ holders: { status: "ready", holders: [] } });
-    expect(markup).toContain("Nobody was given this Connection by itself.");
-    expect(renderPage({ holders: { status: "ready", holders: [] }, locale: "de" })).toContain(
-      "Wer sie verwenden darf"
-    );
+    expect(markup).toContain("Nobody has an additional right on this Connection.");
+    expect(markup).toContain("Workspace members use it through Available in");
+    expect(markup).not.toContain("Who may use it");
+    expect(markup).not.toContain("Access page");
+    const german = renderPage({ holders: { status: "ready", holders: [] }, locale: "de" });
+    expect(german).toContain("Zusätzliche Nutzungsrechte");
+    expect(german).toContain("über „Verfügbar in“");
+    expect(german).not.toContain("Seite Zugriff");
   });
   it("shows the whole new description of an operation whose description is accepted again", () => {
     const runtime = connectionAsset("ledger", { origin: "runtime" });

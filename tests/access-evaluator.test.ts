@@ -435,3 +435,49 @@ describe("actor access", () => {
     ]);
   });
 });
+
+describe("resource use through workspace availability (AVAIL-1)", () => {
+  it.each(["knowledge_base", "connection"] as const)(
+    "inherits only %s.use and retains explicit denies and key bounds",
+    (kind) => {
+      const resource = { kind, name: "handbook", assetId: "asset-available" };
+      const state: PersistedAccess = {
+        holderActive: true,
+        grants: [],
+        memberWorkspaceIds: ["nordlicht"],
+        availableAssets: [{ kind, assetId: resource.assetId }]
+      };
+      const access = createActorAccess(holder(), state);
+      expect(access.authorize(`${kind}.use`, resource)).toEqual({
+        allowed: true,
+        source: "membership"
+      });
+      for (const verb of ["read", "write", "delete"])
+        expect(access.authorize(`${kind}.${verb}`, resource)).toEqual(noGrant);
+      expect(access.authorize(`${kind}.use`, { ...resource, assetId: "elsewhere" })).toEqual(
+        noGrant
+      );
+      expect(
+        createActorAccess(holder(), { ...state, availableAssets: [] }).authorize(
+          `${kind}.use`,
+          resource
+        )
+      ).toEqual(noGrant);
+      const deniedAccess = createActorAccess(holder(), {
+        ...state,
+        grants: [
+          grant({
+            action: `${kind}.use`,
+            effect: "deny",
+            scopeKind: "asset",
+            scopeId: resource.assetId
+          })
+        ]
+      });
+      expect(deniedAccess.authorize(`${kind}.use`, resource)).toEqual(denied);
+      expect(
+        createActorAccess(holder(), state, ["agent.read"]).authorize(`${kind}.use`, resource)
+      ).toEqual({ allowed: false, reason: "outside_key_scope" });
+    }
+  );
+});

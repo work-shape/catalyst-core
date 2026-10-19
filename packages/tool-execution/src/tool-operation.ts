@@ -40,7 +40,11 @@ import {
 import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import { ZodError, z } from "zod";
 import { createKnowledgeRefCounter, runKnowledgeSearch } from "./knowledge-search-tool";
-import type { OperationOutcome, RunOperationDeps } from "./operation-execution";
+import {
+  isUseRightAction,
+  type OperationOutcome,
+  type RunOperationDeps
+} from "./operation-execution";
 import { runOperation } from "./run-operation";
 import { toolFailureLogRecord } from "./tool-failure-log";
 import type { ToolRegistry } from "./tool-registry";
@@ -309,6 +313,7 @@ export function toolResultFromOperationResult(
       // The operation's work goes on after the call; its run says when it ended.
       return { status: "success", output: { status: "running", operationRunId: result.runId } };
     case "denied":
+      if (names.useRightRefusal) return failed("permission_missing", names.useRightRefusal);
       return result.reason.kind === "policy" && result.reason.reason === "confirmation_required"
         ? failed("confirmation_required", denialText(result.reason, names), {
             operation: result.reason.operation
@@ -490,6 +495,7 @@ export function createToolOperationRunner(
           },
           operation: tool.name,
           effect: tool.effect,
+          workspaceId: await deps.conversationWorkspace?.(request.conversationId),
           correlationId: context.correlationId,
           ...(projected.idempotencyKey === undefined
             ? {}
@@ -523,7 +529,12 @@ export function createToolOperationRunner(
         };
       }
       if (result.status === "denied") {
-        names.adminName = await deps.instanceAdminName?.();
+        if (result.reason.kind === "forbidden" && isUseRightAction(result.reason.action))
+          names.useRightRefusal = await deps.useRightRefusal?.(
+            result.reason.action,
+            context.locale
+          );
+        else names.adminName = await deps.instanceAdminName?.();
       }
       const answered = toolResultFromOperationResult(outcome, names);
       // The runtime keeps the started subagent's call with the run it waits on.

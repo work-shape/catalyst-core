@@ -16,6 +16,8 @@ export interface ToolCallNames {
   policyReason?: string;
   locale?: LocaleCode;
   adminName?: string;
+  /** The plain refusal of a missing use right on a Knowledge Base or Connection. */
+  useRightRefusal?: string;
 }
 
 export function denialText(denial: OperationDenial, names: ToolCallNames): string {

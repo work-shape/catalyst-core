@@ -153,6 +153,17 @@ Two exceptions. The default agent of the instance is always available everywhere
 
 Offering an agent in further workspaces lets their members use it. It never lets them edit it: the agent still belongs to the workspace it was made in, and only a right there, or on the instance, lets somebody change it. Only a person with the instance-wide right sets **Available in**.
 
+### What an agent uses
+
+Knowledge Bases and Connections have the same setting, **Available in** ("Verfügbar in"), on their page in Studio. Members of a workspace where one is available may use it through agents there, and nothing more: they cannot open its settings, read its definition or change it, and they never see a Connection's key. That use holds only in a conversation of a workspace where it is available: membership in workspace A, where a Knowledge Base is available, gives no use of it in a conversation of workspace B, where it is not. Availability is checked only for the workspace the call is made in. A CLI or API call made without a workspace is in none, so availability gives it nothing: it needs a use right given explicitly. Rights given on the Access page work as before. A Knowledge Base or Connection without the setting is available in no workspace, and an upgrade makes none available on its own. Only a person with the right to edit that kind on the whole instance sets it.
+
+When an agent is published, or its **Available in** is saved, the dialog or the section lists the Knowledge Bases and Connections the agent uses that are not available in all of the agent's workspaces. Members there cannot use them through the agent.
+
+- A person who may make every one of them available sees one choice, **Make them available there too** ("Dort auch verfügbar machen"), unticked. Ticked, the publish or the save also makes each of them available in the agent's workspaces, adding to where it already is. It does all of it or nothing.
+- Anybody else reads the names of the instance admins to ask, and no link to the settings of what is missing.
+
+Publishing or saving without the choice is allowed.
+
 A workspace right follows ownership. It does not cover an instance-owned agent offered in that workspace, or an asset another workspace owns. Connections belong to the instance, so new Connection rights name one Connection or the whole instance; the server refuses workspace scope.
 
 ## The four questions
