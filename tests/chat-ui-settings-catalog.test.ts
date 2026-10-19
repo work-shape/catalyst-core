@@ -60,7 +60,8 @@ const instance = [
   "instance/jobs",
   "instance/operations",
   "instance/modules",
-  "instance/infrastructure"
+  "instance/infrastructure",
+  "instance/workspaces"
 ];
 
 const member = viewer();
@@ -122,7 +123,10 @@ describe("Settings catalog", () => {
   });
 
   it.each<[key: string, pages: string[]]>([
-    ["users.manage", ["instance/users", "instance/access", "instance/infrastructure"]],
+    [
+      "users.manage",
+      ["instance/users", "instance/access", "instance/infrastructure", "instance/workspaces"]
+    ],
     ["api_access.manage", ["instance/api-access"]],
     ["usage.view", ["instance/usage"]],
     ["audit.view", ["instance/audit", "instance/jobs", "instance/operations", "instance/modules"]]

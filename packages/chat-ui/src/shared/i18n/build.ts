@@ -102,6 +102,12 @@ export const build = defineTranslations({
     "build.refusedModelRequired":
       "An agent in Namespace {namespace} needs a default model the Namespace allows.",
     "build.refusedTool": "The tool {tool} is not allowed in Namespace {namespace}.",
+    "build.refusedModelInWorkspace":
+      "The model {model} is not allowed in the workspace {workspace}. An instance admin sets its models on Instance > Workspaces.",
+    "build.refusedModelRequiredInWorkspace":
+      "An agent of the workspace {workspace} needs a default model the workspace allows.",
+    "build.refusedToolInWorkspace":
+      "The tool {tool} is not allowed in the workspace {workspace}. An instance admin sets its tools on Instance > Workspaces.",
     "build.refusedEgress":
       "The operator's network rule blocks this destination. To have it allowed, send the operator the host of the address.",
     "build.refusedReadOnlyOrigin":
@@ -261,6 +267,12 @@ export const build = defineTranslations({
     "build.refusedModelRequired":
       "Ein Agent im Namespace {namespace} braucht ein Standardmodell, das der Namespace erlaubt.",
     "build.refusedTool": "Das Werkzeug {tool} ist im Namespace {namespace} nicht erlaubt.",
+    "build.refusedModelInWorkspace":
+      "Das Modell {model} ist im Arbeitsbereich {workspace} nicht erlaubt. Seine Modelle legt ein Instanz-Admin unter Instanz > Arbeitsbereiche fest.",
+    "build.refusedModelRequiredInWorkspace":
+      "Ein Agent des Arbeitsbereichs {workspace} braucht ein Standardmodell, das der Arbeitsbereich erlaubt.",
+    "build.refusedToolInWorkspace":
+      "Das Werkzeug {tool} ist im Arbeitsbereich {workspace} nicht erlaubt. Seine Werkzeuge legt ein Instanz-Admin unter Instanz > Arbeitsbereiche fest.",
     "build.refusedEgress":
       "Eine Netzwerkregel des Betreibers sperrt dieses Ziel. Damit es erlaubt wird, schick dem Betreiber den Host der Adresse.",
     "build.refusedReadOnlyOrigin":

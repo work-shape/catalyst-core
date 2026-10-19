@@ -77,6 +77,8 @@ interface RefusalDetails {
   toolName?: string;
   modelBindingId?: string;
   namespace?: string;
+  /** The workspace whose build limits a refusal names, by its name. */
+  workspace?: string;
   /** The file of a folder a refusal names. */
   path?: string;
   /** The file a refused path lies below, where a path is a file and a folder at once. */
@@ -198,6 +200,7 @@ export function readRefusalDetails(error: unknown): RefusalDetails {
     toolName: text(details, "toolName"),
     modelBindingId: text(details, "modelBindingId"),
     namespace: text(details, "namespace"),
+    workspace: text(details, "workspace"),
     path: text(details, "path"),
     folder: text(details, "folder"),
     limit: number(details, "limit"),
@@ -300,21 +303,37 @@ export function readBuildRefusal(
   if (details.reason === "data_store_in_use") {
     return refused({ message: t("build.refusedDataStoreInUse") });
   }
+  // A build limit is a Namespace's or the workspace's that owns the agent.
+  const { workspace } = details;
   const namespace = details.namespace ?? "";
   if (details.reason === "tool_not_allowed" && details.toolName !== undefined) {
+    const tool = details.toolName;
     return refused({
       field: "tools",
-      message: t("build.refusedTool", { tool: details.toolName, namespace })
+      message:
+        workspace === undefined
+          ? t("build.refusedTool", { tool, namespace })
+          : t("build.refusedToolInWorkspace", { tool, workspace })
     });
   }
   if (details.reason === "model_not_allowed" && details.modelBindingId !== undefined) {
+    const model = details.modelBindingId;
     return refused({
       field: "model",
-      message: t("build.refusedModel", { model: details.modelBindingId, namespace })
+      message:
+        workspace === undefined
+          ? t("build.refusedModel", { model, namespace })
+          : t("build.refusedModelInWorkspace", { model, workspace })
     });
   }
   if (details.reason === "model_binding_required") {
-    return refused({ field: "model", message: t("build.refusedModelRequired", { namespace }) });
+    return refused({
+      field: "model",
+      message:
+        workspace === undefined
+          ? t("build.refusedModelRequired", { namespace })
+          : t("build.refusedModelRequiredInWorkspace", { workspace })
+    });
   }
   const folder = folderRefusal(details, t, locale);
   if (folder !== undefined) {

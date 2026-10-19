@@ -38,11 +38,11 @@ export const access = defineTranslations({
     "access.namespaceDisplayName": "Display name",
     "access.namespaceAssets": "Assets",
     "access.namespaceGrants": "Rights",
-    "access.namespaceTools": "Tools",
-    "access.namespaceModels": "Models",
-    "access.namespaceNoLimit": "No limit",
-    "access.namespaceListed": "{count} listed",
-    "access.namespaceNoneAllowed": "None allowed",
+    "access.listTools": "Tools",
+    "access.listModels": "Models",
+    "access.listNoLimit": "No limit",
+    "access.listListed": "{count} listed",
+    "access.listNoneAllowed": "None allowed",
     "access.namespaceMenu": "Actions for {prefix}",
     "access.namespaceInUseOne": "{count} right names this Namespace. Revoke it first.",
     "access.namespaceInUseOther": "{count} rights name this Namespace. Revoke them first.",
@@ -81,7 +81,7 @@ export const access = defineTranslations({
       "The tools, models and assets of the instance could not be loaded.",
     "access.namespaceLockTitle": "An empty list binds everyone who saves an agent here",
     "access.namespaceSaveFailed": "The Namespace could not be saved.",
-    "access.namespaceListEntryGone":
+    "access.listEntryGone":
       "A chosen tool or model no longer exists on this instance. Open the list and choose again.",
     "access.createNamespace": "Create Namespace",
     "access.saveNamespace": "Save",
@@ -173,6 +173,24 @@ export const access = defineTranslations({
     "access.kindGuardrail": "Guardrails",
     "access.kindMailSender": "E-mail senders",
     "access.kindWorkspace": "Building in a workspace",
+    "access.workspacesDescription":
+      "What the agents of each shared workspace may use. A list that is off adds no limit; it binds everyone who saves an agent of the workspace, instance admins included. A Builder in the workspace picks a model from its list.",
+    "access.workspacesEmpty": "There is no shared workspace yet.",
+    "access.workspaceName": "Workspace",
+    "access.editWorkspaceLimits": "Edit the limits of {name}",
+    "access.workspaceLimitsTitle": "Limits of {name}",
+    "access.workspaceLimitsDescription":
+      "The tools and models the agents this workspace owns may use. Saved agents keep running; their next save is checked.",
+    "access.workspaceLimitsSaveFailed": "The limits could not be saved.",
+    "access.saveWorkspaceLimits": "Save",
+    "access.workspaceLimitToolsHint":
+      "Off: agents of this workspace may use every tool of the instance.",
+    "access.workspaceToolsEmptyHint":
+      "No tool is chosen. Nobody can create or change an agent of this workspace that names a tool, an instance admin included.",
+    "access.workspaceModelsEmptyHint":
+      "No model is chosen. Nobody can create or change an agent of this workspace that names a model.",
+    "access.workspaceModelsListedHint":
+      "Every agent created or changed in this workspace names one of these models, whoever saves it. A Builder of the workspace may pick one of them without the right to manage models.",
     "access.actionBuilderDescription":
       "View and edit everything the workspace owns, also what it gets later, and build and try there in private conversations. Deletes nothing. No membership needed: a Builder who is no member sees none of the workspace's conversations.",
     "access.actionPublisherDescription":
@@ -346,11 +364,11 @@ export const access = defineTranslations({
     "access.namespaceDisplayName": "Anzeigename",
     "access.namespaceAssets": "Assets",
     "access.namespaceGrants": "Rechte",
-    "access.namespaceTools": "Werkzeuge",
-    "access.namespaceModels": "Modelle",
-    "access.namespaceNoLimit": "Unbegrenzt",
-    "access.namespaceListed": "{count} gelistet",
-    "access.namespaceNoneAllowed": "Keines erlaubt",
+    "access.listTools": "Werkzeuge",
+    "access.listModels": "Modelle",
+    "access.listNoLimit": "Unbegrenzt",
+    "access.listListed": "{count} gelistet",
+    "access.listNoneAllowed": "Keines erlaubt",
     "access.namespaceMenu": "Aktionen für {prefix}",
     "access.namespaceInUseOne": "{count} Recht nennt diesen Namespace. Entziehe es zuerst.",
     "access.namespaceInUseOther": "{count} Rechte nennen diesen Namespace. Entziehe sie zuerst.",
@@ -390,7 +408,7 @@ export const access = defineTranslations({
       "Die Werkzeuge, Modelle und Assets der Instanz konnten nicht geladen werden.",
     "access.namespaceLockTitle": "Eine leere Liste gilt für alle, die hier einen Agenten speichern",
     "access.namespaceSaveFailed": "Der Namespace konnte nicht gespeichert werden.",
-    "access.namespaceListEntryGone":
+    "access.listEntryGone":
       "Ein gewähltes Werkzeug oder Modell gibt es auf dieser Instanz nicht mehr. Öffne die Liste und wähle neu.",
     "access.createNamespace": "Namespace anlegen",
     "access.saveNamespace": "Speichern",
@@ -482,6 +500,24 @@ export const access = defineTranslations({
     "access.kindGuardrail": "Leitplanken",
     "access.kindMailSender": "E-Mail-Absender",
     "access.kindWorkspace": "Bauen in einem Arbeitsbereich",
+    "access.workspacesDescription":
+      "Was die Agenten jedes geteilten Arbeitsbereichs verwenden dürfen. Eine ausgeschaltete Liste begrenzt nichts; eine Liste bindet alle, die einen Agenten des Arbeitsbereichs speichern, auch Instanz-Admins. Ein Builder des Arbeitsbereichs wählt ein Modell aus seiner Liste.",
+    "access.workspacesEmpty": "Es gibt noch keinen geteilten Arbeitsbereich.",
+    "access.workspaceName": "Arbeitsbereich",
+    "access.editWorkspaceLimits": "Grenzen von {name} bearbeiten",
+    "access.workspaceLimitsTitle": "Grenzen von {name}",
+    "access.workspaceLimitsDescription":
+      "Die Werkzeuge und Modelle, die die Agenten dieses Arbeitsbereichs verwenden dürfen. Gespeicherte Agenten laufen weiter; ihr nächstes Speichern wird geprüft.",
+    "access.workspaceLimitsSaveFailed": "Die Grenzen konnten nicht gespeichert werden.",
+    "access.saveWorkspaceLimits": "Speichern",
+    "access.workspaceLimitToolsHint":
+      "Aus: Agenten dieses Arbeitsbereichs dürfen jedes Werkzeug der Instanz verwenden.",
+    "access.workspaceToolsEmptyHint":
+      "Kein Werkzeug gewählt. Niemand kann einen Agenten dieses Arbeitsbereichs anlegen oder ändern, der ein Werkzeug nennt, auch ein Instanz-Admin nicht.",
+    "access.workspaceModelsEmptyHint":
+      "Kein Modell gewählt. Niemand kann einen Agenten dieses Arbeitsbereichs anlegen oder ändern, der ein Modell nennt.",
+    "access.workspaceModelsListedHint":
+      "Jeder Agent, der in diesem Arbeitsbereich angelegt oder geändert wird, nennt eines dieser Modelle, egal wer speichert. Ein Builder des Arbeitsbereichs darf eines davon wählen, ohne das Recht, Modelle zu verwalten.",
     "access.actionBuilderDescription":
       "Alles ansehen und bearbeiten, was dem Arbeitsbereich gehört, auch was später dazukommt, und dort in privaten Unterhaltungen bauen und ausprobieren. Löscht nichts. Ohne Mitgliedschaft: wer Builder, aber nicht Mitglied ist, sieht keine Unterhaltung des Arbeitsbereichs.",
     "access.actionPublisherDescription":

@@ -13,7 +13,6 @@ import {
 import {
   Banner,
   Button,
-  Chip,
   ConfirmDialog,
   Dialog,
   DropdownMenu,
@@ -26,18 +25,16 @@ import {
   FormNotice,
   IconButton,
   Input,
-  Picker,
   SkeletonList,
-  Switch,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
-  type PickerOption
+  TableRow
 } from "@work-shape/catalyst-ui";
 import { modelDisplayLabel } from "../../shared/model-label";
+import { LimitedList, listSummary } from "./limited-list";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import {
   accessWriteFailure,
@@ -52,9 +49,6 @@ import {
   type NamespaceForm,
   type NamespacePrefixProblem
 } from "./access-model";
-
-/** From this many entries on, a tool or model picker shows its search field. */
-const LIST_SEARCH_FROM_COUNT = 8;
 
 /** What the instance offers a Namespace to list, and the assets a prefix would cover. */
 interface NamespaceReferences {
@@ -134,8 +128,8 @@ export function NamespacesTab({
               <TableRow>
                 <TableHead>{t("access.namespacePrefix")}</TableHead>
                 <TableHead>{t("access.namespaceDisplayName")}</TableHead>
-                <TableHead>{t("access.namespaceTools")}</TableHead>
-                <TableHead>{t("access.namespaceModels")}</TableHead>
+                <TableHead>{t("access.listTools")}</TableHead>
+                <TableHead>{t("access.listModels")}</TableHead>
                 <TableHead className="text-right">{t("access.namespaceAssets")}</TableHead>
                 <TableHead className="text-right">{t("access.namespaceGrants")}</TableHead>
                 <TableHead>
@@ -248,19 +242,6 @@ function updateRequest(form: NamespaceForm): UpdateNamespaceRequest {
   return request;
 }
 
-/** What a list of a Namespace comes to: no limit, nothing allowed, or how many entries. */
-function listSummary(
-  list: readonly string[] | null,
-  t: ReturnType<typeof useTranslation>["t"]
-): string {
-  if (list === null) {
-    return t("access.namespaceNoLimit");
-  }
-  return list.length === 0
-    ? t("access.namespaceNoneAllowed")
-    : t("access.namespaceListed", { count: list.length });
-}
-
 function NamespaceDialog({
   namespace,
   registeredPrefixes,
@@ -321,7 +302,7 @@ function NamespaceDialog({
         }
         setFailure(
           accessWriteFailure(error) === "unknownListEntry"
-            ? "access.namespaceListEntryGone"
+            ? "access.listEntryGone"
             : "access.namespaceSaveFailed"
         );
       })
@@ -503,93 +484,4 @@ function prefixProblemText(
     case "overlap":
       return t("access.namespacePrefixOverlap", { prefix: problem.prefix });
   }
-}
-
-/**
- * One list a Namespace may limit: a switch, and while it is on the picker with what is chosen.
- * On with nothing chosen is a state of its own, and the hint says what it means.
- */
-function LimitedList({
-  label,
-  offHint,
-  emptyHint,
-  listedHint,
-  chooseLabel,
-  limited,
-  chosen,
-  options,
-  optionsReady,
-  onLimitedChange,
-  onChosenChange
-}: {
-  label: string;
-  offHint: string;
-  emptyHint: string;
-  /** What a list with entries means, where that needs saying. */
-  listedHint?: string;
-  chooseLabel: string;
-  limited: boolean;
-  chosen: readonly string[];
-  options: readonly PickerOption[];
-  optionsReady: boolean;
-  onLimitedChange(limited: boolean): void;
-  onChosenChange(chosen: string[]): void;
-}) {
-  const { t } = useTranslation();
-  // A chosen entry the instance no longer offers stays visible, so it can be removed.
-  const shownOptions = [
-    ...options,
-    ...chosen
-      .filter((value) => !options.some((option) => option.value === value))
-      .map((value) => ({ value, label: value }))
-  ];
-  return (
-    <div className="grid gap-2">
-      <Field layout="inline" label={label} hint={limited ? undefined : offHint}>
-        <Switch checked={limited} onCheckedChange={onLimitedChange} />
-      </Field>
-      {limited ? (
-        <div className="grid gap-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <Picker
-              multiple
-              search={shownOptions.length >= LIST_SEARCH_FROM_COUNT}
-              options={shownOptions}
-              value={chosen}
-              onValueChange={onChosenChange}
-            >
-              <Button variant="outline" size="sm" disabled={!optionsReady}>
-                {chooseLabel}
-              </Button>
-            </Picker>
-            <span className="text-caption text-muted-foreground">
-              {t("access.chosenCount", { count: chosen.length, total: shownOptions.length })}
-            </span>
-          </div>
-          {chosen.length === 0 ? (
-            <Banner tone="warning" layout="line">
-              {emptyHint}
-            </Banner>
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-1.5">
-                {chosen.map((value) => (
-                  <Chip
-                    key={value}
-                    size="sm"
-                    onRemove={() => onChosenChange(chosen.filter((other) => other !== value))}
-                  >
-                    {value}
-                  </Chip>
-                ))}
-              </div>
-              {listedHint === undefined ? null : (
-                <p className="text-caption text-muted-foreground">{listedHint}</p>
-              )}
-            </>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
 }

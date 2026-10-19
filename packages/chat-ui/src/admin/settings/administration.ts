@@ -17,6 +17,7 @@ import { ModulesPage } from "./pages/modules";
 import { OperationsPage } from "./pages/operations";
 import { UsagePage } from "./pages/usage";
 import { UsersPage } from "./pages/users";
+import { WorkspacesPage } from "./pages/workspaces";
 
 /**
  * The administration a host mounts: the Instance pages of Settings, one line per page in rail
@@ -98,6 +99,13 @@ export const administration: ChatShellAdministration = {
       width: "wide",
       visible: (viewer) => canManageUsers(viewer.user),
       component: InfrastructurePage
+    },
+    {
+      id: "workspaces",
+      group: "instance",
+      labelKey: "settings.workspaces",
+      visible: (viewer) => canManageUsers(viewer.user),
+      component: WorkspacesPage
     }
   ],
   build: {

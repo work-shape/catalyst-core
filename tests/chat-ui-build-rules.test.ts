@@ -547,6 +547,38 @@ describe("Studio refusals", () => {
     });
   });
 
+  it("names the workspace whose build limits refuse a tool, a model or a missing one", () => {
+    const workspace = { workspaceId: "cws_kai", workspace: "Kai Spezis" };
+    const messages = [
+      { reason: "tool_not_allowed", toolName: "documents.read", ...workspace },
+      { reason: "model_not_allowed", modelBindingId: "reasoning", ...workspace },
+      { reason: "model_binding_required", ...workspace }
+    ].map((details) => readBuildRefusal(refusal("FORBIDDEN", "Forbidden", details), t));
+    expect(messages.map((outcome) => !outcome.ok && outcome.refusals)).toEqual([
+      [
+        {
+          field: "tools",
+          message:
+            "The tool documents.read is not allowed in the workspace Kai Spezis. An instance admin sets its tools on Instance > Workspaces."
+        }
+      ],
+      [
+        {
+          field: "model",
+          message:
+            "The model reasoning is not allowed in the workspace Kai Spezis. An instance admin sets its models on Instance > Workspaces."
+        }
+      ],
+      [
+        {
+          field: "model",
+          message:
+            "An agent of the workspace Kai Spezis needs a default model the workspace allows."
+        }
+      ]
+    ]);
+  });
+
   it("tells a refusal from a Namespace's lists in the reader's language", () => {
     const outcome = readBuildRefusal(
       refusal("FORBIDDEN", "Forbidden", {

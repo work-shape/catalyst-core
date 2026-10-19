@@ -4,7 +4,8 @@ import {
   type ApiClient,
   type CreateNamespaceRequest,
   type CreatePermissionGrantRequest,
-  type UpdateNamespaceRequest
+  type UpdateNamespaceRequest,
+  type UpdateWorkspaceBuildLimitsRequest
 } from "@work-shape/catalyst-api-client";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { accessWriteFailure, GrantWriteError, type GrantWriteResult } from "./access-model";
@@ -23,7 +24,9 @@ const accessQueryKeys = {
   grants: (apiBaseUrl: string, authScope: string) =>
     ["access", apiBaseUrl, authScope, "grants"] as const,
   effective: (apiBaseUrl: string, authScope: string, holderId: string | undefined) =>
-    ["access", apiBaseUrl, authScope, "effective", holderId] as const
+    ["access", apiBaseUrl, authScope, "effective", holderId] as const,
+  workspaceLimits: (apiBaseUrl: string, authScope: string) =>
+    ["access", apiBaseUrl, authScope, "workspaces"] as const
 };
 
 /**
@@ -63,6 +66,14 @@ export function useNamespacesQuery(input: AccessApiInput) {
   return useQuery({
     queryKey: accessQueryKeys.namespaces(input.apiBaseUrl, input.authScope),
     queryFn: () => listAll((paging) => input.client.namespaces.list({ query: paging }))
+  });
+}
+
+/** The Shared Workspaces with their build limits, as Instance > Workspaces lists them. */
+export function useWorkspaceLimitsQuery(input: AccessApiInput) {
+  return useQuery({
+    queryKey: accessQueryKeys.workspaceLimits(input.apiBaseUrl, input.authScope),
+    queryFn: () => listAll((paging) => input.client.workspaces.limits.list({ query: paging }))
   });
 }
 
@@ -187,8 +198,23 @@ export function useAccessMutations(input: AccessApiInput) {
     mutationFn: (grantId: string) => input.client.permissions.revoke({ params: { grantId } }),
     onSettled: refresh
   });
+  const updateWorkspaceLimits = useMutation({
+    mutationFn: (update: { workspaceId: string; body: UpdateWorkspaceBuildLimitsRequest }) =>
+      input.client.workspaces.limits.update({
+        params: { collaborationWorkspaceId: update.workspaceId },
+        body: update.body
+      }),
+    onSettled: refresh
+  });
 
-  return { createNamespace, updateNamespace, deleteNamespace, grant, revoke };
+  return {
+    createNamespace,
+    updateNamespace,
+    deleteNamespace,
+    grant,
+    revoke,
+    updateWorkspaceLimits
+  };
 }
 
 /**

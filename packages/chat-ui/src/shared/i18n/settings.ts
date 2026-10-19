@@ -21,6 +21,7 @@ export const settings = defineTranslations({
     "settings.userChangeWaitsForApproval":
       "This change waits for an approval. Nothing has changed yet.",
     "settings.access": "Access",
+    "settings.workspaces": "Workspaces",
     "settings.apiAccess": "API access",
     "settings.usage": "Usage",
     "settings.audit": "Audit",
@@ -267,6 +268,7 @@ export const settings = defineTranslations({
     "settings.userChangeWaitsForApproval":
       "Diese Änderung wartet auf eine Freigabe. Bisher wurde nichts geändert.",
     "settings.access": "Zugriff",
+    "settings.workspaces": "Arbeitsbereiche",
     "settings.apiAccess": "API-Zugang",
     "settings.usage": "Nutzung",
     "settings.audit": "Audit",
