@@ -452,6 +452,18 @@ async function updateUser(db: PostgresConnection, input: UpdateUserInput): Promi
         )
       )
       .returning();
+    // A deactivated person's scheduled starts pause at once, not at their next tick.
+    if (updated && input.status === "disabled")
+      await tx
+        .update(scheduledStarts)
+        .set({ state: "paused", nextRunAt: null, updatedAt: set.updatedAt })
+        .where(
+          and(
+            eq(scheduledStarts.clientInstanceId, input.clientInstanceId),
+            eq(scheduledStarts.ownerUserId, updated.id),
+            eq(scheduledStarts.state, "active")
+          )
+        );
     if (updated && input.permissions !== undefined) {
       await writeLegacyPermissionList(tx, {
         clientInstanceId: input.clientInstanceId,

@@ -64,6 +64,23 @@ export function parseCron(text: string): CronExpression | undefined {
   };
 }
 
+/** A scheduled agent start runs at most this often. A fixed bound of usage, not a setting. */
+export const SCHEDULED_START_MIN_INTERVAL_MINUTES = 15;
+
+/**
+ * The shortest gap on the wall clock between two due times of a day, counting the one across
+ * midnight as if the next day were due too.
+ */
+export function shortestCronGapMinutes(cron: CronExpression): number {
+  const times = [...cron.hours]
+    .flatMap((hour) => [...cron.minutes].map((minute) => hour * 60 + minute))
+    .sort((a, b) => a - b);
+  let gap = 24 * 60 + (times[0] ?? 0) - (times.at(-1) ?? 0);
+  for (let index = 1; index < times.length; index += 1)
+    gap = Math.min(gap, (times[index] ?? 0) - (times[index - 1] ?? 0));
+  return gap;
+}
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MINUTE_MS = 60_000;
 /** Two looks an hour for more than a year: a due time further away than that is none. */

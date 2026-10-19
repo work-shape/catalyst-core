@@ -22881,7 +22881,7 @@
     "/api/v1/scheduled-starts": {
       "get": {
         "operationId": "scheduled_starts.list",
-        "summary": "List your own scheduled prompts",
+        "summary": "List your own scheduled prompts, or as an instance admin a deactivated person's",
         "tags": [
           "Scheduled starts"
         ],
@@ -22924,6 +22924,15 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "ownerUserId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
             }
           }
         ],

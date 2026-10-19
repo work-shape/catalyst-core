@@ -80,6 +80,8 @@ export const scheduled = defineTranslations({
     "scheduled.cronHint":
       "Common cron syntax: minute, hour, day of month, month, day of week. Examples: 0 8 * * 1-5 runs on weekdays at 08:00, 30 17 * * 5 on Fridays at 17:30, 0 9 1 * * on the 1st of each month at 09:00.",
     "scheduled.cronInvalid": "Write five fields separated by spaces, such as 0 8 * * 1-5.",
+    "scheduled.cronTooOften":
+      "A scheduled prompt runs at most every {minutes} minutes. Choose a less frequent schedule.",
     "scheduled.timeZone": "Time zone",
     "scheduled.timeZoneHint": "The times above are in this zone. It starts as the instance's.",
     "scheduled.saveFailed":
@@ -182,6 +184,8 @@ export const scheduled = defineTranslations({
     "scheduled.cronHint":
       "Übliche Cron-Syntax: Minute, Stunde, Tag im Monat, Monat, Wochentag. Beispiele: 0 8 * * 1-5 läuft werktags um 08:00, 30 17 * * 5 freitags um 17:30, 0 9 1 * * am 1. jedes Monats um 09:00.",
     "scheduled.cronInvalid": "Schreib fünf Felder mit Leerzeichen dazwischen, etwa 0 8 * * 1-5.",
+    "scheduled.cronTooOften":
+      "Ein geplanter Prompt läuft höchstens alle {minutes} Minuten. Wähle einen selteneren Zeitplan.",
     "scheduled.timeZone": "Zeitzone",
     "scheduled.timeZoneHint":
       "Die Zeiten oben gelten in dieser Zone. Sie beginnt mit der der Instanz.",

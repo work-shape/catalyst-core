@@ -229,5 +229,7 @@ export {
   lastDueWithin,
   nextDueAfter,
   parseCron,
+  SCHEDULED_START_MIN_INTERVAL_MINUTES,
+  shortestCronGapMinutes,
   type CronExpression
 } from "./schedule-cron";

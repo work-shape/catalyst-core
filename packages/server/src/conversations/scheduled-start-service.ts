@@ -9,6 +9,8 @@ import {
   isTimeZone,
   nextDueAfter,
   parseCron,
+  SCHEDULED_START_MIN_INTERVAL_MINUTES,
+  shortestCronGapMinutes,
   type AuthenticatedUser,
   type OperationExecutionContext,
   type PlatformStores,
@@ -29,6 +31,11 @@ export function nextScheduledPrompt(cron: string, timeZone: string, after: Date)
     throw new AppError(
       "VALIDATION_FAILED",
       "Use a five-field cron expression and an IANA time zone such as Europe/Berlin"
+    );
+  if (shortestCronGapMinutes(parsed) < SCHEDULED_START_MIN_INTERVAL_MINUTES)
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `A scheduled prompt runs at most every ${SCHEDULED_START_MIN_INTERVAL_MINUTES} minutes. Choose a less frequent schedule`
     );
   const due = nextDueAfter([parsed], after, timeZone);
   if (!due)
@@ -80,11 +87,20 @@ export class ScheduledStartsWorkflow {
       throw new AppError("NOT_FOUND", "This agent is not available in this workspace");
   }
 
-  list(context: OperationExecutionContext, workspaceId: string | undefined, page: StorePage) {
+  async list(
+    context: OperationExecutionContext,
+    query: { collaborationWorkspaceId?: string; ownerUserId?: string },
+    page: StorePage
+  ) {
     const user = person(context);
+    const ownerUserId = query.ownerUserId ?? getSubjectUserId(user);
+    // An instance admin reads a deactivated person's starts to hand them over or delete them.
+    if (ownerUserId !== getSubjectUserId(user))
+      await this.requireDeactivatedOwner(context, ownerUserId, this.options.stores);
+    const workspaceId = query.collaborationWorkspaceId;
     return this.options.stores.scheduledStarts.list({
       clientInstanceId: this.options.clientInstanceId,
-      ownerUserId: getSubjectUserId(user),
+      ownerUserId,
       ...(workspaceId ? { collaborationWorkspaceId: asCollaborationWorkspaceId(workspaceId) } : {}),
       page
     });
@@ -134,9 +150,16 @@ export class ScheduledStartsWorkflow {
     const before = await this.requireOwn(this.options.stores, id, user);
     await this.requireAgent(user, before.collaborationWorkspaceId, fields.agentName);
     const timeZone = fields.timeZone ?? before.timeZone;
-    const next = nextScheduledPrompt(fields.cron, timeZone, new Date());
+    nextScheduledPrompt(fields.cron, timeZone, new Date());
     const consent = await this.personalConsent(context, user);
     return this.change(user, id, async (tx, current) => {
+      // Read under the lock and from no earlier than the tick that last advanced the start, so
+      // an edit racing a tick never puts back a due time that tick already ran.
+      const next = nextScheduledPrompt(
+        fields.cron,
+        timeZone,
+        new Date(Math.max(Date.now(), Date.parse(current.updatedAt)))
+      );
       await this.withdraw(tx, current);
       const saved = await tx.scheduledStarts.update({
         clientInstanceId: current.clientInstanceId,
@@ -199,9 +222,14 @@ export class ScheduledStartsWorkflow {
         id,
         forUpdate: true
       });
-      if (!current) throw new AppError("NOT_FOUND", "Scheduled prompt is not available");
+      if (
+        !current ||
+        (current.ownerUserId !== getSubjectUserId(user) &&
+          !context.access.authorize("users.manage").allowed)
+      )
+        throw new AppError("NOT_FOUND", "Scheduled prompt is not available");
       if (current.ownerUserId !== getSubjectUserId(user))
-        await this.requireDeactivatedOwner(context, current, tx);
+        await this.requireDeactivatedOwner(context, current.ownerUserId, tx);
       await this.withdraw(tx, current);
       await tx.scheduledStarts.delete({
         clientInstanceId: current.clientInstanceId,
@@ -221,7 +249,7 @@ export class ScheduledStartsWorkflow {
         forUpdate: true
       });
       if (!current) throw new AppError("NOT_FOUND", "Scheduled prompt is not available");
-      await this.requireDeactivatedOwner(context, current, tx);
+      await this.requireDeactivatedOwner(context, current.ownerUserId, tx);
       const target = await tx.users.getUser({
         clientInstanceId: current.clientInstanceId,
         userId: asUserId(ownerUserId)
@@ -268,13 +296,13 @@ export class ScheduledStartsWorkflow {
 
   private async requireDeactivatedOwner(
     context: OperationExecutionContext,
-    row: ScheduledStart,
+    ownerUserId: string,
     tx: PlatformStores
   ) {
     context.access.require("users.manage");
     const owner = await tx.users.getUser({
-      clientInstanceId: row.clientInstanceId,
-      userId: asUserId(row.ownerUserId)
+      clientInstanceId: this.options.clientInstanceId,
+      userId: asUserId(ownerUserId)
     });
     if (!owner || owner.status !== "disabled")
       throw new AppError(

@@ -8,6 +8,7 @@ export {
   choiceOf,
   cronLooksValid,
   cronOf,
+  cronRunsTooOften,
   headingOf,
   runReasonKey,
   runState,

@@ -24,11 +24,14 @@ export const scheduledStartOperations = {
     id: "scheduled_starts.list",
     method: "GET",
     path: "/api/v1/scheduled-starts",
-    summary: "List your own scheduled prompts",
+    summary: "List your own scheduled prompts, or as an instance admin a deactivated person's",
     effect: "reading",
     scope: "conversation:read",
     rateClass: "read",
-    query: listQuerySchema.extend({ collaborationWorkspaceId: z.string().optional() }),
+    query: listQuerySchema.extend({
+      collaborationWorkspaceId: z.string().optional(),
+      ownerUserId: z.string().min(1).optional()
+    }),
     response: page(scheduledStartSchema, ["createdAt", "id"], true)
   }),
   "scheduled_starts.create": defineRegisteredOperation({

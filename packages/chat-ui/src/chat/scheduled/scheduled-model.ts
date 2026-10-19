@@ -1,4 +1,9 @@
-import type { SCHEDULED_START_STATES } from "@work-shape/catalyst-core";
+import {
+  parseCron,
+  SCHEDULED_START_MIN_INTERVAL_MINUTES,
+  shortestCronGapMinutes,
+  type SCHEDULED_START_STATES
+} from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import { scheduleInWords } from "../../studio/workflows/schedule-words";
@@ -155,6 +160,14 @@ const CRON_FIELD = /^[\d*a-z?,/-]+$/iu;
 export function cronLooksValid(cron: string): boolean {
   const fields = cron.trim().split(/\s+/u);
   return fields.length === 5 && fields.every((field) => CRON_FIELD.test(field));
+}
+
+/** Whether `cron` is due more often than a scheduled prompt may run, as the instance refuses it. */
+export function cronRunsTooOften(cron: string): boolean {
+  const parsed = parseCron(cron);
+  return (
+    parsed !== undefined && shortestCronGapMinutes(parsed) < SCHEDULED_START_MIN_INTERVAL_MINUTES
+  );
 }
 
 /**

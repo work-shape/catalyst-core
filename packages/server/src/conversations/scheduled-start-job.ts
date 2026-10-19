@@ -6,6 +6,7 @@ import {
   createUserPrincipal,
   defineJobHandler,
   defineJobKind,
+  lastDueWithin,
   nextDueAfter,
   parseCron,
   type AuthenticatedUser,
@@ -83,17 +84,23 @@ export function createScheduledPromptHandler(options: ChatServerOptions, now: ()
             (start.state !== "active" || start.nextRunAt !== job.payload.dueAt))
         )
           return;
+        const moment = new Date(Math.max(now().getTime(), Date.parse(job.payload.dueAt)));
+        // A late tick catches up once, for the latest due time it missed.
+        const cron = job.payload.manual ? undefined : parseCron(start.cron);
+        const scheduledFor = (
+          (cron && lastDueWithin([cron], new Date(job.payload.dueAt), moment, start.timeZone)) ??
+          new Date(job.payload.dueAt)
+        ).toISOString();
         const existing = await tx.scheduledStarts.getRun({
           clientInstanceId: options.clientInstanceId,
           scheduledStartId: start.id,
-          scheduledFor: job.payload.dueAt
+          scheduledFor
         });
         if (existing) return;
-        const moment = new Date(Math.max(now().getTime(), Date.parse(job.payload.dueAt)));
         const history: ScheduledStartRun = {
           id: createPlatformId<"ScheduledStartRunId">("scheduled_run"),
           scheduledStartId: start.id,
-          scheduledFor: job.payload.dueAt,
+          scheduledFor,
           conversationId: null,
           agentRunId: null,
           status: "skipped",

@@ -10,6 +10,7 @@ import {
   choiceOf,
   cronLooksValid,
   cronOf,
+  cronRunsTooOften,
   headingOf,
   runReasonKey,
   runsRefreshMs,
@@ -99,6 +100,15 @@ describe("a scheduled prompt in words", () => {
     expect(cronLooksValid("0 8 * *")).toBe(false);
     expect(cronLooksValid("every day")).toBe(false);
     expect(cronLooksValid("0 8 * * 1; rm")).toBe(false);
+  });
+
+  it("refuses a schedule due more often than every 15 minutes, in English and German", () => {
+    for (const cron of ["*/10 * * * *", "0,5 9 * * *", "0,59 0,23 * * *"])
+      expect(cronRunsTooOften(cron), cron).toBe(true);
+    for (const cron of ["*/15 * * * *", "0 8 * * 1-5", "not a cron"])
+      expect(cronRunsTooOften(cron), cron).toBe(false);
+    expect(en.t("scheduled.cronTooOften", { minutes: 15 })).toContain("at most every 15 minutes");
+    expect(de.t("scheduled.cronTooOften", { minutes: 15 })).toContain("höchstens alle 15 Minuten");
   });
 
   it("says the schedule with its zone in English and German, a custom one as written", () => {

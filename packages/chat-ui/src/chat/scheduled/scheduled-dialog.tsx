@@ -8,6 +8,7 @@ import {
   Select,
   Textarea
 } from "@work-shape/catalyst-ui";
+import { SCHEDULED_START_MIN_INTERVAL_MINUTES } from "@work-shape/catalyst-core";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import {
   DEFAULT_SCHEDULE,
@@ -15,6 +16,7 @@ import {
   choiceOf,
   cronLooksValid,
   cronOf,
+  cronRunsTooOften,
   scheduleLine,
   timeZoneChoices,
   type ScheduleChoice,
@@ -98,7 +100,11 @@ export function ScheduledDialog({
   const cron = cronOf(schedule);
   const promptError = prompt.trim() === "" ? t("scheduled.promptRequired") : undefined;
   const agentError = agentName === "" ? t("scheduled.agentRequired") : undefined;
-  const cronError = cronLooksValid(cron) ? undefined : t("scheduled.cronInvalid");
+  const cronError = !cronLooksValid(cron)
+    ? t("scheduled.cronInvalid")
+    : cronRunsTooOften(cron)
+      ? t("scheduled.cronTooOften", { minutes: SCHEDULED_START_MIN_INTERVAL_MINUTES })
+      : undefined;
   const valid = !promptError && !agentError && !cronError;
 
   function submit(event: FormEvent<HTMLFormElement>) {

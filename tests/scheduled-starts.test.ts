@@ -59,6 +59,20 @@ async function fixture(cookieIdentity = false) {
   };
 }
 
+const listed = (response: { json(): unknown }) =>
+  z
+    .object({ items: z.array(scheduledStartSchema) })
+    .parse(response.json())
+    .items.map((row) => row.id);
+
+/** Only this start's queued tick is moved to the database's present. No wall-clock sleep. */
+async function fireDue(t: { instance: Parameters<typeof getTestJobs>[0] }, id: string) {
+  await withTestSql(async (sql) => {
+    await sql`update platform_jobs set run_after = now() where client_instance_id = ${clientInstanceId} and kind = 'scheduled_prompt.fire' and subject = ${id} and status = 'queued'`;
+  });
+  await getTestJobs(t.instance).runDue();
+}
+
 describe("scheduled prompts API", () => {
   it("lets only the owner read and manage a saved start, including another instance admin", async () => {
     const { t, workspace } = await fixture();
@@ -93,7 +107,7 @@ describe("scheduled prompts API", () => {
       ] as const) {
         expect(
           (await t.call(userId, operation, { params: { scheduledStartId: start.id } })).statusCode
-        ).toBe(operation === "scheduled_starts.delete" ? 403 : 404);
+        ).toBe(operation === "scheduled_starts.delete" && userId === t.admin.id ? 403 : 404);
       }
       expect(
         (
@@ -153,7 +167,7 @@ describe("scheduled prompts API", () => {
     ).toEqual([]);
   });
 
-  it.each(["workspace", "owner"] as const)(
+  it.each(["workspace"] as const)(
     "pauses a queued tick when its %s becomes unavailable without repeating failures",
     async (unavailable) => {
       const { t } = await fixture();
@@ -171,14 +185,11 @@ describe("scheduled prompts API", () => {
           })
         ).json()
       );
-      if (unavailable === "workspace")
-        await t.stores.workspaces.removeMembership({
-          clientInstanceId,
-          collaborationWorkspaceId: team,
-          userId: t.kai.id
-        });
-      else
-        await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "disabled" });
+      await t.stores.workspaces.removeMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: team,
+        userId: t.kai.id
+      });
       await withTestSql(async (sql) => {
         await sql`update platform_jobs set run_after = now() where client_instance_id = ${clientInstanceId} and kind = 'scheduled_prompt.fire' and subject = ${start.id} and status = 'queued'`;
       });
@@ -191,7 +202,7 @@ describe("scheduled prompts API", () => {
       expect(runs).toHaveLength(1);
       expect(runs[0]).toMatchObject({
         status: "failed",
-        reason: unavailable === "workspace" ? "workspace_unavailable" : "owner_unavailable",
+        reason: `${unavailable}_unavailable`,
         conversationId: null,
         agentRunId: null
       });
@@ -214,6 +225,148 @@ describe("scheduled prompts API", () => {
       ).toHaveLength(1);
     }
   );
+
+  it("pauses a deactivated person's starts at once, before their next tick (access check 25)", async () => {
+    const { t, workspace } = await fixture();
+    const start = scheduledStartSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "scheduled_starts.create", {
+          payload: { ...fields, collaborationWorkspaceId: workspace.id }
+        })
+      ).json()
+    );
+    expect(start).toMatchObject({ state: "active" });
+    await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "disabled" });
+    expect(await t.stores.scheduledStarts.get({ clientInstanceId, id: start.id })).toMatchObject({
+      state: "paused",
+      nextRunAt: null
+    });
+    await fireDue(t, start.id);
+    expect(
+      await t.stores.scheduledStarts.listRuns({
+        clientInstanceId,
+        scheduledStartId: start.id,
+        page: { limit: 10 }
+      })
+    ).toEqual([]);
+  });
+
+  it("records failed / agent_unavailable when the agent is withdrawn before its tick", async () => {
+    const { t, workspace } = await fixture();
+    const start = scheduledStartSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "scheduled_starts.create", {
+          payload: { ...fields, collaborationWorkspaceId: workspace.id }
+        })
+      ).json()
+    );
+    await t.stores.configAssets.setAgentAvailability({
+      clientInstanceId,
+      agentName: fields.agentName,
+      availability: { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] }
+    });
+    await fireDue(t, start.id);
+    const runs = await t.stores.scheduledStarts.listRuns({
+      clientInstanceId,
+      scheduledStartId: start.id,
+      page: { limit: 10 }
+    });
+    expect(runs).toEqual([
+      expect.objectContaining({
+        status: "failed",
+        reason: "agent_unavailable",
+        agentRunId: null,
+        conversationId: null
+      })
+    ]);
+  });
+
+  it("refuses a schedule due more often than every 15 minutes, on create and on edit", async () => {
+    const { t, workspace } = await fixture();
+    for (const cron of ["*/10 * * * *", "0,5 9 * * *", "0,59 0,23 * * *", "* 8 * * 1"]) {
+      const refused = await t.call(t.kai.id, "scheduled_starts.create", {
+        payload: { ...fields, cron, collaborationWorkspaceId: workspace.id }
+      });
+      expect(refused.statusCode, cron).toBe(422);
+      expect(refused.body).toContain("at most every 15 minutes");
+    }
+    const start = scheduledStartSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "scheduled_starts.create", {
+          payload: { ...fields, cron: "*/15 * * * *", collaborationWorkspaceId: workspace.id }
+        })
+      ).json()
+    );
+    const edited = await t.call(t.kai.id, "scheduled_starts.update", {
+      params: { scheduledStartId: start.id },
+      payload: { ...fields, cron: "*/5 * * * *" }
+    });
+    expect(edited.statusCode).toBe(422);
+  });
+
+  it("records a late tick once, for the latest due time it missed", async () => {
+    const { t, workspace } = await fixture();
+    const start = scheduledStartSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "scheduled_starts.create", {
+          payload: { ...fields, cron: "0 * * * *", collaborationWorkspaceId: workspace.id }
+        })
+      ).json()
+    );
+    // The worker was away for five hours: the queued tick is for a due time five hours ago.
+    const hour = 3_600_000;
+    const missed = new Date(Math.floor(Date.now() / hour) * hour - 5 * hour).toISOString();
+    await withTestSql(async (sql) => {
+      await sql`update scheduled_starts set next_run_at = ${missed} where id = ${start.id}`;
+      await sql`update platform_jobs set payload = jsonb_set(payload, '{dueAt}', to_jsonb(${missed}::text)), run_after = now() where client_instance_id = ${clientInstanceId} and kind = 'scheduled_prompt.fire' and subject = ${start.id} and status = 'queued'`;
+    });
+    const hourBefore = Math.floor(Date.now() / hour) * hour;
+    await getTestJobs(t.instance).runDue();
+    const hourAfter = Math.floor(Date.now() / hour) * hour;
+    const runs = await t.stores.scheduledStarts.listRuns({
+      clientInstanceId,
+      scheduledStartId: start.id,
+      page: { limit: 10 }
+    });
+    expect(runs).toHaveLength(1);
+    const recorded = Date.parse(required(runs[0]).scheduledFor);
+    expect(recorded).toBeGreaterThanOrEqual(hourBefore);
+    expect(recorded).toBeLessThanOrEqual(hourAfter);
+  });
+
+  it("keeps the next tick when an edit races a tick that already advanced the start", async () => {
+    const { t, workspace } = await fixture();
+    const start = scheduledStartSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "scheduled_starts.create", {
+          payload: { ...fields, collaborationWorkspaceId: workspace.id }
+        })
+      ).json()
+    );
+    // The tick for the first due time runs while the edit still reads a clock before it: here
+    // the tick is moved forward instead of the edit's clock back.
+    await fireDue(t, start.id);
+    const advanced = required(
+      await t.stores.scheduledStarts.get({ clientInstanceId, id: start.id })
+    );
+    expect(Date.parse(required(advanced.nextRunAt))).toBeGreaterThan(
+      Date.parse(required(start.nextRunAt))
+    );
+    const edited = scheduledStartSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "scheduled_starts.update", {
+          params: { scheduledStartId: start.id },
+          payload: { ...fields, prompt: "Prepare my daily summary, briefly" }
+        })
+      ).json()
+    );
+    expect(edited.nextRunAt).toBe(advanced.nextRunAt);
+    await withTestSql(async (sql) => {
+      expect(
+        await sql`select payload->>'dueAt' as "dueAt" from platform_jobs where client_instance_id = ${clientInstanceId} and kind = 'scheduled_prompt.fire' and subject = ${start.id} and status = 'queued'`
+      ).toEqual([{ dueAt: advanced.nextRunAt }]);
+    });
+  });
 
   it("does not run an old owner's queued Run now after handover", async () => {
     const { t } = await fixture();
@@ -296,80 +449,94 @@ describe("scheduled prompts API", () => {
     );
   });
 
-  it("rechecks workspace membership between the due tick and Agent Run execution", async () => {
-    const config = createTestConfig({
-      developmentAuth: {
-        enabled: true,
-        user: {
-          id: "owner",
-          externalUserId: "owner",
-          displayLabel: "Owner",
-          roles: ["user"],
-          permissionRefs: []
+  it.each(["membership", "agent"] as const)(
+    "rechecks the owner's %s between the due tick and Agent Run execution",
+    async (revoked) => {
+      const config = createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          user: {
+            id: "owner",
+            externalUserId: "owner",
+            displayLabel: "Owner",
+            roles: ["user"],
+            permissionRefs: []
+          }
         }
-      }
-    });
-    const app = await createTestInstance({ config, env: {}, tools: [], startAgentRunJobs: false });
-    const me = apiUserSchema.parse((await app.call("me.get")).json());
-    const ownerId = asUserId(me.subjectUserId ?? me.id);
-    const other = await app.stores.users.createUser({
-      clientInstanceId,
-      displayLabel: "Other workspace owner"
-    });
-    const team = await app.stores.workspaces.createWorkspace({
-      clientInstanceId,
-      creatorUserId: other.id,
-      kind: "shared",
-      name: "Queued run team"
-    });
-    await app.stores.workspaces.addMembership({
-      clientInstanceId,
-      collaborationWorkspaceId: team.id,
-      userId: ownerId,
-      role: "member"
-    });
-    await app.stores.configAssets.setAgentAvailability({
-      clientInstanceId,
-      agentName: "test_agent",
-      availability: { mode: "all", personalWorkspaces: true, collaborationWorkspaceIds: [] }
-    });
-    const created = await app.call("scheduled_starts.create", {
-      payload: { ...fields, agentName: "test_agent", collaborationWorkspaceId: team.id }
-    });
-    expect(created.statusCode, created.body).toBe(200);
-    const start = scheduledStartSchema.parse(created.json());
-    await withTestSql(async (sql) => {
-      await sql`update platform_jobs set run_after = now() where client_instance_id = ${clientInstanceId} and kind = 'scheduled_prompt.fire' and subject = ${start.id} and status = 'queued'`;
-    });
-    await getTestJobs(app).runDue();
-    const queued = required(
-      (
-        await app.stores.scheduledStarts.listRuns({
+      });
+      const app = await createTestInstance({
+        config,
+        env: {},
+        tools: [],
+        startAgentRunJobs: false
+      });
+      const me = apiUserSchema.parse((await app.call("me.get")).json());
+      const ownerId = asUserId(me.subjectUserId ?? me.id);
+      const other = await app.stores.users.createUser({
+        clientInstanceId,
+        displayLabel: "Other workspace owner"
+      });
+      const team = await app.stores.workspaces.createWorkspace({
+        clientInstanceId,
+        creatorUserId: other.id,
+        kind: "shared",
+        name: "Queued run team"
+      });
+      await app.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: team.id,
+        userId: ownerId,
+        role: "member"
+      });
+      await app.stores.configAssets.setAgentAvailability({
+        clientInstanceId,
+        agentName: "test_agent",
+        availability: { mode: "all", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+      });
+      const created = await app.call("scheduled_starts.create", {
+        payload: { ...fields, agentName: "test_agent", collaborationWorkspaceId: team.id }
+      });
+      expect(created.statusCode, created.body).toBe(200);
+      const start = scheduledStartSchema.parse(created.json());
+      await withTestSql(async (sql) => {
+        await sql`update platform_jobs set run_after = now() where client_instance_id = ${clientInstanceId} and kind = 'scheduled_prompt.fire' and subject = ${start.id} and status = 'queued'`;
+      });
+      await getTestJobs(app).runDue();
+      const queued = required(
+        (
+          await app.stores.scheduledStarts.listRuns({
+            clientInstanceId,
+            scheduledStartId: start.id,
+            page: { limit: 10 }
+          })
+        )[0]
+      );
+      expect(queued.status).toBe("queued");
+      const runId = asAgentRunId(required(queued.agentRunId));
+      if (revoked === "membership")
+        await app.stores.workspaces.removeMembership({
           clientInstanceId,
-          scheduledStartId: start.id,
-          page: { limit: 10 }
-        })
-      )[0]
-    );
-    expect(queued.status).toBe("queued");
-    const runId = asAgentRunId(required(queued.agentRunId));
-    await app.stores.workspaces.removeMembership({
-      clientInstanceId,
-      collaborationWorkspaceId: team.id,
-      userId: ownerId
-    });
-    await createTestInstance({ config, env: {}, tools: [], seedAssets: false });
-    await waitUntil(async () => {
-      const run = await app.stores.agentRuns.getAgentRun({ clientInstanceId, runId });
-      return run?.status === "failed" || run?.status === "completed";
-    }, "queued scheduled run reaches an outcome");
-    expect((await app.stores.agentRuns.getAgentRun({ clientInstanceId, runId }))?.status).toBe(
-      "failed"
-    );
-    expect(
-      (await app.stores.agentRuns.getAgentRun({ clientInstanceId, runId }))?.error
-    ).toMatchObject({ code: "FORBIDDEN" });
-  });
+          collaborationWorkspaceId: team.id,
+          userId: ownerId
+        });
+      // The default agent cannot be withdrawn through the store, so the row is changed.
+      else
+        await withTestSql(async (sql) => {
+          await sql`update config_asset_availability set mode = 'selected', personal_workspaces = true where asset_id = (select id from config_assets where client_instance_id = ${clientInstanceId} and kind = 'agent' and name = 'test_agent')`;
+        });
+      await createTestInstance({ config, env: {}, tools: [], seedAssets: false });
+      await waitUntil(async () => {
+        const run = await app.stores.agentRuns.getAgentRun({ clientInstanceId, runId });
+        return run?.status === "failed" || run?.status === "completed";
+      }, "queued scheduled run reaches an outcome");
+      expect((await app.stores.agentRuns.getAgentRun({ clientInstanceId, runId }))?.status).toBe(
+        "failed"
+      );
+      expect(
+        (await app.stores.agentRuns.getAgentRun({ clientInstanceId, runId }))?.error
+      ).toMatchObject({ code: "FORBIDDEN" });
+    }
+  );
 
   it("keeps Personal connection consent only from a signed-in person and refuses delegated or narrowed sessions", async () => {
     const { t, workspace, headers } = await fixture(true);
@@ -443,8 +610,15 @@ describe("scheduled prompts API", () => {
       payload: { ownerUserId: t.lena.id }
     };
     expect((await t.call(t.admin.id, "scheduled_starts.handover", handover)).statusCode).toBe(403);
+    const kaiStarts = { query: { ownerUserId: t.kai.id } };
+    expect((await t.call(t.admin.id, "scheduled_starts.list", kaiStarts)).statusCode).toBe(403);
     await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "disabled" });
     expect((await t.call(t.lena.id, "scheduled_starts.handover", handover)).statusCode).toBe(403);
+    // The admin finds the deactivated person's starts to hand them over; nobody else does.
+    expect(listed(await t.expectOk(t.admin.id, "scheduled_starts.list", kaiStarts))).toEqual([
+      start.id
+    ]);
+    expect((await t.call(t.lena.id, "scheduled_starts.list", kaiStarts)).statusCode).toBe(403);
     const moved = scheduledStartSchema.parse(
       (await t.expectOk(t.admin.id, "scheduled_starts.handover", handover)).json()
     );

@@ -37,8 +37,7 @@ export function registerScheduledStartRoutes(route: Route, options: ChatServerOp
   route.operation(apiOperations["scheduled_starts.list"], {
     authorize,
     recordsEveryCall: true,
-    execute: (input, context) =>
-      workflow.list(context, input.collaborationWorkspaceId, pageOf(context.paging))
+    execute: (input, context) => workflow.list(context, input, pageOf(context.paging))
   });
   route.operation(apiOperations["scheduled_starts.create"], {
     authorize: async (input, context) => {
