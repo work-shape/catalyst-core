@@ -49,6 +49,15 @@ export const build = defineTranslations({
     "build.publishDescription":
       "The saved draft becomes the version everyone who uses it gets, from now on. Unsaved changes are not part of it.",
     "build.publishFailed": "The draft could not be published.",
+    "build.deleteFailed": "It could not be deleted. Try again.",
+    "build.refusedDataStoreInUse":
+      "This data store is still in use, so nothing was deleted. Stop using it in the apps, workflows, agents and knowledge bases that use it, then delete it.",
+    "build.deleteChanged":
+      "Somebody changed this since you opened it, so nothing was deleted. Open the page again to see the newer version.",
+    "build.editWithAgent": "Edit with the agent",
+    "build.editWithAgentFailed": "The agent could not be opened",
+    "build.editWithAgentRefused": "You can no longer open this, or it is gone.",
+    "build.editWithAgentClose": "Close",
     "build.publishSaveFirst": "Save your changes first: only a saved draft can be published.",
     "build.historyDescription": "Every saved revision of {name}, the newest first.",
     "build.historyStale":
@@ -197,6 +206,15 @@ export const build = defineTranslations({
     "build.publishDescription":
       "Der gespeicherte Entwurf wird ab jetzt die Version, die alle bekommen, die damit arbeiten. Ungespeicherte Änderungen gehören nicht dazu.",
     "build.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
+    "build.deleteFailed": "Das ließ sich nicht löschen. Versuch es noch einmal.",
+    "build.refusedDataStoreInUse":
+      "Dieser Datenspeicher wird noch verwendet, daher wurde nichts gelöscht. Entferne ihn aus den Apps, Workflows, Agenten und Wissensbasen, die ihn verwenden, und lösche ihn dann.",
+    "build.deleteChanged":
+      "Jemand hat dies geändert, seit du es geöffnet hast. Darum wurde nichts gelöscht. Öffne die Seite neu, um die neuere Version zu sehen.",
+    "build.editWithAgent": "Mit dem Agenten bearbeiten",
+    "build.editWithAgentFailed": "Der Agent ließ sich nicht öffnen",
+    "build.editWithAgentRefused": "Du kannst dies nicht mehr öffnen, oder es ist weg.",
+    "build.editWithAgentClose": "Schließen",
     "build.publishSaveFirst":
       "Speichere zuerst deine Änderungen: Nur ein gespeicherter Entwurf lässt sich veröffentlichen.",
     "build.historyDescription": "Jede gespeicherte Version von {name}, die neueste zuerst.",

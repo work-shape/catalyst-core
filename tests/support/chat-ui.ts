@@ -89,6 +89,7 @@ export {
   type ApprovalRequestState
 } from "../../packages/chat-ui/src/shared/api/approval-request-api";
 export { AssetOpenedChip } from "../../packages/chat-ui/src/chat/conversation/conversation-subject";
+export { useSubjectTitle } from "../../packages/chat-ui/src/chat/conversation/subject-title";
 export { useAgentOpens } from "../../packages/chat-ui/src/chat/conversation/use-agent-opens";
 export {
   ApprovalRevisionHostProvider,

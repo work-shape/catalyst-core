@@ -231,6 +231,11 @@ interface BuildKindBase {
   }>;
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
+  /**
+   * The asset's page offers "Edit with the agent" in its head to a reader who may change the
+   * asset, where the instance offers an agent that builds assets.
+   */
+  editsWithAgent?: true;
 }
 
 /**
@@ -292,6 +297,13 @@ export interface BuildAssetViewProps {
    * draft ahead of what is published, or the reader may not publish it.
    */
   publish?(): Promise<string | undefined>;
+  /**
+   * Deletes the asset through the frame and leaves its page. Answers the instance's sentence
+   * where it refused. Absent where the reader may not delete it.
+   */
+  remove?(): Promise<string | undefined>;
+  /** "Edit with the agent" for the end of the page head, where the frame offers it. */
+  agentAction?: ReactNode;
 }
 
 /**
@@ -301,7 +313,8 @@ export interface BuildAssetViewProps {
 export interface BuildListedKind extends BuildKindBase {
   Editor?: undefined;
   /**
-   * A page that shows one asset of the kind and writes nothing: no History, no delete, no save.
+   * A page that shows one asset of the kind and writes nothing of its definition: no History
+   * and no save. Publish and Delete go through the frame.
    * With it the rows open, and `missingText` is the sentence at the address of an asset that
    * does not exist, with `{name}`.
    */

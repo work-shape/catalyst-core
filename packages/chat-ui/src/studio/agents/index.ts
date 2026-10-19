@@ -5,6 +5,7 @@ export {
   agentStudioRoute,
   agentsRowShown,
   buildingAgentNameFor,
+  editWithBuildingAgent,
   startNewAgent
 } from "./agents-model";
 export { AgentsPage, type AgentsPageProps } from "./agents-page";

@@ -78,3 +78,22 @@ export function buildingAgentNameFor(
   const building = agents.filter((agent) => agent.buildsAssets === true);
   return (building.find((agent) => agent.name === activeAgentName) ?? building[0])?.name;
 }
+
+/**
+ * "Edit with the agent" on an asset page in Build: it chooses the agent that builds assets and
+ * starts a conversation about the asset with it. Nothing where no agent here builds assets (the
+ * Build Agent's Module is off), so the entry is absent.
+ */
+export function editWithBuildingAgent(
+  buildingAgentName: string | undefined,
+  selectAgent: (name: string) => void,
+  startAbout: (subject: { kind: string; name: string }) => Promise<void>
+): ((subject: { kind: string; name: string }) => Promise<void>) | undefined {
+  if (buildingAgentName === undefined) {
+    return undefined;
+  }
+  return (subject) => {
+    selectAgent(buildingAgentName);
+    return startAbout(subject);
+  };
+}

@@ -303,6 +303,9 @@ export function BuildFrame({
         view={entry.view}
         name={assetName}
         kinds={kinds.map((kind) => kind.entry)}
+        canDelete={place.kind.state.canDelete}
+        editsWithAgent={entry.editsWithAgent === true}
+        onDeleted={() => open({ kindPath: entry.path }, { replace: true })}
         page={{ ref: pageRef, above: loadError, shown: pageShown }}
         back={back}
       />

@@ -23,7 +23,6 @@ import {
   TableHeader,
   TableRow
 } from "@work-shape/catalyst-ui";
-import { CopyIdItem } from "../copy-id-item";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import { usePageShown } from "./asset-editor-shell";
@@ -37,8 +36,14 @@ import {
   migrationNumber
 } from "./data-store-model";
 import { DataStoreDraftPage, dataStoreNeverPublished } from "./data-store-draft";
+import { DataStorePublishSection, pendingMigrations, useDataStoreMenu } from "./data-store-head";
 import { hasDataFlows } from "./data-flows-model";
-import { DataStoreFillers, DataStoreProcessors, DataStoreReaders } from "./data-store-provenance";
+import {
+  DataStoreAgents,
+  DataStoreFillers,
+  DataStoreProcessors,
+  DataStoreReaders
+} from "./data-store-provenance";
 import { ReadState } from "./data-store-read-state";
 import { DataStoreRowsSection } from "./data-store-rows";
 import {
@@ -63,10 +68,11 @@ function textOf(config: Record<string, unknown>, key: string): string | undefine
 }
 
 /**
- * The page of one Data Store. It shows and changes nothing: the header with the store's state,
- * where its migrations stand and how large it is, what the server leaves open around it, its
- * tables with their columns, and the first rows of one table. The rows are the answer of one
- * preview, so the page holds as many as the instance hands out and never the whole table.
+ * The page of one Data Store: the header with the store's state, where its migrations stand and
+ * how large it is, what the server leaves open around it, its tables with their columns, and the
+ * first rows of one table. The rows are the answer of one preview, so the page holds as many as
+ * the instance hands out and never the whole table. It writes nothing itself: Publish, Delete
+ * and "Edit with the agent" are the frame's.
  */
 export function DataStorePage(props: BuildAssetViewProps & { source: DataStoreSource }) {
   const { asset } = props;
@@ -90,10 +96,14 @@ function PublishedDataStorePage({
   back,
   asset,
   source,
-  title
+  title,
+  publish,
+  remove,
+  agentAction
 }: BuildAssetViewProps & { source: DataStoreSource; title: string }) {
   const { t } = useTranslation();
   usePageShown(page, "asset");
+  const head = useDataStoreMenu({ id: asset.name, title, published: true, remove });
   const read = source.useStoreState(asset.name);
   const state = read.status === "ready" ? read.data : undefined;
   const conditions = state ? serverConditionsShown(source, state) : [];
@@ -111,6 +121,14 @@ function PublishedDataStorePage({
   // below make. "Processed by" stands only where one is named or counted.
   const usedBy = source.useUsedBy(asset.name);
   const dataFlows = usedBy.status === "ready" ? usedBy.data.dataFlows : undefined;
+  // A draft saved after the publish waits with the migrations it adds past the published level.
+  const draftAhead =
+    asset.draftRevision !== undefined && asset.revision !== asset.publishedRevision;
+  const pending = state ? pendingMigrations(asset.config, state.publishedLevel) : undefined;
+  // The agents that carry the store's row tools, from an instance that names them.
+  const agentsNamed =
+    usedBy.status === "ready" &&
+    (usedBy.data.agents !== undefined || usedBy.data.hidden.agents !== undefined);
   const sections: {
     id: string;
     label: string;
@@ -118,6 +136,27 @@ function PublishedDataStorePage({
     count?: number;
     body: ReactNode;
   }[] = [
+    ...(draftAhead
+      ? [
+          {
+            id: "pending",
+            label: t("dataStores.pendingTitle"),
+            description: t("dataStores.pendingDescription"),
+            count: pending?.length,
+            body:
+              pending === undefined ? (
+                <SkeletonList rows={2} />
+              ) : (
+                <DataStorePublishSection
+                  title={title}
+                  migrations={pending}
+                  firstPublish={false}
+                  publish={publish}
+                />
+              )
+          }
+        ]
+      : []),
     {
       id: "status",
       label: t("dataStores.statusTitle"),
@@ -162,6 +201,17 @@ function PublishedDataStorePage({
       description: t("dataStores.readByDescription"),
       body: <DataStoreReaders {...provenance} />
     },
+    ...(agentsNamed
+      ? [
+          {
+            id: "agents",
+            label: t("dataStores.agentsTitle"),
+            description: t("dataStores.agentsDescription"),
+            count: usedBy.data.agents?.length ?? 0,
+            body: <DataStoreAgents used={usedBy.data} />
+          }
+        ]
+      : []),
     ...(conditions.length > 0
       ? [
           {
@@ -230,7 +280,8 @@ function PublishedDataStorePage({
               </Badge>
             ) : undefined
           }
-          menu={<CopyIdItem id={asset.name} />}
+          primaryAction={agentAction}
+          menu={head.menu}
         />
       }
       outline={
@@ -246,6 +297,7 @@ function PublishedDataStorePage({
         <Banner layout="line" className="mb-4" data-build-read-only="">
           {t("dataStores.description")}
         </Banner>
+        {head.failure}
         {sections.map((section) => (
           <Section
             key={section.id}
@@ -259,6 +311,7 @@ function PublishedDataStorePage({
           </Section>
         ))}
       </div>
+      {head.dialog}
     </Page>
   );
 }

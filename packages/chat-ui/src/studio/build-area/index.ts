@@ -123,6 +123,8 @@ export type {
   KnowledgeBaseSource,
   KnowledgeBaseState,
   KnowledgeDocument,
+  KnowledgeDocumentSummary,
+  KnowledgeHoldersRead,
   KnowledgeOpenableFile,
   KnowledgeRead,
   KnowledgeSearchAnswer

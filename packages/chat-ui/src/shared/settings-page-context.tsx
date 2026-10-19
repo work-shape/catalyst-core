@@ -42,6 +42,12 @@ export interface SettingsPageContextValue {
    */
   buildWithAgent?(prompt: string): void;
   /**
+   * Opens the dock beside the open page with a conversation about one asset, with the agent
+   * that holds the platform's asset tools: "Edit with the agent" on an asset page. Absent where
+   * none is offered, and the entry is then absent too.
+   */
+  editWithAgent?(subject: { kind: string; name: string }): Promise<void>;
+  /**
    * Opens the chat dock beside the open page with a new conversation and this text in its
    * composer, for the person to send. Absent where the shell has no dock.
    */

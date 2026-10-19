@@ -29,6 +29,7 @@ import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
 import { DataFlowList, useWorkflowPage } from "./data-flows";
 import { hasDataFlows, type DataFlowRole } from "./data-flows-model";
 import { ReadState } from "./data-store-read-state";
+import { KnowledgeBaseAgents, KnowledgeBaseHolders } from "./knowledge-base-access";
 import { KnowledgeStatus, KnowledgeTestQuery } from "./knowledge-base-checks";
 import { KnowledgeDocuments } from "./knowledge-base-documents";
 import { KnowledgeTestSearch } from "./knowledge-base-test-search";
@@ -39,7 +40,7 @@ import {
   type KnowledgeBaseHolds,
   type KnowledgeTableForm
 } from "./knowledge-base-model";
-import type { KnowledgeBaseSource } from "./knowledge-base-source";
+import type { KnowledgeBaseSource, KnowledgeHoldersRead } from "./knowledge-base-source";
 import { uploadFormatList, uploadFormats } from "./knowledge-upload-model";
 
 /** The sections of the data Workflows on the page, by what they do to it. */
@@ -115,7 +116,10 @@ export function KnowledgeBaseEditor({
   // the same read, not another. A section stands only where one is named or counted.
   const stateRead = source.useState(asset?.name ?? "", published);
   const dataFlows = stateRead.status === "ready" ? stateRead.data.dataFlows : undefined;
+  // The agents that search it come with the same read, from an instance that names them.
+  const agents = stateRead.status === "ready" ? stateRead.data.agents : undefined;
   const workflowPage = useWorkflowPage();
+  const holders: KnowledgeHoldersRead = source.useHolders?.(asset?.id) ?? { status: "hidden" };
   const namedRoles = (["fills", "processes"] as const).filter((role) =>
     hasDataFlows(dataFlows, role)
   );
@@ -332,7 +336,35 @@ export function KnowledgeBaseEditor({
             )
           }
         ]
-      : [])
+      : []),
+    ...(agents === undefined || stateRead.status !== "ready"
+      ? []
+      : [
+          {
+            id: "agents",
+            label: t("knowledge.agentsTitle"),
+            description: t("knowledge.agentsDescription"),
+            count: agents.length,
+            body: (
+              <KnowledgeBaseAgents
+                agents={agents}
+                truncated={stateRead.data.agentsTruncated === true}
+              />
+            )
+          }
+        ]),
+    // Who was given it by itself is shown to who is shown rights at all, as on a Connection.
+    ...(holders.status === "hidden"
+      ? []
+      : [
+          {
+            id: "access",
+            label: t("knowledge.accessTitle"),
+            description: t("knowledge.accessDescription"),
+            count: holders.status === "ready" ? holders.holders.length : undefined,
+            body: <KnowledgeBaseHolders read={holders} />
+          }
+        ])
   ];
 
   return (

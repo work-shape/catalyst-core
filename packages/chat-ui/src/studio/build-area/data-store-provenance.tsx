@@ -1,6 +1,7 @@
-import { BookOpen, Database, LayoutGrid, MessagesSquare, Workflow } from "lucide-react";
+import { BookOpen, Bot, Database, LayoutGrid, MessagesSquare, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 import { Chip, EmptyState, List, ListRow } from "@work-shape/catalyst-ui";
+import { AGENTS_BUILD_PATH, useBuildNavigation } from "../../shared/build-route";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { DataFlowList } from "./data-flows";
 import { ReadState } from "./data-store-read-state";
@@ -206,6 +207,74 @@ export function DataStoreReaders({ store, workspaceId, source }: ProvenanceProps
   );
 }
 
+/**
+ * "Agents": each published agent that carries the store's row tools, with what its tools do,
+ * and a link to the agent's page. An agent acts with the rights of the person it works for.
+ */
+export function DataStoreAgents({ used }: { used: DataStoreUsedBy }) {
+  const { t } = useTranslation();
+  const { href, open } = useBuildNavigation();
+  const agents = used.agents ?? [];
+  const hidden = used.hidden.agents ?? 0;
+  if (agents.length === 0) {
+    return (
+      <EmptyState layout="inline">
+        {hidden === 0 ? t("dataStores.agentsEmpty") : t("dataStores.agentsHiddenOnly")}
+      </EmptyState>
+    );
+  }
+  return (
+    <>
+      <List aria-label={t("dataStores.agentsTitle")}>
+        {agents.map((agent) => {
+          const place = { kindPath: AGENTS_BUILD_PATH, name: agent.name };
+          return (
+            <ListRow
+              key={agent.name}
+              data-data-store-agent={agent.name}
+              leading={<Bot aria-hidden="true" className="size-4 text-muted-foreground" />}
+              title={agent.title.trim() || agent.name}
+              description={t(
+                agent.reads && agent.writes
+                  ? "dataStores.agentReadsWrites"
+                  : agent.writes
+                    ? "dataStores.agentWrites"
+                    : "dataStores.agentReads"
+              )}
+              link={
+                <a
+                  href={href(place)}
+                  onClick={(event) => {
+                    if (opensInPlace(event)) {
+                      event.preventDefault();
+                      open(place);
+                    }
+                  }}
+                />
+              }
+            />
+          );
+        })}
+      </List>
+      <HiddenLine count={hidden} />
+      <p className="text-caption text-muted-foreground" data-data-store-agents-fact="">
+        {t("dataStores.agentsFact")}
+      </p>
+    </>
+  );
+}
+
+/** A plain press opens the page here. Any other opens the address. */
+function opensInPlace(event: {
+  button: number;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
 function formatCount(count: number, locale: string): string {
   return new Intl.NumberFormat(locale).format(count);
 }
@@ -277,14 +346,7 @@ function useUsingRow(workspaceId: string | undefined, source: DataStoreSource) {
             <a
               href={page.href}
               onClick={(event) => {
-                // A plain press opens the page here. Any other opens the address.
-                if (
-                  event.button === 0 &&
-                  !event.metaKey &&
-                  !event.ctrlKey &&
-                  !event.shiftKey &&
-                  !event.altKey
-                ) {
+                if (opensInPlace(event)) {
                   event.preventDefault();
                   page.open();
                 }

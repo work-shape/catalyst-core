@@ -295,6 +295,11 @@ export function readBuildRefusal(
   if (details.reason === "person_context_app_unavailable") {
     return refused({ message: t("connections.personContextAppUnavailable") });
   }
+  // A Data Store still used by published assets stays. The sentence names none of them: the
+  // instance's sentence may name assets the reader is not shown.
+  if (details.reason === "data_store_in_use") {
+    return refused({ message: t("build.refusedDataStoreInUse") });
+  }
   const namespace = details.namespace ?? "";
   if (details.reason === "tool_not_allowed" && details.toolName !== undefined) {
     return refused({

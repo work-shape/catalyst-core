@@ -377,6 +377,27 @@ describe("Studio refusals", () => {
     ]);
   });
 
+  // STORE-PAGES: a Data Store still used is not deleted. The reader is told so in their own
+  // words, and the instance's sentence, which may name assets hidden from them, is not shown.
+  it.each(["en", "de"] as const)("says a Data Store in use stays, in %s", (locale) => {
+    const { t: translate } = createTranslationContext(locale);
+    const outcome = readBuildRefusal(
+      refusal("VALIDATION_FAILED", "Data Store 'leads' is used by app 'secret-board'", {
+        reason: "data_store_in_use"
+      }),
+      translate,
+      locale
+    );
+    const said = refusalsOf(outcome, undefined);
+    expect(said).toEqual([
+      locale === "en"
+        ? "This data store is still in use, so nothing was deleted. Stop using it in the apps, workflows, agents and knowledge bases that use it, then delete it."
+        : "Dieser Datenspeicher wird noch verwendet, daher wurde nichts gelöscht. Entferne ihn aus den Apps, Workflows, Agenten und Wissensbasen, die ihn verwenden, und lösche ihn dann."
+    ]);
+    expect(said.join(" ")).not.toContain("secret-board");
+    expect(outcome).not.toMatchObject({ refusals: [{ detail: expect.anything() }] });
+  });
+
   it.each(["en", "de"] as const)(
     "names a blocking guardrail by its title in %s, with its author's reason (ACCEPT-FIX-10 E8)",
     (locale) => {

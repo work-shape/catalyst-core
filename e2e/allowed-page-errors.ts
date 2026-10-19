@@ -110,6 +110,17 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "data-store-delete-in-use",
+    reason:
+      "The store-page test deliberately deletes a referenced store, asserts its 422 refusal, " +
+      "then removes the agent reference and retries successfully.",
+    matches: requestAnswered(422),
+    path: /^\/api\/v1\/assets\/data_store\/store-pages-[a-f0-9]{8}\/delete$/u,
+    tests: [
+      "a Data Store's later draft is published, edited with the agent and deleted from its page"
+    ]
+  },
+  {
     name: "refused-default-agent",
     reason:
       "Chromium's own log line: the test asks for an agent that is not offered everywhere to " +

@@ -5,6 +5,7 @@ import type {
   ConfigAssetRevision,
   OperationOutcome
 } from "@work-shape/catalyst-api-client";
+import { DATA_STORE_ASSET_KIND } from "@work-shape/catalyst-core";
 import { invalidateOfferedAgents } from "../../shared/api/agent-placement-mutations";
 import {
   createAssetWrites,
@@ -190,6 +191,11 @@ export interface BuildSource {
    * offered, and where the scope is another owner, whose New keeps its dialog (WS-OWN-1a).
    */
   buildWithAgent?(prompt: string): void;
+  /**
+   * Opens the dock beside the asset's page with a conversation about it, with the agent that
+   * builds assets. Absent where no such agent is offered.
+   */
+  editWithAgent?(subject: { kind: string; name: string }): Promise<void>;
 }
 
 /**
@@ -198,8 +204,16 @@ export interface BuildSource {
  * asset. Nothing here reads the whole set of assets.
  */
 export function useBuildSource(): BuildSource {
-  const { apiBaseUrl, authScope, client, user, config, activeWorkspace, buildWithAgent } =
-    useSettingsPage();
+  const {
+    apiBaseUrl,
+    authScope,
+    client,
+    user,
+    config,
+    activeWorkspace,
+    buildWithAgent,
+    editWithAgent
+  } = useSettingsPage();
   const { locale, t } = useTranslation();
   const queryClient = useQueryClient();
   const contextQuery = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
@@ -290,6 +304,13 @@ export function useBuildSource(): BuildSource {
     if (kind === AGENT_ASSET_KIND) {
       invalidateOfferedAgents(queryClient, apiBaseUrl, authScope).catch(() => undefined);
     }
+    // A publish of a Data Store applies its migrations, and a delete retires it: its state, the
+    // list, its tables and its rows are read again, and the state is polled while it migrates.
+    if (kind === DATA_STORE_ASSET_KIND) {
+      queryClient
+        .invalidateQueries({ queryKey: workspaceQueryKeys.dataStores(apiBaseUrl) })
+        .catch(() => undefined);
+    }
     const goneDraft =
       gone === undefined ? undefined : workspaceQueryKeys.agentDraft(apiBaseUrl, authScope, gone);
     return queryClient.invalidateQueries({
@@ -317,6 +338,7 @@ export function useBuildSource(): BuildSource {
     scope.workspaceId === activeWorkspace?.id
       ? { buildWithAgent }
       : {}),
+    ...(editWithAgent === undefined ? {} : { editWithAgent }),
     useList(kind, filter) {
       const text = filter.text.trim();
       const owner = inScope(kind);

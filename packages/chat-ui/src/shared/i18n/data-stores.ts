@@ -68,6 +68,40 @@ export const dataStores = defineTranslations({
     "dataStores.draftMigrationsTitle": "Draft migrations",
     "dataStores.draftMigrationsDescription": "What publishing applies, in this order.",
     "dataStores.draftMigrationsEmpty": "The draft has no migration.",
+    "dataStores.draftAhead": "Draft ahead of what is published",
+    "dataStores.draftAheadText":
+      "A draft saved after the last publish adds {count} migrations. Publishing applies them to the live store in this order.",
+    "dataStores.draftAheadTextOne":
+      "A draft saved after the last publish adds 1 migration. Publishing applies it to the live store.",
+    "dataStores.draftAheadTextNone":
+      "A draft was saved after the last publish. It adds no migration, so publishing changes no table.",
+    "dataStores.pendingTitle": "Waiting to be published",
+    "dataStores.pendingDescription":
+      "The migrations of the draft that the live store does not have yet.",
+    "dataStores.pendingEmpty": "The draft adds no migration.",
+    "dataStores.publishPendingDescription":
+      "Publishing applies {count} new migrations to the live store, in order, on its rows. A migration cannot be taken back: a later change needs a new migration. A test run of the draft does not prove they work on the live rows.",
+    "dataStores.publishPendingDescriptionOne":
+      "Publishing applies 1 new migration to the live store, on its rows. A migration cannot be taken back: a later change needs a new migration. A test run of the draft does not prove it works on the live rows.",
+    "dataStores.publishPendingDescriptionNone":
+      "Publishing makes the draft live. It adds no migration, so no table changes.",
+    "dataStores.deleteTitle": "Delete the data store {name}?",
+    "dataStores.deleteDescription":
+      "Apps, workflows and agents can no longer reach its rows. The rows stay on the database server until whoever runs it removes them, and the name stays taken until then.",
+    "dataStores.deleteDescriptionDraft":
+      "It was never published, so it has no database and no rows. Its draft and migrations are deleted.",
+    "dataStores.agentsTitle": "Agents",
+    "dataStores.agentsDescription":
+      "Agents that can read or change the rows of this store in a conversation.",
+    "dataStores.agentsEmpty": "No published agent works with the rows of this store.",
+    "dataStores.agentsHiddenOnly": "Only agents you can't see work with the rows of this store.",
+    "dataStores.agentReads": "Reads rows",
+    "dataStores.agentWrites": "Adds or changes rows",
+    "dataStores.agentReadsWrites": "Reads, adds and changes rows",
+    "dataStores.agentsFact":
+      "An agent works with the rights of the person it answers: it reaches only rows that person may reach.",
+    "dataStores.rowApps": "{count} apps",
+    "dataStores.rowAppsHint": "Used by {apps}",
     "dataStores.lastMigration": "Last migration",
     "dataStores.missing": "There is no data store with the id {name}.",
     "dataStores.nearLimit":
@@ -250,6 +284,42 @@ export const dataStores = defineTranslations({
     "dataStores.draftMigrationsDescription":
       "Was beim Veröffentlichen angewendet wird, in dieser Reihenfolge.",
     "dataStores.draftMigrationsEmpty": "Der Entwurf hat keine Migration.",
+    "dataStores.draftAhead": "Entwurf weiter als die veröffentlichte Fassung",
+    "dataStores.draftAheadText":
+      "Ein Entwurf, der nach dem letzten Veröffentlichen gespeichert wurde, bringt {count} Migrationen mit. Beim Veröffentlichen werden sie in dieser Reihenfolge auf den laufenden Speicher angewendet.",
+    "dataStores.draftAheadTextOne":
+      "Ein Entwurf, der nach dem letzten Veröffentlichen gespeichert wurde, bringt 1 Migration mit. Beim Veröffentlichen wird sie auf den laufenden Speicher angewendet.",
+    "dataStores.draftAheadTextNone":
+      "Nach dem letzten Veröffentlichen wurde ein Entwurf gespeichert. Er bringt keine Migration mit, darum ändert das Veröffentlichen keine Tabelle.",
+    "dataStores.pendingTitle": "Wartet aufs Veröffentlichen",
+    "dataStores.pendingDescription":
+      "Die Migrationen des Entwurfs, die der laufende Speicher noch nicht hat.",
+    "dataStores.pendingEmpty": "Der Entwurf bringt keine Migration mit.",
+    "dataStores.publishPendingDescription":
+      "Beim Veröffentlichen werden {count} neue Migrationen der Reihe nach auf den laufenden Speicher und seine Zeilen angewendet. Eine Migration lässt sich nicht zurücknehmen: Eine spätere Änderung braucht eine neue Migration. Ein Testlauf des Entwurfs beweist nicht, dass sie auf den echten Zeilen gelingen.",
+    "dataStores.publishPendingDescriptionOne":
+      "Beim Veröffentlichen wird 1 neue Migration auf den laufenden Speicher und seine Zeilen angewendet. Eine Migration lässt sich nicht zurücknehmen: Eine spätere Änderung braucht eine neue Migration. Ein Testlauf des Entwurfs beweist nicht, dass sie auf den echten Zeilen gelingt.",
+    "dataStores.publishPendingDescriptionNone":
+      "Beim Veröffentlichen wird der Entwurf wirksam. Er bringt keine Migration mit, darum ändert sich keine Tabelle.",
+    "dataStores.deleteTitle": "Den Datenspeicher {name} löschen?",
+    "dataStores.deleteDescription":
+      "Apps, Workflows und Agenten erreichen seine Zeilen dann nicht mehr. Die Zeilen bleiben auf dem Datenbankserver, bis die Betreiber des Servers sie entfernen, und bis dahin bleibt der Name vergeben.",
+    "dataStores.deleteDescriptionDraft":
+      "Er wurde nie veröffentlicht und hat darum keine Datenbank und keine Zeilen. Sein Entwurf und seine Migrationen werden gelöscht.",
+    "dataStores.agentsTitle": "Agenten",
+    "dataStores.agentsDescription":
+      "Agenten, die in einer Unterhaltung Zeilen dieses Speichers lesen oder ändern können.",
+    "dataStores.agentsEmpty":
+      "Kein veröffentlichter Agent arbeitet mit den Zeilen dieses Speichers.",
+    "dataStores.agentsHiddenOnly":
+      "Nur Agenten, die du nicht sehen kannst, arbeiten mit den Zeilen dieses Speichers.",
+    "dataStores.agentReads": "Liest Zeilen",
+    "dataStores.agentWrites": "Fügt Zeilen hinzu oder ändert sie",
+    "dataStores.agentReadsWrites": "Liest, ergänzt und ändert Zeilen",
+    "dataStores.agentsFact":
+      "Ein Agent arbeitet mit den Rechten der Person, der er antwortet: Er erreicht nur Zeilen, die diese Person erreichen darf.",
+    "dataStores.rowApps": "{count} Apps",
+    "dataStores.rowAppsHint": "Verwendet von {apps}",
     "dataStores.lastMigration": "Letzte Migration",
     "dataStores.missing": "Es gibt keinen Datenspeicher mit der Kennung {name}.",
     "dataStores.nearLimit":

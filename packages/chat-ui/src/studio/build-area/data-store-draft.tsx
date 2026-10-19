@@ -1,50 +1,7 @@
-import { Send } from "lucide-react";
-import { useState } from "react";
-import {
-  Badge,
-  Banner,
-  Button,
-  Chip,
-  ConfirmDialog,
-  EmptyState,
-  InlineError,
-  List,
-  ListRow,
-  Page,
-  PageHeader,
-  Section
-} from "@work-shape/catalyst-ui";
-import { CopyIdItem } from "../copy-id-item";
+import { Badge, Chip, Page, PageHeader, Section } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildAssetViewProps } from "./build-asset-kind";
-import { migrationNumber } from "./data-store-model";
-
-/** One migration of a revision, as its definition lists it. */
-interface DraftMigration {
-  number: number;
-  name: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** The migrations a definition names, in the order they are applied. */
-function draftMigrationsOf(config: Record<string, unknown>): DraftMigration[] {
-  const listed = Array.isArray(config.migrations) ? config.migrations : [];
-  return listed.flatMap((migration) =>
-    isRecord(migration) &&
-    typeof migration.number === "number" &&
-    typeof migration.name === "string"
-      ? [{ number: migration.number, name: migration.name }]
-      : []
-  );
-}
-
-/** The file a migration was saved as, as the agent wrote it: `0001_init.sql`. */
-function migrationFileName(migration: DraftMigration): string {
-  return `${migrationNumber(migration.number)}_${migration.name}.sql`;
-}
+import { DataStorePublishSection, migrationsOf, useDataStoreMenu } from "./data-store-head";
 
 /** Whether the store is shown as a draft: it has a draft and nothing was published. */
 export function dataStoreNeverPublished(
@@ -55,9 +12,8 @@ export function dataStoreNeverPublished(
 
 /**
  * The page of a Data Store never published: there is no database yet, so nothing of its state,
- * its tables or its rows can be read. It says so, lists the migrations a publish applies, and
- * offers Publish to whoever may publish it (Platform Access check 44). The agent never publishes,
- * and the person confirms first: a migration applied to the database is not taken back.
+ * its tables or its rows can be read. It says so, lists the migrations a publish applies with
+ * their SQL, and offers Publish to whoever may publish it (Platform Access check 44).
  */
 export function DataStoreDraftPage({
   page,
@@ -65,22 +21,13 @@ export function DataStoreDraftPage({
   asset,
   title,
   description,
-  publish
+  publish,
+  remove,
+  agentAction
 }: BuildAssetViewProps & { title: string; description: string | undefined }) {
   const { t } = useTranslation();
-  const [publishing, setPublishing] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [failure, setFailure] = useState<string>();
-  const migrations = draftMigrationsOf(asset.config);
-  const onPublish =
-    publish === undefined
-      ? undefined
-      : async () => {
-          setPublishing(true);
-          setFailure(await publish());
-          setPublishing(false);
-          setConfirming(false);
-        };
+  const migrations = migrationsOf(asset.config);
+  const head = useDataStoreMenu({ id: asset.name, title, published: false, remove });
   return (
     <Page
       ref={page.ref}
@@ -104,27 +51,14 @@ export function DataStoreDraftPage({
               {t("dataStores.draftUnpublished")}
             </Badge>
           }
-          menu={<CopyIdItem id={asset.name} />}
+          primaryAction={agentAction}
+          menu={head.menu}
         />
       }
     >
       {page.above}
       <div className="grid min-w-0 content-start gap-4 pt-5">
-        <Banner
-          tone="info"
-          title={t("dataStores.draftUnpublished")}
-          action={
-            onPublish === undefined ? undefined : (
-              <Button size="sm" data-data-store-publish="" onClick={() => setConfirming(true)}>
-                <Send aria-hidden="true" />
-                {t("build.publish")}
-              </Button>
-            )
-          }
-        >
-          {t("dataStores.draftUnpublishedText")}
-        </Banner>
-        {failure === undefined ? null : <InlineError>{failure}</InlineError>}
+        {head.failure}
         <Section
           id="migrations"
           layout="stacked"
@@ -133,45 +67,15 @@ export function DataStoreDraftPage({
           count={migrations.length}
         >
           {description === undefined ? null : <p className="text-body">{description}</p>}
-          {migrations.length === 0 ? (
-            <EmptyState layout="inline">{t("dataStores.draftMigrationsEmpty")}</EmptyState>
-          ) : (
-            <List aria-label={t("dataStores.draftMigrationsTitle")}>
-              {migrations.map((migration) => (
-                <ListRow
-                  key={migration.number}
-                  data-data-store-draft-migration=""
-                  title={
-                    <code className="font-mono text-code">{migrationFileName(migration)}</code>
-                  }
-                />
-              ))}
-            </List>
-          )}
+          <DataStorePublishSection
+            title={title}
+            migrations={migrations}
+            firstPublish
+            publish={publish}
+          />
         </Section>
       </div>
-      {onPublish === undefined ? null : (
-        <ConfirmDialog
-          open={confirming}
-          tone="primary"
-          title={t("build.publishTitle", { name: title })}
-          confirmLabel={t("build.publish")}
-          loading={publishing}
-          onConfirm={() => {
-            onPublish().catch(() => undefined);
-          }}
-          onClose={() => setConfirming(false)}
-        >
-          <span data-data-store-publish-confirm="">
-            {t(
-              migrations.length === 1
-                ? "dataStores.publishDescriptionOne"
-                : "dataStores.publishDescription",
-              { count: migrations.length }
-            )}
-          </span>
-        </ConfirmDialog>
-      )}
+      {head.dialog}
     </Page>
   );
 }

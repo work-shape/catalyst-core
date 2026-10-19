@@ -113,8 +113,21 @@ describe("the start page of a dock that builds", () => {
     for (const word of DEMO_WORDS) expect(html).not.toContain(word);
   });
 
+  // STORE-PAGES: the starters of a conversation about a store fit its kind: a store's schema,
+  // a Knowledge Base's description and the agent that searches it.
+  it.each([
+    ["data_store", "en", ["Add a table", "Add a column"]],
+    ["data_store", "de", ["Tabelle hinzufügen", "Spalte hinzufügen"]],
+    ["knowledge_base", "en", ["Describe it", "Give it to an agent"]],
+    ["knowledge_base", "de", ["Beschreiben", "Einem Agenten geben"]]
+  ] as const)("offers starters of its own about a %s (%s)", (kind, locale, titles) => {
+    const html = startPage({ about: "asset", kind, title: "Leads" }, locale);
+    for (const title of titles) expect(html).toContain(title);
+    for (const word of DEMO_WORDS) expect(html).not.toContain(word);
+  });
+
   it("offers no agent prompts for an asset of a kind without starters of its own", () => {
-    const html = startPage({ about: "asset", kind: "knowledge_base", title: "Handbook" });
+    const html = startPage({ about: "asset", kind: "guardrail", title: "Handbook" });
     expect(html).toContain("What should change in “Handbook”?");
     for (const word of DEMO_WORDS) expect(html).not.toContain(word);
     expect(startPage({ about: "new", kind: "connection" })).toContain("What do you want to build?");

@@ -39,7 +39,8 @@ import {
 import {
   agentListStatus,
   agentsRowShown,
-  buildingAgentNameFor
+  buildingAgentNameFor,
+  editWithBuildingAgent
 } from "../../studio/agents/agents-model";
 import { appsRowShown, NO_APP_RIGHTS, resolveAppRights } from "../../studio/apps/app-model";
 import {
@@ -481,6 +482,9 @@ export function useWorkspaceChatModel({
     chrome.requestComposerFocus();
   }
   const buildWithAgent = buildingAgentName === undefined ? undefined : startBuilding;
+  const editWithAgent = editWithBuildingAgent(buildingAgentName, setSelectedAgentName, (subject) =>
+    startConversationAbout(subject, undefined)
+  );
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
 
   // The shell forgets everything else of the person, as it starts a new session.
@@ -518,6 +522,7 @@ export function useWorkspaceChatModel({
     onAccountDeleted: leaveSignedOutSession,
     onCollaborationWorkspaceDeleted: collaborationWorkspace.collaborationWorkspaceDeleted,
     ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
+    ...(editWithAgent === undefined ? {} : { editWithAgent }),
     startDockedChat
   });
   const canViewAdministration = controlPlane.canViewAdministration;

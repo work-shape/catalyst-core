@@ -1,4 +1,4 @@
-import { Contact, Timer } from "lucide-react";
+import { Contact, LayoutGrid, Timer } from "lucide-react";
 import { Badge, Chip } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
@@ -92,6 +92,39 @@ function DataStoreRowMeasured({ name, useSource }: { name: string; useSource(): 
 }
 
 /**
+ * The Apps that use a store, as the list names them: the one App by its name, more by their
+ * number with their names on hover. The whole list is one read, which every row shares, and it
+ * names only the published Apps the reader may read or use. A store no such App uses, and a row
+ * before the answer or after it failed, says nothing of it. It stays at phone width: it is short.
+ */
+function DataStoreRowApps({ name, useSource }: { name: string; useSource(): DataStoreSource }) {
+  const { locale, t } = useTranslation();
+  const read = useSource().useListed();
+  const apps =
+    read.status === "ready" ? (read.data.items.find((item) => item.name === name)?.apps ?? []) : [];
+  if (apps.length === 0) {
+    return null;
+  }
+  const names = apps.map((app) => app.title.trim() || app.name);
+  return (
+    <span
+      className="inline-flex min-w-0"
+      data-data-store-row-apps={name}
+      title={t("dataStores.rowAppsHint", {
+        apps: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(names)
+      })}
+    >
+      <Chip size="sm">
+        <LayoutGrid aria-hidden="true" className="size-3" />
+        {names.length === 1
+          ? names[0]
+          : t("dataStores.rowApps", { count: new Intl.NumberFormat(locale).format(names.length) })}
+      </Chip>
+    </span>
+  );
+}
+
+/**
  * Data Stores in Build on the answers of `useSource`: a list, and a page that shows one store.
  * A store is made by its definition, which an agent or the API writes, so the kind has no
  * editor: its New and its empty list open the agent where one builds here. A row says what the definition says of the store, its
@@ -129,6 +162,7 @@ export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKi
       ]
     },
     icon: "datastore",
+    editsWithAgent: true,
     view: { Page: DataStoreAssetPage, missingText: "dataStores.missing" },
     rowText: (asset) => asset.description,
     badges: (asset, t) => (
@@ -142,6 +176,7 @@ export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKi
           <>
             <DataStoreRowState name={asset.name} useSource={useSource} />
             <DataStoreRowMeasured name={asset.name} useSource={useSource} />
+            <DataStoreRowApps name={asset.name} useSource={useSource} />
           </>
         )}
       </>

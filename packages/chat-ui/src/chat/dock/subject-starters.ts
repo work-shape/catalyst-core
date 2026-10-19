@@ -1,8 +1,10 @@
 import {
   BookOpenCheck,
+  Bot,
   Calculator,
   CalendarClock,
   CalendarDays,
+  Columns3,
   Contact,
   FlaskConical,
   LayoutTemplate,
@@ -10,13 +12,19 @@ import {
   MailOpen,
   MessagesSquare,
   NotebookPen,
+  PencilLine,
   ReceiptText,
+  Table2,
   TextCursorInput,
   Timer,
   type LucideIcon
 } from "lucide-react";
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
-import { DATA_STORE_ASSET_KIND, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
+import {
+  DATA_STORE_ASSET_KIND,
+  KNOWLEDGE_BASE_ASSET_KIND,
+  WORKFLOW_ASSET_KIND
+} from "@work-shape/catalyst-core";
 import type { TranslationKey } from "../../shared/i18n";
 import type { WorkspaceRoute } from "../../shared/routes";
 
@@ -55,6 +63,35 @@ const SUBJECT_STARTERS: Readonly<Record<string, readonly SubjectStarter[]>> = {
       title: "dock.starterWorkflowTestTitle",
       hint: "dock.starterWorkflowTestHint",
       prompt: "dock.starterWorkflowTestPrompt"
+    }
+  ],
+  // A store changes by a new migration: a table or a column. Its rows are not edited here.
+  [DATA_STORE_ASSET_KIND]: [
+    {
+      icon: Table2,
+      title: "dock.starterDataStoreTableTitle",
+      hint: "dock.starterDataStoreTableHint",
+      prompt: "dock.starterDataStoreTablePrompt"
+    },
+    {
+      icon: Columns3,
+      title: "dock.starterDataStoreColumnTitle",
+      hint: "dock.starterDataStoreColumnHint",
+      prompt: "dock.starterDataStoreColumnPrompt"
+    }
+  ],
+  [KNOWLEDGE_BASE_ASSET_KIND]: [
+    {
+      icon: PencilLine,
+      title: "dock.starterKnowledgeDescriptionTitle",
+      hint: "dock.starterKnowledgeDescriptionHint",
+      prompt: "dock.starterKnowledgeDescriptionPrompt"
+    },
+    {
+      icon: Bot,
+      title: "dock.starterKnowledgeAgentTitle",
+      hint: "dock.starterKnowledgeAgentHint",
+      prompt: "dock.starterKnowledgeAgentPrompt"
     }
   ]
 };
@@ -200,7 +237,7 @@ export function startGreeting(start: ConversationStart): {
 
 /**
  * The starters of a conversation's start page, in place of the agent's own: what a person
- * changes on an App or a Workflow, or two examples of a new asset of the kind. None where the
+ * changes on an App, a Workflow, a Data Store or a Knowledge Base, or two examples of a new asset of the kind. None where the
  * kind has none: the agent's own prompts are never offered for an asset.
  */
 export function startStarters(start: ConversationStart): readonly SubjectStarter[] {

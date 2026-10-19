@@ -5,6 +5,15 @@ import {
   useQueryClient
 } from "@tanstack/react-query";
 import { ApiError, type ApiClient } from "@work-shape/catalyst-api-client";
+import { loadFailure } from "../../admin/access/access-model";
+import { useAssetGrantsQuery } from "../../admin/access/access-queries";
+import { resourceHolders, type ResourceHolder } from "../../admin/access/principal-grants-model";
+import {
+  usePlatformContextQuery,
+  useServicePrincipalsQuery,
+  useWorkspaceUsersQuery
+} from "../../shared/api/workspace-queries";
+import { canManageServicePrincipals, canManageUsers } from "../../shared/governance";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { instanceSentence, PendingApprovalError, readRefusalDetails } from "./build-refusals";
@@ -206,12 +215,50 @@ export interface KnowledgeBaseSource {
    * instance. Absent where the page offers no availability.
    */
   useAvailability?(frame: AvailabilityFrame): AvailabilityChoice | undefined;
+  /**
+   * A hook: who was given `knowledge_base.use` on this Knowledge Base itself, by its asset id,
+   * for a reader who is shown rights. A Knowledge Base not yet created has none and reads
+   * nothing. Absent where the page shows no holders.
+   */
+  useHolders?(assetId: string | undefined): KnowledgeHoldersRead;
+  /**
+   * A hook: how many documents a Knowledge Base that keeps documents holds, their state and the
+   * last ingestion, as the first page of its documents says, read with one document only.
+   * `null` from an instance that sends no summary. It reads nothing while `enabled` is
+   * false, as for one that answers from tables.
+   */
+  useDocumentSummary?(
+    knowledgeBase: string,
+    enabled: boolean
+  ): KnowledgeRead<KnowledgeDocumentSummary | null>;
 }
+
+/** What the first page of documents says of all of them. */
+export type KnowledgeDocumentSummary = NonNullable<
+  Awaited<ReturnType<ApiClient["knowledge_bases"]["list_documents"]>>["summary"]
+>;
+
+/** The action that lets a person or a service principal search a Knowledge Base. */
+const KNOWLEDGE_BASE_USE_ACTION = "knowledge_base.use";
+
+/** Who was given one Knowledge Base by itself, as its page asked for it. */
+export type KnowledgeHoldersRead =
+  /** The reader is not shown who holds rights: the page has no such section. */
+  | { status: "hidden" }
+  | { status: "loading" }
+  | { status: "failed"; retry(): void }
+  | { status: "ready"; holders: ResourceHolder[] };
 
 /** The Knowledge Base pages on the instance's own operations. */
 export function useKnowledgeBaseSource(): KnowledgeBaseSource {
-  const { apiBaseUrl, authScope, client, activeWorkspace } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, activeWorkspace, user } = useSettingsPage();
   const queryClient = useQueryClient();
+  const api = { apiBaseUrl, authScope, client };
+  // The grant rows are read by who manages users; the names of principals by who manages them.
+  // The same reads as the Connection page's holders.
+  const seesHolders = canManageUsers(user);
+  const context = usePlatformContextQuery({ ...api, enabled: seesHolders });
+  const seesPrincipals = seesHolders && canManageServicePrincipals(context.data);
   const key = (read: string, ...parts: (string | number)[]) => [
     "knowledge-base",
     apiBaseUrl,
@@ -221,6 +268,34 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
   ];
   return {
     useAvailability: (frame) => useAvailabilityChoice(frame, "knowledge_base"),
+    useHolders(assetId) {
+      const shown = seesHolders && assetId !== undefined;
+      const grants = useAssetGrantsQuery({
+        ...api,
+        assetId: assetId ?? "",
+        action: KNOWLEDGE_BASE_USE_ACTION,
+        enabled: shown
+      });
+      const users = useWorkspaceUsersQuery({ ...api, enabled: shown });
+      const principals = useServicePrincipalsQuery({ ...api, enabled: shown && seesPrincipals });
+      const failure = loadFailure(grants.error);
+      if (!shown || failure === "forbidden") {
+        return { status: "hidden" };
+      }
+      if (grants.data) {
+        return {
+          status: "ready",
+          holders: resourceHolders(grants.data, {
+            action: KNOWLEDGE_BASE_USE_ACTION,
+            users: users.data ?? [],
+            principals: principals.data ?? []
+          })
+        };
+      }
+      return failure === "failed" && !grants.isFetching
+        ? { status: "failed", retry: () => void grants.refetch().catch(() => undefined) }
+        : { status: "loading" };
+    },
     useState: (knowledgeBase, publishedRevision, watchProcessing = false) =>
       useRead(
         key("state", knowledgeBase, publishedRevision ?? ""),
@@ -325,6 +400,20 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         await queryClient.invalidateQueries({ queryKey: key("documents", knowledgeBase) });
         return { count: outcome.output.count };
       }),
+    // Under the documents' key: an upload, a retry or a removal reads it again too.
+    useDocumentSummary: (knowledgeBase, enabled) =>
+      useRead(
+        key("documents", knowledgeBase, "summary"),
+        async (signal) =>
+          (
+            await client.knowledge_bases.list_documents({
+              params: { knowledgeBase },
+              query: { limit: 1 },
+              signal
+            })
+          ).summary ?? null,
+        { enabled }
+      ),
     useOpenableFiles: (search, enabled) => {
       const workspaceId = activeWorkspace?.id;
       const read = useOpenableFiles(

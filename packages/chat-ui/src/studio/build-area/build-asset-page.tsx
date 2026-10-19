@@ -37,6 +37,7 @@ import type { BuildAssetRead, BuildAssetReload, BuildSource } from "./build-data
 import { BuildHistory } from "./build-history";
 import { assetConfigTitle, type VisibleBuildKind } from "./build-model";
 import { formatDateTime } from "../../shared/locale-format";
+import { useBuildEditWithAgent } from "./build-edit-with-agent";
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
 import { AGENT_ASSET_KIND, buildWorkspaceName, type BuildRights } from "../../shared/build-rights";
 
@@ -253,16 +254,32 @@ export function ViewedAssetPage({
   kind,
   view,
   name,
-  kinds
+  kinds,
+  canDelete,
+  editsWithAgent,
+  onDeleted
 }: Pick<AssetPageProps, "source" | "page" | "back"> & {
   kind: string;
   view: NonNullable<BuildListedKind["view"]>;
   name: string;
   kinds: readonly BuildKind[];
+  /** The instance lets the kind's assets be deleted here. */
+  canDelete: boolean;
+  /** The page offers "Edit with the agent" (`BuildKindBase.editsWithAgent`). */
+  editsWithAgent: boolean;
+  /** The asset was deleted: the frame leaves its page. */
+  onDeleted(): void;
 }) {
   const { locale, t } = useTranslation();
   const read = source.useAsset(kind, name);
   usePageShown(page, read.status);
+  const { editWithAgent } = source;
+  const asset = read.status === "ready" ? read.asset : undefined;
+  const agent = useBuildEditWithAgent(
+    asset && editsWithAgent && editWithAgent && mayOnAsset(source.rights, "write", asset)
+      ? () => editWithAgent({ kind, name })
+      : undefined
+  );
   if (read.status === "ready") {
     const { asset } = read;
     const draftAhead =
@@ -282,14 +299,38 @@ export function ViewedAssetPage({
             return undefined;
           }
         : undefined;
+    // The delete names the revision the page shows, as every Build delete does: one written
+    // since is a conflict, and the asset stays.
+    const remove =
+      canDelete && mayOnAsset(source.rights, "delete", asset)
+        ? async (): Promise<string | undefined> => {
+            try {
+              await source.writes.delete({ kind, name, expectedRevision: asset.revision });
+            } catch (error) {
+              const outcome = readBuildRefusal(error, t, locale);
+              return outcome.ok
+                ? t("build.deleteFailed")
+                : outcome.conflict
+                  ? t("build.deleteChanged")
+                  : outcome.refusals.map((refusal) => refusal.message).join(" ");
+            }
+            onDeleted();
+            return undefined;
+          }
+        : undefined;
     return (
-      <view.Page
-        page={page}
-        back={back}
-        asset={asset}
-        kinds={kinds}
-        {...(publish === undefined ? {} : { publish })}
-      />
+      <>
+        <view.Page
+          page={page}
+          back={back}
+          asset={asset}
+          kinds={kinds}
+          {...(publish === undefined ? {} : { publish })}
+          {...(remove === undefined ? {} : { remove })}
+          {...(agent.action === undefined ? {} : { agentAction: agent.action })}
+        />
+        {agent.dialog}
+      </>
     );
   }
   return (
@@ -421,6 +462,12 @@ function LoadedAssetPage({
   // The agent's draft revision the page shows, which a restore names: an agent has one draft,
   // and an earlier revision becomes its content.
   const agentDraftRead = useRef<number | null>(stored.agentDraft?.revision ?? null);
+  const { editWithAgent } = source;
+  const agent = useBuildEditWithAgent(
+    entry.editsWithAgent && editWithAgent && canWrite
+      ? () => editWithAgent({ kind: entry.kind, name: stored.name })
+      : undefined
+  );
   const Editor = entry.Editor;
   const heardUnsaved = useCallback(
     (next: boolean) => {
@@ -575,15 +622,20 @@ function LoadedAssetPage({
         }
         actions={{
           primaryAction: canPublish ? (
-            <Button
-              data-build-publish=""
-              disabled={unsaved}
-              title={unsaved ? t("build.publishSaveFirst") : undefined}
-              onClick={() => setPublishOpen(true)}
-            >
-              <Send aria-hidden="true" />
-              {t("build.publish")}
-            </Button>
+            <span className="flex items-center gap-2">
+              {agent.action}
+              <Button
+                data-build-publish=""
+                disabled={unsaved}
+                title={unsaved ? t("build.publishSaveFirst") : undefined}
+                onClick={() => setPublishOpen(true)}
+              >
+                <Send aria-hidden="true" />
+                {t("build.publish")}
+              </Button>
+            </span>
+          ) : agent.action !== undefined ? (
+            agent.action
           ) : shipped && state.canCreate ? (
             // A shipped asset is changed in a copy, the step its notice names: it stays in the
             // head where the other actions fold.
@@ -722,6 +774,7 @@ function LoadedAssetPage({
             : undefined
         }
       />
+      {agent.dialog}
       <ConfirmDialog
         open={deleteOpen}
         title={t(entry.deleteTitle, { name: stored.name })}

@@ -2,6 +2,7 @@ import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
 import {
   DATA_STORE_ASSET_KIND,
   DATA_STORE_OPERATION_PREFIX,
+  KNOWLEDGE_BASE_ASSET_KIND,
   SUBJECT_TOOL_PREFIX,
   WORKFLOW_ASSET_KIND
 } from "@work-shape/catalyst-core";
@@ -176,15 +177,16 @@ export function sameAsset(a: SubjectAsset | undefined, b: SubjectAsset | undefin
   return a !== undefined && b !== undefined && a.kind === b.kind && a.name === b.name;
 }
 
-/** The path segments of skills and Data Stores in Build. */
+/** The path segments of skills, Data Stores and Knowledge Bases in Build. */
 const SKILLS_BUILD_PATH = "skills";
 const DATA_STORES_BUILD_PATH = "data-stores";
+const KNOWLEDGE_BASES_BUILD_PATH = "knowledge-bases";
 const SKILL_ASSET_KIND = "skill";
 
 /**
- * The page of an asset, where its kind has one: an agent, a skill or a Data Store in Build, a
- * Workflow on its canvas, an App on its draft page. A Workflow and an App have their pages in a
- * workspace.
+ * The page of an asset, where its kind has one: an agent, a skill, a Data Store or a Knowledge
+ * Base in Build, a Workflow on its canvas, an App on its draft page. A Workflow and an App have
+ * their pages in a workspace.
  */
 export function assetPageRoute(
   subject: SubjectAsset,
@@ -198,6 +200,9 @@ export function assetPageRoute(
   }
   if (subject.kind === DATA_STORE_ASSET_KIND) {
     return { kind: "build-asset", assetKind: DATA_STORES_BUILD_PATH, name: subject.name };
+  }
+  if (subject.kind === KNOWLEDGE_BASE_ASSET_KIND) {
+    return { kind: "build-asset", assetKind: KNOWLEDGE_BASES_BUILD_PATH, name: subject.name };
   }
   if (workspaceId === undefined) {
     return undefined;
