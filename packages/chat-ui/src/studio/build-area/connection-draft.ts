@@ -24,7 +24,14 @@ const HTTP_API = "http_api";
 /** A draft as the card and the approval list read it. */
 export interface ConnectionDraft {
   /** The Connection the tools are for, and what a new one is filled with. */
-  connection: { name: string; title: string; baseUrl: string; headerNames: string[] };
+  connection: {
+    name: string;
+    title: string;
+    baseUrl: string;
+    headerNames: string[];
+    /** The path the test reads, when the draft names one. */
+    testPath?: string;
+  };
   /** The drafted operations, as rows of the approval list. */
   operations: ApprovalCandidate[];
 }
@@ -44,6 +51,7 @@ export function readConnectionDraft(result: unknown): ConnectionDraft | undefine
     return undefined;
   }
   const headers = connection?.headerNames;
+  const testPath = textOf(connection?.testPath);
   const operations = list.flatMap((entry): ApprovalCandidate[] => {
     const operation = recordOf(entry);
     const operationName = textOf(operation?.name);
@@ -59,7 +67,8 @@ export function readConnectionDraft(result: unknown): ConnectionDraft | undefine
       baseUrl,
       headerNames: Array.isArray(headers)
         ? headers.filter((header): header is string => typeof header === "string")
-        : []
+        : [],
+      ...(testPath === undefined ? {} : { testPath })
     },
     operations
   };

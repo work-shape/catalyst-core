@@ -101,6 +101,8 @@ interface ConnectionDraftTarget {
   baseUrl: string;
   /** The fixed headers the API needs, by name. Their values are typed by a person. */
   headerNames: string[];
+  /** The path the test of the new Connection reads, when the draft names one. */
+  testPath?: string;
 }
 
 /** One operation of a draft: its declaration as the check accepted it, and its effect. */
@@ -194,6 +196,13 @@ const inputSchema = z.object({
     .describe(
       "The names of fixed headers the API needs on every request that carry no credential, such as 'x-tenant-id'. Names only: a person types their values. A header that carries a key is never one of them: the person enters the key on the Connection's page."
     ),
+  testPath: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "A GET path, relative to baseUrl and without query, that answers 2xx only with a valid key, such as '/health' or '/me'. The Connection's test reads it, so the test proves the key; without one the test only reaches the address. Leave it out when you know no such path."
+    ),
   operations: z
     .array(operationSchema)
     .min(1)
@@ -212,7 +221,8 @@ const outputSchema = z.object({
     name: z.string(),
     title: z.string(),
     baseUrl: z.string(),
-    headerNames: z.array(z.string())
+    headerNames: z.array(z.string()),
+    testPath: z.string().optional()
   }),
   operations: z.array(
     z.object({
@@ -236,7 +246,9 @@ type DraftInput = z.infer<typeof inputSchema>;
  */
 function inputPathOf(path: readonly PropertyKey[]): string {
   const [first, second] = path.map(String);
-  if (first === "settings") return second === "headers" ? "headerNames" : "baseUrl";
+  if (first === "settings") {
+    return second === "headers" ? "headerNames" : second === "testPath" ? "testPath" : "baseUrl";
+  }
   if (first === "name") return "connection";
   if (first === "displayName") return "title";
   return path.map(String).join(".");
@@ -284,6 +296,7 @@ function checkConnectionDraft(
     ownerPrincipalId: input.ownerPrincipalId,
     settings: {
       baseUrl: draft.baseUrl,
+      ...(draft.testPath === undefined ? {} : { testPath: draft.testPath }),
       ...(headerNames.length === 0
         ? {}
         : { headers: Object.fromEntries(headerNames.map((name) => [name, ""])) })
@@ -313,7 +326,8 @@ function checkConnectionDraft(
         name: parsed.data.name,
         title: parsed.data.displayName,
         baseUrl: draft.baseUrl,
-        headerNames
+        headerNames,
+        ...(draft.testPath === undefined ? {} : { testPath: draft.testPath })
       },
       operations: parsed.data.operations.map(draftedOperation)
     }
@@ -369,6 +383,7 @@ export function createConnectionDraftTool(input: {
     description: [
       "Propose the tools of a REST API Connection for a person to approve. Use it when the person asks you to draft the tools of a REST API, such as from the API's OpenAPI description, which you may read with web_fetch.",
       "Write each operation as one GET request that only reads: its name, a description an agent can act on, the path with its parameters and the query parameters, each with a JSON Schema.",
+      "Name a testPath when the API has a read path that answers only with a valid key, such as a health or 'me' path: the Connection's test reads it, so the test proves the key.",
       "The tool checks the operations as a save of the Connection would, and answers either every issue, which you fix before you call it again, or the draft, which the person sees as a card in this conversation. From the card they open the Connection's approval list and approve the tools; nothing is saved before that, and you never save a Connection.",
       "Never ask for a key and never put one into the draft: the person enters it on the Connection's page. A header or parameter that carries a credential, a fixed value in a parameter's schema ('default', 'const', 'examples', 'example', a singleton 'enum'), a method other than GET and the effect 'changing' are refused.",
       "After a draft, tell the person in one sentence to review the tools on the card and approve what they need.",

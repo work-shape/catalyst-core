@@ -785,8 +785,8 @@ export function ConnectionCreateFlow({
 }
 
 /**
- * The fields of a new REST API filled with the agent's draft: its name, address and the names
- * of its fixed headers, whose values the person types, as the key. The draft's id keeps the
+ * The fields of a new REST API filled with the agent's draft: its name, address, test path and
+ * the names of its fixed headers, whose values the person types, as the key. The draft's id keeps the
  * Namespace it starts with where the reader may create in that one.
  */
 function draftedFields(
@@ -794,7 +794,7 @@ function draftedFields(
   namespaces: BuildCreateDialogProps["namespaces"],
   mayNameFreely: boolean
 ): CreateFields {
-  const { name, title, baseUrl, headerNames } = draft.connection;
+  const { name, title, baseUrl, headerNames, testPath } = draft.connection;
   const namespace = namespaces
     .filter((entry) => entry.prefix !== NO_NAMESPACE && name.startsWith(entry.prefix))
     .sort((left, right) => right.prefix.length - left.prefix.length)[0];
@@ -809,7 +809,8 @@ function draftedFields(
       ...emptyConnectionForm(),
       connectorType: "http_api",
       url: baseUrl,
-      headers: headerNames.map((header) => ({ name: header, value: "" }))
+      headers: headerNames.map((header) => ({ name: header, value: "" })),
+      ...(testPath === undefined ? {} : { testPath })
     },
     key: "",
     sendAs: "bearer"

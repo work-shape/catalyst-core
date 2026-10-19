@@ -33,6 +33,7 @@ const answer = {
       title: "Exampledata",
       baseUrl: "https://api.exampledata.com",
       headerNames: ["x-client-instance-id", 7],
+      testPath: "/api/monitoring/health",
       headers: { "x-client-instance-id": SECRET },
       apiKey: SECRET
     },
@@ -61,14 +62,15 @@ function draft(): ConnectionDraft {
 }
 
 describe("the draft the card reads", () => {
-  it("takes the name, address, header names and declarations, and no key or approval", () => {
+  it("takes the name, address, header names, test path and declarations, and no key or approval", () => {
     const read = draft();
     expect(JSON.stringify(read)).not.toContain(SECRET);
     expect(read.connection).toEqual({
       name: "exampledata",
       title: "Exampledata",
       baseUrl: "https://api.exampledata.com",
-      headerNames: ["x-client-instance-id"]
+      headerNames: ["x-client-instance-id"],
+      testPath: "/api/monitoring/health"
     });
     expect(read.operations.map((operation) => operation.title)).toEqual([
       "Mandanten auflisten",
@@ -402,6 +404,8 @@ describe("the New connection dialog opened from a card", () => {
     expect(markup).toContain('value="Exampledata"');
     expect(markup).toContain('value="https://api.exampledata.com"');
     expect(markup).toContain('value="x-client-instance-id"');
+    // The test reads the drafted path, so a Verbinden that passes proves the key.
+    expect(markup).toContain('value="/api/monitoring/health"');
     expect(markup).not.toContain(SECRET);
     // Nothing is written before Verbinden, and the tools wait for the approval after it.
     expect(writes).toEqual([]);
