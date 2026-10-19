@@ -578,20 +578,22 @@ for (const locale of LOCALES) {
       await create.locator("[data-connection-connect]").click();
       await expect(create.locator('li[data-approval-tool="health"]')).toBeVisible();
       await shootModes(page, locale, "new-approve");
-      expect(freshWrites).toEqual([
+      // The refused key's round and the right key's: each saves, stores the key and tests.
+      const connects = [
         "PUT /api/v1/assets/connection/:name",
+        "PUT /api/v1/connections/:name/secret",
+        "POST /api/v1/connections/:name/test",
+        "PUT /api/v1/assets/connection/:name",
+        "PUT /api/v1/connections/:name/secret",
         "POST /api/v1/connections/:name/test"
-      ]);
+      ];
+      expect(freshWrites).toEqual(connects);
       await create.locator("[data-connection-approve]").click();
       await create.locator("[data-connection-approved-done]").click();
       // The chat beside the page stays open: its conversation is in the address.
       await expect(page).toHaveURL(new RegExp(`/build/connections/${fresh}(?:\\?|$)`, "u"));
       await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();
-      expect(freshWrites).toEqual([
-        "PUT /api/v1/assets/connection/:name",
-        "POST /api/v1/connections/:name/test",
-        "PUT /api/v1/assets/connection/:name"
-      ]);
+      expect(freshWrites).toEqual([...connects, "PUT /api/v1/assets/connection/:name"]);
     } finally {
       await removeConnection(page, existing);
       await removeConnection(page, fresh);
