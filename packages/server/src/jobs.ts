@@ -154,7 +154,8 @@ export function createChatServerJobs(
       slots: 1,
       async run(job, control) {
         // The runs no conversation caused are kept as long as the audit events of their calls.
-        // A run a conversation caused goes with that conversation.
+        // A run a conversation caused goes with that conversation. Decided Inbox requests
+        // are deleted in the same transaction as their runs.
         let operationRunsDeletedCount = 0;
         for (let batch = 0; batch < OPERATION_RUN_PRUNE_BATCHES_PER_TICK; batch++) {
           const deleted = await options.stores.operationRuns.deleteWithoutConversationOlderThan({
