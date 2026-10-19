@@ -14,7 +14,7 @@ import {
   type WorkflowStep
 } from "@work-shape/catalyst-core";
 import type { z } from "zod";
-import { activePersonOf } from "./mail-send-operation";
+import { activePersonOf, mailRecipientItemsOf } from "./mail-send-operation";
 
 // The recipient rule of `mail.send` asked of a Workflow's definition, at a save and a publish:
 // what a step writes as a literal is decided before any run. A referenced value is decided by
@@ -38,13 +38,9 @@ function literalOf(step: Extract<WorkflowStep, { type: "operation" }>, field: st
 
 /** The addresses a literal recipient list names as addresses, never people or workspaces. */
 function addressesOf(value: z.infer<typeof mailRecipientListSchema>): string[] {
-  const items = typeof value === "string" ? [value] : value;
-  return items.flatMap((item) => {
-    if (typeof item === "string") return [item];
-    if ("address" in item && typeof item.address === "string") return [item.address];
-    if ("email" in item && typeof item.email === "string") return [item.email];
-    return [];
-  });
+  return mailRecipientItemsOf(value).flatMap((item) =>
+    item.kind === "address" ? [item.email] : []
+  );
 }
 
 function refused(step: string, reason: string, message: string, domain?: string): AppError {

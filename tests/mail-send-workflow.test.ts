@@ -20,7 +20,11 @@ const trigger = { id: "start", name: "Start", type: "trigger", triggers: [{ kind
 const output = { id: "result", name: "Result", type: "output", input: {} };
 const inputs = {
   type: "object",
-  properties: { subject: { type: "string" }, email: { type: "string" } }
+  properties: {
+    subject: { type: "string" },
+    email: { type: "string" },
+    people: { type: "array", items: { type: "object" } }
+  }
 };
 const ref = (path: string) => ({ ref: { step: "start", path: `input.${path}` } });
 
@@ -229,6 +233,31 @@ describe("mail.send from a Workflow (MAIL-1)", () => {
     const sent = await run(t, "people");
     expect(sent.run.status).toBe("done");
     expect(t.capturedMail()).toHaveLength(1);
+  });
+
+  it("takes a record of an earlier result by its email alone, whatever else it holds", async () => {
+    const t = await ready({ mail: { recipientDomains: ["kanzlei.de"] } });
+    const pia = await person(t, "Pia Person", "pia@elsewhere.test");
+    const team = await t.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Team",
+      creatorUserId: pia.id
+    });
+    await grantSystem(t);
+    await save(t, mailFlow("records", basic(ref("people"))));
+    const sent = await run(t, "records", {
+      people: [
+        // The other fields of a record are its data, never a recipient of their own.
+        { email: "anna@kanzlei.de", workspace: team.id, user: pia.id },
+        { email: "bert@kanzlei.de", address: "otto@outside.test, c@kanzlei.de" }
+      ]
+    });
+    expect(sent.run.status).toBe("done");
+    expect(t.capturedMail()[0]?.recipients.to).toEqual([
+      { email: "anna@kanzlei.de" },
+      { email: "bert@kanzlei.de" }
+    ]);
   });
 
   it("mails the people of the instance with an empty list and fails a mail with nobody in to", async () => {

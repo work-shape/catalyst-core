@@ -17,6 +17,7 @@ import {
   isAuthenticatedServicePrincipal,
   mailDomainAllowed,
   mailDomainOf,
+  mailRecipientSchema,
   mailSendContract,
   mailSendInputSchema,
   type AuthenticatedIdentity,
@@ -94,6 +95,34 @@ type MailRefusal =
   | { reason: typeof MAIL_SEND_ERROR_CODES.noRecipient }
   | { reason: typeof MAIL_SEND_ERROR_CODES.mailRejected; providerCode?: string };
 
+/** What one item of a recipient list names. */
+export type MailRecipientItem =
+  | { kind: "address"; email: string }
+  | { kind: "user"; id: string }
+  | { kind: "workspace"; id: string };
+
+/**
+ * The items of a recipient list as the rule and the send read them. A record of an earlier
+ * result is taken by its `email` alone: the schema lets its other fields through unchecked,
+ * so a record's `address`, `user` or `workspace` never names a recipient.
+ */
+export function mailRecipientItemsOf(value: MailSendRecipientList): MailRecipientItem[] {
+  const items = typeof value === "string" ? [value] : value;
+  return items.flatMap((item): MailRecipientItem[] => {
+    if (typeof item === "string") return [{ kind: "address", email: item }];
+    const named = mailRecipientSchema.safeParse(item);
+    if (named.success) {
+      const recipient = named.data;
+      if ("address" in recipient) return [{ kind: "address", email: recipient.address }];
+      if ("user" in recipient) return [{ kind: "user", id: recipient.user }];
+      return [{ kind: "workspace", id: recipient.workspace }];
+    }
+    return "email" in item && typeof item.email === "string"
+      ? [{ kind: "address", email: item.email }]
+      : [];
+  });
+}
+
 /** The active person of the instance whose address this is, where one is. */
 export async function activePersonOf(
   stores: Pick<PlatformStores, "users">,
@@ -135,7 +164,6 @@ export function mailSendOperation(
     value: MailSendRecipientList | undefined
   ): Promise<{ recipients: ResolvedRecipient[]; skipped: number }> {
     if (value === undefined) return { recipients: [], skipped: 0 };
-    const items = typeof value === "string" ? [value] : value;
     const recipients: ResolvedRecipient[] = [];
     let skipped = 0;
     const address = async (email: string) => {
@@ -146,15 +174,14 @@ export function mailSendOperation(
           : { email, label: email, person: false }
       );
     };
-    for (const item of items) {
-      if (typeof item === "string") await address(item);
-      else if ("address" in item && typeof item.address === "string") await address(item.address);
-      else if ("user" in item && typeof item.user === "string") {
-        const user = await userOf(item.user);
+    for (const item of mailRecipientItemsOf(value)) {
+      if (item.kind === "address") await address(item.email);
+      else if (item.kind === "user") {
+        const user = await userOf(item.id);
         if (user?.email) recipients.push(personRecipient({ ...user, email: user.email }));
         else skipped += 1;
-      } else if ("workspace" in item && typeof item.workspace === "string") {
-        const members = await membersOf(item.workspace);
+      } else {
+        const members = await membersOf(item.id);
         if (!members) {
           skipped += 1;
           continue;
@@ -163,7 +190,7 @@ export function mailSendOperation(
           if (member?.email) recipients.push(personRecipient({ ...member, email: member.email }));
           else skipped += 1;
         }
-      } else if ("email" in item && typeof item.email === "string") await address(item.email);
+      }
     }
     return { recipients, skipped };
   }
