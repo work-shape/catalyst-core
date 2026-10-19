@@ -27,7 +27,9 @@ let results: string[] = [];
 
 beforeAll(() => {
   // Unique files keep the typed parser's CI cache from reusing another fixture's source.
-  // The real repository configuration still checks the sole named exception.
+  // The real repository configuration still checks the sole named exception. The files live in
+  // a dot directory that Git ignores, with a project of their own, so the lint, format and type
+  // checks that `pnpm check:local` runs beside the tests never list them.
   const result = spawnSync(
     process.execPath,
     [
@@ -36,14 +38,18 @@ beforeAll(() => {
       `import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ESLint } from "./packages/quality-config/node_modules/eslint/lib/api.js";
-const directory = mkdtempSync("tests/support/chat-ui-imports-");
+const directory = mkdtempSync("tests/support/.chat-ui-imports-");
 try {
+  const project = join(directory, "tsconfig.json");
+  writeFileSync(project, JSON.stringify({ extends: "../../../tsconfig.lint.json", include: ["*.ts", "../chat-ui.ts"] }));
   const fixtures = JSON.parse(readFileSync(0, "utf8")).map(([source, rule, file], index) => {
     const path = file ?? join(directory, index + ".ts");
     if (!file) writeFileSync(path, source);
     return { source, rule, path };
   });
-  const eslint = new ESLint();
+  const eslint = new ESLint({
+    overrideConfig: [{ files: ["**/*.ts"], languageOptions: { parserOptions: { project: [project] } } }]
+  });
   const results = [];
   for (const { source, path } of fixtures) {
     results.push(JSON.stringify(await eslint.lintText(source, { filePath: path })));
