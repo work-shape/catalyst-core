@@ -190,7 +190,7 @@ describe("agent dependency availability (AVAIL-1)", () => {
         dependencyAvailability: {
           missing: [
             { kind: "knowledge_base", displayName: "Knowledge Base", canMakeAvailable: false },
-            { kind: "connection", canMakeAvailable: false }
+            { kind: "connection", displayName: "Connection", canMakeAvailable: false }
           ]
         }
       }
@@ -202,7 +202,10 @@ describe("agent dependency availability (AVAIL-1)", () => {
     expect(restrictedGerman.json()).toMatchObject({
       draft: {
         dependencyAvailability: {
-          missing: [{ kind: "knowledge_base", displayName: "Wissensbasis" }, { kind: "connection" }]
+          missing: [
+            { kind: "knowledge_base", displayName: "Wissensbasis" },
+            { kind: "connection", displayName: "Verbindung" }
+          ]
         }
       }
     });

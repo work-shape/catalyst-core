@@ -257,49 +257,113 @@ describe("Guardrail page", () => {
     expect(unseen).not.toContain('href="/build/skills/kunden-faq"');
   });
 
-  // Fails without the change: a hit showed the reason as stored, in the language of whoever
-  // acted, and the fallback named the guardrail by its id.
+  // LOWS-A: a hit says why it was kept. The author's reason is quoted in its own words; the
+  // platform's own sentences, which name the guardrail by its id, are said in the reader's
+  // language. Fails without the change: the row dropped every reason.
   it.each([
     [
       "en",
-      "Die Leitplanke „no-iban“ verhindert IBANs.",
-      "Checked when it was saved.",
-      "Checked when it was called."
+      "The rule&#x27;s own words: “Die Leitplanke „no-iban“ verhindert IBANs.” Checked when it was saved.",
+      "The content matches the pattern. Checked when it was called.",
+      "The check could not be run. Checked when it was published.",
+      "The check could not be run. Checked when an approval was requested."
     ],
     [
       "de",
-      "The content matches the pattern of guardrail 'no-iban'.",
-      "Geprüft beim Speichern.",
-      "Geprüft beim Aufruf."
+      "Begründung im Wortlaut der Regel: „Die Leitplanke „no-iban“ verhindert IBANs.“ Geprüft beim Speichern.",
+      "Der Inhalt passt auf das Muster. Geprüft beim Aufruf.",
+      "Die Prüfung konnte nicht ausgeführt werden. Geprüft beim Veröffentlichen.",
+      "Die Prüfung konnte nicht ausgeführt werden. Geprüft bei einer Bitte um Freigabe."
     ]
   ] as const)(
-    "words each hit in the reader's language (%s) from what it records",
-    (locale, stored, saved, called) => {
+    "words why and when each hit was kept in the reader's language (%s)",
+    (locale, authored, matched, unchecked, uncheckedLater) => {
       const markup = renderPage({
         locale,
         hits: {
           status: "ready",
           hits: {
             items: [
-              hit({ event: "asset.before_write", subjectKind: "skill", message: stored }),
+              hit({
+                event: "asset.before_write",
+                subjectKind: "skill",
+                message: "Die Leitplanke „no-iban“ verhindert IBANs."
+              }),
               hit({
                 id: "ghit_2",
                 event: "operation.before_call",
                 subjectKind: "operation",
-                message: stored
+                message: "The input matches the pattern of guardrail 'no_personal_data'."
+              }),
+              hit({
+                id: "ghit_3",
+                event: "app.before_publish",
+                subjectKind: "app",
+                message:
+                  "Check 'no_personal_data' could not read content longer than 100000 characters."
+              }),
+              hit({
+                id: "ghit_4",
+                message:
+                  "Check 'no_personal_data' did not answer within 20 seconds. Try again later."
               })
             ],
             hasMore: false,
-            counts: { last7Days: 2, last30Days: 2 }
+            counts: { last7Days: 4, last30Days: 4 }
           }
         }
       });
-      expect(markup).toContain(saved);
-      expect(markup).toContain(called);
-      expect(markup).not.toContain(stored);
-      expect(markup).not.toMatch(/no-iban|asset\.before_write|operation\.before_call/u);
+      expect(markup).toContain(authored);
+      expect(markup).toContain(matched);
+      expect(markup).toContain(unchecked);
+      expect(markup).toContain(uncheckedLater);
+      expect(markup).not.toMatch(
+        /&#x27;no_personal_data&#x27;|asset\.before_write|operation\.before_call/u
+      );
     }
   );
+
+  // LOWS-A: only the platform's exact sentences are said anew. A reason its author wrote is
+  // shown in its own words, also where it quotes the guardrail's id, starts like the platform's
+  // sentence or names a field the event does not hand the check. Fails where any sentence that
+  // quotes the id was taken for the platform's.
+  it.each([
+    ["en", "The rule&#x27;s own words: “", "” Checked when it was called."],
+    ["de", "Begründung im Wortlaut der Regel: „", "“ Geprüft beim Aufruf."]
+  ] as const)("keeps every reason its author wrote (%s)", (locale, before, after) => {
+    const authored = [
+      "Never send what guardrail 'no_personal_data' forbids.",
+      "Check 'no_personal_data' before you share customer names.",
+      "Check 'no_personal_data' could not be evaluated, ask the data protection officer.",
+      "The name matches the pattern of guardrail 'no_personal_data'.",
+      "The input matches the pattern of guardrail 'no_personal_data'. Remove the IBAN."
+    ];
+    const markup = renderPage({
+      locale,
+      hits: {
+        status: "ready",
+        hits: {
+          items: authored.map((message, index) =>
+            hit({
+              id: `ghit_${index}`,
+              event: "operation.before_call",
+              subjectKind: "operation",
+              message
+            })
+          ),
+          hasMore: false,
+          counts: { last7Days: 5, last30Days: 5 }
+        }
+      }
+    });
+    for (const message of authored) {
+      expect(markup).toContain(`${before}${message.replaceAll("'", "&#x27;")}${after}`);
+    }
+    expect(markup).not.toContain(locale === "en" ? "The content matches the pattern." : "Muster.");
+    expect(markup).not.toContain(
+      locale === "en" ? "The check could not be run." : "Die Prüfung konnte nicht"
+    );
+  });
 
   it("shows an empty, a waiting and a failed read of the hits", () => {
     expect(renderPage()).toContain("No hits yet.");

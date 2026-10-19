@@ -117,6 +117,9 @@ export interface AgentRun {
 export interface ActiveRunSummary {
   id: AgentRunId;
   conversationId: ConversationId;
+  /** Who asked and which request it answers; absent on older snapshots. */
+  ownerUserId?: string;
+  inputMessageId?: MessageId;
   agentName: string;
   status: AgentRunStatus;
   startedAt: ISODateString;
@@ -153,6 +156,9 @@ export type AgentRunProjectionPart =
 
 export interface AgentRunProjection {
   runId: AgentRunId;
+  /** Who asked and which request it answers; absent on older snapshots. */
+  ownerUserId?: string;
+  inputMessageId?: MessageId;
   lastSequence: number;
   status: AgentRunStatus;
   durationMs?: number;

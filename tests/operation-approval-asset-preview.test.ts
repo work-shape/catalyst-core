@@ -346,6 +346,44 @@ describe("the preview of a held asset save", () => {
     expect(JSON.stringify(await preview(t.kai.id, requestId))).toContain(OLD_PARAGRAPH);
   });
 
+  it("withholds pending input from an approver without read rights, including the list payload", async () => {
+    const { t, holding, hold } = await setup();
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "skill", name: "kai-leave" },
+      payload: { config: skill("kai-leave", stored) }
+    });
+    await t.grant(
+      t.admin.id,
+      "skill.read",
+      { assetId: await t.assetId("skill", "kai-leave") },
+      "deny"
+    );
+    holding("assets.put");
+    const requestId = await hold("assets.put", "skill", "kai-leave", {
+      config: { ...skill("kai-leave", changed), title: "Leave policy" },
+      expectedRevision: 1
+    });
+    const detail = (
+      await t.expectOk(t.admin.id, "approval_requests.get", { params: { requestId } })
+    ).json();
+    expect(detail.canDecide).toBe(true);
+    expect(detail.preview.asset).toMatchObject({ title: "Leave policy", beforeWithheld: true });
+    expect(detail.payload.input).toBeUndefined();
+    expect(detail.preview.inputs).toEqual([]);
+    expect(JSON.stringify(detail)).not.toContain(NEW_PARAGRAPH);
+    const listed = (
+      await t.expectOk(t.admin.id, "approval_requests.list", { query: { status: "pending" } })
+    ).json();
+    expect(JSON.stringify(listed)).not.toContain(NEW_PARAGRAPH);
+    const own = (
+      await t.expectOk(t.kai.id, "approval_requests.get", { params: { requestId } })
+    ).json();
+    expect(own.payload.input.config.content).toBe(changed);
+    expect(
+      (await t.stores.approvals.getApprovalRequest({ clientInstanceId, requestId }))?.payload.input
+    ).toBeDefined();
+  });
+
   // Fails before the fix of the review: an opened request said `isNew` and chose its shape
   // from the stored row before it asked for the read right, so a person without the right
   // learned whether the asset exists.

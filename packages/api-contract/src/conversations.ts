@@ -603,6 +603,8 @@ export const agentRunSchema = z.object({
 export const activeRunSummarySchema = z.object({
   id: z.string(),
   conversationId: z.string(),
+  ownerUserId: z.string().optional(),
+  inputMessageId: z.string().optional(),
   agentName: z.string(),
   status: agentRunStatusSchema,
   startedAt: timestampSchema,
@@ -657,6 +659,8 @@ export const agentRunProjectionPartSchema = z.discriminatedUnion("type", [
 
 export const agentRunProjectionSchema = z.object({
   runId: z.string(),
+  ownerUserId: z.string().optional(),
+  inputMessageId: z.string().optional(),
   lastSequence: z.number().int().nonnegative(),
   status: agentRunStatusSchema,
   durationMs: z.number().int().nonnegative().optional(),

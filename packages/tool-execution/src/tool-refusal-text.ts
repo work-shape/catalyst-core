@@ -1,5 +1,6 @@
 import {
   operationDenialError,
+  RIGHT_VERB_WORDS,
   AGENT_TOOL_ACTION_PREFIX,
   isPlatformAction,
   type LocaleCode,
@@ -122,23 +123,14 @@ function rightLabel(
   const [kind, verb] = action.split(".");
   if (!isRightKind(kind) || !isRightVerb(verb)) return undefined;
   return de
-    ? `${KIND_WORDS[kind].de} ${VERB_WORDS[verb].de}`
-    : `${VERB_WORDS[verb].en} ${KIND_WORDS[kind].en}`;
+    ? `${KIND_WORDS[kind].de} ${RIGHT_VERB_WORDS[verb].de}`
+    : `${RIGHT_VERB_WORDS[verb].en} ${KIND_WORDS[kind].en}`;
 }
 
 interface Words {
   en: string;
   de: string;
 }
-
-const VERB_WORDS = {
-  read: { en: "view", de: "ansehen" },
-  use: { en: "use", de: "verwenden" },
-  write: { en: "edit", de: "bearbeiten" },
-  publish: { en: "publish", de: "veröffentlichen" },
-  delete: { en: "delete", de: "löschen" },
-  approve: { en: "approve", de: "freigeben" }
-} as const satisfies Record<string, Words>;
 
 const KIND_WORDS = {
   agent: { en: "agents", de: "Agenten" },
@@ -151,7 +143,7 @@ const KIND_WORDS = {
   guardrail: { en: "guardrails", de: "Leitplanken" }
 } as const satisfies Record<string, Words>;
 
-type RightVerb = keyof typeof VERB_WORDS;
+type RightVerb = keyof typeof RIGHT_VERB_WORDS;
 type RightKind = keyof typeof KIND_WORDS;
 type OwnWordAction = Exclude<PlatformAction, `${RightKind}.${RightVerb}`>;
 
@@ -201,5 +193,5 @@ function isRightKind(kind: string | undefined): kind is RightKind {
 }
 
 function isRightVerb(verb: string | undefined): verb is RightVerb {
-  return verb !== undefined && Object.hasOwn(VERB_WORDS, verb);
+  return verb !== undefined && Object.hasOwn(RIGHT_VERB_WORDS, verb);
 }

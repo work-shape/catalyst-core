@@ -180,7 +180,7 @@ function AssistantRuntimePane({
   useReportDockSubject(conversationSubject);
   const pendingOpen = agentOpens.pending;
   // A build refused because others read this conversation goes on in a private one (E3).
-  const privateBuild = usePrivateBuildOffer(chat, continuePrivately);
+  const privateBuild = usePrivateBuildOffer(chat, followUpSource.currentUserId, continuePrivately);
   useAutoOpenPageSurface(activeRun, selectedConversationId);
 
   useEffect(() => {
@@ -498,12 +498,14 @@ function AssistantRuntimePane({
 }
 
 /**
- * The offer to go on privately, where the run that answers the person's last request was
+ * The offer to go on privately, where the run that answers the person's own last request was
  * refused to build because others read the conversation, with that request to take along.
- * Nothing elsewhere, and nothing for a later request after a refused one.
+ * Nothing elsewhere, nothing for a later request after a refused one, and nothing for another
+ * member who reads along.
  */
 function usePrivateBuildOffer(
   chat: Pick<SelectedChatModel, "activeRun" | "completedRunProjections" | "messages">,
+  currentUserId: string | undefined,
   continuePrivately: SelectedChatModel["continuePrivately"]
 ) {
   const { activeRun, completedRunProjections, messages } = chat;
@@ -511,15 +513,22 @@ function usePrivateBuildOffer(
   const request = useMemo(
     () =>
       refusedRequest({
+        currentUserId,
         messages: (messages ?? []).map((message) => ({
+          id: message.id,
           role: message.role,
           text: message.text,
           runId: readCompatibleMessageRunId(message)
         })),
-        activeRun: activeRun && { runId: activeRun.run.id, parts: activeRun.projection.parts },
+        activeRun: activeRun && {
+          runId: activeRun.run.id,
+          ownerUserId: activeRun.run.ownerUserId,
+          inputMessageId: activeRun.run.inputMessageId,
+          parts: activeRun.projection.parts
+        },
         completedRuns: completedRunProjections ?? {}
       }),
-    [activeRun, completedRunProjections, messages]
+    [activeRun, completedRunProjections, currentUserId, messages]
   );
   if (continuePrivately === undefined || request === undefined) return undefined;
   return (

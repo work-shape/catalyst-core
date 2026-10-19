@@ -18,8 +18,13 @@ import {
   SkeletonList
 } from "@work-shape/catalyst-ui";
 import type { GuardrailHitView } from "@work-shape/catalyst-api-client";
+import { GUARDRAIL_CHECKABLE_FIELDS } from "@work-shape/catalyst-core";
 import { formatMomentShort } from "../../shared/locale-format";
-import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import {
+  useTranslation,
+  type TranslationContextValue,
+  type TranslationKey
+} from "../../shared/i18n";
 import { useInboxItemKindLookup } from "../../chat/inbox/inbox-item-kinds";
 import { CopyIdItem } from "../copy-id-item";
 import { usePageShown } from "./asset-editor-shell";
@@ -161,7 +166,14 @@ export function GuardrailPage({
       label: t("guardrails.hitsTitle"),
       description: t("guardrails.hitsDescription"),
       count: hits.status === "ready" ? hits.hits.items.length : undefined,
-      body: <GuardrailHitList read={hits} kinds={kinds} subjectLabel={subjectLabel} />
+      body: (
+        <GuardrailHitList
+          read={hits}
+          kinds={kinds}
+          subjectLabel={subjectLabel}
+          guardrailName={asset.name}
+        />
+      )
     }
   ];
 
@@ -232,6 +244,8 @@ function scopeLabel(
     : t("guardrails.scopeWorkspace", { name });
 }
 
+type Translate = TranslationContextValue["t"];
+
 /** When a hit was checked, by its before-event. */
 const HIT_MOMENTS: Record<string, TranslationKey> = {
   "asset.before_write": "guardrails.hitAtWrite",
@@ -244,6 +258,46 @@ const HIT_MOMENTS: Record<string, TranslationKey> = {
 };
 
 /**
+ * The causes `guardrail-runner.ts` gives where a check could not read or judge the content, in
+ * its sentence `Check '<id>' <cause>.`, which may end in " Try again later.".
+ */
+const UNCHECKED_CAUSES: readonly RegExp[] = [
+  /^could not read content longer than \d+ characters$/u,
+  /^could not judge a file that is no text$/u,
+  /^did not answer within \d+ seconds$/u,
+  /^could not run because the model usage limit of this instance is reached$/u,
+  /^could not be evaluated$/u
+];
+
+/**
+ * Why a hit was kept, in the reader's words. The stored reason is quoted in its own words, as a
+ * refusal quotes a rule's reason, unless it is exactly one of the platform's own sentences of
+ * `guardrail-runner.ts`, which name the guardrail by its id: a pattern without a reason of its
+ * own matched one of the event's fields, or the check could not read or judge the content.
+ * Those are said anew in the reader's language.
+ */
+function hitReason(message: string, guardrailName: string, event: string, t: Translate): string {
+  if (message === "") return t("guardrails.hitUnevaluated");
+  const fields =
+    Object.entries(GUARDRAIL_CHECKABLE_FIELDS).find(([name]) => name === event)?.[1] ?? [];
+  if (
+    fields.some(
+      (field) => message === `The ${field} matches the pattern of guardrail '${guardrailName}'.`
+    )
+  ) {
+    return t("guardrails.hitPatternMatched");
+  }
+  const unchecked = `Check '${guardrailName}' `;
+  if (message.startsWith(unchecked)) {
+    const cause = /^(.*?)\.(?: Try again later\.)?$/u.exec(message.slice(unchecked.length))?.[1];
+    if (cause !== undefined && UNCHECKED_CAUSES.some((known) => known.test(cause))) {
+      return t("guardrails.hitUnevaluated");
+    }
+  }
+  return t("guardrails.hitReason", { reason: message });
+}
+
+/**
  * How often the guardrail fired, by period, and the newest hits, the newest first: on what, why,
  * and when. A hit on an asset of the Build area links it. No hit names a person: hits are
  * counted by rule and period, never listed by person (works-council co-determination, §87(1)
@@ -252,11 +306,13 @@ const HIT_MOMENTS: Record<string, TranslationKey> = {
 function GuardrailHitList({
   read,
   kinds,
-  subjectLabel
+  subjectLabel,
+  guardrailName
 }: {
   read: GuardrailHitsRead;
   kinds: readonly BuildKind[];
   subjectLabel(event: string, kind: string): ReactNode;
+  guardrailName: string;
 }) {
   const { locale, t } = useTranslation();
   const { href, open } = useBuildNavigation();
@@ -336,14 +392,14 @@ function GuardrailHitList({
                   />
                 ) : undefined
               }
-              // The stored reason is in the language of whoever acted or wrote the rule, and a
-              // fallback names the guardrail's id. The row says in the reader's language what
-              // was checked; the rule itself stands above under Rule.
-              description={t(
+              // Why, then when it was checked. Unchecked content has no moment of its own.
+              description={
                 hit.message === ""
-                  ? "guardrails.hitUnevaluated"
-                  : (HIT_MOMENTS[hit.event] ?? "guardrails.hitAtUnknownEvent")
-              )}
+                  ? t("guardrails.hitUnevaluated")
+                  : `${hitReason(hit.message, guardrailName, hit.event, t)} ${t(
+                      HIT_MOMENTS[hit.event] ?? "guardrails.hitAtUnknownEvent"
+                    )}`
+              }
               descriptionWraps
               time={formatMomentShort(hit.createdAt, locale)}
             />
