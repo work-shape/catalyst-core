@@ -554,28 +554,29 @@ describe("Studio refusals", () => {
       { reason: "model_not_allowed", modelBindingId: "reasoning", ...workspace },
       { reason: "model_binding_required", ...workspace }
     ].map((details) => readBuildRefusal(refusal("FORBIDDEN", "Forbidden", details), t));
-    expect(messages.map((outcome) => !outcome.ok && outcome.refusals)).toEqual([
-      [
+    const refused = (refusals: unknown[]) => ({ ok: false, conflict: false, refusals });
+    expect(messages).toEqual([
+      refused([
         {
           field: "tools",
           message:
             "The tool documents.read is not allowed in the workspace Kai Spezis. An instance admin sets its tools on Instance > Workspaces."
         }
-      ],
-      [
+      ]),
+      refused([
         {
           field: "model",
           message:
             "The model reasoning is not allowed in the workspace Kai Spezis. An instance admin sets its models on Instance > Workspaces."
         }
-      ],
-      [
+      ]),
+      refused([
         {
           field: "model",
           message:
             "An agent of the workspace Kai Spezis needs a default model the workspace allows."
         }
-      ]
+      ])
     ]);
   });
 
