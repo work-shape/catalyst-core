@@ -54,7 +54,10 @@ export const connectionOperationDetailSchema = z.object({
   status: connectionOperationStatusSchema,
   /** As the outside system or the release describes it. Untrusted text, shown as text. */
   description: z.string().max(CONNECTION_OPERATION_DESCRIPTION_MAX_CHARS).optional(),
-  /** The bounded declaration read from the catalog; untrusted data, never instructions. */
+  /**
+   * The bounded declaration read from the catalog; untrusted data, never instructions. With
+   * `needs_review` it is the newly read one, which no call runs on until it is accepted.
+   */
   inputSchema: z.record(z.string(), z.unknown()).optional(),
   /** Only with status `needs_review`: the fingerprint to accept in the Connection's config. */
   discoveredFingerprint: z.string().optional(),
@@ -126,7 +129,7 @@ export const connectionDetailSchema = z.object({
   usedBy: z.array(
     z.object({ agentName: z.string(), title: z.string(), toolNames: z.array(z.string()) })
   ),
-  /** Published consumers the caller may read. No draft content or hidden names. */
+  /** Published consumers the caller may read or use. No draft content or hidden names. */
   usedByAssets: z
     .array(
       z.object({
