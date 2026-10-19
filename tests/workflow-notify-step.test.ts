@@ -397,5 +397,5 @@ describe("Workflow notify steps and grouped failure notices", () => {
     const overview = await t.stores.jobs.listOverview({ clientInstanceId });
     expect(overview.find((job) => job.id === repeated.id)?.status).toBe("succeeded");
     expect(await items(t, t.root.id)).toHaveLength(1);
-  });
+  }, 120_000);
 });

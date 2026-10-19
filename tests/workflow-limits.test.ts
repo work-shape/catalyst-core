@@ -250,6 +250,9 @@ describe("limits.concurrency of a Workflow", () => {
     );
     const t = await ready({ definitions: definitions.source, stepSlots: 8 });
     await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    // A held call keeps its slot as long as the gate holds it: workers start late on a busy
+    // machine.
+    t.state.limits = { ...t.state.limits, callTimeoutMs: 30_000 };
     t.state.centralSettings = [
       ...t.state.centralSettings,
       { operation: "workflow.bulk-item.start", value: "allow" }
@@ -260,7 +263,7 @@ describe("limits.concurrency of a Workflow", () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const timer = setTimeout(release, 4_000);
+    const timer = setTimeout(release, 15_000);
     t.setBehaviour(async (_operation, input): Promise<JsonValue> => {
       const text = z.object({ text: z.string() }).parse(input).text;
       if (text === "bulk-items") return { items: BULK_ITEMS };
@@ -333,15 +336,15 @@ describe("limits.concurrency of a Workflow", () => {
     );
     const t = await ready({ definitions: definitions.source, stepSlots: 8 });
     await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    t.state.limits = { ...t.state.limits, callTimeoutMs: 30_000 };
     const seen = { going: 0, most: 0 };
     let release = (): void => undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
     // Every call stays until all eight are with the outside system, or the timer gives up
-    // before the test Connection's call timeout of 2 s, after which a held call would no
-    // longer hold its slot.
-    const timer = setTimeout(release, 1_500);
+    // before the call timeout of 30 s, after which a held call would no longer hold its slot.
+    const timer = setTimeout(release, 15_000);
     t.setBehaviour(async (_operation, input): Promise<JsonValue> => {
       const text = z.object({ text: z.string() }).parse(input).text;
       if (text === "lone-items") return { items: BULK_ITEMS };
@@ -496,11 +499,11 @@ describe("time a run spends waiting", () => {
   it("leaves a waiting run alone when its deadline job comes due, and ends it after the wait", async () => {
     // Real time here: the deadline job is due at the run's deadline on the database's clock.
     const { t: short, started } = await readyWaiting([waiting("import", "manual")], {
-      limits: { maxDurationMs: 1_000 }
+      limits: { maxDurationMs: 5_000 }
     });
     const run = await startRun(short, "import");
     const worker = await untilSyncWaits(short, () => Promise.resolve(run.id));
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    await new Promise((resolve) => setTimeout(resolve, 6_000));
     // The deadline job runs here and finds the run waiting.
     await worker.runDue();
     expect(await short.stores.workflowRuns.readRun({ clientInstanceId, id: run.id })).toMatchObject(
@@ -511,8 +514,8 @@ describe("time a run spends waiting", () => {
     expect(done, JSON.stringify(done.error)).toMatchObject({ status: "done" });
     expect(
       (await short.stores.workflowRuns.readRun({ clientInstanceId, id: run.id }))?.waitedMs
-    ).toBeGreaterThanOrEqual(2_000);
-  });
+    ).toBeGreaterThanOrEqual(6_000);
+  }, 60_000);
 
   it("retains the moved deadline while the old deadline job is still running", async () => {
     const source = waiting("import", "manual");

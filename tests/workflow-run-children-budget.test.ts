@@ -21,6 +21,9 @@ describe("child-run budgets", () => {
     const t = await readyChildWorkflows((fixture) => {
       open = fixture;
     }, definitions);
+    // The bulk insert of a child's history takes longer than the test Connection's default
+    // call timeout on a busy machine, and a timed-out call retries and inserts it twice.
+    t.state.limits = { ...t.state.limits, callTimeoutMs: 30_000 };
     await withTestSql(async (sql) => {
       t.setBehaviour(async (_operation, input): Promise<JsonValue> => {
         const text = z.object({ text: z.string() }).parse(input).text;

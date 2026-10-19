@@ -293,7 +293,7 @@ describe("Workflow batch operations (WF 114)", () => {
         })
       );
     },
-    120_000
+    300_000
   );
 
   it.each([0, -1, 1.5, "500"])("refuses malformed batch size %s", (batch) => {

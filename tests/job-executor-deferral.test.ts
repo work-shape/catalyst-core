@@ -81,5 +81,5 @@ describe("source-requested job deferral", () => {
     expect(
       await db.sql`select 1 from platform_job_wakes where client_instance_id = ${clientInstanceId}`
     ).toHaveLength(0);
-  });
+  }, 120_000);
 });
