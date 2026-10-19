@@ -37,4 +37,46 @@ describe("data scope administration", () => {
     expect(JSON.stringify(changed)).not.toContain("101-private-scope");
     expect(changed[0]?.metadata).toMatchObject({ valueCount: 2, all: false });
   });
+
+  it("refuses an own assignment, also through a group, and asks a principal's administrators (H2, check 41)", async () => {
+    const world = await setupAccessInstance({ scopes });
+    const set = (actor: string, payload: Record<string, unknown>) =>
+      world.call(actor, "scope_assignments.set", {
+        payload: { dimension: "mandant", effect: "allow", values: "all", ...payload }
+      });
+    const lead = await world.stores.users.resolveUserIdentity({
+      clientInstanceId,
+      authSource: "test",
+      externalUserId: "team-lead",
+      displayLabel: "Team lead",
+      roles: ["user"],
+      permissionRefs: [],
+      permissions: ["users.manage"],
+      groups: ["leads"]
+    });
+    const principal = await world.stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      displayLabel: "Nightly Workflow"
+    });
+    const own = { holderKind: "user", holderId: lead.id };
+    for (const [actor, payload] of [
+      [world.admin.id, { holderKind: "user", holderId: world.admin.id }],
+      [lead.id, own],
+      [lead.id, { ...own, effect: "deny", values: [] }],
+      [lead.id, { holderKind: "group", holderId: "leads" }],
+      [lead.id, { holderKind: "service_principal", holderId: principal.id }]
+    ] as const) {
+      const refused = await set(actor, payload);
+      expect(refused.statusCode, JSON.stringify(payload)).toBe(403);
+    }
+    for (const [actor, payload] of [
+      [lead.id, { holderKind: "group", holderId: "staff" }],
+      [lead.id, { holderKind: "user", holderId: world.kai.id, values: ["101"] }],
+      [world.root.id, { holderKind: "service_principal", holderId: principal.id }],
+      [world.root.id, own]
+    ] as const) {
+      const saved = await set(actor, payload);
+      expect(saved.statusCode, saved.body).toBe(200);
+    }
+  });
 });

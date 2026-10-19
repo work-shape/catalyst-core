@@ -12,17 +12,31 @@ test("an administrator edits data scope assignments in both languages, at short 
     data: { email: "e2e-admin@example.test", password: "e2e-admin-password", rememberMe: true }
   });
   expect(signedIn.ok()).toBe(true);
-  const me: { id: string } = await (await page.request.get(`${apiBaseUrl}/api/v1/me`)).json();
+  // Nobody writes their own assignment, so the administrator edits E2E User's.
+  const listed: { items: { id: string; email?: string }[] } = await (
+    await page.request.get(`${apiBaseUrl}/api/v1/instance/users?limit=200`)
+  ).json();
+  const member = listed.items.find((user) => user.email === "e2e-user@example.test");
+  expect(member).toBeDefined();
   const clear = () =>
     requestWithOrigin(page, "put", assignmentPath, {
       data: {
         dimension: "mandant",
         holderKind: "user",
-        holderId: me.id,
+        holderId: member?.id,
         effect: "allow",
         values: []
       }
     });
+  // The tab opens on the administrator's own assignment, which they cannot save.
+  const chooseMember = async () => {
+    await page
+      .getByRole("tabpanel")
+      .getByRole("button", { name: "E2E Admin", exact: true })
+      .click();
+    await page.getByRole("option", { name: /E2E User/u }).click();
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+  };
   expect((await clear()).ok()).toBe(true);
   try {
     for (const locale of ["en", "de"] as const) {
@@ -41,6 +55,7 @@ test("an administrator edits data scope assignments in both languages, at short 
           exact: true
         });
         await scopeTab.click();
+        await chooseMember();
         const values = page.getByLabel(
           locale === "de" ? "Werte, durch Komma getrennt" : "Values, separated by commas"
         );
@@ -66,6 +81,7 @@ test("an administrator edits data scope assignments in both languages, at short 
             .getByRole("tab", { name: locale === "de" ? "Prüfen" : "Check", exact: true })
             .click();
           await scopeTab.click();
+          await chooseMember();
           await expect(values).toHaveValue("101, 102");
         }
         await values.scrollIntoViewIfNeeded();

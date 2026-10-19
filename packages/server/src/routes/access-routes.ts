@@ -1,5 +1,9 @@
-import { requireManageableHolder } from "../access/grant-holder-rules";
-import { withRightsHeld } from "../access/rights-held";
+import {
+  authorizePrincipalHolderWrite,
+  holderNotAdministrable,
+  requireManageableHolder
+} from "../access/grant-holder-rules";
+import { requireAuthorized, withRightsHeld } from "../access/rights-held";
 import {
   auditActorFromUser,
   asUserId,
@@ -85,7 +89,31 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
           ...(input.holderKind === "user" ? { userId: input.holderId } : {})
         },
         async (held) => {
+          // As for grants (check 41): nobody writes or lifts their own assignment, also not
+          // through a group they belong to, and a principal's row is its administrators'.
           held.access.require("users.manage");
+          if (input.holderKind === "service_principal") {
+            requireAuthorized(
+              authorizePrincipalHolderWrite(held.actor, held.access, "scope_assignments.set")
+            );
+          } else {
+            const own =
+              input.holderKind === "user"
+                ? input.holderId === held.actor.id
+                : (
+                    await held.options.stores.users.getUser({
+                      clientInstanceId: options.clientInstanceId,
+                      userId: asUserId(held.actor.id)
+                    })
+                  )?.groups?.includes(input.holderId);
+            if (own)
+              requireAuthorized(
+                holderNotAdministrable(
+                  "scope_assignments.set",
+                  "Nobody writes or lifts a data assignment of their own: another holder of the right does"
+                )
+              );
+          }
           await requireHolder(held.options.stores, held.actor, input);
           await held.options.stores.access.setScopeAssignment({
             ...input,
