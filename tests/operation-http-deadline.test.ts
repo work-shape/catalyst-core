@@ -7,7 +7,6 @@ import {
   asAgentRunId,
   asConversationId,
   asToolCallId,
-  asUserId,
   type AuthenticatedUser,
   type OperationCall,
   type OperationCallRuntime,
@@ -499,56 +498,3 @@ it.each(["knowledge_base.use", "connection.use"] as const)(
     expect(f.deps.useRightRefusal).toHaveBeenCalledWith(action, "de");
   }
 );
-
-it("keeps the resolved asset right of a self-checked call after approval (AVAIL-1b)", async () => {
-  const execute = vi.fn(async () => ({ done: true }));
-  const f = await direct(execute);
-  const original = await f.deps.registry.resolve(f.call.operation);
-  if (!original) throw new Error("The fixture operation is missing");
-  const registry = createOperationRegistry();
-  registry.register({
-    ...original,
-    action: null,
-    resource: () => ({ kind: "connection", id: "crm", name: "crm" }),
-    authorize: (_input, { access, resource }) => {
-      const decision = access.authorize("connection.use", resource);
-      return decision.allowed
-        ? { allowed: true }
-        : { allowed: false, action: "connection.use", reason: decision.reason };
-    }
-  });
-  f.deps.registry = registry;
-  f.deps.resolveResource = async (resource) => ({
-    resource: resource ? { ...resource, assetId: "crm-asset" } : undefined
-  });
-  f.deps.authorizer = createAuthorizer({
-    loadPersistedAccess: async () => ({
-      holderActive: true,
-      grants: [
-        {
-          id: "crm-grant",
-          clientInstanceId,
-          holderKind: "user",
-          holderId: f.actor.id,
-          action: "connection.use",
-          effect: "allow",
-          scopeKind: "asset",
-          scopeId: "crm-asset",
-          grantedBy: asUserId(f.actor.id),
-          createdAt: new Date().toISOString()
-        }
-      ]
-    })
-  });
-  f.deps.policy.instanceDefaults.changing = "approval";
-  f.deps.approvals = { request: async () => ({ approvalRequestId: "resource-approval" }) };
-  const waiting = await f.run();
-  expect(waiting.result).toMatchObject({ status: "pending_approval" });
-  const ended = await executeApprovedOperation(
-    { runId: waiting.run.id, call: f.call },
-    { id: f.actor.id, label: f.actor.displayLabel, at: new Date().toISOString() },
-    f.deps
-  );
-  expect(ended).toMatchObject({ execution: "done", run: { status: "done" } });
-  expect(execute).toHaveBeenCalledOnce();
-});
