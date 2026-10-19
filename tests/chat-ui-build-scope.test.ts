@@ -69,9 +69,8 @@ function source(input: { permissions: string[]; actions: string[]; scope: BuildS
       revert: async () => ({ revision: 1 }),
       revisions: async () => ({ items: [] })
     },
-    scope: input.scope,
-    chooseScope: noop,
-    scoped: (kind) => kind === "agent" || kind === "skill"
+    scopeOf: (kind) => (kind === "agent" || kind === "skill" ? input.scope : undefined),
+    chooseScope: noop
   };
   return built;
 }

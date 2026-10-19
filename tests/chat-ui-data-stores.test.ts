@@ -342,8 +342,7 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
     ...(input.buildWithAgent ? { buildWithAgent: input.buildWithAgent } : {}),
     ...(input.scoped
       ? {
-          scope: { kind: "workspace" as const, workspaceId: "ws_1" },
-          scoped: () => true,
+          scopeOf: () => ({ kind: "workspace" as const, workspaceId: "ws_1" }),
           chooseScope: noop
         }
       : {}),

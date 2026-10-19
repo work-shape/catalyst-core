@@ -101,9 +101,8 @@ function source(
       revert: async () => ({ revision: 1 }),
       revisions: async () => ({ items: [] })
     },
-    scope,
-    chooseScope: noop,
-    scoped: () => true
+    scopeOf: () => scope,
+    chooseScope: noop
   };
 }
 
