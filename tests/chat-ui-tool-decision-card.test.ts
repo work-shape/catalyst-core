@@ -595,3 +595,60 @@ describe("a confirmation in the person's own words", () => {
     expect(allowOf(reading)).toContain(`disabled=""`);
   });
 });
+
+describe("the confirmation card of a mail (MAIL-2, check 138)", () => {
+  const call: ToolDecision = {
+    ...waiting,
+    operationId: "mail.send",
+    inputPreview: { to: ["anna@kanzlei.de"], subject: "Stand", body: "Alles **gut**." }
+  };
+  const mail: ToolDecision = {
+    ...call,
+    simulation: {
+      simulated: true,
+      preview: {
+        from: { name: "Kanzlei Muster", address: "catalyst@mail.example.test" },
+        to: [
+          { kind: "person", label: "Anna Berg" },
+          { kind: "address", label: "office@kanzlei.de" }
+        ],
+        cc: [],
+        bcc: [{ kind: "address", label: "archiv@kanzlei.de" }],
+        skipped: 1,
+        subject: "Stand",
+        html: "<p>Alles <strong>gut</strong>.</p>",
+        text: "Alles gut.\n\n--\nAn agent of Example sent this e-mail on behalf of Kai."
+      }
+    }
+  };
+
+  it("shows the rendered mail with its sender and recipients, and no way to always allow it", () => {
+    const markup = renderView(mail, {}, "en");
+    const shown = text(markup);
+    expect(markup).toContain('data-testid="mail-send-preview"');
+    expect(shown).toContain("From Kanzlei Muster &lt;catalyst@mail.example.test&gt;");
+    expect(shown).toContain("To Anna Berg office@kanzlei.de");
+    expect(shown).toContain("Bcc archiv@kanzlei.de");
+    expect(markup).not.toContain('data-field="mail-cc"');
+    expect(shown).toContain("Subject Stand");
+    expect(shown).toContain("An agent of Example sent this e-mail on behalf of Kai.");
+    expect(markup).toContain('data-field="mail-skipped"');
+    // The mail is what the card asks about: its raw input is under the details alone.
+    expect(markup).not.toContain('data-input-key="subject"');
+    expect(shown).toContain("Allow Deny");
+    expect(shown).not.toMatch(/always/iu);
+  });
+
+  it("says the mail in German", () => {
+    const shown = text(renderView(mail, {}, "de"));
+    expect(shown).toContain("Von Kanzlei Muster &lt;catalyst@mail.example.test&gt;");
+    expect(shown).toContain("An Anna Berg office@kanzlei.de");
+    expect(shown).toContain("Betreff Stand");
+  });
+
+  it("falls back to the input where a mail call carries no simulation", () => {
+    const markup = renderView(call);
+    expect(markup).not.toContain('data-testid="mail-send-preview"');
+    expect(markup).toContain('data-input-key="subject"');
+  });
+});

@@ -54,6 +54,23 @@ export type OperationCallsOptions = Pick<
   publishStoredData?: PublishNarrativeStoredData;
 };
 
+/**
+ * The system sender the publish question names for a `mail.send` step, where release config
+ * switches outbound mail on: the name on the From line, as MAIL-1 registers it, and the address.
+ */
+function mailSenderOf(
+  config: OperationCallsOptions["config"]
+): { mailSender: { name: string; address: string } } | Record<string, never> {
+  const mail = config.infrastructure.mail;
+  if (!mail?.outbound.enabled) return {};
+  return {
+    mailSender: {
+      name: mail.sender.fromName ?? config.clientInstance.displayName,
+      address: mail.sender.fromAddress
+    }
+  };
+}
+
 /** Builds the call path of one process. See `OperationCalls`. */
 export function createOperationCalls(options: OperationCallsOptions): OperationCalls {
   const registry = createOperationRegistry();
@@ -91,7 +108,8 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     ...(options.guardrails ? { guardrails: options.guardrails } : {}),
     resolve: (operation) => deps.registry.resolve(operation),
     policy,
-    ...(options.publishStoredData ? { storedData: options.publishStoredData } : {})
+    ...(options.publishStoredData ? { storedData: options.publishStoredData } : {}),
+    ...mailSenderOf(options.config)
   });
   // A held publish is decided by the holders of the kind's `approve` right.
   const held = publishApprovalKinds({

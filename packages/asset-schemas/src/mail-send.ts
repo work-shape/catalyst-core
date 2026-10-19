@@ -59,6 +59,10 @@ export const MAIL_ATTACHMENTS_MAX_BYTES = 10 * 1024 * 1024;
  *   instance, or such a `replyTo`. `details.domain` names its domain. Nothing is sent to any
  *   recipient of the mail.
  * - `no_recipient`: `to` named people or workspaces, and none of them has an address.
+ * - `workspace_not_allowed`: a `{ workspace }` recipient is not a Shared Workspace the author
+ *   of the mail can see: they are no member of it and no instance admin (MAIL-2). The author
+ *   is the person who saves, publishes or tests the Workflow, or for whom an agent calls; in a
+ *   published run, its publisher. Nothing is sent and no member of it is named.
  * - `mail_rejected`: the provider refused the mail before accepting it. `details.providerCode`
  *   holds the provider's own code; its text is never kept.
  * A transient failure is not one of these: a refused connection is retried by the step's
@@ -67,13 +71,15 @@ export const MAIL_ATTACHMENTS_MAX_BYTES = 10 * 1024 * 1024;
 export const MAIL_SEND_ERROR_CODES = {
   recipientNotAllowed: "recipient_not_allowed",
   noRecipient: "no_recipient",
-  mailRejected: "mail_rejected"
+  mailRejected: "mail_rejected",
+  workspaceNotAllowed: "workspace_not_allowed"
 } as const;
 export type MailSendErrorCode = (typeof MAIL_SEND_ERROR_CODES)[keyof typeof MAIL_SEND_ERROR_CODES];
 export const MAIL_SEND_REFUSAL_REASONS = [
   MAIL_SEND_ERROR_CODES.recipientNotAllowed,
   MAIL_SEND_ERROR_CODES.noRecipient,
-  MAIL_SEND_ERROR_CODES.mailRejected
+  MAIL_SEND_ERROR_CODES.mailRejected,
+  MAIL_SEND_ERROR_CODES.workspaceNotAllowed
 ] as const;
 
 /** `details` of a refused `mail.send`: the one refused domain, or the provider's code. */
@@ -83,6 +89,7 @@ export const mailSendRefusalDetailsSchema = z.discriminatedUnion("reason", [
     domain: z.string().min(1).max(MAIL_ADDRESS_MAX_LENGTH)
   }),
   z.strictObject({ reason: z.literal(MAIL_SEND_ERROR_CODES.noRecipient) }),
+  z.strictObject({ reason: z.literal(MAIL_SEND_ERROR_CODES.workspaceNotAllowed) }),
   z.strictObject({
     reason: z.literal(MAIL_SEND_ERROR_CODES.mailRejected),
     providerCode: z.string().min(1).max(100).optional()

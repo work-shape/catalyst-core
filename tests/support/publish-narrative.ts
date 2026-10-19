@@ -219,6 +219,7 @@ export function narrator(input: {
   onModel?: () => void;
   onHit?: () => void;
   timeZone?: string;
+  mailSender?: { name: string; address: string };
 }) {
   const base = createTestConfig();
   const runner = new GuardrailRunner({
@@ -301,6 +302,7 @@ export function narrator(input: {
     },
     ...(input.policy ? { policy: input.policy } : {}),
     ...(input.timeZone ? { timeZone: input.timeZone } : {}),
+    ...(input.mailSender ? { mailSender: input.mailSender } : {}),
     ...(input.stored === undefined ? { storedData } : { storedData: input.stored })
   });
 }

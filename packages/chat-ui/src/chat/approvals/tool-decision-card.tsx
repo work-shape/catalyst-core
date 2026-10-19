@@ -33,6 +33,7 @@ import { ApprovalRequestCard } from "./approval-request-card";
 import { formatApprovalDate } from "./approval-request-model";
 import { dataStoreRowChange } from "./data-store-row-change";
 import { knowledgeAddFilesCall, useKnowledgeAddFilesAsk } from "./knowledge-add-files";
+import { MailSendDecisionView, mailSendDecisionPreview } from "./mail-send-decision";
 import { CallInputs, RowChangeInputs } from "./operation-call-body";
 import {
   useToolDecisionDecide,
@@ -261,7 +262,9 @@ export function ToolDecisionCardView({
   );
   // A save of an agent says in words what it writes; its definition is a technical detail.
   const agent = agentSaveSummary(decision, locale);
-  const inputsInDetails = ask !== undefined || agent !== undefined;
+  // A mail shows as it will go out, rendered by the server: its input is a technical detail.
+  const mail = mailSendDecisionPreview(decision);
+  const inputsInDetails = ask !== undefined || agent !== undefined || mail !== undefined;
 
   function deny(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -303,6 +306,7 @@ export function ToolDecisionCardView({
       {/* A call that asks its own question, as an App publish asks "For whom?", says in that
           question what it does: its raw inputs are technical details then. */}
       {agent ? <AgentSummary agent={agent} /> : null}
+      {mail ? <MailSendDecisionView mail={mail} /> : null}
       {inputsInDetails ? null : inputs}
       <Disclosure data-testid="tool-decision-details">
         <DisclosureTrigger>{t("operations.callDetails")}</DisclosureTrigger>

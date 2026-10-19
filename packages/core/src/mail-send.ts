@@ -93,11 +93,19 @@ export const MAIL_SEND_UNSENT_REASON = "mail_provider_unreachable";
  */
 export const MAIL_SEND_INTERRUPTED_REASON = "operation_interrupted";
 
+/**
+ * The failure of a call that found no room within `outbound.limits` (MAIL-2): the instance's
+ * mails of the last day or a Workflow's of the last hour. Nothing was sent. A step waits
+ * queued for the window's room; a call from chat is answered with it.
+ */
+export const MAIL_SEND_RATE_LIMITED_REASON = "rate_limited";
+
 /** Every reason a call of `mail.send` fails for, which a Workflow step takes as its code. */
 export const MAIL_SEND_FAILURE_REASONS = [
   ...MAIL_SEND_REFUSAL_REASONS,
   MAIL_SEND_UNSENT_REASON,
-  MAIL_SEND_INTERRUPTED_REASON
+  MAIL_SEND_INTERRUPTED_REASON,
+  MAIL_SEND_RATE_LIMITED_REASON
 ] as const;
 export type MailSendFailureReason = (typeof MAIL_SEND_FAILURE_REASONS)[number];
 

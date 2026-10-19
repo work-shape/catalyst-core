@@ -153,7 +153,8 @@ export async function upsertAsset(
     scope: target.scope,
     name,
     definition: next,
-    stores: options.stores
+    stores: options.stores,
+    actor: call.actor
   });
   const mutations: ConfigAssetMutation[] = [
     {

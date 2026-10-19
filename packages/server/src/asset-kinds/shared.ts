@@ -232,6 +232,8 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     name: string;
     definition: unknown;
     stores: PlatformStores;
+    /** Who writes it: what a definition may name can depend on what they may see. */
+    actor: AuthenticatedIdentity;
   }): Promise<void>;
   /**
    * What a check of a definition that holds says beside its issues: a warning refuses nothing.

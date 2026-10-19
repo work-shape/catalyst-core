@@ -7,6 +7,8 @@ import {
   strictestOutcome,
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
+  MAIL_SEND_OPERATION,
+  MAIL_SENDER_SYSTEM,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   asCollaborationWorkspaceId,
@@ -40,6 +42,7 @@ import {
   stopWarnings,
   workflowSummary,
   type NoticeRecipientsSentence,
+  type MailSentence,
   type StepStop,
   type WorkflowSentence
 } from "./narrative-copy";
@@ -99,6 +102,11 @@ export interface PublishNarratorOptions {
   storedData?: PublishNarrativeStoredData;
   /** The instance's time zone, for a schedule that names none. Absent: UTC, said as the default. */
   timeZone?: string;
+  /**
+   * The system sender of `mail.send` as `infrastructure.mail.sender` names it, where outbound
+   * mail is on. Absent: a step's sender is named by the operation's title for it.
+   */
+  mailSender?: { name: string; address: string };
 }
 
 export interface PublishNarrateInput {
@@ -263,6 +271,41 @@ async function noticeRecipients(
 /** Each name once, in the order first named. */
 const once = (names: readonly string[]) => [...new Set(names)];
 
+/**
+ * Whom each `mail.send` step mails and as which sender: people and workspaces by name, an
+ * address as written, and the recipients a run reads from earlier steps as such.
+ */
+async function mailRecipients(
+  options: PublishNarratorOptions,
+  names: ReturnType<typeof namers>,
+  steps: WorkflowFacts["mailSteps"],
+  definition: OperationDefinition | undefined
+): Promise<MailSentence[]> {
+  return Promise.all(
+    steps.map(async (step) => {
+      const people = await Promise.all(step.users.map(names.person));
+      const workspaces = await Promise.all(step.workspaces.map(names.workspace));
+      const named = (values: readonly (string | undefined)[]) =>
+        values.flatMap((value) => (value === undefined ? [] : [oneLine(value)]));
+      const system = step.sender === MAIL_SENDER_SYSTEM ? options.mailSender : undefined;
+      const title = system?.name ?? definition?.resource({ sender: step.sender })?.title;
+      return {
+        step: oneLine(step.name),
+        sender: {
+          name: oneLine(step.senderName ?? title ?? step.sender),
+          ...(system ? { address: oneLine(system.address) } : {})
+        },
+        people: named(people),
+        unnamedPeople: people.filter((value) => value === undefined).length,
+        workspaces: named(workspaces),
+        unnamedWorkspaces: workspaces.filter((value) => value === undefined).length,
+        addresses: step.addresses.map(oneLine),
+        referenced: step.referenced
+      };
+    })
+  );
+}
+
 async function narrateWorkflow(
   options: PublishNarratorOptions,
   input: PublishNarrateInput,
@@ -344,6 +387,8 @@ async function workflowSentence(
   const writtenStores: string[] = [];
   const uses: { through?: string; step: string }[] = [];
   for (const step of facts.operationSteps) {
+    // A mail is said by whom it reaches and as which sender, below.
+    if (step.operation === MAIL_SEND_OPERATION) continue;
     const { target } = step;
     const effect = definitions.get(step.operation)?.effect;
     if (target.kind === "data_store") {
@@ -385,6 +430,12 @@ async function workflowSentence(
     proposes: once(proposes),
     uses,
     notifies: await noticeRecipients(names, facts.notifySteps),
+    mails: await mailRecipients(
+      options,
+      names,
+      facts.mailSteps,
+      definitions.get(MAIL_SEND_OPERATION)
+    ),
     children: await Promise.all(facts.children.map(names.workflow)),
     agentSteps: facts.agentSteps,
     agentTools: facts.agentTools.length,

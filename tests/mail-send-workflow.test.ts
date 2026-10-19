@@ -1,12 +1,22 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { EVENTS } from "@work-shape/catalyst-core";
 import type { MailSendResult, MailTransport, RenderedMail } from "@work-shape/catalyst-mail";
 import { clientInstanceId } from "./support/access-instance";
 import { required } from "./support/assertions";
+import {
+  basic,
+  grantSystem,
+  mailEvents,
+  mailFlow,
+  person,
+  put,
+  ref,
+  run,
+  save,
+  testRun
+} from "./support/mail-workflows";
 import { withTestSql } from "./support/test-sql";
-import { runSchema, workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
-import { stepRunsOf } from "./support/workflow-runs";
+import { workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
 
 // MAIL-1: `mail.send` called by a published Workflow's `operation` step, end to end on the
 // capture transport. Events checks 129, 130, 132, 133, 134 and 140.
@@ -17,120 +27,9 @@ afterEach(async () => {
   fixture = undefined;
 });
 
-const trigger = { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] };
-const output = { id: "result", name: "Result", type: "output", input: {} };
-const inputs = {
-  type: "object",
-  properties: {
-    subject: { type: "string" },
-    email: { type: "string" },
-    people: { type: "array", items: { type: "object" } }
-  }
-};
-const ref = (path: string) => ({ ref: { step: "start", path: `input.${path}` } });
-
-function mailFlow(id: string, input: Record<string, unknown>) {
-  return {
-    id,
-    name: `Flow ${id}`,
-    runAs: "workflow-runner",
-    inputs,
-    outputs: { type: "object" },
-    steps: [
-      trigger,
-      { id: "mail", name: "Mail the team", type: "operation", operation: "mail.send", input },
-      output
-    ]
-  };
-}
-
-const basic = (to: unknown) => ({
-  to,
-  subject: { value: "Monthly check" },
-  body: { value: "All **good**." }
-});
-
 async function ready(options: Parameters<typeof workflowFixture>[0] = {}) {
   fixture = await workflowFixture({ definitions: "assets", ...options });
   return fixture;
-}
-
-/** The Workflow's account holds `mail_sender.use` on `system`, as the publish screen gives it. */
-async function grantSystem(t: WorkflowFixture) {
-  await t.expectOk(t.root.id, "permissions.grant", {
-    payload: {
-      holderKind: "service_principal",
-      holderId: t.principal.id,
-      action: "mail_sender.use",
-      scopeKind: "asset",
-      scopeId: "system"
-    }
-  });
-}
-
-async function put(t: WorkflowFixture, manifest: ReturnType<typeof mailFlow>) {
-  return t.call(t.admin.id, "assets.put", {
-    params: { kind: "workflow", name: manifest.id },
-    payload: { config: { name: manifest.id, manifest }, expectedRevision: null }
-  });
-}
-
-async function save(t: WorkflowFixture, manifest: ReturnType<typeof mailFlow>) {
-  const written = await put(t, manifest);
-  expect(written.statusCode, written.body).toBe(200);
-  const { revision } = z.object({ revision: z.number() }).parse(written.json());
-  await t.expectOk(t.root.id, "assets.publish", {
-    params: { kind: "workflow", name: manifest.id },
-    payload: { revision }
-  });
-}
-
-async function run(t: WorkflowFixture, workflow: string, input: Record<string, unknown> = {}) {
-  const started = runSchema.parse(
-    (
-      await t.expectOk(t.root.id, "workflows.start", {
-        params: { workflow },
-        payload: { input }
-      })
-    ).json()
-  );
-  const ended = await t.finish(started.id);
-  const step = required((await stepRunsOf(t, started.id)).find((s) => s.stepId === "mail"));
-  return { run: ended, step };
-}
-
-/** The mail events so far, each held to its payload in the event registry. */
-async function mailEvents() {
-  const rows = await withTestSql(
-    (sql) =>
-      sql<{ type: "mail.sent" | "mail.refused"; metadata: Record<string, unknown> }[]>`
-        select type, metadata from audit_events
-        where client_instance_id = ${clientInstanceId} and type in ('mail.sent', 'mail.refused')
-        order by created_at`
-  );
-  for (const { type, metadata } of rows) {
-    const { required: needed, properties } = EVENTS[type].payload;
-    expect(
-      Object.keys(metadata).filter((key) => !Object.hasOwn(properties, key)),
-      type
-    ).toEqual([]);
-    expect(
-      needed.filter((key) => !Object.hasOwn(metadata, key)),
-      type
-    ).toEqual([]);
-    expect(metadata.operationRunId, type).toEqual(expect.stringMatching(/^oprun_/u));
-  }
-  return rows;
-}
-
-async function person(t: WorkflowFixture, displayLabel: string, email?: string) {
-  return t.stores.users.createUser({
-    clientInstanceId,
-    displayLabel,
-    roles: ["user"],
-    permissions: [],
-    ...(email ? { email } : {})
-  });
 }
 
 describe("mail.send from a Workflow (MAIL-1)", () => {
@@ -493,18 +392,7 @@ describe("a test run of a mail.send step", () => {
     const t = await ready({ mail: { recipientDomains: ["kanzlei.de"] } });
     await grantSystem(t);
     await save(t, mailFlow("draft", basic(ref("email"))));
-    const test = async (email: string) => {
-      const started = runSchema.parse(
-        (
-          await t.expectOk(t.root.id, "workflows.test", {
-            params: { workflow: "draft" },
-            payload: { input: { email } }
-          })
-        ).json()
-      );
-      await t.finish(started.id);
-      return required((await stepRunsOf(t, started.id)).find((s) => s.stepId === "mail"));
-    };
+    const test = (email: string) => testRun(t, "draft", { email });
     const simulated = await test("anna@kanzlei.de");
     expect(simulated).toMatchObject({ status: "done", target: "dry_run" });
     const preview: unknown = JSON.parse(required(simulated.outputPreview).text);

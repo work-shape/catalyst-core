@@ -5,7 +5,9 @@ import {
   MAIL_SEND_FAILURE_REASONS,
   MAIL_SEND_INTERRUPTED_REASON,
   MAIL_SEND_MAX_ADDRESSES,
+  MAIL_OUTBOUND_DEFAULT_LIMITS,
   MAIL_SEND_OPERATION,
+  MAIL_SEND_RATE_LIMITED_REASON,
   MAIL_SEND_UNSENT_REASON,
   MAIL_SENDER_RESOURCE_KIND,
   MAIL_SENDER_SYSTEM,
@@ -14,7 +16,9 @@ import {
   asCollaborationWorkspaceId,
   asUserId,
   auditActorFromIdentity,
+  getSubjectUserId,
   isAuthenticatedServicePrincipal,
+  isSuperadmin,
   mailCopyRecipientListSchema,
   mailDomainAllowed,
   mailDomainOf,
@@ -30,10 +34,14 @@ import {
   type MailSendRecipientList,
   type MailSendSimulatedOutput,
   type OperationDefinition,
+  type OperationExecutionContext,
+  type OperationLimitWindow,
   type OperationOrigin,
   type OperationRegistry,
   type OperationSimulationContext,
+  type OperationTarget,
   type PlatformStores,
+  type JsonObject,
   type UserRecord
 } from "@work-shape/catalyst-core";
 import type {
@@ -49,6 +57,11 @@ import { z } from "zod";
 // of `recipientDomains`. A Workflow step and an agent's tool call reach the same send path,
 // policy and audit. Its audit events carry counts, domains and reasons, and never an address,
 // a subject or a body. Spec: events-workflows-and-guardrails.md, "Sending e-mail".
+//
+// MAIL-2 makes it safe to switch on: a test run's "Run live once" sends the mail to the tester
+// alone (`liveOnceTarget`), a live call takes a place within `outbound.limits` first, and the
+// guardrails of `operation.before_call` read the subject, the body and the recipients' domains
+// (`guardrailInput`), never an address.
 
 /** One call: resolving recipients, rendering, and the provider's answer within its own time. */
 const MAIL_SEND_TIMEOUT_MS = 60_000;
@@ -61,7 +74,10 @@ const MAIL_INPUT_INVALID_REASON = "input_invalid";
 
 export interface MailSendOperationOptions {
   clientInstanceId: ClientInstanceId;
-  stores: Pick<PlatformStores, "users" | "workspaces" | "workflowRuns" | "configAssets">;
+  stores: Pick<
+    PlatformStores,
+    "users" | "workspaces" | "workflowRuns" | "configAssets" | "operationRuns" | "workflowNotices"
+  >;
   /** The instance's mailer, rendering in the frame of `workflow-message`. */
   sender: Pick<MailSender, "send" | "preview">;
   /** The system sender as `infrastructure.mail.sender` names it. */
@@ -70,6 +86,9 @@ export interface MailSendOperationOptions {
   recipientDomains: readonly string[];
   /** The frame's language where a call names none. */
   defaultLocale: LocaleCode;
+  /** `infrastructure.mail.outbound.limits`; the defaults of the contract where unset. */
+  limits?: { perWorkflowPerHour: number; perInstancePerDay: number };
+  now?: () => Date;
 }
 
 /**
@@ -79,6 +98,12 @@ export interface MailSendOperationOptions {
  * save, and an agent's tool still names one.
  */
 const mailSendCallInputSchema = mailSendInputSchema.extend({ to: mailCopyRecipientListSchema });
+
+const HOUR_SECONDS = 3_600;
+const DAY_SECONDS = 86_400;
+
+/** Whether the author of a call may mail the members of a workspace (`workspaceMailableBy`). */
+type WorkspaceSight = (workspaceId: string) => Promise<boolean>;
 
 /** A recipient as the send uses it: an address, and whether it is a person of the instance. */
 interface ResolvedRecipient {
@@ -96,12 +121,15 @@ interface ResolvedEnvelope {
   replyTo?: ResolvedRecipient;
   /** People and members without an address, and ids that name nobody. */
   skipped: number;
+  /** A `{ workspace }` the author may not mail: its members were not read. */
+  hiddenWorkspace: boolean;
 }
 
 /** A refusal of a call that sent nothing: the reason, and the one domain where it is the rule's. */
 type MailRefusal =
   | { reason: typeof MAIL_SEND_ERROR_CODES.recipientNotAllowed; domain: string }
   | { reason: typeof MAIL_SEND_ERROR_CODES.noRecipient }
+  | { reason: typeof MAIL_SEND_ERROR_CODES.workspaceNotAllowed }
   | { reason: typeof MAIL_SEND_ERROR_CODES.mailRejected; providerCode?: string };
 
 /** What one item of a recipient list names. */
@@ -130,6 +158,33 @@ export function mailRecipientItemsOf(value: MailSendRecipientList): MailRecipien
       ? [{ kind: "address", email: item.email }]
       : [];
   });
+}
+
+/**
+ * Whether a person may mail the members of a workspace (MAIL-2): a Shared Workspace they are a
+ * member of, or any Shared Workspace for an instance admin. Nobody else learns who is in it,
+ * and no Personal Workspace is ever mailed. Nobody (`undefined`) may mail none.
+ */
+export async function workspaceMailableBy(
+  stores: Pick<PlatformStores, "users" | "workspaces">,
+  clientInstanceId: ClientInstanceId,
+  workspaceId: string,
+  author: string | undefined
+): Promise<boolean> {
+  if (author === undefined) return false;
+  const id = asCollaborationWorkspaceId(workspaceId);
+  const [workspace, user] = await Promise.all([
+    stores.workspaces.getWorkspace(clientInstanceId, id),
+    stores.users.getUser({ clientInstanceId, userId: asUserId(author) })
+  ]);
+  if (workspace?.kind !== "shared" || user?.status !== "active") return false;
+  if (user.roles.includes("admin") || isSuperadmin(user)) return true;
+  const membership = await stores.workspaces.getMembership({
+    clientInstanceId,
+    collaborationWorkspaceId: id,
+    userId: user.id
+  });
+  return membership !== undefined;
 }
 
 /** The active person of the instance whose address this is, where one is. */
@@ -170,11 +225,13 @@ export function mailSendOperation(
 
   /** The recipients of one field: addresses as written, people and the members of workspaces. */
   async function resolveList(
-    value: MailSendRecipientList | undefined
-  ): Promise<{ recipients: ResolvedRecipient[]; skipped: number }> {
-    if (value === undefined) return { recipients: [], skipped: 0 };
+    value: MailSendRecipientList | undefined,
+    sees: WorkspaceSight
+  ): Promise<{ recipients: ResolvedRecipient[]; skipped: number; hidden: boolean }> {
+    if (value === undefined) return { recipients: [], skipped: 0, hidden: false };
     const recipients: ResolvedRecipient[] = [];
     let skipped = 0;
+    let hidden = false;
     const address = async (email: string) => {
       const person = await personOf(email);
       recipients.push(
@@ -190,6 +247,11 @@ export function mailSendOperation(
         if (user?.email) recipients.push(personRecipient({ ...user, email: user.email }));
         else skipped += 1;
       } else {
+        // A workspace the author may not mail is never read: no member of it is named.
+        if (!(await sees(item.id))) {
+          hidden = true;
+          continue;
+        }
         const members = await membersOf(item.id);
         if (!members) {
           skipped += 1;
@@ -201,7 +263,7 @@ export function mailSendOperation(
         }
       }
     }
-    return { recipients, skipped };
+    return { recipients, skipped, hidden };
   }
 
   /** The active members of a Shared Workspace; nothing for an id that names none. */
@@ -216,17 +278,20 @@ export function mailSendOperation(
     return Promise.all(memberships.map(({ userId }) => userOf(userId)));
   }
 
-  async function resolveEnvelope(input: MailSendInput): Promise<ResolvedEnvelope> {
+  async function resolveEnvelope(
+    input: MailSendInput,
+    sees: WorkspaceSight
+  ): Promise<ResolvedEnvelope> {
     const [to, cc, bcc] = await Promise.all([
-      resolveList(input.to),
-      resolveList(input.cc),
-      resolveList(input.bcc)
+      resolveList(input.to, sees),
+      resolveList(input.cc, sees),
+      resolveList(input.bcc, sees)
     ]);
     let replyTo: ResolvedRecipient | undefined;
     let skipped = to.skipped + cc.skipped + bcc.skipped;
     if (input.replyTo !== undefined) {
       const reply = typeof input.replyTo === "string" ? { address: input.replyTo } : input.replyTo;
-      const resolved = await resolveList([reply]);
+      const resolved = await resolveList([reply], sees);
       replyTo = resolved.recipients[0];
       skipped += resolved.skipped;
     }
@@ -244,8 +309,35 @@ export function mailSendOperation(
       cc: once(cc.recipients),
       bcc: once(bcc.recipients),
       ...(replyTo ? { replyTo } : {}),
-      skipped
+      skipped,
+      hiddenWorkspace: to.hidden || cc.hidden || bcc.hidden
     };
+  }
+
+  /**
+   * Who a call's mail is the mail of, for the workspaces it may name: the person who calls, as
+   * an agent's person or a test run's tester, and for a published run the person who published
+   * the revision it runs. A run of a revision nobody published as a person mails no workspace.
+   */
+  async function authorOf(
+    context: Pick<OperationSimulationContext, "actor" | "origin">
+  ): Promise<string | undefined> {
+    if (!isAuthenticatedServicePrincipal(context.actor)) return getSubjectUserId(context.actor);
+    if (context.origin.kind !== "workflow") return undefined;
+    const run = await stores.workflowRuns.readRun({
+      clientInstanceId,
+      id: context.origin.workflowRunId
+    });
+    return run
+      ? stores.workflowNotices.publisher({ clientInstanceId, revisionId: run.definitionRevisionId })
+      : undefined;
+  }
+
+  async function sightOf(
+    context: Pick<OperationSimulationContext, "actor" | "origin">
+  ): Promise<WorkspaceSight> {
+    const author = await authorOf(context);
+    return (workspaceId) => workspaceMailableBy(stores, clientInstanceId, workspaceId, author);
   }
 
   /**
@@ -254,6 +346,7 @@ export function mailSendOperation(
    * `to` is refused, and so is one of more than 50 addresses.
    */
   function refusalOf(envelope: ResolvedEnvelope): MailRefusal | undefined {
+    if (envelope.hiddenWorkspace) return { reason: MAIL_SEND_ERROR_CODES.workspaceNotAllowed };
     const everyone = [
       ...envelope.to,
       ...envelope.cc,
@@ -362,7 +455,7 @@ export function mailSendOperation(
       "audit" | "actor" | "correlationId" | "origin" | "runId"
     >,
     input: MailSendInput,
-    target: "live" | "dry_run",
+    target: OperationTarget,
     refusal: MailRefusal
   ): Promise<void> {
     await context.audit.record({
@@ -389,11 +482,158 @@ export function mailSendOperation(
         ? `The mail was sent to nobody: an address in the domain '${refusal.domain}' is neither a person of this instance nor in a domain the instance may mail`
         : refusal.reason === MAIL_SEND_ERROR_CODES.noRecipient
           ? "The mail was sent to nobody: no recipient in 'to' has an address"
-          : `The mail provider refused the mail${refusal.providerCode ? ` (${refusal.providerCode})` : ""}, and it was sent to nobody`;
+          : refusal.reason === MAIL_SEND_ERROR_CODES.workspaceNotAllowed
+            ? "The mail was sent to nobody: it names a workspace that is not a Shared Workspace its author is a member of"
+            : `The mail provider refused the mail${refusal.providerCode ? ` (${refusal.providerCode})` : ""}, and it was sent to nobody`;
     return new AppError("VALIDATION_FAILED", message, refusal, {
       exposeMessage: true,
       changedNothing: true
     });
+  }
+
+  /**
+   * The Workflows a call from a run counts toward: the run's own and the Workflow of every
+   * run above it, since a Workflow's limit counts its runs and their children.
+   */
+  async function workflowsOf(runId: string): Promise<string[]> {
+    const workflows = new Set<string>();
+    const seen = new Set<string>();
+    let next: string | undefined = runId;
+    while (next !== undefined && !seen.has(next)) {
+      seen.add(next);
+      const run = await stores.workflowRuns.readRun({ clientInstanceId, id: next });
+      if (!run) break;
+      workflows.add(run.workflow);
+      next = run.parentRunId;
+    }
+    return [...workflows];
+  }
+
+  /**
+   * Takes the call's place within `outbound.limits`, or refuses it as changing nothing. A
+   * step that is refused waits queued until the window has room (the retry it is told); a
+   * call from chat is answered `rate_limited`.
+   */
+  async function admit(context: Pick<OperationExecutionContext, "runId" | "origin">) {
+    const limits = options.limits ?? MAIL_OUTBOUND_DEFAULT_LIMITS;
+    const at = options.now?.() ?? new Date();
+    const windows: OperationLimitWindow[] = [
+      { seconds: DAY_SECONDS, calls: limits.perInstancePerDay }
+    ];
+    if (context.origin.kind === "workflow") {
+      for (const workflow of await workflowsOf(context.origin.workflowRunId)) {
+        windows.push({ seconds: HOUR_SECONDS, calls: limits.perWorkflowPerHour, workflow });
+      }
+    }
+    const admission = await stores.operationRuns.admitWithinLimits({
+      clientInstanceId,
+      id: context.runId,
+      operation: MAIL_SEND_OPERATION,
+      at: at.toISOString(),
+      windows
+    });
+    if (admission.admitted) return;
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((Date.parse(admission.roomAt) - at.getTime()) / 1000)
+    );
+    const window = windows[admission.window];
+    throw new AppError(
+      "RATE_LIMITED",
+      window?.workflow === undefined
+        ? `The instance has sent its ${limits.perInstancePerDay} e-mails of the last 24 hours, and the mail was not sent`
+        : `The Workflow has sent its ${limits.perWorkflowPerHour} e-mails of the last hour, and the mail was not sent`,
+      { reason: MAIL_SEND_RATE_LIMITED_REASON, retryAfterSeconds },
+      { exposeMessage: true, changedNothing: true }
+    );
+  }
+
+  /** The person testing a draft, by their address: a test mail reaches them alone. */
+  async function testerOf(actor: AuthenticatedIdentity): Promise<ResolvedRecipient | undefined> {
+    if (isAuthenticatedServicePrincipal(actor)) return undefined;
+    const user = await userOf(actor.id);
+    return user?.email ? personRecipient({ ...user, email: user.email }) : undefined;
+  }
+
+  /** Hands the mail to the provider and records what came of it. */
+  async function deliver(
+    context: OperationExecutionContext,
+    input: MailSendInput,
+    target: Exclude<OperationTarget, "dry_run">,
+    message: WorkflowMessageMailMessage,
+    envelope: Pick<ResolvedEnvelope, "to" | "cc" | "bcc" | "skipped">
+  ): Promise<MailSendOutput> {
+    const origin = originOf(context.origin);
+    const sent = await options.sender.send(
+      message,
+      context.runtime.signal ? { signal: context.runtime.signal } : undefined
+    );
+    const recipients = {
+      to: envelope.to.length,
+      cc: envelope.cc.length,
+      bcc: envelope.bcc.length
+    };
+    if (!sent.ok && sent.failure === "rejected") {
+      const rejected: MailRefusal = {
+        reason: MAIL_SEND_ERROR_CODES.mailRejected,
+        ...(sent.providerCode ? { providerCode: sent.providerCode.slice(0, 100) } : {})
+      };
+      await recordRefusal(context, input, target, rejected);
+      throw refusalError(rejected);
+    }
+    if (!sent.ok && sent.failure === "unsent") {
+      // Nothing reached the provider: the step's attempts make the call again.
+      throw new AppError(
+        "CONFLICT",
+        "The mail provider could not be reached, and the mail was not sent",
+        { reason: MAIL_SEND_UNSENT_REASON },
+        { exposeMessage: true, changedNothing: true }
+      );
+    }
+    const accepted = sent.ok;
+    const domains = [
+      ...new Set(
+        [...envelope.to, ...envelope.cc, ...envelope.bcc].map((recipient) =>
+          mailDomainOf(recipient.email)
+        )
+      )
+    ].sort();
+    await context.audit.record({
+      type: "mail.sent",
+      status: accepted ? "success" : "failed",
+      actor: auditActorFromIdentity(context.actor),
+      correlationId: context.correlationId,
+      subject: input.sender,
+      metadata: {
+        operationRunId: context.runId,
+        origin,
+        sender: input.sender,
+        target,
+        recipients,
+        skipped: envelope.skipped,
+        domains: domains.slice(0, MAIL_AUDIT_MAX_DOMAINS),
+        moreDomains: Math.max(0, domains.length - MAIL_AUDIT_MAX_DOMAINS),
+        attachments: { count: 0, bytes: 0 },
+        outcome: accepted ? "accepted" : "uncertain"
+      }
+    });
+    if (!sent.ok) {
+      // The request left and its answer was lost. The provider takes no key, so the mail is
+      // never sent a second time: the step fails and says it may have gone out.
+      throw new AppError(
+        "TIMEOUT",
+        "The answer of the mail provider was lost after the mail left, so it may or may not have been sent",
+        { reason: MAIL_SEND_INTERRUPTED_REASON },
+        { exposeMessage: true }
+      );
+    }
+    return {
+      sentAt: new Date().toISOString(),
+      ...(sent.messageId ? { messageId: sent.messageId.slice(0, 256) } : {}),
+      recipients,
+      skipped: envelope.skipped,
+      ...(target === "test" ? { test: true as const } : {})
+    };
   }
 
   const preview = (recipient: ResolvedRecipient): MailPreviewRecipient => ({
@@ -407,6 +647,8 @@ export function mailSendOperation(
     changeClass: "outward",
     action: MAIL_SENDER_USE_ACTION,
     rightNeededAtPublish: true,
+    // "Run live once" sends the mail to the tester alone and never to its recipients.
+    liveOnceTarget: "test",
     stepFailureReasons: [...MAIL_SEND_FAILURE_REASONS, MAIL_INPUT_INVALID_REASON],
     retriedReasons: [MAIL_SEND_UNSENT_REASON],
     scope: null,
@@ -426,12 +668,52 @@ export function mailSendOperation(
       };
     },
     timeoutMs: MAIL_SEND_TIMEOUT_MS,
+    // What `operation.before_call` reads: the subject, the body as the call resolved it and
+    // the recipients' domains. The addresses stay out, so the e-mail preset fires on none.
+    async guardrailInput(input, call): Promise<JsonObject> {
+      const parsed = mailSendCallInputSchema.safeParse(input);
+      if (!parsed.success) {
+        // A publish asks before the run resolves a reference: what is written is read.
+        const written = writtenTextSchema.safeParse(input).data;
+        return {
+          ...(written?.subject === undefined ? {} : { subject: written.subject }),
+          ...(written?.body === undefined ? {} : { body: written.body }),
+          attachmentNames: [],
+          recipientDomains: []
+        };
+      }
+      // Only the domains reach the guardrails, and only of the workspaces the call's author
+      // may mail: a publish preview, which has no actor, reads no members.
+      const envelope = await resolveEnvelope(
+        parsed.data,
+        call.actor
+          ? await sightOf({ actor: call.actor, origin: call.origin })
+          : () => Promise.resolve(false)
+      );
+      const recipientDomains = [
+        ...new Set(
+          [
+            ...envelope.to,
+            ...envelope.cc,
+            ...envelope.bcc,
+            ...(envelope.replyTo ? [envelope.replyTo] : [])
+          ].map((recipient) => mailDomainOf(recipient.email))
+        )
+      ].sort();
+      return {
+        subject: parsed.data.subject,
+        body: parsed.data.body,
+        attachmentNames: [],
+        recipientDomains
+      };
+    },
     async simulate(input, context): Promise<MailSendSimulatedOutput> {
       originOf(context.origin);
-      const envelope = await resolveEnvelope(input);
+      const envelope = await resolveEnvelope(input, await sightOf(context));
       const refusal = refusalOf(envelope);
       if (refusal) {
-        await recordRefusal(context, input, "dry_run", refusal);
+        // A test run's preview is `dry_run`; the preview a confirmation shows is of the call.
+        await recordRefusal(context, input, context.target ?? "dry_run", refusal);
         throw refusalError(refusal);
       }
       assertBound(envelope);
@@ -458,87 +740,66 @@ export function mailSendOperation(
       };
     },
     async execute(input, context) {
-      const origin = originOf(context.origin);
-      const envelope = await resolveEnvelope(input);
+      originOf(context.origin);
+      const target = context.target === "test" ? "test" : "live";
+      const envelope = await resolveEnvelope(input, await sightOf(context));
       const refusal = refusalOf(envelope);
       if (refusal) {
-        await recordRefusal(context, input, "live", refusal);
+        await recordRefusal(context, input, target, refusal);
         throw refusalError(refusal);
       }
       assertBound(envelope);
       const message = await messageOf(input, envelope, context);
-      const sent = await options.sender.send(
-        message,
-        context.runtime.signal ? { signal: context.runtime.signal } : undefined
-      );
-      const recipients = {
-        to: envelope.to.length,
-        cc: envelope.cc.length,
-        bcc: envelope.bcc.length
-      };
-      if (!sent.ok && sent.failure === "rejected") {
-        const rejected: MailRefusal = {
-          reason: MAIL_SEND_ERROR_CODES.mailRejected,
-          ...(sent.providerCode ? { providerCode: sent.providerCode.slice(0, 100) } : {})
-        };
-        await recordRefusal(context, input, "live", rejected);
-        throw refusalError(rejected);
-      }
-      if (!sent.ok && sent.failure === "unsent") {
-        // Nothing reached the provider: the step's attempts make the call again.
-        throw new AppError(
-          "CONFLICT",
-          "The mail provider could not be reached, and the mail was not sent",
-          { reason: MAIL_SEND_UNSENT_REASON },
-          { exposeMessage: true, changedNothing: true }
-        );
-      }
-      const accepted = sent.ok;
-      const domains = [
-        ...new Set(
-          [...envelope.to, ...envelope.cc, ...envelope.bcc].map((recipient) =>
-            mailDomainOf(recipient.email)
-          )
-        )
-      ].sort();
-      await context.audit.record({
-        type: "mail.sent",
-        status: accepted ? "success" : "failed",
-        actor: auditActorFromIdentity(context.actor),
-        correlationId: context.correlationId,
-        subject: input.sender,
-        metadata: {
-          operationRunId: context.runId,
-          origin,
-          sender: input.sender,
-          target: "live",
-          recipients,
-          skipped: envelope.skipped,
-          domains: domains.slice(0, MAIL_AUDIT_MAX_DOMAINS),
-          moreDomains: Math.max(0, domains.length - MAIL_AUDIT_MAX_DOMAINS),
-          attachments: { count: 0, bytes: 0 },
-          outcome: accepted ? "accepted" : "uncertain"
+      if (target === "test") {
+        // "Run live once" of a test run: the rendered mail goes to the tester alone, its
+        // subject marked and the recipients it would have reached in a box above the body.
+        const tester = await testerOf(context.actor);
+        if (!tester) {
+          await recordRefusal(context, input, target, {
+            reason: MAIL_SEND_ERROR_CODES.noRecipient
+          });
+          throw new AppError(
+            "VALIDATION_FAILED",
+            "The test mail was sent to nobody: it goes to the address of the person testing, and they have none",
+            { reason: MAIL_SEND_ERROR_CODES.noRecipient },
+            { exposeMessage: true, changedNothing: true }
+          );
         }
-      });
-      if (!sent.ok) {
-        // The request left and its answer was lost. The provider takes no key, so the mail is
-        // never sent a second time: the step fails and says it may have gone out.
-        throw new AppError(
-          "TIMEOUT",
-          "The answer of the mail provider was lost after the mail left, so it may or may not have been sent",
-          { reason: MAIL_SEND_INTERRUPTED_REASON },
-          { exposeMessage: true }
-        );
+        const test: WorkflowMessageMailMessage = {
+          template: message.template,
+          params: {
+            ...message.params,
+            test: {
+              intendedRecipients: {
+                to: envelope.to.map(preview),
+                cc: envelope.cc.map(preview),
+                bcc: envelope.bcc.map(preview)
+              }
+            }
+          },
+          to: [{ email: tester.email, displayLabel: tester.label }],
+          cc: [],
+          bcc: [],
+          ...(message.fromName ? { fromName: message.fromName } : {}),
+          locale: message.locale
+        };
+        return deliver(context, input, target, test, {
+          to: [tester],
+          cc: [],
+          bcc: [],
+          skipped: envelope.skipped
+        });
       }
-      return {
-        sentAt: new Date().toISOString(),
-        ...(sent.messageId ? { messageId: sent.messageId.slice(0, 256) } : {}),
-        recipients,
-        skipped: envelope.skipped
-      };
+      await admit(context);
+      return deliver(context, input, target, message, envelope);
     }
   };
 }
+
+const writtenTextSchema = z.object({
+  subject: z.string().optional().catch(undefined),
+  body: z.string().optional().catch(undefined)
+});
 
 const workflowTitleSchema = z.object({
   manifest: z.object({ name: z.string().min(1) })

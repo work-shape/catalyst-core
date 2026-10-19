@@ -116,7 +116,7 @@ export const operationOf = (
   ...overrides
 });
 
-const identityOf = (user: UserRecord): AuthenticatedIdentity => ({
+export const identityOf = (user: UserRecord): AuthenticatedIdentity => ({
   id: user.id,
   externalUserId: user.id,
   displayLabel: user.displayLabel,

@@ -15,7 +15,7 @@ import {
   type WorkflowStep
 } from "@work-shape/catalyst-core";
 import type { z } from "zod";
-import { activePersonOf, mailRecipientItemsOf } from "./mail-send-operation";
+import { activePersonOf, mailRecipientItemsOf, workspaceMailableBy } from "./mail-send-operation";
 
 // The recipient rule of `mail.send` asked of a Workflow's definition, at a save and a publish:
 // what a step writes as a literal is decided before any run. A referenced value is decided by
@@ -24,7 +24,13 @@ import { activePersonOf, mailRecipientItemsOf } from "./mail-send-operation";
 
 export interface MailSendStepRule {
   clientInstanceId: ClientInstanceId;
-  stores: Pick<PlatformStores, "users">;
+  stores: Pick<PlatformStores, "users" | "workspaces">;
+  /**
+   * The person who saves or publishes the definition, by user id: a `{ workspace }` recipient
+   * must be a Shared Workspace they may mail (`workspaceMailableBy`). Absent where no person
+   * writes it, such as a service principal: then the definition mails no workspace.
+   */
+  author: string | undefined;
   /** Whether `mail.send` exists on the instance: outbound mail is on. */
   registered: boolean;
   /** `infrastructure.mail.outbound.recipientDomains`. */
@@ -56,7 +62,8 @@ function refused(step: string, reason: string, message: string, domain?: string)
  * The first refusal of the definition's `mail.send` steps: `operation_not_found` where the
  * instance has no outbound mail, `input_invalid` for a literal field the operation refuses, and
  * `recipient_not_allowed` naming the domain of a literal address that is outside the rule and
- * no person's of the instance. Nothing where every step may be saved.
+ * no person's of the instance, and `workspace_not_allowed` for a literal workspace the author
+ * may not mail. Nothing where every step may be saved.
  */
 export async function mailSendStepRefusal(
   manifest: Pick<WorkflowManifest, "steps">,
@@ -97,6 +104,16 @@ export async function mailSendStepRefusal(
         typeof value === "object" && value !== null && !Array.isArray(value) ? [value] : value
       );
       if (!list.success) continue;
+      for (const item of mailRecipientItemsOf(list.data)) {
+        if (item.kind !== "workspace") continue;
+        if (await workspaceMailableBy(rule.stores, rule.clientInstanceId, item.id, rule.author))
+          continue;
+        return refused(
+          step.id,
+          MAIL_SEND_ERROR_CODES.workspaceNotAllowed,
+          `The step '${step.name}' mails the members of a workspace that is not a Shared Workspace you are a member of`
+        );
+      }
       for (const address of addressesOf(list.data)) {
         const domain = mailDomainOf(address);
         if (mailDomainAllowed(domain, rule.recipientDomains)) continue;

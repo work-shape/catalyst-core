@@ -4,6 +4,9 @@ import {
   DATA_STORE_OPERATION_PREFIX,
   DATA_STORE_OPERATION_RIGHTS,
   DATA_STORE_OPERATION_VERBS,
+  MAIL_SEND_OPERATION,
+  MAIL_SENDER_SYSTEM,
+  mailRecipientListSchema,
   NOTIFY_CHANNELS,
   parseConnectionOperationName,
   workflowStartOperationName,
@@ -11,6 +14,7 @@ import {
   workflowStepsDeep
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import { mailRecipientItemsOf } from "../mail/mail-send-operation";
 
 // What a revision declares that the publish question's sentence names, read from its config
 // alone: no step runs and no row is read. An App's actions and a Workflow's steps, triggers and
@@ -66,11 +70,27 @@ export interface WorkflowFacts {
     users: readonly string[];
     workspaces: readonly string[];
   }[];
+  /** Its `mail.send` steps: whom each mails and as which sender (MAIL-2). */
+  mailSteps: readonly MailStepFact[];
   /** The child Workflows its `workflow` steps start, each once. */
   children: readonly string[];
   /** How many agent steps it has, and the operations they may call as tools. */
   agentSteps: number;
   agentTools: readonly string[];
+}
+
+/** Whom a `mail.send` step mails, as its mapping writes it, and as which sender. */
+interface MailStepFact {
+  name: string;
+  /** The sender the step names, `system` where it names none. */
+  sender: string;
+  /** The name the step sets on the From line. */
+  senderName?: string;
+  users: readonly string[];
+  workspaces: readonly string[];
+  addresses: readonly string[];
+  /** Recipients the run reads from earlier steps, which are known only when it runs. */
+  referenced: boolean;
 }
 
 export interface AppFacts {
@@ -222,6 +242,11 @@ export function workflowFacts(config: unknown, name: string): WorkflowFacts | un
         }
       ];
     }),
+    mailSteps: steps.flatMap((step): MailStepFact[] =>
+      step.type === "operation" && step.operation === MAIL_SEND_OPERATION
+        ? [mailStepFact(text(step.name, step.id), step.input)]
+        : []
+    ),
     children: [
       ...new Set(
         steps.flatMap((step) =>
@@ -231,6 +256,46 @@ export function workflowFacts(config: unknown, name: string): WorkflowFacts | un
     ],
     agentSteps: steps.filter((step) => step.type === "agent").length,
     agentTools: [...new Set(manifest.tools ?? [])]
+  };
+}
+
+const mappingSchema = z.record(z.string(), z.unknown());
+const literalSchema = z.object({ value: z.unknown() });
+
+/** Whom a `mail.send` step's mapping mails: its literal recipients, and whether some are read. */
+function mailStepFact(name: string, input: unknown): MailStepFact {
+  const mapping = mappingSchema.safeParse(input ?? {}).data ?? {};
+  const literal = (field: string) => literalSchema.safeParse(mapping[field]).data?.value;
+  const users: string[] = [];
+  const workspaces: string[] = [];
+  const addresses: string[] = [];
+  let referenced = false;
+  for (const field of ["to", "cc", "bcc"]) {
+    if (mapping[field] === undefined) continue;
+    const value = literal(field);
+    const list = mailRecipientListSchema.safeParse(
+      typeof value === "object" && value !== null && !Array.isArray(value) ? [value] : value
+    );
+    // A reference, or a text with one, names its recipients only when the run resolves it.
+    if (!list.success) {
+      referenced = true;
+      continue;
+    }
+    for (const item of mailRecipientItemsOf(list.data)) {
+      if (item.kind === "address") addresses.push(item.email);
+      else (item.kind === "user" ? users : workspaces).push(item.id);
+    }
+  }
+  const sender = literal("sender");
+  const senderName = literal("senderName");
+  return {
+    name,
+    sender: typeof sender === "string" && sender.length > 0 ? sender : MAIL_SENDER_SYSTEM,
+    ...(typeof senderName === "string" && senderName.length > 0 ? { senderName } : {}),
+    users: [...new Set(users)],
+    workspaces: [...new Set(workspaces)],
+    addresses: [...new Set(addresses)],
+    referenced
   };
 }
 

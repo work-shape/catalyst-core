@@ -285,7 +285,12 @@ export async function workflowFixture(
      * Outbound mail on: `mail.send` with the system sender, its mails rendered in the frame and
      * handed to the transport given, a capture where none is.
      */
-    mail?: { recipientDomains: readonly string[]; transport?: MailTransport };
+    mail?: {
+      recipientDomains: readonly string[];
+      transport?: MailTransport;
+      /** `outbound.limits`; the contract's defaults where unset. */
+      limits?: { perWorkflowPerHour: number; perInstancePerDay: number };
+    };
   } = {}
 ): Promise<WorkflowFixture> {
   let workflows: InstanceWorkflows | undefined;
@@ -355,6 +360,8 @@ export async function workflowFixture(
               sender: new TemplateMailSender(mailTransport, MAIL_IDENTITY),
               system: { fromAddress: MAIL_IDENTITY.fromAddress, fromName: MAIL_IDENTITY.fromName },
               recipientDomains: options.mail.recipientDomains,
+              ...(options.mail.limits ? { limits: options.mail.limits } : {}),
+              ...(options.now ? { now: options.now } : {}),
               defaultLocale: "en"
             });
           operationRegistry = server.operationCalls.registry;

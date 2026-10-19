@@ -28,6 +28,8 @@ export interface WorkflowSentence {
   uses: readonly { through?: string; step: string }[];
   /** Who its `notify` steps reach, one entry for each set of channels, in the order first named. */
   notifies: readonly NoticeRecipientsSentence[];
+  /** Whom its `mail.send` steps mail and as which sender, one entry per step (MAIL-2). */
+  mails: readonly MailSentence[];
   children: readonly string[];
   agentSteps: number;
   agentTools: number;
@@ -43,6 +45,21 @@ export interface NoticeRecipientsSentence {
   unnamedPeople: number;
   workspaces: readonly string[];
   unnamedWorkspaces: number;
+}
+
+/** Whom one `mail.send` step mails, named where the instance knows them, and as which sender. */
+export interface MailSentence {
+  step: string;
+  /** The name on the From line, and the address where the sender is the system sender. */
+  sender: { name: string; address?: string };
+  people: readonly string[];
+  unnamedPeople: number;
+  workspaces: readonly string[];
+  unnamedWorkspaces: number;
+  /** Addresses as the step writes them. */
+  addresses: readonly string[];
+  /** Recipients a run reads from earlier steps. */
+  referenced: boolean;
 }
 
 /** What an App revision does, with every name as people read it. */
@@ -124,6 +141,12 @@ interface Copy {
   proposes(names: string): string;
   uses(through: string | undefined, step: string): string;
   notifies(channels: readonly NotifyChannel[], recipients: string): string;
+  /** A `mail.send` step: whom it mails, as which sender. */
+  mails(recipients: string, sender: MailSentence["sender"]): string;
+  /** The recipients a mail's run reads from earlier steps. */
+  referencedRecipients: string;
+  /** Said once where a Workflow may mail an address that is no person of the instance. */
+  outsideAddresses: string;
   workspace(name: string): string;
   /** People or workspaces counted beside named ones, or alone. */
   otherPeople(count: number, alone: boolean): string;
@@ -204,6 +227,11 @@ const EN: Copy = {
   uses: (through, step) => (through ? `uses ${through} for “${step}”` : `runs “${step}”`),
   notifies: (channels, recipients) =>
     `notifies ${recipients} ${channelWords(channels, "by mail", "in the Inbox", "and")}`,
+  mails: (recipients, sender) =>
+    `e-mails ${recipients} as “${sender.name}”${sender.address ? ` <${sender.address}>` : ""}`,
+  referencedRecipients: "recipients from earlier steps",
+  outsideAddresses:
+    "An address outside the instance holds no data scope: it receives whatever the mail says.",
   workspace: (name) => `the workspace “${name}”`,
   otherPeople: (count, alone) =>
     count === 1
@@ -312,6 +340,11 @@ const DE: Copy = {
   uses: (through, step) => (through ? `nutzt ${through} für „${step}“` : `führt „${step}“ aus`),
   notifies: (channels, recipients) =>
     `benachrichtigt ${recipients} ${channelWords(channels, "per Mail", "im Eingang", "und")}`,
+  mails: (recipients, sender) =>
+    `schickt eine E-Mail an ${recipients} als „${sender.name}“${sender.address ? ` <${sender.address}>` : ""}`,
+  referencedRecipients: "Empfänger aus früheren Schritten",
+  outsideAddresses:
+    "Eine Adresse außerhalb der Instanz hat keinen Datenbereich: An sie geht alles, was die Mail enthält.",
   workspace: (name) => `den Arbeitsbereich „${name}“`,
   otherPeople: (count, alone) =>
     count === 1
@@ -531,9 +564,27 @@ export function workflowSummary(input: WorkflowSentence, locale: LocaleCode): st
       : [];
   });
   const notifies = notices.length > 0;
+  const mails = input.mails.map((mail) => {
+    const named = mail.people.length > 0 || mail.workspaces.length > 0 || mail.addresses.length > 0;
+    const recipients = [
+      ...mail.people,
+      ...(mail.unnamedPeople > 0 ? [copy.otherPeople(mail.unnamedPeople, !named)] : []),
+      ...mail.workspaces.map((name) => copy.workspace(name)),
+      ...(mail.unnamedWorkspaces > 0 ? [copy.otherWorkspaces(mail.unnamedWorkspaces, !named)] : []),
+      ...mail.addresses,
+      ...(mail.referenced || !named ? [copy.referencedRecipients] : [])
+    ];
+    return copy.mails(and.format(recipients), mail.sender);
+  });
+  // An address a step writes or reads may be no person's: it holds no data scope.
+  const outside = input.mails.some((mail) => mail.addresses.length > 0 || mail.referenced);
   // Only where nothing it calls could send: a child or an agent may, and is said instead.
   const sendsNothing =
-    input.uses.length === 0 && !notifies && input.children.length === 0 && input.agentSteps === 0;
+    input.uses.length === 0 &&
+    !notifies &&
+    mails.length === 0 &&
+    input.children.length === 0 &&
+    input.agentSteps === 0;
   const doing = [
     ...(input.reads.length > 0 ? [copy.reads(and.format(input.reads))] : []),
     ...(input.adds.length > 0 ? [copy.adds(and.format(input.adds))] : []),
@@ -541,6 +592,7 @@ export function workflowSummary(input: WorkflowSentence, locale: LocaleCode): st
     ...(input.proposes.length > 0 ? [copy.proposes(and.format(input.proposes))] : []),
     ...input.uses.map((use) => copy.uses(use.through, use.step)),
     ...notices,
+    ...mails,
     ...(input.children.length > 0 ? [copy.starts(quoted(input.children))] : []),
     ...(input.agentSteps > 0 ? [copy.agent(input.agentSteps, input.agentTools)] : [])
   ];
@@ -574,7 +626,7 @@ export function workflowSummary(input: WorkflowSentence, locale: LocaleCode): st
     if (store.truncated) shown.push(copy.moreReaders(store.title));
     return shown.length > 0 ? shown : [copy.nobodyReads(store.title)];
   });
-  return [sentence, ...readers].join(" ");
+  return [sentence, ...(outside ? [copy.outsideAddresses] : []), ...readers].join(" ");
 }
 
 /** The summary of an App revision. */

@@ -192,12 +192,18 @@ describe("what mail.send answers", () => {
     expect(mailSendSimulatedOutputSchema.safeParse({ simulated: true }).success).toBe(false);
   });
 
-  it("refuses with one of three codes, naming the domain of a refused recipient", () => {
+  it("refuses with one of four codes, naming the domain of a refused recipient", () => {
     expect(Object.values(MAIL_SEND_ERROR_CODES)).toEqual([
       "recipient_not_allowed",
       "no_recipient",
-      "mail_rejected"
+      "mail_rejected",
+      "workspace_not_allowed"
     ]);
+    // A workspace its author may not mail is refused without a word of who is in it (MAIL-2).
+    expect(
+      mailSendRefusalDetailsSchema.safeParse({ reason: "workspace_not_allowed", workspace: "w" })
+        .success
+    ).toBe(false);
     expect(
       mailSendRefusalDetailsSchema.parse({ reason: "recipient_not_allowed", domain: "gmail.com" })
     ).toEqual({ reason: "recipient_not_allowed", domain: "gmail.com" });
@@ -341,7 +347,7 @@ describe("the events of mail.send", () => {
     }
     expect(EVENTS["mail.sent"].payload.properties.domains).toMatchObject({ maxItems: 10 });
     expect(EVENTS["mail.refused"].payload.properties.reason).toEqual({
-      enum: ["recipient_not_allowed", "no_recipient", "mail_rejected"]
+      enum: ["recipient_not_allowed", "no_recipient", "mail_rejected", "workspace_not_allowed"]
     });
   });
 });

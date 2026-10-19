@@ -92,7 +92,8 @@ export async function validateAssetDefinition(
               scope: target.scope,
               name: name ?? "",
               definition: findDefinition(found.accepted, kind.kind, name ?? "") ?? prepared,
-              stores: options.stores
+              stores: options.stores,
+              actor: call.actor
             }) ?? Promise.resolve()
         );
   const dependencyAvailability =

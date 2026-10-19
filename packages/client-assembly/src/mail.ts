@@ -123,6 +123,7 @@ export function registerInstanceMailSend(
       ...(outbound.sender.replyTo ? { replyTo: outbound.sender.replyTo } : {})
     },
     recipientDomains: outbound.outbound.recipientDomains,
+    limits: outbound.outbound.limits,
     defaultLocale: defaultLocaleOf(input.config)
   });
 }

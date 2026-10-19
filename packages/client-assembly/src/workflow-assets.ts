@@ -7,7 +7,8 @@ import { checkWorkflowPersonContexts } from "./workflow-person-context";
 import {
   getSubjectUserId,
   asUserId,
-  isAuthenticatedServicePrincipal
+  isAuthenticatedServicePrincipal,
+  type AuthenticatedIdentity
 } from "@work-shape/catalyst-core";
 import { checkPublishedChildren } from "./workflow-child-assets";
 import { workflowAccountRights } from "./workflow-account-rights";
@@ -158,10 +159,15 @@ export function createWorkflowAssetKind(
     const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
     return parsed.ok ? parsed.manifest : undefined;
   };
-  const assertMailSteps = async (manifest: WorkflowManifest, stores: PlatformStores) => {
+  const assertMailSteps = async (
+    manifest: WorkflowManifest,
+    stores: PlatformStores,
+    actor: AuthenticatedIdentity
+  ) => {
     const refusal = await mailSendStepRefusal(manifest, {
       clientInstanceId,
       stores,
+      author: isAuthenticatedServicePrincipal(actor) ? undefined : getSubjectUserId(actor),
       registered: options.mailSend?.registered ?? false,
       recipientDomains: options.mailSend?.recipientDomains ?? []
     });
@@ -374,7 +380,7 @@ export function createWorkflowAssetKind(
         throw workflowDefinitionRefusal(result.manifest.id, continuation);
       const kindIssues = workflowKindIssues(result.manifest);
       if (kindIssues.length > 0) throw workflowDefinitionRefusal(parsed.name, kindIssues);
-      await assertMailSteps(result.manifest, stores);
+      await assertMailSteps(result.manifest, stores, actor);
       // A limit above the operator's ceiling is refused here, by name, and never clamped.
       const above = workflowLimitIssues(result.manifest, limits);
       if (above.length > 0) throw workflowDefinitionRefusal(parsed.name, above);
@@ -443,11 +449,11 @@ export function createWorkflowAssetKind(
       }
       await reschedule(stores, published, undefined);
     },
-    assertScopedWrite: async ({ definition, stores }) => {
+    assertScopedWrite: async ({ definition, stores, actor }) => {
       const parsed = workflowConfigSchema.parse(definition);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
-      await assertMailSteps(result.manifest, stores);
+      await assertMailSteps(result.manifest, stores, actor);
       await checkChildContracts(
         result.manifest,
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets }),

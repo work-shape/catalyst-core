@@ -839,3 +839,77 @@ describe("PUBQ-1 the publish question's sentence", () => {
     );
   });
 });
+
+describe("MAIL-2 a mail step in the publish question (check 139)", () => {
+  const sender = { name: "Kanzlei Muster", address: "catalyst@mail.example.test" };
+  const mailer = (steps: JsonObject[]): JsonObject => ({
+    title: "Monatsmail",
+    manifest: {
+      id: "monatsmail",
+      name: "Monatsmail",
+      steps: [
+        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+        ...steps
+      ]
+    }
+  });
+  const mail = (id: string, name: string, input: JsonObject): JsonObject => ({
+    id,
+    name,
+    type: "operation",
+    operation: "mail.send",
+    input: { subject: { value: "Stand" }, body: { value: "Alles gut." }, ...input }
+  });
+  const options = (extra: Partial<Parameters<typeof narrator>[0]> = {}) => ({
+    definitions: [operationDefinition("mail.send")],
+    mailSender: sender,
+    ...extra
+  });
+
+  it("says whom each step mails and as which sender, and that an outside address holds no data scope", async () => {
+    const config = mailer([
+      mail("team", "An das Team", {
+        to: { value: [{ user: "usr_anna" }, { workspace: WORKSPACE }, "office@kanzlei.de"] }
+      }),
+      mail("client", "An den Mandanten", {
+        to: { ref: { step: "start", path: "input.email" } },
+        senderName: { value: "Kanzlei Team" }
+      })
+    ]);
+    expect((await narrateWorkflow("en", options(), config)).summary).toBe(
+      "Monatsmail runs when someone starts it, e-mails Anna Berg, the workspace “Kai Spezis”, and office@kanzlei.de as “Kanzlei Muster” <catalyst@mail.example.test>, and e-mails recipients from earlier steps as “Kanzlei Team” <catalyst@mail.example.test>. An address outside the instance holds no data scope: it receives whatever the mail says."
+    );
+    expect((await narrateWorkflow("de", options(), config)).summary).toBe(
+      "Monatsmail läuft, wenn jemand ihn startet, schickt eine E-Mail an Anna Berg, den Arbeitsbereich „Kai Spezis“ und office@kanzlei.de als „Kanzlei Muster“ <catalyst@mail.example.test> und schickt eine E-Mail an Empfänger aus früheren Schritten als „Kanzlei Team“ <catalyst@mail.example.test>. Eine Adresse außerhalb der Instanz hat keinen Datenbereich: An sie geht alles, was die Mail enthält."
+    );
+  });
+
+  it("says nothing of outside addresses where a step mails only people and workspaces", async () => {
+    const config = mailer([mail("team", "An das Team", { to: { value: [{ user: "usr_ben" }] } })]);
+    const { summary } = await narrateWorkflow("en", options(), config);
+    expect(summary).toBe(
+      "Monatsmail runs when someone starts it and e-mails Ben Kurz as “Kanzlei Muster” <catalyst@mail.example.test>."
+    );
+  });
+
+  it("names the mail step a guardrail on mail.send will stop", async () => {
+    const config = mailer([
+      mail("team", "An das Team", {
+        to: { value: "office@kanzlei.de" },
+        body: { value: "Bitte auf DE89370400440532013000 überweisen." }
+      })
+    ]);
+    const { warnings } = await narrateWorkflow(
+      "en",
+      options({
+        guardrails: [{ guardrail: { ...ibanApproval, filter: { operation: "mail.send" } } }]
+      }),
+      config
+    );
+    expect(warnings).toEqual([
+      expect.stringContaining(
+        "The step “An das Team” will stop: the guardrail “E-Mail senden: IBAN → Freigabe”"
+      )
+    ]);
+  });
+});
