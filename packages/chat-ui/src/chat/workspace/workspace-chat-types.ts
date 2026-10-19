@@ -279,6 +279,8 @@ export interface SelectedChatModel {
   fileDropzone: ChatFileDropzoneController;
   changeDraft(value: string): void;
   selectFiles(files: File[]): void;
+  /** Uploads the files a new conversation's first message carries; answers that conversation. */
+  sendStagedFiles(): Promise<string | undefined>;
   removeDraftAttachment(attachmentId: string): void;
   retryDraftAttachment(attachmentId: string): void;
   conversationStarted(conversationId: string): void;

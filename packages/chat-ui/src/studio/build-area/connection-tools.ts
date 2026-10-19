@@ -2,6 +2,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import type { ConnectionTools } from "@work-shape/catalyst-api-client";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { useBuildNavigation } from "../../shared/build-route";
+import { operationTitle } from "./connection-approval-model";
 import { needsSignIn } from "./connection-sign-in-model";
 import { toolGroupStartsOpen } from "./tool-group";
 
@@ -43,6 +44,24 @@ export interface ConnectionToolChoice {
 /** Whether a tool name is one of a Connection's operation, by its form alone. */
 export function isConnectionToolName(toolName: string): boolean {
   return toolName.startsWith(CONNECTION_TOOL_PREFIX);
+}
+
+/**
+ * A Connection's tool as people read it: the Connection's title and the operation in words.
+ * Nothing while the tools are not read or the tool is not among them.
+ */
+export function connectionToolTitle(
+  read: ConnectionToolsRead,
+  toolName: string
+): string | undefined {
+  if (read.status !== "ready") return undefined;
+  for (const connection of read.connections) {
+    const tool = connection.tools.find((candidate) => candidate.toolName === toolName);
+    if (tool) {
+      return `${connection.title.trim() || connection.name}: ${operationTitle(tool.operation)}`;
+    }
+  }
+  return undefined;
 }
 
 /** One Connection as the Tools section shows it. */

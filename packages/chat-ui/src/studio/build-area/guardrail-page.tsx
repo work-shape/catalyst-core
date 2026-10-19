@@ -289,17 +289,18 @@ function GuardrailHitList({
               data-guardrail-hit-subject={hit.subjectName}
               leading={<Icon aria-hidden="true" className="size-4 text-muted-foreground" />}
               title={
-                hit.subjectKind === "operation" && hit.subjectName !== undefined ? (
-                  t("guardrails.subjectOperation", { name: hit.subjectName })
-                ) : hit.subjectName !== undefined ? (
-                  <span className="font-mono">{hit.subjectName}</span>
-                ) : (
-                  subjectLabel(hit.event, hit.subjectKind)
-                )
+                hit.subjectKind === "operation" && hit.subjectName !== undefined
+                  ? t("guardrails.subjectOperation", { name: hit.subjectName })
+                  : hit.subjectTitle !== undefined
+                    ? // An asset is named by its title; its name stays in the link to its page.
+                      hit.subjectTitle
+                    : // Without a readable title (deleted, unreadable, never created) the kind
+                      // names it; the internal name is no title for a person.
+                      subjectLabel(hit.event, hit.subjectKind)
               }
               chips={
                 <>
-                  {hit.subjectName !== undefined && hit.subjectKind !== "operation" ? (
+                  {hit.subjectTitle !== undefined && hit.subjectKind !== "operation" ? (
                     <Chip>{subjectLabel(hit.event, hit.subjectKind)}</Chip>
                   ) : null}
                   <Badge tone={view.tone} size="sm">

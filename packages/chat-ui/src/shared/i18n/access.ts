@@ -120,7 +120,7 @@ export const access = defineTranslations({
     "access.actionReadKnowledgeBaseDescription":
       "See the Knowledge Base, the tables it describes and whether they can be read.",
     "access.actionUseKnowledgeBaseDescription":
-      "Read its rows: in chat through an agent that has it, and with a test query. This person needs no right on the Data Store behind it.",
+      "Get answers from its documents: in chat through an agent that has it, and with a test search. This person needs no further right for that.",
     "access.actionWriteKnowledgeBaseDescription":
       "Change the draft of the Knowledge Base. A draft answers nobody until it is published.",
     "access.actionPublishKnowledgeBaseDescription":
@@ -399,7 +399,7 @@ export const access = defineTranslations({
     "access.actionReadKnowledgeBaseDescription":
       "Die Wissensbasis sehen, die Tabellen, die sie beschreibt, und ob sie sich lesen lassen.",
     "access.actionUseKnowledgeBaseDescription":
-      "Ihre Zeilen lesen: im Chat über einen Agenten, der sie hat, und mit einer Testabfrage. Diese Person braucht kein Recht am Datenspeicher dahinter.",
+      "Antworten aus ihren Dokumenten bekommen: im Chat über einen Agenten, der sie hat, und mit einer Testsuche. Dafür braucht die Person kein weiteres Recht.",
     "access.actionWriteKnowledgeBaseDescription":
       "Den Entwurf der Wissensbasis ändern. Ein Entwurf antwortet niemandem, bis er veröffentlicht ist.",
     "access.actionPublishKnowledgeBaseDescription":

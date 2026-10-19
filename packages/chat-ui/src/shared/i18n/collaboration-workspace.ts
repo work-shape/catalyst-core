@@ -104,6 +104,8 @@ export const collaborationWorkspace = defineTranslations({
       'You lose access to the conversations in "{name}". Nothing is deleted, and you can be added again later.',
     collaborationWorkspaceLeaveTitle: "Leave workspace?",
     collaborationWorkspaceLoadFailed: "Workspaces could not be loaded.",
+    collaborationWorkspaceLinkClosed:
+      "That link leads into a workspace you are not a member of, so it opened your own workspace. Ask someone in that workspace to add you.",
     collaborationWorkspaceLoading: "Loading workspaces…",
     collaborationWorkspaceMemberCandidatePendingRequest: "Has requested access",
     collaborationWorkspaceMemberCandidatesLabel: "Member suggestions",
@@ -279,6 +281,8 @@ export const collaborationWorkspace = defineTranslations({
       "Du verlierst den Zugriff auf die Unterhaltungen in „{name}“. Es wird nichts gelöscht und du kannst später wieder hinzugefügt werden.",
     collaborationWorkspaceLeaveTitle: "Arbeitsbereich verlassen?",
     collaborationWorkspaceLoadFailed: "Arbeitsbereiche konnten nicht geladen werden.",
+    collaborationWorkspaceLinkClosed:
+      "Der Link führt in einen Arbeitsbereich, in dem du kein Mitglied bist. Deshalb ist dein eigener Arbeitsbereich geöffnet. Bitte jemanden dort, dich hinzuzufügen.",
     collaborationWorkspaceLoading: "Arbeitsbereiche werden geladen…",
     collaborationWorkspaceMemberCandidatePendingRequest: "Hat Zugriff angefragt",
     collaborationWorkspaceMemberCandidatesLabel: "Mitgliedervorschläge",

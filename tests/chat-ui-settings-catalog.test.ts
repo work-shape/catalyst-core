@@ -340,15 +340,18 @@ describe("old addresses", () => {
     expect(resolve("/admin", member)).toEqual({ kind: "chat" });
   });
 
-  it("answers an administration address the viewer may not open as before", () => {
+  it("says an Instance page the viewer may not open is closed, where it is", () => {
     const usageOnly = viewer({ permissions: ["usage.view"] });
 
-    // The old panel fell back to the first tab the viewer had, and to chat with none.
-    expect(resolve("/admin/users", usageOnly)).toEqual({
+    // ACCEPT-FIX-10 C10: a member who opened Usage landed in Studio without a word.
+    expect(resolve("/settings/instance/usage", answeredMember)).toEqual({ kind: "no-access" });
+    expect(resolve("/admin/users", usageOnly)).toEqual({ kind: "no-access" });
+    expect(resolve("/admin/users", member)).toEqual({ kind: "no-access" });
+    // An address of no page still leads to the first page the viewer may open.
+    expect(resolve("/settings/instance/nothing", usageOnly)).toEqual({
       kind: "redirect",
       route: { kind: "settings", group: "instance", page: "usage" }
     });
-    expect(resolve("/admin/users", member)).toEqual({ kind: "chat" });
     // The old address of Studio is a Studio address: closed to a viewer who holds nothing in it.
     expect(resolve("/admin/config", member)).toEqual({
       kind: "build-closed",

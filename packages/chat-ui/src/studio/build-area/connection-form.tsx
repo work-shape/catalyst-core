@@ -1,7 +1,11 @@
 import { X } from "lucide-react";
 import { useId } from "react";
 import { Button, Field, IconButton, Input, RadioGroup } from "@work-shape/catalyst-ui";
-import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import {
+  useTranslation,
+  type TranslationContextValue,
+  type TranslationKey
+} from "../../shared/i18n";
 import {
   CONNECTION_AUTH_CHOICES,
   sendsSecret,
@@ -19,6 +23,27 @@ const AUTH_LABELS: Record<
   bearer: { label: "connections.authBearer", text: "connections.authBearerText" },
   header: { label: "connections.authHeader", text: "connections.authHeaderText" }
 };
+
+const CONNECTOR_TYPE_LABELS = new Map<string, TranslationKey>([
+  ["mcp", "connectionCreate.mcpTitle"],
+  ["http_api", "connectionCreate.restTitle"]
+]);
+
+const AUTH_SCHEME_LABELS = new Map<string, TranslationKey>(
+  Object.entries(AUTH_LABELS).map(([scheme, { label }]) => [scheme, label])
+);
+
+/** A Connector type in words. A type the interface does not know keeps its id. */
+export function connectorTypeLabel(type: string, t: TranslationContextValue["t"]): string {
+  const key = CONNECTOR_TYPE_LABELS.get(type);
+  return key === undefined ? type : t(key);
+}
+
+/** How a Connection proves itself, in words. A scheme the interface does not know keeps its id. */
+export function authSchemeLabel(scheme: string, t: TranslationContextValue["t"]): string {
+  const key = AUTH_SCHEME_LABELS.get(scheme);
+  return key === undefined ? scheme : t(key);
+}
 
 /** The address of the server and, for a REST API, its fixed headers and its test path. */
 export function ConnectionServerFields({

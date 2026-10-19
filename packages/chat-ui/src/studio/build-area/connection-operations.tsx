@@ -101,8 +101,11 @@ export function EditableOperations({
                   label={t(
                     exposure === "outside" ? "connections.exposeOutside" : EXPOSURE_LABELS[exposure]
                   )}
+                  // What leaving the instance means is said only once an outside client may call.
                   description={
-                    exposure === "outside" ? t("connections.exposeOutsideHint") : undefined
+                    exposure === "outside" && operation.exposure.includes("outside")
+                      ? t("connections.exposeOutsideHint")
+                      : undefined
                   }
                   checked={operation.exposure.includes(exposure)}
                   disabled={blocked}

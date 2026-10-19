@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
@@ -16,11 +16,21 @@ export interface DraftAttachmentControllerInput {
   authScope: string;
   client: ApiClient;
   selectedConversationId: string | undefined;
+  /** The open workspace; files waiting for a first message belong to it. */
+  collaborationWorkspaceId: string | undefined;
   isAuthenticated: boolean;
-  ensureConversationForFiles(files: File[]): Promise<string>;
+  /** Makes the conversation the files of a first message go to, without opening it. */
+  createConversationForFiles(files: File[]): Promise<CreatedConversation>;
+  /** Opens a conversation whose files could not be got ready, so they can be retried there. */
+  showConversationForFiles(conversation: CreatedConversation): void;
   /** The last draft attachment of the conversation was removed and no upload is in flight. */
   onDraftAttachmentsEmptied?(conversationId: string): void;
   onError(message: string): void;
+}
+
+interface CreatedConversation {
+  id: string;
+  collaborationWorkspaceId: string;
 }
 
 export interface DraftAttachmentController {
@@ -28,12 +38,19 @@ export interface DraftAttachmentController {
   visibleUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
   onFilesSelected(files: File[]): void;
+  /**
+   * The first message of a new conversation is sent: makes the conversation, uploads the files
+   * waiting in the composer and answers once they are ready. Answers nothing without such files.
+   */
+  sendStagedFiles(): Promise<string | undefined>;
   onRemoveDraftAttachment(attachmentId: string): void;
   onRetryDraftAttachment(attachmentId: string): void;
   clearConversationUploads(conversationId: string): void;
 }
 
 type LocalUploadingConversationAttachment = LocalUploadingAttachment & { conversationId: string };
+/** `uploadedAs` names the draft attachment a file became on a send that failed for another. */
+type StagedFile = LocalUploadingAttachment & { file: File; uploadedAs?: string };
 const MAX_CONCURRENT_UPLOADS = 2;
 const UPLOAD_ATTEMPTS = 3;
 const GATEWAY_FAILURE_STATUSES = [0, 502, 503, 504];
@@ -41,6 +58,8 @@ const GATEWAY_FAILURE_STATUSES = [0, 502, 503, 504];
 // long as the API says and goes on, a bounded number of times.
 const RATE_LIMIT_WAITS = 5;
 const DRAFT_ATTACHMENT_POLL_MS = 1000;
+// A first message waits this long for its files; then their conversation opens with them.
+const DRAFT_ATTACHMENT_SETTLE_POLLS = 600;
 
 export function useDraftAttachmentController(
   input: DraftAttachmentControllerInput
@@ -51,9 +70,29 @@ export function useDraftAttachmentController(
   const [localUploadingAttachments, setLocalUploadingAttachments] = useState<
     LocalUploadingConversationAttachment[]
   >([]);
+  // Files picked before the first message wait here: a conversation is made only when it is sent.
+  const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
+  // The conversation a failed first send made: the next send goes on in it.
+  const stagedConversation = useRef<CreatedConversation | undefined>(undefined);
+  const ended = useRef(false);
+  useEffect(() => {
+    ended.current = false;
+    return () => {
+      ended.current = true;
+    };
+  }, []);
+  // Waiting files and a failed send's conversation stay in the workspace they were picked in:
+  // another workspace starts with an empty composer and makes its own conversation.
+  const stagedWorkspace = useRef(input.collaborationWorkspaceId);
+  useEffect(() => {
+    if (stagedWorkspace.current === input.collaborationWorkspaceId) return;
+    stagedWorkspace.current = input.collaborationWorkspaceId;
+    stagedConversation.current = undefined;
+    setStagedFiles([]);
+  }, [input.collaborationWorkspaceId]);
   // Removal settles after later renders, so it reads the uploads and callback of that moment.
-  const latest = useRef({ input, localUploadingAttachments });
-  latest.current = { input, localUploadingAttachments };
+  const latest = useRef({ input, localUploadingAttachments, stagedFiles });
+  latest.current = { input, localUploadingAttachments, stagedFiles };
   const draftAttachmentsQuery = useQuery({
     queryKey: workspaceQueryKeys.draftAttachments(
       input.apiBaseUrl,
@@ -75,7 +114,7 @@ export function useDraftAttachmentController(
     ? localUploadingAttachments.filter(
         (attachment) => attachment.conversationId === input.selectedConversationId
       )
-    : [];
+    : stagedFiles.map(({ file: _file, uploadedAs: _uploadedAs, ...attachment }) => attachment);
 
   function onFilesSelected(files: File[]) {
     if (!input.enabled) {
@@ -89,8 +128,12 @@ export function useDraftAttachmentController(
     if (selectedFiles.length === 0) {
       return;
     }
+    const conversationId = input.selectedConversationId;
+    if (!conversationId) {
+      stageFiles(selectedFiles);
+      return;
+    }
     try {
-      const conversationId = await input.ensureConversationForFiles(selectedFiles);
       const acceptedFiles = selectedFiles.filter((file) =>
         shouldUploadFile(file, draftAttachments, localUploadingAttachments)
       );
@@ -100,6 +143,101 @@ export function useDraftAttachmentController(
     } catch (error) {
       input.onError(error instanceof ApiError ? error.message : "File upload failed");
     }
+  }
+
+  function stageFiles(files: File[]) {
+    const accepted = files.filter((file) => shouldUploadFile(file, [], stagedFiles));
+    setStagedFiles((current) => [
+      ...current,
+      ...accepted.map((file) => ({
+        id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}:${file.name}`,
+        file,
+        filename: file.name,
+        byteSize: file.size,
+        mimeType: file.type || undefined,
+        status: "staged" as const
+      }))
+    ]);
+  }
+
+  async function sendStagedFiles(): Promise<string | undefined> {
+    const staged = latest.current.stagedFiles;
+    if (staged.length === 0) {
+      return undefined;
+    }
+    const restage = (uploaded: ReadonlyMap<string, string> = new Map()) =>
+      setStagedFiles((current) =>
+        current.map((file) => ({
+          ...file,
+          status: "staged",
+          uploadedAs: file.uploadedAs ?? uploaded.get(file.id)
+        }))
+      );
+    setStagedFiles((current) => current.map((file) => ({ ...file, status: "uploading" })));
+    const conversation =
+      stagedConversation.current ??
+      (await input
+        .createConversationForFiles(staged.map((stagedFile) => stagedFile.file))
+        .catch((error: unknown) => {
+          restage();
+          throw error;
+        }));
+    // A conversation made while the person moved to another workspace is not held for theirs.
+    if (stagedWorkspace.current === input.collaborationWorkspaceId) {
+      stagedConversation.current = conversation;
+    }
+    const queryKey = workspaceQueryKeys.draftAttachments(
+      input.apiBaseUrl,
+      input.authScope,
+      conversation.id
+    );
+    const waiting = staged.filter((stagedFile) => stagedFile.uploadedAs === undefined);
+    const uploads = await Promise.allSettled(
+      waiting.map(({ file }) =>
+        uploadLimiter.current(() =>
+          uploadFileWithRetry(file, (readFile) =>
+            input.client.conversations.draft_attachments.upload({
+              params: { conversationId: conversation.id },
+              file: readFile
+            })
+          )
+        )
+      )
+    );
+    const uploaded = new Map<string, string>();
+    let refusal: string | undefined;
+    uploads.forEach((upload, index) => {
+      const stagedFile = waiting[index];
+      if (!stagedFile) return;
+      if (upload.status === "fulfilled") {
+        uploaded.set(stagedFile.id, upload.value.attachment.id);
+      } else {
+        refusal ??= uploadErrorMessage(upload.reason, stagedFile.filename, t);
+      }
+    });
+    if (refusal !== undefined) {
+      // A refused upload leaves nothing to retry in the conversation: the files stay here and
+      // the next send takes them on in the conversation already made.
+      restage(uploaded);
+      throw new Error(refusal);
+    }
+    const attachments = await settledDraftAttachments(input.client, conversation.id, ended).catch(
+      (error: unknown) => {
+        restage(uploaded);
+        throw error;
+      }
+    );
+    stagedConversation.current = undefined;
+    setStagedFiles([]);
+    queryClient.setQueryData(queryKey, attachments);
+    const blocked = getSendBlockedReason(attachments, []);
+    if (blocked) {
+      // The files are in the conversation now: it opens, and they are retried or removed there.
+      queryClient.invalidateQueries({ queryKey }).catch(() => undefined);
+      latest.current.input.showConversationForFiles(conversation);
+      throw new Error(blocked);
+    }
+    return conversation.id;
   }
 
   async function startUpload(conversationId: string, file: File): Promise<void> {
@@ -151,6 +289,17 @@ export function useDraftAttachmentController(
   function onRemoveDraftAttachment(attachmentId: string) {
     const conversationId = input.selectedConversationId;
     if (!conversationId) {
+      const uploadedAs = stagedFiles.find((file) => file.id === attachmentId)?.uploadedAs;
+      const madeFor = stagedConversation.current;
+      setStagedFiles((current) => withoutDraftAttachment(current, attachmentId));
+      // A file a failed send already uploaded leaves the conversation made for it as well.
+      if (uploadedAs && madeFor) {
+        input.client.conversations.draft_attachments
+          .delete({ params: { conversationId: madeFor.id, attachmentId: uploadedAs } })
+          .catch((error: unknown) =>
+            input.onError(error instanceof ApiError ? error.message : "Remove failed")
+          );
+      }
       return;
     }
     const queryKey = workspaceQueryKeys.draftAttachments(
@@ -209,8 +358,12 @@ export function useDraftAttachmentController(
   return {
     draftAttachments,
     visibleUploadingAttachments,
-    sendBlockedReason: getSendBlockedReason(draftAttachments, visibleUploadingAttachments),
+    sendBlockedReason: getSendBlockedReason(
+      draftAttachments,
+      visibleUploadingAttachments.filter((attachment) => attachment.status === "uploading")
+    ),
     onFilesSelected,
+    sendStagedFiles,
     onRemoveDraftAttachment,
     onRetryDraftAttachment,
     clearConversationUploads
@@ -318,6 +471,29 @@ function createConcurrencyLimiter(maxConcurrency: number) {
   };
 }
 
+/**
+ * The draft attachments of a conversation once none of them is still processed, or as they
+ * stand after a bounded wait. Stops when the page that waits is gone.
+ */
+async function settledDraftAttachments(
+  client: ApiClient,
+  conversationId: string,
+  ended: { readonly current: boolean }
+): Promise<DraftAttachment[]> {
+  for (let poll = 1; ; poll += 1) {
+    if (ended.current) {
+      throw new Error("The page that sent the files is gone.");
+    }
+    const attachments = await listAll((paging) =>
+      client.conversations.draft_attachments.list({ params: { conversationId }, query: paging })
+    );
+    if (!hasProcessingDraftAttachments(attachments) || poll >= DRAFT_ATTACHMENT_SETTLE_POLLS) {
+      return attachments;
+    }
+    await new Promise((resolve) => setTimeout(resolve, DRAFT_ATTACHMENT_POLL_MS));
+  }
+}
+
 function hasProcessingDraftAttachments(attachments: DraftAttachment[]): boolean {
   return attachments.some(
     (attachment) => attachment.status === "queued" || attachment.status === "preprocessing"
@@ -350,7 +526,7 @@ function getSendBlockedReason(
 function shouldUploadFile(
   file: File,
   draftAttachments: DraftAttachment[],
-  localUploadingAttachments: LocalUploadingConversationAttachment[]
+  localUploadingAttachments: LocalUploadingAttachment[]
 ): boolean {
   const duplicateExists =
     draftAttachments.some(

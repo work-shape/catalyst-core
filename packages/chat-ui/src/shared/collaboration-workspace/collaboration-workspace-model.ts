@@ -55,6 +55,9 @@ export interface CollaborationWorkspaceModel {
   closeDialog(): void;
   conversationMoved(conversationId: string, destinationCollaborationWorkspaceId: string): void;
   collaborationWorkspaceDeleted(collaborationWorkspaceId: string): void;
+  /** A link led to a workspace the person is no member of, and the page went to their own. */
+  closedLinkLeftHere: boolean;
+  dismissClosedLink(): void;
 }
 
 /**
@@ -133,6 +136,7 @@ export function useCollaborationWorkspaceModel(
     showSettings
   } = input;
   const [dialog, setDialog] = useState<CollaborationWorkspaceDialogState>({ kind: "none" });
+  const [closedLinkLeftHere, setClosedLinkLeftHere] = useState(false);
   const [settingsCollaborationWorkspaceId, setSettingsCollaborationWorkspaceId] = useState<
     string | undefined
   >();
@@ -243,6 +247,8 @@ export function useCollaborationWorkspaceModel(
     if (activeCollaborationWorkspace || !fallbackCollaborationWorkspaceId) {
       return;
     }
+    // The page says why it went elsewhere: a link from a colleague otherwise just lands here.
+    setClosedLinkLeftHere(true);
     goToCollaborationWorkspace(fallbackCollaborationWorkspaceId, { replace: true });
   }, [
     activeCollaborationWorkspace,
@@ -273,6 +279,7 @@ export function useCollaborationWorkspaceModel(
       if (collaborationWorkspaceId === routedCollaborationWorkspaceId) {
         return;
       }
+      setClosedLinkLeftHere(false);
       goToCollaborationWorkspace(collaborationWorkspaceId);
     },
     [goToCollaborationWorkspace, routedCollaborationWorkspaceId]
@@ -352,7 +359,9 @@ export function useCollaborationWorkspaceModel(
     openMoveConversationDialog,
     closeDialog,
     conversationMoved,
-    collaborationWorkspaceDeleted
+    collaborationWorkspaceDeleted,
+    closedLinkLeftHere,
+    dismissClosedLink: () => setClosedLinkLeftHere(false)
   };
 }
 

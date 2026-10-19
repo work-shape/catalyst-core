@@ -189,7 +189,7 @@ describe("Guardrail page", () => {
   // Fails without the change: a hit named only the kind of what it checked, so nobody could
   // tell which skill was blocked or open it.
   it("names the subject of a hit and links an asset of the Build area to its page", () => {
-    const read = (sees?: string[]) =>
+    const read = (sees?: string[], subjectTitle?: string) =>
       renderPage({
         ...(sees ? { sees } : {}),
         asset: guardrailAsset({
@@ -205,6 +205,7 @@ describe("Guardrail page", () => {
                 event: "asset.before_write",
                 subjectKind: "skill",
                 subjectName: "kunden-faq",
+                ...(subjectTitle ? { subjectTitle } : {}),
                 message: "Skills hold no IBAN."
               }),
               hit({
@@ -222,6 +223,12 @@ describe("Guardrail page", () => {
         }
       });
     const markup = read(["skill"]);
+    // The row of the skill's hit, up to the next hit's row.
+    const skillHit = (page: string) =>
+      page.slice(
+        page.indexOf('data-guardrail-hit="block"'),
+        page.indexOf('data-guardrail-hit="require_approval"')
+      );
     expect(markup).toContain(
       "Runs before anyone saves a skill, instance-wide, set by the operator. Checks the content for a text pattern."
     );
@@ -234,6 +241,16 @@ describe("Guardrail page", () => {
     // A call is no page of the Build area: its hit names it and links nothing.
     expect(markup).not.toContain("data_store.kunden.insert</a>");
     expect(markup).not.toMatch(/href="[^"]*data_store\.kunden\.insert/u);
+    // ACCEPT-FIX-10 E8: without a readable title (deleted, unreadable, never created) the hit
+    // names the kind once, never the internal name; the name stays in the link and data.
+    expect(markup).not.toContain(">kunden-faq<");
+    expect(skillHit(markup).match(/>Skills</gu)).toHaveLength(1);
+    // ACCEPT-FIX-10 E8: with the title the instance gives it, the hit names it by that alone.
+    const titled = read(["skill"], "Kunden-FAQ");
+    expect(titled).toContain(">Kunden-FAQ<");
+    expect(titled).not.toContain(">kunden-faq<");
+    expect(skillHit(titled).match(/>Skills</gu)).toHaveLength(1);
+    expect(titled).toContain('href="/build/skills/kunden-faq"');
     // A reader who does not see skills in Build is named the skill and offered no link.
     const unseen = read();
     expect(unseen).toContain('data-guardrail-hit-subject="kunden-faq"');

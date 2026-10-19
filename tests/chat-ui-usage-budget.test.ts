@@ -8,6 +8,10 @@ import { UsageView } from "@work-shape/catalyst-chat-ui/control-plane";
 import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
 import { createApiClient } from "@work-shape/catalyst-api-client";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
+import { agentConfigSchema, createSafeConfigView } from "@work-shape/catalyst-config-schema";
+import { safeConfigSchema } from "@work-shape/catalyst-api-contract";
+import { createTestConfig } from "./support/fixtures";
 import { required } from "./support/assertions";
 import {
   mountPage,
@@ -598,6 +602,48 @@ describe("usage spend budget progress", () => {
     for (const markup of [english, german]) {
       expect(markup).not.toContain("stored-agent");
       expect(markup).not.toContain("knowledge_field_extraction");
+    }
+  });
+});
+
+// ACCEPT-FIX-10 C10: a call of an agent named the agent by its id, `workflow_assistant`.
+describe("the recent calls of Usage", () => {
+  it.each([
+    { locale: "en" as const, name: "Workflow assistant" },
+    { locale: "de" as const, name: "Workflow-Assistent" }
+  ])("name the agent of a call by its display name ($locale)", async ({ locale, name }) => {
+    const usage = createUsageSummary();
+    usage.recentEvents = [
+      { ...createEvent("usage_agent", "settled"), agentName: "workflow_assistant" }
+    ];
+    const config = createTestConfig();
+    const agent = agentConfigSchema.parse({
+      name: "workflow_assistant",
+      displayName: { en: "Workflow assistant", de: "Workflow-Assistent" },
+      instructions: "Help.",
+      toolNames: []
+    });
+    const settings = settingsPageContext(
+      createApiClient({
+        baseUrl: SETTINGS_INSTANCE_URL,
+        fetchImpl: async () => Response.json(usage)
+      })
+    );
+    settings.config = safeConfigSchema.parse(
+      createSafeConfigView(
+        config,
+        { version: 0, agents: [agent], skills: [] },
+        resolveInstanceModules(config, []).snapshot,
+        { requestedLocale: locale }
+      )
+    );
+    const page = required(administration.pages?.find((candidate) => candidate.id === "usage"));
+    const mounted = await mountPage(settings, locale, createElement(page.component));
+    try {
+      await waitForText(mounted.container, name);
+      expect(mounted.container.textContent).not.toContain("workflow_assistant");
+    } finally {
+      await mounted.unmount();
     }
   });
 });

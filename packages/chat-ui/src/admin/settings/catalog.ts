@@ -172,10 +172,10 @@ export type SettingsResolution =
   | { kind: "chat" };
 
 /**
- * Resolves an address the way the old areas answered it: an administration address the viewer
- * may not open leads to the first one they may, else to chat; Security without a changeable
- * password leads to Profile; any other closed page says that it is closed, and so does Build
- * for a viewer who holds no right on an agent or a skill.
+ * Resolves an address: `/admin` and an address of no page lead to the first page the viewer
+ * may open, else to chat; Security without a changeable password leads to Profile; any other
+ * closed page says that it is closed, and so does Build for a viewer who holds no right on an
+ * agent or a skill.
  */
 export function resolveSettingsRoute(input: {
   route: WorkspaceRoute;
@@ -224,7 +224,9 @@ export function resolveSettingsRoute(input: {
   if (!platformReady) {
     return { kind: "pending" };
   }
-  if (route.group === "instance") {
+  // An Instance page that exists says it is closed, where it is, rather than leading elsewhere
+  // without a word; an address of no page leads to the first one the viewer may open.
+  if (route.group === "instance" && page === undefined) {
     return administration();
   }
   if (route.group === "you" && route.page === "security") {

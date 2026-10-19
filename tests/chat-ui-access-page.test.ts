@@ -1,6 +1,7 @@
 import { createElement, type ComponentProps } from "react";
 import {
   ApiError,
+  createApiClient,
   type AdministeredUser,
   type ConfigAssetSummary,
   type EffectivePermissions,
@@ -21,6 +22,7 @@ import {
   GrantsTab,
   grantVerbs,
   groupGrants,
+  listGrantChoiceAssets,
   namespaceLockedLists,
   namespacePrefixProblem,
   namespaceRequest,
@@ -750,5 +752,27 @@ describe("what the dialogs send", () => {
       "namespaceInUse"
     );
     expect(accessWriteFailure(new Error("offline"))).toBe("other");
+  });
+});
+
+describe("the assets a right can name", () => {
+  it("are listed with titles in the reader's language, as Studio lists them (ACCEPT-FIX-10 C2)", async () => {
+    const asked: URL[] = [];
+    const client = createApiClient({
+      baseUrl: "https://instance.example.test",
+      fetchImpl: async (input, init) => {
+        asked.push(new URL(new Request(input, init).url));
+        return Response.json({ items: [] });
+      }
+    });
+    await listGrantChoiceAssets(client, {
+      kind: "agent",
+      owners: ["instance", "workspace"],
+      workspaceIds: ["cws_team"],
+      locale: "de"
+    });
+    expect(asked).toHaveLength(2);
+    for (const url of asked) expect(url.searchParams.get("locale"), url.href).toBe("de");
+    expect(asked.map((url) => url.searchParams.get("workspaceId"))).toEqual([null, "cws_team"]);
   });
 });

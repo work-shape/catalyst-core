@@ -31,7 +31,7 @@ import {
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
-import type { ConnectionToolChoice } from "./connection-tools";
+import { connectionToolTitle, type ConnectionToolChoice } from "./connection-tools";
 import { heldToolCount, toolPackages } from "./instance-tools";
 import { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 import { ToolPackagesSection } from "./tool-packages-section";
@@ -128,7 +128,9 @@ export function AgentEditor({
   const titles: DraftTitles = {
     skill: (name) => skillsByName.get(name)?.title || name,
     tool: (name) =>
-      references?.tools?.find((tool) => tool.name === name)?.title?.[locale].trim() || name,
+      references?.tools?.find((tool) => tool.name === name)?.title?.[locale].trim() ||
+      connectionToolTitle(connectionTools.read, name) ||
+      name,
     knowledgeBase: (name) =>
       knowledgeChoice?.options.find((option) => option.name === name)?.title || name,
     model: (id) => {

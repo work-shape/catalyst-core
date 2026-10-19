@@ -7,7 +7,7 @@ import { isRefusal, refusalAskingInstanceAdmin } from "../ask-instance-admin";
 
 /** Instance > Usage: model usage and budgets, with its own data. */
 export function UsagePage() {
-  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, config, user } = useSettingsPage();
   const { t } = useTranslation();
   const usageQuery = useWorkspaceUsageQuery({ apiBaseUrl, authScope, client, enabled: true });
   const error = usageQuery.error;
@@ -15,6 +15,9 @@ export function UsagePage() {
   return (
     <UsageView
       usage={usageQuery.data}
+      agentLabel={(agentName) =>
+        config.agents.find((agent) => agent.name === agentName)?.displayName
+      }
       error={
         !error
           ? undefined

@@ -4,7 +4,7 @@ export const guardrails = defineTranslations({
   en: {
     "guardrails.kind": "Guardrails",
     "guardrails.description":
-      "The operator's guardrails come from the release config; further ones are written with the CLI or the Build Agent and enforce once published. An instance admin switches the guardrail the platform ships here.",
+      "The operator's guardrails come from the release config; further ones are written with the CLI and enforce once published. An instance admin switches the guardrail the platform ships here.",
     "guardrails.shippedHeading": "Shipped with the platform",
     "guardrails.shippedPublishTitle": "Publishing needs an instance admin's approval",
     "guardrails.shippedPublishText":
@@ -115,12 +115,13 @@ export const guardrails = defineTranslations({
     "guardrails.hitBlocked": "Blocked",
     "guardrails.hitBlockedApprovalCouldNotWait": "Blocked: approval could not wait",
     "guardrails.hitUnevaluated": "The check could not be run.",
-    "guardrails.subjectOperation": "Call of {name}"
+    "guardrails.subjectOperation": "Call of {name}",
+    "guardrails.blockedChange": "The guardrail “{name}” stopped this change."
   },
   de: {
     "guardrails.kind": "Leitplanken",
     "guardrails.description":
-      "Die Leitplanken des Betreibers kommen aus der Release-Konfiguration; weitere werden mit der CLI oder dem Build-Agenten geschrieben und gelten, sobald sie veröffentlicht sind. Die Leitplanke der Plattform schaltet ein Instanz-Admin hier um.",
+      "Die Leitplanken des Betreibers kommen aus der Release-Konfiguration; weitere werden mit der CLI geschrieben und gelten, sobald sie veröffentlicht sind. Die Leitplanke der Plattform schaltet ein Instanz-Admin hier um.",
     "guardrails.shippedHeading": "Mit der Plattform geliefert",
     "guardrails.shippedPublishTitle": "Veröffentlichen braucht die Freigabe eines Instanz-Admins",
     "guardrails.shippedPublishText":
@@ -234,6 +235,7 @@ export const guardrails = defineTranslations({
     "guardrails.hitBlocked": "Blockiert",
     "guardrails.hitBlockedApprovalCouldNotWait": "Blockiert: konnte nicht auf Freigabe warten",
     "guardrails.hitUnevaluated": "Die Prüfung konnte nicht ausgeführt werden.",
-    "guardrails.subjectOperation": "Aufruf von {name}"
+    "guardrails.subjectOperation": "Aufruf von {name}",
+    "guardrails.blockedChange": "Die Leitplanke „{name}“ hat diese Änderung verhindert."
   }
 });

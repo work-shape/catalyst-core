@@ -13,6 +13,7 @@ import { BuildNavigationProvider } from "../../shared/build-route";
 import { CollaborationWorkspaceAvatar } from "../../shared/collaboration-workspace/collaboration-workspace-avatar";
 import type { BuildAreaModel, SettingsAreaModel } from "../control-plane/control-plane-model";
 import { useTranslation } from "../../shared/i18n";
+import { refusalAskingInstanceAdmin } from "./ask-instance-admin";
 import { settingsGroups } from "./catalog";
 import type { SettingsPageDefinition } from "../../shared/page-definition";
 import { SettingsPageProvider } from "../../shared/settings-page-context";
@@ -59,6 +60,10 @@ export function SettingsArea({ settings }: { settings: SettingsAreaModel }) {
       }))
   }));
   const OpenPage = page?.component;
+  // Where a person who may not open a page goes instead: their own settings.
+  const profile = pages.find(
+    (candidate) => candidate.group === "you" && candidate.id === "profile"
+  );
 
   return (
     <AreaFrame ref={areaRef} label={t("settings")}>
@@ -83,7 +88,22 @@ export function SettingsArea({ settings }: { settings: SettingsAreaModel }) {
           {OpenPage ? (
             <OpenPage />
           ) : noAccess ? (
-            <EmptyState icon={<Lock aria-hidden="true" />}>{t("settings.noAccess")}</EmptyState>
+            <EmptyState
+              icon={<Lock aria-hidden="true" />}
+              action={
+                profile ? (
+                  <Button variant="outline" onClick={() => openPage(profile)}>
+                    {t("settings.openProfile")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {refusalAskingInstanceAdmin(
+                t("settings.noAccess"),
+                t,
+                context.user.instanceAdminName
+              )}
+            </EmptyState>
           ) : null}
         </Page>
       </SettingsPageProvider>

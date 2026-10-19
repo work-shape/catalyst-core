@@ -108,20 +108,27 @@ export function createWorkspaceConversationActions({
     routeState.goToDefaultChat(activeCollaborationWorkspaceId, options);
   }
 
-  async function ensureConversationForFiles(files: File[]): Promise<string> {
-    if (selectedConversationId) {
-      return selectedConversationId;
-    }
-    const title = attachedFilesTitle(files, activeLocale);
-    const conversation = await client.conversations.create({
+  /**
+   * The conversation the files of a first message go to. It is made as that message is sent,
+   * not when the files are picked, and opens once its run starts.
+   */
+  function createConversationForFiles(files: File[]) {
+    return client.conversations.create({
       body: {
-        title,
+        title: attachedFilesTitle(files, activeLocale),
         locale: activeLocale,
         ...(activeCollaborationWorkspaceId
           ? { collaborationWorkspaceId: activeCollaborationWorkspaceId }
           : {})
       }
     });
+  }
+
+  /** A first message's files could not be got ready: their conversation opens with them. */
+  function showConversationForFiles(conversation: {
+    id: string;
+    collaborationWorkspaceId: string;
+  }) {
     draftController.moveDraft({
       authScope: WORKSPACE_AUTH_SCOPE,
       fromConversationId: undefined,
@@ -130,9 +137,7 @@ export function createWorkspaceConversationActions({
     showCreatedConversation(conversation, {
       replace: route.kind === "new-conversation"
     });
-    setNotice(undefined);
     workspaceCache.invalidateConversations();
-    return conversation.id;
   }
 
   /**
@@ -300,7 +305,8 @@ export function createWorkspaceConversationActions({
     showConversationInActiveCollaborationWorkspace,
     showCreatedConversation,
     goToActiveCollaborationWorkspaceChat,
-    ensureConversationForFiles,
+    createConversationForFiles,
+    showConversationForFiles,
     startConversationAbout,
     returnToStartPageAfterDraftEmptied,
     startNewConversation,

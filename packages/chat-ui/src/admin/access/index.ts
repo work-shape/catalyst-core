@@ -38,3 +38,4 @@ export {
 } from "./principal-grants-model";
 
 export { grantOptions } from "./grant-options";
+export { listGrantChoiceAssets } from "./access-queries";

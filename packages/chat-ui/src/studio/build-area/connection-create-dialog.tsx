@@ -154,6 +154,7 @@ export function ConnectionCreateFlow({
   const name = `${fields.prefix}${id}`;
   const title = fields.title.trim();
   const created = memory.current.revision !== undefined;
+  const mayDiscard = mayDelete(fields.prefix === NO_NAMESPACE ? undefined : fields.prefix);
   const rest = fields.form.connectorType === "http_api";
 
   /** One write of the definition over the revision the dialog wrote last. */
@@ -386,7 +387,7 @@ export function ConnectionCreateFlow({
       return;
     }
     if (stage.step === "form") {
-      if (mayDelete(fields.prefix === NO_NAMESPACE ? undefined : fields.prefix)) setAsking(true);
+      if (mayDiscard) setAsking(true);
       else onClose();
       return;
     }
@@ -522,6 +523,7 @@ export function ConnectionCreateFlow({
             busy={busy}
             steps={steps}
             detailsOpen={detailsOpen}
+            {...(created ? { saved: { discardable: mayDiscard } } : {})}
             onChange={setFields}
           />
         );

@@ -214,8 +214,13 @@ describe("Connection page", () => {
   it("shows the settings and of the credential only whether it is there", () => {
     const markup = renderPage();
 
-    expect(markup).toContain(">mcp<");
-    expect(markup).toContain(">bearer<");
+    // Type and authentication read in words; their ids wait under Technical details.
+    expect(markup).toContain(">MCP server<");
+    expect(markup).toContain(">Bearer token<");
+    expect(markup).not.toContain(">mcp<");
+    expect(markup).not.toContain(">bearer<");
+    expect(markup).toContain("data-connection-technical");
+    expect(markup).toContain(">Server address<");
     expect(markup).toContain("https://sample-business.example.test/mcp");
     expect(markup).toContain(">timeoutSeconds<");
     expect(markup).toContain(">20<");
@@ -911,6 +916,25 @@ describe("Connection page", () => {
     expect(german).toContain("1 Tool freigeben");
   });
 
+  it("names the settings of a REST API in words, in English and in German", () => {
+    const rest = connectionAsset("exampledata", {
+      connectorType: "http_api",
+      settings: { baseUrl: "https://gateway.example.test/api", testPath: "/health" }
+    });
+    const markup = renderPage({ asset: rest });
+    for (const label of [">REST API<", ">Base address<", ">Test path<", ">Bearer token<"]) {
+      expect(markup, label).toContain(label);
+    }
+    for (const raw of [">http_api<", ">baseUrl<", ">testPath<", ">bearer<"]) {
+      expect(markup, raw).not.toContain(raw);
+    }
+    const german = renderPage({ asset: rest, locale: "de" });
+    for (const label of [">REST-API<", ">Basisadresse<", ">Testpfad<", ">Bearer-Token<"]) {
+      expect(german, label).toContain(label);
+    }
+    expect(german).toContain("Technische Details");
+  });
+
   it("adds the tools of a REST API by pasting them or drafting them in the chat, never by discovery", () => {
     const rest = connectionAsset("exampledata", {
       origin: "runtime",
@@ -940,7 +964,10 @@ describe("Connection page", () => {
       return match?.[0] ?? "";
     };
     expect(markup).toContain("Outside clients (CLI, MCP)");
-    expect(markup).toContain("What a call returns is copied to the computer that holds the key.");
+    // The note on leaving the instance stands only under the one box that is ticked.
+    expect(
+      markup.split("What a call returns is copied to the computer that holds the key.")
+    ).toHaveLength(2);
     // Ticked only where the operation names `outside`, which no operation does by itself.
     expect(box("list_customers")).toContain('aria-checked="true"');
     for (const name of ["revenue_by_month", "update_customer", "top_products", "delete_order"]) {

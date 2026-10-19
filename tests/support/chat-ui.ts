@@ -180,6 +180,7 @@ export {
   draftAttachmentPolling,
   uploadErrorMessage,
   uploadFileWithRetry,
+  useDraftAttachmentController,
   withoutDraftAttachment
 } from "../../packages/chat-ui/src/chat/conversation/draft-attachment-controller";
 export {
@@ -394,7 +395,12 @@ export {
   CollaborationWorkspaceMemberCandidateList,
   nextCollaborationWorkspaceMemberCandidate
 } from "../../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-member-search";
-export { canonicalConversationRedirect } from "../../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-model";
+export {
+  canonicalConversationRedirect,
+  useCollaborationWorkspaceModel,
+  type CollaborationWorkspaceModelInput
+} from "../../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-model";
+export { ClosedWorkspaceLinkBanner } from "../../packages/chat-ui/src/chat/workspace/workspace-chrome";
 export {
   canChangeCollaborationWorkspaceRole,
   canDeleteCollaborationWorkspace,
@@ -445,6 +451,9 @@ export {
   readStoredContextIndicatorPreference,
   writeStoredContextIndicatorPreference
 } from "../../packages/chat-ui/src/shared/workspace-utils";
+
+export { useDocumentLanguage } from "../../packages/chat-ui/src/shared/i18n";
+export { rightSentenceKeys } from "../../packages/chat-ui/src/admin/access/grant-words";
 
 // Source-reading contract tests share the same relocation seam as executable imports.
 export const chatUiSources = {

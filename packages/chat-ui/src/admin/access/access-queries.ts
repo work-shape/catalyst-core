@@ -26,6 +26,39 @@ const accessQueryKeys = {
     ["access", apiBaseUrl, authScope, "effective", holderId] as const
 };
 
+/**
+ * The assets of one kind a grant can name, with titles in the reader's language as Studio
+ * lists them: the instance's own where the kind lives there, and each given workspace's.
+ */
+export async function listGrantChoiceAssets(
+  client: ApiClient,
+  input: {
+    kind: string;
+    owners: readonly string[];
+    workspaceIds: readonly string[];
+    locale: string;
+  }
+) {
+  const { kind, locale } = input;
+  const lists = await Promise.all([
+    ...(input.owners.includes("instance")
+      ? [
+          listAll((paging) =>
+            client.assets.list({ params: { kind }, query: { ...paging, locale } })
+          )
+        ]
+      : []),
+    ...(input.owners.includes("workspace")
+      ? input.workspaceIds.map((workspaceId) =>
+          listAll((paging) =>
+            client.assets.list({ params: { kind }, query: { ...paging, workspaceId, locale } })
+          )
+        )
+      : [])
+  ]);
+  return lists.flat();
+}
+
 export function useNamespacesQuery(input: AccessApiInput) {
   return useQuery({
     queryKey: accessQueryKeys.namespaces(input.apiBaseUrl, input.authScope),

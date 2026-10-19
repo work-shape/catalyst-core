@@ -65,6 +65,10 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.discardText":
       "It was saved while connecting and has no tools. Discarding deletes it.",
     "connectionCreate.discardConfirm": "Discard",
+    "connectionCreate.saved":
+      "{name} is saved already and is in the list, with no tools yet. Correct the field and connect again.",
+    "connectionCreate.savedDiscardable":
+      "{name} is saved already and is in the list, with no tools yet. Correct the field and connect again, or cancel to discard it.",
     "connectionCreate.approveHeading": "Approve tools",
     "connectionCreate.connectedMcp": "Connected to {name}. It offers {count} tools.",
     "connectionCreate.connectedMcpOne": "Connected to {name}. It offers 1 tool.",
@@ -198,6 +202,10 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.discardText":
       "Sie wurde beim Verbinden gespeichert und hat keine Tools. Verwerfen löscht sie.",
     "connectionCreate.discardConfirm": "Verwerfen",
+    "connectionCreate.saved":
+      "{name} ist schon gespeichert und steht in der Liste, noch ohne Tools. Korrigiere das Feld und verbinde erneut.",
+    "connectionCreate.savedDiscardable":
+      "{name} ist schon gespeichert und steht in der Liste, noch ohne Tools. Korrigiere das Feld und verbinde erneut, oder brich ab, um sie zu verwerfen.",
     "connectionCreate.approveHeading": "Tools freigeben",
     "connectionCreate.connectedMcp": "Mit {name} verbunden. Es bietet {count} Tools.",
     "connectionCreate.connectedMcpOne": "Mit {name} verbunden. Es bietet 1 Tool.",
