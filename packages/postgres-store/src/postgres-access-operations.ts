@@ -113,7 +113,13 @@ export function createPostgresAccessStore(
                     and availability.client_instance_id = ${input.clientInstanceId}
                     and asset.status = 'active' and asset.kind in ('knowledge_base', 'connection')
                     and ${availableThroughMembership(input.clientInstanceId, input.holder.id, input.workspaceId)}
-                ), '[]'::jsonb)`
+                ), '[]'::jsonb)`,
+                // The holder's roles that have a row; their grants come with the holder's own.
+                storedRoleIds: sql<string[]>`coalesce((
+                  select array_agg(role.id) from roles role
+                  where role.client_instance_id = ${input.clientInstanceId}
+                    and ${productUsers.roles} ? role.id
+                ), '{}'::text[])`
               })
               .from(productUsers)
               .where(
@@ -129,7 +135,8 @@ export function createPostgresAccessStore(
                 scopeAssignments: scopeRows,
                 status: servicePrincipals.status,
                 memberWorkspaceIds: sql<string[]>`'{}'::text[]`,
-                availableAssets: sql<NonNullable<PersistedAccess["availableAssets"]>>`'[]'::jsonb`
+                availableAssets: sql<NonNullable<PersistedAccess["availableAssets"]>>`'[]'::jsonb`,
+                storedRoleIds: sql<string[]>`'{}'::text[]`
               })
               .from(servicePrincipals)
               .where(
@@ -145,8 +152,22 @@ export function createPostgresAccessStore(
           .where(
             and(
               eq(permissionGrants.clientInstanceId, input.clientInstanceId),
-              eq(permissionGrants.holderKind, input.holder.kind),
-              eq(permissionGrants.holderId, input.holder.id)
+              or(
+                and(
+                  eq(permissionGrants.holderKind, input.holder.kind),
+                  eq(permissionGrants.holderId, input.holder.id)
+                ),
+                // A person's roles hold rows too, read by the same index in the same statement.
+                input.holder.kind === "user"
+                  ? and(
+                      eq(permissionGrants.holderKind, "role"),
+                      sql`${permissionGrants.holderId} in (
+                        select jsonb_array_elements_text(holder.roles) from product_users holder
+                        where holder.client_instance_id = ${input.clientInstanceId}
+                          and holder.id = ${input.holder.id})`
+                    )
+                  : undefined
+              )
             )
           )
       ]);
@@ -162,7 +183,8 @@ export function createPostgresAccessStore(
             : grantRows.map(mapGrant),
         memberWorkspaceIds: holder[0]?.memberWorkspaceIds ?? [],
         availableAssets: holder[0]?.availableAssets ?? [],
-        scopeAssignments: holder[0]?.scopeAssignments ?? []
+        scopeAssignments: holder[0]?.scopeAssignments ?? [],
+        storedRoleIds: holder[0]?.storedRoleIds ?? []
       };
     },
 

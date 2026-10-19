@@ -141,6 +141,14 @@ export interface UserStore {
     clientInstanceId: ClientInstanceId;
     userId: UserId;
   }): Promise<UserRecord | undefined>;
+  /**
+   * Whether an active person other than `userId`, whose deletion was not requested, holds
+   * `superadmin`. The last-superadmin rule asks it under the rights locks.
+   */
+  hasOtherActiveSuperadmin(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: UserId;
+  }): Promise<boolean>;
   /** Active people in the instance, counted without loading identities or grants. */
   countActiveUsers(input: { clientInstanceId: ClientInstanceId }): Promise<number>;
   listUsers(input: {

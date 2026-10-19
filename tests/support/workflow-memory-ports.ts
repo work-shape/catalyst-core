@@ -144,6 +144,9 @@ export const unusedPlatformStores: PlatformStores = {
   get access() {
     return unsupported();
   },
+  get roles() {
+    return unsupported();
+  },
   get configAssets() {
     return unsupported();
   },

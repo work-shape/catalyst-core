@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   jsonb,
@@ -9,7 +10,7 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { PermissionGrant } from "@work-shape/catalyst-core";
+import type { PermissionGrant, RolePendingAction } from "@work-shape/catalyst-core";
 
 /**
  * Who may do an action on a scope. `scope_id` is a workspace id or an asset id and is null for
@@ -58,6 +59,37 @@ export const permissionGrants = pgTable(
     check(
       "permission_grants_scope_id_check",
       sql`(${table.scopeKind} in ('workspace', 'asset')) = (${table.scopeId} is not null)`
+    )
+  ]
+);
+
+/**
+ * A role of the instance: every custom role, and a built-in one (`user`, `admin`) from a
+ * superadmin's first edit on. Its grants are rows of `permission_grants` with the role as
+ * holder. A built-in role without a row holds its release default, and `superadmin` never has
+ * one. `default_actions` is the default a built-in role was last reconciled with, and
+ * `pending_actions` what a release changed in that default since, waiting for a superadmin.
+ */
+export const roles = pgTable(
+  "roles",
+  {
+    clientInstanceId: text("client_instance_id").notNull(),
+    id: text("id").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    builtIn: boolean("built_in").notNull(),
+    defaultActions: jsonb("default_actions").$type<string[]>(),
+    pendingActions: jsonb("pending_actions").$type<RolePendingAction[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    primaryKey({ name: "roles_pk", columns: [table.clientInstanceId, table.id] }),
+    uniqueIndex("roles_name_unique").on(table.clientInstanceId, table.name),
+    check("roles_built_in_check", sql`not ${table.builtIn} or ${table.id} in ('user', 'admin')`),
+    check(
+      "roles_default_actions_check",
+      sql`${table.builtIn} = (${table.defaultActions} is not null)`
     )
   ]
 );

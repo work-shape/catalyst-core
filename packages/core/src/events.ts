@@ -849,6 +849,14 @@ export const EVENTS = {
     name: "permission.revoked",
     subject: "permission_grant"
   },
+  // Roles as data (ADR-0028): the actor, the role, and the grants added and removed with
+  // action and scope. `role.reconciled` is the migration step's: what a release changed.
+  "role.created": { ...LEGACY_AUDIT, name: "role.created", subject: "role" },
+  "role.updated": { ...LEGACY_AUDIT, name: "role.updated", subject: "role" },
+  "role.reset": { ...LEGACY_AUDIT, name: "role.reset", subject: "role" },
+  "role.deleted": { ...LEGACY_AUDIT, name: "role.deleted", subject: "role" },
+  "role.pending_decided": { ...LEGACY_AUDIT, name: "role.pending_decided", subject: "role" },
+  "role.reconciled": { ...LEGACY_AUDIT, name: "role.reconciled", subject: "role" },
   "storage.orphaned_file_cleanup_failed": {
     ...LEGACY_AUDIT,
     name: "storage.orphaned_file_cleanup_failed",

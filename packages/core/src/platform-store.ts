@@ -27,7 +27,8 @@ import type {
 } from "./execution-workspace";
 import type { FileSearchStore } from "./file-search";
 import type { PlatformFileStore } from "./files";
-import type { AccessAdministrationStore } from "./permissions";
+import type { AccessAdministrationStore } from "./access-administration-store";
+import type { RoleStore } from "./roles";
 import type { JobsStore } from "./jobs";
 import type { LiveOnceSwitchStore } from "./draft-calls";
 import type { OperationRunStore } from "./operation-runs";
@@ -84,6 +85,7 @@ export interface PlatformStores {
   apiAccess: ApiAccessStore;
   personalApiKeys: PersonalApiKeyStore;
   access: AccessAdministrationStore;
+  roles: RoleStore;
   configAssets: ConfigAssetStore;
   agentProposals: AgentProposalStore;
   agentTryConversations: AgentTryConversationStore;

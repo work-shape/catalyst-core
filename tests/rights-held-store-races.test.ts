@@ -38,7 +38,9 @@ async function untilBlocked(sql: postgres.Sql, finished: () => boolean): Promise
 }
 
 describe("deletion admission under the rights locks", () => {
-  it.each(["superadmin", "users.manage"] as const)(
+  // A deny never takes `users.manage` from a superadmin (ADR-0028); a disabled account is
+  // what only reloading the caller's access sees.
+  it.each(["superadmin", "active status"] as const)(
     "refuses deletion when the caller lost %s before the marking transaction",
     async (lost) => {
       const t = await setupAccessInstance();
@@ -54,14 +56,10 @@ describe("deletion admission under the rights locks", () => {
           });
         } else {
           // Keep the superadmin role so only reloading access can see this refusal.
-          await t.stores.access.createGrant({
+          await t.stores.users.updateUser({
             clientInstanceId,
-            holderKind: "user",
-            holderId: t.root.id,
-            action: "users.manage",
-            effect: "deny",
-            scopeKind: "instance",
-            grantedBy: t.root.id
+            userId: t.root.id,
+            status: "disabled"
           });
         }
         return transaction(fn);

@@ -45,6 +45,7 @@ import { createPostgresWorkspacesStore } from "./postgres-collaboration-workspac
 import { createPostgresApiAccessStore } from "./postgres-api-access-operations";
 import { createPostgresPersonalApiKeyStore } from "./postgres-personal-api-key-operations";
 import { createPostgresAccessStore } from "./postgres-access-operations";
+import { createPostgresRoleStore } from "./postgres-role-operations";
 import { createPostgresConfigAssetsStore } from "./postgres-config-asset-operations";
 import { createPostgresApprovalsStore } from "./postgres-approval-request-operations";
 import type { TransactWithStores } from "./postgres-approval-request-operations";
@@ -143,6 +144,7 @@ function bindStores(
     apiAccess: createPostgresApiAccessStore(db),
     personalApiKeys: createPostgresPersonalApiKeyStore(db),
     access: createPostgresAccessStore(db, inTransaction),
+    roles: createPostgresRoleStore(db),
     configAssets: createPostgresConfigAssetsStore(
       db,
       {

@@ -1,5 +1,7 @@
 export * from "./identity";
 export * from "./permissions";
+export * from "./access-administration-store";
+export * from "./roles";
 export * from "./held-rights";
 export * from "./rights-lock";
 export * from "./legacy-permission-lists";

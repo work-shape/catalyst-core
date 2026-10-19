@@ -25,7 +25,7 @@ import {
   userInDeletionError,
   type UserStore
 } from "@work-shape/catalyst-core";
-import { and, eq, inArray, isNull, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql as drizzleSql } from "drizzle-orm";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
 import {
@@ -742,6 +742,22 @@ export function createPostgresUsersStore(db: PostgresConnection): UserStore {
     },
     async getUser(input: Parameters<UserStore["getUser"]>[0]): Promise<UserRecord | undefined> {
       return getUserRecord(db, input.clientInstanceId, input.userId);
+    },
+    async hasOtherActiveSuperadmin({ clientInstanceId, userId }) {
+      const [row] = await db
+        .select({ id: productUsers.id })
+        .from(productUsers)
+        .where(
+          and(
+            eq(productUsers.clientInstanceId, clientInstanceId),
+            ne(productUsers.id, userId),
+            eq(productUsers.status, "active"),
+            isNull(productUsers.deletionRequestedAt),
+            drizzleSql`${productUsers.roles} @> '["superadmin"]'::jsonb`
+          )
+        )
+        .limit(1);
+      return row !== undefined;
     },
     async countActiveUsers({ clientInstanceId }) {
       const [row] = await db

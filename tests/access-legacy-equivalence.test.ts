@@ -195,8 +195,10 @@ describe("legacy equivalence: users", () => {
             persisted: { holderActive: true, grants },
             action: key
           });
+          // ADR-0028: no deny takes `users.manage` from a superadmin any more.
+          const floor = key === "users.manage" && roles.includes("superadmin");
           expect(decision.allowed, `${roles.join("+")} [${permissions.join(",")}] ${key}`).toBe(
-            frozenHasPermission({ roles, permissions }, key)
+            floor || frozenHasPermission({ roles, permissions }, key)
           );
         }
       }

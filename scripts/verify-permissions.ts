@@ -254,7 +254,10 @@ async function compareHolder(input: {
     differences: []
   };
   for (const key of LEGACY_KEYS) {
-    const before = active && input.legacy.hasPermission(input.legacySubject, key);
+    const before =
+      active &&
+      (keptBySuperadminFloor(input.legacySubject, key) ||
+        input.legacy.hasPermission(input.legacySubject, key));
     const now = access.authorize(key).allowed;
     if (now) comparison.keys.push(key);
     if (before !== now) {
@@ -279,6 +282,14 @@ async function compareHolder(input: {
     }
   }
   return comparison;
+}
+
+/**
+ * The one answer that changed on purpose since AP-4: no deny takes `users.manage` from a
+ * superadmin (ADR-0028), so a superadmin's revocation of it reads as held.
+ */
+function keptBySuperadminFloor(subject: LegacySubject, key: LegacyKey): boolean {
+  return key === "users.manage" && (subject.roles ?? []).includes("superadmin");
 }
 
 export async function verifyPermissions(input: {

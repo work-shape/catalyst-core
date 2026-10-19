@@ -19,9 +19,8 @@ import { GRANTABLE_ACTION_SCOPES } from "./grantable-action-scopes";
 import { isAuthenticatedServicePrincipal, type AuthenticatedIdentity } from "./identity";
 import type { ClientInstanceId, UserId } from "./ids";
 import { operationDenialError } from "./operation-denial";
-import type { StorePage } from "./paging";
 import { personalApiKeyCovers, personalApiKeyNamesAction } from "./personal-api-keys";
-import type { RightsLock } from "./rights-lock";
+import { ROLE_DEFAULT_ACTIONS, isEditableBuiltInRole } from "./roles";
 import type { ISODateString } from "./time";
 
 export const PERMISSIONS = [
@@ -92,20 +91,6 @@ export const INSTANCE_ACTIONS = [
   "service_principals.manage"
 ] as const satisfies readonly PlatformAction[];
 
-export const ROLE_DEFAULT_ACTIONS: Record<
-  "user" | "admin" | "superadmin",
-  readonly PlatformAction[]
-> = {
-  user: [],
-  admin: ACTIONS.filter(
-    (action) =>
-      action !== "assets.release" &&
-      action !== "api_access.manage" &&
-      action !== "agent_models.manage"
-  ),
-  superadmin: ACTIONS.filter((action) => action !== "assets.release")
-};
-
 export interface PermissionGrant {
   id: string;
   clientInstanceId: ClientInstanceId;
@@ -117,16 +102,6 @@ export interface PermissionGrant {
   scopeId?: string;
   namespace?: string;
   grantedBy: UserId;
-  createdAt: ISODateString;
-}
-
-export interface Namespace {
-  clientInstanceId: ClientInstanceId;
-  prefix: string;
-  displayName: string;
-  allowedToolNames?: string[];
-  allowedModelBindingIds?: string[];
-  createdBy: UserId;
   createdAt: ISODateString;
 }
 
@@ -206,6 +181,12 @@ export interface PersistedAccess {
    * runs beside it. A service principal is a member of none.
    */
   memberWorkspaceIds?: readonly string[];
+  /**
+   * The holder's roles that are stored: a custom role, or a built-in one a superadmin edited.
+   * Their rights are the role's rows among `grants`. A built-in role not among them holds its
+   * release default (`ROLE_DEFAULT_ACTIONS`).
+   */
+  storedRoleIds?: readonly string[];
   /** Only use is inherited from availability; settings, writes and secrets stay explicit. */
   availableAssets?: readonly { assetId: string; kind: WorkspaceUseAssetKind }[];
 }
@@ -315,6 +296,8 @@ export interface AccessEntry {
   scopeId?: string;
   namespace?: string;
   source: AccessSource;
+  /** The role the entry is held through, for the source `role`. */
+  roleId?: string;
 }
 
 /** An actor outside the closed union holds nothing: it is refused before any right is read. */
@@ -344,16 +327,20 @@ export function accessHolderFromIdentity(actor: AuthenticatedIdentity): AccessHo
 }
 
 /**
- * Everything the four sources say about one holder, in the order role defaults, references,
- * memberships, grant rows. The evaluator and the effective-rights list both read this.
+ * Everything the four sources say about one holder, in the order computed roles, references,
+ * memberships, grant rows (a stored role's among them). The evaluator and the effective-rights list both read this.
  */
 export function listAccessEntries(holder: AccessHolder, persisted: PersistedAccess): AccessEntry[] {
   const entries: AccessEntry[] = [];
   for (const role of holder.roles) {
-    if (isDefaultActionRole(role)) {
-      for (const action of ROLE_DEFAULT_ACTIONS[role]) {
-        entries.push({ action, effect: "allow", scopeKind: "instance", source: "role" });
-      }
+    for (const action of computedRoleActions(role, persisted)) {
+      entries.push({
+        action,
+        effect: "allow",
+        scopeKind: "instance",
+        source: "role",
+        roleId: role
+      });
     }
   }
   for (const permissionRef of holder.permissionRefs) {
@@ -396,7 +383,7 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
   }
   for (const grant of persisted.grants) {
     // A row of another client instance or of another holder never applies. Rows held through a
-    // role or a group are the store's answer for this holder.
+    // group are the store's answer for this holder; a role's count where the holder holds it.
     if (grant.clientInstanceId !== holder.clientInstanceId) {
       continue;
     }
@@ -406,7 +393,20 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
     ) {
       continue;
     }
+    if (grant.holderKind === "role" && !holdsStoredRole(holder, persisted, grant.holderId)) {
+      continue;
+    }
     if (!isPlatformAction(grant.action)) {
+      continue;
+    }
+    // A deny never takes `users.manage` on the instance from a superadmin (ADR-0028): it is
+    // the right that repairs every other one.
+    if (
+      grant.effect === "deny" &&
+      grant.action === "users.manage" &&
+      grant.scopeKind === "instance" &&
+      holder.roles.includes("superadmin")
+    ) {
       continue;
     }
     if (
@@ -422,10 +422,33 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
       scopeKind: grant.scopeKind,
       ...(grant.scopeId === undefined ? {} : { scopeId: grant.scopeId }),
       ...(grant.namespace === undefined ? {} : { namespace: grant.namespace }),
-      source: "grant"
+      ...(grant.holderKind === "role"
+        ? { source: "role" as const, roleId: grant.holderId }
+        : { source: "grant" as const })
     });
   }
   return entries;
+}
+
+/**
+ * What a role holds without rows: `superadmin` the floor, which is never stored, and an
+ * editable built-in role its release default until a superadmin edits it. From then on, as for
+ * a custom role, its rows are what it holds.
+ */
+function computedRoleActions(role: string, persisted: PersistedAccess): readonly PlatformAction[] {
+  if (role === "superadmin") return ROLE_DEFAULT_ACTIONS.superadmin;
+  return isEditableBuiltInRole(role) && !persisted.storedRoleIds?.includes(role)
+    ? ROLE_DEFAULT_ACTIONS[role]
+    : [];
+}
+
+/** A role's rows count for a holder who holds the role, and never for the computed floor. */
+function holdsStoredRole(holder: AccessHolder, persisted: PersistedAccess, roleId: string) {
+  return (
+    roleId !== "superadmin" &&
+    holder.roles.includes(roleId) &&
+    (persisted.storedRoleIds?.includes(roleId) ?? false)
+  );
 }
 
 /**
@@ -702,14 +725,6 @@ export function allowedLegacyPermissions(access: ActorAccess): Permission[] {
   return PERMISSIONS.filter((permission) => access.authorize(permission).allowed);
 }
 
-/** What a Namespace list answers: the record and what refers to it. */
-export interface NamespaceUsage extends Namespace {
-  /** Grant rows that name the prefix, of any holder and either effect. */
-  grantCount: number;
-  /** Active agents and skills whose names start with the prefix. */
-  assetCount: number;
-}
-
 /** The asset an asset-scoped grant row names. */
 export interface GrantScopeAsset {
   id: string;
@@ -719,96 +734,6 @@ export interface GrantScopeAsset {
   active: boolean;
   /** The workspace that owns the asset; absent for one of the instance's own. */
   workspaceId?: string;
-}
-
-/** The store behind grants and Namespaces: the evaluator's port plus the administration writes. */
-export interface AccessAdministrationStore extends AccessStore, RightsLock {
-  listScopeAssignments(input: {
-    clientInstanceId: ClientInstanceId;
-    holderKind: ScopeAssignmentInput["holderKind"];
-    holderId: string;
-  }): Promise<ScopeAssignmentInput[]>;
-  setScopeAssignment(
-    input: ScopeAssignmentInput & { clientInstanceId: ClientInstanceId }
-  ): Promise<void>;
-  /** Non-admin people who inherit use through availability, with their own rows for the evaluator. */
-  listAvailabilityMembers(input: {
-    clientInstanceId: ClientInstanceId;
-    assetId: string;
-    action: string;
-    page: StorePage;
-  }): Promise<{ userId: UserId; displayLabel: string; grants: PermissionGrant[] }[]>;
-  /**
-   * Throws CONFLICT `duplicate_grant`, VALIDATION_FAILED `unknown_namespace` for an
-   * unregistered prefix, `userInDeletionError` for a user whose deletion was requested, and
-   * NOT_FOUND `unknown_holder` for a service principal the instance does not have.
-   */
-  createGrant(input: Omit<PermissionGrant, "id" | "createdAt">): Promise<PermissionGrant>;
-  getGrant(input: {
-    clientInstanceId: ClientInstanceId;
-    grantId: string;
-  }): Promise<PermissionGrant | undefined>;
-  deleteGrant(input: {
-    clientInstanceId: ClientInstanceId;
-    grantId: string;
-  }): Promise<PermissionGrant | undefined>;
-  listGrants(input: {
-    clientInstanceId: ClientInstanceId;
-    holderKind?: PermissionGrant["holderKind"];
-    holderId?: string;
-    action?: string;
-    scopeKind?: PermissionGrant["scopeKind"];
-    /** The asset or the workspace the rows name. */
-    scopeId?: string;
-    /** Leaves out the rows whose holder is a user with the superadmin role. */
-    excludeSuperadminHolders?: boolean;
-    /** Leaves out the rows whose holder is a service principal. */
-    excludeServicePrincipalHolders?: boolean;
-    /** Administration hides principals managed by their owning asset. */
-    excludeOwnedPrincipalHolders?: boolean;
-    /**
-     * Leaves out the instance-wide rows of the actions a legacy key carries, which the legacy
-     * permission lists show. An instance-wide row of any other action is listed.
-     */
-    excludeLegacyKeyRows?: boolean;
-    page?: StorePage;
-  }): Promise<PermissionGrant[]>;
-  /** Throws CONFLICT `namespace_overlap` naming the registered prefix it meets. */
-  createNamespace(input: Omit<Namespace, "createdAt">): Promise<Namespace>;
-  /** A list left out is kept; `null` lifts the restriction. */
-  updateNamespace(input: {
-    clientInstanceId: ClientInstanceId;
-    prefix: string;
-    displayName?: string;
-    allowedToolNames?: string[] | null;
-    allowedModelBindingIds?: string[] | null;
-  }): Promise<Namespace | undefined>;
-  /** Throws CONFLICT `namespace_in_use` while a grant row names the prefix. */
-  deleteNamespace(input: {
-    clientInstanceId: ClientInstanceId;
-    prefix: string;
-  }): Promise<Namespace | undefined>;
-  /** The Namespaces with what refers to each. It counts per Namespace: for a page that shows the counts. */
-  listNamespaces(input: { clientInstanceId: ClientInstanceId }): Promise<NamespaceUsage[]>;
-  /** The Namespaces alone, in the byte order of their prefixes: what a write and a list read. */
-  listNamespaceRecords(input: { clientInstanceId: ClientInstanceId }): Promise<Namespace[]>;
-  /** The active agent or skill an asset-scoped grant names. */
-  getGrantableAsset(input: {
-    clientInstanceId: ClientInstanceId;
-    assetId: string;
-  }): Promise<Omit<GrantScopeAsset, "active"> | undefined>;
-  /**
-   * The agents and skills behind asset scope ids, deleted ones included: a deny outlives the
-   * asset it names, and whoever lists it has to say which name it still refuses.
-   */
-  listGrantScopeAssets(input: {
-    clientInstanceId: ClientInstanceId;
-    assetIds: readonly string[];
-  }): Promise<GrantScopeAsset[]>;
-}
-
-function isDefaultActionRole(role: string): role is keyof typeof ROLE_DEFAULT_ACTIONS {
-  return Object.hasOwn(ROLE_DEFAULT_ACTIONS, role);
 }
 
 export function isPermission(permission: string): permission is Permission {

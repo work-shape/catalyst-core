@@ -331,7 +331,10 @@ describe("AP-4 verifier: rights before and after migration 0079", () => {
         const after = await authorizer.forActor(actor);
         for (const question of QUESTIONS) {
           for (const resource of RESOURCES) {
-            const was = before.authorize(question, resource).allowed;
+            // ADR-0028: no deny takes `users.manage` from a superadmin any more.
+            const was =
+              before.authorize(question, resource).allowed ||
+              (user.active && question === "users.manage" && user.roles.includes("superadmin"));
             const now = after.authorize(question, resource).allowed;
             if (was !== now) {
               differences.push(

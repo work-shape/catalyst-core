@@ -213,6 +213,21 @@ export type GrantHolderKind = (typeof GRANT_HOLDER_KINDS)[number];
 export const GRANT_SCOPE_KINDS = ["instance", "workspace", "namespace", "asset"] as const;
 export type GrantScopeKind = (typeof GRANT_SCOPE_KINDS)[number];
 
+/** Where a role's grant lies: the whole instance, one workspace or one asset. */
+export const ROLE_GRANT_SCOPE_KINDS = [
+  "instance",
+  "workspace",
+  "asset"
+] as const satisfies readonly GrantScopeKind[];
+export type RoleGrantScopeKind = (typeof ROLE_GRANT_SCOPE_KINDS)[number];
+
+/** What a release did to an action of a built-in role's default that waits for a superadmin. */
+export const ROLE_PENDING_CHANGES = ["added", "removed"] as const;
+
+/** A superadmin's decision on a pending action: apply what the release did, or dismiss it. */
+export const ROLE_PENDING_DECISIONS = ["apply", "dismiss"] as const;
+export type RolePendingDecision = (typeof ROLE_PENDING_DECISIONS)[number];
+
 export const GRANT_EFFECTS = ["allow", "deny"] as const;
 export type GrantEffect = (typeof GRANT_EFFECTS)[number];
 

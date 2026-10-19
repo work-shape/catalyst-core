@@ -10,6 +10,7 @@ import {
   runsOutsideTransaction,
   type MigrationStatement
 } from "./migration-statements.js";
+import { reconcileBuiltInRoles } from "./built-in-role-reconciliation.js";
 import { legacyPermissionRestores } from "./schema/access.js";
 
 const committedMigrationsDirectory = resolve(
@@ -98,6 +99,7 @@ export async function migrateDatabase(input: MigrateDatabaseInput): Promise<stri
           applied.push(migration.name);
         }
         const moved = await moveRestoredLegacyLists(session, migrations);
+        await inTransaction(session, () => reconcileBuiltInRoles(session));
         return moved === undefined ? applied : [...applied, moved];
       } finally {
         if (!sessionEnded)
@@ -225,16 +227,23 @@ async function moveRestoredLegacyLists(
 ): Promise<string | undefined> {
   const legacy = migrations.find(isLegacyListMigration);
   if (legacy === undefined || !(await legacyListsRestored(session))) return undefined;
-  await session.unsafe("begin");
-  try {
+  await inTransaction(session, async () => {
     for (const chunk of legacy.chunks) await session.unsafe(chunk.text);
     await session.unsafe(`delete from "${restoresTable}"`);
+  });
+  return legacy.name;
+}
+
+/** Runs a data step's statements in one transaction of the migration session. */
+async function inTransaction(session: Queries, step: () => Promise<void>): Promise<void> {
+  await session.unsafe("begin");
+  try {
+    await step();
     await session.unsafe("commit");
   } catch (error) {
     if (!endsSession(error)) await session.unsafe("rollback");
     throw error;
   }
-  return legacy.name;
 }
 
 export interface MigrationState {
