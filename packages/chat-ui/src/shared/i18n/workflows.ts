@@ -67,7 +67,7 @@ export const workflows = defineTranslations({
     "workflows.advice.missingRightAdminAccount":
       "Under {place}, give the account “{account}” this right, then run the workflow again.",
     "workflows.advice.connectionUseAdmin":
-      "Under {place}, give the account “{account}” the Connection “{connection}” to use, then run the workflow again.",
+      "Under {place}, allow the account “{account}” to use the Connection “{connection}”, then run the workflow again.",
     "workflows.advice.needsApproval":
       "Whoever builds the workflow has to change the step, or an administrator the rule that asks for the approval.",
     "workflows.advice.notSupported": "Whoever builds the workflow has to replace the step.",
@@ -212,6 +212,10 @@ export const workflows = defineTranslations({
       "The workflow may not do this: its account may not use the Connection “{connection}”.",
     "workflows.reason.connectionUseNamed":
       "The workflow may not do this: its account “{account}” may not use the Connection “{connection}”.",
+    "workflows.reason.connectionUseOfStep":
+      "The workflow may not do this: its account may not use the Connection that one of its steps calls.",
+    "workflows.reason.connectionUseOfStepNamed":
+      "The workflow may not do this: its account “{account}” may not use the Connection that one of its steps calls.",
     "workflows.reason.needsApproval":
       "This step would wait for an approval, which a run cannot do.",
     "workflows.reason.notSupported": "This instance cannot run this kind of step yet.",
@@ -452,7 +456,7 @@ export const workflows = defineTranslations({
     "workflows.advice.missingRightAdminAccount":
       "Gib dem Konto „{account}“ unter {place} dieses Recht und starte den Workflow dann erneut.",
     "workflows.advice.connectionUseAdmin":
-      "Gib dem Konto „{account}“ unter {place} die Verbindung „{connection}“ zum Verwenden und starte den Workflow dann erneut.",
+      "Erlaube dem Konto „{account}“ unter {place}, die Verbindung „{connection}“ zu verwenden, und starte den Workflow dann erneut.",
     "workflows.advice.needsApproval":
       "Wer den Workflow baut, muss den Schritt ändern, oder ein Administrator die Regel, die die Freigabe verlangt.",
     "workflows.advice.notSupported": "Wer den Workflow baut, muss den Schritt ersetzen.",
@@ -601,6 +605,10 @@ export const workflows = defineTranslations({
       "Der Workflow darf das nicht: Sein Konto darf die Verbindung „{connection}“ nicht verwenden.",
     "workflows.reason.connectionUseNamed":
       "Der Workflow darf das nicht: Sein Konto „{account}“ darf die Verbindung „{connection}“ nicht verwenden.",
+    "workflows.reason.connectionUseOfStep":
+      "Der Workflow darf das nicht: Sein Konto darf die Verbindung nicht verwenden, die einer seiner Schritte aufruft.",
+    "workflows.reason.connectionUseOfStepNamed":
+      "Der Workflow darf das nicht: Sein Konto „{account}“ darf die Verbindung nicht verwenden, die einer seiner Schritte aufruft.",
     "workflows.reason.needsApproval":
       "Dieser Schritt würde auf eine Freigabe warten, und das kann ein Lauf nicht.",
     "workflows.reason.notSupported":

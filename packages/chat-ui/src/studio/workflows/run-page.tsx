@@ -535,7 +535,9 @@ function RunNotices({
           {t("workflows.run.earlierRevision")}
         </Banner>
       ) : null}
-      {showFailure && run.failure ? <FailureBanner failure={run.failure} /> : null}
+      {showFailure && run.failure ? (
+        <FailureBanner failure={run.failure} account={run.runsAs} />
+      ) : null}
       {failedEntries === undefined ? null : (
         <FailedEntriesBanner
           failedEntries={failedEntries}
