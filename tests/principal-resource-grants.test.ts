@@ -48,7 +48,7 @@ async function auditOf(t: ConnectionOperationsFixture, type: string, principalId
 }
 
 describe("the rights a service principal can be granted", () => {
-  it("are seven use rights in one list, each a registered action and none that changes or manages", () => {
+  it("are eight use rights in one list, each a registered action and none that changes or manages", () => {
     expect(PRINCIPAL_GRANTABLE_ACTIONS).toEqual([
       "connection.use",
       "data_store.read",
@@ -56,6 +56,7 @@ describe("the rights a service principal can be granted", () => {
       "data_store.execute",
       "data_store.records",
       "knowledge_base.use",
+      "mail_sender.use",
       "workflow.use"
     ]);
     for (const action of PRINCIPAL_GRANTABLE_ACTIONS) {
@@ -527,6 +528,21 @@ describe("what a service principal's grant row may give", () => {
     expect(await s.principalRows()).toEqual([]);
   });
 
+  it("refuses the mail sender's right while no kind of the instance registers it (MAIL-0)", async () => {
+    const s = await setup();
+    const { t } = s;
+    const crm = await t.seed("crm", forWorkflows);
+    // MAIL-1 registers the kind `mail_sender` with the sender `system` while outbound mail is on.
+    const error = await t.expectRefused(
+      t.root.id,
+      "permissions.grant",
+      { payload: s.payload(crm, { action: "mail_sender.use" }) },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+    expect(error.details).toMatchObject({ reason: "action_not_grantable_to_principal" });
+    expect(await s.principalRows()).toEqual([]);
+  });
+
   it("refuses a use right of the list whose module is off", async () => {
     const s = await setup();
     const { t } = s;
@@ -541,9 +557,11 @@ describe("what a service principal's grant row may give", () => {
       "knowledge_base.use": "knowledge",
       "workflow.use": "workflows"
     };
-    // Every right of the list but a Connection's belongs to one of them.
+    // Every right of the list but a Connection's and a mail sender's belongs to one of them.
     expect(
-      PRINCIPAL_GRANTABLE_ACTIONS.filter((name) => name !== "connection.use" && !(name in ofModule))
+      PRINCIPAL_GRANTABLE_ACTIONS.filter(
+        (name) => name !== "connection.use" && name !== "mail_sender.use" && !(name in ofModule)
+      )
     ).toEqual([]);
     for (const [action, module] of Object.entries(ofModule)) {
       expect(PRINCIPAL_GRANTABLE_ACTIONS, action).toContain(action);

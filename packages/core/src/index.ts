@@ -40,6 +40,7 @@ export * from "./knowledge-fields";
 export * from "./record-evidence";
 export * from "./knowledge-extraction";
 export * from "./knowledge-sources";
+export * from "./mail-send";
 export * from "./modules";
 export * from "./operation-denial";
 export * from "./operation-policy";

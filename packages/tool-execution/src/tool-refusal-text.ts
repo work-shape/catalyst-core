@@ -165,6 +165,10 @@ const OWN_ACTION_WORDS: Record<OwnWordAction, Words> = {
     en: "review extracted fields in data stores",
     de: "Extrahierte Felder in Datenspeichern prüfen"
   },
+  "mail_sender.use": {
+    en: "send e-mail as a sender of the instance",
+    de: "E-Mails als Absender der Instanz senden"
+  },
   "operations.approve": { en: "approve operation calls", de: "Aufrufe von Operationen freigeben" },
   "users.manage": { en: "manage users", de: "Benutzer verwalten" },
   "usage.view": { en: "view usage", de: "Nutzung ansehen" },

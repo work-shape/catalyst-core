@@ -93,6 +93,8 @@
 {"name":"live_once.cleared","legacy":false,"audited":true,"phases":["after"]}
 {"name":"live_once.switched_on","legacy":false,"audited":true,"phases":["after"]}
 {"name":"live_once.used","legacy":false,"audited":true,"phases":["after"]}
+{"name":"mail.refused","legacy":false,"audited":true,"phases":["after"]}
+{"name":"mail.sent","legacy":false,"audited":true,"phases":["after"]}
 {"name":"message.cancelled","legacy":true,"audited":true,"phases":["after"]}
 {"name":"message.completed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"message.created","legacy":true,"audited":true,"phases":["after"]}

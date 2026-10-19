@@ -58,6 +58,7 @@ describe("permissions", () => {
       "knowledge_base.publish",
       "knowledge_base.delete",
       "knowledge_base.use",
+      "mail_sender.use",
       "guardrail.read",
       "guardrail.write",
       "guardrail.publish",
@@ -71,11 +72,13 @@ describe("permissions", () => {
       "agent_models.manage",
       "assets.release"
     ]);
-    // The rights of a Connection, an App, a Workflow, a Data Store, a Knowledge Base and a Guardrail came
-    // after the legacy keys, as did the right over service principals: no key names one, so
-    // nobody holds one through the legacy column.
+    // The rights of a Connection, an App, a Workflow, a Data Store, a Knowledge Base, a Guardrail
+    // and a mail sender came after the legacy keys, as did the right over service principals: no
+    // key names one, so nobody holds one through the legacy column.
     const unkeyed = (action: string) =>
-      /^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action) ||
+      /^(?:connection|app|workflow|data_store|knowledge_base|guardrail|mail_sender)\./u.test(
+        action
+      ) ||
       action === "service_principals.manage" ||
       action === "agent.publish";
     const keyed = ACTIONS.filter((action) => !unkeyed(action));
@@ -166,6 +169,7 @@ describe("permissions", () => {
       "knowledge_base.publish",
       "knowledge_base.delete",
       "knowledge_base.use",
+      "mail_sender.use",
       "guardrail.read",
       "guardrail.write",
       "guardrail.publish",

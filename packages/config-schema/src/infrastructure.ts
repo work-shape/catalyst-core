@@ -1,4 +1,11 @@
-import { OPENAI_COMPATIBLE_APIS } from "@work-shape/catalyst-asset-schemas";
+import {
+  localeCodes,
+  MAIL_OUTBOUND_DEFAULT_LIMITS,
+  MAIL_OUTBOUND_FOOTER_MAX_LENGTH,
+  MAIL_RECIPIENT_DOMAINS_ANY,
+  mailRecipientDomainSchema,
+  OPENAI_COMPATIBLE_APIS
+} from "@work-shape/catalyst-asset-schemas";
 import {
   PROVIDER_REGIONS,
   REASONING_EFFORTS,
@@ -47,8 +54,70 @@ export const noticeMailSettingsSchema = z
   })
   .prefault({});
 
+/**
+ * Mail with content through `mail.send` (MAIL-SEND). A floor of release config that no
+ * instance admin lowers: while `enabled` is false the operation is not registered. An instance
+ * mails people of the instance always and other addresses only in `recipientDomains`: `[]`
+ * admits nobody outside, `["*"]` everybody. `footer` is the operator's legal footer per
+ * language, as plain text; a mail in a language without one carries the other's.
+ */
+export const mailOutboundSettingsSchema = z
+  .strictObject({
+    enabled: z.boolean().default(false),
+    recipientDomains: z
+      .array(mailRecipientDomainSchema)
+      .max(100)
+      .default([])
+      .superRefine((domains, context) => {
+        if (domains.includes(MAIL_RECIPIENT_DOMAINS_ANY) && domains.length > 1) {
+          context.addIssue({
+            code: "custom",
+            message: `'*' admits every address and stands alone in 'recipientDomains'`
+          });
+        }
+        const seen = new Set<string>();
+        for (const [index, domain] of domains.entries()) {
+          if (seen.has(domain)) {
+            context.addIssue({
+              code: "custom",
+              path: [index],
+              message: `'${domain}' is listed twice in 'recipientDomains'`
+            });
+          }
+          seen.add(domain);
+        }
+      }),
+    limits: z
+      .strictObject({
+        perWorkflowPerHour: z
+          .number()
+          .int()
+          .positive()
+          .default(MAIL_OUTBOUND_DEFAULT_LIMITS.perWorkflowPerHour),
+        perInstancePerDay: z
+          .number()
+          .int()
+          .positive()
+          .default(MAIL_OUTBOUND_DEFAULT_LIMITS.perInstancePerDay)
+      })
+      .prefault({}),
+    footer: z
+      .partialRecord(
+        z.enum(localeCodes),
+        z.string().trim().min(1).max(MAIL_OUTBOUND_FOOTER_MAX_LENGTH)
+      )
+      .refine((footer) => Object.keys(footer).length > 0, {
+        message: "'footer' names at least one language, such as de"
+      })
+      .optional()
+  })
+  .prefault({});
+
+export type MailOutboundSettings = z.infer<typeof mailOutboundSettingsSchema>;
+
 const mailEntrySchema = z.looseObject({
   notices: noticeMailSettingsSchema,
+  outbound: mailOutboundSettingsSchema,
   ...providerEntryFields,
   /** Public URL of the chat UI; emailed links point here. */
   appUrl: z.string().url(),

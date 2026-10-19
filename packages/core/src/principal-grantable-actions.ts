@@ -14,6 +14,8 @@ export const PRINCIPAL_GRANTABLE_ACTIONS = [
   "data_store.execute",
   "data_store.records",
   "knowledge_base.use",
+  // On the sender `system` only (MAIL-SEND): a Connection sender asks `connection.use`.
+  "mail_sender.use",
   "workflow.use"
 ] as const satisfies readonly PlatformAction[];
 

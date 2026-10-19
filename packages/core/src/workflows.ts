@@ -1,6 +1,9 @@
 import type { NoticeRecipients } from "./notice-address";
 import type { WorkflowKind } from "@work-shape/catalyst-asset-schemas";
-import { workflowDatasetReferenceSchema } from "@work-shape/catalyst-asset-schemas";
+import {
+  WORKFLOW_TEXT_MAX_PARTS,
+  workflowDatasetReferenceSchema
+} from "@work-shape/catalyst-asset-schemas";
 import {
   NOTIFY_CHANNELS,
   WORKFLOW_RUN_MODES,
@@ -182,6 +185,43 @@ export const workflowInputValueSchema = z.union([
   z.strictObject({ value: z.json() }),
   z.strictObject({ ref: z.strictObject({ step: z.string().min(1), path: z.string() }) })
 ]);
+
+/**
+ * One part of a text joined from parts: a literal string, or a reference whose value is a
+ * string, a number or a yes-or-no value, where `null` joins as empty text. In a field whose
+ * schema has `format: markdown` (`WORKFLOW_TEXT_FORMAT_MARKDOWN`) a referenced list of strings
+ * joins as a bulleted list and a list of flat records as a table, and every referenced value
+ * is escaped as Markdown text.
+ */
+export type WorkflowTextPart = string | { ref: WorkflowReference };
+
+/**
+ * A string field of a step's input joined from parts, in order (EW-TEXT). It sits beside
+ * `{ value }` and `{ ref }` once EW-TEXT adds it to `workflowInputValueSchema` with the
+ * reference check per part and the join at run time; MAIL-0 only freezes its shape. A joined
+ * text longer than its field allows fails the step with `input_invalid`.
+ */
+export interface WorkflowInputText {
+  text: readonly WorkflowTextPart[];
+  value?: never;
+  ref?: never;
+}
+
+export {
+  WORKFLOW_MARKDOWN_MAX_COLUMNS,
+  WORKFLOW_MARKDOWN_MAX_ROWS,
+  WORKFLOW_TEXT_FORMAT_MARKDOWN,
+  WORKFLOW_TEXT_MAX_PARTS
+} from "@work-shape/catalyst-asset-schemas";
+
+export const workflowTextPartSchema = z.union([
+  z.string(),
+  z.strictObject({ ref: z.strictObject({ step: z.string().min(1), path: z.string() }) })
+]);
+
+export const workflowInputTextSchema = z.strictObject({
+  text: z.array(workflowTextPartSchema).min(1).max(WORKFLOW_TEXT_MAX_PARTS)
+});
 
 /** The input of a step, by the field names of its input schema. */
 export type WorkflowInputMapping = Readonly<Record<string, WorkflowInputValue>>;

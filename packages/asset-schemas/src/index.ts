@@ -15,3 +15,5 @@ export * from "./operation-paging";
 export * from "./workflow-data-flows";
 export * from "./data-store-records";
 export * from "./usage-limits";
+export * from "./workflow-text";
+export * from "./mail-send";

@@ -87,6 +87,9 @@ export const ACTIONS = [
   "knowledge_base.publish",
   "knowledge_base.delete",
   "knowledge_base.use",
+  // Sending e-mail as one sender of the instance (`mail.send`). The `admin` role holds it on
+  // the sender `system`; a member only by a grant.
+  "mail_sender.use",
   "guardrail.read",
   "guardrail.write",
   "guardrail.publish",
@@ -889,6 +892,21 @@ export const WORKFLOW_TRIGGER_KINDS = ["manual", "schedule", "parent"] as const;
 export type WorkflowTriggerKind = (typeof WORKFLOW_TRIGGER_KINDS)[number];
 
 export const NOTIFY_CHANNELS = ["inbox", "mail"] as const;
+
+/**
+ * What an operation step's facts name as its source (`stepFacts`, workflow-canvas.md 9.8). A
+ * step on `mail.send` names its sender as `mail_sender`, with the sender's icon key as
+ * `service` (`MAIL_SENDER_SYSTEM_ICON`, or a Connection's service).
+ */
+export const WORKFLOW_STEP_SOURCE_KINDS = [
+  "connection",
+  "data_store",
+  "knowledge_base",
+  "workflow",
+  "mail_sender",
+  "other"
+] as const;
+export type WorkflowStepSourceKind = (typeof WORKFLOW_STEP_SOURCE_KINDS)[number];
 export type NotifyChannel = (typeof NOTIFY_CHANNELS)[number];
 
 export const PRINCIPAL_HOLDER_KINDS = [
