@@ -365,6 +365,42 @@ describe("an agent's tool calls in a chat run", () => {
     await f.app.close();
   });
 
+  it("runs an approved call of a person who left the workspace and builds there (WS-BUILD-1)", async () => {
+    const f = await fixture([{ operation: "demo.change", value: "approval" }]);
+    const shared = await f.app.call("workspaces.create", { payload: { name: "Shared" } });
+    const said = await f.say(
+      '/tool demo.change {"text":"built"}',
+      shared.json<{ id: string }>().id
+    );
+    const [held] = await f.runs();
+    const actorId = held?.actor.id ?? "";
+    await f.app.call("approval_requests.decide", {
+      params: { requestId: held?.approvalRequestId ?? "" },
+      payload: { decision: "approve" }
+    });
+    // A Builder of the workspace works there without being its member.
+    await f.app.stores.access.createGrant({
+      clientInstanceId: f.clientInstanceId,
+      holderKind: "user",
+      holderId: actorId,
+      action: "builder",
+      effect: "allow",
+      scopeKind: "workspace",
+      scopeId: said.workspaceId,
+      grantedBy: asUserId(actorId)
+    });
+    await f.app.stores.workspaces.removeMembership({
+      clientInstanceId: f.clientInstanceId,
+      collaborationWorkspaceId: asCollaborationWorkspaceId(said.workspaceId),
+      userId: asUserId(actorId)
+    });
+
+    await f.runJobs();
+
+    expect(calls).toEqual(["built"]);
+    await f.app.close();
+  });
+
   // Fails before the fix: the allowlist of the agent was read when the call was approved,
   // inside the approval, and never when it ran.
   it("does not run an approved call of a tool the agent no longer lists", async () => {

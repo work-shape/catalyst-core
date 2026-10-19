@@ -1,10 +1,12 @@
 import {
   AppError,
+  accessHolderFromIdentity,
   asUserId,
-  createAuthorizer,
+  explainAccessEntries,
   getSubjectUserId,
   isAppError,
   isSuperadmin,
+  listAccessEntries,
   type AuthenticatedUser,
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
@@ -95,11 +97,17 @@ export async function holdsWorkspaceBundle(
     workspaceId
   );
   if (workspace?.kind !== "shared") return false;
-  const access = await createAuthorizer(options.stores.access).forActor(user);
-  return WORKSPACE_BUNDLES.some((bundle) => {
-    const decision = access.authorize(bundle, { workspaceId });
-    return decision.allowed && decision.source === "grant";
+  const holder = accessHolderFromIdentity(user);
+  const persisted = await options.stores.access.loadPersistedAccess({
+    clientInstanceId: options.clientInstanceId,
+    holder: { kind: holder.kind, id: holder.id }
   });
+  if (!persisted.holderActive) return false;
+  // Decided over the rows alone, their denies included: a role's bundles do not count here.
+  const rows = listAccessEntries(holder, persisted).filter((entry) => entry.source === "grant");
+  return WORKSPACE_BUNDLES.some(
+    (bundle) => explainAccessEntries(rows, bundle, { workspaceId }).decision.allowed
+  );
 }
 
 /** Membership decides, except that a superadmin is Owner of every Shared Workspace. */
