@@ -285,12 +285,14 @@ describe("outbound.limits (check 136)", () => {
     });
     t.state.agentTools.set("assistant", ["mail.send"]);
     const input = { to: ["anna@kanzlei.de"], subject: "Stand", body: "Alles **gut**." };
+    const origin = agentOrigin("mail.send");
     const call = (toolCallId: string): OperationCall => ({
       operation: "mail.send",
       effect: "changing",
       input,
       actor: identityOf(t.root),
-      origin: { ...agentOrigin("mail.send"), toolCallId: asToolCallId(toolCallId) },
+      origin:
+        origin.kind === "agent" ? { ...origin, toolCallId: asToolCallId(toolCallId) } : origin,
       correlationId: "corr_test"
     });
     const worker = {

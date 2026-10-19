@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 import { z } from "zod";
-import { EVENTS, type UserRecord, type UserRole } from "@work-shape/catalyst-core";
+import { EVENTS, type UserId, type UserRecord, type UserRole } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./access-instance";
 import { required } from "./assertions";
 import { withTestSql } from "./test-sql";
@@ -62,8 +62,14 @@ export async function grantSystem(t: WorkflowFixture) {
   });
 }
 
+type FixtureResponse = Awaited<ReturnType<WorkflowFixture["call"]>>;
+
 /** Writes a new Workflow, as the administrator unless another writer is named. */
-export async function put(t: WorkflowFixture, manifest: { id: string }, writer = t.admin.id) {
+export async function put(
+  t: WorkflowFixture,
+  manifest: { id: string },
+  writer: UserId = t.admin.id
+): Promise<FixtureResponse> {
   return t.call(writer, "assets.put", {
     params: { kind: "workflow", name: manifest.id },
     payload: { config: { name: manifest.id, manifest }, expectedRevision: null }
@@ -74,7 +80,7 @@ export async function put(t: WorkflowFixture, manifest: { id: string }, writer =
 export async function save(
   t: WorkflowFixture,
   manifest: { id: string },
-  people: { writer?: string; publisher?: string } = {}
+  people: { writer?: UserId; publisher?: UserId } = {}
 ) {
   const written = await put(t, manifest, people.writer);
   expect(written.statusCode, written.body).toBe(200);
