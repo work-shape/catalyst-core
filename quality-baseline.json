@@ -453,7 +453,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "packages/server",
-      "count": 225,
+      "count": 222,
       "owner": "NS-RETIRE"
     },
     {
