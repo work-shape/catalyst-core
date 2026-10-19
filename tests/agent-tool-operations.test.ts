@@ -8,9 +8,11 @@ import {
   asCollaborationWorkspaceId,
   asUserId,
   createPlatformId,
+  scheduleDedupeKey,
   getRuntimeSubjectUserId,
   type CentralPolicySetting
 } from "@work-shape/catalyst-core";
+import { expireConversationsJob } from "@work-shape/catalyst-server";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
@@ -480,8 +482,7 @@ describe("an agent's tool calls in a chat run", () => {
     await f.app.close();
   });
 
-  // Was not tested before; it passes without the fix of this round.
-  it("ends the held call of a deleted conversation and removes its input", async () => {
+  it("deletes a held call and its request with their conversation", async () => {
     const f = await fixture([{ operation: "demo.change", value: "approval" }]);
     const said = await f.say('/tool demo.change {"text":"secret-conversation"}');
     const [held] = await f.runs();
@@ -497,26 +498,18 @@ describe("an agent's tool calls in a chat run", () => {
       clientInstanceId: f.clientInstanceId,
       requestId
     });
-    expect(request).toMatchObject({
-      status: "superseded",
-      applyResult: {
-        execution: "refused",
-        error: { message: "The conversation of this call was deleted." }
-      },
-      payload: { inputRemoved: true }
-    });
-    expect(JSON.stringify(request)).not.toContain("secret-conversation");
+    expect(request).toBeUndefined();
     const late = await f.app.call("approval_requests.decide", {
       params: { requestId },
       payload: { decision: "approve" }
     });
-    expect(late.statusCode).toBe(409);
+    expect(late.statusCode).toBe(404);
     expect(calls).toEqual([]);
     await f.app.close();
   });
 
-  // Fails before the fix: the deletion skipped the request somebody was deciding, deleted
-  // its run, and nothing found the open request again. It kept its input for good.
+  // An old decision can hold the request across deletion. Keep its run until the cleanup
+  // retry can settle the request, then remove both without executing the call.
   it("ends a held call whose conversation was deleted while a decision on it failed", async () => {
     const f = await fixture([{ operation: "demo.change", value: "approval" }]);
     const said = await f.say('/tool demo.change {"text":"secret-orphan"}');
@@ -547,22 +540,21 @@ describe("an agent's tool calls in a chat run", () => {
           clientInstanceId: f.clientInstanceId,
           requestId
         });
-      // The run is gone and the request is open, with what the agent was given.
-      expect(await f.runs()).toEqual([]);
+      // An unsettled request keeps its run, which makes the deleted conversation retryable.
+      expect(await f.runs()).toMatchObject([{ id: held?.id, status: "pending_approval" }]);
       expect(await stored()).toMatchObject({ status: "pending" });
-
+      await f.app.stores.jobs.enqueue(
+        expireConversationsJob,
+        {},
+        {
+          clientInstanceId: f.clientInstanceId,
+          dedupeKey: scheduleDedupeKey(expireConversationsJob.kind)
+        }
+      );
       await f.runJobs();
 
-      const request = await stored();
-      expect(request).toMatchObject({
-        status: "superseded",
-        applyResult: {
-          execution: "refused",
-          error: { message: "The call of this request no longer exists." }
-        },
-        payload: { inputRemoved: true }
-      });
-      expect(JSON.stringify(request)).not.toContain("secret-orphan");
+      expect(await f.runs()).toEqual([]);
+      expect(await stored()).toBeUndefined();
       expect(calls).toEqual([]);
     } finally {
       failing.resolve();
