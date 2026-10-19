@@ -369,6 +369,14 @@ describe("event registry", () => {
     ]);
   });
 
+  it("requires the writing Operation Run in row-write event payloads", () => {
+    expect(EVENTS["data_store.rows_written"].payload).toMatchObject({
+      additionalProperties: false,
+      required: expect.arrayContaining(["store", "table", "operationRunId"]),
+      properties: { operationRunId: { type: "string" } }
+    });
+  });
+
   it("retains every current audit name unchanged as legacy and audited", async () => {
     const definitions: [string, PlatformEventDefinition][] = Object.entries(EVENTS);
     for (const [name, definition] of definitions) {

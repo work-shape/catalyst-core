@@ -50,6 +50,7 @@ import {
 } from "./operation-policy-call";
 import { recordedResult } from "./operation-recorded-result";
 import { hashInput } from "./input-hash";
+import { z } from "zod";
 
 /**
  * How long a call waits for another person's approval before it expires unexecuted. The
@@ -344,10 +345,14 @@ async function parseInput(
       : { code: "input_invalid", message: "Operation input is nested too deeply" });
   const parsed = unreadable
     ? undefined
-    : await definition.inputSchema.safeParseAsync(call.input).catch((error: unknown) => {
-        if (!surface.allowed) throw operationDenialError({ kind: "forbidden", ...surface });
-        throw error;
-      });
+    : await definition.inputSchema
+        .safeParseAsync(call.input, {
+          error: (runtime.locale === "de" ? z.locales.de() : z.locales.en()).localeError
+        })
+        .catch((error: unknown) => {
+          if (!surface.allowed) throw operationDenialError({ kind: "forbidden", ...surface });
+          throw error;
+        });
   if (parsed?.success) {
     return parsed.data;
   }
@@ -356,7 +361,11 @@ async function parseInput(
   }
   throw new AppError(
     "VALIDATION_FAILED",
-    unreadable ? unreadable.message : "Operation input is invalid",
+    unreadable
+      ? unreadable.message
+      : runtime.locale === "de"
+        ? "Die Eingabe für diesen Aufruf ist ungültig."
+        : "Operation input is invalid",
     {
       issues: unreadable
         ? [{ code: unreadable.code, path: [], message: unreadable.message }]

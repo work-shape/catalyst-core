@@ -68,7 +68,8 @@ function mutation(verb: "update" | "delete_rows"): StoreVerb {
       for (const { key, set } of changes) {
         for (const name of [...Object.keys(key), ...Object.keys(set)]) {
           const column = columns.get(name);
-          if (!column || column.generated)
+          // A computed column can identify a row; only assigning to it is forbidden.
+          if (!column || (column.generated && Object.hasOwn(set, name)))
             return refuse(
               "column_unknown",
               "The call names an unknown or generated column. Use describe to check writable columns.",
