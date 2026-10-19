@@ -1,5 +1,5 @@
-import { Blocks, PanelLeft, Plus, Search, Settings, SquarePen } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { Blocks, ChevronRight, PanelLeft, Plus, Search, Settings, SquarePen } from "lucide-react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@work-shape/catalyst-api-client";
 import {
   Avatar,
@@ -13,7 +13,7 @@ import {
   Skeleton,
   useSidebarCollapsed
 } from "@work-shape/catalyst-ui";
-import type { RailApp } from "../../studio/apps/rail-apps";
+import { RAIL_APPS_LIMIT, useRailAppsOpen, type RailApp } from "../../studio/apps/rail-apps";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../../shared/i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
@@ -63,10 +63,13 @@ interface WorkspaceRailProps {
   /** The Workflows area is open to the person: the Workflows row shows. */
   workflows?: boolean;
   /**
-   * The published Apps the person may open, most recently used first and bounded by the
-   * caller. They stand under the Apps row, which opens the page with every App.
+   * The published Apps the person may open, most recently used first. The first
+   * `RAIL_APPS_LIMIT` fold under the Apps row, whose caret opens and folds them; the row
+   * itself opens the page with every App.
    */
   publishedApps?: readonly RailApp[];
+  /** The workspace holds more Apps than `publishedApps`: "All apps" follows the listed ones. */
+  morePublishedApps?: boolean;
   /** The App on screen: its row is the current one in place of the Apps row. */
   openAppName?: string;
   onOpenApp?: (app: string) => void;
@@ -124,6 +127,7 @@ function RailHeader({
   sections,
   inbox,
   publishedApps = [],
+  morePublishedApps = false,
   openAppName,
   onOpenApp,
   view,
@@ -166,40 +170,83 @@ function RailHeader({
     </NavItem>
   );
   // The Apps under their row, as the conversations stand under "Recent": the strip of icons
-  // has no room for a list. An App that is listed and open is the current row itself.
-  const appRows = iconsOnly ? [] : publishedApps;
-  const listedAppOpen = appRows.some((app) => app.name === openAppName);
+  // has no room for a list. An App that is listed and open is the current row itself, while
+  // its row is in view.
+  const appRows = iconsOnly ? [] : publishedApps.slice(0, RAIL_APPS_LIMIT);
+  const listedOpenApp = appRows.some((app) => app.name === openAppName) ? openAppName : undefined;
+  const appsFold = useRailAppsOpen(listedOpenApp);
+  const appsGroupId = useId();
+  const appsShown = appRows.length > 0 && appsFold.open;
   const sectionRows = sections.flatMap((section) => {
     const count = section.count?.({ inbox }) ?? 0;
+    const folds = section.id === "apps" && appRows.length > 0;
     const row = (
       <NavItem
         key={section.id}
         icon={<RegistryIcon name={section.icon} />}
-        selected={view === section.view && !(section.id === "apps" && listedAppOpen)}
+        selected={view === section.view && !(section.id === "apps" && appsShown && listedOpenApp)}
         count={count > 0 ? count : undefined}
         aria-label={count > 0 && section.countLabel ? t(section.countLabel, { count }) : undefined}
         onClick={() => onViewChange(section.view)}
+        {...(folds
+          ? {
+              trailingShown: true,
+              trailing: (
+                <IconButton
+                  size="sm"
+                  label={t(appsFold.open ? "nav.appsHide" : "nav.appsShow")}
+                  aria-expanded={appsFold.open}
+                  aria-controls={appsFold.open ? appsGroupId : undefined}
+                  data-testid="rail-apps-toggle"
+                  onClick={appsFold.toggle}
+                >
+                  <ChevronRight
+                    aria-hidden="true"
+                    className={appsFold.open ? "rotate-90" : undefined}
+                  />
+                </IconButton>
+              )
+            }
+          : {})}
       >
         {t(section.label)}
       </NavItem>
     );
-    if (section.id !== "apps" || appRows.length === 0) {
+    if (section.id !== "apps" || !appsShown) {
       return [row];
     }
     return [
       row,
-      <NavGroup key="published-apps" aria-label={t("nav.publishedApps")} data-testid="rail-apps">
+      <NavGroup
+        key="published-apps"
+        id={appsGroupId}
+        aria-label={t("nav.publishedApps")}
+        data-testid="rail-apps"
+      >
         {appRows.map((app) => (
           <NavItem
             key={app.name}
-            // The label starts where the labels of the section rows start.
+            // The mark starts where the label of the Apps row starts.
             className="pl-8"
+            icon={<Avatar kind="app" size="xs" name={app.title} />}
             selected={app.name === openAppName}
+            // The name is cut at the rail's edge; the whole name shows on the pointer.
+            title={app.title}
             onClick={() => onOpenApp?.(app.name)}
           >
             {app.title}
           </NavItem>
         ))}
+        {morePublishedApps || publishedApps.length > RAIL_APPS_LIMIT ? (
+          <NavItem
+            // The words start where the names of the Apps start.
+            className="pl-15 text-muted-foreground"
+            data-testid="rail-apps-all"
+            onClick={() => onViewChange("apps")}
+          >
+            {t("nav.allApps")}
+          </NavItem>
+        ) : null}
       </NavGroup>
     ];
   });

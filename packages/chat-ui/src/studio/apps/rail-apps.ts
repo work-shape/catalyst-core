@@ -1,13 +1,17 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AssetSummary } from "@work-shape/catalyst-api-client";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { useAppList } from "./app-data";
 import { appState } from "./app-model";
 
-/** How many Apps the rail lists under its Apps row. The Apps page holds every one. */
+/**
+ * How many Apps the rail lists under its Apps row. Where there are more, "All apps" follows
+ * them and opens the page that holds every one.
+ */
 export const RAIL_APPS_LIMIT = 5;
 
 const APP_OPENS_STORAGE_PREFIX = "vivd-catalyst:app-opens";
+const RAIL_APPS_OPEN_STORAGE_KEY = "vivd-catalyst:rail-apps-open";
 
 /** One App as the rail lists it. */
 export interface RailApp {
@@ -21,14 +25,14 @@ export interface RailApp {
 export type AppOpens = Readonly<Record<string, number>>;
 
 /**
- * The Apps the rail lists: the published ones among `rows`, the one this person opened last
- * first, and the ones they never opened after those by their latest change. Never more than
- * `limit`. An App with a draft alone is not listed: it has nothing to open.
+ * The Apps the rail may list, in its order: the published ones among `rows`, the one this
+ * person opened last first, and the ones they never opened after those by their latest change.
+ * The rail shows the first `RAIL_APPS_LIMIT`. An App with a draft alone is not listed: it has
+ * nothing to open.
  */
 export function railApps(
   rows: readonly AssetSummary[] | undefined,
-  opens: AppOpens,
-  limit: number = RAIL_APPS_LIMIT
+  opens: AppOpens
 ): readonly RailApp[] {
   return (rows ?? [])
     .filter((app) => appState(app).kind === "published")
@@ -39,7 +43,6 @@ export function railApps(
         right.app.updatedAt.localeCompare(left.app.updatedAt) ||
         left.app.name.localeCompare(right.app.name)
     )
-    .slice(0, limit)
     .map(({ app }) => ({ name: app.name, title: app.title.trim() || app.name }));
 }
 
@@ -93,6 +96,13 @@ function writeStoredAppOpens(key: string, opens: AppOpens): void {
   }
 }
 
+/** The published Apps the rail may list, and whether the workspace holds more than were read. */
+export interface RailAppsList {
+  apps: readonly RailApp[];
+  /** The list read is one page of more: the rail offers "All apps" whatever it shows. */
+  more: boolean;
+}
+
 /**
  * The published Apps of the open workspace for the rail, most recently opened by this person
  * first. Empty while the module is off, no workspace is open, the list has not arrived or
@@ -105,7 +115,7 @@ export function useRailApps(input: {
   workspaceId: string | undefined;
   /** The App on screen, which counts as opened now. */
   openApp: string | undefined;
-}): readonly RailApp[] {
+}): RailAppsList {
   const { apiBaseUrl } = useWorkspaceApiClient();
   const workspaceId = input.enabled ? input.workspaceId : undefined;
   const list = useAppList(workspaceId);
@@ -123,5 +133,54 @@ export function useRailApps(input: {
       writeStoredAppOpens(key, opens);
     }
   }, [key, openApp, opens]);
-  return useMemo(() => railApps(list.rows, opens), [list.rows, opens]);
+  const apps = useMemo(() => railApps(list.rows, opens), [list.rows, opens]);
+  return useMemo(() => ({ apps, more: list.hasMore }), [apps, list.hasMore]);
+}
+
+/** What the browser keeps of the fold: the Apps stand open only where it says so. */
+export function parseRailAppsOpen(stored: string | null): boolean {
+  return stored === "open";
+}
+
+function readStoredRailAppsOpen(): boolean {
+  try {
+    return parseRailAppsOpen(window.localStorage.getItem(RAIL_APPS_OPEN_STORAGE_KEY));
+  } catch {
+    return false;
+  }
+}
+
+function writeStoredRailAppsOpen(open: boolean): void {
+  try {
+    window.localStorage.setItem(RAIL_APPS_OPEN_STORAGE_KEY, open ? "open" : "closed");
+  } catch {
+    // The fold is a convenience: without the store the Apps stand folded on the next visit.
+  }
+}
+
+/**
+ * Whether the rail shows the Apps under their row. Folded until the person opens them; their
+ * choice is kept in this browser. Opening a listed App opens the fold for that App without
+ * changing the choice, so the row of the App on screen is in view.
+ */
+export function useRailAppsOpen(activeApp: string | undefined): {
+  open: boolean;
+  toggle(): void;
+} {
+  const [open, setOpen] = useState(readStoredRailAppsOpen);
+  const [shownFor, setShownFor] = useState<string | undefined>(undefined);
+  // Set while rendering, so the row of the App just opened shows in the same frame.
+  if (activeApp !== shownFor) {
+    setShownFor(activeApp);
+    if (activeApp !== undefined && !open) {
+      setOpen(true);
+    }
+  }
+  return {
+    open,
+    toggle: () => {
+      writeStoredRailAppsOpen(!open);
+      setOpen(!open);
+    }
+  };
 }

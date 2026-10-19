@@ -35,6 +35,11 @@ export interface NavItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    * appear, so the pointer reaches it.
    */
   trailingKeepsRoom?: boolean;
+  /**
+   * The trailing slot shows at rest too. For a control the row is read by, such as the caret
+   * that folds the items under it: a person who has not pointed at the row still sees it.
+   */
+  trailingShown?: boolean;
   /** Renders the single child, a link element, as the item; what is inside it is the label. */
   asChild?: boolean;
 }
@@ -52,6 +57,7 @@ export function NavItem({
   shortcut,
   trailing,
   trailingKeepsRoom = false,
+  trailingShown = false,
   asChild = false,
   type = "button",
   children,
@@ -125,7 +131,11 @@ export function NavItem({
         <span
           className={cn(
             trailingSlotClassName,
-            trailingKeepsRoom ? undefined : trailingSlotOutOfFlowClassName
+            trailingShown
+              ? "opacity-100"
+              : trailingKeepsRoom
+                ? undefined
+                : trailingSlotOutOfFlowClassName
           )}
         >
           {trailing}

@@ -67,4 +67,11 @@ export {
 } from "../../shared/routes";
 export { railSections, shownRailSections } from "../../chat/workspace/rail-sections";
 export { WorkspaceRail } from "../../chat/workspace/workspace-rail";
-export { parseAppOpens, railApps, RAIL_APPS_LIMIT, withAppOpen, type RailApp } from "./rail-apps";
+export {
+  parseAppOpens,
+  parseRailAppsOpen,
+  railApps,
+  RAIL_APPS_LIMIT,
+  withAppOpen,
+  type RailApp
+} from "./rail-apps";

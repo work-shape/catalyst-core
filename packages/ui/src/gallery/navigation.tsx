@@ -1,5 +1,6 @@
 import {
   AppWindow,
+  ChevronRight,
   Clock,
   Ellipsis,
   Hammer,
@@ -197,6 +198,7 @@ function SidebarSampleFooter({ text }: { text: GalleryText }) {
 }
 
 function NavItemSamples({ text }: { text: GalleryText }) {
+  const [appsOpen, setAppsOpen] = useState(true);
   return (
     <div className="grid gap-6 sm:grid-cols-2">
       <div className="grid w-full max-w-(--layout-sidebar) content-start gap-4">
@@ -264,6 +266,38 @@ function NavItemSamples({ text }: { text: GalleryText }) {
         </NavGroup>
       </div>
       <div className="grid w-full max-w-(--layout-sidebar) content-start gap-4">
+        <NavGroup label={text.navRowFolds}>
+          {/* The row opens its page; the caret it always shows folds its items. */}
+          <NavItem
+            icon={<AppWindow aria-hidden="true" />}
+            trailingShown
+            trailing={
+              <IconButton
+                size="sm"
+                label={appsOpen ? text.navRowFoldsHide : text.navRowFoldsShow}
+                aria-expanded={appsOpen}
+                onClick={() => setAppsOpen(!appsOpen)}
+              >
+                <ChevronRight aria-hidden="true" className={appsOpen ? "rotate-90" : undefined} />
+              </IconButton>
+            }
+          >
+            {text.navApps}
+          </NavItem>
+          {appsOpen
+            ? [text.navConversationTax, text.navConversationLease].map((title, index) => (
+                <NavItem
+                  key={title}
+                  className="pl-8"
+                  selected={index === 0}
+                  icon={<Avatar kind="app" size="xs" name={title} />}
+                  title={title}
+                >
+                  {title}
+                </NavItem>
+              ))
+            : null}
+        </NavGroup>
         <NavGroup label={text.navGroupPlain}>
           <NavItem>{text.navConversationLease}</NavItem>
         </NavGroup>

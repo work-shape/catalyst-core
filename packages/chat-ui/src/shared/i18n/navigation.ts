@@ -4,7 +4,10 @@ import { defineTranslations } from "./translation-area";
 export const navigation = defineTranslations({
   en: {
     "nav.agents": "Agents",
+    "nav.allApps": "All apps",
     "nav.apps": "Apps",
+    "nav.appsHide": "Hide apps",
+    "nav.appsShow": "Show apps",
     "nav.collapse": "Collapse sidebar",
     "nav.expand": "Expand sidebar",
     "nav.inbox": "Inbox",
@@ -31,7 +34,10 @@ export const navigation = defineTranslations({
   },
   de: {
     "nav.agents": "Agenten",
+    "nav.allApps": "Alle Apps",
     "nav.apps": "Apps",
+    "nav.appsHide": "Apps ausblenden",
+    "nav.appsShow": "Apps anzeigen",
     "nav.collapse": "Seitenleiste einklappen",
     "nav.expand": "Seitenleiste ausklappen",
     "nav.inbox": "Eingang",

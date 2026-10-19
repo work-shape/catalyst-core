@@ -543,7 +543,8 @@ function ChatWorkspaceContent({
             agents={rail.agents}
             apps={rail.apps}
             workflows={rail.workflows}
-            publishedApps={railApps}
+            publishedApps={railApps.apps}
+            morePublishedApps={railApps.more}
             openAppName={appsRoute?.kind === "app" ? appsRoute.app : undefined}
             onOpenApp={(app) => {
               if (railAppsWorkspaceId) {

@@ -130,6 +130,9 @@ export interface GalleryText
   paletteNoMatch: string;
   navRowActions: string;
   navRowMore: string;
+  navRowFolds: string;
+  navRowFoldsShow: string;
+  navRowFoldsHide: string;
   skipLinkLabel: string;
   skipLinkHint: string;
   skipLinkTarget: string;
@@ -365,6 +368,9 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     paletteNoMatch: "No results.",
     navRowActions: "With marks and actions",
     navRowMore: "More actions",
+    navRowFolds: "Row that folds its items",
+    navRowFoldsShow: "Show apps",
+    navRowFoldsHide: "Hide apps",
     skipLinkLabel: "Skip to content",
     skipLinkHint: "The link shows while it holds the focus: press Tab from here.",
     skipLinkTarget: "Content",
@@ -634,6 +640,9 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     paletteNoMatch: "Keine Treffer.",
     navRowActions: "Mit Marken und Aktionen",
     navRowMore: "Weitere Aktionen",
+    navRowFolds: "Zeile, die ihre Einträge einklappt",
+    navRowFoldsShow: "Apps anzeigen",
+    navRowFoldsHide: "Apps ausblenden",
     skipLinkLabel: "Zum Inhalt springen",
     skipLinkHint: "Der Link erscheint, solange er den Fokus hat: von hier aus Tab drücken.",
     skipLinkTarget: "Inhalt",
