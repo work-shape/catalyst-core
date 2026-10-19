@@ -534,6 +534,7 @@ export { useDraftForNewConnection } from "../../packages/chat-ui/src/studio/buil
 export {
   conversationStart,
   dockKindOfRoute,
+  TRY_DOCK_KIND,
   type ConversationStart
 } from "../../packages/chat-ui/src/chat/dock/subject-starters";
 export { createSampleSource } from "../../packages/chat-ui/src/studio/workflows/samples/sample-source";

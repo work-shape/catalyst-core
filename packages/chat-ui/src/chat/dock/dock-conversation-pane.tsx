@@ -3,6 +3,7 @@ import { useTranslation } from "../../shared/i18n";
 import { ConversationPane } from "../subagents/conversation-pane";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
 import type { AgentTryPaneState } from "./agent-try";
+import { TRY_DOCK_KIND } from "./subject-starters";
 import { TryRunLinesProvider } from "./try-run-lines";
 
 /**
@@ -22,7 +23,9 @@ export function DockConversationPane({
   if (agentTry.opening) return <TryOpening failed={agentTry.failed} onRetry={agentTry.retry} />;
   return (
     <TryRunLinesProvider messages={chat.messages}>
-      <ConversationPane chat={{ ...chat, selectedAgentName: agentTry.agent }} />
+      <ConversationPane
+        chat={{ ...chat, selectedAgentName: agentTry.agent, dockKind: TRY_DOCK_KIND }}
+      />
     </TryRunLinesProvider>
   );
 }

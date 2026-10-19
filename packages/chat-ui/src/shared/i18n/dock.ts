@@ -17,6 +17,7 @@ export const dock = defineTranslations({
     "dock.greetingNewOther": "What do you want to build?",
     "dock.greetingNewSkill": "What should the new skill know how to do?",
     "dock.greetingNewWorkflow": "What should the new workflow do?",
+    "dock.greetingTry": "Send a message to try the agent.",
     "dock.newAgentAnswersHint": "From your price list and terms",
     "dock.newAgentAnswersPrompt":
       "Build an agent that answers client questions from our price list and terms of business, and says so when it does not know.",
@@ -85,6 +86,7 @@ export const dock = defineTranslations({
     "dock.greetingNewOther": "Was möchtest du bauen?",
     "dock.greetingNewSkill": "Was soll der neue Skill können?",
     "dock.greetingNewWorkflow": "Was soll der neue Workflow tun?",
+    "dock.greetingTry": "Schreib eine Nachricht, um den Agenten auszuprobieren.",
     "dock.newAgentAnswersHint": "Aus Preisliste und AGB",
     "dock.newAgentAnswersPrompt":
       "Bau einen Agenten, der Kundenfragen aus unserer Preisliste und unseren AGB beantwortet und sagt, wenn er etwas nicht weiß.",

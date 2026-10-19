@@ -8,6 +8,7 @@ import {
   dockKindOfRoute,
   ThreadStartBlock,
   ThreadWelcomeHeading,
+  TRY_DOCK_KIND,
   type ConversationStart
 } from "./support/chat-ui";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -131,6 +132,17 @@ describe("the start page of a dock that builds", () => {
     expect(html).toContain("What should change in “Handbook”?");
     for (const word of DEMO_WORDS) expect(html).not.toContain(word);
     expect(startPage({ about: "new", kind: "connection" })).toContain("What do you want to build?");
+  });
+
+  it("invites the first message of Try, in German too, with no Build greeting or prompts", () => {
+    const start = conversationStart(undefined, TRY_DOCK_KIND);
+    const html = startPage(start);
+    expect(html).toContain("Send a message to try the agent.");
+    expect(html).not.toContain("What do you want to build?");
+    for (const word of DEMO_WORDS) expect(html).not.toContain(word);
+    expect(startPage(start, "de")).toContain(
+      "Schreib eine Nachricht, um den Agenten auszuprobieren."
+    );
   });
 
   it("keeps the agent's own welcome and prompts in a chat of its own", () => {

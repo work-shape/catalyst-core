@@ -187,7 +187,12 @@ const NEW_GREETINGS: Readonly<Record<string, TranslationKey>> = {
  * never offers the agent's own welcome and prompts, which are written for a chat of its own.
  */
 export type ConversationStart =
-  { about: "asset"; kind: string; title: string | undefined } | { about: "new"; kind: string };
+  | { about: "asset"; kind: string; title: string | undefined }
+  | { about: "new"; kind: string }
+  | { about: "try" };
+
+/** The dock kind of the Try tab, whose empty conversation invites a first message. */
+export const TRY_DOCK_KIND = "try";
 
 /** The kind of asset a page is about, where the dock beside it builds or changes one. */
 export function dockKindOfRoute(route: WorkspaceRoute): string | undefined {
@@ -219,6 +224,7 @@ export function conversationStart(
   if (subject !== undefined) {
     return { about: "asset", kind: subject.kind, title: subject.title };
   }
+  if (dockKind === TRY_DOCK_KIND) return { about: "try" };
   return dockKind === undefined ? undefined : { about: "new", kind: dockKind };
 }
 
@@ -227,6 +233,7 @@ export function startGreeting(start: ConversationStart): {
   key: TranslationKey;
   values?: Record<string, string>;
 } {
+  if (start.about === "try") return { key: "dock.greetingTry" };
   if (start.about === "asset") {
     return start.title === undefined || start.title.trim() === ""
       ? { key: "dock.greetingAboutUntitled" }
@@ -241,5 +248,6 @@ export function startGreeting(start: ConversationStart): {
  * kind has none: the agent's own prompts are never offered for an asset.
  */
 export function startStarters(start: ConversationStart): readonly SubjectStarter[] {
+  if (start.about === "try") return [];
   return (start.about === "asset" ? SUBJECT_STARTERS : NEW_STARTERS)[start.kind] ?? [];
 }
