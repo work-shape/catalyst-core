@@ -1,3 +1,4 @@
+import { recordedSeedFetch } from "./adapters/agent-stories-seed-fetch.mjs";
 // Bundled with esbuild for Node. This imports the committed seed rather than its shared-target CLI.
 import { seedDemo } from "../src/seed/index.ts";
 import { hostEnvironment } from "../src/env.ts";
@@ -12,13 +13,7 @@ try {
     assetsDir: `${root}/clients/demo/seed`,
     instanceAssetsDir: `${root}/clients/demo`,
     env: hostEnvironment(),
-    fetchImpl: async (url, init) => {
-      const response = await fetch(url, init);
-      const path = new URL(typeof url === "string" || url instanceof URL ? url : url.url).pathname;
-      requests.push({ path, status: response.status });
-      if (requests.length > 8) requests.shift();
-      return response;
-    },
+    fetchImpl: recordedSeedFetch(requests),
     envFile: `${privateDir}/cli.env`
   });
   await writeFile(

@@ -7,6 +7,8 @@ import { until } from "../scripts/agent-stories/processes.mjs";
 import { evidence, hash, usageTotal } from "../scripts/agent-stories/safety.mjs";
 import { createdOracle } from "../scripts/agent-stories/oracles.mjs";
 
+// Fixture deletion is asynchronous; a bounded drain keeps warm reuse free of owned work.
+const FIXTURE_CLEANUP_MS = 30_000;
 const folder = process.env.AGENT_STORIES_OUTPUT;
 const stack = JSON.parse(await readFile(process.env.AGENT_STORIES_STACK, "utf8"));
 const auth = JSON.parse(await readFile(resolve(stack.privateDir, "stack-auth.json"), "utf8"));
@@ -71,7 +73,7 @@ export const test = base.extend({
     const baseline = new Set((await sql`select id from model_usage_events`).map((row) => row.id));
     const root = await browser.newContext({ baseURL: ui });
     const people = [];
-    let workspace;
+    let workspace, actor;
     try {
       await signIn(root, { email: "setup@example.test", password: auth.secrets.password });
       for (const suffix of ["builder", "teammate"]) {
@@ -90,7 +92,7 @@ export const test = base.extend({
         });
         people.push({ ...person, id: user.id });
       }
-      const actor = await session(browser, watch, people[0]);
+      actor = await session(browser, watch, people[0]);
       workspace = await json(actor.context.request, "POST", "/api/v1/workspaces", {
         name: `Story ${id} ${randomUUID()}`,
         defaultConversationVisibility: "private"
@@ -239,7 +241,7 @@ export const test = base.extend({
         },
         async created(kind, run) {
           const rows =
-            await sql`select a.id,a.name,a.kind,a.created_at as "createdAt",r.actor->>'userId' as "actorId",r.id as "revisionId",r.revision,
+            await sql`select a.id,a.name,a.kind,a.scope_kind as "scopeKind",a.scope_id as "scopeId",a.active_revision_id as "revisionId",a.created_at as "createdAt",r.actor->>'userId' as "actorId",r.revision,
           coalesce(c.conversation_id,r.origin->>'conversationId') as "conversationId",
           o.origin->>'agentRunId' as "runId"
           from config_assets a join config_asset_revisions r on r.asset_id=a.id and r.revision=1
@@ -266,10 +268,13 @@ export const test = base.extend({
           observations.runId = row.runId;
           observations.revision = row.revision;
           observations.createdAt = new Date(row.createdAt).toISOString();
+          const query = new URLSearchParams();
+          if (kind !== "workflow") query.set("files", "true");
+          if (row.scopeKind === "workspace") query.set("workspaceId", row.scopeId);
           const asset = await json(
             actor.context.request,
             "GET",
-            `/api/v1/assets/${kind}/${encodeURIComponent(row.name)}?files=true`
+            `/api/v1/assets/${kind}/${encodeURIComponent(row.name)}?${query}`
           );
           expect(asset.id).toBe(row.id);
           await writeFile(
@@ -344,20 +349,27 @@ export const test = base.extend({
             { expectedRevision: asset.revision },
             [200, 202, 204]
           ).catch(() => errors.push("asset cleanup failed"));
-        for (const context of contexts) await context.close();
       }
     } finally {
-      // Reused services keep only evidence; fixture accounts/workspace are removed through setup APIs.
-      if (workspace)
+      // Only the workspace owner deletes it. Setup may delete the people once ownership is gone.
+      const cleanupDeadline = Date.now() + FIXTURE_CLEANUP_MS;
+      if (workspace && actor)
         await json(
-          root.request,
+          actor.context.request,
           "DELETE",
           `/api/v1/workspaces/${workspace.id}`,
-          undefined,
+          { confirmName: workspace.name },
           [200, 202, 204]
         ).catch(() => {
           errors.push("workspace cleanup failed");
         });
+      if (workspace && !errors.includes("workspace cleanup failed"))
+        await until(
+          async () =>
+            (await sql`select id from collaboration_workspaces where id=${workspace.id}`).length,
+          (count) => count === 0,
+          cleanupDeadline
+        ).catch(() => errors.push("workspace cleanup failed"));
       for (const person of people)
         await json(
           root.request,
@@ -368,11 +380,30 @@ export const test = base.extend({
         ).catch(() => {
           errors.push("actor cleanup failed");
         });
+      if (people.length && !errors.includes("actor cleanup failed"))
+        await until(
+          async () =>
+            (
+              await sql`select id from product_users where id in ${sql(people.map((person) => person.id))}`
+            ).length,
+          (count) => count === 0,
+          cleanupDeadline
+        ).catch(() => errors.push("actor cleanup failed"));
+      for (const context of contexts) await context.close();
       await root.close();
       if (errors.some((error) => error.includes("cleanup"))) {
+        const original = await readFile(resolve(folder, `${id}.json`), "utf8")
+          .then(JSON.parse)
+          .catch(() => ({ scenario: id }));
         await writeFile(
           resolve(folder, `${id}.json`),
-          JSON.stringify({ scenario: id, status: "blocked", code: "fixture_cleanup_failure" }),
+          JSON.stringify({
+            ...original,
+            verdict: original.status,
+            status: "blocked",
+            code: "fixture_cleanup_failure",
+            message: errors.filter((error) => error.includes("cleanup")).join("; ")
+          }),
           { mode: 0o600 }
         );
       }
