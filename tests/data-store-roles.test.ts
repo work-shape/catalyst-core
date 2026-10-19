@@ -213,7 +213,7 @@ describe("the roles of a Data Store", () => {
 
     expect(
       await refusal(call(world, "insert", { table: "findings", rows: [finding(1)] }))
-    ).toMatchObject({ details: { sqlState: "28P01" } });
+    ).toMatchObject({ code: "VALIDATION_FAILED", details: { reason: "database_refusal" } });
     // A sequence keeps what a transaction that was rolled back took from it.
     expect(
       await call(world, "query", { sql: "select last_value::integer as calls from calls" })

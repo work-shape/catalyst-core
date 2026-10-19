@@ -131,7 +131,8 @@ describe("a changing call of a Data Store that carries an idempotency key", () =
     const broken = { table: "findings", rows: [finding(1, { severity: "unheard-of" })] };
 
     expect(await refusal(call(world, "insert", broken, "step-broken"))).toMatchObject({
-      details: { sqlState: "23514" }
+      code: "VALIDATION_FAILED",
+      details: { reason: "database_refusal" }
     });
     expect(await records(world)).toHaveLength(0);
     expect(await insert(world, 2, "step-good")).toMatchObject({ inserted: 2 });
