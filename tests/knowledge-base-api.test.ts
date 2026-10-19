@@ -96,10 +96,10 @@ describe("a Knowledge Base on a Data Store", () => {
     expect(made.statusCode, made.body).toBe(200);
   }
 
-  it("names only readable published agents assigned to this Knowledge Base", async () => {
+  it("names only readable live agents assigned to this Knowledge Base", async () => {
     const instance = await start(true, undefined, developmentAuth, undefined, true);
     await published(instance);
-    async function agent(name: string, bases: string[], publish: boolean) {
+    async function agent(name: string, bases: string[], live: boolean) {
       const key = `agent:${name}`;
       const written = await instance.stores.configAssets.applyConfigAssetMutations({
         clientInstanceId,
@@ -109,35 +109,38 @@ describe("a Knowledge Base on a Data Store", () => {
             type: "upsert",
             kind: "agent",
             name,
-            draft: true,
             config: {
               name,
               displayName: { de: `Agent ${name}` },
               instructions: "Help",
               toolNames: [],
-              knowledgeBases: bases
+              knowledgeBases: live ? bases : []
             }
           }
         ]
       });
-      if (!publish) return;
-      const revision = required(written.revisions[key]);
-      const stored = required(
-        await instance.stores.configAssets.getConfigAssetRevision({
+      if (!live) {
+        await instance.stores.configAssets.applyConfigAssetMutations({
           clientInstanceId,
-          kind: "agent",
-          name,
-          revision
-        })
-      );
-      await instance.stores.configAssets.publishConfigAssetRevision({
-        clientInstanceId,
-        kind: "agent",
-        name,
-        assetId: required(written.assetIds[key]),
-        revision,
-        revisionId: stored.id
-      });
+          baseRevisions: { [key]: required(written.revisions[key]) },
+          mutations: [
+            {
+              type: "upsert",
+              kind: "agent",
+              name,
+              agentDraft: { expectedDraftRevision: null, author: { release: true } },
+              config: {
+                name,
+                displayName: { de: `Agent ${name}` },
+                instructions: "Help",
+                toolNames: [],
+                knowledgeBases: bases
+              }
+            }
+          ]
+        });
+        return;
+      }
     }
     await agent("using-knowledge", [KB], true);
     await agent("draft-knowledge", [KB], false);

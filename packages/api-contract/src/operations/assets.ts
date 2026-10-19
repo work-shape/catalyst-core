@@ -243,7 +243,7 @@ export const assetOperations = {
     effect: "changing",
     body: deleteAssetRequestSchema,
     response: json(assetWriteResponseSchema),
-    errors: ["NOT_FOUND", "REVISION_CONFLICT", "PRECONDITION_REQUIRED"],
+    errors: ["NOT_FOUND", "REVISION_CONFLICT", "PRECONDITION_REQUIRED", "VALIDATION_FAILED"],
     rateClass: "write"
   }),
   // Valid for a kind that is offered per workspace. The right is decided as for the default.

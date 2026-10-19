@@ -311,18 +311,18 @@ function stateOperation(
         clientInstanceId: runtime.clientInstanceId,
         assetId: knowledgeBase.asset.id
       });
-      const publishedAgents = await runtime.stores.configAssets.listPublishedConfigAssets({
+      const liveAgents = await runtime.stores.configAssets.listActiveConfigAssets({
         clientInstanceId: runtime.clientInstanceId,
         kind: "agent",
         limit: DATA_STORE_USED_BY_MAX_ASSETS + 1
       });
-      const agents = publishedAgents.slice(0, DATA_STORE_USED_BY_MAX_ASSETS).flatMap((asset) => {
+      const agents = liveAgents.slice(0, DATA_STORE_USED_BY_MAX_ASSETS).flatMap((asset) => {
         if (
           asset.status !== "active" ||
           !context.access.authorize("agent.read", assetResource(asset)).allowed
         )
           return [];
-        const config = agentKnowledgeSchema.safeParse(asset.publishedConfig);
+        const config = agentKnowledgeSchema.safeParse(asset.config);
         if (!config.success || !config.data.knowledgeBases?.includes(knowledgeBase.asset.name))
           return [];
         const label = config.data.displayName;
@@ -342,7 +342,7 @@ function stateOperation(
         ...(await stateOf(runtime, knowledgeBase, state)),
         ...(dataFlows ? { dataFlows } : {}),
         ...(agents.length > 0 ? { agents } : {}),
-        ...(publishedAgents.length > DATA_STORE_USED_BY_MAX_ASSETS ? { agentsTruncated: true } : {})
+        ...(liveAgents.length > DATA_STORE_USED_BY_MAX_ASSETS ? { agentsTruncated: true } : {})
       });
       if (kept) return withFlows(kept);
       // Nothing kept: it was never checked, or its store was being made when it was. A store

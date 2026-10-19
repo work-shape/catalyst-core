@@ -157,7 +157,10 @@ export interface DataStores {
     stores: PlatformStores,
     input: { assetId: string; revision: number; config: unknown }
   ): Promise<void>;
-  /** What deleting the asset does to the store, in the transaction of the delete: it is retired. */
+  /**
+   * Refuses while a published asset or a live agent uses the store. Otherwise retires it in the delete's
+   * transaction; the database and its rows remain for operator cleanup.
+   */
   retire(stores: PlatformStores, assetId: string): Promise<void>;
   readonly operationSource: OperationSource;
   /**

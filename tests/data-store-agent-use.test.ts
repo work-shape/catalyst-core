@@ -34,7 +34,7 @@ const answerSchema = z.object({
 describe("agents carrying a Data Store's row tools", () => {
   const { db, published } = useDataStoreWorld("data_store_agent_use");
 
-  it("uses published row tools, checks the complete store name and hides unreadable agents", async () => {
+  it("uses live row tools, checks the complete store name and hides unreadable agents", async () => {
     const world = await published("agent_use");
     const config = (name: string, toolNames: string[]): JsonObject => ({
       name,
@@ -44,15 +44,33 @@ describe("agents carrying a Data Store's row tools", () => {
     });
     async function save(name: string, value: JsonObject, publish: boolean) {
       const key = `agent:${name}`;
-      const current = await db.store.configAssets.getConfigAsset({
+      let current = await db.store.configAssets.getConfigAsset({
         clientInstanceId: world.clientInstanceId,
         kind: "agent",
         name
       });
+      if (!publish && current === undefined) {
+        await save(name, config(name, []), true);
+        current = await db.store.configAssets.getConfigAsset({
+          clientInstanceId: world.clientInstanceId,
+          kind: "agent",
+          name
+        });
+      }
       const result = await db.store.configAssets.applyConfigAssetMutations({
         clientInstanceId: world.clientInstanceId,
         baseRevisions: { [key]: current?.revision ?? null },
-        mutations: [{ type: "upsert", kind: "agent", name, config: value, draft: true }]
+        mutations: [
+          {
+            type: "upsert",
+            kind: "agent",
+            name,
+            config: value,
+            ...(!publish
+              ? { agentDraft: { expectedDraftRevision: null, author: { release: true } } }
+              : {})
+          }
+        ]
       });
       if (publish) {
         const revision = required(result.revisions[key]);
@@ -169,7 +187,12 @@ describe("agents carrying a Data Store's row tools", () => {
     await save("other_board", "findings2", true);
     const listed = await world.dataStores.list(accessOf(admin));
     expect(listed.items[0]?.apps).toEqual([{ name: "board", title: "App board" }]);
-    const member: AuthenticatedUser = { ...admin, id: "usr_store_list_member", clientInstanceId: world.clientInstanceId, roles: ["user"] };
+    const member: AuthenticatedUser = {
+      ...admin,
+      id: "usr_store_list_member",
+      clientInstanceId: world.clientInstanceId,
+      roles: ["user"]
+    };
     const hidden = await world.dataStores.list(
       accessOf(member, {
         grants: [
@@ -191,5 +214,65 @@ describe("agents carrying a Data Store's row tools", () => {
     expect(hidden.items).toHaveLength(1);
     expect(hidden.items[0]?.apps ?? []).toEqual([]);
     expect(JSON.stringify(hidden)).not.toContain("board");
+  });
+
+  it("checks references beyond the first published-asset page before retirement", async () => {
+    const world = await published("retire_pages");
+    const stored = required(
+      await db.store.configAssets.getConfigAsset({
+        clientInstanceId: world.clientInstanceId,
+        kind: "data_store",
+        name: "findings"
+      })
+    );
+    const asked: (string | undefined)[] = [];
+    let last: string | undefined;
+    await expect(
+      db.store.transaction((stores) =>
+        world.dataStores.retire(
+          {
+            ...stores,
+            configAssets: {
+              ...stores.configAssets,
+              async listPublishedConfigAssets() {
+                return [];
+              },
+              async listActiveConfigAssets(input) {
+                if (input.kind !== "agent") return [];
+                asked.push(input.afterName);
+                if (input.afterName !== undefined)
+                  return [
+                    {
+                      ...stored,
+                      kind: "agent",
+                      name: "zz-scout",
+                      config: { toolNames: ["data_store.findings.query"] }
+                    }
+                  ];
+                const page = Array.from({ length: input.limit ?? 0 }, (_, index) => ({
+                  ...stored,
+                  kind: "agent",
+                  name: `a-${String(index).padStart(4, "0")}`,
+                  config: { toolNames: [] }
+                }));
+                last = page.at(-1)?.name;
+                return page;
+              }
+            }
+          },
+          world.id
+        )
+      )
+    ).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: { reason: "data_store_in_use" }
+    });
+    expect(asked).toEqual([undefined, last]);
+    expect(
+      await db.store.dataStores.getDataStore({
+        clientInstanceId: world.clientInstanceId,
+        id: world.id
+      })
+    ).toMatchObject({ status: "ready" });
   });
 });

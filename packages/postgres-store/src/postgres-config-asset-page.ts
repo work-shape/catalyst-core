@@ -1,5 +1,16 @@
 import { appAvailabilityColumn } from "./app-availability";
-import { and, eq, ilike, inArray, like, or, sql, type SQLWrapper } from "drizzle-orm";
+import {
+  asc,
+  getTableColumns,
+  and,
+  eq,
+  ilike,
+  inArray,
+  like,
+  or,
+  sql,
+  type SQLWrapper
+} from "drizzle-orm";
 import type { ConfigAssetRecord, ConfigAssetStore } from "@work-shape/catalyst-core";
 import { containsPattern, prefixPattern } from "./like-pattern";
 import { publishedColumns, publishedRevisions } from "./postgres-config-asset-revisions";
@@ -139,4 +150,45 @@ export async function listConfigAssetPage(
     const row = byId.get(id);
     return row ? [mapConfigAsset(row.asset, row.revision, row.published, row.appAvailability)] : [];
   });
+}
+
+/** A revision whose config, for a skill, is left without its resources in the database. */
+const revisionWithoutSkillResources = {
+  ...getTableColumns(configAssetRevisions),
+  config:
+    sql`case when ${configAssets.kind} = 'skill' then ${configAssetRevisions.config} - 'resources' else ${configAssetRevisions.config} end`.mapWith(
+      configAssetRevisions.config
+    )
+};
+
+export async function listActiveConfigAssets(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["listActiveConfigAssets"]>[0]
+): Promise<ConfigAssetRecord[]> {
+  const conditions = [
+    eq(configAssets.clientInstanceId, input.clientInstanceId),
+    eq(configAssets.status, "active")
+  ];
+  if (input.kind !== undefined) {
+    conditions.push(eq(configAssets.kind, input.kind));
+  }
+  if (input.namePrefix !== undefined) {
+    // A constant pattern, so the planner reads it as a range of the prefix index.
+    conditions.push(like(configAssets.name, prefixPattern(input.namePrefix)));
+  }
+  if (input.afterName !== undefined) {
+    conditions.push(sql`${configAssets.name} ~>~ ${input.afterName}`);
+  }
+  const query = db
+    .select({
+      asset: configAssets,
+      revision: input.withoutSkillResources ? revisionWithoutSkillResources : configAssetRevisions
+    })
+    .from(configAssets)
+    .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+    .where(and(...conditions))
+    .orderBy(asc(configAssets.kind), sql`${configAssets.name} using ~<~`)
+    .$dynamic();
+  const rows = await (input.limit === undefined ? query : query.limit(input.limit));
+  return rows.map((row) => mapConfigAsset(row.asset, row.revision));
 }

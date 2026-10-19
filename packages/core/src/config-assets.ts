@@ -416,6 +416,10 @@ export interface ConfigAssetStore {
   listActiveConfigAssets(input: {
     clientInstanceId: ClientInstanceId;
     kind?: ConfigAssetKind;
+    /** Exclusive byte-order name cursor when reading one kind. */
+    afterName?: string;
+    /** At most this many active definitions; omitted by full-snapshot readers. */
+    limit?: number;
     /** Only assets whose name starts with this text, such as a Namespace prefix. */
     namePrefix?: string;
     /**

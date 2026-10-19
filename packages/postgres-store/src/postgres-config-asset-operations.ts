@@ -1,11 +1,11 @@
+import { listActiveConfigAssets } from "./postgres-config-asset-page";
 import { getConfigAssetState } from "./postgres-config-asset-state";
 import { appAvailabilityColumn } from "./app-availability";
 import { removeAgentProposal } from "./postgres-agent-proposal-operations";
 import { chunksOf, type WrittenAsset } from "./config-asset-batch";
 import { writeAgentDraft, consumeAgentDraft, carryAgentSkillChange } from "./agent-draft-mutations";
-import { prefixPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
-import { and, asc, desc, eq, getTableColumns, inArray, like, max, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, max, or, sql } from "drizzle-orm";
 import {
   AppError,
   INSTANCE_ASSET_SCOPE,
@@ -60,42 +60,6 @@ import {
   removeConfigAsset as removePostgresConfigAsset
 } from "./postgres-config-asset-pointers";
 import { sweepAssetRepoSaves } from "./jobs/asset-repo-sweep";
-
-/** A revision whose config, for a skill, is left without its resources in the database. */
-const revisionWithoutSkillResources = {
-  ...getTableColumns(configAssetRevisions),
-  config:
-    sql`case when ${configAssets.kind} = 'skill' then ${configAssetRevisions.config} - 'resources' else ${configAssetRevisions.config} end`.mapWith(
-      configAssetRevisions.config
-    )
-};
-
-async function listActiveConfigAssets(
-  db: PostgresConnection,
-  input: Parameters<ConfigAssetStore["listActiveConfigAssets"]>[0]
-): Promise<ConfigAssetRecord[]> {
-  const conditions = [
-    eq(configAssets.clientInstanceId, input.clientInstanceId),
-    eq(configAssets.status, "active")
-  ];
-  if (input.kind !== undefined) {
-    conditions.push(eq(configAssets.kind, input.kind));
-  }
-  if (input.namePrefix !== undefined) {
-    // A constant pattern, so the planner reads it as a range of the prefix index.
-    conditions.push(like(configAssets.name, prefixPattern(input.namePrefix)));
-  }
-  const rows = await db
-    .select({
-      asset: configAssets,
-      revision: input.withoutSkillResources ? revisionWithoutSkillResources : configAssetRevisions
-    })
-    .from(configAssets)
-    .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
-    .where(and(...conditions))
-    .orderBy(asc(configAssets.kind), asc(configAssets.name));
-  return rows.map((row) => mapConfigAsset(row.asset, row.revision));
-}
 
 async function listPublishedConfigAssets(
   db: PostgresConnection,

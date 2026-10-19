@@ -1,3 +1,4 @@
+import { useOfOperations, type StoreUse } from "./store-use";
 import { conversationWriters } from "./conversation-writers";
 import { recordKnowledgeSources } from "./records/lineage";
 import { workflowDataFlowsSchema } from "@work-shape/catalyst-core";
@@ -9,14 +10,12 @@ import {
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_OPERATION_PREFIX,
-  DATA_STORE_OPERATION_RIGHTS,
   DATA_STORE_OPERATION_VERBS,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   appReachesDataStore,
-  parseConnectionOperationName,
   workflowStepsDeep,
   type ActorAccess,
   type ConfigAssetRecord,
@@ -129,61 +128,6 @@ const usedByOutputSchema = z.object({
 
 type UsedBy = z.infer<typeof usedByOutputSchema>;
 
-/** What a published definition does with the store, and the Connections it calls. */
-interface StoreUse {
-  title: string;
-  reads: boolean;
-  writes: boolean;
-  connections: readonly string[];
-  knowledge?: readonly string[];
-}
-
-/** Whether an operation of the store adds rows: one that needs more than the right to read. */
-function verbWrites(verb: string): boolean {
-  if (verb === "records.propose") return true;
-  const known = DATA_STORE_OPERATION_VERBS.find((candidate) => candidate === verb);
-  return known !== undefined && DATA_STORE_OPERATION_RIGHTS[known] !== DATA_STORE_ACTIONS.read;
-}
-
-/** What a definition that calls these operations does with the store, or nothing. */
-function useOfOperations(
-  operations: readonly string[],
-  store: string,
-  title: string
-): StoreUse | undefined {
-  const prefix = `${DATA_STORE_OPERATION_PREFIX}${store}.`;
-  const verbs = operations.flatMap((operation) =>
-    operation.startsWith(prefix) ? [operation.slice(prefix.length)] : []
-  );
-  if (verbs.length === 0) return undefined;
-  return {
-    title,
-    reads: verbs.some((verb) => !verbWrites(verb)),
-    writes: verbs.some(verbWrites),
-    connections: connectionsOf(operations),
-    knowledge: [
-      ...new Set(
-        operations.flatMap((operation) => {
-          const [prefix, name] = operation.split(".");
-          return prefix === "knowledge" && name ? [name] : [];
-        })
-      )
-    ]
-  };
-}
-
-/** The Connections whose operations are named, each once, in the order they are first named. */
-function connectionsOf(operations: readonly string[]): string[] {
-  return [
-    ...new Set(
-      operations.flatMap((operation) => {
-        const parsed = parseConnectionOperationName(operation);
-        return parsed ? [parsed.connection] : [];
-      })
-    )
-  ];
-}
-
 const appConfigSchema = z.object({
   title: z.string().optional(),
   manifest: z.object({ actions: z.array(z.unknown()) })
@@ -258,13 +202,13 @@ const agentUseSchema = z.object({
   toolNames: z.array(z.string())
 });
 
-/** A published agent carries row tools; a draft alone never gives it access to a store. */
+/** An agent carries its live row tools; its separate shared draft grants no access. */
 function agentUse(
   asset: ConfigAssetRecord,
   store: string,
   locale: DataStoreRuntime["defaultLocale"]
 ): StoreUse | undefined {
-  const parsed = agentUseSchema.safeParse(asset.publishedConfig);
+  const parsed = agentUseSchema.safeParse(asset.config);
   if (!parsed.success) return undefined;
   const { displayName, toolNames } = parsed.data;
   const prefix = `${DATA_STORE_OPERATION_PREFIX}${store}.`;
@@ -310,7 +254,11 @@ async function usedBy(
     published(APP.kind),
     published(WORKFLOW_ASSET_KIND),
     published(KNOWLEDGE_BASE_ASSET_KIND),
-    published("agent")
+    stores.configAssets.listActiveConfigAssets({
+      clientInstanceId,
+      kind: "agent",
+      limit: DATA_STORE_USED_BY_MAX_ASSETS + 1
+    })
   ]);
   /**
    * Splits the assets that use the store into the ones the caller is shown and a count. The
@@ -452,6 +400,49 @@ async function usedBy(
       Math.max(apps.length, workflows.length, knowledgeBases.length, agents.length) >
         DATA_STORE_USED_BY_MAX_ASSETS || audiences.truncated()
   };
+}
+
+/** Refuse retirement while any live definition still reaches the store, including beyond the first page. */
+export async function assertStoreUnused(
+  runtime: Pick<DataStoreRuntime, "clientInstanceId">,
+  stores: Pick<DataStoreRuntime["stores"], "configAssets">,
+  name: string
+): Promise<void> {
+  for (const kind of [APP.kind, WORKFLOW_ASSET_KIND, KNOWLEDGE_BASE_ASSET_KIND, "agent"]) {
+    let afterName: string | undefined;
+    for (;;) {
+      const page = await (kind === "agent"
+        ? stores.configAssets.listActiveConfigAssets({
+            clientInstanceId: runtime.clientInstanceId,
+            kind,
+            afterName,
+            limit: DATA_STORE_USED_BY_MAX_ASSETS
+          })
+        : stores.configAssets.listPublishedConfigAssets({
+            clientInstanceId: runtime.clientInstanceId,
+            kind,
+            afterName,
+            limit: DATA_STORE_USED_BY_MAX_ASSETS
+          }));
+      const inUse = page.some((asset) =>
+        kind === APP.kind
+          ? appUse(asset, name) !== undefined
+          : kind === WORKFLOW_ASSET_KIND
+            ? workflowUse(asset, name) !== undefined
+            : kind === KNOWLEDGE_BASE_ASSET_KIND
+              ? knowledgeBaseUse(asset, name) !== undefined
+              : agentUse(asset, name, "en") !== undefined
+      );
+      if (inUse)
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "This data store is still used. Remove its references before deleting it.",
+          { reason: "data_store_in_use" }
+        );
+      if (page.length < DATA_STORE_USED_BY_MAX_ASSETS) break;
+      afterName = page.at(-1)?.name;
+    }
+  }
 }
 
 /**

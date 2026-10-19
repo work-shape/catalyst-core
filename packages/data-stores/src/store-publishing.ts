@@ -1,3 +1,4 @@
+import { assertStoreUnused } from "./used-by";
 import {
   AppError,
   DATA_STORE_ASSET_KIND,
@@ -103,6 +104,7 @@ export async function retireDataStore(
     lock: true
   });
   if (!record || record.status === "retired") return;
+  await assertStoreUnused(runtime, stores, record.name);
   const now = new Date().toISOString();
   await stores.dataStores.putDataStore({
     ...record,
