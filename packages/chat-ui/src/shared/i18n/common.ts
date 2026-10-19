@@ -10,6 +10,7 @@ export const common = defineTranslations({
     copyId: "Copy ID",
     idCopied: "ID copied",
     conversationRunning: "Running",
+    conversationWaitsForYou: "Waits for you",
     deleting: "Deleting",
     "docs.learnMore": "Learn more",
     "docs.learnMoreDenyName": "Learn more about how a deny is decided, opens in a new tab",
@@ -48,6 +49,7 @@ export const common = defineTranslations({
     copyId: "ID kopieren",
     idCopied: "ID kopiert",
     conversationRunning: "Läuft",
+    conversationWaitsForYou: "Wartet auf dich",
     deleting: "Löscht",
     "docs.learnMore": "Mehr erfahren",
     "docs.learnMoreDenyName":

@@ -3,6 +3,7 @@ import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
 import { Clock, FolderInput, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { ConversationListItem, SafeConfig } from "@work-shape/catalyst-api-client";
 import {
+  Badge,
   Button,
   cn,
   Dialog,
@@ -49,7 +50,9 @@ export function ConversationButton({
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const renamingFromMenuRef = useRef(false);
   const wasSelectedRef = useRef(selected);
-  const running = Boolean(conversation.activeRun);
+  // A run paused for a person's decision is not working: it waits for the person, not a spinner.
+  const waitsForDecision = conversation.activeRun?.status === "waiting_for_decision";
+  const running = Boolean(conversation.activeRun) && !waitsForDecision;
   const unread = Boolean(conversation.unread && !selected);
   const expiresAt = retentionWarningDate(conversation.retainedUntil, retention);
   const expiryLabel = expiresAt ? retentionWarningText(expiresAt, { locale, t }) : undefined;
@@ -280,6 +283,11 @@ export function ConversationButton({
               >
                 {title}
               </span>
+              {waitsForDecision ? (
+                <Badge tone="warning" size="sm" dot data-testid="conversation-waits-for-you">
+                  {t("conversationWaitsForYou")}
+                </Badge>
+              ) : null}
               {conversation.visibility === "private" ? (
                 <span
                   className="shrink-0 text-muted-foreground"

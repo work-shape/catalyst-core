@@ -629,6 +629,53 @@ describe("workspace rail private conversation marker", () => {
   });
 });
 
+describe("workspace rail run marker", () => {
+  const conversation = {
+    id: "conv_1",
+    clientInstanceId: "client",
+    collaborationWorkspaceId: "cw_shared",
+    createdByUserId: "user_1",
+    createdByExternalUserId: "external_1",
+    visibility: "workspace",
+    title: "Angebot Q3",
+    status: "active",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    updatedAt: "2026-08-01T10:00:00.000Z",
+    retainedUntil: "2027-08-01T10:00:00.000Z"
+  } as ConversationListItem;
+  const runWith = (status: NonNullable<ConversationListItem["activeRun"]>["status"]) => ({
+    ...conversation,
+    activeRun: {
+      id: "run_1",
+      conversationId: conversation.id,
+      agentName: "assistant",
+      status,
+      startedAt: "2026-08-01T10:00:00.000Z",
+      updatedAt: "2026-08-01T10:00:00.000Z",
+      lastSequence: 3
+    }
+  });
+
+  it("keeps the spinner for a run that works", () => {
+    const markup = renderRail(undefined, undefined, [runWith("running")]);
+
+    expect(markup).toContain('data-testid="conversation-running-indicator"');
+    expect(markup).not.toContain("conversation-waits-for-you");
+  });
+
+  it.each<[LocaleCode, string]>([
+    ["en", "Waits for you"],
+    ["de", "Wartet auf dich"]
+  ])("marks a run paused for a decision as waiting for the person (%s)", (locale, text) => {
+    const markup = renderRail(undefined, undefined, [runWith("waiting_for_decision")], {}, locale);
+
+    expect(markup).not.toContain("conversation-running-indicator");
+    expect(markup).toMatch(
+      new RegExp(`data-testid="conversation-waits-for-you"[^>]*>.*${text}</span>`, "u")
+    );
+  });
+});
+
 describe("workspace rail conversation rows", () => {
   const day = 24 * 60 * 60 * 1000;
   // Midday UTC, so the deletion dates below fall on the same calendar day in every time zone.

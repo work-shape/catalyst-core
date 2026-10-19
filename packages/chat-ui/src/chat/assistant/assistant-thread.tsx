@@ -250,7 +250,6 @@ export function AssistantThread({
                           <ThreadMessage
                             conversationRunning={conversationRunning}
                             activeRunId={activeRunId}
-                            optimisticPending={optimisticPending}
                           />
                         </>
                       )}

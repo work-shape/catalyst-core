@@ -2,23 +2,19 @@ import { useWaitsForDecision } from "../approvals/tool-decision-context";
 import {
   ActionBarPrimitive,
   AttachmentPrimitive,
-  ComposerPrimitive,
   ErrorPrimitive,
-  MessagePartPrimitive,
   MessagePrimitive,
   useAuiState,
   useThreadViewport,
   useThreadViewportStore,
   type PartState
 } from "@assistant-ui/react";
-import { Check, Copy, ListRestart, Pencil, RefreshCw, User } from "lucide-react";
+import { Check, Copy, ListRestart, User } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Button, cn, IconButton } from "@work-shape/catalyst-ui";
+import { cn, IconButton } from "@work-shape/catalyst-ui";
 import { ApprovalDecisionLine } from "../approvals/approval-decision-line";
-import { managedFileIdFromUrl, useAttachmentContentContext } from "../files/attachment-content";
-import { resolveFileType } from "../files/file-type";
-import { FileTypeIcon } from "../files/file-type-icon";
 import { MessageAttachments } from "../files/message-attachments";
+import { FilePart, ImagePart } from "./message-file-parts";
 import {
   ASSISTANT_WORK_GROUP,
   countAssistantWorkTimelineSteps,
@@ -48,19 +44,12 @@ const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();
 
 export function ThreadMessage({
   conversationRunning,
-  activeRunId,
-  optimisticPending: _optimisticPending
+  activeRunId
 }: {
   conversationRunning?: boolean;
   activeRunId?: string;
-  optimisticPending?: boolean;
 }) {
   const role = useAuiState((state) => state.message.role);
-  const isEditing = useAuiState((state) => state.message.composer.isEditing);
-
-  if (isEditing) {
-    return <DisabledEditComposer />;
-  }
 
   if (role === "user") {
     return <UserMessage />;
@@ -249,9 +238,6 @@ function AssistantMessage({
               <CopiedState />
             </IconButton>
           </ActionBarPrimitive.Copy>
-          <IconButton label={t("regenerateResponse")} disabled>
-            <RefreshCw aria-hidden="true" />
-          </IconButton>
         </div>
       ) : null}
     </MessagePrimitive.Root>
@@ -572,9 +558,6 @@ function UserMessage() {
             <CopiedState />
           </IconButton>
         </ActionBarPrimitive.Copy>
-        <IconButton label={t("editMessage")} disabled>
-          <Pencil aria-hidden="true" />
-        </IconButton>
       </div>
     </MessagePrimitive.Root>
   );
@@ -666,144 +649,6 @@ function CopiedState() {
   return isCopied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />;
 }
 
-function FilePart() {
-  const { t } = useTranslation();
-  const file = useAuiState((state) => (state.part.type === "file" ? state.part : undefined));
-  if (!file) {
-    return null;
-  }
-  const mimeType = filePartMimeType(file);
-  const url = filePartUrl(file);
-  if (isSupportedImageMimeType(mimeType)) {
-    return <ImageFilePart data={url} filename={file.filename} mimeType={mimeType} />;
-  }
-  return (
-    <div className="chat-message-block my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
-      <FileTypeIcon type={resolveFileType({ filename: file.filename, mimeType })} />
-      <span className="truncate">{file.filename ?? mimeType ?? t("attachmentFallbackName")}</span>
-    </div>
-  );
-}
-
-function ImagePart() {
-  const { t } = useTranslation();
-  const image = useAuiState((state) => (state.part.type === "image" ? state.part : undefined));
-  if (!image) {
-    return null;
-  }
-  return (
-    <div className="chat-message-block my-2 overflow-hidden rounded-md border bg-card shadow-xs">
-      <MessagePartPrimitive.Image
-        alt={image.filename ?? t("attachmentImageFallbackAlt")}
-        className="max-h-96 w-auto max-w-full object-contain"
-      />
-    </div>
-  );
-}
-
-function ImageFilePart({
-  data,
-  filename,
-  mimeType
-}: {
-  data: string;
-  filename?: string;
-  mimeType: string;
-}) {
-  const attachmentContent = useAttachmentContentContext();
-  const { t } = useTranslation();
-  const attachmentClient = attachmentContent?.client;
-  const selectedConversationId = attachmentContent?.selectedConversationId;
-  const [imageUrl, setImageUrl] = useState<string | undefined>(() =>
-    isDirectImageUrl(data) ? data : undefined
-  );
-
-  useEffect(() => {
-    if (isDirectImageUrl(data)) {
-      setImageUrl(data);
-      return undefined;
-    }
-
-    const fileId = managedFileIdFromUrl(data);
-    if (!fileId || !attachmentClient || !selectedConversationId) {
-      setImageUrl(undefined);
-      return undefined;
-    }
-
-    let active = true;
-    let objectUrl: string | undefined;
-    void attachmentClient.conversations.files
-      .get_content({ params: { conversationId: selectedConversationId, fileId } })
-      .then((blob) => {
-        if (!active) {
-          return;
-        }
-        objectUrl = URL.createObjectURL(blob);
-        setImageUrl(objectUrl);
-      })
-      .catch(() => {
-        if (active) {
-          setImageUrl(undefined);
-        }
-      });
-
-    return () => {
-      active = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [attachmentClient, data, selectedConversationId]);
-
-  if (!imageUrl) {
-    return (
-      <div className="chat-message-block my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
-        <FileTypeIcon type={resolveFileType({ filename, mimeType })} />
-        <span className="truncate">{filename ?? mimeType}</span>
-      </div>
-    );
-  }
-
-  return (
-    <figure className="chat-message-block my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
-      <img
-        src={imageUrl}
-        alt={filename ?? t("attachmentImageFallbackAlt")}
-        className="max-h-96 w-auto max-w-full rounded object-contain"
-      />
-      {filename ? (
-        <figcaption className="truncate px-1 pb-1 text-xs text-muted-foreground">
-          {filename}
-        </figcaption>
-      ) : null}
-    </figure>
-  );
-}
-
-function isDirectImageUrl(value: string | undefined): value is string {
-  return Boolean(value && /^(https:\/\/|blob:|data:image\/)/u.test(value));
-}
-
-function isSupportedImageMimeType(value: string | undefined): value is string {
-  return (
-    value === "image/png" ||
-    value === "image/jpeg" ||
-    value === "image/webp" ||
-    value === "image/gif"
-  );
-}
-
-function filePartMimeType(file: { mediaType?: string; mimeType?: string }): string | undefined {
-  return file.mediaType ?? file.mimeType;
-}
-
-function filePartUrl(file: { url?: string; data?: unknown }): string {
-  if (typeof file.url === "string") {
-    return file.url;
-  }
-  return typeof file.data === "string" ? file.data : "";
-}
-
 function MessageError() {
   return (
     <MessagePrimitive.Error>
@@ -811,30 +656,5 @@ function MessageError() {
         <ErrorPrimitive.Message />
       </ErrorPrimitive.Root>
     </MessagePrimitive.Error>
-  );
-}
-
-function DisabledEditComposer() {
-  const { t } = useTranslation();
-
-  return (
-    <MessagePrimitive.Root className="mx-auto w-full max-w-3xl">
-      <ComposerPrimitive.Root className="grid gap-2 rounded-md border bg-muted/50 p-3">
-        <ComposerPrimitive.Input
-          className="min-h-20 resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          disabled
-        />
-        <div className="flex justify-end gap-2">
-          <ComposerPrimitive.Cancel asChild>
-            <Button variant="ghost" size="sm">
-              {t("cancel")}
-            </Button>
-          </ComposerPrimitive.Cancel>
-          <Button size="sm" disabled>
-            {t("update")}
-          </Button>
-        </div>
-      </ComposerPrimitive.Root>
-    </MessagePrimitive.Root>
   );
 }
