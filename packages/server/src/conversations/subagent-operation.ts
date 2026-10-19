@@ -21,7 +21,10 @@ const AGENTS_RUN_TIMEOUT_MS = 30_000;
 
 export interface SubagentOperationOptions {
   clientInstanceId: ClientInstanceId;
-  stores: Pick<PlatformStores, "agentRuns" | "childAgentRuns" | "conversations">;
+  stores: Pick<
+    PlatformStores,
+    "agentRuns" | "childAgentRuns" | "conversations" | "scheduledStarts"
+  >;
   assetSource: ConfigAssetSource;
   /** Whether a person may use an agent in a workspace now: the rule a new run starts under. */
   agentAvailable(input: {
@@ -62,12 +65,17 @@ export function subagentOperation(
     timeoutMs: AGENTS_RUN_TIMEOUT_MS,
     async execute(input, context) {
       const { origin } = context;
-      // EW-8 does not start subagents unattended; their separate usage and consent path is deferred.
-      if (context.runtime.unattended)
-        return refused("agent_not_available", "Scheduled prompts cannot start subagents yet.");
       if (origin.kind !== "agent") {
         return refused("agent_not_available", "Only an agent's run starts a subagent.");
       }
+      // EW-8 defers scheduled subagents; other existing unattended callers keep CR-1 behavior.
+      if (
+        await options.stores.scheduledStarts.isScheduledAgentRun({
+          clientInstanceId: options.clientInstanceId,
+          runId: asAgentRunId(origin.agentRunId)
+        })
+      )
+        return refused("agent_not_available", "Scheduled prompts cannot start subagents yet.");
       const parent = await options.stores.agentRuns.getAgentRun({
         clientInstanceId: options.clientInstanceId,
         runId: asAgentRunId(origin.agentRunId)

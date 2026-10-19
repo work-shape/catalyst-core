@@ -868,9 +868,20 @@ export const EVENTS = {
     subject: "storage"
   },
   "scheduled_start.fired": {
-    ...LEGACY_AUDIT,
     name: "scheduled_start.fired",
-    subject: "scheduled_start"
+    subject: "scheduled_start",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["conversationId", "agentRunId"],
+      properties: {
+        conversationId: { type: "string" },
+        agentRunId: { type: "string" }
+      }
+    }
   },
   "user.created": { ...LEGACY_AUDIT, name: "user.created", subject: "user" },
   "user.deleted": { ...LEGACY_AUDIT, name: "user.deleted", subject: "user" },
