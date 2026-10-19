@@ -193,7 +193,7 @@ export const build = defineTranslations({
       "Speichert einen Entwurf. Er antwortet niemandem, bis er veröffentlicht ist.",
     "build.publishTitle": "{name} veröffentlichen?",
     "build.publishDescription":
-      "Der gespeicherte Entwurf wird ab jetzt die Version, die alle bekommen, die ihn nutzen. Ungespeicherte Änderungen gehören nicht dazu.",
+      "Der gespeicherte Entwurf wird ab jetzt die Version, die alle bekommen, die damit arbeiten. Ungespeicherte Änderungen gehören nicht dazu.",
     "build.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
     "build.publishSaveFirst":
       "Speichere zuerst deine Änderungen: Nur ein gespeicherter Entwurf lässt sich veröffentlichen.",

@@ -122,6 +122,14 @@ describe("interface translations", () => {
     );
   });
 
+  it("tells what publishing does without a pronoun that fits only some kinds", () => {
+    // The dialog serves every kind: der Agent, die Wissensbasis, die App, der Workflow.
+    // "die ihn nutzen" read wrong for a Wissensbasis (ACCEPT-2e).
+    const description = de.t("build.publishDescription");
+    expect(description).toContain("die alle bekommen, die damit arbeiten");
+    expect(description).not.toMatch(/\b(ihn|sie|es)\b/u);
+  });
+
   it("puts values into their placeholders", () => {
     expect(en.t("attachmentsShowMore", { count: 3 })).toBe("+ 3 more");
     expect(de.t("attachmentsSummary", { count: 2, size: "4 MB" })).toBe("2 Dateien · 4 MB");
