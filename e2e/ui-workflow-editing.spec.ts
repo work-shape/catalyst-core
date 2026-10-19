@@ -44,7 +44,7 @@ for (const mode of ["light", "dark"] as const) {
       await page.keyboard.press("Enter");
       await expect(page.getByRole("listbox")).toBeVisible();
       await page.keyboard.press("Enter");
-      await expect(picker).toContainText("Load the clients");
+      await expect(picker).toContainText("Bookings");
       await expect(picker).toBeFocused();
 
       const fields = page
@@ -96,7 +96,9 @@ for (const mode of ["light", "dark"] as const) {
       const edgePoint = draft.locator('[data-place="edge:trigger:load"]');
       await page.mouse.move(0, 0);
       await expect(edgePoint).toHaveCSS("opacity", "0");
-      await draft.hover({ position: { x: 8, y: 8 } });
+      // Below the sticky header of the gallery, which covers the top of the page at 390.
+      await draft.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await draft.hover({ position: { x: 8, y: 280 } });
       await expect(edgePoint).toHaveCSS("opacity", "1");
       await page.mouse.move(0, 0);
       await draft.locator('[data-flow-id="trigger"]').focus();

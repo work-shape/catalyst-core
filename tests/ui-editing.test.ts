@@ -226,9 +226,8 @@ describe("flow editing marks", () => {
     expect(host?.querySelector('[aria-label="Hidden"]')).toBeNull();
     const target = find<HTMLButtonElement>("[data-target]");
     // A name that starts with the words the button shows.
-    expect(target.hasAttribute("aria-label")).toBe(false);
-    expect(target.textContent).toBe("Move here, after Load");
-    expect(target.querySelector(".sr-only")?.textContent).toBe(", after Load");
+    expect(target.textContent).toBe("Move here");
+    expect(target.getAttribute("aria-label")).toBe("Move here, after Load");
     // Only a point that can be pressed answers the pointer.
     const classes = find('[aria-label="Unavailable"]').className.split(" ");
     expect(classes).toContain("enabled:hover:border-primary");
@@ -419,7 +418,7 @@ describe("insert points on the canvas", () => {
       "exit:branch:yes",
       "exit:branch:no"
     ]);
-    expect(targets[0]?.textContent).toBe("Hierher verschieben, nach start");
+    expect(targets[0]?.getAttribute("aria-label")).toBe("Hierher verschieben, nach start");
     expect(targets.some((target) => target.hasAttribute("data-reveal"))).toBe(false);
     // No node can be opened or acted on while a step moves.
     for (const part of Array.from(host?.querySelectorAll<HTMLElement>("[data-flow-id]") ?? [])) {

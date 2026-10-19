@@ -38,7 +38,8 @@ export function FlowInsertPoint({
         event.stopPropagation();
         onClick?.(event);
       }}
-      aria-label={target ? undefined : label}
+      // A target's name starts with the words it shows.
+      aria-label={target ? `${labels.moveHere}, ${label}` : label}
       data-slot="flow-insert-point"
       data-target={target ? "" : undefined}
       data-reveal={reveal && !target ? "" : undefined}
@@ -54,12 +55,7 @@ export function FlowInsertPoint({
       )}
     >
       <Plus aria-hidden="true" className="size-4" />
-      {target ? (
-        <>
-          {labels.moveHere}
-          <span className="sr-only">, {label}</span>
-        </>
-      ) : null}
+      {target ? labels.moveHere : null}
     </button>
   );
 }
