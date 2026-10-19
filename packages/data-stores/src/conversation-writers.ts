@@ -29,7 +29,14 @@ export async function conversationWriters(
   const conversations = new Set<string>();
   for (const page of pages) {
     for (const run of page.slice(0, WRITER_RUNS_PER_OPERATION)) {
-      if (run.status !== "done" || run.target !== "live" || run.origin.kind !== "agent") continue;
+      // Workflow agent steps act as their service principal, never as a person chatting.
+      if (
+        run.status !== "done" ||
+        run.target !== "live" ||
+        run.origin.kind !== "agent" ||
+        run.actor.kind !== "user"
+      )
+        continue;
       const written = writtenRows.safeParse(run.output?.value);
       if (!written.success) continue;
       const { inserted = 0, updated = 0, deleted = 0 } = written.data;

@@ -70,90 +70,101 @@ describe("building from a workspace whose conversations are shared", () => {
     ]);
   });
 
+  // A message names no author: the run that answers it does, by its owner and its input.
+  const refusal = {
+    type: "tool_call",
+    toolCallId: "call_1",
+    toolName: "platform.assets.put",
+    state: "output_error",
+    errorReason: "subject_conversation_shared"
+  };
+  const user = (id: string, text: string) => ({ id, role: "user", text, runId: undefined });
+  const reply = (runId: string) => ({ id: `msg_${runId}`, role: "assistant", text: "…", runId });
+  const run = (ownerUserId: string | undefined, inputMessageId: string, refused: boolean) => ({
+    ownerUserId,
+    inputMessageId,
+    parts: refused ? [{ type: "text" }, refusal] : [{ type: "text" }]
+  });
+
   it("offers to go on privately only after a build was refused as shared, with the last request", () => {
-    const refusal = {
-      type: "tool_call",
-      toolCallId: "call_1",
-      toolName: "platform.assets.put",
-      state: "output_error",
-      errorReason: "subject_conversation_shared"
-    };
-    const refused = { parts: [{ type: "text" }, refusal] };
-    const answered = { parts: [{ type: "text" }] };
-    const user = (text: string) => ({ role: "user", text, runId: undefined });
-    const reply = (runId: string) => ({ role: "assistant", text: "…", runId });
     const request = "  Baue die App für Fristen.  ";
 
     // The run that answered the last request was refused: its request goes along, trimmed.
     expect(
       refusedRequest({
-        messages: [user("Erst das."), reply("run_1"), user(request), reply("run_2")],
+        currentUserId: "user_anna",
+        messages: [user("m1", "Erst das."), reply("run_1"), user("m2", request), reply("run_2")],
         activeRun: undefined,
-        completedRuns: { run_1: answered, run_2: refused }
+        completedRuns: {
+          run_1: run("user_anna", "m1", false),
+          run_2: run("user_anna", "m2", true)
+        }
       })
     ).toBe("Baue die App für Fristen.");
     // So where a later run goes on with the same request, after one that built nothing.
     expect(
       refusedRequest({
-        messages: [user(request), reply("run_1"), reply("run_2")],
+        currentUserId: "user_anna",
+        messages: [user("m1", request), reply("run_1"), reply("run_2")],
         activeRun: undefined,
-        completedRuns: { run_1: answered, run_2: refused }
+        completedRuns: {
+          run_1: run("user_anna", "m1", false),
+          run_2: run("user_anna", "m1", true)
+        }
       })
     ).toBe("Baue die App für Fristen.");
     // And while it still goes.
     expect(
       refusedRequest({
-        messages: [user(request)],
-        activeRun: { runId: "run_1", ...refused },
+        currentUserId: "user_anna",
+        messages: [user("m1", request)],
+        activeRun: { runId: "run_1", ...run("user_anna", "m1", true) },
         completedRuns: {}
       })
     ).toBe("Baue die App für Fristen.");
     // Some other refusal is none of this.
     expect(
       refusedRequest({
-        messages: [user(request), reply("run_1")],
+        currentUserId: "user_anna",
+        messages: [user("m1", request), reply("run_1")],
         activeRun: undefined,
-        completedRuns: { run_1: { parts: [{ ...refusal, errorReason: undefined }] } }
+        completedRuns: {
+          run_1: {
+            ...run("user_anna", "m1", false),
+            parts: [{ ...refusal, errorReason: undefined }]
+          }
+        }
       })
     ).toBeUndefined();
   });
 
   it("offers nothing for a later request once an earlier build was refused", () => {
-    const refused = {
-      parts: [
-        {
-          type: "tool_call",
-          toolCallId: "call_1",
-          toolName: "platform.assets.put",
-          state: "output_error",
-          errorReason: "subject_conversation_shared"
-        }
-      ]
-    };
-    const answered = { parts: [{ type: "text" }] };
-    const user = (text: string) => ({ role: "user", text, runId: undefined });
-    const reply = (runId: string) => ({ role: "assistant", text: "…", runId });
-    const earlier = [user("Baue die App."), reply("run_1")];
+    const earlier = [user("m1", "Baue die App."), reply("run_1")];
+    const refused = run("user_anna", "m1", true);
+    const later = user("m2", "Wie spät ist es?");
 
     // A later run answered: the earlier refusal is stale.
     expect(
       refusedRequest({
-        messages: [...earlier, user("Wie spät ist es?"), reply("run_2")],
+        currentUserId: "user_anna",
+        messages: [...earlier, later, reply("run_2")],
         activeRun: undefined,
-        completedRuns: { run_1: refused, run_2: answered }
+        completedRuns: { run_1: refused, run_2: run("user_anna", "m2", false) }
       })
     ).toBeUndefined();
     // The later request is answered right now, or not yet: never with the earlier refusal.
     expect(
       refusedRequest({
-        messages: [...earlier, user("Wie spät ist es?")],
-        activeRun: { runId: "run_2", ...answered },
+        currentUserId: "user_anna",
+        messages: [...earlier, later],
+        activeRun: { runId: "run_2", ...run("user_anna", "m2", false) },
         completedRuns: { run_1: refused }
       })
     ).toBeUndefined();
     expect(
       refusedRequest({
-        messages: [...earlier, user("Wie spät ist es?")],
+        currentUserId: "user_anna",
+        messages: [...earlier, later],
         activeRun: undefined,
         completedRuns: { run_1: refused }
       })
@@ -161,11 +172,103 @@ describe("building from a workspace whose conversations are shared", () => {
     // The refused run still shown as going answered the earlier request, not this one.
     expect(
       refusedRequest({
-        messages: [...earlier, user("Wie spät ist es?")],
+        currentUserId: "user_anna",
+        messages: [...earlier, later],
         activeRun: { runId: "run_1", ...refused },
         completedRuns: {}
       })
     ).toBeUndefined();
+  });
+
+  // Members read a shared conversation together. The refusal of Anna's build is Anna's: Ben,
+  // who reads along, is offered nothing, and nobody takes along words someone else wrote.
+  it("offers going on privately only to the person whose own request was refused", () => {
+    const request = "Baue die App für Fristen.";
+    const thread = (
+      currentUserId: string | undefined,
+      refusedRun = run("user_anna", "m1", true)
+    ) => ({
+      completed: refusedRequest({
+        currentUserId,
+        messages: [user("m1", request), reply("run_1")],
+        activeRun: undefined,
+        completedRuns: { run_1: refusedRun }
+      }),
+      active: refusedRequest({
+        currentUserId,
+        messages: [user("m1", request)],
+        activeRun: { runId: "run_1", ...refusedRun },
+        completedRuns: {}
+      })
+    });
+
+    // Anna, who started the refused run, is offered her request, while it goes and after.
+    expect(thread("user_anna")).toEqual({ completed: request, active: request });
+    // Ben reads the same thread and is offered nothing.
+    expect(thread("user_ben")).toEqual({ completed: undefined, active: undefined });
+    // Who reads is not known yet: nothing, even though the run names its owner.
+    expect(thread(undefined)).toEqual({ completed: undefined, active: undefined });
+    // The run names no owner: nobody's request is anybody's own, not even an unknown reader's.
+    expect(thread("user_anna", run(undefined, "m1", true))).toEqual({
+      completed: undefined,
+      active: undefined
+    });
+    expect(thread(undefined, run(undefined, "m1", true))).toEqual({
+      completed: undefined,
+      active: undefined
+    });
+  });
+
+  it("never carries a later message of another member as the person's own request", () => {
+    // Anna's build was refused, then Ben wrote in the same conversation.
+    const messages = [
+      user("m1", "Baue die App für Fristen."),
+      reply("run_1"),
+      user("m2", "Und dasselbe für die Kanzlei Süd.")
+    ];
+    const annasRefusal = run("user_anna", "m1", true);
+    // Anna's refused run is still shown as going: it answered her request, not Ben's message.
+    expect(
+      refusedRequest({
+        currentUserId: "user_anna",
+        messages,
+        activeRun: { runId: "run_1", ...annasRefusal },
+        completedRuns: {}
+      })
+    ).toBeUndefined();
+    // A run of Anna's that the snapshot ties to the last message, but whose input is another
+    // message, does not vouch for it: what Ben wrote stays his.
+    expect(
+      refusedRequest({
+        currentUserId: "user_anna",
+        messages: [...messages, reply("run_2")],
+        activeRun: undefined,
+        completedRuns: { run_1: annasRefusal, run_2: run("user_anna", "m1", true) }
+      })
+    ).toBeUndefined();
+    // Ben's own run on his message was refused: Ben is offered his words, Anna nothing.
+    const bensRefusal = { run_1: annasRefusal, run_2: run("user_ben", "m2", true) };
+    for (const [currentUserId, offered] of [
+      ["user_ben", "Und dasselbe für die Kanzlei Süd."],
+      ["user_anna", undefined]
+    ] as const) {
+      expect(
+        refusedRequest({
+          currentUserId,
+          messages: [...messages, reply("run_2")],
+          activeRun: undefined,
+          completedRuns: bensRefusal
+        })
+      ).toBe(offered);
+      expect(
+        refusedRequest({
+          currentUserId,
+          messages,
+          activeRun: { runId: "run_2", ...bensRefusal.run_2 },
+          completedRuns: { run_1: annasRefusal }
+        })
+      ).toBe(offered);
+    }
   });
 
   it("names the offer in each language", () => {

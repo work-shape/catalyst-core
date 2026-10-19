@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   NoopAuditRecorder,
   asToolCallId,
+  asAgentRunId,
   asClientInstanceId,
   createAssistantFinalMetadata,
   createPlatformId
@@ -16,7 +17,7 @@ import {
 
 import { toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
-import { eventually } from "./support/assertions";
+import { eventually, required } from "./support/assertions";
 import { createTestConfig, createTestUser } from "./support/fixtures";
 import { createHeldModel, HELD_MODEL_PROVIDER } from "./support/held-model";
 import {
@@ -55,9 +56,23 @@ describe("client instance app vertical slice", () => {
       "snapshot should show this run while active"
     );
     const runId = started.run.id;
+    const fullRun = required(
+      await app.stores.agentRuns.getAgentRun({
+        clientInstanceId: asClientInstanceId(config.clientInstance.id),
+        runId: asAgentRunId(runId)
+      })
+    );
 
-    // The run is queued until the worker takes it up: read the thread until it is running.
-    await eventually(async () => {
+    // Wait only for readiness; identity assertions fail immediately and always release the model.
+    try {
+      await eventually(async () => {
+        const response = await fetchTestOperation(baseUrl, "conversations.thread.get", {
+          params: { conversationId: conversation.id }
+        });
+        expect(await response.json()).toMatchObject({
+          activeRun: { run: { id: runId, status: "running" } }
+        });
+      });
       const snapshot = await fetchTestOperation(baseUrl, "conversations.thread.get", {
         params: { conversationId: conversation.id }
       });
@@ -75,17 +90,22 @@ describe("client instance app vertical slice", () => {
         activeRun: {
           run: {
             id: runId,
+            ownerUserId: fullRun.ownerUserId,
+            inputMessageId: fullRun.inputMessageId,
             status: "running"
           },
           projection: {
             runId,
+            ownerUserId: fullRun.ownerUserId,
+            inputMessageId: fullRun.inputMessageId,
             lastSequence: expect.any(Number),
             text: expect.any(String)
           }
         }
       });
-    });
-    model.release();
+    } finally {
+      model.release();
+    }
 
     await fetchRunEvents(baseUrl, conversation.id, runId);
 
@@ -107,6 +127,8 @@ describe("client instance app vertical slice", () => {
     expect(completedBody.activeRun).toBeUndefined();
     expect(completedBody.completedRunProjections?.[runId]).toMatchObject({
       runId,
+      ownerUserId: fullRun.ownerUserId,
+      inputMessageId: fullRun.inputMessageId,
       status: "completed",
       parts: expect.arrayContaining([
         expect.objectContaining({

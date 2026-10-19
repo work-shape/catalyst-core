@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import postgres from "postgres";
-import { asAgentRunId, createPlatformId, type AgentRun } from "@work-shape/catalyst-core";
+import {
+  asAgentRunId,
+  asConversationId,
+  createPlatformId,
+  type AgentRun
+} from "@work-shape/catalyst-core";
 import { clientInstanceId, useDataStoreInstance } from "./support/data-store-instance";
 import { injectStartConversationRun } from "./support/chat-server-run-harness";
 import { eventually, required } from "./support/assertions";
@@ -158,6 +163,36 @@ describe("row tools in the platform agent's real conversation path", () => {
       expect(currentUsage.json()).toMatchObject({
         conversationWriters: { agents: 1, conversations: 1, truncated: false }
       });
+      // Workflow agent calls have an agent origin too, but act as the Workflow's principal.
+      const listWriters = vi
+        .spyOn(world.stores.operationRuns, "list")
+        .mockImplementation(async ({ filters }) =>
+          filters?.operation === "data_store.findings.insert"
+            ? [
+                completed,
+                {
+                  ...completed,
+                  actor: { kind: "service_principal", id: "workflow-principal", label: "Workflow" },
+                  origin: {
+                    ...oldOrigin,
+                    agentName: "workflow-agent",
+                    conversationId: asConversationId("workflow-thread")
+                  }
+                }
+              ]
+            : []
+        );
+      try {
+        const withWorkflow = await world.api.call("data_stores.used_by", {
+          params: { store: "findings" }
+        });
+        expect(withWorkflow.statusCode, withWorkflow.body).toBe(200);
+        expect(withWorkflow.json()).toMatchObject({
+          conversationWriters: { agents: 1, conversations: 1, truncated: false }
+        });
+      } finally {
+        listWriters.mockRestore();
+      }
       const recent = Array.from({ length: 1_000 }, () => ({
         ...completed,
         origin: { kind: "user" as const }

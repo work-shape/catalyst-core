@@ -32,7 +32,7 @@ const reviewer: AuthenticatedUser = {
   permissions: ["agent_skills.approve"]
 };
 
-async function fixture() {
+async function fixture(approverNames?: () => Promise<string[]>) {
   const store = (await createTestInstance()).stores;
   const apply = vi.fn(
     async (_payload: JsonObject, actor: AuthenticatedUser): Promise<JsonObject> => ({
@@ -68,6 +68,7 @@ async function fixture() {
     store: store.approvals,
     handlers,
     onDecided,
+    ...(approverNames ? { approverNames } : {}),
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
   });
   const create = (kind = "fake") =>
@@ -80,6 +81,20 @@ async function fixture() {
 }
 
 describe("approval request workflow", () => {
+  it("retries a failed approver-name lookup and caches only the recovered result", async () => {
+    const names = vi
+      .fn<() => Promise<string[]>>()
+      .mockRejectedValueOnce(new Error("Temporary directory failure"))
+      .mockResolvedValue(["Reviewer"]);
+    const f = await fixture(names);
+    const request = await f.create();
+    const read = () => f.workflow.getRequest(requester, accessOf(requester), context, request.id);
+    await expect(read()).rejects.toThrow("Temporary directory failure");
+    expect((await read()).preview.approverNames).toEqual(["Reviewer"]);
+    expect((await read()).preview.approverNames).toEqual(["Reviewer"]);
+    expect(names).toHaveBeenCalledTimes(2);
+  });
+
   it("validates creation and stores empty checks without payload in the audit", async () => {
     const f = await fixture();
     await expect(

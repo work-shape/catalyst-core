@@ -409,6 +409,8 @@ function toActiveRunSummary(run: AgentRun): ActiveRunSummary {
     id: run.id,
     conversationId: run.conversationId,
     agentName: run.agentName,
+    ownerUserId: run.ownerUserId,
+    inputMessageId: run.inputMessageId,
     status: run.status,
     startedAt: run.startedAt,
     updatedAt: run.updatedAt,

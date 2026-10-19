@@ -63,6 +63,8 @@ export interface PlatformContextRead {
     name: string;
     kind: CollaborationWorkspaceKind;
     member: boolean;
+    /** This conversation's workspace; rights on another workspace do not apply here. */
+    current?: true;
     actions: string[];
   }[];
   /** The Namespaces the person holds a right in, with those rights. */
@@ -150,6 +152,7 @@ const contextOutputSchema = z.object({
       name: z.string(),
       kind: z.enum(COLLABORATION_WORKSPACE_KINDS),
       member: z.boolean(),
+      current: z.literal(true).optional(),
       actions: z.array(z.string())
     })
   ),
@@ -201,8 +204,8 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
       effect: context.effect,
       description: [
         "Read what this instance can do and what the user may do on it: the modules that are on, the kinds of asset that exist (agent, skill, workflow, app, data_store, knowledge_base, connection, as far as they are on), and the user's rights.",
-        "'actions' are rights on instance-owned assets of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'workspaces' names visible workspaces and the rights on their assets, including scoped writes such as 'skill.write'. A missing write in 'actions' does not mean the user cannot write in a workspace: check that workspace's actions. 'namespaces' are rights on the assets whose names start with a prefix.",
-        "Call it before you say whether something can be built here or whether the user may change it. availableHere lists the published agents and Apps offered in this conversation’s workspace. Use their titles, never internal names. An asset found through platform.assets.list may be editable but unavailable to use here; never offer it as an available agent or App.",
+        "'actions' are rights on instance-owned assets of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'workspaces' names visible workspaces and the rights on their assets; current: true marks this conversation's workspace. Before refusing a create or change, check the actions of the workspace that owns it. A workspace skill.write allows creating a skill there even when actions has no skill.write; rights on another workspace do not apply here. 'namespaces' are rights on the assets whose names start with a prefix.",
+        "Call it before you say whether something can be built here or whether the user may change it. availableHere lists the published agents and Apps offered in this conversation's workspace. Use their titles, never internal names. An asset found through platform.assets.list may be editable but unavailable to use here; never offer it as an available agent or App.",
         "For a new Workflow, choose runAs only from workflowPrincipals: these are Workflow accounts this user may publish, never integration or release accounts. If exactly one is offered, use it without asking. If empty, explain that a Workflow account without an API key is created under Settings > API access; never guess a principal name. Schedules use instance.timeZone; if timeZoneDefaulted, say that UTC is the instance default. Store the intended IANA timeZone on each schedule trigger; never shift the wall clock into UTC yourself. caller identifies the person you act for: use caller.id to notify 'me', without asking them for an id. Give person to resolve a recipient by name or email within this user's directory rights. An empty result means no known match; ask for a clearer name, never an internal id. If several match, ask which person by name/email."
       ].join(" "),
       inputSchema: z.object({

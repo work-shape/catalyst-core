@@ -26681,6 +26681,12 @@
           "conversationId": {
             "type": "string"
           },
+          "ownerUserId": {
+            "type": "string"
+          },
+          "inputMessageId": {
+            "type": "string"
+          },
           "agentName": {
             "type": "string"
           },
@@ -27186,6 +27192,12 @@
         "type": "object",
         "properties": {
           "runId": {
+            "type": "string"
+          },
+          "ownerUserId": {
+            "type": "string"
+          },
+          "inputMessageId": {
             "type": "string"
           },
           "lastSequence": {

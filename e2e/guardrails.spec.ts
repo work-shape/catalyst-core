@@ -200,9 +200,9 @@ test("Studio lists the Guardrails with when each runs, and a Guardrail's page sh
       ).toBeVisible();
       const hits = main.locator("[data-guardrail-hit]");
       await expect(hits).toHaveCount(3);
-      // Each hit is worded in the reader's language, never as its stored reason.
+      // The stored reason is kept, with the surrounding words in the reader's language.
       await expect(hits.first()).toContainText("Checked when an approval was requested.");
-      await expect(hits.first()).not.toContainText("The text names a customer and a file number.");
+      await expect(hits.first()).toContainText("The text names a customer and a file number.");
       await expect(hits.nth(2)).toContainText("The check could not be run.");
       // A hit says on what kind of request, not who asked.
       await expect(hits.first()).toContainText("Skill change");

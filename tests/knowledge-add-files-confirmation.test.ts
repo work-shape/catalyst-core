@@ -109,12 +109,24 @@ describe("a Knowledge Base file confirmation", () => {
     });
     const thread = await world.api.call("conversations.thread.get", { params: { conversationId } });
     expect(thread.body).toContain('"targetTitle":"Nordlicht policies"');
+    expect(
+      await world.stores.agentRuns.getAgentRun({
+        clientInstanceId,
+        runId: asAgentRunId(runId)
+      })
+    ).toMatchObject({ status: "waiting_for_decision" });
+    if (pending.type !== "tool_decision_requested") throw new Error("No pending KB decision");
+    expect(
+      await world.stores.operationRuns.get({
+        clientInstanceId,
+        id: pending.operationRunId
+      })
+    ).toMatchObject({ status: "pending_confirmation" });
     const documents = await world.api.call("knowledge_bases.list_documents", {
       params: { knowledgeBase }
     });
     expect(documents.statusCode, documents.body).toBe(200);
     expect(documents.json()).toMatchObject({ documents: [] });
-    if (pending.type !== "tool_decision_requested") throw new Error("No pending KB decision");
     expect(
       (
         await world.api.call("operations.decide", {
