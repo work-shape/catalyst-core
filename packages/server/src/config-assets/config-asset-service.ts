@@ -26,9 +26,17 @@ export class ConfigAssetWorkflow {
       this.options.configAssets.store.listActiveConfigAssets({
         clientInstanceId: this.options.clientInstanceId
       }),
-      this.options.configAssets.store.listAgentAvailability({
-        clientInstanceId: this.options.clientInstanceId
-      })
+      Promise.all(
+        this.kinds.kinds
+          .filter((kind) => kind.hasWorkspaceAvailability)
+          .map(async (kind) => ({
+            kind: kind.kind,
+            records: await this.options.configAssets.store.listAgentAvailability({
+              clientInstanceId: this.options.clientInstanceId,
+              kind: kind.kind
+            })
+          }))
+      )
     ]);
     return {
       version: state.version,
@@ -42,8 +50,13 @@ export class ConfigAssetWorkflow {
           name: asset.name,
           revision: asset.revision,
           updatedAt: asset.updatedAt,
-          ...(this.kind(asset.kind).hasWorkspaceAvailability && availability.has(asset.name)
-            ? { availability: availability.get(asset.name) }
+          ...(this.kind(asset.kind).hasWorkspaceAvailability &&
+          availability.find((entry) => entry.kind === asset.kind)?.records.has(asset.name)
+            ? {
+                availability: availability
+                  .find((entry) => entry.kind === asset.kind)
+                  ?.records.get(asset.name)
+              }
             : {})
         })),
       references: configAssetReferences(this.options)

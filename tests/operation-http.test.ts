@@ -216,6 +216,7 @@ describe("operation over HTTP: who checks the right", () => {
             asked.push(action);
             throw new AppError("FORBIDDEN", "Refused by the test", { action, reason: "denied" });
           },
+          authorizeTransfer: () => ({ allowed: false, reason: "no_grant" }),
           holdsGrantAt: () => false,
           denials: () => []
         })

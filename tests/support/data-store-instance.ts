@@ -86,6 +86,8 @@ export interface DataStoreInstance {
 type StoreFiles = readonly { path: string; text: string }[];
 
 interface KnowledgeOptions {
+  /** Also register the live Connection seam for cross-resource availability tests. */
+  connections?: true;
   defaultLocale?: "de" | "en";
   apiAccess?: true;
   knowledgeWorker?: "in_process" | "separate";
@@ -233,6 +235,9 @@ export function useDataStoreInstance(): {
         : {}),
       modules: {
         assetManagement: { enabled: true },
+        ...(typeof knowledge === "object" && knowledge.connections
+          ? { connections: { enabled: true } }
+          : {}),
         dataStores: { enabled: dataStores },
         ...(workflows ? { workflows: { enabled: true } } : {}),
         ...(options.apiAccess ? { personalApiKeys: { enabled: true } } : {}),

@@ -17,10 +17,15 @@ import {
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { useOptionalSettingsPage } from "../../shared/settings-page-context";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
+import {
+  AvailabilityFields,
+  useAvailabilityEdit,
+  type AvailabilityChoice
+} from "./asset-availability-fields";
 import { FieldRefusals } from "./asset-form-fields";
 import { countChangedFields } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
-import { refusalsOf } from "./build-refusals";
+import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
 import { DataFlowList, useWorkflowPage } from "./data-flows";
 import { hasDataFlows, type DataFlowRole } from "./data-flows-model";
 import { ReadState } from "./data-store-read-state";
@@ -60,15 +65,19 @@ const FLOW_SECTIONS = {
  * documents, the published Knowledge Base lists them with their state, takes more and has a
  * search to try; with tables, it names the Data Store with a sentence per table, and once
  * published whether it can read them and a query to try. The frame saves the form as a draft and publishes it.
+ * Where it is available applies at once, saved with the same save bar.
  */
 export function KnowledgeBaseEditor({
   frame,
   initialForm,
-  source
+  source,
+  availability
 }: {
   frame: BuildAssetEditorProps;
   initialForm: KnowledgeBaseForm;
   source: KnowledgeBaseSource;
+  /** Where agents can use it, for a reader who may change it. */
+  availability?: AvailabilityChoice;
 }) {
   const { locale, t } = useTranslation();
   const settings = useOptionalSettingsPage();
@@ -78,14 +87,26 @@ export function KnowledgeBaseEditor({
   const { canWrite, asset } = frame;
   const update = (patch: Partial<KnowledgeBaseForm>) =>
     setForm((value) => ({ ...value, ...patch }));
-  const submit = async () => {
+  const availabilityEdit = useAvailabilityEdit(availability);
+  const changedFields = countChangedFields(form, state.baseline);
+  // The definition first, then where it is available, each only when it changed.
+  const submit = async (): Promise<BuildWriteOutcome> => {
     setSaving(true);
-    const answer = await frame.save(knowledgeBaseFormToConfig(form));
-    setSaving(false);
-    state.setOutcome(answer);
-    if (answer.ok) {
+    const saved: BuildWriteOutcome =
+      asset === undefined || changedFields > 0
+        ? await frame.save(knowledgeBaseFormToConfig(form))
+        : { ok: true };
+    if (saved.ok) {
       state.markSaved();
     }
+    const refused =
+      saved.ok && availabilityEdit.changed ? await availabilityEdit.save() : undefined;
+    const answer: BuildWriteOutcome =
+      refused === undefined
+        ? saved
+        : { ok: false, conflict: false, refusals: [{ field: "availability", message: refused }] };
+    setSaving(false);
+    state.setOutcome(answer);
     return answer;
   };
   const published = asset?.publishedRevision;
@@ -291,7 +312,27 @@ export function KnowledgeBaseEditor({
                 <EmptyState layout="inline">{t("knowledge.notPublished")}</EmptyState>
               )
           }
-        ])
+        ]),
+    ...(availability
+      ? [
+          {
+            id: "availability",
+            label: t("configAvailability"),
+            description: t("configAvailabilityKnowledgeBaseDescription"),
+            refusalField: "availability" as const,
+            body: (
+              <AvailabilityFields
+                edit={availabilityEdit}
+                disabled={saving}
+                workspaces={availability.workspaces}
+                workspacesError={availability.workspacesError}
+                hiddenHint={t("configAvailabilityAssetHiddenHint")}
+                refusals={refusalsOf(outcome, "availability")}
+              />
+            )
+          }
+        ]
+      : [])
   ];
 
   return (
@@ -301,14 +342,18 @@ export function KnowledgeBaseEditor({
       description={form.description.trim()}
       sections={sections}
       control={{
-        changes: countChangedFields(form, state.baseline),
+        changes: changedFields + (availabilityEdit.changed ? 1 : 0),
         submit,
-        discard: state.discard
+        discard: () => {
+          state.discard();
+          availabilityEdit.discard();
+        }
       }}
       outcome={outcome}
       saving={saving}
       saveLabel={asset ? t("configSaveChanges") : t("knowledge.create")}
-      saveHint={t("build.savesDraft")}
+      // Where it is available applies at once; only its definition goes to the draft.
+      {...(asset === undefined || changedFields > 0 ? { saveHint: t("build.savesDraft") } : {})}
     />
   );
 }

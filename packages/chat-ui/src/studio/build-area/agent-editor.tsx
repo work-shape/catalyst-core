@@ -17,8 +17,6 @@ import { useTranslation } from "../../shared/i18n";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import { FieldRefusals, InitialPromptsEditor, LocalizedField } from "./asset-form-fields";
 import {
-  agentAvailabilityFormsEqual,
-  agentAvailabilityToForm,
   agentConfigToForm,
   agentMissingTranslations,
   countChangedFields,
@@ -35,7 +33,12 @@ import type { ConnectionToolChoice } from "./connection-tools";
 import { heldToolCount, toolPackages } from "./instance-tools";
 import { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 import { ToolPackagesSection } from "./tool-packages-section";
-import { AgentAvailabilityFields, type AgentAvailabilityChoice } from "./agent-availability-fields";
+import {
+  AvailabilityFields,
+  useAvailabilityEdit,
+  type AvailabilityChoice
+} from "./asset-availability-fields";
+import { MissingDependencies } from "./dependency-availability";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
 import { AgentModels, modelBindingLabel } from "./agent-models";
 import { AgentSkills, type SkillChoice } from "./agent-skills";
@@ -88,7 +91,7 @@ export function AgentEditor({
   /** Makes the agent the instance's default. Answers with what went wrong, if anything did. */
   onMakeDefault?: () => Promise<string | undefined>;
   /** Where the agent can be chosen, for a reader who may change it. */
-  availability?: AgentAvailabilityChoice;
+  availability?: AvailabilityChoice;
   /**
    * The agent's one draft, for a reader who may change the agent: the form starts from the
    * draft the source read, and saves write it. Absent for a new agent and for a reader.
@@ -106,13 +109,14 @@ export function AgentEditor({
   // The draft the form was started from or last saved as. The page writes against it, and a
   // newer one somebody else wrote is taken over only where nothing is typed.
   const [held, setHeld] = useState<AgentDraft | null>(draft?.latest ?? null);
-  const savedAvailability = useMemo(
-    () => agentAvailabilityToForm(availability?.saved),
-    [availability?.saved]
-  );
-  const [availabilityForm, setAvailabilityForm] = useState(savedAvailability);
-  const availabilityChanged =
-    availability !== undefined && !agentAvailabilityFormsEqual(availabilityForm, savedAvailability);
+  const availabilityEdit = useAvailabilityEdit(availability);
+  const availabilityChanged = availabilityEdit.changed;
+  // Publish also makes what the draft uses available where the agent is, where the reader
+  // chose so in the dialog. The choice starts unticked each time the dialog opens, and the
+  // dialog reads the draft again first: only the instance tells what the draft uses that is
+  // missing where the agent is.
+  const [publishDependencies, setPublishDependencies] = useState(false);
+  const [preflight, setPreflight] = useState(false);
   const canEdit = (field: string) => canWrite && editableAgentFields.includes(field);
   const canEditModel = canWrite && canManageAgentModels;
   const canEditMaxSteps = canEdit("maxSteps");
@@ -231,10 +235,7 @@ export function AgentEditor({
       // The page reads the draft again and says who wrote it.
       await draft?.reread().catch(() => undefined);
     }
-    const refused =
-      saved.ok && availability !== undefined && availabilityChanged
-        ? await availability.save(availabilityForm)
-        : undefined;
+    const refused = saved.ok && availabilityChanged ? await availabilityEdit.save() : undefined;
     const answer: BuildWriteOutcome =
       refused === undefined
         ? saved
@@ -498,14 +499,15 @@ export function AgentEditor({
             description: t("configAvailabilityDescription"),
             refusalField: "availability" as const,
             body: (
-              <AgentAvailabilityFields
-                form={availabilityForm}
-                locked={isDefault && savedAvailability.mode === "all"}
+              <AvailabilityFields
+                edit={availabilityEdit}
+                locked={isDefault && availability.saved?.mode === "all"}
                 disabled={saving}
                 workspaces={availability.workspaces}
                 workspacesError={availability.workspacesError}
+                hiddenHint={t("configAvailabilityHiddenHint")}
+                dependencies={availability.dependencies}
                 refusals={refusalsOf(outcome, "availability")}
-                onChange={setAvailabilityForm}
               />
             )
           }
@@ -549,7 +551,15 @@ export function AgentEditor({
                   : undefined
                 : t("agentDraft.publishNeedsRight", { right: actionLabel("agent.publish", t) })
             }
-            onClick={() => setDeciding("publish")}
+            onClick={() => {
+              setPublishDependencies(false);
+              setPreflight(true);
+              setDeciding("publish");
+              draft
+                .reread()
+                .catch(() => undefined)
+                .finally(() => setPreflight(false));
+            }}
           >
             <Send aria-hidden="true" />
             {t("build.publish")}
@@ -615,7 +625,7 @@ export function AgentEditor({
         submit,
         discard: () => {
           state.discard();
-          setAvailabilityForm(savedAvailability);
+          availabilityEdit.discard();
         }
       }}
       outcome={outcome}
@@ -633,6 +643,11 @@ export function AgentEditor({
         : {})}
     />
   );
+  // What the dialog lists, as the publish preflight read it for the draft it publishes.
+  const reviewed =
+    held === null
+      ? undefined
+      : (latest?.revision === held.revision ? latest : held).dependencyAvailability;
   const decision =
     held === null ? null : (
       <>
@@ -642,15 +657,30 @@ export function AgentEditor({
           title={t("build.publishTitle", { name: liveTitle })}
           confirmLabel={t("build.publish")}
           loading={busy === "publish"}
+          confirmDisabled={preflight}
           onConfirm={() => {
             draft
-              ?.decide("publish", held.revision)
+              ?.decide("publish", held.revision, {
+                makeDependenciesAvailable: publishDependencies,
+                // The workspaces the list in this dialog was read for.
+                expectedAvailability: reviewed?.availability ?? null
+              })
               .finally(() => setDeciding(undefined))
               .catch(() => undefined);
           }}
           onClose={() => setDeciding(undefined)}
         >
-          {t("agentDraft.publishDescription", { revision: held.revision, name: liveTitle })}
+          <div className="grid gap-3">
+            <p>
+              {t("agentDraft.publishDescription", { revision: held.revision, name: liveTitle })}
+            </p>
+            <MissingDependencies
+              dependencies={preflight ? undefined : reviewed}
+              makeAvailable={publishDependencies}
+              disabled={busy === "publish"}
+              onMakeAvailableChange={setPublishDependencies}
+            />
+          </div>
         </ConfirmDialog>
         <ConfirmDialog
           open={deciding === "discard"}

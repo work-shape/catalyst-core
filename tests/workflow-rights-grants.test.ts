@@ -8,11 +8,19 @@ import {
 import {
   GRANTABLE_ACTION_SCOPES,
   GRANTABLE_ACTIONS,
+  asConversationId,
+  createPlatformId,
+  authenticatedUserFromRecord,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND
 } from "@work-shape/catalyst-core";
 import { SCOPES_HEADER, clientInstanceId, grantSchema } from "./support/access-instance";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
+import {
+  createAppPublishTool,
+  createToolOperationRunner,
+  ToolRegistry
+} from "@work-shape/catalyst-tool-execution";
 import { NOTE, notifyClients, readyWorkflows } from "./support/workflow-runs";
 
 // The rights on a Workflow as an administrator gives them, through `permissions.grant` and
@@ -40,7 +48,7 @@ describe("a right on a Workflow given through grant administration", () => {
       (fixture) => {
         open = fixture;
       },
-      { definitions: "assets" }
+      { definitions: "assets", publishTool: true }
     );
     for (const [id, name] of [
       [NOTIFY, "Notify clients"],
@@ -340,6 +348,116 @@ describe("a right on a Workflow given through grant administration", () => {
       t.forbidden("workflow.write", "no_grant")
     );
   });
+
+  it.each(["runOperation", "agent tool"])(
+    "does not lend workspace availability through %s (AVAIL-1b)",
+    async (path) => {
+      const t = await ready();
+      const address = { kind: WORKFLOW_ASSET_KIND, name: NOTIFY };
+      const workflowId = await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY);
+      const connectionId = await t.assetId("connection", "crm");
+      // Replace the fixture's broad right with exactly the right availability could mask.
+      for (const grant of await t.stores.access.listGrants({
+        clientInstanceId,
+        holderId: t.principal.id
+      }))
+        await t.stores.access.deleteGrant({ clientInstanceId, grantId: grant.id });
+      await t.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "service_principal",
+        holderId: t.principal.id,
+        action: "connection.use",
+        effect: "allow",
+        scopeKind: "asset",
+        scopeId: connectionId,
+        grantedBy: t.root.id
+      });
+      const workspaceId = await t.sharedWorkspace("Nordlicht");
+      await t.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: workspaceId,
+        userId: t.kai.id,
+        role: "member"
+      });
+      await t.expectOk(t.admin.id, "assets.set_availability", {
+        params: { kind: "connection", name: "crm" },
+        payload: { mode: "selected", collaborationWorkspaceIds: [workspaceId] }
+      });
+      for (const action of [WORKFLOW_ACTIONS.write, WORKFLOW_ACTIONS.publish])
+        await t.grant(t.kai.id, action, { assetId: workflowId });
+      const revision = await put(t, t.kai.id, NOTIFY, { ...notifyClients(), name: "Revised" }, 1);
+      await t.expectRefused(
+        t.kai.id,
+        "assets.publish",
+        { params: address, payload: { revision } },
+        t.forbidden("connection.use", "no_grant")
+      );
+      if (path === "runOperation") {
+        const direct = await t.invoke(
+          t.kai,
+          "assets.publish",
+          { ...address, revision },
+          { effect: "changing", workspaceId }
+        );
+        expect(direct.result, JSON.stringify(direct.result)).toMatchObject({
+          status: "failed",
+          error: { code: "FORBIDDEN", details: { action: "connection.use", reason: "no_grant" } }
+        });
+        return;
+      }
+      const created = await t.expectOk(t.kai.id, "conversations.create", {
+        payload: {
+          title: "Publish",
+          collaborationWorkspaceId: workspaceId,
+          visibility: "private",
+          subject: address
+        }
+      });
+      const conversationId = asConversationId(
+        z.object({ id: z.string() }).parse(created.json()).id
+      );
+      t.state.agentTools.set("assistant", ["assets.publish"]);
+      const runner = createToolOperationRunner(
+        t.operationCalls.deps,
+        new ToolRegistry({ tools: [createAppPublishTool()] })
+      );
+      const ask = () =>
+        runner(
+          {
+            toolName: "assets.publish",
+            agentName: "assistant",
+            conversationId,
+            agentRunId: createPlatformId("agr"),
+            toolCallId: createPlatformId("tc"),
+            input: { ...address, revision }
+          },
+          {
+            clientInstanceId,
+            user: authenticatedUserFromRecord({
+              user: t.kai,
+              identity: { authSource: "test", externalUserId: t.kai.id }
+            }),
+            correlationId: "avail-1b"
+          }
+        );
+      expect(await ask()).toMatchObject({
+        status: "failed",
+        error: { code: "handler_failed", message: expect.stringContaining("connection.use") }
+      });
+      expect(
+        await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address })
+      ).toMatchObject({ publishedRevision: 1 });
+      // An explicit grant is lendable even when the membership allow is encountered first.
+      await t.grant(t.kai.id, "connection.use", { assetId: connectionId });
+      const allowed = await t.invoke(
+        t.kai,
+        "assets.publish",
+        { ...address, revision },
+        { effect: "changing", workspaceId }
+      );
+      expect(allowed.result, JSON.stringify(allowed.result)).toMatchObject({ status: "done" });
+    }
+  );
 
   it("lists an unpublished Workflow for its asset-only writer with the record's allowed rights", async () => {
     const t = await ready();

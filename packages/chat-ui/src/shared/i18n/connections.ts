@@ -106,11 +106,11 @@ export const connections = defineTranslations({
     "connections.healthUnavailableNext":
       "Check the address under Settings. The operator of this instance can change it.",
     "connections.statusDescription": "Whether the instance reaches the outside system.",
-    "connections.accessTitle": "Who may use it",
+    "connections.accessTitle": "Additional use rights",
     "connections.accessDescription":
-      "People and service principals with a right on this Connection itself. Rights on a whole workspace or Namespace are on the Access page.",
-    "connections.accessEmpty": "Nobody was given this Connection by itself.",
-    "connections.accessFailed": "Who may use this Connection could not be loaded.",
+      "People and service principals given a right on this Connection itself. Workspace members use it through Available in and are not listed here.",
+    "connections.accessEmpty": "Nobody has an additional right on this Connection.",
+    "connections.accessFailed": "The additional use rights could not be loaded.",
     "connections.accessServicePrincipal": "Service principal",
     "connections.accessPrincipalDisabled": "Disabled",
     "connections.accessUnknownPerson": "A person you cannot see",
@@ -368,11 +368,11 @@ export const connections = defineTranslations({
     "connections.healthUnavailableNext":
       "Prüfe die Adresse unter Einstellungen. Ändern kann sie der Betreiber dieser Instanz.",
     "connections.statusDescription": "Ob die Instanz das externe System erreicht.",
-    "connections.accessTitle": "Wer sie verwenden darf",
+    "connections.accessTitle": "Zusätzliche Nutzungsrechte",
     "connections.accessDescription":
-      "Personen und Technische Konten mit einem Recht auf dieser Verbindung selbst. Rechte auf einem ganzen Arbeitsbereich oder Namespace stehen auf der Seite Zugriff.",
-    "connections.accessEmpty": "Niemand hat diese Verbindung einzeln erhalten.",
-    "connections.accessFailed": "Wer diese Verbindung verwenden darf, konnte nicht geladen werden.",
+      "Personen und Technische Konten mit einem Recht auf dieser Verbindung selbst. Mitglieder eines Arbeitsbereichs verwenden sie über „Verfügbar in“ und stehen nicht hier.",
+    "connections.accessEmpty": "Niemand hat ein zusätzliches Recht auf dieser Verbindung.",
+    "connections.accessFailed": "Die zusätzlichen Nutzungsrechte konnten nicht geladen werden.",
     "connections.accessServicePrincipal": "Technisches Konto",
     "connections.accessPrincipalDisabled": "Deaktiviert",
     "connections.accessUnknownPerson": "Eine Person, die du nicht sehen kannst",

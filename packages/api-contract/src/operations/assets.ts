@@ -178,7 +178,7 @@ export const assetOperations = {
     effect: "changing",
     body: publishAssetRequestSchema,
     response: json(assetPointersResponseSchema),
-    errors: ["NOT_FOUND", "VALIDATION_FAILED"],
+    errors: ["NOT_FOUND", "VALIDATION_FAILED", "CONFLICT", "PRECONDITION_REQUIRED"],
     rateClass: "write"
   }),
   "assets.discard_draft": defineRegisteredOperation({
@@ -259,7 +259,7 @@ export const assetOperations = {
     effect: "changing",
     body: setAssetAvailabilityRequestSchema,
     response: json(agentAvailabilitySchema),
-    errors: ["NOT_FOUND", "CONFLICT"],
+    errors: ["NOT_FOUND", "CONFLICT", "PRECONDITION_REQUIRED"],
     rateClass: "write"
   }),
   "assets.revisions.list": defineRegisteredOperation({

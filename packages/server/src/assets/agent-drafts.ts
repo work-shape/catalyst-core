@@ -2,13 +2,19 @@ import {
   AppError,
   moduleOffError,
   asUserId,
+  asCollaborationWorkspaceId,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   type AgentDraftAuthor,
+  type AgentAvailability,
   type AgentProposal,
   type OperationAuthorization
 } from "@work-shape/catalyst-core";
 import type { AssetWorkflowOptions } from "../types";
+import {
+  agentDependencyAvailability,
+  authorizeAgentDependencies
+} from "./agent-dependency-availability";
 import { decide, type AssetCall } from "./asset-access";
 import { requireActive, type AssetAddress, type AssetTarget } from "./asset-target";
 
@@ -28,7 +34,9 @@ interface DraftHost {
   publish(
     call: AssetCall,
     target: AssetTarget,
-    draft: AgentProposal
+    draft: AgentProposal,
+    makeDependenciesAvailable?: boolean,
+    expectedAvailability?: AgentAvailability | null
   ): Promise<{ revision: number }>;
 }
 
@@ -63,6 +71,17 @@ export class AgentDraftWorkflow {
           liveRevision: live.revision,
           stale: draft.baseRevision !== live.revision,
           config: draft.config,
+          dependencyAvailability: await agentDependencyAvailability(
+            this.options,
+            call,
+            draft.config,
+            (
+              await this.options.configAssets.store.listAgentAvailability({
+                clientInstanceId: this.options.clientInstanceId,
+                agentName: live.name
+              })
+            ).get(live.name)
+          ),
           author: await this.namedAuthor(draft.author),
           updatedAt: draft.updatedAt
         }
@@ -84,7 +103,10 @@ export class AgentDraftWorkflow {
     return user ? { ...author, name: user.displayLabel } : author;
   }
 
-  async authorizePublish(call: AssetCall, input: AssetAddress): Promise<OperationAuthorization> {
+  async authorizePublish(
+    call: AssetCall,
+    input: AssetAddress & { makeDependenciesAvailable?: boolean }
+  ): Promise<OperationAuthorization> {
     const target = await this.host.target(input);
     if (isAuthenticatedServicePrincipal(call.actor))
       return { allowed: false, action: "agent.publish", reason: "user_only" };
@@ -94,10 +116,33 @@ export class AgentDraftWorkflow {
     const draft = target.asset ? await this.pending(target.asset.id) : undefined;
     if (!this.options.modules.isEnabled("assetManagement") && !draft?.author.release)
       throw moduleOffError("assetManagement");
+    if (input.makeDependenciesAvailable && draft) {
+      const availability = await this.options.configAssets.store.listAgentAvailability({
+        clientInstanceId: this.options.clientInstanceId,
+        agentName: input.name
+      });
+      return authorizeAgentDependencies(
+        this.options,
+        call.access,
+        draft.config,
+        availability.get(input.name)
+      );
+    }
     return decision;
   }
 
-  async publish(call: AssetCall, input: AssetAddress & { revision: number }) {
+  async publish(
+    call: AssetCall,
+    input: AssetAddress & {
+      revision: number;
+      makeDependenciesAvailable?: boolean;
+      expectedAvailability?: {
+        mode: AgentAvailability["mode"];
+        personalWorkspaces: boolean;
+        collaborationWorkspaceIds: string[];
+      } | null;
+    }
+  ) {
     const target = await this.host.target(input);
     if (isAuthenticatedServicePrincipal(call.actor))
       throw new AppError("FORBIDDEN", "A service principal cannot publish an agent");
@@ -114,7 +159,20 @@ export class AgentDraftWorkflow {
       throw new AppError("CONFLICT", "The live agent changed since the draft was written", {
         reason: "stale_base"
       });
-    const written = await this.host.publish(call, target, draft);
+    const written = await this.host.publish(
+      call,
+      target,
+      draft,
+      input.makeDependenciesAvailable,
+      input.expectedAvailability == null
+        ? input.expectedAvailability
+        : {
+            ...input.expectedAvailability,
+            collaborationWorkspaceIds: input.expectedAvailability.collaborationWorkspaceIds.map(
+              asCollaborationWorkspaceId
+            )
+          }
+    );
     return {
       draftRevision: draft.revision,
       publishedRevision: written.revision,

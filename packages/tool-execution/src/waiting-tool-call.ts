@@ -72,6 +72,15 @@ export function createDecidedToolCallRunner(callDeps: RunOperationDeps): ToolDec
             }
           });
     if (!end) return failed("handler_failed", "The approved call is not available. Nothing ran.");
+    const denial =
+      end.outcome?.result.status === "denied" ? end.outcome.result.reason : end.run?.denial;
+    if (
+      denial?.kind === "forbidden" &&
+      (denial.action === "connection.use" || denial.action === "knowledge_base.use")
+    ) {
+      const message = await callDeps.useRightRefusal?.(denial.action, context.locale);
+      if (message) return failed("permission_missing", message);
+    }
     return decidedToolResult(end, {
       toolName: request.toolName,
       agentName: request.agentName,

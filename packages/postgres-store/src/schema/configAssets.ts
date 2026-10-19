@@ -119,7 +119,7 @@ export const configAssetRevisions = pgTable(
   ]
 );
 
-/** Availability of agents and Apps. A selected App chooses its owner workspace or one personal workspace; a missing agent row hides it. */
+/** Availability of agents, Apps, Knowledge Bases and Connections. No row grants no workspace availability. */
 export const configAssetAvailability = pgTable(
   "config_asset_availability",
   {

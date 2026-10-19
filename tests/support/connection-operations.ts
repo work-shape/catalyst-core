@@ -172,6 +172,7 @@ interface ExecutedCall {
 
 interface InvokeOptions {
   origin?: OperationOrigin;
+  workspaceId?: import("@work-shape/catalyst-core").CollaborationWorkspaceId;
   effect?: OperationEffect;
   idempotencyKey?: string;
 }
@@ -336,8 +337,8 @@ export async function fixtureOn<Instance extends AccessInstance>(
       };
       const evaluator = createAuthorizer(stores.access);
       const authorizer: Authorizer = {
-        async forActor(actor) {
-          const access = await evaluator.forActor(actor);
+        async forActor(actor, scope) {
+          const access = await evaluator.forActor(actor, scope);
           return {
             ...access,
             authorize(action, resource) {
@@ -464,6 +465,7 @@ export async function fixtureOn<Instance extends AccessInstance>(
         actor: identityOf(user),
         // A direct call needs an origin some exposure admits: a person's key over the CLI.
         origin: further.origin ?? { kind: "cli" },
+        workspaceId: further.workspaceId,
         correlationId: "corr_test",
         ...(further.idempotencyKey ? { idempotencyKey: further.idempotencyKey } : {})
       },

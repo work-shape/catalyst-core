@@ -13,8 +13,9 @@ import {
   type JsonObject,
   type OperationAuthorization
 } from "@work-shape/catalyst-core";
+import { makeAgentDependenciesAvailable } from "./agent-dependency-availability";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
-import { accessResource, decide, type AssetCall } from "./asset-access";
+import { accessResource, decide, transactionalAssetCall, type AssetCall } from "./asset-access";
 import { validateAssetSet, withDefaultAgentName } from "./asset-set";
 import {
   authorizeInteractiveWrite,
@@ -40,6 +41,8 @@ interface SetAssetDefaultInput {
 }
 
 interface SetAssetAvailabilityInput {
+  expectedRevision?: number;
+  makeDependenciesAvailable?: boolean;
   kind: string;
   name: string;
   mode: AgentAvailability["mode"];
@@ -121,6 +124,39 @@ export async function setAssetAvailability(
     );
   }
   await authorizeInteractiveWrite(options, call.actor, call, call.audit);
+  if (input.kind === "agent" && input.makeDependenciesAvailable) {
+    if (input.expectedRevision === undefined)
+      throw new AppError(
+        "PRECONDITION_REQUIRED",
+        "Read the agent again before changing its dependencies' availability"
+      );
+    return options.stores.transaction(async (stores) => {
+      const within = {
+        ...options,
+        stores,
+        configAssets: { ...options.configAssets, store: stores.configAssets }
+      };
+      const asset = await stores.configAssets.getConfigAsset({
+        clientInstanceId: options.clientInstanceId,
+        kind: "agent",
+        name: input.name
+      });
+      const wanted: AgentAvailability = {
+        mode: input.mode,
+        personalWorkspaces: input.mode === "selected" && input.personalWorkspaces === true,
+        collaborationWorkspaceIds:
+          input.mode === "selected"
+            ? (input.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
+            : []
+      };
+      await makeAgentDependenciesAvailable(within, call, asset?.config, wanted);
+      return setAssetAvailability(
+        within,
+        transactionalAssetCall(call, options.clientInstanceId, stores.audit),
+        { ...input, makeDependenciesAvailable: false }
+      );
+    });
+  }
   const selected = input.mode === "selected";
   const collaborationWorkspaceIds = selected
     ? (input.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
@@ -140,6 +176,8 @@ export async function setAssetAvailability(
   const availability = await options.configAssets.store.setAgentAvailability({
     clientInstanceId: options.clientInstanceId,
     agentName: input.name,
+    kind: input.kind,
+    ...(input.expectedRevision === undefined ? {} : { expectedRevision: input.expectedRevision }),
     availability: {
       mode: input.mode,
       personalWorkspaces: selected && input.personalWorkspaces === true,
@@ -206,6 +244,16 @@ export async function initialAgentPlacement(
     madeIn?: string;
   }
 ): Promise<{ initialAgentAvailability?: InitialAgentAvailability; warnings: AssetWarning[] }> {
+  // Knowledge Bases and Connections start with no availability. Their use is widened only
+  // by an explicit availability save, never by an ordinary content write or release.
+  if (kind.kind !== "agent") {
+    if (input.availableIn !== undefined && input.availableIn !== "nowhere")
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Set this asset's availability with assets.set_availability"
+      );
+    return { warnings: [] };
+  }
   if (!kind.hasWorkspaceAvailability || !input.creates) {
     if (input.availableIn !== undefined) {
       throw new AppError(

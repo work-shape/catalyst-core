@@ -107,6 +107,8 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   readonly holdsInstanceDefault: boolean;
   /** An asset of this kind is usable only in the workspaces its availability names. */
   readonly hasWorkspaceAvailability: boolean;
+  /** Resource use can operate on data without opening its published settings. */
+  readonly useOpensPublishedRevision?: false;
   /** The active account's label for this revision. No account ids or internal names. */
   readRunsAs?(config: JsonObject): Promise<string | undefined>;
   /**

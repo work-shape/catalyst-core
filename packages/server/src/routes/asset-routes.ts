@@ -242,7 +242,15 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     overview.getOverview(identity, context)
   );
 
-  route(apiOperations["instance.workspaces.list"], () => overview.listAdministeredWorkspaces());
+  route(apiOperations["instance.workspaces.list"], ({ access }) => {
+    if (
+      !["agent.write", "knowledge_base.write", "connection.write"].some(
+        (action) => access.authorize(action).allowed
+      )
+    )
+      access.require("agent.write");
+    return overview.listAdministeredWorkspaces();
+  });
 }
 
 /** What the call touches, as its run and its events name it. */

@@ -3,6 +3,7 @@ import {
   authorizeHeldRights,
   explainAccessEntries,
   isGrantableAt,
+  transferableAccessEntries,
   type AccessResource,
   type DeniedAssets
 } from "@work-shape/catalyst-core";
@@ -40,9 +41,12 @@ export function grantOptions(
   workspaces: GrantChoices | undefined
 ) {
   const entries = giver?.holderActive ? giver.items : [];
+  const transferable = transferableAccessEntries(entries);
   const access = {
     authorize: (action: string, resource?: AccessResource) =>
       explainAccessEntries(entries, action, resource).decision,
+    authorizeTransfer: (action: string, resource?: AccessResource) =>
+      explainAccessEntries(transferable, action, resource).decision,
     denials: (action: string) =>
       entries.filter((entry) => entry.action === action && entry.effect === "deny")
   };

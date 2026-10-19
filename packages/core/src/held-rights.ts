@@ -9,7 +9,7 @@ import {
 } from "./permissions";
 
 /** The resolver answers the lending rule reads. */
-type HeldRightsAccess = Pick<ActorAccess, "authorize" | "denials">;
+type HeldRightsAccess = Pick<ActorAccess, "authorize" | "authorizeTransfer" | "denials">;
 
 /**
  * One right as a holder holds it: an action on one resource, or without a resource on the whole
@@ -45,8 +45,8 @@ export type RightsTransfer =
 
 /**
  * The rule of no escalation: a person may give or lend a right only where the call they make
- * holds it. "Holds" is the call's own `authorize`, so roles, rows, denies, memberships and the
- * scopes of a personal key all count, and a call with a narrow key lends only what the key
+ * holds it. "Holds" is the call's `authorizeTransfer`: roles, rows, denies and the
+ * scopes of a personal key count; membership and availability never do. A narrow key lends only what it
  * covers. Asked by every act that gives or lends: making a Workflow revision live that runs as
  * a service principal; giving, enabling or issuing a key to one; giving a person a row, a role
  * or a legacy key; and changing a person's account, which asks every right the person holds.
@@ -93,7 +93,7 @@ function firstUnheldRight(
   deniedAssets: DeniedAssets
 ): Refusal | undefined {
   for (const right of rights) {
-    const decision = access.authorize(right.action, right.resource);
+    const decision = access.authorizeTransfer(right.action, right.resource);
     const on = resourcePhrase(access, right.resource);
     if (decision.allowed) {
       const deny = denyInside(access, right, deniedAssets);

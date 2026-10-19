@@ -7,6 +7,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { Chip, Spinner } from "@work-shape/catalyst-ui";
 import { useOptionalWorkspaceApiClient } from "../../shared/api/workspace-api-client";
+import { useAttachmentContentContext } from "../files/attachment-content";
 import { useTranslation } from "../../shared/i18n";
 import { apiErrorCode, apiErrorStatus } from "../../shared/workspace-utils";
 import { saveBlobAsFile } from "../files/conversation-file-content";
@@ -80,6 +81,9 @@ const OPENED_SOURCE_URL_MS = 60_000;
 function KnowledgeSourceChips({ source }: { source: KnowledgeCitationSource }) {
   const { t } = useTranslation();
   const api = useOptionalWorkspaceApiClient();
+  // The conversation the citation stands in: its workspace is where the reader may use the
+  // Knowledge Base through availability.
+  const conversationId = useAttachmentContentContext()?.selectedConversationId;
   const [state, setState] = useState<"idle" | "opening" | "removed" | "failed">("idle");
   const label =
     source.page === undefined
@@ -90,7 +94,8 @@ function KnowledgeSourceChips({ source }: { source: KnowledgeCitationSource }) {
     setState("opening");
     try {
       const blob = await api.client.knowledge_bases.open_document({
-        params: { knowledgeBase: source.knowledgeBase, documentId: source.documentId }
+        params: { knowledgeBase: source.knowledgeBase, documentId: source.documentId },
+        ...(conversationId ? { query: { conversationId } } : {})
       });
       const url = URL.createObjectURL(blob);
       const tab = window.open(

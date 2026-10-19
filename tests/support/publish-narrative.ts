@@ -72,13 +72,15 @@ const PEOPLE: Record<string, string> = { usr_anna: "Anna Berg", usr_ben: "Ben Ku
 const allowed: AccessDecision = { allowed: true, source: "grant" };
 export const everything: ActorAccess = {
   authorize: () => allowed,
+  authorizeTransfer: () => allowed,
   require: () => undefined,
   holdsGrantAt: () => true,
   denials: () => []
 };
 export const nothing: ActorAccess = {
   ...everything,
-  authorize: () => ({ allowed: false, reason: "no_grant" })
+  authorize: () => ({ allowed: false, reason: "no_grant" }),
+  authorizeTransfer: () => ({ allowed: false, reason: "no_grant" })
 };
 
 const EFFECTS: Record<string, OperationEffect> = {

@@ -13,6 +13,8 @@ const KNOWLEDGE_BASES_BUILD_PATH = "knowledge-bases";
 export function knowledgeBaseKindOn(useSource: () => KnowledgeBaseSource): BuildAssetKind {
   function KnowledgeBaseAssetEditor(frame: BuildAssetEditorProps) {
     const { asset, start } = frame;
+    const source = useSource();
+    const availability = source.useAvailability?.(frame);
     return (
       <KnowledgeBaseEditor
         frame={frame}
@@ -21,7 +23,8 @@ export function knowledgeBaseKindOn(useSource: () => KnowledgeBaseSource): Build
             ? knowledgeBaseConfigToForm(asset.config)
             : startedKnowledgeBaseForm(start ?? { name: "", title: "" })
         }
-        source={useSource()}
+        source={source}
+        {...(availability === undefined ? {} : { availability })}
       />
     );
   }

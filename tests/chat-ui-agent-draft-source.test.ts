@@ -147,13 +147,13 @@ async function mountDraft(input: { reload?: () => Promise<unknown> } = {}) {
       });
       await shows(revision);
     },
-    /** Publish of the draft revision on screen. */
-    publish() {
+    /** Publish of the draft revision on screen, with what the reader chose in the dialog. */
+    publish(options?: Parameters<AgentDraftSource["decide"]>[2]) {
       let published: Promise<void> = Promise.resolve();
       const state = required(seen.state);
       const revision = required(state.latest).revision;
       act(() => {
-        published = state.decide("publish", revision);
+        published = state.decide("publish", revision, options);
       });
       return published;
     },
@@ -198,6 +198,51 @@ describe("the answer to Publish", () => {
       const published = page.publish();
       await page.answer(refusal(409, "CONFLICT", "stale_base"), published);
       expect(page.seen.state?.answerFor(1)).toEqual({ kind: "stale" });
+      expect(page.sent).toEqual([{ decision: "publish", body: { revision: 1 } }]);
+    } finally {
+      await page.unmount();
+    }
+  });
+
+  // The instance makes what the agent uses available only where the agent was when the dialog
+  // read what is missing; it refuses a choice that does not say where that was.
+  it.each([
+    {
+      mode: "selected" as const,
+      personalWorkspaces: true,
+      collaborationWorkspaceIds: ["ws_sales"]
+    },
+    null
+  ])(
+    "sends where the agent was when the reader chose to make it available (%o)",
+    async (expected) => {
+      const page = await mountDraft();
+      try {
+        const published = page.publish({
+          makeDependenciesAvailable: true,
+          expectedAvailability: expected
+        });
+        await page.answer(refusal(409, "CONFLICT", "stale_base"), published);
+        expect(page.sent).toEqual([
+          {
+            decision: "publish",
+            body: { revision: 1, makeDependenciesAvailable: true, expectedAvailability: expected }
+          }
+        ]);
+      } finally {
+        await page.unmount();
+      }
+    }
+  );
+
+  it("sends neither when the reader did not choose it", async () => {
+    const page = await mountDraft();
+    try {
+      const published = page.publish({
+        makeDependenciesAvailable: false,
+        expectedAvailability: null
+      });
+      await page.answer(refusal(409, "CONFLICT", "stale_base"), published);
       expect(page.sent).toEqual([{ decision: "publish", body: { revision: 1 } }]);
     } finally {
       await page.unmount();

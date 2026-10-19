@@ -6,9 +6,9 @@ import type {
 } from "@work-shape/catalyst-core";
 
 /**
- * A declared right must see the stored asset's id and owner, including after deletion.
- * Resolve incomplete resources here for initial calls, paged reads and calls resumed after
- * approval. Complete resources and resources of other kinds need no store read.
+ * Named rights and self-checked reads use the stored asset's id and owner, including after
+ * deletion. Complete resources and resources of other kinds need no store read. A write that
+ * checks its own rights keeps its declared resource, including the scope of an asset it creates.
  */
 export async function resolveOperationResource(
   options: {

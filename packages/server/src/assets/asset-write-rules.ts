@@ -179,6 +179,10 @@ export function accessOfSyncCredential(
       : access.authorize(action, resource);
   return {
     authorize,
+    authorizeTransfer: (action, resource) =>
+      action === RELEASE_ACTION
+        ? { allowed: false, reason: "no_grant" }
+        : access.authorizeTransfer(action, resource),
     require(action, resource) {
       if (action === RELEASE_ACTION) {
         throw operationDenialError({ kind: "forbidden", action, reason: "no_grant" });
