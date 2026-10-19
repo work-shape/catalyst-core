@@ -511,7 +511,8 @@ describe("a Knowledge Base on a Data Store", () => {
     expect(tool.description).toContain(`- ${KB} ("Findings")`);
     expect(tool.description).toContain("table findings: One row per finding of a run.");
     expect(tool.inputJsonSchema).toMatchObject({
-      required: ["knowledgeBase", "sql"],
+      required: ["knowledgeBase"],
+      oneOf: [{ required: ["sql"] }, { required: ["query"] }],
       properties: { knowledgeBase: { enum: [KB] } }
     });
 

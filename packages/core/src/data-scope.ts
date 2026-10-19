@@ -7,9 +7,6 @@ export {
   type DataScopes
 } from "@work-shape/catalyst-asset-schemas";
 
-export interface ScopeAssignment extends ScopeAssignmentInput {
-  clientInstanceId: string;
-}
 export type DataScope = "all" | readonly string[];
 
 /** A person's explicit revocation wins over their own and their groups' allowances. */
@@ -18,7 +15,7 @@ export function resolveDataScope(
   dimension: string
 ): DataScope {
   const rows = assignments.filter((row) => row.dimension === dimension);
-  const denied = rows.filter((row) => row.effect === "deny" && row.holderKind !== "group");
+  const denied = rows.filter((row) => row.effect === "deny");
   if (denied.some((row) => row.values === "all")) return [];
   const allowed = rows.filter((row) => row.effect === "allow");
   // An all allowance with individual exceptions cannot be represented as a finite set.

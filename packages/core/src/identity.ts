@@ -88,8 +88,6 @@ export interface AuthenticatedServicePrincipal {
   id: ServicePrincipalId;
   credentialId: ApiCredentialId;
   displayLabel: string;
-  /** Group ids vouched for by the identity adapter; never supplied by an operation caller. */
-  groups?: readonly string[];
   permissionRefs: string[];
   permissions: string[];
   clientInstanceId: ClientInstanceId;

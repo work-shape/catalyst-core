@@ -16,13 +16,13 @@ import {
 } from "@work-shape/catalyst-core";
 import { useDataStoreWorld, manifest, refusal } from "./support/data-store-world";
 import { accessOf } from "./support/access";
-import { required } from "./support/assertions";
+import { eventually, required } from "./support/assertions";
 
 const dimension = { mandant: { label: "Mandant", valueType: "text" as const } };
 const scoped = manifest("tables: { findings: { scope: { mandant: mandant_nr } } }\n");
 const init = {
   path: "migrations/0001_init.sql",
-  text: `create table findings (id int primary key, mandant_nr text not null, note text); insert into findings values (1, '101', 'A'), (2, '102', 'B'), (3, '103', 'C');`
+  text: `create table findings (id int primary key, mandant_nr text not null default '103', note text); insert into findings values (1, '101', 'A'), (2, '102', 'B'), (3, '103', 'C');`
 };
 const person: AuthenticatedUser = {
   id: "scope-person",
@@ -44,7 +44,7 @@ const access = (values: ScopeAssignmentInput["values"]) =>
   accessOf(person, { scopeAssignments: [assignment(values)] });
 
 describe("scoped Data Store rows", () => {
-  const { db, setup, publish, settle } = useDataStoreWorld("scope_rows");
+  const { db, setup, publish, settle, recordOf } = useDataStoreWorld("scope_rows");
   const world = async () => {
     const world = await setup(
       "scopes",
@@ -290,6 +290,17 @@ describe("scoped Data Store rows", () => {
       tables: [{ name: "findings" }]
     };
     try {
+      expect(
+        kb.assetKind.read([
+          {
+            name: "documents",
+            title: "Documents",
+            description: "Documents",
+            methods: ["keyword"],
+            queries: [{ name: "findings", file: "queries/findings.sql", sql }]
+          }
+        ]).refused
+      ).toHaveLength(1);
       await kb.publish(db.store, {
         access: access("all"),
         assetId,
@@ -341,11 +352,15 @@ describe("scoped Data Store rows", () => {
     }
   });
 
-  it("refuses publishing a dropped scope column and leaves the original rows intact", async () => {
+  it.each([
+    "drop column mandant_nr",
+    "alter column mandant_nr drop not null",
+    "alter column mandant_nr type varchar(50)"
+  ])("refuses publishing invalid scope column: %s", async (ddl) => {
     const w = await world();
     const drop = {
       path: "migrations/0002_remove_scope.sql",
-      text: "alter table findings drop column mandant_nr"
+      text: `alter table findings ${ddl}`
     };
     expect(await refusal(publish(w, [scoped, init, drop]))).toMatchObject({
       details: { reason: "scope_column_invalid" }
@@ -400,5 +415,20 @@ describe("scoped Data Store rows", () => {
         call(w, "delete_rows", { table: "findings", keys: [{ id: 3 }] }, access(["101"]))
       )
     ).toMatchObject({ details: { reason: "key_not_found" } });
+  });
+  it("never activates an initially nullable scope column", async () => {
+    const w = await setup("nullable", {}, undefined, undefined, undefined, dimension);
+    const id = await publish(w, [
+      scoped,
+      { ...init, text: init.text.replace("mandant_nr text not null", "mandant_nr text") }
+    ]);
+    const record = await eventually(async () => {
+      await w.worker.runDue();
+      const record = await recordOf(w, id);
+      expect(record.status).toBe("ready");
+      expect(record.failure !== undefined || record.level > 0).toBe(true);
+      return record;
+    });
+    expect(record).toMatchObject({ level: 0, failure: { code: "scope_column_invalid" } });
   });
 });

@@ -29,6 +29,14 @@ describe("the data scope resolver", () => {
       )
     ).toEqual(["101", "102"]);
   });
+  it("honours a group's revocation as well as a person's", () => {
+    expect(
+      resolveDataScope(
+        [assignment(), assignment({ holderKind: "group", effect: "deny" })],
+        "mandant"
+      )
+    ).toEqual([]);
+  });
   it("has no implicit all, even for an admin, and an inactive holder sees no data", () => {
     const holder = {
       kind: "user" as const,

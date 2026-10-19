@@ -113,6 +113,7 @@
 {"name":"operation.started","legacy":false,"audited":true,"phases":["after"]}
 {"name":"permission.granted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"permission.revoked","legacy":true,"audited":true,"phases":["after"]}
+{"name":"scope_assignment.changed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"storage.orphaned_file_cleanup_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"storage.orphaned_files_deleted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.created","legacy":true,"audited":true,"phases":["after"]}

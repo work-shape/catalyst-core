@@ -503,7 +503,7 @@ async function migrate(
         failed = {
           code: error.code,
           message:
-            error.code === "record_key_invalid"
+            error.code === "record_key_invalid" || error.code === "scope_column_invalid"
               ? `${file} violates ${error.message} Nothing of it was applied.`
               : error.code === "data_store_size_limit"
                 ? `${file} would leave the store at ${error.sizeBytes} bytes, over its size limit (sizeLimit). Nothing of it was applied.`

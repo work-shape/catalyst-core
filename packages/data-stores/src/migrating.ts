@@ -73,7 +73,11 @@ export async function readSignedMigrations(
 
 /** Why a migration was not applied although the database raised no error of its own. */
 export class DataStoreMigrationRefusal extends Error {
-  readonly code: "migration_changed_role" | "data_store_size_limit" | "record_key_invalid";
+  readonly code:
+    | "migration_changed_role"
+    | "data_store_size_limit"
+    | "record_key_invalid"
+    | "scope_column_invalid";
   /** Whether the migration was applied all the same: its role changed only as it committed. */
   readonly applied: boolean;
   /** The size the store's database had with the migration, where that is why it was refused. */
@@ -168,7 +172,17 @@ export async function applyMigration(
           await checkScopedColumns(sql, held.tables);
         } catch (error) {
           if (isAppError(error) && error.code === "VALIDATION_FAILED") {
-            refuse(new DataStoreMigrationRefusal("record_key_invalid", { message: error.message }));
+            refuse(
+              new DataStoreMigrationRefusal(
+                typeof error.details === "object" &&
+                  error.details !== null &&
+                  "reason" in error.details &&
+                  error.details.reason === "scope_column_invalid"
+                  ? "scope_column_invalid"
+                  : "record_key_invalid",
+                { message: error.message }
+              )
+            );
           }
           throw error;
         }

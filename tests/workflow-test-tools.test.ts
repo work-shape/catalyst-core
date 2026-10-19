@@ -255,7 +255,6 @@ describe("the agent projections of Workflow testing", () => {
         ...context,
         resource: undefined,
         access: {
-          scopeOf: () => "all",
           ...context.access,
           authorize
         }

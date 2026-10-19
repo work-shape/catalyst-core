@@ -27,11 +27,12 @@ const SKILL_FILE = "SKILL.md";
 
 export async function readAssetSource(
   path: string,
-  representation: (typeof ASSET_REPRESENTATIONS)[number]
+  representation: (typeof ASSET_REPRESENTATIONS)[number],
+  kind?: string
 ): Promise<AssetSource> {
   return representation === "files"
     ? { files: await readFileSet(path) }
-    : { config: await readDefinition(path) };
+    : { config: await readDefinition(path, kind) };
 }
 
 /**
@@ -39,7 +40,7 @@ export async function readAssetSource(
  * the skill's resources, or from the folder of a guardrail, its `guardrail.yaml` with the
  * `check.md` beside it. A folder that holds a `SKILL.md` is read as that file.
  */
-async function readDefinition(path: string): Promise<Record<string, unknown>> {
+async function readDefinition(path: string, kind?: string): Promise<Record<string, unknown>> {
   const folder = (await stat(path)).isDirectory();
   const guardrailFolder = folder
     ? path
@@ -80,7 +81,7 @@ async function readDefinition(path: string): Promise<Record<string, unknown>> {
     throw new Error(`'${file}' holds no definition: its top level is not a mapping.`);
   }
   const config = { ...definitionOfShown(definition) };
-  if (Array.isArray(config.queries)) {
+  if (kind === "knowledge_base" && Array.isArray(config.queries)) {
     if (config.queries.length > 50)
       throw new Error("A Knowledge Base holds at most 50 named queries");
     const base = await realpath(dirname(file));

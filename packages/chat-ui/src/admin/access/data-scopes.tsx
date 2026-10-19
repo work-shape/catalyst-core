@@ -88,7 +88,15 @@ export function DataScopes({
           { value: "service_principal", label: t("access.scopePrincipal") }
         ]}
       >
-        <Button variant="outline">{t("access.scopeHolderKind")}</Button>
+        <Button variant="outline">
+          {t(
+            holderKind === "user"
+              ? "access.scopePerson"
+              : holderKind === "group"
+                ? "access.scopeGroup"
+                : "access.scopePrincipal"
+          )}
+        </Button>
       </Picker>
       {holderKind === "user" ? (
         <Picker

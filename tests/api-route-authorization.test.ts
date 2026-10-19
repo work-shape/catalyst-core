@@ -88,6 +88,7 @@ const acceptedQueries: Partial<Record<ApiOperationName, Record<string, string>>>
   "data_stores.preview_rows": { table: "missing" },
   "data_stores.rows": { table: "missing" },
   "data_stores.value": { table: "missing", column: "missing", at: "missing" },
+  "scope_assignments.list": { holderKind: "user", holderId: "missing" },
   "permissions.effective": { holderKind: "user", holderId: "missing" }
 };
 

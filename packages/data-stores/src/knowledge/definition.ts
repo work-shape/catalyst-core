@@ -247,6 +247,11 @@ export const knowledgeBaseDefinitionSchema = definitionFieldsSchema.transform(
       }
       return { ...fields, methods: ["structured"], backend, tables };
     }
+    if (fields.queries?.length)
+      return refuse(
+        "queries",
+        "Named SQL queries require a structured Knowledge Base on a Data Store"
+      );
     if (tables !== undefined || methods?.includes("structured")) {
       return refuse(
         tables === undefined ? "methods" : "tables",

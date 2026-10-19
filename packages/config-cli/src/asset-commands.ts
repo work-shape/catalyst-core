@@ -231,7 +231,7 @@ const VERBS: Record<string, Verb> = {
       return async (session) => {
         // What put reads, validate reads. The instance checks a definition without writing
         // it; the files of a kind whose revision holds files it checks only as it writes them.
-        const source = await readAssetSource(from, session.kind.representation);
+        const source = await readAssetSource(from, session.kind.representation, session.kind.kind);
         if ("files" in source) return filesRead(session, from, source.files.length);
         const result = await session.api.read((client) =>
           client.assets.validate({
@@ -270,7 +270,7 @@ const VERBS: Record<string, Verb> = {
       const from = fromPath(values, cwd, "--from <file-or-folder>");
       return async (session) => {
         requireAgentForDraftFence(session, draftFence);
-        const source = await readAssetSource(from, session.kind.representation);
+        const source = await readAssetSource(from, session.kind.representation, session.kind.kind);
         if ("config" in source && source.config.name !== undefined && source.config.name !== name) {
           throw new UsageError(
             `The definition names '${String(source.config.name)}', and the command '${name}'.`
