@@ -35,6 +35,11 @@ export const approvalRequests = pgTable(
       table.clientInstanceId,
       sql`(${table.origin}->>'conversationId')`
     ),
+    // Every request a call left behind, including confirmation followed by approval.
+    index("approval_requests_client_run_idx").on(
+      table.clientInstanceId,
+      sql`(${table.payload}->>'runId')`
+    ),
     // A person's own requests, newest first: the Inbox list "My requests" and its counts.
     index("approval_requests_client_requester_idx").on(
       table.clientInstanceId,

@@ -3,17 +3,33 @@ import { expireOperationRunsAndResumeAgents } from "./postgres-operation-run-exp
 import {
   INTERRUPTED_RUN_ERROR,
   WAITING_OPERATION_RUN_STATUSES,
+  type ClientInstanceId,
   type OperationRun,
   type OperationRunStatus,
   type OperationRunStore
 } from "@work-shape/catalyst-core";
-import { and, asc, desc, eq, gte, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  notInArray,
+  ne,
+  or,
+  sql,
+  type SQL
+} from "drizzle-orm";
 import { resumeAgentRunAfterApproval } from "./postgres-agent-run-approval-resume";
 import { wakeStepsWaitingFor } from "./postgres-workflow-operation-wake";
 import { keysetFilter } from "./paging";
 import { type PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";
 import { operationRuns } from "./schema/operationRuns";
+import { approvalRequests } from "./schema/approvals";
 import { agentRuns } from "./schema/agentRuns";
 
 const OPEN_RUN_STATUSES = [
@@ -21,6 +37,14 @@ const OPEN_RUN_STATUSES = [
   "pending_confirmation",
   "pending_approval"
 ] as const satisfies readonly OperationRunStatus[];
+
+// Shared by candidate selection and deletion so a pending settlement cannot fill a prune batch.
+const NO_PENDING_REQUEST = sql`not exists (
+  select 1 from ${approvalRequests}
+  where ${approvalRequests.clientInstanceId} = ${operationRuns.clientInstanceId}
+    and ${approvalRequests.payload}->>'runId' = ${operationRuns.id}
+    and ${approvalRequests.status} = 'pending'
+)`;
 
 type OperationRunRow = typeof operationRuns.$inferSelect;
 type Input<Method extends keyof OperationRunStore> = Parameters<OperationRunStore[Method]>[0];
@@ -338,15 +362,14 @@ async function deleteOperationRunsOfConversations(
   input: Input<"deleteOfConversations">
 ): Promise<number> {
   if (input.conversationIds.length === 0) return 0;
-  const removed = await db
-    .delete(operationRuns)
-    .where(
-      and(
-        eq(operationRuns.clientInstanceId, input.clientInstanceId),
-        inArray(operationRuns.conversationId, [...input.conversationIds])
-      )
-    );
-  return removed.count;
+  return deleteOperationRunsAndRequests(
+    db,
+    input.clientInstanceId,
+    and(
+      eq(operationRuns.clientInstanceId, input.clientInstanceId),
+      inArray(operationRuns.conversationId, [...input.conversationIds])
+    )
+  );
 }
 
 async function deleteOperationRunsWithoutConversationOlderThan(
@@ -362,14 +385,55 @@ async function deleteOperationRunsWithoutConversationOlderThan(
         isNull(operationRuns.conversationId),
         // A run that still runs or waits is not history yet, whatever its age.
         notInArray(operationRuns.status, [...OPEN_RUN_STATUSES]),
+        NO_PENDING_REQUEST,
         // The cutoff is the database's: its clock stamped the rows.
         lt(operationRuns.createdAt, sql`now() - make_interval(days => ${input.days})`)
       )
     )
     .orderBy(asc(operationRuns.createdAt))
     .limit(input.limit);
-  const removed = await db.delete(operationRuns).where(inArray(operationRuns.id, old));
-  return removed.count;
+  return deleteOperationRunsAndRequests(db, input.clientInstanceId, inArray(operationRuns.id, old));
+}
+
+/** A decided request is history of its call and leaves atomically with that Operation Run.
+ * Conversation cleanup settles waiting calls first; age pruning selects only ended runs.
+ * More than one request may name a run when a confirmation handed it to an approver.
+ * Keep the run ids inside the statement: one conversation can have more than a batch of runs.
+ */
+async function deleteOperationRunsAndRequests(
+  db: PostgresConnection,
+  clientInstanceId: ClientInstanceId,
+  filter: SQL | undefined
+): Promise<number> {
+  // A settlement can lag the end of its run. Keep both for the next cleanup pass.
+  const removed = db
+    .$with("removed_runs")
+    .as(
+      db
+        .delete(operationRuns)
+        .where(and(filter, NO_PENDING_REQUEST))
+        .returning({ id: operationRuns.id })
+    );
+  const requests = db.$with("removed_requests").as(
+    db
+      .delete(approvalRequests)
+      .where(
+        and(
+          eq(approvalRequests.clientInstanceId, clientInstanceId),
+          inArray(
+            sql`${approvalRequests.payload}->>'runId'`,
+            db.select({ id: removed.id }).from(removed)
+          ),
+          ne(approvalRequests.status, "pending")
+        )
+      )
+      .returning({ id: approvalRequests.id })
+  );
+  const [row] = await db
+    .with(removed, requests)
+    .select({ count: sql<number>`count(*)::int` })
+    .from(removed);
+  return row?.count ?? 0;
 }
 
 async function markOperationRunInterrupted(

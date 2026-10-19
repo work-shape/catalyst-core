@@ -130,6 +130,15 @@ export function testDataStoreRowWrites(): void {
           })
         ).toMatchObject({ status: "failed", error: { details: { reason: "column_unknown" } } });
         expect(
+          await call("update", {
+            table: "computed_keys",
+            rows: [{ key: { id: 5 }, set: { source: 8 } }]
+          })
+        ).toMatchObject({ status: "failed", error: { details: { reason: "key_column_in_set" } } });
+        expect([...(await sql`select source, id, value from computed_keys`)]).toEqual([
+          { source: 4, id: 5, value: "after" }
+        ]);
+        expect(
           await call("delete_rows", { table: "computed_keys", keys: [{ id: 5 }] })
         ).toMatchObject({ status: "done", output: { deleted: 1 } });
         expect([...(await sql`select * from computed_keys`)]).toEqual([]);

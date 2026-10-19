@@ -30,6 +30,7 @@ import {
   type RuntimeCallContext
 } from "@work-shape/catalyst-core";
 import { guardrailDenial } from "@work-shape/catalyst-tool-execution";
+import { HELD_ASSET_OPERATION } from "./held-asset-preview";
 import type { GuardrailRunner } from "../guardrails/guardrail-runner";
 
 /** Scopes the approval routes require; the view flags use the same ones. */
@@ -602,7 +603,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     // Lists need only the summary. An opened comparison withheld by the kind must not leak
     // its proposed content through the executable input or the technical field preview.
     const withholdInput =
-      viewer.inList || (isJsonObject(preview.asset) && preview.asset.beforeWithheld === true);
+      viewer.inList ||
+      (request.payload.operation === HELD_ASSET_OPERATION &&
+        (!isJsonObject(preview.asset) || preview.asset.beforeWithheld === true));
     if (withholdInput && "inputs" in preview) {
       preview.inputs = [];
       preview.inputFieldCount = 0;
