@@ -57,7 +57,7 @@ function textOf(node: Nodes): string {
   return "";
 }
 
-/** A link whose label is its own address in ASCII, such as `<https://kanzlei.de>`. */
+/** A link whose label is its own address in ASCII, such as `<https://office.example>`. */
 function showsItsAddress(label: string, url: string): boolean {
   return PRINTABLE_ASCII.test(label) && (label === url || `mailto:${label}` === url);
 }
