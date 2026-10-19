@@ -2,6 +2,7 @@ import { required } from "./support/assertions";
 import { createTestInstance, getTestConfig, getTestJobs } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { STANDALONE_AUTH_SOURCE } from "@work-shape/catalyst-auth";
 import {
@@ -119,7 +120,7 @@ describe("client instance app vertical slice", () => {
 
     // A disabled person is told why by a reason the interface words for them (ACCEPT-FIX-13 C4).
     const disabled = await app.call("users.update", {
-      params: { userId: (normalMe.json() as { id: string }).id },
+      params: { userId: z.object({ id: z.string() }).parse(normalMe.json()).id },
       payload: { status: "disabled" }
     });
     expect(disabled.statusCode).toBe(200);
