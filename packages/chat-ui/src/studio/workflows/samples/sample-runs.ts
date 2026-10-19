@@ -13,6 +13,12 @@ const SCHEDULE = { id: "workflow-runner", label: "workflow-runner" };
 /** The person the samples page looks through. */
 export const SAMPLE_VIEWER_ID = VIEWER.id;
 
+/**
+ * The account every sample run acts as, by its label: a sample names no principal of the
+ * instance. A run carries it as its own, as an instance's run does.
+ */
+export const SAMPLE_PRINCIPAL = { displayLabel: "Workflow runner" };
+
 export interface SampleRun {
   run: WorkflowRunResource;
   /** The step runs outside every item of a loop. */
@@ -88,6 +94,7 @@ function monthly(
     workflow: "monthly-booking-check",
     trigger: "schedule",
     startedBy: SCHEDULE,
+    principal: SAMPLE_PRINCIPAL,
     rootRunId: id,
     depth: 0,
     definitionRevisionId: SAMPLE_REVISION,
@@ -332,6 +339,7 @@ function quarter(clock: Clock): readonly SampleRun[] {
         workflow: "quarter-close",
         trigger: "schedule",
         startedBy: SCHEDULE,
+        principal: SAMPLE_PRINCIPAL,
         status: "running",
         rootRunId: id,
         depth: 0,
@@ -403,6 +411,7 @@ function quarter(clock: Clock): readonly SampleRun[] {
         workflow: "send-reminders",
         trigger: "parent",
         startedBy: SCHEDULE,
+        principal: SAMPLE_PRINCIPAL,
         status: "running",
         parentRunId: id,
         parentStepRunId: `${id}:remind`,
