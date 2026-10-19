@@ -116,7 +116,9 @@ describe("the title of the asset a conversation is about", () => {
     await vi.waitFor(() => expect(shown.textContent).toBe("Store page leads"), {
       timeout: CONDITION_WAIT_MS
     });
-    expect(reads).toContain(`/api/v1/assets/data_store/${store.name}?${WORKSPACE}`);
+    expect(reads).toContain(
+      `${apiOperations["assets.get"].path.replace(":kind", store.kind).replace(":name", store.name)}?${WORKSPACE}`
+    );
   });
 
   it("names an instance's Knowledge Base by its title", async () => {
@@ -126,7 +128,9 @@ describe("the title of the asset a conversation is about", () => {
     await vi.waitFor(() => expect(shown.textContent).toBe("Handbuch"), {
       timeout: CONDITION_WAIT_MS
     });
-    expect(reads).toContain("/api/v1/assets/knowledge_base/handbook-kb");
+    expect(reads).toContain(
+      apiOperations["assets.get"].path.replace(":kind", base.kind).replace(":name", base.name)
+    );
   });
 
   it("keeps the address of a store the reader may not read, and while it loads", async () => {

@@ -654,7 +654,7 @@ describe("a statement of an App on a Data Store", () => {
     expect(some.rows).toEqual([{ client_id: "client-b" }]);
   });
 
-  it("fails a call with a named reason once the store was deleted", async () => {
+  it("fails a call with a named reason once the store definition is gone", async () => {
     await t.publishStore(
       "archive",
       [{ ...manifest(), text: "id: archive\nname: Archive\n" }, init],
@@ -666,7 +666,7 @@ describe("a statement of an App on a Data Store", () => {
     ).toEqual([]);
     const frame = await t.openApp(t.admin.id, "published", "findings-archive");
 
-    await t.deleteStore("archive");
+    await t.removeStoreDefinition("archive");
     const response = await t.callAction(t.admin.id, frame, "list_findings", {
       limit: 1,
       offset: 0

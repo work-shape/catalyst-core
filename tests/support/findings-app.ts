@@ -145,8 +145,8 @@ export interface FindingsWorld extends AppActionsInstance {
     files: StoreFile[],
     workspaceId?: CollaborationWorkspaceId
   ): Promise<DataStoreRecord>;
-  /** Deletes a store as the asset workflow does: the asset is removed and the store retired. */
-  deleteStore(name: string): Promise<void>;
+  /** Removes only a definition to simulate a missing legacy dependency outside asset guards. */
+  removeStoreDefinition(name: string): Promise<void>;
   /** Adds rows to `findings` as the platform's own role. */
   addFindings(rows: JsonObject[]): Promise<void>;
   /** Every row of `findings`, as the platform's own role reads them. */
@@ -304,7 +304,8 @@ export async function setupFindingsApp(): Promise<FindingsWorld> {
     publishStore,
     addFindings,
     findingRows: () => rowsAs<JsonObject[]>`select * from findings order by id`,
-    async deleteStore(name) {
+    // Simulates a missing legacy definition, outside the guarded asset-removal path.
+    async removeStoreDefinition(name) {
       const asset = required(
         await t.stores.configAssets.getConfigAsset({
           clientInstanceId,
@@ -318,7 +319,6 @@ export async function setupFindingsApp(): Promise<FindingsWorld> {
           baseRevisions: { [`${DATA_STORE_ASSET_KIND}:${name}`]: asset.revision },
           mutations: [{ type: "delete", kind: DATA_STORE_ASSET_KIND, name, scope: asset.scope }]
         });
-        await dataStores.retire(stores, asset.id);
       });
     },
     async setSizeLimit(storeId, bytes) {

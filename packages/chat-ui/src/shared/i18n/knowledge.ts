@@ -287,9 +287,9 @@ export const knowledge = defineTranslations({
     "knowledge.statusOk": "Bereit",
     "knowledge.agentsTitle": "Verwendet von Agenten",
     "knowledge.agentsDescription":
-      "Veröffentlichte Agenten, die diese Wissensdatenbank durchsuchen, soweit Sie sie sehen dürfen.",
+      "Veröffentlichte Agenten, die diese Wissensbasis durchsuchen, soweit Sie sie sehen dürfen.",
     "knowledge.agentsEmpty":
-      "Kein veröffentlichter Agent, den Sie sehen dürfen, durchsucht diese Wissensdatenbank.",
+      "Kein veröffentlichter Agent, den Sie sehen dürfen, durchsucht diese Wissensbasis.",
     "knowledge.agentsTruncated":
       "Nur ein Teil der Agenten wurde gelesen, es können also weitere sie verwenden.",
     "knowledge.rowDocument": "{count} Dokument",
@@ -300,8 +300,8 @@ export const knowledge = defineTranslations({
     "knowledge.rowIngesting": "Wird eingelesen",
     "knowledge.accessTitle": "Zusätzliche Nutzungsrechte",
     "knowledge.accessDescription":
-      "Personen und Technische Konten mit dem Recht, diese Wissensdatenbank selbst zu durchsuchen. Mitglieder eines Arbeitsbereichs verwenden sie über „Verfügbar in“ und stehen nicht hier.",
-    "knowledge.accessEmpty": "Niemand hat ein zusätzliches Recht auf dieser Wissensdatenbank.",
+      "Personen und Technische Konten mit dem Recht, diese Wissensbasis selbst zu durchsuchen. Mitglieder eines Arbeitsbereichs verwenden sie über „Verfügbar in“ und stehen nicht hier.",
+    "knowledge.accessEmpty": "Niemand hat ein zusätzliches Recht auf dieser Wissensbasis.",
     "knowledge.accessFailed": "Die zusätzlichen Nutzungsrechte konnten nicht geladen werden.",
     "knowledge.accessServicePrincipal": "Technisches Konto",
     "knowledge.accessPrincipalDisabled": "Deaktiviert",
