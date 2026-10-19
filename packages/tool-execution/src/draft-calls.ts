@@ -34,6 +34,13 @@ import { auditForRun } from "./operation-run-recording";
  * draft context that bounds anything else: only a person's call from a Workflow test run is.
  */
 export function draftCallOf(call: OperationCall, workflowAgent = false): OperationCall {
+  if (call.draft?.kind === "agent_preview" && call.origin.kind === "agent") {
+    const { asset, revisionId, part } = call.draft;
+    call = {
+      ...call,
+      origin: { ...call.origin, draft: { kind: "agent_preview", asset, revisionId, part } }
+    };
+  }
   const boundBy = call.draft?.boundBy;
   if (!boundBy) return call;
   const { origin, actor } = call;
@@ -70,6 +77,7 @@ export async function decideTarget(input: {
   const { draft } = call;
   if (!draft || definition.effect === "reading") return "live";
   if (definition.draftTarget) return definition.draftTarget;
+  if (draft.kind === "agent_preview") return "dry_run";
   if (!deps.liveOnce || !(await admitted())) return "dry_run";
   const forRun = call.origin.kind === "workflow" ? call.origin.workflowRunId : draft.workflowRunId;
   const now = deps.now ?? (() => new Date());

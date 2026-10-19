@@ -1,7 +1,9 @@
+import { previewForTurn } from "./agent-preview";
 import { auditActorFromUser } from "@work-shape/catalyst-core";
 import {
   AppError,
   type ActorAccess,
+  type AgentPreview,
   type PrepareConversationRunStartInput,
   type ConversationFollowUp,
   type PlatformStores,
@@ -94,21 +96,23 @@ export class RunStartWorkflow {
     requestedModelBindingId: string | undefined,
     requestedReasoningEffort: ReasoningEffortConfig | undefined,
     caller: { user: AuthenticatedUser; access?: ActorAccess },
-    acceptedFollowUp = false
+    acceptedFollowUp = false,
+    preview?: AgentPreview
   ): Promise<{
     agentName: string;
     modelBindingId?: string;
     reasoningEffort?: ReasoningEffortConfig;
   }> {
     const assets = await getWorkspaceAssetSnapshot(this.options, workspace);
-    const agentName = requestedAgentName ?? assets.defaultAgentName;
+    const agentName = preview?.config.name ?? requestedAgentName ?? assets.defaultAgentName;
     if (!agentName) {
       throw new AppError(
         "VALIDATION_FAILED",
         "No default agent is configured for this client instance yet"
       );
     }
-    const agent = assets.agents.find((candidate) => candidate.name === agentName);
+    const agent =
+      preview?.config ?? assets.agents.find((candidate) => candidate.name === agentName);
     if (requestedAgentName !== undefined && !agent) {
       throw new AppError("NOT_FOUND", `Agent '${requestedAgentName}' is not defined`);
     }
@@ -200,6 +204,7 @@ export class RunStartWorkflow {
       conversationId,
       user
     );
+    const preview = await previewForTurn(this.options, conversation, user, command.access);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
       const claim = await this.claimOrResolveRunStartCommand({
@@ -224,7 +229,8 @@ export class RunStartWorkflow {
         command.modelBindingId,
         command.reasoningEffort,
         { user, access: command.access },
-        Boolean(command.dispatchFollowUpId)
+        Boolean(command.dispatchFollowUpId),
+        preview
       );
       const attachments = this.options.attachments;
       const pendingDraftAttachments =
@@ -276,7 +282,7 @@ export class RunStartWorkflow {
                         ? userMessageId
                         : createPlatformId<"MessageId">("msg"),
                     text: item.text,
-                    metadata: createUserMessageMetadata({ attachmentManifest: manifest })
+                    metadata: createUserMessageMetadata({ attachmentManifest: manifest, preview })
                   },
                   attachmentManifest: manifest
                 };
@@ -288,7 +294,7 @@ export class RunStartWorkflow {
                 message: {
                   id: userMessageId,
                   text: command.text,
-                  metadata: createUserMessageMetadata({ attachmentManifest })
+                  metadata: createUserMessageMetadata({ attachmentManifest, preview })
                 },
                 attachmentManifest
               }
@@ -378,6 +384,7 @@ export class RunStartWorkflow {
       const run = await this.options.agentRuntime.start(
         {
           agentName: prepared.run.agentName,
+          preview,
           modelBindingId: prepared.run.modelBindingId,
           reasoningEffort: prepared.run.reasoningEffort,
           conversationId,

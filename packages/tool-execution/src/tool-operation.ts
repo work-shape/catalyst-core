@@ -1,4 +1,5 @@
 import { SCHEDULED_START_TOOL_NAMES } from "./scheduled-start-tools";
+import { previewDraft, previewToolDeps, previewToolResult } from "./agent-preview";
 import { denialText, type ToolCallNames } from "./tool-refusal-text";
 import {
   AGENTS_RUN_OPERATION,
@@ -15,6 +16,7 @@ import {
   RUN_AGENT_TOOL_NAME,
   answerAsTool,
   isAppError,
+  forbiddenPreviewTool,
   isAuthenticatedServicePrincipal,
   isDataToolName,
   knowledgeToolCall,
@@ -350,9 +352,9 @@ export function toolResultFromOperationResult(
     case "expired":
     case "pending_confirmation":
     case "pending_approval":
-    // An agent's call carries no draft context yet, so it is never simulated.
-    case "dry_run":
       return internalFailure(names.correlationId);
+    case "dry_run":
+      return previewToolResult(result, names.locale);
   }
 }
 
@@ -459,12 +461,15 @@ interface CalledTool {
  * as a changing release tool does.
  */
 export function createToolOperationRunner(
-  deps: RunOperationDeps,
+  baseDeps: RunOperationDeps,
   tools: ToolRegistry,
   dataTools?: DataToolRunnerOptions
 ): ToolOperationRunner {
   const takeKnowledgeRefs = createKnowledgeRefCounter();
   const runner: ToolOperationRunner = async (toolRequest, context, options = {}) => {
+    const deps = previewToolDeps(baseDeps, context);
+    if (context.agentPreview && forbiddenPreviewTool(toolRequest.toolName))
+      return failed("not_allowed", "This tool is not available in Preview");
     // One call of each Knowledge Base's search, merged: each call takes this runner's path.
     if (toolRequest.toolName === KNOWLEDGE_SEARCH_TOOL_NAME) {
       return runKnowledgeSearch(toolRequest, context, options, deps, runner, takeKnowledgeRefs);
@@ -501,8 +506,8 @@ export function createToolOperationRunner(
     try {
       const outcome = await runOperation(
         operationCallFromToolRequest({
-          ...(context.workflowDraft ? { draft: context.workflowDraft } : {}),
           request,
+          draft: context.workflowDraft ?? previewDraft(context, request.conversationId),
           // The run acts for the person it was started for, with what that start was allowed.
           actor: {
             ...context.user,

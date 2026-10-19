@@ -1093,3 +1093,6 @@ export const PUBLISHED_DATA_CONSUMER_KINDS = ["app", "workflow", "knowledge_base
 export type PublishedDataConsumerKind = (typeof PUBLISHED_DATA_CONSUMER_KINDS)[number];
 /** State of a scheduled prompt. */
 export const SCHEDULED_START_STATES = ["active", "paused"] as const;
+
+/** Which revision answered an agent preview turn. */
+export const AGENT_PREVIEW_SOURCES = ["draft", "live"] as const;

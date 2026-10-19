@@ -38094,6 +38094,46 @@
                   "id",
                   "label"
                 ]
+              },
+              "draft": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "agent_preview"
+                  },
+                  "asset": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "id",
+                      "name"
+                    ]
+                  },
+                  "revisionId": {
+                    "type": "string"
+                  },
+                  "part": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "asset",
+                  "revisionId",
+                  "part"
+                ]
               }
             },
             "required": [
@@ -41291,6 +41331,31 @@
           "kind": {
             "type": "string",
             "const": "user_message"
+          },
+          "preview": {
+            "type": "object",
+            "properties": {
+              "agentId": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "live"
+                ]
+              }
+            },
+            "required": [
+              "agentId",
+              "revision",
+              "source"
+            ]
           },
           "attachmentManifest": {}
         },

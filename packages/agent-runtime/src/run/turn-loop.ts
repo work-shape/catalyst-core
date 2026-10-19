@@ -4,6 +4,7 @@ import {
   AppError,
   WorkflowAgentOutputInvalidError,
   WORKFLOW_STEP_DATA_MAX_BYTES,
+  forbiddenPreviewTool,
   SUBJECT_TOOL_PREFIX,
   systemClock,
   unknownToJsonValue,
@@ -60,6 +61,7 @@ export class TurnLoop {
     input: StartAgentRunInput,
     context: RuntimeCallContext
   ): Promise<void> {
+    if (input.preview) context = { ...context, agentPreview: input.preview };
     const setup = await this.prepareRun(runId, input, context);
     const entry = input.resume
       ? await this.resumeEntry(state, runId, input, context, setup, input.resume.state)
@@ -83,11 +85,11 @@ export class TurnLoop {
           displayName: { en: input.agentName, de: input.agentName },
           initialPrompts: []
         }
-      : getSnapshotAgentConfig(assets, input.agentName);
+      : (input.preview?.config ?? getSnapshotAgentConfig(assets, input.agentName));
     // An agent whose definition lists the platform's tools is offered those it lists, the
     // orientation on the platform and the skills the platform ships. The asset tools come from
     // the offer alone, which may hold back one the definition lists.
-    const offer = input.workflowAgent
+    const offer = input.workflowAgent || input.preview
       ? undefined
       : await this.options.conversationOffer?.offerOf({
           clientInstanceId: context.clientInstanceId,
@@ -108,7 +110,7 @@ export class TurnLoop {
         (toolName) =>
           !withheld.has(toolName) &&
           !((context.subagent || input.workflowAgent) && isRunAgentCall(toolName))
-      )
+      ).filter((toolName) => !input.preview || !forbiddenPreviewTool(toolName))
     };
     const modelSelection = this.modelInput.getModelSelectionForAgent(
       agent,

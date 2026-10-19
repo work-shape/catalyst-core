@@ -1,4 +1,5 @@
 import { agentDependencyWarnings } from "./agent-dependency-availability";
+import { deleteTryConversations } from "../deletion/conversation-cleanup";
 import { agentDraftAuthor } from "./agent-drafts";
 import {
   AppError,
@@ -538,6 +539,18 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
   await recordCommitted(options, call, records);
   for (const entry of ready) {
     const id = result.assetIds[assetKey(entry.kind.kind, entry.name)];
+    if (!entry.absent && entry.item.type === "delete" && entry.kind.kind === "agent" && id) {
+      await deleteTryConversations(
+        options,
+        { agentId: id },
+        {
+          deletedAt: new Date().toISOString(),
+          requestedBy: "agent_deleted",
+          correlationId: call.correlationId,
+          actor: auditActorFromIdentity(call.actor)
+        }
+      );
+    }
     if (
       !entry.absent &&
       entry.item.type === "put" &&

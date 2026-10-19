@@ -130,6 +130,10 @@ export async function testRunCall(
     },
     draft: {
       workflowRunId: run.id,
+      // A test target reached from agent Try inherits its prohibition on Run live once.
+      ...(start?.origin.kind === "agent" && start.origin.draft?.kind === "agent_preview"
+        ? { kind: "agent_preview" as const }
+        : {}),
       asset: { kind: WORKFLOW_ASSET_KIND, id: asset.id, name: asset.name },
       revisionId: run.definitionRevisionId,
       part: stepRun.stepId,

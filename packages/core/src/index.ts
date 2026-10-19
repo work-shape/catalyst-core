@@ -1,5 +1,6 @@
 export { yamlValueIssue, yamlValueIssueSentence } from "@work-shape/catalyst-asset-schemas";
 export * from "./agent-proposals";
+export * from "./agent-preview";
 export * from "./agent-try-conversations";
 export * from "./agent-run-projection";
 export * from "./artifact-preview-lifecycle";

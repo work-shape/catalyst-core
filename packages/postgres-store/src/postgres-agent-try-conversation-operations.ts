@@ -116,8 +116,9 @@ export function createPostgresAgentTryConversationStore(
   return {
     get: async (input) => {
       const [row] = await db
-        .select({ agentId: agentTryConversations.agentId })
+        .select({ agentId: agentTryConversations.agentId, agentName: configAssets.name })
         .from(agentTryConversations)
+        .leftJoin(configAssets, eq(configAssets.id, agentTryConversations.agentId))
         .where(
           and(
             eq(agentTryConversations.clientInstanceId, input.clientInstanceId),
@@ -125,7 +126,9 @@ export function createPostgresAgentTryConversationStore(
           )
         )
         .limit(1);
-      return row;
+      return row
+        ? { agentId: row.agentId, ...(row.agentName === null ? {} : { agentName: row.agentName }) }
+        : undefined;
     },
     open: (input) => openTryConversation(db, input),
     list: (input) => listTryConversations(db, input),

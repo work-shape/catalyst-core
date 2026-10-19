@@ -283,6 +283,51 @@ describe("a test run of a Workflow draft", () => {
     expect(t.executed.filter((call) => call.operation === "write")).toEqual([]);
   });
 
+  it("keeps an agent preview's Workflow test target from consuming Run live once", async () => {
+    const t = await ready();
+    await t.expectOk(t.root.id, "assets.publish", { params: address, payload: { revision: 1 } });
+    await switchOn(t, 1);
+    await t.allow({ kind: "user", id: t.kai.id }, "workflow.use");
+    const created = await t.expectOk(t.kai.id, "conversations.create", {
+      payload: { title: "Preview test target" }
+    });
+    const conversationId = asConversationId(z.object({ id: z.string() }).parse(created.json()).id);
+    const operation = `workflow.${WORKFLOW}.start`;
+    t.state.centralSettings.push({ operation, value: "allow" });
+    t.state.agentTools.set("builder", [operation]);
+    const outcome = await t.invoke(
+      t.kai,
+      operation,
+      { note: NOTE },
+      {
+        effect: "changing",
+        origin: {
+          kind: "agent",
+          agentName: "builder",
+          agentRunId: asAgentRunId("preview-run"),
+          conversationId,
+          toolCallId: asToolCallId("preview-test-target"),
+          toolName: operation
+        },
+        draft: {
+          kind: "agent_preview",
+          asset: { kind: "agent", id: "preview-agent", name: "builder" },
+          revisionId: "draft:1",
+          part: conversationId
+        }
+      }
+    );
+    expect(outcome.run.target).toBe("test");
+    expect(outcome.result.status, JSON.stringify(outcome.result)).toBe("done");
+    if (outcome.result.status !== "done") throw new Error("Preview test target did not start");
+    const { id } = z.object({ id: z.string() }).parse(outcome.result.output);
+    expect((await t.finish(id)).status).toBe("done");
+    expect(
+      (await stepRunsOf(t, id)).filter((step) => step.stepId === "send").map((step) => step.target)
+    ).toEqual(["dry_run", "dry_run", "dry_run"]);
+    expect(t.executed.map((call) => call.operation)).toEqual(["echo"]);
+  });
+
   // Acceptance check 6.
   it("reads live, simulates the changing step and marks each step with its target", async () => {
     const t = await ready();

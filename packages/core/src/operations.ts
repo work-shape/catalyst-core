@@ -48,6 +48,13 @@ export type OperationOrigin =
        * testing: the service principal whose rights bounded theirs (ADR-0031).
        */
       boundBy?: { id: string; label: string };
+      /** Minimized provenance of an agent preview call, kept on its Operation Run. */
+      draft?: {
+        kind: "agent_preview";
+        asset: { kind: string; id: string; name: string };
+        revisionId: string;
+        part: string;
+      };
     }
   | { kind: "user" }
   /**

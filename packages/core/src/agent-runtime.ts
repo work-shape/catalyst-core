@@ -1,3 +1,4 @@
+import type { AgentPreview } from "./agent-preview";
 import {
   AGENT_RUN_FAILURE_CATEGORIES,
   AGENT_RUN_STATUSES,
@@ -33,6 +34,8 @@ import type { SubagentRef, SubagentStarted } from "./subagents";
 
 export interface StartAgentRunInput {
   agentName: string;
+  /** Internal preview snapshot, frozen when the user message is accepted. */
+  preview?: AgentPreview;
   modelBindingId?: string;
   /** The reasoning effort the user picked; unset runs with the configured default. */
   reasoningEffort?: ReasoningEffortConfig;

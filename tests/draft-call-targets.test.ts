@@ -58,6 +58,7 @@ interface DraftCall {
   principal?: ServicePrincipalRecord;
   /** A call of what is live, which carries no draft context. */
   live?: true;
+  preview?: true;
 }
 
 describe("a call made by a draft", () => {
@@ -160,7 +161,13 @@ describe("a call made by a draft", () => {
         ...(operation === "write" ? { idempotencyKey: call.key ?? crypto.randomUUID() } : {}),
         ...(call.live
           ? {}
-          : { draft: { ...draft, boundBy: runIdentity(call.principal ?? t.principal) } })
+          : {
+              draft: {
+                ...draft,
+                ...(call.preview ? { kind: "agent_preview" as const } : {}),
+                boundBy: runIdentity(call.principal ?? t.principal)
+              }
+            })
       },
       t.operationCalls.deps
     );
@@ -361,6 +368,18 @@ describe("a call made by a draft", () => {
       { type: "live_once.switched_on", part: "send", revisionId, actor: t.kai.id },
       { type: "live_once.used", part: "send", revisionId, actor: t.kai.id }
     ]);
+  });
+
+  it("never consumes Run live once for an agent preview", async () => {
+    const t = await ready();
+    const asset = await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address });
+    if (!asset) throw new Error("Draft missing");
+    expect((await switchOn(t, asset.revision)).statusCode).toBe(200);
+    const simulated = await stepCall(t, { preview: true });
+    expect(simulated.result.status).toBe("dry_run");
+    expect(simulated.run.target).toBe("dry_run");
+    expect(t.executed).toEqual([]);
+    expect((await stepCall(t)).run.target).toBe("live");
   });
 
   it("clears an unused switch once the draft changes, and audits the clearing", async () => {

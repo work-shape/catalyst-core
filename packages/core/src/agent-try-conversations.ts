@@ -20,7 +20,7 @@ export interface AgentTryConversationStore {
   get(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
-  }): Promise<{ agentId: string } | undefined>;
+  }): Promise<{ agentId: string; agentName?: string } | undefined>;
   /** Removes the link last, once the conversation's data cleanup completes. */
   remove(input: {
     clientInstanceId: ClientInstanceId;

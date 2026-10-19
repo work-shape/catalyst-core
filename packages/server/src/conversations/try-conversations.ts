@@ -33,10 +33,18 @@ export class TryConversations {
 
   async authorize(actor: AuthenticatedIdentity, access: ActorAccess, input: TryAddress) {
     if (isAuthenticatedServicePrincipal(actor)) throw unavailable();
+    const agent = await this.options.configAssets.store.getConfigAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: "agent",
+      name: input.name
+    });
+    if (agent?.status !== "active") throw unavailable();
+    const workspaceId = agent.scope.kind === "workspace" ? agent.scope.workspaceId : undefined;
+    if (input.workspaceId !== undefined && input.workspaceId !== workspaceId) throw unavailable();
     return new AssetWorkflow(this.options).authorizeWrite(access, {
       kind: "agent",
       name: input.name,
-      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {})
+      ...(workspaceId ? { workspaceId } : {})
     });
   }
 

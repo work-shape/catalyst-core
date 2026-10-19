@@ -1,3 +1,4 @@
+import type { AgentPreview } from "./agent-preview";
 import {
   AUTH_PRINCIPAL_KINDS,
   AUTH_SCOPE_WILDCARD,
@@ -169,6 +170,8 @@ export interface AgentRunWriteFence {
  * live once" was switched on for this action or step of this revision.
  */
 export interface OperationDraftContext {
+  /** Agent Try has no Run live once, including when it falls back to a live revision. */
+  kind?: "agent_preview";
   /** The draft Workflow test that binds a live-once switch across agent tool calls. */
   workflowRunId?: string;
   /** The App or the Workflow whose draft makes the call. */
@@ -193,6 +196,8 @@ export interface OperationDraftContext {
 }
 
 export interface RuntimeCallContext {
+  /** Only internal preview execution sets this; never read from an HTTP request. */
+  agentPreview?: AgentPreview;
   user: AuthenticatedUser;
   clientInstanceId: ClientInstanceId;
   correlationId: string;

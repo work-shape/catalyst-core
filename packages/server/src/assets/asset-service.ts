@@ -559,6 +559,16 @@ export class AssetWorkflow {
       { previous: target.asset?.config, config: undefined }
     );
     const revision = allocatedRevision(result, kind.kind, name);
+
+    await recordCommitted(this.options, call, [
+      () =>
+        recordAssetEvent(call, "config_asset.deleted", {
+          kind: kind.kind,
+          name,
+          revision,
+          version: result.version
+        })
+    ]);
     if (kind.kind === "agent" && target.asset) {
       await deleteTryConversations(
         this.options,
@@ -572,15 +582,6 @@ export class AssetWorkflow {
       );
     }
 
-    await recordCommitted(this.options, call, [
-      () =>
-        recordAssetEvent(call, "config_asset.deleted", {
-          kind: kind.kind,
-          name,
-          revision,
-          version: result.version
-        })
-    ]);
     await afterRemove(this.options, call, target);
     return { version: result.version, revision, warnings: [] };
   }

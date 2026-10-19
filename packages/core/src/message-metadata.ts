@@ -1,3 +1,4 @@
+import { agentPreviewSchema, type AgentPreview } from "./agent-preview";
 import { readKnowledgeCitationSources, type KnowledgeCitationSource } from "./knowledge-citations";
 import { MESSAGE_FINISH_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import {
@@ -42,6 +43,7 @@ export interface StoredToolCall {
 export interface AgentRuntimeUserMessageMetadata {
   version: typeof MESSAGE_METADATA_VERSION;
   kind: "user_message";
+  preview?: AgentPreview;
   attachmentManifest: JsonValue;
 }
 
@@ -208,15 +210,20 @@ export interface StoredModelOutputProjection {
 }
 
 export function createUserMessageMetadata(input: {
+  preview?: AgentPreview;
   attachmentManifest?: AttachmentManifest;
 }): JsonObject | undefined {
-  if (!input.attachmentManifest || input.attachmentManifest.attachments.length === 0) {
+  if (
+    !input.preview &&
+    (!input.attachmentManifest || input.attachmentManifest.attachments.length === 0)
+  ) {
     return undefined;
   }
   return wrapAgentRuntimeMetadata({
     version: MESSAGE_METADATA_VERSION,
     kind: "user_message",
-    attachmentManifest: unknownToJsonValue(input.attachmentManifest)
+    attachmentManifest: unknownToJsonValue(input.attachmentManifest),
+    ...(input.preview ? { preview: input.preview } : {})
   });
 }
 
@@ -326,7 +333,10 @@ export function readAgentRuntimeMessageMetadata(
     return {
       version: MESSAGE_METADATA_VERSION,
       kind: "user_message",
-      attachmentManifest: unknownToJsonValue(runtime.attachmentManifest)
+      attachmentManifest: unknownToJsonValue(runtime.attachmentManifest),
+      ...(agentPreviewSchema.safeParse(runtime.preview).success
+        ? { preview: agentPreviewSchema.parse(runtime.preview) }
+        : {})
     };
   }
   if (runtime.kind === "assistant_tool_calls" && typeof runtime.runId === "string") {

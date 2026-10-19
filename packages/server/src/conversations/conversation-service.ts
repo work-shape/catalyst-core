@@ -272,6 +272,19 @@ export class ConversationWorkflow {
     command: MoveConversationCommand
   ): Promise<Conversation> {
     const conversation = await this.requireChatConversationAccess(conversationId, user);
+    if (
+      await this.options.stores.agentTryConversations.get({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId
+      })
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "A preview conversation stays with its agent",
+        { reason: "preview_conversation_private" },
+        { exposeMessage: true }
+      );
+    }
     const destination = await this.requireMemberWorkspace(user, command.collaborationWorkspaceId);
     if (conversation.collaborationWorkspaceId === command.collaborationWorkspaceId) {
       throw new AppError("VALIDATION_FAILED", "Conversation already belongs to this workspace");

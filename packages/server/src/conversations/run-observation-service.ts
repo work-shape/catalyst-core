@@ -6,6 +6,7 @@ import {
   projectAgentRun,
   readAssistantFinalMetadata,
   withoutAssistantProviderContinuation,
+  withoutAgentPreviewConfig,
   type ActiveRunSummary,
   type AgentRun,
   type AgentRunId,
@@ -394,7 +395,7 @@ export class RunObservationWorkflow {
 function toPublicChatMessage(message: ChatMessage): ChatMessage {
   return {
     ...message,
-    metadata: withoutAssistantProviderContinuation(message.metadata)
+    metadata: withoutAgentPreviewConfig(withoutAssistantProviderContinuation(message.metadata))
   };
 }
 

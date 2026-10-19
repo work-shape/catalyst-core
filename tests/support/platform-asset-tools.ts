@@ -140,7 +140,8 @@ export async function createAssetToolsFixture(
     publishTool = false,
     skillTool = false,
     centralPolicySettings,
-    allowAgentDeletion = false
+    allowAgentDeletion = false,
+    releaseSync = false
   }: {
     filesStore?: boolean;
     publishTool?: boolean;
@@ -148,6 +149,7 @@ export async function createAssetToolsFixture(
     skillTool?: boolean;
     centralPolicySettings?: () => CentralPolicySetting[];
     allowAgentDeletion?: boolean;
+    releaseSync?: boolean;
   } = {}
 ): Promise<AssetToolsFixture> {
   // No release names `read_skill` here: the skill of a subject is readable all the same.
@@ -167,7 +169,8 @@ export async function createAssetToolsFixture(
           id: OWNER,
           externalUserId: OWNER,
           displayLabel: "Owner",
-          roles: ["user", "admin", "superadmin"]
+          roles: ["user", "admin", "superadmin"],
+          permissions: releaseSync ? ["config_assets.release"] : []
         },
         { id: OTHER, externalUserId: OTHER, displayLabel: "Other", roles: ["user"] }
       ]

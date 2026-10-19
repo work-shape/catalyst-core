@@ -14,6 +14,7 @@ import {
   failAgentRunOfLostJob,
   getSubjectUserId,
   readAssistantFinalMetadata,
+  readUserMessageMetadata,
   runFailureCodeOf,
   type AgentRun,
   type AgentRunError,
@@ -560,11 +561,25 @@ async function reconstructInput(
   if (!message || message.role !== "user") {
     throw new AppError("NOT_FOUND", "Agent run input message is not available");
   }
+  const preview = readUserMessageMetadata(message.metadata)?.preview;
+  const trying = await options.stores.agentTryConversations.get({
+    clientInstanceId: run.clientInstanceId,
+    conversationId: run.conversationId
+  });
+  if (
+    trying &&
+    (!preview || preview.agentId !== trying.agentId || preview.config.name !== run.agentName)
+  )
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "The preview snapshot is not available. Send the message again in Try."
+    );
   const attachmentManifest = readUserAttachmentManifest(message.metadata);
   const workflowAgent = run.workflowStepRunId ? await workflowAgentOf(options, run) : undefined;
   return {
     ...(workflowAgent ? { workflowAgent } : {}),
     agentName: run.agentName,
+    preview,
     modelBindingId: run.modelBindingId,
     reasoningEffort: run.reasoningEffort,
     conversationId: run.conversationId,

@@ -1,4 +1,5 @@
 import {
+  AGENT_PREVIEW_SOURCES,
   FOLLOW_UP_MODES,
   FOLLOW_UP_STATUSES,
   TOOL_DECISION_MODES,
@@ -117,6 +118,14 @@ export const messageCitationSchema = z.object({
 export const userMessageMetadataSchema = z.object({
   version: messageMetadataVersionSchema,
   kind: z.literal("user_message"),
+  // Provenance only: the private frozen config remains in the worker's stored message.
+  preview: z
+    .object({
+      agentId: z.string(),
+      revision: z.number().int().positive(),
+      source: z.enum(AGENT_PREVIEW_SOURCES)
+    })
+    .optional(),
   attachmentManifest: z.unknown()
 });
 

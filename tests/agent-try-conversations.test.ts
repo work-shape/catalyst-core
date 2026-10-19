@@ -1,5 +1,6 @@
 import {
   asConversationId,
+  createPlatformId,
   asCollaborationWorkspaceId,
   scheduleDedupeKey
 } from "@work-shape/catalyst-core";
@@ -39,7 +40,9 @@ describe("the Try conversation of an agent", () => {
   });
   afterAll(() => vi.restoreAllMocks());
 
-  async function fixture(options: { filesStore?: boolean; allowAgentDeletion?: boolean } = {}) {
+  async function fixture(
+    options: { filesStore?: boolean; allowAgentDeletion?: boolean; releaseSync?: boolean } = {}
+  ) {
     // A person may change an agent's instructions outside a release, and nothing else.
     const t = await createAssetToolsFixture("in_process", ["instructions"], options);
     const address = () => ({ params: { name: AGENT.name } });
@@ -195,7 +198,9 @@ describe("the Try conversation of an agent", () => {
 
   it("opens without a Build conversation and isolates two writers", async () => {
     const t = await fixture();
-    const first = await t.opened("unused");
+    const concurrent = await Promise.all([t.opened("unused"), t.opened("unused")]);
+    const first = concurrent[0];
+    expect(concurrent[1]).toBe(first);
     const other = await t.converse(OTHER, true);
     const person = await t.app.stores.conversations.getConversation(
       t.clientInstanceId,
@@ -224,13 +229,44 @@ describe("the Try conversation of an agent", () => {
     );
   }, 120_000);
 
+  it("refuses a mismatched owner on Try open", async () => {
+    const t = await fixture();
+    const result = await t.app.call("agents.try.open", {
+      params: { name: AGENT.name },
+      query: { workspaceId: "cws_wrong-owner" }
+    });
+    expect(result.statusCode).toBe(404);
+  });
+
   it("goes with Publish and Discard, keeping its audit and usage, and opens anew after", async () => {
     const t = await fixture();
     const before = await t.live();
     const build = await t.converse();
     await t.propose(build, "Proposed once.", before.revision);
     const otherBuild = await t.converse();
-    const otherTry = await t.opened(otherBuild);
+    const own = await t.converse(OTHER, true);
+    const person = await t.app.stores.conversations.getConversation(
+      t.clientInstanceId,
+      asConversationId(own)
+    );
+    const agent = await t.app.stores.configAssets.getConfigAsset({
+      clientInstanceId: t.clientInstanceId,
+      ...AGENT
+    });
+    await t.ok(
+      t.app.call("permissions.grant", {
+        payload: {
+          holderKind: "user",
+          holderId: person?.createdByUserId,
+          action: "agent.write",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: agent?.id
+        }
+      })
+    );
+    const otherTry = openSchema.parse((await t.ok(t.open(otherBuild, OTHER))).json()).conversation
+      .id;
     const first = await t.opened(build);
     await t.say(first, "Try it.");
     const usage = await t.usage(first);
@@ -250,7 +286,8 @@ describe("the Try conversation of an agent", () => {
     expect(await t.usage(first)).toEqual(usage);
 
     // The next open makes another; a Discard removes that one.
-    const secondOtherTry = await t.opened(otherBuild);
+    const secondOtherTry = openSchema.parse((await t.ok(t.open(otherBuild, OTHER))).json())
+      .conversation.id;
     const second = await t.opened(build);
     expect(second).not.toBe(first);
     await t.propose(build, "Proposed twice.", (await t.live()).revision);
@@ -286,35 +323,59 @@ describe("the Try conversation of an agent", () => {
     expect(await t.status(build)).toBe("active");
   }, 120_000);
 
-  it("survives deletion of Build and goes with deletion of its agent", async () => {
-    const t = await fixture({ allowAgentDeletion: true });
-    const build = await t.converse();
-    const tried = await t.opened(build);
-    await t.ok(t.app.call("conversations.delete", { params: { conversationId: build } }));
-    expect(await t.status(tried)).toBe("active");
-    expect(await t.opened(await t.converse())).toBe(tried);
-    await t.ok(
-      t.app.call("assets.delete", {
-        params: AGENT,
-        payload: { expectedRevision: (await t.live()).revision }
-      })
-    );
-    expect(await t.status(tried)).toBe("deleted");
-    expect(await t.linked(tried)).toBe(false);
-    expect(await t.deletions(tried)).toEqual([
-      expect.objectContaining({
-        metadata: expect.objectContaining({ requestedBy: "agent_deleted" })
-      })
-    ]);
-  }, 120_000);
+  it.each(["direct", "sync"])(
+    "survives deletion of Build and goes with %s deletion of its agent",
+    async (mode) => {
+      const t = await fixture({ allowAgentDeletion: true, releaseSync: true });
+      const build = await t.converse();
+      const tried = await t.opened(build);
+      await t.ok(t.app.call("conversations.delete", { params: { conversationId: build } }));
+      expect(await t.status(tried)).toBe("active");
+      expect(await t.opened(await t.converse())).toBe(tried);
+      await t.ok(
+        mode === "direct"
+          ? t.app.call("assets.delete", {
+              params: AGENT,
+              payload: { expectedRevision: (await t.live()).revision }
+            })
+          : t.app.call("assets.sync", {
+              payload: {
+                items: [{ type: "delete", ...AGENT, expectedRevision: (await t.live()).revision }],
+                defaultAgentName: null,
+                expectedDefaultAgentName: AGENT.name
+              }
+            })
+      );
+      expect(await t.status(tried)).toBe("deleted");
+      expect(await t.linked(tried)).toBe(false);
+      expect(await t.deletions(tried)).toEqual([
+        expect.objectContaining({
+          metadata: expect.objectContaining({ requestedBy: "agent_deleted" })
+        })
+      ]);
+    },
+    120_000
+  );
 
   it("keeps a replaced Try conversation in reach of the retry until its cleanup is through", async () => {
     const t = await fixture({ filesStore: true });
     const before = await t.live();
     const build = await t.converse();
     const first = await t.opened(build);
-    // A call in the Try conversation leaves an Operation Run, and nothing else to clean up.
-    await t.call(first, "platform.assets.get");
+    // A stored preview call remains discoverable when its cleanup fails once.
+    await t.app.stores.operationRuns.create({
+      id: createPlatformId("oprun"),
+      clientInstanceId: t.clientInstanceId,
+      operation: "preview.read",
+      effect: "reading",
+      actor: { kind: "user", id: "owner", label: "Owner" },
+      origin: { kind: "user" },
+      conversationId: asConversationId(first),
+      target: "live",
+      inputHash: "preview-read",
+      correlationId: "preview-cleanup",
+      startedAt: new Date().toISOString()
+    });
     expect(await t.operationRuns(first)).toBeGreaterThan(0);
     await t.propose(build, "Proposed.", before.revision);
 
@@ -382,7 +443,7 @@ describe("the Try conversation of an agent", () => {
       t.clientInstanceId,
       asConversationId(build)
     );
-    // Opened as the store opens it: the person holds no write right on the agent here.
+    // Seed through the store to exercise the account deletion order directly.
     const agent = await t.app.stores.configAssets.getConfigAsset({
       clientInstanceId: t.clientInstanceId,
       ...AGENT
@@ -397,6 +458,18 @@ describe("the Try conversation of an agent", () => {
       title: "Try",
       retainedUntil: new Date(Date.now() + 86_400_000).toISOString()
     });
+    await t.ok(
+      t.app.call("permissions.grant", {
+        payload: {
+          holderKind: "user",
+          holderId: person?.createdByUserId,
+          action: "agent.write",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: agent?.id
+        }
+      })
+    );
     // The Build conversation is the newer one, so the deletion lists it first.
     await t.say(conversation.id, "Try it.", OTHER);
     await t.say(build, "Build it.", OTHER);

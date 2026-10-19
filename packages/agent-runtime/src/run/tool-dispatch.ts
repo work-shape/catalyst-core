@@ -1,3 +1,4 @@
+import { forbiddenPreviewTool } from "@work-shape/catalyst-core";
 import type {
   AgentRunId,
   ChatMessage,
@@ -76,7 +77,9 @@ export class ToolDispatch {
         state,
         toolCall,
         runTool: this.options.runTool,
-        unoffered: isUnofferedDataToolCall(toolCall.toolName, offeredDataTools),
+        unoffered:
+          isUnofferedDataToolCall(toolCall.toolName, offeredDataTools) ||
+          Boolean(input.preview && forbiddenPreviewTool(toolCall.toolName)),
         ...(refusal ? { refusal } : {}),
         modelContext: this.modelInput.modelContextOptions(context),
         repeatedToolCall: this.registerToolCall(

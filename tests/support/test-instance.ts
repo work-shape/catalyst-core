@@ -118,6 +118,7 @@ type Metadata = {
   /** The options of a server built here, from which its job worker is made on first use. */
   serverOptions?: ChatServerOptions;
   jobs?: JobWorker;
+  agentRunJobs?: JobWorker;
   closed: boolean;
   cleanup(): Promise<void>;
 };
@@ -354,6 +355,7 @@ async function createConfiguredInstance(
       server: testFramework(app).app,
       runtime: app,
       jobs: app.jobs,
+      agentRunJobs: app.agentRunJobs,
       config: app.config,
       closed: false,
       cleanup: () => app.close()
@@ -502,6 +504,13 @@ function bindInstance<S extends PlatformStores>(
  * due with `runDue()`, or starts the loop itself. An instance built from server options gets
  * its worker here, with the handlers the product registers.
  */
+/** Executes only the Agent Run worker, held off by startAgentRunJobs: false. */
+export function getTestAgentRunJobs(instance: TestInstance): JobWorker {
+  const jobs = metadata.get(instance)?.agentRunJobs;
+  if (!jobs) throw new Error("This fixture has no Agent Run worker");
+  return jobs;
+}
+
 export function getTestJobs(instance: TestInstance, jobOptions?: ChatServerJobOptions): JobWorker {
   const state = metadata.get(instance);
   if (!state || state.closed) throw new Error("Test instance is closed");

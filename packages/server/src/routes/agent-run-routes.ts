@@ -20,7 +20,8 @@ import {
   asAgentRunId,
   asCollaborationWorkspaceId,
   asConversationId,
-  requireAuthScope
+  requireAuthScope,
+  withoutAgentPreviewConfig
 } from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import { RunObservationWorkflow } from "../conversations/run-observation-service";
@@ -216,7 +217,7 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
     const requestHost = request.headers.host ?? request.hostname;
     return startConversationRunResponseSchema.parse({
       conversation,
-      userMessage,
+      userMessage: { ...userMessage, metadata: withoutAgentPreviewConfig(userMessage.metadata) },
       run,
       thread: await runObservation.getThreadSnapshot(conversation.id, user),
       eventsUrl: new URL(eventsUrl, `${request.protocol}://${requestHost}`).toString()

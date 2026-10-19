@@ -171,6 +171,7 @@ interface ExecutedCall {
 }
 
 interface InvokeOptions {
+  draft?: import("@work-shape/catalyst-core").OperationDraftContext;
   origin?: OperationOrigin;
   workspaceId?: import("@work-shape/catalyst-core").CollaborationWorkspaceId;
   effect?: OperationEffect;
@@ -468,6 +469,7 @@ export async function fixtureOn<Instance extends AccessInstance>(
         // A direct call needs an origin some exposure admits: a person's key over the CLI.
         origin: further.origin ?? { kind: "cli" },
         workspaceId: further.workspaceId,
+        ...(further.draft ? { draft: further.draft } : {}),
         correlationId: "corr_test",
         ...(further.idempotencyKey ? { idempotencyKey: further.idempotencyKey } : {})
       },
