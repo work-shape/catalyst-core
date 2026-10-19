@@ -599,6 +599,18 @@ describe("inbox item of an operation call", () => {
   // ACCEPT-FIX-9 E7: an outdated request offered Approve without a word, although approving
   // applies nothing. ACCEPT-2d C-2: it then still offered Approve, its comparison read as a
   // revert of the newer text, and the requester was told to ask themselves.
+  it.each(["agent", "workflow", "connection", "knowledge_base", "data_store", "app", "guardrail"])(
+    "offers only Decline on a stale held %s save (LOWS-D)",
+    (kind) => {
+      for (const locale of ["en", "de"] as const) {
+        const markup = put({ ...changedSkill, kind, isStale: true }, locale);
+        expect(markup).toContain('data-testid="operation-call-stale"');
+        expect(markup).toContain('data-decision="reject"');
+        expect(markup).not.toContain('data-decision="approve"');
+      }
+    }
+  );
+
   it("offers only Decline on a request whose skill changed since, labels its comparison and speaks to the reader's role", () => {
     const stale = { ...changedSkill, isStale: true };
     const asRequester = (markup: ReactNode) =>

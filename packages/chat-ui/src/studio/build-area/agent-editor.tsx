@@ -97,7 +97,7 @@ export function AgentEditor({
   availability?: AvailabilityChoice;
   /**
    * A new agent's: what it would use that is missing where it starts, read before the create.
-   * Absent for an existing agent and for one that starts hidden.
+   * Absent for an existing agent. A new hidden agent is checked too: the first becomes the default everywhere.
    */
   createCheck?: AgentCreateCheck;
   /**
