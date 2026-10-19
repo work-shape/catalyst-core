@@ -79,8 +79,11 @@ export interface OperationCallAsset {
   kind: string;
   name: string;
   title: string;
-  /** Approving creates the asset. */
-  isNew: boolean;
+  /**
+   * Approving creates the asset. Absent where the server does not say: to a reader who may not
+   * read the stored asset, and in a preview frozen for a requester who could not.
+   */
+  isNew?: boolean;
   /** A skill's text in the shape `SkillChangeBody` reads. An opened request has it, a row has not. */
   content?: unknown;
   /** A skill's description as the call saves it. */
@@ -89,7 +92,7 @@ export interface OperationCallAsset {
   previous: { title?: string; description?: string };
   /** The resources the stored skill has and the call leaves out. */
   removedResources: string[];
-  /** The reader may not read the stored skill, so nothing is compared with it. */
+  /** The reader may not read the stored skill: nothing of its text or the call's is shown. */
   beforeWithheld: boolean;
   /** The stored asset changed after the call was held: approving it applies nothing. */
   isStale: boolean;
@@ -251,7 +254,12 @@ function parseActor(value: unknown): OperationCallPreview["actor"] | undefined {
 }
 
 function parseAsset(value: unknown): OperationCallAsset | undefined {
-  if (!isRecord(value) || typeof value.isNew !== "boolean") {
+  // Whether the save creates may be unknown. Where the reader may read the asset, a value that
+  // is not a yes or no makes the asset unreadable; a withheld one is read for its title alone.
+  if (
+    !isRecord(value) ||
+    (value.isNew !== undefined && typeof value.isNew !== "boolean" && value.beforeWithheld !== true)
+  ) {
     return undefined;
   }
   const kind = readText(value.kind);
@@ -267,7 +275,7 @@ function parseAsset(value: unknown): OperationCallAsset | undefined {
     kind,
     name,
     title: readText(value.title) ?? name,
-    isNew: value.isNew,
+    ...(typeof value.isNew === "boolean" ? { isNew: value.isNew } : {}),
     previous: {
       ...(previousTitle ? { title: previousTitle } : {}),
       ...(previousDescription ? { description: previousDescription } : {})

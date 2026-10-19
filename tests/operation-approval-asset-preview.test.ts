@@ -112,13 +112,14 @@ describe("the preview of a held asset save", () => {
             });
       const item = response.json();
       expect(JSON.stringify(item)).not.toContain(OLD_PARAGRAPH);
-      expect(item.preview.asset).toEqual({
+      expect(item.preview.asset).toMatchObject({
         kind: "skill",
         name: "kai-leave",
         title: "Leave policy",
-        namespace: "kai-",
         beforeWithheld: true
       });
+      expect(item.preview.asset.isNew).toBeUndefined();
+      expect(item.preview.asset.content).toBeUndefined();
       expect(item).toEqual(
         (await t.expectOk(reader.id, "approval_requests.get", { params: { requestId } })).json()
       );
@@ -410,7 +411,15 @@ describe("the preview of a held asset save", () => {
 
   it("ACCEPT-FIX-9b: withholds a new skill's comparison shape before and after rejection", async () => {
     const { t, holding, hold, preview } = await setup();
-    await t.seedHistoricalGrant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
+    await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.admin.id,
+      action: "skill.read",
+      effect: "deny",
+      scopeKind: "instance",
+      grantedBy: t.root.id
+    });
     holding("assets.put");
     const requestId = await hold("assets.put", "skill", "kai-new", {
       config: { ...skill("kai-new", changed), title: "New policy" }
@@ -419,15 +428,20 @@ describe("the preview of a held asset save", () => {
       kind: "skill",
       name: "kai-new",
       title: "New policy",
-      namespace: "kai-",
       beforeWithheld: true
     };
-    expect((await preview(t.admin.id, requestId)).asset).toEqual(withheld);
+    const before = (await preview(t.admin.id, requestId)).asset;
+    expect(before).toMatchObject(withheld);
+    expect(before.content).toBeUndefined();
+    expect(before.isNew).toBeUndefined();
     await t.expectOk(t.admin.id, "approval_requests.decide", {
       params: { requestId },
       payload: { decision: "reject" }
     });
-    expect((await preview(t.admin.id, requestId)).asset).toEqual(withheld);
+    const after = (await preview(t.admin.id, requestId)).asset;
+    expect(after).toMatchObject(withheld);
+    expect(after.content).toBeUndefined();
+    expect(after.isNew).toBeUndefined();
   });
 
   it("names an asset of another kind and shows no content for it", async () => {

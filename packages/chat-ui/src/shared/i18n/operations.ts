@@ -136,6 +136,7 @@ export const operations = defineTranslations({
       "If you approve, it runs once as {actor}. If you decline, nothing runs.",
     "operations.callAssetCreate": "{actor} wants to create {kind} “{title}”.",
     "operations.callAssetChange": "{actor} wants to change {kind} “{title}”.",
+    "operations.callAssetSave": "{actor} wants to save {kind} “{title}”.",
     "operations.callAssetStale":
       "This request is out of date: “{title}” was changed after it was made. Approving it changes nothing. Ask {actor} to submit a new change.",
     "operations.callAssetKindSkill": "the skill",
@@ -156,8 +157,8 @@ export const operations = defineTranslations({
     "operations.callSkillDescription": "Description",
     "operations.callSkillRemovedResources": "Removed references",
     "operations.callSkillSameText": "The text of the skill stays as it is.",
-    "operations.callSkillBeforeWithheld":
-      "You may not read this skill as it is now, so only the new text is shown and nothing is compared.",
+    "operations.callAssetWithheld":
+      "You may not read {kind}, so neither its current content nor the proposed content is shown.",
     "operations.callDetails": "Technical details",
     "operations.callFullInput": "Full input",
     "operations.callCalledBy": "Called by",
@@ -352,6 +353,7 @@ export const operations = defineTranslations({
       "Wenn du freigibst, läuft sie einmal als {actor}. Wenn du ablehnst, läuft nichts.",
     "operations.callAssetCreate": "{actor} möchte {kind} „{title}“ anlegen.",
     "operations.callAssetChange": "{actor} möchte {kind} „{title}“ ändern.",
+    "operations.callAssetSave": "{actor} möchte {kind} „{title}“ speichern.",
     "operations.callAssetStale":
       "Diese Anfrage ist veraltet: „{title}“ wurde geändert, nachdem die Anfrage gestellt wurde. Eine Freigabe ändert nichts. Bitte {actor} um eine neue Änderung.",
     "operations.callAssetKindSkill": "den Skill",
@@ -372,8 +374,8 @@ export const operations = defineTranslations({
     "operations.callSkillDescription": "Beschreibung",
     "operations.callSkillRemovedResources": "Entfernte Referenzen",
     "operations.callSkillSameText": "Der Text des Skills bleibt, wie er ist.",
-    "operations.callSkillBeforeWithheld":
-      "Du darfst diesen Skill in seinem jetzigen Stand nicht lesen. Deshalb steht hier nur der neue Text, und nichts wird verglichen.",
+    "operations.callAssetWithheld":
+      "Du darfst {kind} nicht lesen. Deshalb wird weder der jetzige noch der vorgeschlagene Inhalt gezeigt.",
     "operations.callDetails": "Technische Details",
     "operations.callFullInput": "Vollständige Eingabe",
     "operations.callCalledBy": "Aufgerufen von",

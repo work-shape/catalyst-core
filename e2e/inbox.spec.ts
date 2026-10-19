@@ -630,8 +630,8 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     expect(JSON.stringify(kept)).toContain(OLD_PARAGRAPH);
 
     // A person who may write skills here and may not read them asks for the same change. Their
-    // own request shows them the new text and says that nothing is compared: the paragraph
-    // the skill has now is not theirs to read.
+    // own request names the skill and says why nothing else is shown: neither the paragraph
+    // the skill has now nor the one proposed, not even under the technical details.
     const stamp = Date.now();
     const writer = {
       email: `e2e-held-writer-${stamp}@example.test`,
@@ -682,8 +682,13 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     await writerPage.goto(`/inbox/${withheldRequestId}`);
     const withheld = writerPage.getByTestId("operation-call");
     await expect(withheld.getByTestId("operation-call-no-before")).toBeVisible();
-    await expect(withheld).toContainText(NEW_PARAGRAPH);
+    await expect(withheld.getByTestId("operation-call-headline")).toContainText(HELD_TITLE);
+    await expect(withheld).not.toContainText(NEW_PARAGRAPH);
     await expect(withheld).not.toContainText(OLD_PARAGRAPH);
+    await withheld.getByTestId("operation-call-details-open").click();
+    await expect(withheld.getByTestId("operation-call-technical")).toBeVisible();
+    await expect(withheld).not.toContainText(NEW_PARAGRAPH);
+    await expect(withheld.getByTestId("operation-call-full-input")).toHaveCount(0);
     await shoot(
       writerPage,
       "inbox-skill-change-withheld",

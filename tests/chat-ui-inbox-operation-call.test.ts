@@ -420,25 +420,124 @@ describe("inbox item of an operation call", () => {
     expect(markup).toContain("old/table.md");
     expect(markup).not.toContain('data-testid="operation-call-no-before"');
 
-    // A reader who may not read the stored skill is told that nothing is compared.
-    const withheld = put({
-      ...changedSkill,
-      previous: undefined,
-      removedResources: undefined,
-      beforeWithheld: true,
-      content: {
-        ...changedSkill.content,
-        changes: [{ type: "replace", target: "root", after: "Krankmeldung ab dem ersten Tag." }]
-      }
-    });
-    expect(withheld).toMatch(
-      /data-testid="operation-call-no-before"[^>]*>.*You may not read this skill as it is now/u
-    );
-    expect(withheld).not.toContain("Before</span>");
     // A save that leaves the text as it is says so.
     expect(put({ ...changedSkill, content: { ...changedSkill.content, changes: [] } })).toContain(
       "The text of the skill stays as it is."
     );
+  });
+
+  // Hosted check 39180143605: for a reader who may not read the skill, the server sends only
+  // its kind, name and title. The item dropped that preview, and so showed the call's raw input
+  // with the proposed text.
+  it("shows a reader who may not read the skill its title and why, and nothing the call writes", () => {
+    const current = "Krankmeldung ab dem dritten Tag.";
+    const proposed = "Krankmeldung ab dem ersten Tag.";
+    const withheldSkill = {
+      kind: "skill",
+      name: "hr-leave-policy",
+      title: "Urlaubsrichtlinie",
+      beforeWithheld: true
+    };
+    const withheld = (locale: "de" | "en") =>
+      call(
+        {
+          summary: "assets.put",
+          preview: {
+            ...putPreview,
+            // More fields than listed would open the technical details by themselves.
+            inputs: [
+              { key: "kind", value: "skill" },
+              { key: "config.content", value: proposed }
+            ],
+            inputFieldCount: 4,
+            asset: withheldSkill
+          },
+          payload: { runId: "opr_2", input: { config: { content: proposed } } }
+        },
+        locale
+      );
+
+    const en = withheld("en");
+    expect(en).toMatch(
+      /data-testid="operation-call-headline"[^>]*>Elif Aydin wants to save the skill “Urlaubsrichtlinie”\.</u
+    );
+    expect(en).toMatch(/data-field="title"[\s\S]*Urlaubsrichtlinie/u);
+    expect(en).toMatch(
+      /data-testid="operation-call-no-before"[\s\S]*You may not read the skill, so neither its current content nor the proposed content is shown\./u
+    );
+    expect(withheld("de")).toMatch(
+      /data-testid="operation-call-headline"[^>]*>Elif Aydin möchte den Skill „Urlaubsrichtlinie“ speichern\.</u
+    );
+    expect(withheld("de")).toContain(
+      "Du darfst den Skill nicht lesen. Deshalb wird weder der jetzige noch der vorgeschlagene Inhalt gezeigt."
+    );
+    for (const markup of [en, withheld("de")]) {
+      expect(markup).not.toContain(proposed);
+      expect(markup).not.toContain(current);
+      expect(markup).not.toContain("config.content");
+      expect(markup).not.toContain('data-testid="operation-call-skill"');
+      expect(markup).not.toContain('data-testid="operation-call-full-input"');
+    }
+    // Nothing claims a new skill or a change of a stored one from what the server left out.
+    expect(en).not.toContain("wants to create");
+    expect(en).not.toContain("wants to change");
+    expect(en).not.toContain("If you approve, the change is saved.");
+  });
+
+  // The server holds back every kind of asset, not only skills: the notice names the kind.
+  it("names an agent the reader may not read as an agent, with its title and nothing it writes", () => {
+    const proposed = "Antworte immer auf Englisch.";
+    const markup = (locale: "de" | "en") =>
+      call(
+        {
+          summary: "assets.put",
+          preview: {
+            ...putPreview,
+            inputs: [{ key: "config.instructions", value: proposed }],
+            asset: {
+              kind: "agent",
+              name: "hr-assistant",
+              title: "HR-Assistent",
+              beforeWithheld: true
+            }
+          },
+          payload: { runId: "opr_2", input: { config: { instructions: proposed } } }
+        },
+        locale
+      );
+
+    expect(markup("en")).toMatch(
+      /data-testid="operation-call-headline"[^>]*>Elif Aydin wants to save the agent “HR-Assistent”\.</u
+    );
+    expect(markup("en")).toContain(
+      "You may not read the agent, so neither its current content nor the proposed content is shown."
+    );
+    expect(markup("de")).toContain(
+      "Du darfst den Agenten nicht lesen. Deshalb wird weder der jetzige noch der vorgeschlagene Inhalt gezeigt."
+    );
+    for (const locale of ["en", "de"] as const) {
+      expect(markup(locale)).not.toContain(proposed);
+      expect(markup(locale)).not.toContain("Skill");
+    }
+  });
+
+  // A preview frozen for a requester who could not read the skill holds neither whether the
+  // save creates nor its text. A later reader who may read it gets the title alone: the item
+  // names the skill and makes no claim of a new one or a change.
+  it("names the skill of a frozen preview that says neither whether it is new nor what it writes", () => {
+    const markup = put({ kind: "skill", name: "hr-leave-policy", title: "Urlaubsrichtlinie" });
+
+    expect(markup).toMatch(
+      /data-testid="operation-call-headline"[^>]*>Elif Aydin wants to save the skill “Urlaubsrichtlinie”\.</u
+    );
+    expect(markup).toContain("If you approve, it is saved as Elif Aydin.");
+    expect(markup).not.toContain("wants to create");
+    expect(markup).not.toContain("wants to change");
+    expect(markup).not.toContain('data-testid="operation-call-no-before"');
+    // A yes or no that is neither is not read as one.
+    expect(
+      put({ kind: "skill", name: "hr-leave-policy", title: "Urlaubsrichtlinie", isNew: "yes" })
+    ).not.toContain("Urlaubsrichtlinie");
   });
 
   // ACCEPT-FIX-9 E4: once decided, the item read "Action to approve · assets.put" and "the
