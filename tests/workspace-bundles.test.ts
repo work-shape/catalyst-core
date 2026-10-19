@@ -245,6 +245,16 @@ describe("the build limits of a workspace", () => {
       }),
       200
     );
+    // The model list is the operator's choice: a Builder picks among it without the right to
+    // manage models, and is refused outside it naming the list.
+    const pick = (name: string, modelBindingId: string) =>
+      put(t.kai.id, name, { modelProviderId: undefined, modelBindingId });
+    expectStatus(await pick("kai-listed-model", "plain"), 200);
+    const unlisted = await pick("kai-unlisted-model", "other");
+    expect([unlisted.statusCode, refusalOf(unlisted)]).toEqual([
+      403,
+      { reason: "model_not_allowed", modelBindingId: "other", ...named }
+    ]);
     // An agent of the instance is not bound by the workspace's lists.
     expectStatus(await t.putAgent(t.admin.id, "house", { toolNames: ["second.tool"] }), 200);
   });

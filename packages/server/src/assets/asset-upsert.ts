@@ -20,6 +20,7 @@ import {
 } from "./asset-set";
 import {
   assertChangedAgentsAllowed,
+  listsModelBindings,
   assertUpsertWithinLimits,
   assetKey,
   loadStoredAssets,
@@ -127,7 +128,7 @@ export async function upsertAsset(
     call.runtime?.locale ?? options.config.localization.defaultLocale,
     options
   );
-  const { namespaces, warnings: toolWarnings } = await assertChangedAgentsAllowed(
+  const { lists, warnings: toolWarnings } = await assertChangedAgentsAllowed(
     options,
     call.access,
     stored.set,
@@ -141,7 +142,12 @@ export async function upsertAsset(
     }
   );
   if (!write.releaseDraft)
-    assertUpsertWithinLimits(call.access, surface, kind, { name, current, next, namespaces });
+    assertUpsertWithinLimits(call.access, surface, kind, {
+      name,
+      current,
+      next,
+      modelBindingsListed: listsModelBindings(lists, name)
+    });
   await kind.assertScopedWrite?.({
     clientInstanceId: options.clientInstanceId,
     scope: target.scope,

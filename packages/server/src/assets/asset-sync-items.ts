@@ -12,6 +12,8 @@ import {
   loadStoredAssets,
   impliesDefaultChange,
   maxSyncItems,
+  listsModelBindings,
+  loadAgentLists,
   missingUpsertRightOf,
   preparedUpsert,
   requireAssetKindModuleOn,
@@ -154,9 +156,9 @@ async function requireFurtherRights(
   planned: PlannedItem[]
 ): Promise<void> {
   const ready = planned.filter(isReady);
-  const [stored, namespaces] = await Promise.all([
+  const [stored, lists] = await Promise.all([
     loadStoredAssets(options),
-    options.stores.access.listNamespaceRecords({ clientInstanceId: options.clientInstanceId })
+    loadAgentLists(options, input.workspaceId)
   ]);
   const storedByName = definitionsByName(stored.set);
   const defaultChange =
@@ -178,7 +180,7 @@ async function requireFurtherRights(
       name: entry.name,
       current,
       next: preparedUpsert(access, "sync", entry.kind, { current, next: entry.item.config }),
-      namespaces
+      modelBindingsListed: listsModelBindings(lists, entry.name)
     });
     if (action !== undefined) {
       entry.refusal = { code: "FORBIDDEN", message: `Missing the right '${action}'`, action };

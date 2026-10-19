@@ -160,7 +160,8 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     /** The stored definition, or undefined for a new asset. */
     current: unknown;
     next: unknown;
-    namespaces: readonly Namespace[];
+    /** A list names the model bindings the agent may use (`listsModelBindings`). */
+    modelBindingsListed: boolean;
   }): string | undefined;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses this interactive save. */
   assertInteractiveUpsertAllowed(input: {
@@ -171,7 +172,7 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     current: unknown;
     /** The validated definition. */
     next: unknown;
-    namespaces: readonly Namespace[];
+    modelBindingsListed: boolean;
   }): void;
   /**
    * Throws where the stored asset may not be changed through any asset operation, whatever

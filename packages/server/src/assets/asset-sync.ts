@@ -33,6 +33,7 @@ import {
   assetKey,
   authorizeInteractiveWrite,
   findChangedAgentRefusals,
+  listsModelBindings,
   findIssuesOfChange,
   isHiddenEverywhere,
   isReleaseSync,
@@ -348,7 +349,7 @@ async function checkBatch(
         name: entry.name,
         current: storedByName(entry.kind.kind).get(entry.name),
         next: acceptedByName(entry.kind.kind).get(entry.name),
-        namespaces: changed.namespaces
+        modelBindingsListed: listsModelBindings(changed.lists, entry.name)
       })
     );
   }

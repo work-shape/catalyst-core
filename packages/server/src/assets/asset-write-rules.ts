@@ -31,11 +31,11 @@ import {
   type AssetScope,
   type AuditRecorder,
   type AuthenticatedIdentity,
+  type CollaborationWorkspace,
   type ConfigAssetKind,
   type ConfigAssetRecord,
   type InitialAgentAvailability,
   type JsonObject,
-  type CollaborationWorkspace,
   type Namespace,
   type OperationAuthorization,
   type RuntimeCallContext
@@ -535,7 +535,7 @@ export async function findChangedAgentRefusals(
   validated: AssetSet,
   toolTargets: AgentToolValidationTargets
 ): Promise<{
-  namespaces: Namespace[];
+  lists: AgentLists;
   modelIssues: string[];
   refusals: ChangedAgentRefusal[];
   warnings: AgentToolWarning[];
@@ -562,26 +562,54 @@ export async function findChangedAgentRefusals(
       refusals.push({ agentName: entry.agent.name, error: invalidAssetSet(issues) });
     }
   }
-  // The Namespaces without their counts: a write reads the prefixes and the lists only.
-  const namespaces = await options.stores.access.listNamespaceRecords({
-    clientInstanceId: options.clientInstanceId
-  });
   // A write has one owner: the workspace whose build limits bind the agents it owns.
-  const owner =
-    toolTargets.scope.workspaceId === undefined
-      ? undefined
-      : await options.stores.workspaces.getWorkspace(
-          options.clientInstanceId,
-          toolTargets.scope.workspaceId
-        );
+  const lists = await loadAgentLists(options, toolTargets.scope.workspaceId);
   for (const { agent } of changed) {
-    const namespace = findNamespaceOfAssetName(namespaces, agent.name);
+    const namespace = findNamespaceOfAssetName(lists.namespaces, agent.name);
     const error =
       (namespace && buildLimitRefusal(access, namespaceLimits(namespace), agent)) ??
-      (owner && buildLimitRefusal(access, workspaceLimits(owner), agent));
+      (lists.workspace && buildLimitRefusal(access, workspaceLimits(lists.workspace), agent));
     if (error) refusals.push({ agentName: agent.name, error });
   }
-  return { namespaces, modelIssues, refusals, warnings };
+  return { lists, modelIssues, refusals, warnings };
+}
+
+/**
+ * The lists that bind the agents of one owner: the Namespaces', until NS-RETIRE, and the build
+ * limits of the workspace that owns them.
+ */
+export interface AgentLists {
+  namespaces: readonly Namespace[];
+  workspace?: CollaborationWorkspace;
+}
+
+export async function loadAgentLists(
+  options: Pick<AssetWorkflowOptions, "stores" | "clientInstanceId">,
+  workspaceId: string | undefined
+): Promise<AgentLists> {
+  const { clientInstanceId } = options;
+  // The Namespaces without their counts: a write reads the prefixes and the lists only.
+  const [namespaces, workspace] = await Promise.all([
+    options.stores.access.listNamespaceRecords({ clientInstanceId }),
+    workspaceId === undefined
+      ? undefined
+      : options.stores.workspaces.getWorkspace(
+          clientInstanceId,
+          asCollaborationWorkspaceId(workspaceId)
+        )
+  ]);
+  return { namespaces, ...(workspace ? { workspace } : {}) };
+}
+
+/**
+ * Whether a list names the model bindings the agent may use: the operator's choice of models
+ * for it, so its writer picks among them without the right to manage models.
+ */
+export function listsModelBindings(lists: AgentLists, agentName: string): boolean {
+  return (
+    findNamespaceOfAssetName(lists.namespaces, agentName)?.allowedModelBindingIds !== undefined ||
+    lists.workspace?.allowedModelBindingIds !== undefined
+  );
 }
 
 /** Lists that bind an agent, with the place a refusal names. */
@@ -614,7 +642,7 @@ export async function assertChangedAgentsAllowed(
   stored: AssetSet,
   validated: AssetSet,
   toolTargets: AgentToolValidationTargets
-): Promise<{ namespaces: Namespace[]; warnings: AgentToolWarning[] }> {
+): Promise<{ lists: AgentLists; warnings: AgentToolWarning[] }> {
   const found = await findChangedAgentRefusals(options, access, stored, validated, toolTargets);
   if (found.modelIssues.length > 0) {
     throw invalidAssetSet(found.modelIssues);

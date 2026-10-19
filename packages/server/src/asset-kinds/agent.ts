@@ -141,14 +141,14 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       return withoutFastMode;
     },
 
-    missingUpsertRight({ access, name, current, next, namespaces }) {
-      return changedModelSettings(namespaces, name, current, next).length > 0 &&
+    missingUpsertRight({ access, current, next, modelBindingsListed }) {
+      return changedModelSettings(modelBindingsListed, current, next).length > 0 &&
         !access.authorize(MODEL_SETTINGS_RIGHT).allowed
         ? MODEL_SETTINGS_RIGHT
         : undefined;
     },
 
-    assertInteractiveUpsertAllowed({ access, name, current, next, namespaces }) {
+    assertInteractiveUpsertAllowed({ access, name, current, next, modelBindingsListed }) {
       if (current === undefined && !policy().allowAgentCreation) {
         throw new AppError("FORBIDDEN", "Interactive agent creation is disabled");
       }
@@ -159,7 +159,7 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         (field) =>
           !configValuesEqual(readDefinitionField(stored, field), readDefinitionField(next, field))
       );
-      const changedSettings = changedModelSettings(namespaces, name, current, next);
+      const changedSettings = changedModelSettings(modelBindingsListed, current, next);
       if (changedSettings.length > 0 && !access.authorize(MODEL_SETTINGS_RIGHT).allowed) {
         throw new AppError(
           "FORBIDDEN",
@@ -217,19 +217,17 @@ const MODEL_SETTINGS_RIGHT = "agent_models.manage";
 /**
  * The model settings a save changes that the right governs. They are governed by a
  * permission, not by the editable-field policy. The one exception is the binding of an agent
- * in a Namespace that lists bindings: the list is the operator's choice of models for that
- * Namespace, so its writer picks among them.
+ * a list of bindings binds, a Namespace's or its workspace's: the list is the operator's choice
+ * of models for it, so its writer picks among them.
  */
 function changedModelSettings(
-  namespaces: readonly Namespace[],
-  name: string,
+  modelBindingsListed: boolean,
   current: unknown,
   next: unknown
 ): AgentModelSettingField[] {
-  const bindingListed = hasModelBindingList(namespaces, name);
   return AGENT_MODEL_SETTING_FIELDS.filter(
     (field) =>
-      !(field === "modelBindingId" && bindingListed) &&
+      !(field === "modelBindingId" && modelBindingsListed) &&
       !configValuesEqual(
         agentModelSettingValue(current, field),
         agentModelSettingValue(next, field)
@@ -239,10 +237,6 @@ function changedModelSettings(
 
 function isAgentModelSettingField(field: string): field is AgentModelSettingField {
   return AGENT_MODEL_SETTING_FIELDS.some((candidate) => candidate === field);
-}
-
-function hasModelBindingList(namespaces: readonly Namespace[], agentName: string): boolean {
-  return findNamespaceOfAssetName(namespaces, agentName)?.allowedModelBindingIds !== undefined;
 }
 
 /**

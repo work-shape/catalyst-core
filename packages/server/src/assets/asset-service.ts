@@ -56,6 +56,8 @@ import {
   loadReferableAssets,
   loadStoredAssets,
   assertUpsertPolicyAndMissingRight,
+  listsModelBindings,
+  loadAgentLists,
   missingUpsertRightOf,
   type StoredAssets,
   requireInstanceDefaultChange,
@@ -303,9 +305,13 @@ export class AssetWorkflow {
         name,
         current,
         next: kind.prepareInteractiveUpsert({ current, next: config }),
-        namespaces: await this.options.stores.access.listNamespaceRecords({
-          clientInstanceId: this.options.clientInstanceId
-        })
+        modelBindingsListed: listsModelBindings(
+          await loadAgentLists(
+            this.options,
+            target.scope.kind === "workspace" ? target.scope.workspaceId : undefined
+          ),
+          name
+        )
       });
       if (action !== undefined) {
         return { allowed: false, action, reason: "no_grant" };
