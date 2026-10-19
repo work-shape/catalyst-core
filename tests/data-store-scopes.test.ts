@@ -423,6 +423,81 @@ describe("scoped Data Store rows", () => {
     });
   });
 
+  it.each([
+    "create table findings_more () inherits (findings)",
+    "create table findings_all (id int, mandant_nr text not null, note text); alter table findings inherit findings_all",
+    "create view findings_view as select * from findings",
+    "create materialized view findings_counts as select mandant_nr, count(*) from findings group by 1"
+  ])("refuses publishing an undeclared relative of a scoped table (M1): %s", async (ddl) => {
+    const w = await world();
+    const relative = { path: "migrations/0002_relative.sql", text: ddl };
+    expect(await refusal(publish(w, [scoped, init, relative]))).toMatchObject({
+      details: { reason: "scope_column_invalid" }
+    });
+  });
+
+  it("never activates a store whose undeclared partition holds a scoped table's rows (M1)", async () => {
+    const w = await setup("partitions", {}, undefined, undefined, undefined, dimension);
+    const id = await publish(w, [
+      scoped,
+      {
+        path: "migrations/0001_init.sql",
+        text: `create table findings (id int, mandant_nr text not null, note text, primary key (id, mandant_nr)) partition by list (mandant_nr);
+create table findings_103 partition of findings for values in ('103');`
+      }
+    ]);
+    const record = await eventually(async () => {
+      await w.worker.runDue();
+      const record = await recordOf(w, id);
+      expect(record.failure).toBeDefined();
+      return record;
+    });
+    expect(record).toMatchObject({ level: 0, failure: { code: "scope_column_invalid" } });
+  });
+
+  it("filters reads and writes of declared partitions and views (M1)", async () => {
+    const w = await setup("declared", {}, undefined, undefined, undefined, dimension);
+    const id = await publish(w, [
+      manifest(`tables:
+  findings: { scope: { mandant: mandant_nr } }
+  findings_101: { scope: { mandant: mandant_nr } }
+  findings_103: { scope: { mandant: mandant_nr } }
+  per_mandant: { scope: { mandant: mandant_nr } }
+`),
+      {
+        path: "migrations/0001_init.sql",
+        text: `create table findings (id int, mandant_nr text not null, note text, primary key (id, mandant_nr)) partition by list (mandant_nr);
+create table findings_101 partition of findings for values in ('101');
+create table findings_103 partition of findings for values in ('103');
+create view per_mandant as select mandant_nr, count(*)::int as n from findings group by mandant_nr;
+insert into findings values (1, '101', 'A'), (3, '103', 'C');`
+      }
+    ]);
+    await settle(w, id, 1);
+    const viewer = access(["101"]);
+    const call103 = (part: string, input: JsonObject) =>
+      call(w, part, { table: "findings_103", ...input }, viewer);
+    expect(await call103("preview_rows", {})).toMatchObject({ rows: [] });
+    expect(await call103("rows", {})).toMatchObject({ rows: [] });
+    expect(
+      await refusal(
+        call103("update", { rows: [{ key: { id: 3, mandant_nr: "103" }, set: { note: "x" } }] })
+      )
+    ).toMatchObject({ details: { reason: "key_not_found" } });
+    expect(
+      await refusal(call103("delete_rows", { keys: [{ id: 3, mandant_nr: "103" }] }))
+    ).toMatchObject({ details: { reason: "key_not_found" } });
+    expect(
+      await refusal(call103("insert", { rows: [{ id: 9, mandant_nr: "103", note: "planted" }] }))
+    ).toMatchObject({ code: "FORBIDDEN" });
+    expect(await call(w, "query", { sql: "select * from findings_103" }, viewer)).toMatchObject({
+      rows: []
+    });
+    expect(await call(w, "query", { sql: "select * from per_mandant" }, viewer)).toEqual(
+      expect.objectContaining({ rows: [{ mandant_nr: "101", n: 1 }] })
+    );
+  });
+
   it("refuses a load missing the scope value and checks old and new scope values on mutations", async () => {
     const w = await world();
     expect(

@@ -177,7 +177,37 @@ export function scopedStatement(
   return { sql: `${sql.slice(0, at)} ${ctes.join(", ")},${sql.slice(at)}`, parameters: bound };
 }
 
-/** Checked inside the DDL transaction before commit; scope columns stay text and NOT NULL. */
+/**
+ * Relations that read or hold a scoped table's rows under another name: a partition or an
+ * `INHERITS` child, a parent the table is one of, and a view over it. The rewrite filters
+ * names it knows, so each of them is declared scoped itself or refused.
+ */
+const UNDECLARED_RELATIVES = `
+  with scoped as (
+    select c.oid, c.relname from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = any($1::text[])
+  ), relatives as (
+    select i.inhrelid as relative, s.relname as scoped
+    from pg_catalog.pg_inherits i join scoped s on s.oid = i.inhparent
+    union all
+    select i.inhparent, s.relname from pg_catalog.pg_inherits i join scoped s on s.oid = i.inhrelid
+    union all
+    select r.ev_class, s.relname from pg_catalog.pg_depend d
+    join pg_catalog.pg_rewrite r on r.oid = d.objid
+    join scoped s on s.oid = d.refobjid
+    where d.classid = 'pg_catalog.pg_rewrite'::pg_catalog.regclass
+      and d.refclassid = 'pg_catalog.pg_class'::pg_catalog.regclass and r.ev_class <> s.oid
+  )
+  select c.relname as relation, r.scoped from relatives r
+  join pg_catalog.pg_class c on c.oid = r.relative
+  where r.relative not in (select oid from scoped)
+  order by 1, 2 limit 1`;
+
+/**
+ * Checked inside the DDL transaction before commit; scope columns stay text, NOT NULL on a
+ * table, and no relation reads a scoped table's rows unscoped.
+ */
 export async function checkScopedColumns(
   sql: Pick<PostgresChangeStatements, "run">,
   tables: ScopedTables | undefined
@@ -186,7 +216,8 @@ export async function checkScopedColumns(
     for (const column of Object.values(metadata.scope)) {
       const rows = z.array(z.object({ valid: z.boolean() })).parse(
         await sql.run(
-          `select a.attnotnull and a.atttypid = 'pg_catalog.text'::pg_catalog.regtype as valid
+          `select (a.attnotnull or c.relkind in ('v', 'm'))
+            and a.atttypid = 'pg_catalog.text'::pg_catalog.regtype as valid
         from pg_catalog.pg_attribute a join pg_catalog.pg_class c on c.oid = a.attrelid
         join pg_catalog.pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relname = $1 and a.attname = $2 and not a.attisdropped`,
@@ -201,4 +232,14 @@ export async function checkScopedColumns(
         );
     }
   }
+  if (!Object.keys(tables ?? {}).length) return;
+  const [relative] = z
+    .array(z.object({ relation: z.string(), scoped: z.string() }))
+    .parse(await sql.run(UNDECLARED_RELATIVES, [Object.keys(tables ?? {})]));
+  if (relative)
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'${relative.relation}' is a partition, inheritance parent or child, or view of scoped table '${relative.scoped}'; declare it scoped too or remove it`,
+      { reason: "scope_column_invalid", table: relative.relation }
+    );
 }
