@@ -130,6 +130,7 @@ export {
 export { resolveBuildPlace, visibleBuildKinds } from "./build-model";
 export { addressBlocksCreate, addressCheckOf } from "./name-check";
 export {
+  approverNamesOf,
   PendingApprovalError,
   readBuildRefusal,
   refusalsOf,

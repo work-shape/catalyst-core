@@ -964,6 +964,7 @@ export function useWorkspaceChatModel({
     },
     approvalRevision: {
       currentUserId: meQuery.data?.id,
+      instanceAdminName: meQuery.data?.instanceAdminName,
       // `getConfig` is the caller's Personal Workspace view of the agents.
       personalWorkspaceAgentName: (proposingAgentName) =>
         activeAgentNameFor(configQuery.data, proposingAgentName),

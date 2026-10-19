@@ -1,6 +1,7 @@
 import { createSkillRevisionPreview, skillConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   INSTANCE_ASSET_SCOPE,
+  SKILL_CHANGE_TYPES,
   asCollaborationWorkspaceId,
   assetScopesEqual,
   findNamespaceOfAssetName,
@@ -46,13 +47,16 @@ interface HeldAssetPreview {
   kind: string;
   name: string;
   title: string;
+  workspaceId?: string;
   /** The registered prefix the name starts with, for an asset of the instance's own. */
   namespace?: string;
   /**
-   * Approving creates the asset. For a reader who may read the target: no asset of the name
-   * exists. For every other reader: the call names no revision it replaces.
+   * Approving creates the asset. Present only when the viewer may read the target, or for
+   * a list row whose existence claim comes from the submitted call.
    */
-  isNew: boolean;
+  isNew?: boolean;
+  /** Stored only: what the frozen call said about existence for list rows. */
+  requestedNew?: boolean;
   /** A skill's text: all of it for a new one, otherwise what differs from the stored one. */
   content?: ReturnType<typeof createSkillRevisionPreview>;
   /** A skill's description as the call saves it. */
@@ -63,11 +67,14 @@ interface HeldAssetPreview {
   removedResources?: string[];
   /** The call changes a skill whose stored text the reader is not shown: nothing is compared. */
   beforeWithheld?: true;
+  /** The frozen revision no longer matches: approving cannot apply this change. */
+  isStale?: boolean;
 }
 
 export type HeldAssetPreviewer = (
   input: JsonValue,
-  viewer: ApprovalPreviewViewer | undefined
+  viewer: ApprovalPreviewViewer | undefined,
+  frozen?: HeldAssetPreview
 ) => Promise<HeldAssetPreview | undefined>;
 
 /**
@@ -97,7 +104,7 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
     return known;
   };
 
-  return async (input, viewer) => {
+  return async (input, viewer, frozen) => {
     const parsed = inputSchema.safeParse(input);
     if (!parsed.success) return undefined;
     const { name, config, expectedRevision, workspaceId } = parsed.data;
@@ -116,11 +123,15 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
     const named = {
       kind: kind.kind,
       name,
-      title: titleOf(kind, config) ?? name,
+      title: frozen?.title ?? titleOf(kind, config) ?? name,
+      ...(workspaceId ? { workspaceId } : {}),
       ...(namespace ? { namespace } : {})
     };
     if (!viewer || viewer.inList) {
-      return { ...named, isNew: (expectedRevision ?? null) === null };
+      return {
+        ...named,
+        isNew: frozen ? (frozen.requestedNew ?? false) : (expectedRevision ?? null) === null
+      };
     }
 
     // The right is asked before anything is told of the stored asset, with the resource
@@ -131,13 +142,25 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
       kind.actions.read,
       accessResource(kind.kind, name, scope, inScope?.id)
     ).allowed;
-    // A reader without the right is told what the call asks for and nothing of what is stored:
-    // not its text and not whether it exists.
-    const stored = mayRead && inScope?.status === "active" ? inScope : undefined;
-    const isNew = mayRead ? stored === undefined : (expectedRevision ?? null) === null;
+    // Only the submitted title identifies a held change to a non-reader. Neither a stored
+    // comparison nor its shape (creation, change kinds or resource targets) is disclosed.
+    if (!mayRead) return { ...named, beforeWithheld: true };
+    const stored = inScope?.status === "active" ? inScope : undefined;
+    if (frozen) {
+      const { requestedNew: _requestedNew, beforeWithheld: _withheld, ...retained } = frozen;
+      return { ...retained, ...named };
+    }
+    const isNew = stored === undefined;
     const next = kind.kind === SKILL_KIND ? skillConfigSchema.safeParse(config) : undefined;
     if (!next?.success) return { ...named, isNew };
-    const preview: HeldAssetPreview = { ...named, isNew, description: next.data.description };
+    const preview: HeldAssetPreview = {
+      ...named,
+      isNew,
+      description: next.data.description,
+      ...(expectedRevision !== undefined && (stored?.revision ?? null) !== expectedRevision
+        ? { isStale: true }
+        : {})
+    };
     if (isNew) {
       return { ...preview, content: createSkillRevisionPreview(undefined, next.data) };
     }
@@ -180,6 +203,46 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
   };
 }
 
+/** Reads only the preview fields this server wrote; no executable input survives here. */
+export const heldAssetPreviewSchema = z.object({
+  kind: z.string(),
+  name: z.string(),
+  title: z.string(),
+  workspaceId: z.string().optional(),
+  isNew: z.boolean().optional(),
+  requestedNew: z.boolean().optional(),
+  description: z.string().optional(),
+  previous: z
+    .object({ title: z.string().optional(), description: z.string().optional() })
+    .optional(),
+  removedResources: z.array(z.string()).optional(),
+  beforeWithheld: z.literal(true).optional(),
+  content: z
+    .object({
+      skillName: z.string(),
+      skillTitle: z.string(),
+      isNewSkill: z.boolean(),
+      changes: z.array(
+        z.object({
+          type: z.enum(SKILL_CHANGE_TYPES),
+          target: z.string(),
+          sectionHeading: z.string().optional(),
+          before: z.string().optional(),
+          after: z.string()
+        })
+      ),
+      newSkill: z
+        .object({
+          name: z.string(),
+          title: z.string(),
+          description: z.string(),
+          content: z.string()
+        })
+        .optional()
+    })
+    .optional()
+});
+
 /** The title the kind reads from a definition. Nothing for one its schema refuses. */
 function titleOf(
   kind: { summarize(definition: unknown): { title: string } },
@@ -191,4 +254,35 @@ function titleOf(
     if (isAppError(error) && error.code === "VALIDATION_FAILED") return undefined;
     throw error;
   }
+}
+
+/** Checks the frozen revision in the decision's transaction without applying anything. */
+export async function heldAssetIsStale(
+  input: JsonValue,
+  store: Pick<ConfigAssetStore, "getConfigAsset">,
+  clientInstanceId: ClientInstanceId
+): Promise<boolean> {
+  const parsed = inputSchema.safeParse(input);
+  if (!parsed.success || parsed.data.expectedRevision === undefined) return false;
+  const row = await store.getConfigAsset({
+    clientInstanceId,
+    kind: parsed.data.kind,
+    name: parsed.data.name
+  });
+  const scope: AssetScope =
+    parsed.data.workspaceId === undefined
+      ? INSTANCE_ASSET_SCOPE
+      : {
+          kind: "workspace",
+          workspaceId: asCollaborationWorkspaceId(parsed.data.workspaceId)
+        };
+  const revision =
+    row?.status === "active" && assetScopesEqual(row.scope, scope) ? row.revision : null;
+  return revision !== parsed.data.expectedRevision;
+}
+
+/** What the frozen call itself says about existence, without reading the stored asset. */
+export function heldAssetRequestedNew(input: JsonValue): boolean | undefined {
+  const parsed = inputSchema.safeParse(input);
+  return parsed.success ? (parsed.data.expectedRevision ?? null) === null : undefined;
 }

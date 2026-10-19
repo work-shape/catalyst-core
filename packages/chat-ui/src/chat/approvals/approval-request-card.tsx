@@ -28,7 +28,7 @@ import {
   offersApprovalWithdraw,
   visibleApprovalChecks
 } from "./approval-request-model";
-import { ApprovalStatusBadge } from "./approval-status-badge";
+import { ApprovalRefreshButton, ApprovalStatusBadge } from "./approval-status-badge";
 import { isInboxConfirmation } from "./operation-call-preview";
 
 /**
@@ -120,6 +120,7 @@ export function ApprovalRequestCardView({
           applyResult={request.applyResult}
           confirmation={isInboxConfirmation(request)}
         />
+        {state.onRefresh ? <ApprovalRefreshButton onRefresh={state.onRefresh} /> : null}
         {hasActions ? null : detailsButton}
       </div>
       {hasActions ? (
