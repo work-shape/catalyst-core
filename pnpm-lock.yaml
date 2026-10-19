@@ -1163,10 +1163,22 @@ importers:
       '@work-shape/catalyst-tool-execution':
         specifier: workspace:*
         version: link:../tool-execution
+      mdast-util-from-markdown:
+        specifier: 2.1.0
+        version: 2.1.0
+      mdast-util-gfm-table:
+        specifier: 2.0.0
+        version: 2.0.0
+      micromark-extension-gfm-table:
+        specifier: 2.1.1
+        version: 2.1.1
       zod:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
+      '@types/mdast':
+        specifier: 4.0.4
+        version: 4.0.4
       '@types/node':
         specifier: ^24.13.1
         version: 24.13.1

@@ -33,7 +33,8 @@ import { stepRunsOf } from "./support/workflow-runs";
 // MAIL-2, "Safe to switch on": Run live once mails the tester alone, `outbound.limits` hold
 // across workers, the guardrails of `operation.before_call` read no address, an agent's mail
 // waits for its person with the mail as it goes out, and a workspace is mailed only by who may
-// see it. Events checks 135 to 138; the publish question's sentence (139) is in
+// see it. A body mapped from an earlier value shows where each of its links leads. Events
+// checks 135 to 138; the publish question's sentence (139) is in
 // publish-narrative.test.ts and the card of check 138 in chat-ui-tool-decision-card.test.ts.
 
 let fixture: WorkflowFixture | undefined;
@@ -405,6 +406,71 @@ describe("guardrails on a mail (check 137)", () => {
     expect(rival.step.error?.message).toContain("Nicht an Rivale");
     expect(t.capturedMail().map((mail) => mail.recipients.to[0]?.email)).toEqual([
       "anna@kanzlei.de"
+    ]);
+  });
+});
+
+describe("a body mapped as one reference (MAIL-2)", () => {
+  // An agent's answer or a child Workflow's text keeps its Markdown, but a label it wrote
+  // cannot pass for another address: each of its links shows where it leads.
+  const deceptive = [
+    "**Stand:** alles erledigt.",
+    "",
+    "- [Ihre Bank](https://evil.example/login)",
+    "- [https://kanzlei.de/portal](https://evil.example/portal)",
+    "",
+    "| Mandant | Akte |",
+    "| --- | --- |",
+    "| Krause | [Akte öffnen][akte] |",
+    "",
+    "![](https://track.example/pixel.gif) <b>roh</b>",
+    "",
+    "[akte]: https://evil.example/akte"
+  ].join("\n");
+  const links = (html: string) =>
+    [...html.matchAll(/<a href="([^"]*)"[^>]*>([^<]*)<\/a>/gu)].map(([, href, label]) => ({
+      href,
+      label
+    }));
+
+  it("keeps the value's Markdown and shows each link's address after its label", async () => {
+    const t = await ready();
+    await grantSystem(t);
+    await save(
+      t,
+      mailFlow("digest", { ...basic({ value: "anna@kanzlei.de" }), body: ref("body") })
+    );
+    expect((await run(t, "digest", { body: deceptive })).run.status).toBe("done");
+    const mail = required(t.capturedMail()[0]);
+    expect(mail.html).toContain("<strong>Stand:</strong>");
+    expect(mail.html).toContain("<ul");
+    expect(mail.html).toContain("<table");
+    expect(links(mail.html)).toEqual([
+      { href: "https://evil.example/login", label: "https://evil.example/login" },
+      { href: "https://evil.example/portal", label: "https://evil.example/portal" },
+      { href: "https://evil.example/akte", label: "https://evil.example/akte" }
+    ]);
+    expect(mail.html).toContain('Ihre Bank (<a href="https://evil.example/login"');
+    expect(mail.html).toContain('https://kanzlei.de/portal (<a href="https://evil.example/portal"');
+    expect(mail.html).toContain('Akte öffnen (<a href="https://evil.example/akte"');
+    expect(mail.html).not.toContain("track.example");
+    expect(mail.html).toContain("&lt;b&gt;roh&lt;/b&gt;");
+    expect(mail.text).toContain("Ihre Bank (https://evil.example/login)");
+  });
+
+  it("keeps the links of a body the author typed", async () => {
+    const t = await ready();
+    await grantSystem(t);
+    await save(
+      t,
+      mailFlow("typed", {
+        ...basic({ value: "anna@kanzlei.de" }),
+        body: { value: "Zum [Portal](https://kanzlei.de/portal)." }
+      })
+    );
+    expect((await run(t, "typed")).run.status).toBe("done");
+    expect(links(required(t.capturedMail()[0]).html)).toEqual([
+      { href: "https://kanzlei.de/portal", label: "Portal" }
     ]);
   });
 });

@@ -17,7 +17,8 @@ import type { WorkflowStepIndex } from "./definition";
 import { WORKFLOW_ITERATION_LABEL_MAX_CHARS } from "./limits";
 import { schemaAt } from "./dataset-schema";
 import { WorkflowStepFailure } from "./step-failure";
-import { isTextValue, joinText, type TextPartValue } from "./text-join";
+import { markdownMayLink, referencedMarkdown } from "./referenced-markdown";
+import { isMarkdownField, isTextValue, joinText, type TextPartValue } from "./text-join";
 
 // How a step reads what earlier steps left: a reference names a step and a dotted path into
 // its output. A mapping holds literals, references and texts joined from parts, and no
@@ -149,7 +150,7 @@ export async function resolveReference(
 /**
  * What joining a text needs of the step's schemas: the step's input schema, for a field's
  * `format` and `maxLength`, and the schema of what a reference names, for the columns of a
- * table. Read only when the mapping holds a text.
+ * table. Read only when the mapping holds a text, or a reference to text that may hold a link.
  */
 export interface TextSchemas {
   input: JsonObject | undefined;
@@ -158,7 +159,8 @@ export interface TextSchemas {
 
 /**
  * The input of a step: each field of its mapping as a literal, as what a reference names, or
- * as the text its parts join to (EW-TEXT).
+ * as the text its parts join to (EW-TEXT). A Markdown field mapped as one reference takes the
+ * value's Markdown with each link's address shown (`referenced-markdown.ts`).
  */
 export async function resolveInput(
   scope: ReferenceScope,
@@ -184,8 +186,17 @@ export async function resolveInput(
       }
       const schema = schemas?.input ? schemaAt(schemas.input, field) : undefined;
       input[field] = joinText({ name: field, ...withSchema(schema) }, parts);
+    } else if (source.ref) {
+      const value = await resolveReference(scope, source.ref);
+      // A Markdown field mapped as one reference keeps the value's Markdown, and its links
+      // show where they lead.
+      if (typeof value === "string" && markdownMayLink(value)) {
+        schemas ??= textSchemas ? await textSchemas() : undefined;
+        const schema = schemas?.input ? schemaAt(schemas.input, field) : undefined;
+        input[field] = isMarkdownField(schema) ? referencedMarkdown(value) : value;
+      } else input[field] = value;
     } else {
-      input[field] = source.ref ? await resolveReference(scope, source.ref) : source.value;
+      input[field] = source.value;
     }
   }
   return input;

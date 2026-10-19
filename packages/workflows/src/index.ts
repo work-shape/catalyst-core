@@ -145,6 +145,7 @@ export {
   escapeMarkdownText,
   joinText
 } from "./text-join";
+export { referencedMarkdown } from "./referenced-markdown";
 
 export { enqueueDatasetCleanup } from "./dataset-lifetime";
 

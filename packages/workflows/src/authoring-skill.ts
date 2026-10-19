@@ -494,7 +494,9 @@ The \`input\` of a step is a mapping: one entry per field, and each entry is exa
   referenced part is a text, a number or a yes-or-no value; \`null\` joins as empty text. In a
   field whose schema has \`format: markdown\`, such as the body of a mail, a referenced list of
   strings joins as a bulleted list and a list of flat records as a table of at most 100 rows
-  and 8 columns, every referenced value is escaped, and a dataset is refused.
+  and 8 columns, every referenced value is escaped, and a dataset is refused. Such a field
+  mapped as one \`ref\`, such as an agent's answer as a mail's body, keeps the value's
+  Markdown, but each of its links shows its address after its label, and images are left out.
 
 A mapping holds no expression, no template and no arithmetic; joining text only joins. What
 needs computing is done by the operation a step calls or by a code step.

@@ -190,7 +190,8 @@ export const mailSubjectSchema = z
 /**
  * The author's Markdown, rendered on the server: no raw HTML, no image, links over `https`,
  * `http` and `mailto` only. `format: markdown` is what makes a mapped field join lists and
- * tables (EW-TEXT) and escape every referenced value.
+ * tables (EW-TEXT) and escape every referenced value, and a field mapped as one reference show
+ * each link's address after its label (MAIL-2).
  */
 export const mailBodySchema = z
   .string()
@@ -282,7 +283,8 @@ export type MailSendSimulatedOutput = z.infer<typeof mailSendSimulatedOutputSche
  * The params of the template `workflow-message`, per mail. The frame (the instance's name,
  * embedded logo, accent colour and `outbound.footer`) is the instance's and not a param; the
  * envelope (From name, to, cc, bcc, Reply-To) is the message's and not a param either.
- * `markdown` arrives with every referenced value already escaped. `test` puts "[Test]" before
+ * `markdown` arrives with every joined referenced value already escaped, and a body mapped as
+ * one reference with each link's address shown. `test` puts "[Test]" before
  * the subject and lists whom the mail would have reached.
  */
 export const workflowMessageMailParamsSchema = z.strictObject({

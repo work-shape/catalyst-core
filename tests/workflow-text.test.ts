@@ -16,7 +16,8 @@ import {
   checkDatasetContracts,
   escapeMarkdownText,
   joinText,
-  parseWorkflowManifest
+  parseWorkflowManifest,
+  referencedMarkdown
 } from "@work-shape/catalyst-workflows";
 
 // EW-TEXT: text joined from parts in a step's input mapping, events-workflows-and-guardrails.md
@@ -519,5 +520,52 @@ describe("a Markdown field", () => {
 
   it("joins an empty list as nothing", () => {
     expect(joinText(body, [{ literal: "a" }, value([]), { literal: "b" }])).toBe("ab");
+  });
+});
+
+describe("a Markdown field mapped as one reference (MAIL-2)", () => {
+  it("keeps emphasis, lists, tables and a value without a link as they are", () => {
+    const markdown = "**Stand:** gut.\n\n- eins\n- zwei\n\n| a | b |\n| --- | --- |\n| 1 | [2] |";
+    expect(referencedMarkdown(markdown)).toBe(markdown);
+  });
+
+  it("shows each link's address after its label, and a reference's alike without its definition", () => {
+    expect(referencedMarkdown('Bitte [Ihre Bank](https://evil.example/login "Bank") öffnen.')).toBe(
+      "Bitte Ihre Bank (<https://evil.example/login>) öffnen."
+    );
+    expect(referencedMarkdown("[https://kanzlei.de](https://evil.example)")).toBe(
+      "https://kanzlei.de (<https://evil.example/>)"
+    );
+    expect(referencedMarkdown("Siehe [Akte][a].\n\n[a]: https://evil.example/akte")).toBe(
+      "Siehe Akte (<https://evil.example/akte>).\n\n"
+    );
+    expect(referencedMarkdown("| x |\n| --- |\n| [a](https://e.example/a\\|b) |")).toBe(
+      "| x |\n| --- |\n| a (<https://e.example/a%7Cb>) |"
+    );
+  });
+
+  it("keeps a link that shows its own address, and shows a look-alike host in ASCII", () => {
+    expect(referencedMarkdown("<https://kanzlei.de/> and <anna@kanzlei.de>")).toBe(
+      "<https://kanzlei.de/> and <anna@kanzlei.de>"
+    );
+    expect(referencedMarkdown("<https://b\u0430nk.de>")).toBe(
+      "https://b\u0430nk.de (<https://xn--bnk-6cd.de/>)"
+    );
+  });
+
+  it("shows the address of a link that brackets around another one make", () => {
+    expect(referencedMarkdown("[[x](https://real.example)](https://evil.example)")).toBe(
+      "x (<https://real.example/>) (<https://evil.example/>)"
+    );
+  });
+
+  it("leaves images out, a relative address as text, and raw HTML as written", () => {
+    expect(
+      referencedMarkdown("![](https://track.example/p.gif)Hallo [![a](i.png)](https://u.example)")
+    ).toBe("Hallo <https://u.example/>");
+    expect(referencedMarkdown("[Akte](/akten/1)")).toBe("Akte (\\/akten\\/1)");
+    expect(referencedMarkdown('<a href="https://evil.example">Bank</a>')).toBe(
+      '<a href="https://evil.example">Bank</a>'
+    );
   });
 });

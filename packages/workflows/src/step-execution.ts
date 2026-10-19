@@ -177,7 +177,8 @@ export function createStepExecutor(options: StepExecutorOptions) {
 
   /**
    * The schemas a text of the attempt's step joins with (EW-TEXT): its input schema and the
-   * schemas of what its references name. Read only when its mapping holds a text.
+   * schemas of what its references name. Read only when its mapping holds a text, or a
+   * reference to text that may hold a link (`referenced-markdown.ts`).
    */
   function textSchemasOf(attempt: StepAttempt): () => Promise<TextSchemas> {
     return async () => {

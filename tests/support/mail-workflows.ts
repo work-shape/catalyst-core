@@ -20,6 +20,7 @@ export const mailInputs = {
   type: "object",
   properties: {
     subject: { type: "string" },
+    body: { type: "string" },
     email: { type: "string" },
     workspace: { type: "string" },
     people: { type: "array", items: { type: "object" } }
