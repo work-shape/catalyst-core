@@ -77,7 +77,17 @@ async function openLink(
   await act(async () => {
     root.render(createElement(QueryClientProvider, { client: queryClient }, createElement(Probe)));
   });
-  await vi.waitFor(() => expect(model?.loading).toBe(false), { timeout: CONDITION_WAIT_MS });
+  // The memberships have been read; the model may still wait, for a list of somebody else.
+  await vi.waitFor(
+    () =>
+      expect(
+        queryClient
+          .getQueryCache()
+          .getAll()
+          .some((query) => query.state.status === "success")
+      ).toBe(true),
+    { timeout: CONDITION_WAIT_MS }
+  );
   await act(async () => undefined);
   return { model: () => model, goTo, reads, unmount: () => act(() => root.unmount()) };
 }
@@ -102,6 +112,23 @@ describe("a link into a workspace the person is no member of", () => {
     try {
       expect(opened.goTo).not.toHaveBeenCalled();
       expect(opened.model()?.closedLink).toBeUndefined();
+      expect(opened.reads).toEqual([]);
+    } finally {
+      await opened.unmount();
+    }
+  });
+
+  // A tab whose browser was signed in as another person reads that person's memberships before
+  // `/me` names them. The route still names a workspace of the person before; it is no closed
+  // link of the person after, so nothing reads it and nothing moves.
+  it("reads nothing while the memberships are those of another person", async () => {
+    const opened = await openLink([
+      { ...personalWorkspace(), id: "cw_personal_b", personalUserId: "user_2" }
+    ]);
+    try {
+      expect(opened.goTo).not.toHaveBeenCalled();
+      expect(opened.model()?.closedLink).toBeUndefined();
+      expect(opened.model()?.collaborationWorkspaces).toEqual([]);
       expect(opened.reads).toEqual([]);
     } finally {
       await opened.unmount();
