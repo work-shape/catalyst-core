@@ -1,6 +1,16 @@
 import { requireIdle } from "./idle.mjs";
 import { randomBytes } from "node:crypto";
-import { readFile, writeFile, mkdir, stat, open, rm, readdir, realpath } from "node:fs/promises";
+import {
+  readFile,
+  writeFile,
+  mkdir,
+  stat,
+  open,
+  rm,
+  readdir,
+  realpath,
+  cp
+} from "node:fs/promises";
 import { createServer } from "node:net";
 import { hostname } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -99,7 +109,38 @@ export function isolatedSetupUser(users) {
     developmentPassword: undefined
   };
 }
-export async function coldStack(root, folder, supervisor, deadline) {
+/**
+ * Points the owned config copy's agents at the story model. Every shipped and generated agent
+ * names `primary`, so `primary` takes the chosen binding's model at the chosen effort; the demo's
+ * own config is never edited. Returns what the stack's agents run on.
+ */
+export function storyModel(config, { bindingId, reasoningEffort }) {
+  const chosen = config.modelBindings.find((b) => b.id === bindingId);
+  if (!chosen || chosen.kind === "embedding" || chosen.agentSelectable === false)
+    throw new Error(`Unknown agent model binding '${bindingId}'`);
+  const provider = config.infrastructure.models[chosen.providerId];
+  const primary = config.modelBindings.find((b) => b.id === "primary");
+  primary.providerId = chosen.providerId;
+  primary.model = chosen.model ?? provider.model;
+  primary.reasoningEffort = reasoningEffort;
+  return { provider: provider.provider, model: primary.model, reasoningEffort, bindingId };
+}
+/**
+ * A copy of the demo's own agents and skills for the seed. An agent's own effort would outrank
+ * its binding's, so the copy carries the story effort instead.
+ */
+export async function stageInstanceAssets(root, dir, reasoningEffort) {
+  const source = resolve(root, "clients/demo");
+  await mkdir(resolve(dir, "agents"), { recursive: true, mode: 0o700 });
+  await cp(resolve(source, "catalyst.yaml"), resolve(dir, "catalyst.yaml"));
+  await cp(resolve(source, "skills"), resolve(dir, "skills"), { recursive: true });
+  for (const name of await readdir(resolve(source, "agents"))) {
+    const agent = parse(await readFile(resolve(source, "agents", name), "utf8"));
+    if (agent.reasoningEffort) agent.reasoningEffort = reasoningEffort;
+    await writeFile(resolve(dir, "agents", name), stringify(agent), { mode: 0o600 });
+  }
+}
+export async function coldStack(root, folder, supervisor, deadline, choice) {
   const privateDir = resolve(folder, ".private");
   await mkdir(privateDir, { recursive: true, mode: 0o700 });
   const owner = random();
@@ -156,6 +197,7 @@ export async function coldStack(root, folder, supervisor, deadline) {
     storage.root = resolve(privateDir, "objects", name);
   config.infrastructure.sandbox.image = runnerImage;
   config.uiFile = resolve(root, "clients/demo/config/ui.yaml");
+  const model = storyModel(config, choice);
   config.egress.allow = [
     {
       protocol: "http",
@@ -364,6 +406,8 @@ export async function coldStack(root, folder, supervisor, deadline) {
   );
   await ready(stack, deadline, () => supervisor.check());
   await bundleCommittedSeed(root, supervisor);
+  const instanceAssets = resolve(privateDir, "instance-assets");
+  await stageInstanceAssets(root, instanceAssets, model.reasoningEffort);
   await supervisor.run(
     process.execPath,
     [
@@ -372,7 +416,8 @@ export async function coldStack(root, folder, supervisor, deadline) {
       configPath,
       root,
       privateDir,
-      resolve(folder, "seed.json")
+      resolve(folder, "seed.json"),
+      instanceAssets
     ],
     "committed seedDemo",
     env
@@ -385,12 +430,7 @@ export async function coldStack(root, folder, supervisor, deadline) {
     "clients/demo/agents",
     "clients/demo/skills"
   ]);
-  stack.model = {
-    provider: config.infrastructure.models.openai.provider,
-    model: config.modelBindings.find((b) => b.id === "primary").model,
-    reasoningEffort: config.infrastructure.models.openai.reasoningEffort,
-    bindingId: "primary"
-  };
+  stack.model = model;
   stack.fingerprint = await fingerprint(root, configPath);
   if (source.head !== stack.fingerprint.head || source.dirty !== stack.fingerprint.dirty)
     throw new Error("Source changed during build");

@@ -42,18 +42,29 @@ export const STORIES = Object.fromEntries(
     ];
   })
 );
+// Mirrors REASONING_EFFORTS in @work-shape/catalyst-core; the owned stack's config load validates it again.
+const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"];
+// Story agents run on Luna by default because it is cheap; rerun a failure on `primary` to tell
+// model weakness from a platform bug.
+export const DEFAULT_MODEL = { bindingId: "gpt56Luna", reasoningEffort: "xhigh" };
+const USAGE =
+  "Expected --stories S2,S5,S14 [--model <bindingId>] [--reasoning <effort>] [--reuse <owned stack.json>] [--keep-stack]";
 export function plan(args) {
   let selection;
   let reuse;
   let keep = false;
+  let bindingId;
+  let reasoningEffort;
   for (let i = 0; i < args.length; i++) {
     const flag = args[i];
     if (flag === "--") continue;
     if (flag === "--stories" && selection === undefined) selection = args[++i];
     else if (flag === "--reuse" && reuse === undefined) reuse = args[++i];
     else if (flag === "--keep-stack") keep = true;
-    else
-      throw new Error("Expected --stories S2,S5,S14 [--reuse <owned stack.json>] [--keep-stack]");
+    else if (flag === "--model" && bindingId === undefined) bindingId = args[++i] ?? "";
+    else if (flag === "--reasoning" && reasoningEffort === undefined)
+      reasoningEffort = args[++i] ?? "";
+    else throw new Error(USAGE);
   }
   if (!selection || selection.split(",").some((s) => !s.trim()))
     throw new Error("Story selection must not be empty");
@@ -61,12 +72,24 @@ export function plan(args) {
   if (stories.some((s) => !Object.hasOwn(STORIES, s)))
     throw new Error("Unknown story; expected S1–S17");
   if (args.includes("--reuse") && !reuse) throw new Error("Missing owned stack.json");
+  if (bindingId !== undefined && !bindingId.trim()) throw new Error("Missing model binding id");
+  if (reasoningEffort !== undefined && !REASONING_EFFORTS.includes(reasoningEffort))
+    throw new Error(`Reasoning effort must be one of ${REASONING_EFFORTS.join(", ")}`);
+  if (reuse && (bindingId !== undefined || reasoningEffort !== undefined))
+    throw new Error("A reused stack keeps the model it was started with; omit --model/--reasoning");
   const cases = CASES.filter((c) => c.stories.some((s) => stories.includes(s)));
   return {
     stories,
     cases,
     reuse,
     keep,
+    // A reused stack reports the model recorded in its receipt instead.
+    model: reuse
+      ? undefined
+      : {
+          bindingId: bindingId?.trim() ?? DEFAULT_MODEL.bindingId,
+          reasoningEffort: reasoningEffort ?? DEFAULT_MODEL.reasoningEffort
+        },
     coverage: stories.map((id) => ({
       id,
       ...STORIES[id],

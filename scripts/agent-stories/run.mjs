@@ -96,7 +96,7 @@ async function measure() {
   const owned = supervisor.stack;
   if (!owned?.sql) return;
   const rows =
-    await owned.sql`select id,status,agent_run_id,provider_id,model,purpose,total_tokens,counted_tokens,counted_cost_micros,customer_billable_cost from model_usage_events`;
+    await owned.sql`select e.id,e.status,e.agent_run_id,e.provider_id,e.model,e.purpose,e.total_tokens,e.counted_tokens,e.counted_cost_micros,e.customer_billable_cost,r.reasoning_effort from model_usage_events e left join agent_runs r on r.id=e.agent_run_id`;
   usage = await accounting.sample(rows);
   usageEvents = rows
     .filter((row) => !accounting.baseline.has(row.id))
@@ -105,6 +105,8 @@ async function measure() {
       runId: row.agent_run_id,
       provider: row.provider_id,
       model: row.model,
+      // The effort a person picked for the run; unset, the run used the configured effort.
+      reasoningEffort: row.reasoning_effort ?? undefined,
       purpose: row.purpose,
       status: row.status,
       tokens: Number(row.counted_tokens ?? row.total_tokens),
@@ -144,7 +146,7 @@ try {
   try {
     stack = selection.reuse
       ? await reuseStack(root, selection.reuse, supervisor, started + LIMITS.startupMs)
-      : await coldStack(root, folder, supervisor, started + LIMITS.startupMs);
+      : await coldStack(root, folder, supervisor, started + LIMITS.startupMs, selection.model);
   } finally {
     clearTimeout(startupTimer);
   }
@@ -256,7 +258,15 @@ try {
 
   if (Date.now() >= deadline) stopped ??= "cleanup_deadline";
   const code = stopped ? 2 : exitCode(selection, results);
-  const runLine = `${startedAt.slice(0, 10)} | ${folder.split("/").at(-1)} | automated trial | ${stack?.fingerprint?.head ?? "startup blocked"} | ${stack?.model?.model ?? "model unavailable"} | ${selection.stories.join(",")} (${results.map((r) => `${r.scenario}:${r.status}`).join(", ")}) | partial coverage; manual clauses retained | EUR ${(usage.micros / 1e6).toFixed(6)} including unsettled reserves; ${usage.tokens} tokens; ${Math.round((Date.now() - started) / 1000)}s | ${folder}/report.md`;
+  // The models agent runs actually called, so a run that ignored the chosen model shows it.
+  const ranOn = [
+    ...new Set(
+      usageEvents
+        .filter((e) => e.runId)
+        .map((e) => (e.reasoningEffort ? `${e.model} (picked ${e.reasoningEffort})` : e.model))
+    )
+  ];
+  const runLine = `${startedAt.slice(0, 10)} | ${folder.split("/").at(-1)} | automated trial | ${stack?.fingerprint?.head ?? "startup blocked"} | ${stack?.model ? `${stack.model.model} (${stack.model.bindingId}, reasoning ${stack.model.reasoningEffort}; ran ${ranOn.join(", ") || "no agent runs"})` : "model unavailable"} | ${selection.stories.join(",")} (${results.map((r) => `${r.scenario}:${r.status}`).join(", ")}) | partial coverage; manual clauses retained | EUR ${(usage.micros / 1e6).toFixed(6)} including unsettled reserves; ${usage.tokens} tokens; ${Math.round((Date.now() - started) / 1000)}s | ${folder}/report.md`;
   const summary = {
     id: folder.split("/").at(-1),
     startedAt,

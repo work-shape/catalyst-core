@@ -6,7 +6,15 @@ From `platform/` in a composite workspace:
 pnpm test:agent-stories --stories S2,S5,S14
 ```
 
-This explicitly starts paid calls through the normal demo's shipped `workflow_assistant` and selected model binding. It acquires the composite workspace's `scripts/lane/browser` once; that helper acquires heavy before browser. The helper and private `platform/clients/demo/.env` containing `OPENAI_API_KEY` must exist in that workspace. Missing prerequisites stop with exit 2. The command never falls back to another checkout's credentials, a shared server or `e2e-server`.
+This explicitly starts paid calls through the normal demo's shipped `workflow_assistant`. It acquires the composite workspace's `scripts/lane/browser` once; that helper acquires heavy before browser. The helper and private `platform/clients/demo/.env` containing `OPENAI_API_KEY` must exist in that workspace. Missing prerequisites stop with exit 2. The command never falls back to another checkout's credentials, a shared server or `e2e-server`.
+
+The owned stack's agents run on the demo binding `gpt56Luna` (gpt-5.6-luna) at reasoning effort `xhigh`, because it is cheap. A rerun can choose another binding and effort, for instance to tell model weakness from a platform bug when a story fails on Luna:
+
+```sh
+pnpm test:agent-stories --stories S2 --model primary --reasoning high
+```
+
+Only the stack's own copy changes: its `primary` binding takes the chosen binding's model at that effort, and its staged copy of the demo's agents carries that effort, because an agent's own effort outranks its binding's. `clients/demo/config/app.yaml` and the shipped agents stay as they are. A reused stack keeps the model it was started with and refuses `--model`/`--reasoning`. The manifest records the chosen binding, model and effort; each usage event records the model it called and any effort a person picked for its run, and the Runs line shows both what was chosen and the models agent runs actually called.
 
 Selection accepts only nonempty S1–S17 ids. Cases are deduplicated and run serially once, with no Playwright retries. S2 selects `workflow-safe-test`, S5 `stateful-app`, S14 `live-skill-consent`. Other ids remain unimplemented. A mixed selection runs its implemented cases and still exits 2 for uncovered ids. The plan prints before building or starting services.
 

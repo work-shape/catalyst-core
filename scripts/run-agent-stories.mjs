@@ -13,6 +13,7 @@ try {
     JSON.stringify(
       {
         stories: selection.stories,
+        model: selection.model ?? "recorded in the reused stack",
         cases: selection.cases.map((c) => ({
           id: c.id,
           prerequisite: c.prerequisite,

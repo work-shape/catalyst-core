@@ -1,6 +1,12 @@
 import { parse } from "yaml";
 import { fileURLToPath } from "node:url";
-import { bundleCommittedSeed, minimalEnv, isolatedSetupUser } from "./stack.mjs";
+import {
+  bundleCommittedSeed,
+  minimalEnv,
+  isolatedSetupUser,
+  storyModel,
+  stageInstanceAssets
+} from "./stack.mjs";
 import { requireIdle } from "./idle.mjs";
 import { UsageWatchdog } from "./watchdog.mjs";
 import { test } from "node:test";
@@ -379,7 +385,7 @@ test("the committed seed adapter loads its dependencies before stack or model ac
     await bundleCommittedSeed(root, new Processes(root, minimalEnv()));
     const result = spawnSync(process.execPath, [output], { env: minimalEnv(), encoding: "utf8" });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /Expected five owned-stack seed arguments/u);
+    assert.match(result.stderr, /Expected six owned-stack seed arguments/u);
     assert.doesNotMatch(result.stderr, /ERR_MODULE_NOT_FOUND/u);
   } finally {
     await rm(output, { force: true });
@@ -440,4 +446,63 @@ test("warm baseline retains inherited spend without rebilling old calls when rea
   assert.equal(usage.tokens, 0);
   assert.equal(usage.micros, 0);
   assert.deepEqual(cancelled, ["spend"]);
+});
+
+test("story agents default to Luna at xhigh; a rerun can choose another binding and effort", () => {
+  assert.deepEqual(plan(["--stories", "S2"]).model, {
+    bindingId: "gpt56Luna",
+    reasoningEffort: "xhigh"
+  });
+  assert.deepEqual(plan(["--stories", "S2", "--model", "primary", "--reasoning", "high"]).model, {
+    bindingId: "primary",
+    reasoningEffort: "high"
+  });
+  for (const args of [
+    ["--model"],
+    ["--model", ""],
+    ["--reasoning", "extreme"],
+    ["--reuse", "/x/stack.json", "--model", "primary"],
+    ["--reuse", "/x/stack.json", "--reasoning", "low"]
+  ])
+    assert.throws(() => plan(["--stories", "S2", ...args]));
+  assert.equal(plan(["--stories", "S2", "--reuse", "/x/stack.json"]).model, undefined);
+});
+
+test("the owned config copy runs every primary agent on the chosen model; the demo's own stays", async () => {
+  const source = await readFile(
+    new URL("../../clients/demo/config/app.yaml", import.meta.url),
+    "utf8"
+  );
+  const config = parse(source);
+  assert.deepEqual(storyModel(config, plan(["--stories", "S2"]).model), {
+    provider: "openai-compatible",
+    model: "gpt-5.6-luna",
+    reasoningEffort: "xhigh",
+    bindingId: "gpt56Luna"
+  });
+  const primary = config.modelBindings.find((b) => b.id === "primary");
+  assert.equal(primary.model, "gpt-5.6-luna");
+  assert.equal(primary.reasoningEffort, "xhigh");
+  assert.equal(
+    storyModel(parse(source), { bindingId: "primary", reasoningEffort: "high" }).model,
+    "gpt-5.5"
+  );
+  for (const bindingId of ["missing", "guardrailCheck"])
+    assert.throws(() => storyModel(parse(source), { bindingId, reasoningEffort: "xhigh" }));
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const dir = await mkdtemp(resolve(tmpdir(), "story-assets-"));
+  try {
+    await stageInstanceAssets(root, dir, "xhigh");
+    const agent = parse(
+      await readFile(resolve(dir, "agents/workflow-assistant.agent.yaml"), "utf8")
+    );
+    assert.equal(agent.modelBindingId, "primary");
+    assert.equal(agent.reasoningEffort, "xhigh");
+    const shipped = parse(
+      await readFile(resolve(root, "clients/demo/agents/workflow-assistant.agent.yaml"), "utf8")
+    );
+    assert.equal(shipped.reasoningEffort, "high");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

@@ -3,15 +3,17 @@ import { recordedSeedFetch } from "./adapters/agent-stories-seed-fetch.mjs";
 import { seedDemo } from "../src/seed/index.ts";
 import { hostEnvironment } from "../src/env.ts";
 import { writeFile, rm } from "node:fs/promises";
-const [baseUrl, appConfigPath, root, privateDir, reportPath] = process.argv.slice(2);
-if (process.argv.slice(2).length !== 5) throw new Error("Expected five owned-stack seed arguments");
+// The demo's own agents come from the stack's staged copy, which carries the story model's effort.
+const [baseUrl, appConfigPath, root, privateDir, reportPath, instanceAssetsDir] =
+  process.argv.slice(2);
+if (process.argv.slice(2).length !== 6) throw new Error("Expected six owned-stack seed arguments");
 const requests = [];
 try {
   const report = await seedDemo({
     baseUrl,
     appConfigPath,
     assetsDir: `${root}/clients/demo/seed`,
-    instanceAssetsDir: `${root}/clients/demo`,
+    instanceAssetsDir,
     env: hostEnvironment(),
     fetchImpl: recordedSeedFetch(requests),
     envFile: `${privateDir}/cli.env`
