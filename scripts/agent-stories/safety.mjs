@@ -9,9 +9,20 @@ export const LIMITS = {
 };
 export const hash = (value) => createHash("sha256").update(value).digest("hex");
 
+// The committed pin includes explanatory comments, never part of the Docker image name.
+export function parsePinnedImage(text) {
+  const lines = text
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+  if (lines.length !== 1 || !/^[^\s]+@sha256:[a-f0-9]{64}$/u.test(lines[0]))
+    throw new Error("Postgres pin must name one image by digest");
+  return lines[0];
+}
+
 // Only this schema reaches evidence. Never retain headers, config/env, SSE or errors from providers.
 const KEYS = new Set(
-  "id kind name status target operation revision expectedRevision tester expectedTester total notify deliveries published liveRuns invalidRows validRows reloadedRows freshRows otherRows storageCommitted errors beforeAssets beforeRevisions beforeFiles reconnectAssets reconnectRevisions reconnectFiles deniedAssets deniedRevisions deniedFiles pendingStatus deniedStatus allowedAssets allowedRevisions allowedExecutions replayRevisions replayExecutions instructionMatches ownerMatches actorId conversationId runId createdAt story scenario assertions code message prompt path hash provider model reasoningEffort bindingId tokens settledTokens reservedTokens micros settledMicros reservedMicros pending calls source currency overshootTokens overshootMicros startedAt endedAt elapsedMs cleanup uid host root head dirty builds config migrations modules workers entrypoint ports image imageId pid label owner worktree baseline usage counters costMicros periodKind periodStart scopeKind scopeId seededIds seed steps created existing coverage cases manual stories results verdict exitCode prerequisites differences runLine time budget peak missingCosts observations capabilities deadlineMs totalMs startupMs micros tokenLimit spendLimit usageEvents runs jobs operations purpose".split(
+  "id kind name status mode target operation revision expectedRevision tester expectedTester total notify deliveries published liveRuns invalidRows validRows reloadedRows freshRows otherRows storageCommitted errors beforeAssets beforeRevisions beforeFiles reconnectAssets reconnectRevisions reconnectFiles deniedAssets deniedRevisions deniedFiles pendingStatus deniedStatus allowedAssets allowedRevisions allowedExecutions replayRevisions replayExecutions instructionMatches ownerMatches actorId conversationId runId createdAt story scenario assertions code message prompt path hash provider model reasoningEffort bindingId tokens settledTokens reservedTokens micros settledMicros reservedMicros pending calls source currency overshootTokens overshootMicros startedAt endedAt elapsedMs cleanup uid host root head dirty builds config migrations modules workers entrypoint ports image imageId pid label owner worktree baseline usage counters costMicros periodKind periodStart scopeKind scopeId seededIds seed steps created existing coverage cases manual stories results verdict exitCode prerequisites differences runLine time budget peak missingCosts observations capabilities deadlineMs totalMs startupMs micros tokenLimit spendLimit usageEvents runs jobs operations purpose".split(
     " "
   )
 );

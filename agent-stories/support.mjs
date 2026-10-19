@@ -122,6 +122,19 @@ export const test = base.extend({
           effect: "allow",
           scopeKind: "instance"
         });
+      // The shipped shared Workflow account holds these read-only sample Connections.
+      // Ordinary builders must hold the same use rights before it can be offered to them.
+      for (const name of ["sample-accounting", "sample-accounting-rest"]) {
+        const connection = await json(root.request, "GET", `/api/v1/assets/connection/${name}`);
+        await json(root.request, "POST", "/api/v1/instance/access/grants", {
+          holderKind: "user",
+          holderId: actor.me.id,
+          action: "connection.use",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: connection.id
+        });
+      }
       await writeFile(
         process.env.AGENT_STORIES_ACTOR_FILE,
         JSON.stringify({ ...people[0], id: actor.me.id }),
@@ -296,14 +309,11 @@ export const test = base.extend({
         if (actor.page.url().startsWith(`${ui}/w/`))
           await actor.page.screenshot({ path: resolve(folder, `${id}.png`) }).catch(() => {});
         const status = testInfo.status === "passed" && errors.length === 0 ? "pass" : "fail";
-        const usageRows = await until(
-          async () =>
-            (
-              await sql`select id,status,total_tokens,counted_tokens,counted_cost_micros,customer_billable_cost from model_usage_events`
-            ).filter((row) => !baseline.has(row.id)),
-          (rows) => rows.every((row) => !["pending", "abandoned"].includes(row.status)),
-          Math.min(deadline, Date.now() + 30_000)
-        );
+        // Keep a final snapshot even when the story's deadline has already expired.
+        // Unsettled title/worker calls remain conservative reservations in usageTotal.
+        const usageRows = (
+          await sql`select id,status,total_tokens,counted_tokens,counted_cost_micros,customer_billable_cost from model_usage_events`
+        ).filter((row) => !baseline.has(row.id));
         const result = evidence(
           {
             scenario: id,

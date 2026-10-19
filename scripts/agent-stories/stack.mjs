@@ -8,7 +8,7 @@ import { parse, stringify } from "yaml";
 import postgres from "postgres";
 import { execFileSync } from "node:child_process";
 import { sourceFingerprint, treeHash } from "./fingerprints.mjs";
-import { hash, LIMITS, validateReceipt } from "./safety.mjs";
+import { hash, LIMITS, validateReceipt, parsePinnedImage } from "./safety.mjs";
 import { until } from "./processes.mjs";
 
 const RESERVED_PORTS = new Set([
@@ -86,6 +86,19 @@ export async function modelKey(root) {
   if (!value) throw new Error("Empty model-key prerequisite");
   return value;
 }
+// Change the setup sign-in, while preserving the demo's actual administrative rights.
+export function isolatedSetupUser(users) {
+  const shipped = users.find((user) => user.roles.includes("superadmin"));
+  if (!shipped) throw new Error("Demo has no setup superadmin");
+  return {
+    ...shipped,
+    displayLabel: "Story setup",
+    email: "setup@example.test",
+    emailEnvName: undefined,
+    passwordEnvName: "STORY_SETUP_PASSWORD",
+    developmentPassword: undefined
+  };
+}
 export async function coldStack(root, folder, supervisor, deadline) {
   const privateDir = resolve(folder, ".private");
   await mkdir(privateDir, { recursive: true, mode: 0o700 });
@@ -99,7 +112,9 @@ export async function coldStack(root, folder, supervisor, deadline) {
     sample: await port(),
     sampleBackend: await port()
   };
-  const image = (await readFile(resolve(root, "docker/postgres/pinned-image"), "utf8")).trim();
+  const image = parsePinnedImage(
+    await readFile(resolve(root, "docker/postgres/pinned-image"), "utf8")
+  );
   const runnerImage = `catalyst-agent-stories-${runId}:local`;
   const container = `catalyst-agent-stories-${runId}`;
   const configPath = resolve(privateDir, "app.yaml");
@@ -125,14 +140,7 @@ export async function coldStack(root, folder, supervisor, deadline) {
   config.clientInstance.id = `agent-stories-${runId}`;
   config.auth.standalone.baseUrl = `${api}/api/auth`;
   config.auth.standalone.trustedOrigins = [ui];
-  config.auth.standalone.seedUsers = [
-    {
-      displayLabel: "Story setup",
-      email: "setup@example.test",
-      passwordEnvName: "STORY_SETUP_PASSWORD",
-      roles: ["user", "admin", "superadmin"]
-    }
-  ];
+  config.auth.standalone.seedUsers = [isolatedSetupUser(config.auth.standalone.seedUsers)];
   config.infrastructure.mail.appUrl = ui;
   if (config.infrastructure.mail.provider !== "capture")
     throw new Error("Demo mail must remain capture-only");
@@ -355,19 +363,7 @@ export async function coldStack(root, folder, supervisor, deadline) {
     { mode: 0o600 }
   );
   await ready(stack, deadline, () => supervisor.check());
-  await supervisor.run(
-    resolve(root, "node_modules/.bin/esbuild"),
-    [
-      "clients/demo/scripts/agent-stories-seed.mjs",
-      "--bundle",
-      "--platform=node",
-      "--format=esm",
-      "--packages=external",
-      `--outfile=${root}/clients/demo/dist/agent-stories-seed.mjs`
-    ],
-    "bundle committed seed",
-    minimalEnv()
-  );
+  await bundleCommittedSeed(root, supervisor);
   await supervisor.run(
     process.execPath,
     [
@@ -408,6 +404,22 @@ export async function coldStack(root, folder, supervisor, deadline) {
     { mode: 0o600 }
   );
   return stack;
+}
+export async function bundleCommittedSeed(root, supervisor) {
+  await supervisor.run(
+    resolve(root, "node_modules/.bin/esbuild"),
+    [
+      "clients/demo/scripts/agent-stories-seed.mjs",
+      "--bundle",
+      "--platform=node",
+      "--format=esm",
+      "--packages=external",
+      "--external:@work-shape/*",
+      `--outfile=${root}/clients/demo/dist/agent-stories-seed.mjs`
+    ],
+    "bundle committed seed",
+    minimalEnv()
+  );
 }
 export async function ready(stack, deadline, check) {
   await until(
@@ -494,7 +506,7 @@ export async function reuseStack(root, file, supervisor, deadline) {
     entrypoint: ENTRYPOINT,
     workers: SERVER_FILES,
     modules: hash(await readFile(configPath)),
-    image: (await readFile(resolve(root, "docker/postgres/pinned-image"), "utf8")).trim()
+    image: parsePinnedImage(await readFile(resolve(root, "docker/postgres/pinned-image"), "utf8"))
   };
   expected.imageId = command(
     "docker",

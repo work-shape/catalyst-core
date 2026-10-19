@@ -1,14 +1,24 @@
+import { parse } from "yaml";
+import { fileURLToPath } from "node:url";
+import { bundleCommittedSeed, minimalEnv, isolatedSetupUser } from "./stack.mjs";
 import { requireIdle } from "./idle.mjs";
 import { UsageWatchdog } from "./watchdog.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { plan, exitCode } from "./catalog.mjs";
-import { LIMITS, usageTotal, budgetStop, evidence, validateReceipt } from "./safety.mjs";
+import {
+  LIMITS,
+  usageTotal,
+  budgetStop,
+  evidence,
+  validateReceipt,
+  parsePinnedImage
+} from "./safety.mjs";
 import { appOracle, workflowOracle, consentOracle, createdOracle } from "./oracles.mjs";
 import { Processes } from "./processes.mjs";
 
@@ -324,4 +334,68 @@ test("warm reuse permits a future passive tick but refuses future model jobs and
     assert.throws(() => requireIdle({ runs: 0, pending: 0, jobs: [{ ...job, ...change }] }, 0));
   assert.throws(() => requireIdle({ runs: 1, pending: 0, jobs: [] }, 0));
   assert.throws(() => requireIdle({ runs: 0, pending: 1, jobs: [] }, 0));
+});
+
+test("the commented Postgres pin becomes exactly one Docker digest, and malformed pins refuse", async () => {
+  const source = await readFile(
+    new URL("../../docker/postgres/pinned-image", import.meta.url),
+    "utf8"
+  );
+  const image = source.split("\n").find((line) => line.startsWith("ghcr.io/"));
+  assert.equal(parsePinnedImage(source), image);
+  for (const invalid of [
+    "",
+    "# no image",
+    "postgres:17",
+    source + "\nother:tag",
+    "image@sha256:short"
+  ])
+    assert.throws(() => parsePinnedImage(invalid));
+});
+
+// A loader failure happens before the adapter's catch or any network request.
+test("the committed seed adapter loads its dependencies before stack or model access", async () => {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const output = resolve(root, "clients/demo/dist/agent-stories-seed.mjs");
+  await mkdir(resolve(root, "clients/demo/dist"), { recursive: true });
+  try {
+    await bundleCommittedSeed(root, new Processes(root, minimalEnv()));
+    const result = spawnSync(process.execPath, [output], { env: minimalEnv(), encoding: "utf8" });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Expected five owned-stack seed arguments/u);
+    assert.doesNotMatch(result.stderr, /ERR_MODULE_NOT_FOUND/u);
+  } finally {
+    await rm(output, { force: true });
+  }
+});
+
+test("owned setup keeps the shipped superadmin tool references needed to seed ordinary people", async () => {
+  const config = parse(
+    await readFile(new URL("../../clients/demo/config/app.yaml", import.meta.url), "utf8")
+  );
+  const shipped = config.auth.standalone.seedUsers.find((user) =>
+    user.roles.includes("superadmin")
+  );
+  const owned = isolatedSetupUser(config.auth.standalone.seedUsers);
+  assert.deepEqual(owned.roles, shipped.roles);
+  assert.deepEqual(owned.permissionRefs, shipped.permissionRefs);
+  assert.equal(owned.passwordEnvName, "STORY_SETUP_PASSWORD");
+  assert.ok(owned.developmentPassword === undefined);
+  assert.ok(owned.emailEnvName === undefined);
+  assert.throws(() => isolatedSetupUser([]));
+});
+
+test("Playwright cleanup cannot erase its sibling stack credentials, manifest or ownership receipt", async () => {
+  const folder = await mkdtemp(resolve(tmpdir(), "story-output-"));
+  try {
+    const program = `const config = (await import('./agent-stories/playwright.config.mjs')).default; process.stdout.write(config.outputDir);`;
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", program], {
+      env: { ...minimalEnv(), AGENT_STORIES_OUTPUT: folder },
+      encoding: "utf8"
+    });
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, resolve(folder, "playwright"));
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
 });

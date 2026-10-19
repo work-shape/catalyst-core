@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: ".",
@@ -8,7 +9,11 @@ export default defineConfig({
   timeout: 12 * 60_000,
   expect: { timeout: 15_000 },
   reporter: [["line"]],
-  outputDir: process.env.AGENT_STORIES_OUTPUT,
+  // Playwright clears only its artifacts; stack auth, ownership and reports are siblings.
+  outputDir: resolve(
+    process.env.AGENT_STORIES_OUTPUT ?? "../tmp/agent-stories/discovery",
+    "playwright"
+  ),
   use: {
     ...devices["Desktop Chrome"],
     baseURL: process.env.AGENT_STORIES_UI,

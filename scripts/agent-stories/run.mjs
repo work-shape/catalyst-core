@@ -242,6 +242,15 @@ try {
   } catch {
     stopped ??= "cleanup_failure";
     cleanup = "cleanup incomplete: inspect owned receipt";
+    // A failed debug receipt must never strand the services whose credentials it lost.
+    if (keep) {
+      try {
+        await cleanStack(stack, supervisor, false, measure);
+        cleanup = "removed owned resources after debug retention failed";
+      } catch {
+        await supervisor.stop();
+      }
+    }
   }
   await rm(resolve(folder, ".private/actor.json"), { force: true });
 

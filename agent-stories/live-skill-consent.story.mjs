@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { test, expect, selected, sql, json, saveObservation } from "./support.mjs";
+import { test, expect, selected, sql, json, saveObservation, terminal } from "./support.mjs";
 import { CASES } from "../scripts/agent-stories/catalog.mjs";
 import { consentOracle } from "../scripts/agent-stories/oracles.mjs";
 import { until } from "../scripts/agent-stories/processes.mjs";
@@ -15,10 +15,15 @@ function collect(story, prefix, values) {
 }
 async function pending(run, deadline) {
   return until(
-    async () =>
-      (
-        await sql`select id,status from operation_runs where conversation_id=${run.conversationId} and origin->>'agentRunId'=${run.runId} and status='pending_confirmation'`
-      )[0],
+    async () => {
+      const [call] =
+        await sql`select id,status from operation_runs where conversation_id=${run.conversationId} and origin->>'agentRunId'=${run.runId} and status='pending_confirmation'`;
+      if (call) return call;
+      const [agent] = await sql`select status from agent_runs where id=${run.runId}`;
+      if (terminal(agent))
+        throw new Error("Agent finished without the required live-save confirmation");
+      return null;
+    },
     Boolean,
     deadline
   );
