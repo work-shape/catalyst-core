@@ -1,4 +1,9 @@
-import { AppError, type DataStoreColumn, type JsonObject } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  type DataStoreColumn,
+  type JsonObject,
+  type LocaleCode
+} from "@work-shape/catalyst-core";
 import {
   PostgresExecutorError,
   type PostgresExecutor,
@@ -30,7 +35,7 @@ const TYPE_LABELS: Readonly<Record<string, { en: string; de: string }>> = {
 };
 
 /** Only verified catalog labels reach the person; never diagnostics or row values. */
-function label(column: DataStoreColumn, locale: "en" | "de"): string {
+function label(column: DataStoreColumn, locale: LocaleCode): string {
   const list = column.type.endsWith("[]");
   const scalar = column.type.replace(/\[\]$/u, "");
   const type = TYPE_LABELS[scalar]?.[locale] ?? TYPE_LABELS.other?.[locale];
