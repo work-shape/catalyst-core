@@ -44,6 +44,8 @@ test("a second member opens an instance App built in a personal workspace and re
     email: process.env.E2E_SUPERADMIN_EMAIL ?? "e2e-superadmin@example.test",
     password: process.env.E2E_SUPERADMIN_PASSWORD ?? "e2e-superadmin-password"
   });
+  const storeAddress = `${apiOrigin}/api/v1/assets/data_store/${store}`;
+  const appAddress = `${apiOrigin}/api/v1/assets/app/${app}`;
   const member = await browser.newContext({ baseURL });
   await pageErrors.watch(member);
   try {
@@ -52,7 +54,6 @@ test("a second member opens an instance App built in a personal workspace and re
       email: process.env.E2E_APPS_MEMBER_EMAIL ?? "e2e-apps-member@example.test",
       password: process.env.E2E_APPS_MEMBER_PASSWORD ?? "e2e-apps-member-password"
     });
-    const storeAddress = `${apiOrigin}/api/v1/assets/data_store/${store}`;
     const saved = await requestWithOrigin(page, "put", storeAddress, {
       data: {
         workspaceId: owner,
@@ -87,7 +88,6 @@ test("a second member opens an instance App built in a personal workspace and re
       { data: { table: "deadlines", rows: [{ client: "Nordlicht", due: "2026-11-01" }] } }
     );
     expect(inserted.ok(), await inserted.text()).toBe(true);
-    const appAddress = `${apiOrigin}/api/v1/assets/app/${app}`;
     const written = await requestWithOrigin(page, "put", appAddress, {
       timeout: 90_000,
       data: {
@@ -172,5 +172,18 @@ test("a second member opens an instance App built in a personal workspace and re
     });
   } finally {
     await member.close();
+    // An App for the instance is listed in every workspace: one left behind fills the empty
+    // Apps lists of the specs after this one. The App goes first, then the store it reads.
+    for (const address of [appAddress, storeAddress]) {
+      const current = await page.request.get(`${address}?workspaceId=${owner}`);
+      if (!current.ok()) continue;
+      const deleted = await requestWithOrigin(page, "post", `${address}/delete`, {
+        data: {
+          workspaceId: owner,
+          expectedRevision: revisionSchema.parse(await current.json()).revision
+        }
+      });
+      expect(deleted.ok(), await deleted.text()).toBe(true);
+    }
   }
 });
