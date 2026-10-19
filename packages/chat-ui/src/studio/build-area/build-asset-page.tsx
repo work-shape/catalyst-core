@@ -237,7 +237,7 @@ export function ViewedAssetPage({
   name: string;
   kinds: readonly BuildKind[];
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const read = source.useAsset(kind, name);
   usePageShown(page, read.status);
   if (read.status === "ready") {
@@ -250,7 +250,7 @@ export function ViewedAssetPage({
             try {
               await source.writes.publish({ kind, name, revision: asset.revision });
             } catch (error) {
-              const outcome = readBuildRefusal(error, t);
+              const outcome = readBuildRefusal(error, t, locale);
               return outcome.ok || outcome.conflict
                 ? t("build.publishFailed")
                 : outcome.refusals.map((refusal) => refusal.message).join(" ");
@@ -495,7 +495,7 @@ function LoadedAssetPage({
       setStored({ ...stored, ...pointers });
       setFailure(undefined);
     } catch (error) {
-      const outcome = readBuildRefusal(error, t);
+      const outcome = readBuildRefusal(error, t, locale);
       setFailure(
         outcome.ok || outcome.conflict
           ? t("build.publishFailed")

@@ -219,7 +219,8 @@ const operationCall: InboxItemKind = {
   rowDetail(item) {
     const call = parseOperationCallPreview(item.preview);
     if (isInboxConfirmation(item)) return call?.review?.title ?? call?.operation;
-    return call?.asset ? call.asset.namespace : call?.operation;
+    // An asset is named by its title in the heading; its Namespace prefix is an id.
+    return call?.asset ? undefined : call?.operation;
   },
   Body: ({ item }) => createElement(OperationCallBody, { request: item }),
   decisions: (item) => (isInboxConfirmation(item) ? confirmationDecisions : approvalDecisions)

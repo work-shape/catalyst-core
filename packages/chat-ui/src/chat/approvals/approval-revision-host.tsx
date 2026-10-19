@@ -8,6 +8,8 @@ import type { WorkspaceRoute } from "../../shared/workspace-route";
  */
 export interface ApprovalRevisionHost {
   currentUserId: string | undefined;
+  /** An active instance admin the person can ask, by name, as the instance tells them. */
+  instanceAdminName?: string;
   /**
    * The agent a revision in the reviewer's Personal Workspace runs with: the
    * proposing agent while that workspace offers it, otherwise its default.

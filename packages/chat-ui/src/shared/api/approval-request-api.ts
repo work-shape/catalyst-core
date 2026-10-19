@@ -27,6 +27,24 @@ export const APPROVAL_AUTH_SCOPE = "standalone";
 
 const PENDING_COUNT_REFETCH_MS = 60_000;
 
+/**
+ * How often a request whose approved change is still being carried out is asked again, so the
+ * final state shows once the change has run.
+ */
+const SETTLING_REFETCH_MS = 2_000;
+
+/**
+ * How long a request is asked at that pace, from when the page first saw its change running. Then,
+ * or at once when a read fails, the page stops asking for it, keeps the last state and offers a
+ * refresh. It asks at its usual pace again once the change is no longer running.
+ */
+const SETTLING_MAX_MS = 120_000;
+
+/** The decision is taken and its change still runs: `execution` is `queued`. */
+function isSettling(request: ApprovalRequestView | undefined): boolean {
+  return request?.status === "approved" && request.applyResult?.execution === "queued";
+}
+
 export const approvalRequestQueryKeys = {
   /** Prefix of every approval request query; a decision invalidates all of them at once. */
   all: (apiBaseUrl: string, authScope: string) =>
@@ -43,13 +61,27 @@ export type ApprovalRequestState =
   /** Missing, or not visible to this user: the server does not tell the two apart. */
   | { status: "not-found" }
   | { status: "error"; onRetry(): void }
-  | { status: "ready"; request: ApprovalRequestView };
+  | {
+      status: "ready";
+      request: ApprovalRequestView;
+      /** The change still ran when the page stopped asking: the person asks again. */
+      onRefresh?(): void;
+    };
 
 export function approvalRequestState(
-  query: Pick<ReturnType<typeof useApprovalRequestQuery>, "data" | "error" | "isError" | "refetch">
+  query: Pick<
+    ReturnType<typeof useApprovalRequestQuery>,
+    "data" | "error" | "isError" | "refetch" | "settlingStopped"
+  >
 ): ApprovalRequestState {
   return query.data
-    ? { status: "ready", request: query.data }
+    ? {
+        status: "ready",
+        request: query.data,
+        ...(query.settlingStopped
+          ? { onRefresh: () => void query.refetch().catch(() => undefined) }
+          : {})
+      }
     : isApprovalRequestNotFound(query.error)
       ? { status: "not-found" }
       : query.isError
@@ -65,16 +97,44 @@ export function useApprovalRequestQuery(
     refetchIntervalMs?: number;
   }
 ) {
-  return useQuery({
-    queryKey: approvalRequestQueryKeys.request(input.apiBaseUrl, input.authScope, input.requestId),
+  const queryKey = approvalRequestQueryKeys.request(
+    input.apiBaseUrl,
+    input.authScope,
+    input.requestId
+  );
+  const identity = JSON.stringify(queryKey);
+  // When each request was first seen running here; dropped once its change is no longer running.
+  const settlingSince = useRef(new Map<string, number>());
+  /** Undefined while no change runs; true once this request is no longer asked by itself. */
+  const settlingStopped = (data: ApprovalRequestView | undefined, failed: boolean) => {
+    if (!isSettling(data)) {
+      settlingSince.current.delete(identity);
+      return undefined;
+    }
+    const since = settlingSince.current.get(identity) ?? Date.now();
+    settlingSince.current.set(identity, since);
+    return failed || Date.now() - since >= SETTLING_MAX_MS;
+  };
+  const query = useQuery({
+    queryKey,
     queryFn: () => input.client.approval_requests.get({ params: { requestId: input.requestId } }),
     enabled: input.enabled ?? true,
     // The card is the live state of a shared request: another approver may
     // have decided while this tab was in the background.
     refetchOnWindowFocus: true,
-    refetchInterval: input.refetchIntervalMs ?? false,
+    // Nothing tells this tab when an approved change has run: a request in the Inbox or in a
+    // conversation whose run this tab does not watch asks again soon while the change runs.
+    refetchInterval: (query) => {
+      const stopped = settlingStopped(query.state.data, query.state.status === "error");
+      return stopped === undefined
+        ? (input.refetchIntervalMs ?? false)
+        : stopped
+          ? false
+          : SETTLING_REFETCH_MS;
+    },
     retry: (failureCount, error) => !isApprovalRequestNotFound(error) && failureCount < 2
   });
+  return { ...query, settlingStopped: settlingStopped(query.data, query.isError) === true };
 }
 
 export function useApprovalPendingCountQuery(
