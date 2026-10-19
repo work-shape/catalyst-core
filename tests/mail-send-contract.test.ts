@@ -32,7 +32,6 @@ import {
   workflowInputValueSchema,
   workflowMailSenderFactSchema,
   workflowMessageMailParamsSchema,
-  type JsonObject,
   type MailSenderId,
   type MailSendInput,
   type WorkflowInputText
@@ -140,15 +139,20 @@ describe("the input of mail.send", () => {
   });
 
   it("marks the body as Markdown and the subject as one line in its JSON Schema", () => {
-    const schema = z.toJSONSchema(mailSendInputSchema, { io: "input", unrepresentable: "any" });
-    const properties = (schema as { properties: Record<string, JsonObject> }).properties;
+    const schema = z
+      .looseObject({
+        properties: z.record(z.string(), z.looseObject({ pattern: z.string().optional() })),
+        required: z.array(z.string())
+      })
+      .parse(z.toJSONSchema(mailSendInputSchema, { io: "input", unrepresentable: "any" }));
+    const { properties } = schema;
     expect(properties.body).toMatchObject({
       type: "string",
       format: WORKFLOW_TEXT_FORMAT_MARKDOWN
     });
     expect(properties.subject).toMatchObject({ type: "string", maxLength: 200 });
     expect(properties.subject?.pattern).toEqual(expect.any(String));
-    expect((schema as { required: string[] }).required).toEqual(["to", "subject", "body"]);
+    expect(schema.required).toEqual(["to", "subject", "body"]);
   });
 });
 
