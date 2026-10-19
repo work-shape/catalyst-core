@@ -1,3 +1,4 @@
+import { createScheduledPromptHandler } from "./conversations/scheduled-start-job";
 import { createNoticeMailJobs } from "./notices/notice-mail";
 import {
   asCollaborationWorkspaceId,
@@ -81,6 +82,7 @@ export function createChatServerJobs(
   const usageReconciliation = createUsageReconciliation(options, now);
 
   const handlers: RegisteredJobHandler[] = [
+    createScheduledPromptHandler(options, now),
     createFollowUpDispatchHandler(options),
     defineJobHandler({
       kind: generateConversationTitleJob,

@@ -325,6 +325,10 @@ export class RunStartWorkflow {
             reasoningEffort: command.reasoningEffort,
             locale: context.locale,
             authorization: {
+              personalConnectionsAllowed:
+                user.authenticationMethod === "session-cookie" &&
+                user.sessionId !== undefined &&
+                user.delegatedActor === undefined,
               principal: context.principal ?? getAuthPrincipal(user),
               subjectUserId: context.subjectUserId ?? getSubjectUserId(user),
               delegatedActor: context.delegatedActor ?? user.delegatedActor,

@@ -575,6 +575,7 @@ function usageEventOrigin(
   | "userId"
   | "collaborationWorkspaceId"
   | "operationRunId"
+  | "unattended"
 > {
   const who = {
     ...(attribution.userId === undefined ? {} : { userId: attribution.userId }),
@@ -585,6 +586,7 @@ function usageEventOrigin(
   if (attribution.kind === "agent_run") {
     return {
       ...who,
+      ...(attribution.unattended ? { unattended: true } : {}),
       conversationId: attribution.conversationId,
       agentRunId: attribution.runId,
       agentName: attribution.agentName,

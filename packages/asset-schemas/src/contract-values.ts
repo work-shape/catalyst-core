@@ -1096,3 +1096,5 @@ export const WORKSPACE_USE_ASSET_KINDS = ["knowledge_base", "connection"] as con
 /** Published assets that consume Connections or stored data. Agents hold tools separately. */
 export const PUBLISHED_DATA_CONSUMER_KINDS = ["app", "workflow", "knowledge_base"] as const;
 export type PublishedDataConsumerKind = (typeof PUBLISHED_DATA_CONSUMER_KINDS)[number];
+/** State of a scheduled prompt. */
+export const SCHEDULED_START_STATES = ["active", "paused"] as const;

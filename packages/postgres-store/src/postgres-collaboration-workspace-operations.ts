@@ -1,3 +1,4 @@
+import { deleteWorkspaceScheduledStartHistory } from "./postgres-scheduled-starts";
 import { listWorkspaceAdministratorNames } from "./postgres-workspace-administrators";
 import { and, asc, eq, ilike, inArray, isNull, or, sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
@@ -651,6 +652,10 @@ async function deletePersonalWorkspaceForUser(
         )
       );
     await deleteWorkspaceOwnedAssets(tx, {
+      clientInstanceId: input.clientInstanceId,
+      collaborationWorkspaceId: workspace.id
+    });
+    await deleteWorkspaceScheduledStartHistory(tx, {
       clientInstanceId: input.clientInstanceId,
       collaborationWorkspaceId: workspace.id
     });

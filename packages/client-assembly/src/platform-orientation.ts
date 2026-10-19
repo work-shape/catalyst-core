@@ -1,3 +1,4 @@
+import { SCHEDULED_START_TOOL_NAMES } from "@work-shape/catalyst-tool-execution";
 import { CATALYST_INTERNAL_AGENT_PROMPT } from "@work-shape/catalyst-agent-runtime";
 import { RUN_AGENT_TOOL_NAME } from "@work-shape/catalyst-core";
 import type { PlatformInstructions } from "@work-shape/catalyst-server";
@@ -32,7 +33,7 @@ export const PLATFORM_ORIENTATION = `You run on a platform where people build an
 - data_store: tables of structured data that people, agents, Apps and Workflows read and write.
 - knowledge_base: documents, indexed so agents can search them.
 - connection: access to an outside system and the operations it offers: a remote MCP server, or a REST API whose read operations a person approves; where you hold ${CONNECTION_DRAFT_TOOL_NAME}, you draft them with it. Without that tool, say you cannot draft a Connection here and direct the person to Studio > Connections (German: Studio › Verbindungen); never dump HTTP or YAML as a substitute. You never save a Connection. Once a person approved a Connection's tools, an agent can call them only after it is given them: where you hold ${CONNECTION_OFFER_TOOL_NAME}, offer that with it, and the person's confirmation on its card publishes the agent with them. A person enters its key on the Connection's page in Studio, never in this chat: never ask for a key, token or password.
-What you show beside the chat is no asset: write its files and show an HTML file or an App's folder with ${WORKSPACE_OPEN_TOOL_NAME}. A quick view with data you write in needs nothing more; a saved interface to use again is an App: when the user says "save this as an app", call ${APP_SAVE_TOOL_NAME} on what you opened and never build it again. Saving asks the user nothing and gives them the App at once; sharing it with others is their step. Before you write an App's actions, read references/apps/build.md of '${PLATFORM_DOCS_SKILL_NAME}'. Something that should run again without the user is a Workflow.
+What you show beside the chat is no asset: write its files and show an HTML file or an App's folder with ${WORKSPACE_OPEN_TOOL_NAME}. A quick view with data you write in needs nothing more; a saved interface to use again is an App: when the user says "save this as an app", call ${APP_SAVE_TOOL_NAME} on what you opened and never build it again. Saving asks the user nothing and gives them the App at once; sharing it with others is their step. Before you write an App's actions, read references/apps/build.md of '${PLATFORM_DOCS_SKILL_NAME}'. A saved prompt on an agent at a regular time is a scheduled prompt: use scheduled_starts.create, list, update, set_state or delete, with the workspace and instance time zone from platform.context. The person confirms the agent, prompt and when; it runs as them and its private result conversations appear under Scheduled (Geplant). A process with defined steps is a Workflow.
 Not every instance has every kind: ${context.name} says which kinds and modules exist here and what the user may do.
 Finding: call ${listAssets.name} before you say something does not exist. It answers names, titles and descriptions, never contents. What the user may not see is not listed: then say you know nothing of that name. ${listFiles.name} finds previews and files of other conversations of this workspace.
 Operations: use ${operations.name} to find callable operation names and schemas. Filter by exact name or a prefix such as connection.crm. or data_store.orders.; use for: app for App connection actions. Each page has at most 200 operations. Pass nextCursor as cursor with the same filters until nextCursor is absent before saying an operation does not exist. Discovery shows only what this user may call.
@@ -52,6 +53,7 @@ For how the product works in detail, read the skill '${PLATFORM_DOCS_SKILL_NAME}
  * definition lists one of them holds them.
  */
 export const PLATFORM_TOOL_NAMES: readonly string[] = [
+  ...SCHEDULED_START_TOOL_NAMES,
   ...PLATFORM_DISCOVERY_TOOL_NAMES,
   ...PLATFORM_ASSET_TOOL_NAMES
 ];

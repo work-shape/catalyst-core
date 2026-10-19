@@ -1,3 +1,4 @@
+import { SCHEDULED_START_TOOL_NAMES } from "./scheduled-start-tools";
 import { denialText, type ToolCallNames } from "./tool-refusal-text";
 import {
   AGENTS_RUN_OPERATION,
@@ -199,6 +200,7 @@ export function registerToolOperations(
     // replace their person-rights and subject checks, or collide when routes register.
     // `run_agent` is the call of `agents.run`, which the server registers.
     if (
+      SCHEDULED_START_TOOL_NAMES.includes(tool.name) ||
       WORKFLOW_TEST_TOOL_NAMES.includes(tool.name) ||
       tool.name === RUN_AGENT_TOOL_NAME ||
       tool.name === APP_PUBLISH_TOOL_NAME ||

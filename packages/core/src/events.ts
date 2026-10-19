@@ -867,6 +867,11 @@ export const EVENTS = {
     name: "storage.orphaned_files_deleted",
     subject: "storage"
   },
+  "scheduled_start.fired": {
+    ...LEGACY_AUDIT,
+    name: "scheduled_start.fired",
+    subject: "scheduled_start"
+  },
   "user.created": { ...LEGACY_AUDIT, name: "user.created", subject: "user" },
   "user.deleted": { ...LEGACY_AUDIT, name: "user.deleted", subject: "user" },
   "user.deletion_requested": {

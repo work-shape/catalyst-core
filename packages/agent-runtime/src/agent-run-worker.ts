@@ -465,6 +465,10 @@ async function executeClaimedRun(
   try {
     try {
       const input = await reconstructInput(options, run, resumeState);
+      const scheduled = await options.stores.scheduledStarts.isScheduledAgentRun({
+        clientInstanceId: run.clientInstanceId,
+        runId: run.id
+      });
       const user = await options.loadCurrentUser(run);
       const authorization = requireAuthorization(run, user);
       const context: RuntimeCallContext = {
@@ -479,7 +483,9 @@ async function executeClaimedRun(
         runFence: { runId: run.id, lease },
         // A subagent never waits for a decision and starts no subagent of its own (CR-1).
         ...(run.parentRunId ? { subagent: true } : {}),
-        ...(!run.parentRunId && options.unattended?.(run) ? { unattended: true } : {})
+        ...(!run.parentRunId && (scheduled || options.unattended?.(run))
+          ? { unattended: true }
+          : {})
       };
       const execution = await options.execute(input, context, {
         assertLease: async () => {

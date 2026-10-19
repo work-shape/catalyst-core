@@ -1,3 +1,4 @@
+import { scheduledStartOperations } from "./scheduled-starts";
 import { accessOperations } from "./access";
 import { accountOperations } from "./account";
 import { agentOperations } from "./agents";
@@ -30,6 +31,7 @@ import { workflowPrincipalRightsOperations } from "./workflow-principal-rights";
 
 /** Every product operation of the HTTP API, one file per area. */
 export const apiOperations = {
+  ...scheduledStartOperations,
   ...approvalRequestOperations,
   ...accountOperations,
   ...instanceOperations,

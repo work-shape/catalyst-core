@@ -76,6 +76,8 @@ export interface AgentRunError {
 }
 
 export interface AgentRunAuthorization {
+  /** Owner accepted this start in a first-party signed-in session. Never inferred from roles. */
+  personalConnectionsAllowed?: boolean;
   principal: AuthPrincipal;
   subjectUserId: string;
   delegatedActor?: DelegatedActor;

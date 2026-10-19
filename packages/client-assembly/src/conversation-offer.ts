@@ -1,3 +1,7 @@
+import {
+  createScheduledStartTools,
+  SCHEDULED_START_TOOL_NAMES
+} from "@work-shape/catalyst-tool-execution";
 import { describeAgentDataTools } from "@work-shape/catalyst-agent-runtime";
 import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@work-shape/catalyst-server";
 import { HTTP_API_CONNECTOR_TYPE } from "@work-shape/catalyst-connections";
@@ -187,10 +191,14 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...(withheld.length > 0 ? { withheldToolNames: withheld } : {}),
         toolNames: [
           ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
-          ...(holds ? [...WORKFLOW_TEST_TOOL_NAMES, KNOWLEDGE_ADD_FILES_TOOL_NAME] : []),
-          ...(holds || subject?.kind === "connection"
-            ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]
+          ...(holds
+            ? [
+                ...WORKFLOW_TEST_TOOL_NAMES,
+                KNOWLEDGE_ADD_FILES_TOOL_NAME,
+                ...SCHEDULED_START_TOOL_NAMES
+              ]
             : []),
+          ...(holds || subject?.kind === "connection" ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME] : []),
           ...appToolNames(input.hasTool),
           ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
         ]
@@ -258,6 +266,7 @@ export function createPlatformTools(
       ...createPlatformDiscoveryTools(platformAssets.calls),
       ...createPlatformAssetTools(platformAssets.calls),
       ...createWorkflowTestTools(),
+      ...createScheduledStartTools(),
       createKnowledgeAddFilesTool(),
       createRunAgentTool(),
       createAppSaveTool(platformAssets.calls),

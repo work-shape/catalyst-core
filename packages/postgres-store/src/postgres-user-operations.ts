@@ -33,7 +33,13 @@ import {
   legacyPermissionLists,
   writeLegacyPermissionList
 } from "./legacy-permission-lists";
-import { permissionGrants, productUsers, userIdentities } from "./schema";
+import {
+  permissionGrants,
+  productUsers,
+  userIdentities,
+  scheduledStarts,
+  scheduledStartRuns
+} from "./schema";
 import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-workspace-operations";
 import { lockRights, lockRightsOfUsableUser } from "./rights-lock";
 import { appendAuditEvent as appendPostgresAuditEvent } from "./postgres-audit-usage-operations";
@@ -516,6 +522,23 @@ async function deleteUser(db: PostgresConnection, input: DeleteUserInput): Promi
           eq(scopeAssignments.holderId, input.userId)
         )
       );
+    const ownedStarts = and(
+      eq(scheduledStarts.clientInstanceId, input.clientInstanceId),
+      eq(scheduledStarts.ownerUserId, input.userId)
+    );
+    await tx
+      .delete(scheduledStartRuns)
+      .where(
+        and(
+          eq(scheduledStartRuns.clientInstanceId, input.clientInstanceId),
+          isNull(scheduledStartRuns.agentRunId),
+          inArray(
+            scheduledStartRuns.scheduledStartId,
+            tx.select({ id: scheduledStarts.id }).from(scheduledStarts).where(ownedStarts)
+          )
+        )
+      );
+    await tx.delete(scheduledStarts).where(ownedStarts);
     return tx
       .delete(productUsers)
       .where(

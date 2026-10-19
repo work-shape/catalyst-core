@@ -255,6 +255,7 @@ export class ModelInput {
           continuation: capabilities.continuation ? providerContinuation : undefined,
           attribution: {
             kind: "agent_run",
+            ...(context.unattended ? { unattended: true } : {}),
             conversationId: input.conversationId,
             runId,
             agentName: input.agentName,

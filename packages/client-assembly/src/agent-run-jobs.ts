@@ -9,6 +9,7 @@ import {
 import {
   AppError,
   asUserId,
+  isAgentAvailableInWorkspace,
   type AgentRun,
   type AuthenticatedUser,
   type ClientInstanceId,
@@ -100,6 +101,43 @@ async function loadCurrentUser(store: PlatformStores, run: AgentRun): Promise<Au
   });
   if (!user || user.status !== "active") {
     throw new AppError("FORBIDDEN", "Agent run owner is unavailable or disabled");
+  }
+  // The queued job is not a permission snapshot. Revocation between tick and execution
+  // closes it here, before a model or a tool sees the prompt.
+  const scheduled = await store.scheduledStarts.isScheduledAgentRun({
+    clientInstanceId: run.clientInstanceId,
+    runId: run.id
+  });
+  if (scheduled) {
+    const conversation = await store.conversations.getConversation(
+      run.clientInstanceId,
+      run.conversationId
+    );
+    const workspace =
+      conversation &&
+      (await store.workspaces.getWorkspace(
+        run.clientInstanceId,
+        conversation.collaborationWorkspaceId
+      ));
+    const member =
+      workspace &&
+      (await store.workspaces.getMembership({
+        clientInstanceId: run.clientInstanceId,
+        collaborationWorkspaceId: workspace.id,
+        userId: asUserId(run.ownerUserId)
+      }));
+    const availability = await store.configAssets.listAgentAvailability({
+      clientInstanceId: run.clientInstanceId
+    });
+    if (
+      !workspace ||
+      !member ||
+      !isAgentAvailableInWorkspace(availability.get(run.agentName), workspace)
+    )
+      throw new AppError(
+        "FORBIDDEN",
+        "Scheduled prompt owner can no longer use this agent in this workspace"
+      );
   }
   const principal = run.authorization?.principal;
   const identity =

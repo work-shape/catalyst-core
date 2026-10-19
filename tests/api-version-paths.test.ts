@@ -233,6 +233,14 @@ describe("the operation catalog", () => {
         "roles.update  PATCH /api/v1/instance/access/roles/:roleId",
         "scope_assignments.list  GET /api/v1/instance/access/scope-assignments",
         "scope_assignments.set  PUT /api/v1/instance/access/scope-assignments",
+        "scheduled_starts.create  POST /api/v1/scheduled-starts",
+        "scheduled_starts.delete  DELETE /api/v1/scheduled-starts/:scheduledStartId",
+        "scheduled_starts.handover  POST /api/v1/scheduled-starts/:scheduledStartId/handover",
+        "scheduled_starts.list  GET /api/v1/scheduled-starts",
+        "scheduled_starts.run_now  POST /api/v1/scheduled-starts/:scheduledStartId/run",
+        "scheduled_starts.runs  GET /api/v1/scheduled-starts/:scheduledStartId/runs",
+        "scheduled_starts.set_state  POST /api/v1/scheduled-starts/:scheduledStartId/state",
+        "scheduled_starts.update  PATCH /api/v1/scheduled-starts/:scheduledStartId",
         "service_principals.create  POST /api/v1/instance/service-principals",
         "service_principals.list  GET /api/v1/instance/service-principals",
         "service_principals.update  PATCH /api/v1/instance/service-principals/:servicePrincipalId",
@@ -339,6 +347,7 @@ describe("the operation catalog", () => {
       "operations",
       "password-reset",
       "password-setup",
+      "scheduled-starts",
       "workflow-runs",
       "workflows",
       "workspaces"
@@ -603,7 +612,8 @@ describe("a running instance", () => {
       "roles.update",
       "roles.delete",
       "roles.reset",
-      "roles.pending.decide"
+      "roles.pending.decide",
+      ...names.filter((name) => name.startsWith("scheduled_starts."))
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

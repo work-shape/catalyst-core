@@ -1,6 +1,7 @@
 import type { WorkflowNoticesStore } from "./workflow-notices";
 import type { NoticeMailStore } from "./notice-mail";
 import type { ConversationFollowUpStore } from "./follow-up-store";
+import type { ScheduledStartsStore } from "./scheduled-starts";
 import type { AgentProposalStore } from "./agent-proposals";
 import type { AgentTryConversationStore } from "./agent-try-conversations";
 import type { AgentRunDecisionStore } from "./agent-run-decision";
@@ -75,6 +76,7 @@ export type DatabaseReadiness =
 export interface PlatformStores {
   conversations: ConversationsStore;
   followUps: ConversationFollowUpStore;
+  scheduledStarts: ScheduledStartsStore;
   agentRuns: AgentRunsStore;
   childAgentRuns: ChildAgentRunStore;
   files: PlatformFileStore;

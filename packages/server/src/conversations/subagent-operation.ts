@@ -62,6 +62,9 @@ export function subagentOperation(
     timeoutMs: AGENTS_RUN_TIMEOUT_MS,
     async execute(input, context) {
       const { origin } = context;
+      // EW-8 does not start subagents unattended; their separate usage and consent path is deferred.
+      if (context.runtime.unattended)
+        return refused("agent_not_available", "Scheduled prompts cannot start subagents yet.");
       if (origin.kind !== "agent") {
         return refused("agent_not_available", "Only an agent's run starts a subagent.");
       }

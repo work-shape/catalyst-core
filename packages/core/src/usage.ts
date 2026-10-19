@@ -81,6 +81,8 @@ export type UsageCostRecord = SettledUsageCostRecord | IncompleteUsageCostRecord
 export type ModelUsageEventStatus = (typeof MODEL_USAGE_EVENT_STATUSES)[number];
 
 export interface ModelUsageEvent extends ModelTokenUsage {
+  /** Uses the shared unattended safeguard bucket; owner attribution is retained. */
+  unattended?: boolean;
   id: ModelUsageEventId;
   status: ModelUsageEventStatus;
   clientInstanceId: ClientInstanceId;
@@ -141,6 +143,8 @@ export const KNOWLEDGE_INGESTION_PURPOSES = [
 
 /** A model call an agent run made. */
 export interface AgentRunModelAttribution {
+  /** Scheduled runs use the shared unattended safeguards while retaining their run identity. */
+  unattended?: true;
   kind: "agent_run";
   conversationId: ConversationId;
   runId: AgentRunId;
@@ -214,6 +218,7 @@ export interface ModelCallUsage extends ModelTokenUsage {
 export interface ModelUsageEventInput extends Omit<ModelCallAdmission, "request">, ModelCallUsage {}
 
 export interface ModelUsageEventRecordInput extends ModelTokenUsage {
+  unattended?: boolean;
   clientInstanceId: ClientInstanceId;
   conversationId?: ConversationId;
   agentRunId?: AgentRunId;

@@ -114,6 +114,9 @@ export const unusedPlatformStores: PlatformStores = {
   get followUps() {
     return unsupported();
   },
+  get scheduledStarts() {
+    return unsupported();
+  },
   get agentRuns() {
     return unsupported();
   },

@@ -10,6 +10,7 @@ import {
   notInDeletion,
   workspaceRowWhere
 } from "./postgres-collaboration-workspace-operations";
+import { deleteWorkspaceScheduledStartHistory } from "./postgres-scheduled-starts";
 import { deleteWorkspaceOwnedAssets } from "./postgres-config-asset-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { requireNoPendingConversationCleanup } from "./postgres-pending-cleanup";
@@ -180,6 +181,7 @@ export async function deleteWorkspace(
         )
       );
     await deleteWorkspaceOwnedAssets(tx, input);
+    await deleteWorkspaceScheduledStartHistory(tx, input);
     const [row] = await tx
       .delete(collaborationWorkspaces)
       .where(

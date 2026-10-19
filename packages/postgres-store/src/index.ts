@@ -32,6 +32,7 @@ import { assertDatabaseMigrated } from "./migrations";
 import { createDatabaseReadinessCheck } from "./readiness";
 import { schema } from "./schema";
 import { createPostgresFollowUpStore } from "./postgres-follow-up-operations";
+import { createPostgresScheduledStartsStore } from "./postgres-scheduled-starts";
 import { lockActiveConversation } from "./postgres-conversation-operations";
 import { createPostgresConversationsStore } from "./postgres-conversation-operations";
 import { expireConversation, listExpiredConversations } from "./postgres-conversation-expiry";
@@ -129,6 +130,7 @@ function bindStores(
       expireConversation: (input) => expireConversation(db, input)
     }),
     followUps: createPostgresFollowUpStore(db, { lockActiveConversation }),
+    scheduledStarts: createPostgresScheduledStartsStore(db),
     agentRuns: createPostgresAgentRunsStore(db, enqueued),
     childAgentRuns: createPostgresChildAgentRunStore(db, enqueued),
     files: createPostgresFilesStore(db, enqueued),

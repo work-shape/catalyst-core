@@ -5,6 +5,7 @@ import {
 } from "./schema/noticeMail";
 export { noticeMail, workflowRevisionPublishers, workflowFailureNotices };
 export * from "./schema/followUps";
+export * from "./schema/scheduledStarts";
 export * from "./schema/users";
 export * from "./schema/workspaces";
 export * from "./schema/apiAccess";
@@ -77,6 +78,7 @@ import { guardrailHits } from "./schema/guardrails";
 import { knowledgeBaseStates } from "./schema/knowledgeBases";
 
 import { conversationFollowUps } from "./schema/followUps";
+import { scheduledStarts, scheduledStartRuns } from "./schema/scheduledStarts";
 
 import {
   workflowRunDatasets,
@@ -92,6 +94,8 @@ export const schema = {
   workflowDatasetUsage,
   workflowDatasetReaders,
   conversationFollowUps,
+  scheduledStarts,
+  scheduledStartRuns,
   approvalRequests,
   productUsers,
   userIdentities,

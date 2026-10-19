@@ -1,4 +1,5 @@
 import { registerWorkflowUnpublishRoute } from "./workflows/workflow-unpublish";
+import { registerScheduledStartRoutes } from "./routes/scheduled-start-routes";
 export { SKILL_MAX_BYTES } from "./asset-kinds/skill-files";
 import type { HttpRuntime, Logger } from "@work-shape/catalyst-core";
 import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
@@ -259,6 +260,7 @@ export async function createChatServer(
   registerSessionTokenRoutes(route, options);
   registerServiceAccessTokenRoutes(route, options);
   registerAgentRunRoutes(route, options);
+  registerScheduledStartRoutes(route, options);
   registerConfigRoutes(route, options);
   registerPlatformRoutes(route, options);
   registerViewRuntimeRoutes(route);

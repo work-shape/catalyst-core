@@ -41,13 +41,15 @@ export const monthOf = (createdAt: SQL): SQL =>
  * null for an erased event, which has none.
  */
 export const scopeKindOf = (row: SQL): SQL => drizzleSql`case
+  when ${row}.unattended and ${row}.correlation_id <> '' then 'system'
   when ${row}.user_id is not null and (${row}.purpose is null or ${row}.purpose in (${drizzleSql.join(
     PERSON_OWN_PURPOSES.map((purpose) => drizzleSql`${purpose}`),
     drizzleSql`, `
   )})) then 'user'
   when ${row}.user_id is not null or ${row}.correlation_id <> '' then 'system'
 end`;
-export const scopeIdOf = (row: SQL): SQL => drizzleSql`coalesce(${row}.user_id, '')`;
+export const scopeIdOf = (row: SQL): SQL =>
+  drizzleSql`case when ${row}.unattended then '' else coalesce(${row}.user_id, '') end`;
 
 /** Ingestion is recorded separately from chat counters, including while history is rebuilt. */
 const countsAsChat = (purpose: SQL): SQL => drizzleSql`(
