@@ -28,6 +28,8 @@ export const workspaceQueryKeys = {
     ["conversation-search", apiBaseUrl, authScope, collaborationWorkspaceId, titleQuery] as const,
   collaborationWorkspaces: (apiBaseUrl: string, authScope: string) =>
     ["collaboration-workspaces", apiBaseUrl, authScope] as const,
+  closedWorkspaceLink: (apiBaseUrl: string, authScope: string, collaborationWorkspaceId: string) =>
+    ["closed-workspace-link", apiBaseUrl, authScope, collaborationWorkspaceId] as const,
   collaborationWorkspaceAgentsScope: (apiBaseUrl: string, authScope: string) =>
     ["collaboration-workspace-agents", apiBaseUrl, authScope] as const,
   collaborationWorkspaceAgents: (

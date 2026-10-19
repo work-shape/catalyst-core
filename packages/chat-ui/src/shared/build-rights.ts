@@ -328,9 +328,18 @@ export function subscribeBuildScope(listener: () => void): () => void {
 }
 
 /**
+ * Sets Studio to an owner for this tab alone: one Studio was taken to rather than one the
+ * reader chose. The next visit starts from the reader's own choice again.
+ */
+export function showBuildScopeInTab(scope: string): void {
+  chosenInTab = scope;
+  for (const listener of scopeListeners) listener();
+}
+
+/**
  * Sets Studio to the owner of an asset whose page the person is taken to, so the page reads it
  * where it is: the workspace that owns it, by its id, or the instance.
  */
 export function showOwnerInStudio(workspaceId: string | undefined): void {
-  storeLastBuildScope(workspaceId ?? INSTANCE_SCOPE_VALUE);
+  showBuildScopeInTab(workspaceId ?? INSTANCE_SCOPE_VALUE);
 }

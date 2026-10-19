@@ -234,6 +234,44 @@ describe("form components", () => {
     expect(markup).toContain(`<p id="${hintId}" class="text-caption text-muted-foreground">`);
   });
 
+  // ACCEPT-2d: "Pflichtfeld" stood under required fields that were filled already.
+  it("says a field is required only while its control holds no text", () => {
+    const field = (value: string) =>
+      render(
+        createElement(Field, {
+          label: "Name",
+          required: true,
+          children: createElement(Input, { value, onChange: () => undefined })
+        }),
+        uiLabelsDe
+      );
+    for (const [empty, filled] of [
+      [field(""), field("Richtlinien")],
+      [field("   "), field(" x ")]
+    ] as const) {
+      expect(empty).toContain(uiLabelsDe.required);
+      expect(filled).not.toContain(uiLabelsDe.required);
+      // The control and the mark stay required either way.
+      expect(filled).toMatch(/<input[^>]*\srequired=""/u);
+      expect(filled).toContain('<span aria-hidden="true" class="text-destructive">*</span>');
+    }
+  });
+
+  it("counts a number as filled, and a number that is none as empty", () => {
+    const field = (value: number) =>
+      render(
+        createElement(Field, {
+          label: "Limit",
+          required: true,
+          children: createElement(Input, { type: "number", value, onChange: () => undefined })
+        }),
+        uiLabelsDe
+      );
+    expect(field(0)).not.toContain(uiLabelsDe.required);
+    expect(field(25)).not.toContain(uiLabelsDe.required);
+    expect(field(Number.NaN)).toContain(uiLabelsDe.required);
+  });
+
   it("names a proposed value's group by its label and keeps the value under it", () => {
     const markup = render(
       createElement(library.ProposedValue, { label: "Proposed by the agent" }, "Cite the clause.")

@@ -161,7 +161,12 @@ export function AvailabilityFields({
       ) : null}
 
       {edit.changed && dependencies ? (
-        <ChangedDependencies edit={edit} dependencies={dependencies} disabled={disabled} />
+        <ChangedDependencies
+          edit={edit}
+          dependencies={dependencies}
+          workspaceName={(id) => workspaceNames.get(id)}
+          disabled={disabled}
+        />
       ) : null}
       <FieldRefusals messages={refusals} />
     </>
@@ -175,10 +180,12 @@ export function AvailabilityFields({
 function ChangedDependencies({
   edit,
   dependencies,
+  workspaceName,
   disabled
 }: {
   edit: AvailabilityEdit;
   dependencies: NonNullable<AvailabilityChoice["dependencies"]>;
+  workspaceName(id: string): string | undefined;
   disabled: boolean;
 }): ReactNode {
   const { t } = useTranslation();
@@ -200,6 +207,8 @@ function ChangedDependencies({
   return (
     <MissingDependencies
       dependencies={read.data ?? undefined}
+      availability={form}
+      workspaceName={workspaceName}
       makeAvailable={edit.makeDependenciesAvailable}
       disabled={disabled}
       onMakeAvailableChange={edit.setMakeDependenciesAvailable}

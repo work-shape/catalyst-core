@@ -1,10 +1,14 @@
+import { authorizeAgentDependencies } from "./agent-dependency-availability";
+import { validateAssetDefinition } from "./asset-validation";
+import { createAgentWithDependencies } from "./agent-creation";
 import { requireAppAudience } from "../apps/app-audience";
-import type { AppAudience } from "@work-shape/catalyst-core";
+import type { AppAudience, AgentAvailability } from "@work-shape/catalyst-core";
 import { upsertAsset, type AssetUpsert } from "./asset-upsert";
 import { publishAgentDraft } from "./agent-publication";
 import { AgentDraftWorkflow } from "./agent-drafts";
 import {
   AppError,
+  asCollaborationWorkspaceId,
   auditActorFromIdentity,
   findNamespaceOfAssetName,
   isAppError,
@@ -28,11 +32,8 @@ import {
 } from "../asset-kinds/shared";
 import {
   INVALID_ASSET_SET_MESSAGE,
-  findAssetSetIssues,
-  findDefinition,
   validateAssetSet,
   withDefaultAgentName,
-  withDefinition,
   withoutDefinition,
   type AssetSet
 } from "./asset-set";
@@ -61,9 +62,7 @@ import {
   requireAssetKindModuleOn,
   requireMatchingConfigName,
   setsInitialDefault,
-  storedWritableIssues,
-  withPublishedConfigs,
-  writeIssuesOf
+  withPublishedConfigs
 } from "./asset-write-rules";
 import {
   assertStoredWritable,
@@ -80,11 +79,10 @@ import {
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
-import { type AssetWarning, type AvailableIn } from "./asset-placement";
+import { type AvailableIn } from "./asset-placement";
 import { AssetReadWorkflow } from "./asset-read-service";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
-import { assertReferencesWithinOwners } from "./asset-owner-references";
 import { liveRevision } from "./asset-live-revision";
 import { appPublishReview } from "../apps/app-publish-reach";
 import { publishApproval, publishFromAPerson } from "../approvals/publish-approval";
@@ -226,6 +224,10 @@ export class AssetWorkflow {
     access: ActorAccess,
     input: AssetAddress & {
       expectedRevision?: number | null;
+      makeDependenciesAvailable?: boolean;
+      expectedAvailability?: Omit<AgentAvailability, "collaborationWorkspaceIds"> & {
+        collaborationWorkspaceIds: string[];
+      };
       config?: Record<string, unknown>;
       /** The revision a revert makes the content again: its config is what the write puts. */
       revision?: number;
@@ -255,6 +257,25 @@ export class AssetWorkflow {
     const further = await this.furtherRight(access, target, right, config, beforeConfirmation);
     if (further.allowed) {
       requirePrecondition(input, input.expectedRevision);
+    }
+    if (further.allowed && input.makeDependenciesAvailable) {
+      if (target.kind.kind !== "agent" || target.asset?.status === "active" || config === undefined)
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "Dependency availability consent is only accepted when creating an agent"
+        );
+      if (input.expectedAvailability === undefined)
+        throw new AppError(
+          "PRECONDITION_REQUIRED",
+          "Review the new agent's workspace availability before making its dependencies available",
+          { reason: "dependency_availability_review_required" }
+        );
+      return authorizeAgentDependencies(this.options, access, config, {
+        ...input.expectedAvailability,
+        collaborationWorkspaceIds: input.expectedAvailability.collaborationWorkspaceIds.map(
+          asCollaborationWorkspaceId
+        )
+      });
     }
     return further;
   }
@@ -396,6 +417,10 @@ export class AssetWorkflow {
       expectedRevision?: number | null;
       expectedDraftRevision?: number | null;
       availableIn?: AvailableIn;
+      makeDependenciesAvailable?: boolean;
+      expectedAvailability?: Omit<AgentAvailability, "collaborationWorkspaceIds"> & {
+        collaborationWorkspaceIds: string[];
+      };
     }
   ) {
     const target = await this.target(input);
@@ -432,12 +457,17 @@ export class AssetWorkflow {
     requireOwnScope(target, call.access);
     await requireExpectedRevision(this.options, call, target, expectedRevision);
     assertStoredWritable(target, "always");
-    return this.upsert(call, target, input.config, {
-      expectedRevision,
-      audit: "config_asset.updated",
-      expectedDraftRevision: input.expectedDraftRevision ?? null,
-      ...(input.availableIn === undefined ? {} : { availableIn: input.availableIn })
-    });
+    const config = input.config;
+    const write = (within: AssetWorkflowOptions, called: AssetCall) =>
+      new AssetWorkflow(within).upsert(called, target, config, {
+        expectedRevision,
+        audit: "config_asset.updated",
+        expectedDraftRevision: input.expectedDraftRevision ?? null,
+        ...(input.availableIn === undefined ? {} : { availableIn: input.availableIn })
+      });
+    return input.makeDependenciesAvailable
+      ? createAgentWithDependencies(this.options, call, input, write)
+      : write(this.options, call);
   }
 
   /** Makes an earlier revision the content again, as a new revision. A deleted asset returns. */
@@ -561,88 +591,16 @@ export class AssetWorkflow {
    */
   async validate(
     call: AssetCall,
-    input: { kind: string; config: Record<string, unknown>; workspaceId?: string }
+    input: {
+      kind: string;
+      config: Record<string, unknown>;
+      workspaceId?: string;
+      availability?: Omit<AgentAvailability, "collaborationWorkspaceIds"> & {
+        collaborationWorkspaceIds: string[];
+      };
+    }
   ) {
-    const name = readDefinitionName(input.config);
-    const target = await this.target({ ...input, name: name ?? "" });
-    const { kind } = target;
-    call.access.require(kind.actions.read, target.resource);
-    const kinds = this.options.configAssets.kinds.kinds;
-    const stored = await loadStoredAssets(this.options);
-    const view = loadReferableAssets(this.options, call.access, stored);
-    const current = name === undefined ? undefined : findDefinition(view.set, kind.kind, name);
-    const prepared = kind.prepareInteractiveUpsert({
-      current,
-      next: input.config,
-      principalId: call.actor.id
-    });
-    const drafted = (set: AssetSet) => withDefinition(set, kind.kind, name ?? "", prepared);
-    const found = findAssetSetIssues(kinds, drafted(view.set), view.set);
-    const ofDefinition = view.complete
-      ? found.issues
-      : findIssuesOfChange(
-          kinds,
-          stored.set,
-          view,
-          drafted,
-          new Set([assetKey(kind.kind, name ?? "")]),
-          call.runtime?.locale ?? this.options.config.localization.defaultLocale
-        );
-    // What is stored and read-only is refused before the definition is read, as a put is.
-    const readOnly = storedWritableIssues(kind, current);
-    const checked =
-      readOnly || ofDefinition.length > 0
-        ? { issues: readOnly ?? ofDefinition, warnings: [] }
-        : await writeIssuesOf(
-            this.options,
-            call.access,
-            view.set,
-            found,
-            async () => {
-              const { scope } = target;
-              const write = { type: "upsert", kind: kind.kind, name: name ?? "", scope } as const;
-              await assertReferencesWithinOwners(
-                kinds,
-                [{ ...write, config: prepared }],
-                stored.assets,
-                call.runtime?.locale ?? this.options.config.localization.defaultLocale,
-                this.options
-              );
-            },
-            {
-              names: kind.kind === "agent" && name !== undefined ? [name] : [],
-              scope:
-                target.scope.kind === "workspace" ? { workspaceId: target.scope.workspaceId } : {}
-            },
-            // A put asks this of the validated definition before it stores it; so does a check.
-            () =>
-              kind.assertScopedWrite?.({
-                clientInstanceId: this.options.clientInstanceId,
-                scope: target.scope,
-                name: name ?? "",
-                definition: findDefinition(found.accepted, kind.kind, name ?? "") ?? prepared,
-                stores: this.options.stores
-              }) ?? Promise.resolve()
-          );
-    return {
-      valid: checked.issues.length === 0,
-      ...nonEmptyWarnings([
-        ...checked.warnings,
-        // A definition that holds is asked what its kind warns of; one with issues is not.
-        ...(checked.issues.length > 0
-          ? []
-          : ((await kind.validationWarnings?.({
-              clientInstanceId: this.options.clientInstanceId,
-              definition: prepared,
-              stores: this.options.stores
-            })) ?? []))
-      ]),
-      issues: checked.issues.map(({ message, path, code }) => ({
-        message,
-        ...(path === undefined || path.length === 0 ? {} : { path: path.map(String) }),
-        ...(code === undefined ? {} : { code })
-      }))
-    };
+    return validateAssetDefinition(this.options, call, input);
   }
 
   /** Whether a create would take the name, asked with the right a create asks. Writes nothing. */
@@ -808,9 +766,4 @@ function allocatedRevision(
     throw new AppError("INTERNAL", `The write of config ${kind} '${name}' has no revision`);
   }
   return revision;
-}
-
-/** The warnings of an answer, left out where there are none. */
-function nonEmptyWarnings(warnings: AssetWarning[]): { warnings?: AssetWarning[] } {
-  return warnings.length > 0 ? { warnings } : {};
 }

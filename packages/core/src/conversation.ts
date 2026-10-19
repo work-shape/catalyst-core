@@ -11,7 +11,8 @@ import type {
   ClientInstanceId,
   CollaborationWorkspaceId,
   ConversationId,
-  MessageId
+  MessageId,
+  UserId
 } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
 import type { StorePage } from "./paging";
@@ -307,6 +308,8 @@ export interface ConversationStore extends ConversationHistoryStore {
    * that workspace: one that was moved away meanwhile is answered as not available.
    */
   deleteConversation(input: {
+    /** Discard only this person's unused draft; refuse when it has any content. */
+    discardEmptyByUserId?: UserId;
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     deletedAt: ISODateString;

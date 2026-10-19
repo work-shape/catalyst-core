@@ -63,6 +63,10 @@ async function startPage(
       const url = new URL(request instanceof Request ? request.url : String(request));
       const method = (request instanceof Request ? request.method : init?.method) ?? "GET";
       const files = url.pathname.endsWith("/draft-attachments");
+      if (method === "DELETE" && url.searchParams.get("discardEmpty") === "true") {
+        calls.push(`discard ${url.pathname.split("/").at(-1)}`);
+        return Response.json(conversation);
+      }
       if (method === "DELETE") {
         calls.push(`remove ${url.pathname.split("/").at(-1)}`);
         return new Response(null, { status: 204 });
@@ -207,6 +211,8 @@ describe("files attached before the first message", () => {
 
   it("stay in the composer when the upload is refused, and go with the next send", async () => {
     // An upload the API refuses leaves no draft attachment to retry in the conversation.
+    // ACCEPT-2d: the conversation made for it took nothing and is discarded, so no row named
+    // after the refused file is left; the next send makes a new one.
     const page = await startPage({ refusals: 1 });
     try {
       await act(async () => page.controller()?.onFilesSelected([pdf()]));
@@ -231,10 +237,11 @@ describe("files attached before the first message", () => {
         conversationId = await page.controller()?.sendStagedFiles();
       });
       expect(conversationId).toBe("conv_files");
-      // The conversation made for the first try takes the file; no second one is made.
       expect(page.calls).toEqual([
         "create conversation",
         "upload files of conv_files",
+        "discard conv_files",
+        "create conversation",
         "upload files of conv_files",
         "list files of conv_files"
       ]);
@@ -442,6 +449,7 @@ describe("files attached before the first message", () => {
       expect(page.calls).toEqual([
         "create conversation",
         "upload files of conv_files",
+        "discard conv_files",
         "create conversation",
         "upload files of conv_files",
         "list files of conv_files"

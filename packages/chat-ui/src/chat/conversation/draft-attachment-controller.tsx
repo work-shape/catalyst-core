@@ -230,8 +230,15 @@ export function useDraftAttachmentController(
       }
     });
     if (refusal !== undefined) {
-      // A refused upload leaves nothing to retry in the conversation: the files stay here and
-      // the next send takes them on in the conversation already made.
+      // A refused upload leaves nothing to retry in the conversation: the files stay here. A
+      // conversation that took none of them is discarded, so no row named after a refused file
+      // is left behind, and the next send makes a new one; one that took a file is kept for it.
+      if (
+        uploaded.size === 0 &&
+        staged.every((stagedFile) => stagedFile.uploadedAs === undefined)
+      ) {
+        await discardEmptyConversation(conversation.id);
+      }
       restage(uploaded);
       throw new Error(refusal);
     }
@@ -251,6 +258,24 @@ export function useDraftAttachmentController(
       throw new Error(blocked);
     }
     return conversation.id;
+  }
+
+  /**
+   * Deletes a conversation made for files none of which it took. The instance deletes it only
+   * while it holds no message and no file of the person's, and keeps it otherwise.
+   */
+  async function discardEmptyConversation(conversationId: string): Promise<void> {
+    if (stagedConversation.current?.id === conversationId) stagedConversation.current = undefined;
+    await input.client.conversations
+      .delete({ params: { conversationId }, query: { discardEmpty: "true" } })
+      .then(
+        () =>
+          queryClient.invalidateQueries({
+            queryKey: workspaceQueryKeys.conversationsScope(input.apiBaseUrl, input.authScope)
+          }),
+        // Not empty after all, or not reached: the refusal of the file is what the person reads.
+        () => undefined
+      );
   }
 
   async function startUpload(conversationId: string, file: File): Promise<void> {

@@ -1,4 +1,4 @@
-import { useId, useMemo, type HTMLAttributes, type ReactNode } from "react";
+import { isValidElement, useId, useMemo, type HTMLAttributes, type ReactNode } from "react";
 import { cn } from "../cn";
 import { useUiLabels } from "../ui-root";
 import { FieldControlContext } from "./field-control";
@@ -11,7 +11,10 @@ export interface FieldProps extends Omit<HTMLAttributes<HTMLDivElement>, "childr
   hint?: ReactNode;
   /** What is wrong with the value. It takes the hint's place and is announced. */
   error?: ReactNode;
-  /** Marks the field and its control as required. */
+  /**
+   * Marks the field and its control as required. The label's word for it is said only while a
+   * control that holds a text holds none: a filled field asks for nothing.
+   */
   required?: boolean;
   /** Says beside the label that the field may stay empty. */
   optional?: boolean;
@@ -57,7 +60,7 @@ export function Field({
           <span aria-hidden="true" className="text-destructive">
             *
           </span>
-          <span className="sr-only">{labels.required}</span>
+          {isFilled(children) ? null : <span className="sr-only">{labels.required}</span>}
         </>
       ) : null}
       {optional ? (
@@ -104,6 +107,14 @@ export function Field({
       )}
     </FieldControlContext>
   );
+}
+
+/** The one control holds a text that is not blank, as an Input or a Textarea given its value. */
+function isFilled(control: ReactNode): boolean {
+  if (!isValidElement<{ value?: unknown }>(control)) return false;
+  const { value } = control.props;
+  if (typeof value === "number") return Number.isFinite(value);
+  return typeof value === "string" && value.trim() !== "";
 }
 
 function isShown(node: ReactNode): boolean {

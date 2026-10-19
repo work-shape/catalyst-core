@@ -160,6 +160,7 @@ export const dataStores = defineTranslations({
       "The instance has more published apps, workflows, knowledge bases or rights than one read looks through, so these lists may be incomplete.",
     "dataStores.usedByWorkflow": "Workflow",
     "dataStores.valueFailed": "The value could not be loaded.",
+    "dataStores.valueFalse": "No",
     "dataStores.valueGone":
       "The row is not there any more: it was removed, or its key or its place changed. Go back to the start of the table.",
     "dataStores.valueLength": "{count} characters",
@@ -168,6 +169,7 @@ export const dataStores = defineTranslations({
     "dataStores.valueShow": "Show the whole value of {column}",
     "dataStores.valueTooLarge":
       "This value is larger than one read of a store answers, so it cannot be shown here. A query reads a part of it.",
+    "dataStores.valueTrue": "Yes",
     "dataStores.valueUnread": "Not read"
   },
   de: {
@@ -335,6 +337,7 @@ export const dataStores = defineTranslations({
       "Die Instanz hat mehr veröffentlichte Apps, Workflows, Wissensbasen oder Rechte, als ein Lesezugriff durchsieht. Diese Listen können unvollständig sein.",
     "dataStores.usedByWorkflow": "Workflow",
     "dataStores.valueFailed": "Der Wert konnte nicht geladen werden.",
+    "dataStores.valueFalse": "Nein",
     "dataStores.valueGone":
       "Die Zeile gibt es nicht mehr: Sie wurde entfernt, oder ihr Schlüssel oder ihr Platz hat sich geändert. Geh zum Anfang der Tabelle zurück.",
     "dataStores.valueLength": "{count} Zeichen",
@@ -343,6 +346,7 @@ export const dataStores = defineTranslations({
     "dataStores.valueShow": "Ganzen Wert von {column} anzeigen",
     "dataStores.valueTooLarge":
       "Dieser Wert ist größer, als ein Lesezugriff auf einen Speicher beantwortet, und lässt sich hier nicht anzeigen. Eine Abfrage liest einen Teil davon.",
+    "dataStores.valueTrue": "Ja",
     "dataStores.valueUnread": "Nicht gelesen"
   }
 });

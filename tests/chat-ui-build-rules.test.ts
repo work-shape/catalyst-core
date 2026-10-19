@@ -405,6 +405,26 @@ describe("Studio refusals", () => {
     }
   );
 
+  // ACCEPT-2d E-1: a new agent's consent that the instance no longer holds is told as a check
+  // to make again, in the reader's language, never as the instance's English sentence.
+  it.each([
+    ["PRECONDITION_REQUIRED", "dependency_availability_review_required", "en"],
+    ["CONFLICT", "dependency_availability_changed", "en"],
+    ["CONFLICT", "dependency_availability_changed", "de"]
+  ] as const)("asks for the check again on %s %s (%s)", (code, reason, locale) => {
+    const { t: translate } = createTranslationContext(locale);
+    const outcome = readBuildRefusal(
+      refusal(code, "Review the new agent's workspace availability", { reason }),
+      translate,
+      locale
+    );
+    expect(refusalsOf(outcome, undefined)).toEqual([
+      locale === "en"
+        ? "Where this agent will be available changed after you checked what it uses. Nothing was created. Create it again to check the list once more."
+        : "Wo dieser Agent verfügbar sein wird, hat sich nach deiner Prüfung geändert. Es wurde nichts erstellt. Erstelle ihn noch einmal, um die Liste erneut zu prüfen."
+    ]);
+  });
+
   it("answers a write over a newer revision as a conflict, with no sentence of its own", () => {
     const outcome = readBuildRefusal(
       refusal("REVISION_CONFLICT", "Config agent 'tax' is not at the revision the call names", {

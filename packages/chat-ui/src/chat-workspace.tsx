@@ -501,8 +501,11 @@ function ChatWorkspaceContent({
         </SkipLink>
         <OutdatedInterfaceNotice />
         <StagingBanner environment={model.config.config.clientInstance.environment} />
-        {model.collaborationWorkspace.closedLinkLeftHere ? (
-          <ClosedWorkspaceLinkBanner onDismiss={model.collaborationWorkspace.dismissClosedLink} />
+        {model.collaborationWorkspace.closedLink ? (
+          <ClosedWorkspaceLinkBanner
+            administrators={model.collaborationWorkspace.closedLink.administrators}
+            onDismiss={model.collaborationWorkspace.dismissClosedLink}
+          />
         ) : null}
         <div className="flex min-h-0 flex-1">
           <WorkspaceRail

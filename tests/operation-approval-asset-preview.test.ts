@@ -169,7 +169,12 @@ describe("the preview of a held asset save", () => {
       params: { kind: "skill", name: "kai-leave" },
       payload: { config: skill("kai-leave", "A newer policy"), expectedRevision: 1 }
     });
-    expect((await preview(t.admin.id, requestId)).asset.isStale).toBe(true);
+    const stale = (await preview(t.admin.id, requestId)).asset;
+    expect(stale.isStale).toBe(true);
+    // ACCEPT-FIX-12 C-2: this is the version Kai saw, not the later admin save.
+    expect(JSON.stringify(stale.content)).toContain(OLD_PARAGRAPH);
+    expect(JSON.stringify(stale.content)).toContain(NEW_PARAGRAPH);
+    expect(JSON.stringify(stale.content)).not.toContain("A newer policy");
     const stillPending = await t.stores.approvals.getApprovalRequest({
       clientInstanceId,
       requestId

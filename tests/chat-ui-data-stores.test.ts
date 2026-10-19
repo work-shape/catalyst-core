@@ -657,6 +657,29 @@ describe("The rows of a Data Store", () => {
     expect(german).toContain(">Weiter<");
   });
 
+  it("shows a yes-or-no value in the reader's words, as the confirmation of a row write does", () => {
+    const rows = ready({
+      ...visitRows,
+      columns: [
+        { name: "id", type: "integer", nativeType: "bigint" },
+        { name: "done", type: "boolean", nativeType: "boolean" }
+      ],
+      rows: [
+        { at: "at_1", values: { id: 1, done: false } },
+        { at: "at_2", values: { id: 2, done: true } }
+      ]
+    });
+    const english = render(address, { rows });
+    expect(english).toContain(">No<");
+    expect(english).toContain(">Yes<");
+    expect(english).not.toMatch(/>(?:true|false)</u);
+
+    const german = render(address, { locale: "de", rows });
+    expect(german).toContain(">Nein<");
+    expect(german).toContain(">Ja<");
+    expect(german).not.toMatch(/>(?:true|false)</u);
+  });
+
   it("shows a cut value by its first characters and a value read by no page as not read, each with the button that reads it whole", () => {
     const page = render(address);
     expect(page).toContain('data-data-store-cut="text"');

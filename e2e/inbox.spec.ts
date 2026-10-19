@@ -560,7 +560,7 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     ).toBe(202);
 
     // A new skill: the row names it, and the item shows all of it with its line breaks.
-    await openRow(`New skill: ${HELD_TITLE}`);
+    await openRow(`New skill by E2E Superadmin: ${HELD_TITLE}`);
     await expect(headline).toHaveText(`E2E Superadmin wants to create the skill “${HELD_TITLE}”.`);
     await expect(call).toContainText(
       "If you approve, the skill is saved. If you decline, nothing changes."
@@ -606,7 +606,7 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     expect(change.status()).toBe(202);
 
     // A change: the item shows the paragraph before and after, and not the ones that stay.
-    await openRow(`Skill change: ${HELD_TITLE}`);
+    await openRow(`Skill change by E2E Superadmin: ${HELD_TITLE}`);
     await expect(headline).toHaveText(`E2E Superadmin wants to change the skill “${HELD_TITLE}”.`);
     await expect(skill).toContainText(OLD_PARAGRAPH);
     await expect(skill).toContainText(NEW_PARAGRAPH);

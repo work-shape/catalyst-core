@@ -1,6 +1,6 @@
-import type { Asset } from "@work-shape/catalyst-api-client";
+import type { AgentAvailability, Asset } from "@work-shape/catalyst-api-client";
 import { Banner, Checkbox } from "@work-shape/catalyst-ui";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 
 /**
  * The Knowledge Bases and Connections an agent uses that are not available in all of its
@@ -30,17 +30,52 @@ function dependencyOffer(dependencies: DependencyAvailability | undefined): Depe
 }
 
 /**
- * What members in some of the agent's workspaces cannot use, beside the save or the publish
- * that leaves it so. It never links to the settings of what it names: a reader who may not
- * make them available is told whom to ask.
+ * The sentence before the list: the workspaces it was read for by their names, where the page
+ * knows each name. An agent available everywhere, or a workspace the page cannot name, keeps
+ * the sentence without names: no id is ever shown.
+ */
+function missingText(
+  availability: AgentAvailability | null | undefined,
+  workspaceName: (id: string) => string | undefined,
+  t: TranslationContextValue["t"],
+  locale: string
+): string {
+  if (availability?.mode !== "selected") return t("configAvailabilityMissingText");
+  const named = availability.collaborationWorkspaceIds.map(workspaceName);
+  if (named.some((name) => name === undefined)) return t("configAvailabilityMissingText");
+  const workspaces = [
+    ...named.filter((name): name is string => name !== undefined),
+    ...(availability.personalWorkspaces ? [t("configAvailabilityMissingPersonal")] : [])
+  ];
+  if (workspaces.length === 0) return t("configAvailabilityMissingText");
+  // Each item may be missing in some of them only: "A, B or C".
+  const list = new Intl.ListFormat(locale, { type: "disjunction" }).format(workspaces);
+  return workspaces.length === 1
+    ? t("configAvailabilityMissingInOne", { workspace: list })
+    : t("configAvailabilityMissingInSome", { workspaces: list });
+}
+
+const NO_NAMES = () => undefined;
+
+/**
+ * What members in some of the agent's workspaces cannot use, beside the create, the save or the
+ * publish that leaves it so, with the workspaces named where the page knows their names. It
+ * never links to the settings of what it names: a reader who may not make them available is
+ * told whom to ask.
  */
 export function MissingDependencies({
   dependencies,
+  availability = dependencies?.availability,
+  workspaceName = NO_NAMES,
   makeAvailable,
   disabled = false,
   onMakeAvailableChange
 }: {
   dependencies: DependencyAvailability | undefined;
+  /** Where the agent would be available, as the list was read for. Defaults to what it says. */
+  availability?: AgentAvailability | null;
+  /** The name of a shared workspace by its id, as the page loaded it. */
+  workspaceName?: (id: string) => string | undefined;
   makeAvailable: boolean;
   disabled?: boolean;
   onMakeAvailableChange(on: boolean): void;
@@ -48,11 +83,15 @@ export function MissingDependencies({
   const { locale, t } = useTranslation();
   const offer = dependencyOffer(dependencies);
   if (offer.kind === "none") return null;
+  // The instance names the workspaces it read the list for; the page's own names stand in for
+  // an instance that does not.
+  const nameOf = (id: string) =>
+    dependencies?.workspaces?.find((workspace) => workspace.id === id)?.name ?? workspaceName(id);
   const names = new Intl.ListFormat(locale, { type: "disjunction" });
   return (
     <Banner tone="warning" title={t("configAvailabilityMissingTitle")} data-missing-dependencies="">
       <div className="grid gap-2">
-        <p>{t("configAvailabilityMissingText")}</p>
+        <p data-missing-dependencies-text="">{missingText(availability, nameOf, t, locale)}</p>
         <ul className="grid gap-1" aria-label={t("configAvailabilityMissingTitle")}>
           {offer.missing.map((dependency) => (
             <li

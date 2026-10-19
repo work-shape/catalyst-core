@@ -138,7 +138,11 @@ export const operations = defineTranslations({
     "operations.callAssetChange": "{actor} wants to change {kind} “{title}”.",
     "operations.callAssetSave": "{actor} wants to save {kind} “{title}”.",
     "operations.callAssetStale":
-      "This request is out of date: “{title}” was changed after it was made. Approving it changes nothing. Ask {actor} to submit a new change.",
+      "This request is out of date: “{title}” was changed after {actor} made it, so it can no longer be approved. Decline it; {actor} can submit a new change.",
+    "operations.callAssetStaleOwn":
+      "Your request is out of date: “{title}” was changed after you made it, so it can no longer be approved. Submit a new change if it is still needed.",
+    "operations.callSkillStaleSeen": "Version {actor} saw",
+    "operations.callSkillStaleProposed": "Proposed by {actor}",
     "operations.callAssetKindSkill": "the skill",
     "operations.callAssetKindAgent": "the agent",
     "operations.callAssetKindConnection": "the Connection",
@@ -183,6 +187,8 @@ export const operations = defineTranslations({
       "Allowed. The call now waits for an approver; nothing was executed yet.",
     "operations.callOutcomeStale":
       "Not applied: “{title}” was changed after this request was made, so nothing changed. Submit a new change if it is still needed.",
+    "operations.callOutcomeStaleApprover":
+      "Not applied: “{title}” was changed after this request was made, so nothing changed. {actor} can submit a new change.",
     "operations.callOutcomeReason": "Reason: {reason}",
     "operations.callExpires": "Expires",
     "operations.callExpiresHint": "After that the call expires and does not run.",
@@ -199,6 +205,10 @@ export const operations = defineTranslations({
     "operations.rowKey": "Row {n}, key",
     "operations.rowValues": "Row {n}",
     "operations.rowNewValues": "Row {n}, new values",
+    "operations.rowNow": "Row {n}, as it is now",
+    "operations.rowsUnavailable":
+      "The rows as they are now could not be read. The key shows which row the call is about.",
+    "operations.rowGone": "Row {n} is no longer in the table.",
     "operations.confirmAllow": "Allow",
     "operations.confirmDeny": "Deny",
     "operations.confirmHeadlineAgentChanging": "{agent} wants to run a changing action for you.",
@@ -367,7 +377,11 @@ export const operations = defineTranslations({
     "operations.callAssetChange": "{actor} möchte {kind} „{title}“ ändern.",
     "operations.callAssetSave": "{actor} möchte {kind} „{title}“ speichern.",
     "operations.callAssetStale":
-      "Diese Anfrage ist veraltet: „{title}“ wurde geändert, nachdem die Anfrage gestellt wurde. Eine Freigabe ändert nichts. Bitte {actor} um eine neue Änderung.",
+      "Diese Anfrage ist veraltet: „{title}“ wurde geändert, nachdem {actor} sie gestellt hat. Deshalb kann sie nicht mehr freigegeben werden. Lehne sie ab; {actor} kann eine neue Änderung einreichen.",
+    "operations.callAssetStaleOwn":
+      "Deine Anfrage ist veraltet: „{title}“ wurde geändert, nachdem du sie gestellt hast. Deshalb kann sie nicht mehr freigegeben werden. Reiche eine neue Änderung ein, wenn sie noch nötig ist.",
+    "operations.callSkillStaleSeen": "Version, die {actor} gesehen hat",
+    "operations.callSkillStaleProposed": "Vorschlag von {actor}",
     "operations.callAssetKindSkill": "den Skill",
     "operations.callAssetKindAgent": "den Agenten",
     "operations.callAssetKindConnection": "die Connection",
@@ -414,6 +428,8 @@ export const operations = defineTranslations({
       "Erlaubt. Der Aufruf wartet jetzt auf eine Freigabe; noch wurde nichts ausgeführt.",
     "operations.callOutcomeStale":
       "Nicht übernommen: „{title}“ wurde nach dieser Anfrage geändert, deshalb hat sich nichts geändert. Reiche eine neue Änderung ein, wenn sie noch nötig ist.",
+    "operations.callOutcomeStaleApprover":
+      "Nicht übernommen: „{title}“ wurde nach dieser Anfrage geändert, deshalb hat sich nichts geändert. {actor} kann eine neue Änderung einreichen.",
     "operations.callOutcomeReason": "Grund: {reason}",
     "operations.callExpires": "Läuft ab",
     "operations.callExpiresHint": "Danach verfällt der Aufruf und läuft nicht.",
@@ -430,6 +446,10 @@ export const operations = defineTranslations({
     "operations.rowKey": "Datensatz {n}, Schlüssel",
     "operations.rowValues": "Datensatz {n}",
     "operations.rowNewValues": "Datensatz {n}, neue Werte",
+    "operations.rowNow": "Datensatz {n}, wie er jetzt ist",
+    "operations.rowsUnavailable":
+      "Die Datensätze ließen sich gerade nicht lesen. Der Schlüssel zeigt, um welchen Datensatz es geht.",
+    "operations.rowGone": "Datensatz {n} ist nicht mehr in der Tabelle.",
     "operations.confirmAllow": "Erlauben",
     "operations.confirmDeny": "Verweigern",
     "operations.confirmHeadlineAgentChanging":

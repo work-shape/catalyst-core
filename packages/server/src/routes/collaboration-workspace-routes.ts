@@ -8,6 +8,7 @@ import {
   getSubjectUserId,
   hasAuthScope,
   isAuthenticatedServicePrincipal,
+  isAppError,
   type ActorAccess,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
@@ -177,7 +178,19 @@ export function registerCollaborationWorkspaceRoutes(
   });
 
   route(apiOperations["workspaces.get"], async ({ user, params }) => {
-    return workspaces.getWorkspace(user, collaborationWorkspaceId(params));
+    const workspaceId = collaborationWorkspaceId(params);
+    try {
+      return await workspaces.getWorkspace(user, workspaceId);
+    } catch (error) {
+      if (!isAppError(error) || error.code !== "NOT_FOUND") throw error;
+      const administrators = await options.stores.workspaces.listWorkspaceAdministratorNames({
+        clientInstanceId: options.clientInstanceId,
+        collaborationWorkspaceId: workspaceId
+      });
+      throw new AppError("NOT_FOUND", "Collaboration Workspace is not available", {
+        administrators
+      });
+    }
   });
 
   route(

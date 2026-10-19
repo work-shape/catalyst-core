@@ -85,6 +85,21 @@ describe("execution workspace source attachments", () => {
     }
   });
 
+  it("accepts PDF, DOCX and JSON from the same list advertised by the picker (ACCEPT-FIX-12 attachments)", () => {
+    for (const [extension, mime] of [
+      ["pdf", "application/pdf"],
+      ["docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+      ["json", "application/json"]
+    ]) {
+      expect(WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES).toContain(`.${extension}`);
+      expect(WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES).toContain(mime);
+      expect(
+        detectWorkspaceSourceFileFormat(`source.${extension}`, "application/octet-stream")
+      ).toBe(extension);
+      expect(detectWorkspaceSourceFileFormat("source", mime)).toBe(extension);
+    }
+  });
+
   it("accepts source artifact formats used by workspace skills", () => {
     expect(detectWorkspaceSourceFileFormat("analysis.xlsx", undefined)).toBe("xlsx");
     expect(
@@ -101,7 +116,7 @@ describe("execution workspace source attachments", () => {
     expect(detectWorkspaceSourceFileFormat("notes.markdown", undefined)).toBe("markdown");
     expect(detectWorkspaceSourceFileFormat("source.csv", "text/plain")).toBe("csv");
     expect(detectWorkspaceSourceFileFormat("notes", "text/plain")).toBe("txt");
-    for (const filename of ["data.json", "script.py", "archive.bin"]) {
+    for (const filename of ["script.py", "archive.bin"]) {
       expect(detectWorkspaceSourceFileFormat(filename, "text/plain")).toBeUndefined();
     }
     expect(detectWorkspaceSourceFileFormat("notes", "text/markdown; charset=utf-8")).toBe(
@@ -197,7 +212,7 @@ describe("execution workspace source attachments", () => {
         })
       ).rejects.toMatchObject({
         message:
-          "Diesen Dateityp kannst du hier nicht anhängen. Verwende eine unterstützte Datei, zum Beispiel eine Textdatei."
+          "Diese DOCX-Datei ist kein lesbares Word-Dokument. Hänge die ursprüngliche DOCX-Datei an."
       });
       await expect(
         fixture.handler.uploadDraftAttachment({
@@ -209,7 +224,8 @@ describe("execution workspace source attachments", () => {
         })
       ).rejects.toMatchObject({
         code: "VALIDATION_FAILED",
-        message: "You cannot attach this file type here. Use a supported file, such as a text file."
+        message:
+          "You cannot attach this file type here. Supported types are PDF, Word (DOC/DOCX), JSON, text (TXT/Markdown/CSV/RTF), spreadsheets (XLS/XLSX/XLSM/ODS), presentations (PPT/PPTX/PPTM/ODP), and ODT."
       });
 
       await expect(
@@ -342,11 +358,11 @@ describe("execution workspace source attachments", () => {
         content: "kaputt",
         locale: "de"
       });
-      expect(german.statusCode).toBe(400);
+      expect(german.statusCode).toBe(422);
       expect(german.json()).toMatchObject({
         error: {
           message:
-            "Diesen Dateityp kannst du hier nicht anhängen. Verwende eine unterstützte Datei, zum Beispiel eine Textdatei."
+            "Diese DOCX-Datei ist kein lesbares Word-Dokument. Hänge die ursprüngliche DOCX-Datei an."
         }
       });
       expect(unsupported.statusCode).toBe(400);
@@ -354,7 +370,7 @@ describe("execution workspace source attachments", () => {
         error: {
           code: "BAD_REQUEST",
           message:
-            "You cannot attach this file type here. Use a supported file, such as a text file."
+            "You cannot attach this file type here. Supported types are PDF, Word (DOC/DOCX), JSON, text (TXT/Markdown/CSV/RTF), spreadsheets (XLS/XLSX/XLSM/ODS), presentations (PPT/PPTX/PPTM/ODP), and ODT."
         }
       });
 

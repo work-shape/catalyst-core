@@ -15,7 +15,11 @@ import {
   PageHeader,
   SkeletonPage
 } from "@work-shape/catalyst-ui";
-import type { AssetContent, AssetFileEntry } from "../../shared/api/asset-writes";
+import type {
+  AssetContent,
+  AssetFileEntry,
+  DependencyConsent
+} from "../../shared/api/asset-writes";
 import { opensHere } from "../apps/app-header";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
@@ -30,7 +34,7 @@ import type {
 } from "./build-asset-kind";
 import type { BuildAssetRead, BuildAssetReload, BuildSource } from "./build-data";
 import { BuildHistory } from "./build-history";
-import type { VisibleBuildKind } from "./build-model";
+import { assetConfigTitle, type VisibleBuildKind } from "./build-model";
 import { formatDateTime } from "../../shared/locale-format";
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
 import { AGENT_ASSET_KIND, buildWorkspaceName, type BuildRights } from "../../shared/build-rights";
@@ -70,7 +74,12 @@ export function NewAssetPage({
         ? { owner: source.scope.workspaceId }
         : {})}
       onUnsavedChange={page.onUnsavedChange}
-      save={(config) => create({ config })}
+      save={(config, write) =>
+        create(
+          { config },
+          write !== undefined && "dependencyConsent" in write ? write.dependencyConsent : undefined
+        )
+      }
       folder={{ read: async () => [], save: (files) => create({ files }) }}
     />
   );
@@ -87,16 +96,17 @@ function useCreate({
   start: BuildAssetStart;
   source: BuildSource;
   onCreated(name: string): void;
-}): (content: AssetContent) => Promise<BuildWriteOutcome> {
+}): (content: AssetContent, dependencyConsent?: DependencyConsent) => Promise<BuildWriteOutcome> {
   const { locale, t } = useTranslation();
-  return async (content) => {
+  return async (content, dependencyConsent) => {
     const create = (expectedRevision: number | null) =>
       source.writes.put({
         kind: entry.kind,
         name: start.name,
         ...content,
         expectedRevision,
-        ...(start.availableIn ? { availableIn: start.availableIn } : {})
+        ...(start.availableIn ? { availableIn: start.availableIn } : {}),
+        ...(dependencyConsent ? { dependencyConsent } : {})
       });
     try {
       try {
@@ -652,7 +662,12 @@ function LoadedAssetPage({
             </Banner>
           ) : null
         }
-        save={(config, draft) => write({ config }, draft)}
+        save={(config, draft) =>
+          write(
+            { config },
+            draft !== undefined && "expectedDraftRevision" in draft ? draft : undefined
+          )
+        }
         reload={reload}
         folder={{
           read: () => source.writes.readFiles(address),
@@ -709,7 +724,7 @@ function LoadedAssetPage({
       <ConfirmDialog
         open={publishOpen}
         tone="primary"
-        title={t("build.publishTitle", { name: stored.name })}
+        title={t("build.publishTitle", { name: assetConfigTitle(stored, locale) })}
         confirmLabel={t("build.publish")}
         loading={publishing}
         onConfirm={() => {

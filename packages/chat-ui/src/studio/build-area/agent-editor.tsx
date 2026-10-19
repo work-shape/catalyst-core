@@ -38,7 +38,9 @@ import {
   useAvailabilityEdit,
   type AvailabilityChoice
 } from "./asset-availability-fields";
-import { MissingDependencies } from "./dependency-availability";
+import { MissingDependencies, type DependencyAvailability } from "./dependency-availability";
+import { AgentCreateReview, type AgentCreateCheck } from "./agent-create-review";
+import type { DependencyConsent } from "../../shared/api/asset-writes";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
 import { AgentModels, modelBindingLabel } from "./agent-models";
 import { AgentSkills, type SkillChoice } from "./agent-skills";
@@ -67,6 +69,7 @@ export function AgentEditor({
   appTools = NO_APP_TOOLS,
   onMakeDefault,
   availability,
+  createCheck,
   draft
 }: {
   frame: BuildAssetEditorProps;
@@ -93,6 +96,11 @@ export function AgentEditor({
   /** Where the agent can be chosen, for a reader who may change it. */
   availability?: AvailabilityChoice;
   /**
+   * A new agent's: what it would use that is missing where it starts, read before the create.
+   * Absent for an existing agent and for one that starts hidden.
+   */
+  createCheck?: AgentCreateCheck;
+  /**
    * The agent's one draft, for a reader who may change the agent: the form starts from the
    * draft the source read, and saves write it. Absent for a new agent and for a reader.
    */
@@ -117,6 +125,11 @@ export function AgentEditor({
   // missing where the agent is.
   const [publishDependencies, setPublishDependencies] = useState(false);
   const [preflight, setPreflight] = useState(false);
+  // A new agent's create that waits for the reader's answer to what it would leave missing.
+  const [creating, setCreating] = useState<{
+    config: Record<string, unknown>;
+    dependencies: DependencyAvailability;
+  }>();
   const canEdit = (field: string) => canWrite && editableAgentFields.includes(field);
   const canEditModel = canWrite && canManageAgentModels;
   const canEditMaxSteps = canEdit("maxSteps");
@@ -158,6 +171,11 @@ export function AgentEditor({
     (live ?? state.baseline).displayName[locale].trim() ||
     (live ?? state.baseline).displayName[locale === "de" ? "en" : "de"].trim() ||
     state.baseline.name;
+  // The name the page head shows: as the form holds it.
+  const title =
+    form.displayName[locale].trim() ||
+    form.displayName[locale === "de" ? "en" : "de"].trim() ||
+    form.name;
   const showModels =
     canEditModel ||
     proposed.fields.includes("model") ||
@@ -208,7 +226,8 @@ export function AgentEditor({
   const answer = draft?.answerFor(held?.revision);
   const stale = held !== null && (held.stale || answer?.kind === "stale");
   // One save bar for the agent and where it can be chosen: the agent first, then its
-  // availability, each only when it changed.
+  // availability, each only when it changed. A new agent that would miss what it uses where it
+  // starts is created from the dialog that offers to make it available, as a publish is.
   const submit = async (): Promise<BuildWriteOutcome> => {
     setSaving(true);
     const config = editedAgentConfig(
@@ -216,6 +235,37 @@ export function AgentEditor({
       held?.config ?? frame.asset?.config,
       references?.enabledToolNames
     );
+    if (frame.asset === undefined && createCheck !== undefined) {
+      // Nothing is created without the check: a check that fails keeps the form as it is.
+      const checked = await createCheck.read(config).then(
+        (dependencies) => ({ dependencies }),
+        () => undefined
+      );
+      if (checked === undefined) {
+        const failed: BuildWriteOutcome = {
+          ok: false,
+          conflict: false,
+          refusals: [{ message: t("build.dependencyCheckFailed") }]
+        };
+        setSaving(false);
+        state.setOutcome(failed);
+        return failed;
+      }
+      const { dependencies } = checked;
+      if (dependencies !== null && dependencies.missing.length > 0) {
+        setSaving(false);
+        setCreating({ config, dependencies });
+        // Nothing is written yet, and nothing was refused.
+        return { ok: true };
+      }
+    }
+    return write(config);
+  };
+  const write = async (
+    config: Record<string, unknown>,
+    dependencyConsent?: DependencyConsent
+  ): Promise<BuildWriteOutcome> => {
+    setSaving(true);
     const asset = frame.asset;
     const saved: BuildWriteOutcome & { draftRevision?: number } =
       asset === undefined || changedFields > 0
@@ -223,7 +273,9 @@ export function AgentEditor({
             config,
             asset !== undefined && draft !== undefined
               ? { expectedDraftRevision: held?.revision ?? null }
-              : undefined
+              : asset === undefined && dependencyConsent !== undefined
+                ? { dependencyConsent }
+                : undefined
           )
         : { ok: true };
     if (saved.ok) {
@@ -526,11 +578,7 @@ export function AgentEditor({
           canWrite &&
           (editableAgentFields.length > 0 || canManageAgentModels || availability !== undefined)
       }}
-      title={
-        form.displayName[locale].trim() ||
-        form.displayName[locale === "de" ? "en" : "de"].trim() ||
-        form.name
-      }
+      title={title}
       description={
         form.description[locale].trim() || form.description[locale === "de" ? "en" : "de"].trim()
       }
@@ -678,6 +726,9 @@ export function AgentEditor({
             </p>
             <MissingDependencies
               dependencies={preflight ? undefined : reviewed}
+              workspaceName={(id) =>
+                availability?.workspaces.find((workspace) => workspace.id === id)?.name
+              }
               makeAvailable={publishDependencies}
               disabled={busy === "publish"}
               onMakeAvailableChange={setPublishDependencies}
@@ -705,6 +756,15 @@ export function AgentEditor({
     <>
       {page}
       {decision}
+      {creating && createCheck ? (
+        <AgentCreateReview
+          name={title}
+          check={createCheck}
+          dependencies={creating.dependencies}
+          onCreate={(dependencyConsent) => write(creating.config, dependencyConsent)}
+          onClose={() => setCreating(undefined)}
+        />
+      ) : null}
     </>
   );
 }

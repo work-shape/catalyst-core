@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   Banner,
@@ -14,10 +15,15 @@ import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { operationOriginLabelKeys } from "../../shared/operations-model";
 import { formatApprovalDate } from "./approval-request-model";
 import { ConfirmationLead } from "./confirmation-lead";
+import { useOptionalWorkspaceApiClient } from "../../shared/api/workspace-api-client";
+import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import {
+  currentRow,
   dataStoreRowChange,
+  keyedRowsQuery,
   rowChangeInputs,
   rowChangeSummary,
+  type CurrentRows,
   type DataStoreRowChange
 } from "./data-store-row-change";
 import { useApprovalRevisionHost } from "./approval-revision-host";
@@ -33,7 +39,7 @@ import {
   type OperationCallPreview
 } from "./operation-call-preview";
 import { PublishReviewBody } from "./publish-review";
-import { SkillChangeBody } from "./skill-change-body";
+import { SkillChangeBody, type SkillChangeLabels } from "./skill-change-body";
 import { parseSkillChangePreview } from "./skill-change-preview";
 
 type OutcomeTone = "info" | "success" | "danger" | "warning";
@@ -81,7 +87,9 @@ const APPROVAL_STALE = "APPROVAL_STALE";
 function shownOutcome(
   request: Pick<ApprovalRequestView, "status" | "applyResult">,
   confirmation: boolean,
-  asset: OperationCallAsset | undefined
+  asset: OperationCallAsset | undefined,
+  /** Who asked, unless the reader did: the sentence then says what they can do. */
+  otherActor: string | undefined
 ): ShownOutcome | undefined {
   if (confirmation && request.status === "rejected") {
     return { outcome: "denied", label: "operations.confirmOutcomeDenied", tone: "info" };
@@ -96,8 +104,12 @@ function shownOutcome(
     return asset
       ? {
           outcome: ended.outcome,
-          label: "operations.callOutcomeStale",
-          values: { title: asset.title },
+          ...(otherActor === undefined
+            ? { label: "operations.callOutcomeStale", values: { title: asset.title } }
+            : {
+                label: "operations.callOutcomeStaleApprover",
+                values: { title: asset.title, actor: otherActor }
+              }),
           tone: "warning"
         }
       : { outcome: ended.outcome, ...OUTCOME.refused };
@@ -148,6 +160,7 @@ export function OperationCallBody({
   >;
 }) {
   const { t } = useTranslation();
+  const host = useApprovalRevisionHost();
   const call = parseOperationCallPreview(request.preview);
   if (!call) {
     return (
@@ -161,8 +174,12 @@ export function OperationCallBody({
   // A person's own confirmation, which only they see: it leads with who asks for them.
   const confirmation = isInboxConfirmation(request);
   const { asset } = call;
-  const outcome = pending ? undefined : shownOutcome(request, confirmation, asset);
   const actor = call.actor.label;
+  // The reader who asked is told what they can do; anyone else is told what the asker can.
+  const ownRequest = host !== undefined && host.currentUserId === call.actor.id;
+  const outcome = pending
+    ? undefined
+    : shownOutcome(request, confirmation, asset, ownRequest ? undefined : actor);
   // A reader who may not read the asset sees its title and why, never what the call writes.
   const withheld = asset?.beforeWithheld ? asset : undefined;
   // The skill's own view needs a text the server could read; without one the input shows.
@@ -230,7 +247,10 @@ export function OperationCallBody({
           )}
           {asset?.isStale ? (
             <Banner tone="warning" role="note" data-testid="operation-call-stale">
-              {t("operations.callAssetStale", { title: asset.title, actor })}
+              {t(ownRequest ? "operations.callAssetStaleOwn" : "operations.callAssetStale", {
+                title: asset.title,
+                actor
+              })}
             </Banner>
           ) : null}
           {/* A reason is given only where it names the rule that holds the request. */}
@@ -263,7 +283,7 @@ export function OperationCallBody({
       {review ? null : withheld ? (
         <WithheldAsset asset={withheld} />
       ) : skill ? (
-        <SkillAsset asset={skill} />
+        <SkillAsset asset={skill} actor={actor} />
       ) : rowChange ? (
         <RowChangeInputs change={rowChange} />
       ) : (
@@ -309,22 +329,30 @@ function WithheldAsset({ asset }: { asset: OperationCallAsset }) {
 }
 
 /** A saved skill as people read one: what else changes about it, then its text. */
-function SkillAsset({ asset }: { asset: OperationCallAsset }) {
+function SkillAsset({ asset, actor }: { asset: OperationCallAsset; actor: string }) {
   const { t } = useTranslation();
   const { previous, removedResources } = asset;
   const hasText = parseSkillChangePreview(asset.content) !== undefined;
+  // An outdated request is compared with the version its requester saw, not with what is saved
+  // now: the labels say so, so the comparison does not read as a revert of the newer text.
+  const labels = asset.isStale
+    ? {
+        before: t("operations.callSkillStaleSeen", { actor }),
+        after: t("operations.callSkillStaleProposed", { actor })
+      }
+    : { before: t("skillChangeBefore"), after: t("skillChangeAfter") };
   return (
     <section className="grid min-w-0 gap-3" data-testid="operation-call-skill">
       {previous.title || previous.description || removedResources.length > 0 ? (
         <KeyValueList layout="stacked" data-testid="operation-call-skill-fields">
           {previous.title ? (
             <KeyValue label={t("operations.callSkillTitle")} data-field="title">
-              <BeforeAndNow before={previous.title} now={asset.title} />
+              <BeforeAndNow labels={labels} before={previous.title} now={asset.title} />
             </KeyValue>
           ) : null}
           {previous.description ? (
             <KeyValue label={t("operations.callSkillDescription")} data-field="description">
-              <BeforeAndNow before={previous.description} now={asset.description} />
+              <BeforeAndNow labels={labels} before={previous.description} now={asset.description} />
             </KeyValue>
           ) : null}
           {removedResources.length > 0 ? (
@@ -335,7 +363,7 @@ function SkillAsset({ asset }: { asset: OperationCallAsset }) {
         </KeyValueList>
       ) : null}
       {hasText ? (
-        <SkillChangeBody preview={asset.content} heading={false} expanded />
+        <SkillChangeBody preview={asset.content} heading={false} expanded labels={labels} />
       ) : (
         <p className="text-muted-foreground" data-testid="operation-call-skill-same-text">
           {t("operations.callSkillSameText")}
@@ -345,16 +373,23 @@ function SkillAsset({ asset }: { asset: OperationCallAsset }) {
   );
 }
 
-function BeforeAndNow({ before, now }: { before: string; now: string | undefined }) {
-  const { t } = useTranslation();
+function BeforeAndNow({
+  labels,
+  before,
+  now
+}: {
+  labels: SkillChangeLabels;
+  before: string;
+  now: string | undefined;
+}) {
   return (
     <>
       <span className="block text-muted-foreground">
-        {t("skillChangeBefore")}: {before}
+        {labels.before}: {before}
       </span>
       {now === undefined ? null : (
         <span className="block">
-          {t("skillChangeAfter")}: {now}
+          {labels.after}: {now}
         </span>
       )}
     </>
@@ -420,11 +455,61 @@ export function CallInputs({
 
 /**
  * A Data Store write as one question, "Add 1 row to Holiday requests?", then its table and every
- * row of it, a block per key and per values.
+ * row of it, a block per key and per values. A row named by key also shows as it stands now, read
+ * with the reader's own rights inside a workspace.
  */
 export function RowChangeInputs({ change }: { change: DataStoreRowChange }) {
+  const api = useOptionalWorkspaceApiClient();
+  const query = keyedRowsQuery(change);
+  return api && query ? (
+    <ReadRowChange change={change} query={query} api={api} />
+  ) : (
+    <RowChangeView change={change} current={undefined} />
+  );
+}
+
+function ReadRowChange({
+  change,
+  query,
+  api
+}: {
+  change: DataStoreRowChange;
+  query: NonNullable<ReturnType<typeof keyedRowsQuery>>;
+  api: NonNullable<ReturnType<typeof useOptionalWorkspaceApiClient>>;
+}) {
+  const read = useQuery({
+    // Under the Data Store reads, so a write of the store reads the rows again.
+    queryKey: [
+      ...workspaceQueryKeys.dataStores(api.apiBaseUrl),
+      "keyed-rows",
+      change.store,
+      query.sql,
+      query.parameters
+    ],
+    queryFn: ({ signal }) =>
+      api.client.data_stores.query({ params: { store: change.store }, body: query, signal }),
+    retry: false
+  });
+  // A capped answer may leave out a keyed row: no row is told gone on its word.
+  const current: CurrentRows =
+    read.isError || read.data?.truncated === true
+      ? { status: "unavailable" }
+      : read.data
+        ? { status: "read", rows: read.data.rows }
+        : undefined;
+  return <RowChangeView change={change} current={current} />;
+}
+
+function RowChangeView({ change, current }: { change: DataStoreRowChange; current: CurrentRows }) {
   const { locale, t } = useTranslation();
-  const inputs = rowChangeInputs(change, t);
+  const inputs = rowChangeInputs(change, t, current);
+  // The rows a read found no longer, by their number in the change.
+  const gone =
+    current?.status === "read"
+      ? change.rows.flatMap(({ key }, index) =>
+          key && !currentRow(key, current.rows) ? [index + 1] : []
+        )
+      : [];
   return (
     <div className="grid min-w-0 gap-3" data-testid="row-change-inputs" data-verb={change.verb}>
       <p className="text-foreground wrap-anywhere" data-testid="operation-call-summary">
@@ -434,6 +519,16 @@ export function RowChangeInputs({ change }: { change: DataStoreRowChange }) {
         call={{ inputs, inputFieldCount: inputs.length, inputRemoved: false }}
         hiddenFields={0}
       />
+      {current?.status === "unavailable" ? (
+        <p className="text-muted-foreground" data-testid="row-change-unavailable">
+          {t("operations.rowsUnavailable")}
+        </p>
+      ) : null}
+      {gone.map((n) => (
+        <p key={n} className="text-muted-foreground" data-testid="row-change-gone">
+          {t("operations.rowGone", { n })}
+        </p>
+      ))}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import type {
   ConversationListItem
 } from "@work-shape/catalyst-api-client";
 import { useCollaborationWorkspacesQuery } from "../api/workspace-queries";
+import { useClosedWorkspaceLinkQuery } from "../api/closed-workspace-link";
 import { canManageCollaborationWorkspace } from "./collaboration-workspace-selector";
 import {
   clearStoredCollaborationWorkspaceId,
@@ -55,8 +56,11 @@ export interface CollaborationWorkspaceModel {
   closeDialog(): void;
   conversationMoved(conversationId: string, destinationCollaborationWorkspaceId: string): void;
   collaborationWorkspaceDeleted(collaborationWorkspaceId: string): void;
-  /** A link led to a workspace the person is no member of, and the page went to their own. */
-  closedLinkLeftHere: boolean;
+  /**
+   * A link led to a workspace the person is no member of, and the page went to their own: the
+   * owners and admins of that workspace to ask, once the instance named them. Absent otherwise.
+   */
+  closedLink: { administrators: readonly string[] } | undefined;
   dismissClosedLink(): void;
 }
 
@@ -136,7 +140,8 @@ export function useCollaborationWorkspaceModel(
     showSettings
   } = input;
   const [dialog, setDialog] = useState<CollaborationWorkspaceDialogState>({ kind: "none" });
-  const [closedLinkLeftHere, setClosedLinkLeftHere] = useState(false);
+  // The workspace a closed link named, while the page says why it went elsewhere.
+  const [closedLinkWorkspaceId, setClosedLinkWorkspaceId] = useState<string>();
   const [settingsCollaborationWorkspaceId, setSettingsCollaborationWorkspaceId] = useState<
     string | undefined
   >();
@@ -151,6 +156,12 @@ export function useCollaborationWorkspaceModel(
     [collaborationWorkspacesQuery.data]
   );
   const collaborationWorkspacesLoaded = collaborationWorkspacesQuery.isSuccess;
+  const closedLinkAdministrators = useClosedWorkspaceLinkQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    collaborationWorkspaceId: closedLinkWorkspaceId
+  });
   const personalCollaborationWorkspaceId = collaborationWorkspaces.find(
     (collaborationWorkspace) => collaborationWorkspace.kind === "personal"
   )?.id;
@@ -247,8 +258,9 @@ export function useCollaborationWorkspaceModel(
     if (activeCollaborationWorkspace || !fallbackCollaborationWorkspaceId) {
       return;
     }
-    // The page says why it went elsewhere: a link from a colleague otherwise just lands here.
-    setClosedLinkLeftHere(true);
+    // The page says why it went elsewhere, and whom to ask: a link from a colleague otherwise
+    // just lands here.
+    setClosedLinkWorkspaceId(activeCollaborationWorkspaceId);
     goToCollaborationWorkspace(fallbackCollaborationWorkspaceId, { replace: true });
   }, [
     activeCollaborationWorkspace,
@@ -279,7 +291,7 @@ export function useCollaborationWorkspaceModel(
       if (collaborationWorkspaceId === routedCollaborationWorkspaceId) {
         return;
       }
-      setClosedLinkLeftHere(false);
+      setClosedLinkWorkspaceId(undefined);
       goToCollaborationWorkspace(collaborationWorkspaceId);
     },
     [goToCollaborationWorkspace, routedCollaborationWorkspaceId]
@@ -360,8 +372,11 @@ export function useCollaborationWorkspaceModel(
     closeDialog,
     conversationMoved,
     collaborationWorkspaceDeleted,
-    closedLinkLeftHere,
-    dismissClosedLink: () => setClosedLinkLeftHere(false)
+    closedLink:
+      closedLinkWorkspaceId !== undefined && closedLinkAdministrators.data !== undefined
+        ? { administrators: closedLinkAdministrators.data }
+        : undefined,
+    dismissClosedLink: () => setClosedLinkWorkspaceId(undefined)
   };
 }
 

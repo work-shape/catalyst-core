@@ -137,7 +137,10 @@ const makeAvailableBox = () =>
 
 describe("publishing an agent that uses what its workspaces lack", () => {
   /** The agent page with a draft whose read again names what is missing. */
-  function mountDraft(dependencyAvailability: AgentDraft["dependencyAvailability"]) {
+  function mountDraft(
+    dependencyAvailability: AgentDraft["dependencyAvailability"],
+    availability?: AvailabilityChoice
+  ) {
     const draft: AgentDraft = {
       agent: "assistant",
       revision: 4,
@@ -177,7 +180,8 @@ describe("publishing an agent that uses what its workspaces lack", () => {
         editableAgentFields: ["instructions"],
         canManageAgentModels: false,
         skillChoice: { options: [], onSearch: noop },
-        draft: source
+        draft: source,
+        ...(availability === undefined ? {} : { availability })
       });
     }
     mount(createElement(Page));
@@ -256,6 +260,63 @@ describe("publishing an agent that uses what its workspaces lack", () => {
     expect(missingBanner()?.textContent).toContain("Ask an instance admin to make them available.");
   });
 
+  // ACCEPT-2d C-1: the dialog names the workspaces the list was read for, by the names the page
+  // loaded, and never shows an id it cannot name.
+  const sharedChoice: AvailabilityChoice = {
+    saved: { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: ["ws_sales"] },
+    workspaces,
+    save: async () => undefined
+  };
+  it.each([
+    [["ws_sales"], false, "Members in Sales cannot use:"],
+    [["ws_sales"], true, "Members in Sales or personal workspaces may be unable to use:"],
+    [["ws_gone"], false, "Members in some of this agent's workspaces cannot use:"]
+  ])(
+    "names the workspaces %j (personal: %s) the list was read for",
+    async (collaborationWorkspaceIds, personalWorkspaces, sentence) => {
+      mountDraft(
+        {
+          missing: [contracts],
+          administrators: [],
+          availability: { mode: "selected", personalWorkspaces, collaborationWorkspaceIds }
+        },
+        sharedChoice
+      );
+      await openPublish();
+      await vi.waitFor(() => expect(missingBanner()).not.toBeNull(), {
+        timeout: CONDITION_WAIT_MS
+      });
+
+      expect(missingBanner()?.querySelector("[data-missing-dependencies-text]")?.textContent).toBe(
+        sentence
+      );
+      expect(missingBanner()?.textContent).not.toContain("ws_");
+    }
+  );
+
+  // A publisher who does not administer the workspace has no local name for it: the instance
+  // names it.
+  it("names a workspace by the name the instance gives, where the page has none", async () => {
+    mountDraft({
+      missing: [contracts],
+      administrators: [],
+      availability: {
+        mode: "selected",
+        personalWorkspaces: false,
+        collaborationWorkspaceIds: ["ws_nordlicht"]
+      },
+      workspaces: [{ id: "ws_nordlicht", name: "Nordlicht" }]
+    });
+    await openPublish();
+    await vi.waitFor(() => expect(missingBanner()).not.toBeNull(), {
+      timeout: CONDITION_WAIT_MS
+    });
+
+    expect(missingBanner()?.querySelector("[data-missing-dependencies-text]")?.textContent).toBe(
+      "Members in Nordlicht cannot use:"
+    );
+  });
+
   it("says nothing where nothing is missing", async () => {
     const page = mountDraft({ missing: [], administrators: ["Ana Admin"] });
     await openPublish();
@@ -325,6 +386,22 @@ describe("saving where an agent is available", () => {
       { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] },
       { makeDependenciesAvailable: true }
     ]);
+  });
+
+  it("names the workspace the changed availability was read for", async () => {
+    mountAvailability();
+    await click(
+      required(
+        [...host.querySelectorAll<HTMLButtonElement>('button[role="checkbox"]')].find((box) =>
+          box.closest("label, div")?.textContent?.includes("Sales")
+        )
+      )
+    );
+    await vi.waitFor(() => expect(missingBanner()).not.toBeNull(), { timeout: CONDITION_WAIT_MS });
+
+    expect(missingBanner()?.querySelector("[data-missing-dependencies-text]")?.textContent).toBe(
+      "Members in Sales cannot use:"
+    );
   });
 
   it("clears the choice when the availability changes again", async () => {

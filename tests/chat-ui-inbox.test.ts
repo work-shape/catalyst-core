@@ -168,7 +168,8 @@ describe("inbox model", () => {
     expect(inboxItemSurface("apr_1", item(), kindOf, t)).toEqual({
       kind: "inbox_item",
       key: "inbox-item:apr_1",
-      title: "Änderung einer Fähigkeit",
+      // ACCEPT-2d C-9: the German kind said "Fähigkeit" where body and Studio say "Skill".
+      title: "Skill-Änderung",
       subtitle: "Skill: Gehaltsabrechnungen prüfen",
       itemId: "apr_1"
     });
@@ -203,6 +204,37 @@ describe("inbox list", () => {
       locale
     );
   }
+
+  // ACCEPT-2d C-9: two pending changes of one skill carried the same heading.
+  it("tells two requests for the same skill apart by who asked, with Skill in German too", () => {
+    const save = (id: string, actorId: string, label: string) =>
+      item({
+        id,
+        kind: "operation_call",
+        preview: {
+          runId: `opr_${id}`,
+          operation: "assets.put",
+          effect: "changing",
+          actor: { kind: "user", id: actorId, label },
+          origin: { kind: "user" },
+          inputs: [],
+          asset: { kind: "skill", name: "leave", title: "Urlaubsrichtlinie", isNew: false }
+        }
+      });
+    const rows = renderList("to_decide", [
+      save("apr_e", "user-elif", "Elif Aydin"),
+      save("apr_m", "user-mara", "Mara Lindqvist")
+    ]);
+    const titles = [...rows.matchAll(/title="([^"]*Urlaubsrichtlinie)"/gu)].map((m) => m[1]);
+    expect(titles).toEqual([
+      "Skill-Änderung von Elif Aydin: Urlaubsrichtlinie",
+      "Skill-Änderung von Mara Lindqvist: Urlaubsrichtlinie"
+    ]);
+    expect(rows).not.toContain("Fähigkeit");
+    expect(renderList("to_decide", [save("apr_e", "user-elif", "Elif Aydin")], "en")).toContain(
+      'title="Skill change by Elif Aydin: Urlaubsrichtlinie"'
+    );
+  });
 
   it("says in a row what is asked, who asked through which agent, and how long ago", () => {
     const markup = renderList("to_decide", [item()]);

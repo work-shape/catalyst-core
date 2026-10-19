@@ -95,6 +95,10 @@ export const build = defineTranslations({
       "The operator's network rule blocks this destination. To have it allowed, send the operator the host of the address.",
     "build.refusedReadOnlyOrigin":
       "The operator of the instance set up this connection, so it cannot be changed here.",
+    "build.refusedDependencyReview":
+      "Where this agent will be available changed after you checked what it uses. Nothing was created. Create it again to check the list once more.",
+    "build.dependencyCheckFailed":
+      "Could not check what this agent uses where it will be available. Nothing was created. Try again.",
     "build.removePrompt": "Remove prompt {number}",
     "build.restoreDescription":
       "The asset gets a new revision with that content. Changes on this page that are not saved are lost.",
@@ -238,6 +242,10 @@ export const build = defineTranslations({
       "Eine Netzwerkregel des Betreibers sperrt dieses Ziel. Damit es erlaubt wird, schick dem Betreiber den Host der Adresse.",
     "build.refusedReadOnlyOrigin":
       "Diese Verbindung hat der Betreiber der Instanz eingerichtet, deshalb lässt sie sich hier nicht ändern.",
+    "build.refusedDependencyReview":
+      "Wo dieser Agent verfügbar sein wird, hat sich nach deiner Prüfung geändert. Es wurde nichts erstellt. Erstelle ihn noch einmal, um die Liste erneut zu prüfen.",
+    "build.dependencyCheckFailed":
+      "Es ließ sich nicht prüfen, was dieser Agent dort verwendet, wo er verfügbar sein wird. Es wurde nichts erstellt. Versuch es noch einmal.",
     "build.removePrompt": "Vorschlag {number} entfernen",
     "build.restoreDescription":
       "Das Asset erhält eine neue Version mit diesem Inhalt. Nicht gespeicherte Änderungen auf dieser Seite gehen verloren.",

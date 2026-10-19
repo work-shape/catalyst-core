@@ -11,6 +11,12 @@ import {
 /** A block of content that is new as a whole: neutral, with no accent. */
 const WHOLE_CONTENT_CLASS = "rounded-md border border-border bg-card px-3 py-2 text-foreground";
 
+/** What the two sides of a replaced text are called. */
+export interface SkillChangeLabels {
+  before: string;
+  after: string;
+}
+
 /**
  * Plain-language view of a proposed skill change for people who never see the
  * skill source: whole paragraphs as "before" and "new", never a unified diff.
@@ -25,9 +31,12 @@ export function SkillChangeBody({
   preview,
   heading = true,
   expanded = false,
+  labels,
   refusal
 }: {
   preview: unknown;
+  /** The names of the two sides, where they are not "Before" and "New". */
+  labels?: SkillChangeLabels;
   /** Set where the approved change was not applied, with the reason; empty where none came. */
   refusal?: string;
   /** The line that names the skill. Left out where the surroundings already name it. */
@@ -62,7 +71,12 @@ export function SkillChangeBody({
       ) : null}
       {change.newSkill ? <NewSkill skill={change.newSkill} expanded={expanded} /> : null}
       {change.changes.map((entry, index) => (
-        <SkillChange key={index} change={entry} expanded={expanded} />
+        <SkillChange
+          key={index}
+          change={entry}
+          expanded={expanded}
+          labels={labels ?? { before: t("skillChangeBefore"), after: t("skillChangeAfter") }}
+        />
       ))}
     </div>
   );
@@ -70,10 +84,12 @@ export function SkillChangeBody({
 
 function SkillChange({
   change,
-  expanded
+  expanded,
+  labels
 }: {
   change: SkillChangePreviewChange;
   expanded: boolean;
+  labels: SkillChangeLabels;
 }) {
   const { t } = useTranslation();
   const resource = change.target === SKILL_ROOT_TARGET ? undefined : change.target;
@@ -106,12 +122,12 @@ function SkillChange({
   return (
     <div className="grid min-w-0 gap-2">
       {change.before !== undefined ? (
-        <ChangeBlock label={t("skillChangeBefore")} detail={location} tone="before">
+        <ChangeBlock label={labels.before} detail={location} tone="before">
           <SourceText>{change.before}</SourceText>
         </ChangeBlock>
       ) : null}
       <ChangeBlock
-        label={t("skillChangeAfter")}
+        label={labels.after}
         detail={change.before === undefined ? location : undefined}
         tone="new"
       >

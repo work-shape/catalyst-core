@@ -294,7 +294,11 @@ export function DataStoreValueDialog({
 /** One value of a row. A long one is cut and shows whole on demand; `null` is named as such. */
 function RowCell({ value, type }: { value: unknown; type: string }) {
   const { t } = useTranslation();
-  const text = cellText(value);
+  // A yes-or-no value in the reader's words, as the confirmation of a row write says it.
+  const text =
+    typeof value === "boolean"
+      ? t(value ? "dataStores.valueTrue" : "dataStores.valueFalse")
+      : cellText(value);
   if (text === undefined) {
     return (
       <TableCell align={alignOf(type)} className="text-muted-foreground">

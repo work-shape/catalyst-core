@@ -277,6 +277,14 @@ export function readBuildRefusal(
     });
   }
   const details = readRefusalDetails(error);
+  // A new agent's choice to make what it uses available held for where it was checked, and
+  // the instance now reads that differently: the reader checks again.
+  if (
+    details.reason === "dependency_availability_review_required" ||
+    details.reason === "dependency_availability_changed"
+  ) {
+    return refused({ message: t("build.refusedDependencyReview") });
+  }
   // A guardrail is named by its title in the reader's language, with its author's reason.
   if (apiErrorCode(error) === "GUARDRAIL_BLOCKED" && details.guardrailTitle !== undefined) {
     const blocked = t("guardrails.blockedChange", { name: details.guardrailTitle });

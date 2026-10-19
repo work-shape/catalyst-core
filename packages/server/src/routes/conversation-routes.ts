@@ -84,8 +84,13 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
     })
   );
 
-  route(apiOperations["conversations.delete"], ({ user, context, params }) =>
-    conversations.deleteConversation(conversationIdParam(params), user, context)
+  route(apiOperations["conversations.delete"], ({ user, context, params, query }) =>
+    conversations.deleteConversation(
+      conversationIdParam(params),
+      user,
+      context,
+      query.discardEmpty === "true"
+    )
   );
 }
 

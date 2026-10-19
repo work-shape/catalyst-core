@@ -72,3 +72,25 @@ export function formatUpdated(updatedAt: string, now: Date, locale: LocaleCode):
     unit
   );
 }
+
+/**
+ * The name people read of an asset, as its definition holds it: its `title` or its
+ * `displayName`, as one text or one per language, in the reader's language first. Without
+ * one, its id.
+ */
+export function assetConfigTitle(
+  asset: { name: string; config: Readonly<Record<string, unknown>> },
+  locale: LocaleCode
+): string {
+  for (const field of ["title", "displayName"]) {
+    const value = asset.config[field];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "object" && value !== null) {
+      for (const language of [locale, locale === "de" ? "en" : "de"]) {
+        const text: unknown = Reflect.get(value, language);
+        if (typeof text === "string" && text.trim()) return text.trim();
+      }
+    }
+  }
+  return asset.name;
+}

@@ -91,7 +91,10 @@ export function BuildCreateDialog({
         name,
         title,
         ...(purpose.trim() ? { description: purpose.trim() } : {}),
-        ...(availableIn ? { availableIn } : {})
+        ...(availableIn ? { availableIn } : {}),
+        ...(availableIn && availableIn !== "all" && startsIn?.workspace
+          ? { availableInName: startsIn.workspace.name }
+          : {})
       });
     }
   };
