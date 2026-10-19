@@ -12,6 +12,7 @@ import {
   draftAttachmentsKey,
   resolveSendBlock,
   shouldQueueSend,
+  visibleSendRefusal,
   type QueuedSendState,
   type SendBlock,
   AssistantThread,
@@ -312,6 +313,24 @@ describe("composer send during a block", () => {
 
     expect(removed(queuedWithFile)).toBe("wait");
     expect(removed({ ...queuedWithFile, block: undefined, attachmentsKey: "" })).toBe("drop");
+  });
+
+  it("ends a refusal once the refused file is removed and good files are attached", () => {
+    const refusedDraft = draftAttachmentsKey([{ id: "kaputt.docx" }]);
+    const refusal = {
+      message: "kaputt.docx: Diese DOCX-Datei ist kein lesbares Word-Dokument.",
+      attachmentsKey: refusedDraft
+    };
+
+    expect(visibleSendRefusal(refusal, refusedDraft)).toBe(refusal.message);
+    expect(visibleSendRefusal(refusal, "")).toBeUndefined();
+    expect(
+      visibleSendRefusal(
+        refusal,
+        draftAttachmentsKey([{ id: "vertrag.pdf" }, { id: "rechnung.json" }])
+      )
+    ).toBeUndefined();
+    expect(visibleSendRefusal(undefined, refusedDraft)).toBeUndefined();
   });
 
   it("sends a queued message whose attachments stayed as they were", () => {

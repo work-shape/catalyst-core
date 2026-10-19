@@ -40,7 +40,13 @@ import {
   ProductConversationRunTransport,
   startProductConversationRun
 } from "./product-run-transport";
-import { draftAttachmentsKey, resolveSendBlock, type QueuedSend } from "./send-block";
+import {
+  draftAttachmentsKey,
+  resolveSendBlock,
+  visibleSendRefusal,
+  type QueuedSend,
+  type SendRefusal
+} from "./send-block";
 import { QueuedSendBridge } from "./queued-send-bridge";
 
 export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
@@ -139,7 +145,7 @@ function AssistantRuntimePane({
   const rootSubmitPendingRef = useRef(false);
   const [optimisticPending, setOptimisticPending] = useState(false);
   const [rootSubmitPending, setRootSubmitPending] = useState(false);
-  const [rootSubmitError, setRootSubmitError] = useState<string | undefined>(undefined);
+  const [rootSubmitError, setRootSubmitError] = useState<SendRefusal | undefined>(undefined);
   const noAgentsMessage =
     config && config.agents.length === 0 && !agentsLoading
       ? t(agentsWorkspaceScoped ? "workspaceNoAgents" : "instanceNotConfigured")
@@ -170,7 +176,7 @@ function AssistantRuntimePane({
     [attachmentsKey, collaborationWorkspaceId]
   );
   const settleQueuedSend = useCallback(() => setQueuedSend(undefined), []);
-  const visibleNotice = rootSubmitError ?? notice;
+  const visibleNotice = visibleSendRefusal(rootSubmitError, attachmentsKey) ?? notice;
   useAutoOpenCompletedRunSurface(activeRun, locale);
   const conversationSubject = useConversationSubject({
     activeRun,
@@ -249,7 +255,10 @@ function AssistantRuntimePane({
           if (!activeRef.current) {
             return;
           }
-          setRootSubmitError(error instanceof Error ? error.message : "Message send failed");
+          setRootSubmitError({
+            message: error instanceof Error ? error.message : "Message send failed",
+            attachmentsKey
+          });
         })
         .finally(() => {
           setRootSubmitPendingIfActive(false);
@@ -258,6 +267,7 @@ function AssistantRuntimePane({
       return true;
     },
     [
+      attachmentsKey,
       client,
       collaborationWorkspaceId,
       locale,

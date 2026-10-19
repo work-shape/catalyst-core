@@ -77,6 +77,23 @@ export function draftAttachmentsKey(attachments: readonly { id: string }[]): str
   return attachments.map((attachment) => attachment.id).join("\n");
 }
 
+/** A send the instance refused, with the attachments it was refused for. */
+export interface SendRefusal {
+  message: string;
+  attachmentsKey: string;
+}
+
+/**
+ * The refusal shown above the composer. It answers the draft it was given for: once the person
+ * removes the refused file or attaches others, it no longer speaks of what they would send.
+ */
+export function visibleSendRefusal(
+  refusal: SendRefusal | undefined,
+  attachmentsKey: string
+): string | undefined {
+  return refusal?.attachmentsKey === attachmentsKey ? refusal.message : undefined;
+}
+
 export type QueuedSendStep = "wait" | "send" | "drop";
 
 export interface QueuedSendState {

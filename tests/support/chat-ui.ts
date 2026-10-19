@@ -150,7 +150,8 @@ export {
   type QueuedSendState,
   resolveSendBlock,
   type SendBlock,
-  shouldQueueSend
+  shouldQueueSend,
+  visibleSendRefusal
 } from "../../packages/chat-ui/src/chat/assistant/send-block";
 export {
   composerActions,
