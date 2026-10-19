@@ -4658,6 +4658,13 @@
                             "type": "string",
                             "maxLength": 4000
                           },
+                          "inputSchema": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
                           "discoveredFingerprint": {
                             "type": "string"
                           },
@@ -4729,6 +4736,39 @@
                           "toolNames"
                         ]
                       }
+                    },
+                    "usedByAssets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "app",
+                              "workflow",
+                              "knowledge_base"
+                            ]
+                          },
+                          "workspaceId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "title"
+                        ]
+                      }
+                    },
+                    "usedByAssetsTruncated": {
+                      "type": "boolean"
                     },
                     "discoveredAt": {
                       "$ref": "#/components/schemas/Timestamp"

@@ -156,7 +156,7 @@ export const assetSummarySchema = z.object({
   /**
    * What the kind says of the asset beside its name, by the kind's own keys: a Connection
    * names its `connectorType`, its `origin`, whether it is `enabled` and, where it has one, its
-   * `service`, which picks its icon. A skill names its
+   * `service`, which picks its icon. Connection lists also carry runtime `health`. A skill names its
    * `origin`, who ships it: `instance` for a skill of the instance's own, `release` for one a
    * release ships. It names its `summary`, the sentence for people, where it has one. A skill
    * a release ships also names its `icon`, a key of the interface's icon registry; no other

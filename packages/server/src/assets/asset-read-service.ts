@@ -212,18 +212,40 @@ export class AssetReadWorkflow {
               .map((record) => record.id)
           : []
     });
+    const health = new Map(
+      (kind.kind === "connection"
+        ? await this.options.stores.connections.listConnectionStates({
+            clientInstanceId: this.options.clientInstanceId,
+            connectionAssetIds: records.map((record) => record.id)
+          })
+        : []
+      ).map((state) => [state.connectionAssetId, state.health])
+    );
     return records.map((record) => {
       const namespace = findNamespaceOfAssetName(namespaces, record.name);
       const resource = accessResource(record.kind, record.name, record.scope, record.id);
       const allowed = allowedOn(kind, call, resource);
-      if (!reads(resource)) {
-        return { ...this.publishedSummary(kind, record, namespace?.prefix, locale), allowed };
+      const published = !reads(resource)
+        ? this.publishedSummary(kind, record, namespace?.prefix, locale)
+        : undefined;
+      const summary = published ?? summarizeAsset(kind, record.name, record.config, locale);
+      const attributes =
+        kind.kind === "connection"
+          ? { ...summary.attributes, health: health.get(record.id) ?? "unknown" }
+          : summary.attributes;
+      if (published) {
+        return {
+          ...published,
+          ...(attributes === undefined ? {} : { attributes }),
+          allowed
+        };
       }
       return {
         id: record.id,
         kind: record.kind,
         allowed,
-        ...summarizeAsset(kind, record.name, record.config, locale),
+        ...summary,
+        ...(attributes === undefined ? {} : { attributes }),
         scope: record.scope,
         ...(namespace ? { namespace: namespace.prefix } : {}),
         revision: record.revision,

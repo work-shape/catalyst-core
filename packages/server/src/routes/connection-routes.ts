@@ -25,6 +25,8 @@ import type { ChatServerOptions } from "../types";
 const AGENT_ASSET_KIND = "agent";
 /** The module these operations belong to. */
 const CONNECTIONS_MODULE = "connections";
+/** Bounds the published-consumer scan; the page offers retry after a timed-out read. */
+const CONNECTION_DETAIL_TIMEOUT_MS = 15_000;
 /** What the run of a secret write keeps in the value's place. */
 const SECRET_MARK = "[secret]";
 
@@ -109,11 +111,21 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
   });
 
   route.operation(apiOperations["connections.get"], {
+    timeoutMs: CONNECTION_DETAIL_TIMEOUT_MS,
     authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.read, input.name),
     resource: connectionResource,
     module: CONNECTIONS_MODULE,
     execute: async (input, context) =>
-      required().get(input.name, await readableAgents(context.access))
+      required().get(input.name, await readableAgents(context.access), (resource) => {
+        const kind = options.configAssets.kinds.get(resource.kind ?? "");
+        return (
+          kind !== undefined &&
+          options.modules.offModuleOf("kind", kind.kind) === undefined &&
+          [kind.actions.read, kind.actions.use].some(
+            (right) => right !== undefined && context.access.authorize(right, resource).allowed
+          )
+        );
+      })
   });
 
   route.operation(apiOperations["connections.test"], {

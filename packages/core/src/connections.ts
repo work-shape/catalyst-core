@@ -1,3 +1,7 @@
+export {
+  PUBLISHED_DATA_CONSUMER_KINDS,
+  type PublishedDataConsumerKind
+} from "@work-shape/catalyst-asset-schemas";
 import {
   CONNECTION_EXPOSURES,
   CONNECTION_HEALTH_STATES,
@@ -506,9 +510,10 @@ export interface ConnectionsStore extends ConnectionBindingsStore {
     clientInstanceId: ClientInstanceId;
     connectionAssetId: string;
   }): Promise<ConnectionStateRecord | undefined>;
-  /** The state of every Connection of the instance, in one read. */
+  /** Connection states in one read, optionally restricted to a page of assets. */
   listConnectionStates(input: {
     clientInstanceId: ClientInstanceId;
+    connectionAssetIds?: readonly string[];
   }): Promise<ConnectionStateRecord[]>;
   /** Writes the health. Test time, error code and catalog stay unless they are named. */
   putConnectionState(input: {

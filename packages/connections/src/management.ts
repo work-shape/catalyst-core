@@ -10,6 +10,7 @@ import {
   connectionOperationName,
   parseConnectionOperationName,
   type AccessResource,
+  type JsonObject,
   type AuditActor,
   type ConnectionProviderRevocation,
   type ConnectionBindingState,
@@ -52,6 +53,8 @@ import {
   type ConnectionSignInDeps
 } from "./oauth/sign-in";
 import { createSecretStore, type SecretKeyring } from "./secret-store";
+import { connectionConsumers, type ConnectionConsumer } from "./used-by";
+import { isJsonSchemaWithinBounds } from "./json-schema";
 
 // What the Connection's page and the agent editor read beyond the asset, and the test of a
 // Connection. Nothing here answers a secret, a handle of one or data of the outside system.
@@ -68,6 +71,7 @@ export interface ConnectionOperationView {
   enabled: boolean;
   status: ConnectionOperationStatus;
   description?: string;
+  inputSchema?: JsonObject;
   discoveredFingerprint?: string;
   /** Only with status `unknown`: the bound the operation's stored schema is over. */
   schemaRefusal?: string;
@@ -116,6 +120,8 @@ export interface ConnectionView {
   operations: ConnectionOperationView[];
   discovered: ConnectionDiscoveredToolView[];
   usedBy: { agentName: string; title: string; toolNames: string[] }[];
+  usedByAssets?: ConnectionConsumer[];
+  usedByAssetsTruncated?: boolean;
   discoveredAt?: string;
   /** The shared sign-in, where one was made for the Connection's address. */
   binding?: ConnectionBindingView;
@@ -157,7 +163,11 @@ export interface ConnectionManagement extends ReturnType<
   /** What a right on the Connection is decided on. Nothing where no such Connection exists. */
   resource(name: string): Promise<OperationResource | undefined>;
   /** `agents` are the agents the caller may read: `usedBy` names no other. */
-  get(name: string, agents: readonly AgentToolListing[]): Promise<ConnectionView>;
+  get(
+    name: string,
+    agents: readonly AgentToolListing[],
+    readable?: (resource: AccessResource) => boolean
+  ): Promise<ConnectionView>;
   /** The type's bounded test. Writes the health and answers no data of the outside system. */
   test(
     name: string,
@@ -249,6 +259,9 @@ function operationsOf(connection: StoredConnection): ConnectionOperationView[] {
       ...(description === undefined
         ? {}
         : { description: description.slice(0, CONNECTION_DESCRIPTION_MAX_CHARS) }),
+      ...(state.descriptor && isJsonSchemaWithinBounds(state.descriptor.inputSchema)
+        ? { inputSchema: state.descriptor.inputSchema }
+        : {}),
       ...(fingerprint === undefined ? {} : { discoveredFingerprint: fingerprint }),
       ...(state.schemaRefusal === undefined ? {} : { schemaRefusal: state.schemaRefusal })
     };
@@ -379,7 +392,7 @@ export function createConnectionManagement(
       return connection ? resourceOf(connection) : undefined;
     },
 
-    async get(name, agents) {
+    async get(name, agents, readable) {
       const connection = await readConnection(deps, name);
       if (!connection) throw notFound(name);
       const usedBy = agents.flatMap((agent) => {
@@ -390,6 +403,7 @@ export function createConnectionManagement(
           ? [{ agentName: agent.name, title: agent.title, toolNames }]
           : [];
       });
+      const consumers = readable ? await connectionConsumers(deps, name, readable) : undefined;
       const { state, catalog } = connection;
       const origin = connection.type
         ? connectionOriginOf(connection.type, connection.config)
@@ -410,6 +424,12 @@ export function createConnectionManagement(
         operations: operationsOf(connection),
         discovered: discoveredOf(connection),
         usedBy,
+        ...(consumers === undefined
+          ? {}
+          : {
+              usedByAssets: consumers.assets,
+              usedByAssetsTruncated: consumers.truncated
+            }),
         ...(catalog ? { discoveredAt: catalog.discoveredAt } : {}),
         ...(binding === undefined ? {} : { binding }),
         ...(oauth === undefined ? {} : { oauth })

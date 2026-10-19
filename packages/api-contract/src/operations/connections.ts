@@ -1,4 +1,5 @@
 import {
+  PUBLISHED_DATA_CONSUMER_KINDS,
   CONNECTION_BINDING_STATES,
   GRANT_HOLDER_KINDS,
   CONNECTION_EXPOSURES,
@@ -53,6 +54,8 @@ export const connectionOperationDetailSchema = z.object({
   status: connectionOperationStatusSchema,
   /** As the outside system or the release describes it. Untrusted text, shown as text. */
   description: z.string().max(CONNECTION_OPERATION_DESCRIPTION_MAX_CHARS).optional(),
+  /** The bounded declaration read from the catalog; untrusted data, never instructions. */
+  inputSchema: z.record(z.string(), z.unknown()).optional(),
   /** Only with status `needs_review`: the fingerprint to accept in the Connection's config. */
   discoveredFingerprint: z.string().optional(),
   /**
@@ -123,6 +126,19 @@ export const connectionDetailSchema = z.object({
   usedBy: z.array(
     z.object({ agentName: z.string(), title: z.string(), toolNames: z.array(z.string()) })
   ),
+  /** Published consumers the caller may read. No draft content or hidden names. */
+  usedByAssets: z
+    .array(
+      z.object({
+        kind: z.enum(PUBLISHED_DATA_CONSUMER_KINDS),
+        workspaceId: z.string().optional(),
+        name: z.string(),
+        title: z.string()
+      })
+    )
+    .optional(),
+  /** The published-asset scan reached its bound, so the list may be incomplete. */
+  usedByAssetsTruncated: z.boolean().optional(),
   discoveredAt: timestampSchema.optional(),
   /** The shared sign-in, where one was made for the Connection's address. */
   binding: connectionBindingSchema.optional(),

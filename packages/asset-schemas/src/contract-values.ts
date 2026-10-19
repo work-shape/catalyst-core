@@ -1077,3 +1077,7 @@ export type WorkflowDatasetDownloadFormat = (typeof WORKFLOW_DATASET_DOWNLOAD_FO
 
 /** Instance resources whose use may be inherited through workspace availability. */
 export const WORKSPACE_USE_ASSET_KINDS = ["knowledge_base", "connection"] as const;
+
+/** Published assets that consume Connections or stored data. Agents hold tools separately. */
+export const PUBLISHED_DATA_CONSUMER_KINDS = ["app", "workflow", "knowledge_base"] as const;
+export type PublishedDataConsumerKind = (typeof PUBLISHED_DATA_CONSUMER_KINDS)[number];

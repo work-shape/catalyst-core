@@ -1,13 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { connectionDetailSchema, connectionToolsSchema } from "@work-shape/catalyst-api-contract";
-import { AppError, connectionCallError, type JsonValue } from "@work-shape/catalyst-core";
+import {
+  assetSummarySchema,
+  listEnvelopeSchema,
+  connectionDetailSchema,
+  connectionToolsSchema
+} from "@work-shape/catalyst-api-contract";
+import {
+  AppError,
+  asCollaborationWorkspaceId,
+  connectionCallError,
+  type ConfigAssetRecord,
+  type JsonValue
+} from "@work-shape/catalyst-core";
+import { createConnectionManagement } from "@work-shape/catalyst-connections";
+import { createNoticeKind } from "./support/notice-kind";
+import { setupAccessInstance } from "./support/access-instance";
 import { agent, clientInstanceId } from "./support/access-instance";
 import {
   DEFAULT_LIMITS,
   agentOrigin,
   echo,
   fixture,
+  fixtureOn,
   operationOf,
   write
 } from "./support/connection-operations";
@@ -202,7 +217,8 @@ describe("the Connection routes", () => {
           exposure: ["agent", "outside"],
           enabled: true,
           status: "ready",
-          description: echo.description
+          description: echo.description,
+          inputSchema: echo.inputSchema
         },
         {
           name: "write",
@@ -211,7 +227,8 @@ describe("the Connection routes", () => {
           exposure: ["agent", "outside"],
           enabled: false,
           status: "disabled",
-          description: write.description
+          description: write.description,
+          inputSchema: write.inputSchema
         }
       ]);
       // Kai reads the Connection and not the agent: the answer names no agent to Kai.
@@ -238,6 +255,264 @@ describe("the Connection routes", () => {
       { params: { name: "nothing" } },
       { status: 404, code: "NOT_FOUND" }
     );
+  });
+
+  it("lists only readable published Apps, nested Workflows and Knowledge Base sources", async () => {
+    const kinds = ["app", "workflow", "knowledge_base"] as const;
+    const t = await fixtureOn((options) =>
+      setupAccessInstance({
+        ...options,
+        modules: {
+          ...options.modules,
+          apps: { enabled: true },
+          workflows: { enabled: true },
+          knowledge: { enabled: true },
+          dataStores: { enabled: true }
+        },
+        furtherKinds: [
+          ...(options.furtherKinds ?? []),
+          ...kinds.map((kind) => ({
+            ...createNoticeKind(),
+            kind,
+            plural: `${kind}s`,
+            actions: {
+              read: `${kind}.read`,
+              use: `${kind}.use`,
+              write: `${kind}.write`,
+              delete: `${kind}.delete`
+            }
+          }))
+        ]
+      })
+    );
+    const connectionId = await t.seed("crm");
+    const publish = async (kind: string, name: string, config: Record<string, JsonValue>) => {
+      await applyAtCurrentRevisions(t.stores.configAssets, {
+        clientInstanceId,
+        mutations: [{ type: "upsert", kind, name, config, draft: true }]
+      });
+      const asset = await t.stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
+      if (!asset) throw new Error("Missing test asset");
+      const revision = await t.stores.configAssets.getConfigAssetRevision({
+        clientInstanceId,
+        kind,
+        name,
+        revision: asset.revision
+      });
+      if (!revision) throw new Error("Missing test revision");
+      await t.stores.configAssets.publishConfigAssetRevision({
+        clientInstanceId,
+        kind,
+        name,
+        assetId: asset.id,
+        revision: asset.revision,
+        revisionId: revision.id
+      });
+      return asset.id;
+    };
+    const appId = await publish("app", "report", {
+      title: "Live report",
+      manifest: { connections: ["crm"], actions: [] }
+    });
+    const flowId = await publish("workflow", "nested", {
+      manifest: {
+        name: "Nested flow",
+        steps: [
+          {
+            id: "parallel",
+            type: "parallel",
+            branches: [
+              {
+                id: "read",
+                steps: [{ id: "call", type: "operation", operation: "connection.crm.echo" }]
+              }
+            ]
+          }
+        ]
+      }
+    });
+    await publish("workflow", "agent-step", {
+      manifest: { name: "Agent flow", steps: [], tools: ["connection.crm.echo"] }
+    });
+    const kbId = await publish("knowledge_base", "manuals", {
+      title: "Live manuals",
+      sources: [{ connection: "crm" }, { connection: "crm" }]
+    });
+    await publish("app", "other", { title: "Other", manifest: { connections: ["crm-other"] } });
+    await publish("app", "malformed", { title: "Malformed", manifest: "invalid" });
+    // The new draft uses another Connection and has another title; the live revision counts.
+    await applyAtCurrentRevisions(t.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "app",
+          name: "report",
+          draft: true,
+          config: { title: "Private draft", manifest: { connections: ["other"] } }
+        },
+        {
+          type: "upsert",
+          kind: "app",
+          name: "draft-only",
+          draft: true,
+          config: { title: "Unpublished", manifest: { connections: ["crm"] } }
+        }
+      ]
+    });
+    const detail = connectionDetailSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "connections.get", {
+          params: { name: "crm" }
+        })
+      ).json()
+    );
+    expect(detail.usedByAssets).toEqual([
+      { kind: "app", name: "report", title: "Live report" },
+      { kind: "workflow", name: "agent-step", title: "Agent flow" },
+      { kind: "workflow", name: "nested", title: "Nested flow" },
+      { kind: "knowledge_base", name: "manuals", title: "Live manuals" }
+    ]);
+    expect(detail.usedByAssetsTruncated).toBe(false);
+    await t.grant(t.kai.id, "connection.read", { assetId: connectionId });
+    await t.grant(t.kai.id, "app.read", { assetId: appId });
+    await t.grant(t.kai.id, "knowledge_base.read", { assetId: kbId });
+    const limited = connectionDetailSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "connections.get", {
+          params: { name: "crm" }
+        })
+      ).json()
+    );
+    expect(limited.usedByAssets).toEqual([
+      { kind: "app", name: "report", title: "Live report" },
+      { kind: "knowledge_base", name: "manuals", title: "Live manuals" }
+    ]);
+    await t.grant(t.lena.id, "connection.read", { assetId: connectionId });
+    await t.grant(t.lena.id, "workflow.use", { assetId: flowId });
+    const usedOnly = connectionDetailSchema.parse(
+      (
+        await t.expectOk(t.lena.id, "connections.get", {
+          params: { name: "crm" }
+        })
+      ).json()
+    );
+    expect(usedOnly.usedByAssets).toEqual([
+      { kind: "workflow", name: "nested", title: "Nested flow" }
+    ]);
+    const publishedApp = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "app",
+      name: "report"
+    });
+    if (!publishedApp) throw new Error("Missing published fixture");
+    const workspaceId = asCollaborationWorkspaceId("cws-consumer-fixture");
+    const workspaceApp: ConfigAssetRecord = {
+      ...publishedApp,
+      scope: { kind: "workspace", workspaceId }
+    };
+    vi.spyOn(t.stores.configAssets, "listPublishedConfigAssets").mockImplementation(
+      async ({ kind }) => (kind === "app" ? Array.from({ length: 1_001 }, () => workspaceApp) : [])
+    );
+    const readable = vi.fn(() => true);
+    const bounded = await createConnectionManagement(t.sourceDeps).get("crm", [], readable);
+    expect(readable).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "app", name: "report", assetId: appId, workspaceId })
+    );
+    expect(bounded.usedByAssets?.[0]).toMatchObject({ kind: "app", name: "report", workspaceId });
+    expect(bounded.usedByAssets).toHaveLength(1_000);
+    expect(bounded.usedByAssetsTruncated).toBe(true);
+  });
+
+  it("omits a historical unbounded input schema from the detail answer", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm", {
+      connectorType: "discovering",
+      operations: [operationOf("lookup")]
+    });
+    const management = createConnectionManagement(t.sourceDeps);
+    const oversized = { type: "object", description: "x".repeat(300_000) };
+    await t.stores.connections.putConnectionState({
+      clientInstanceId,
+      connectionAssetId: assetId,
+      health: "ok",
+      catalog: {
+        version: 1,
+        discoveredAt: new Date().toISOString(),
+        pinned: { lookup: "a".repeat(64) },
+        entries: [
+          {
+            name: "lookup",
+            description: "Old tool",
+            inputSchema: oversized,
+            proposedEffect: "reading",
+            fingerprint: "a".repeat(64)
+          }
+        ]
+      }
+    });
+    const detail = await management.get("crm", []);
+    expect(detail.operations[0]).toMatchObject({
+      name: "lookup",
+      status: "unknown",
+      schemaRefusal: "schema_too_large"
+    });
+    expect(detail.operations[0]).not.toHaveProperty("inputSchema");
+    expect(JSON.stringify(detail)).not.toContain(oversized.description);
+  });
+
+  it("bounds a Connection page read to the published-consumer deadline", async () => {
+    const t = await fixture();
+    const definition = await t.operationCalls.registry.resolve("connections.get");
+    expect(definition?.timeoutMs).toBe(15_000);
+  });
+
+  it("lists runtime health from only the Connection page of assets, without new revisions", async () => {
+    const t = await fixture();
+    const first = await t.seed("a-tested");
+    const second = await t.seed("b-untested");
+    const third = await t.seed("c-unlisted");
+    await t.stores.connections.putConnectionState({
+      clientInstanceId,
+      connectionAssetId: first,
+      health: "failed"
+    });
+    await t.stores.connections.putConnectionState({
+      clientInstanceId,
+      connectionAssetId: third,
+      health: "ok"
+    });
+    const stateRead = vi.spyOn(t.stores.connections, "listConnectionStates");
+    const page = listEnvelopeSchema(assetSummarySchema).parse(
+      (
+        await t.expectOk(t.admin.id, "assets.list", {
+          params: { kind: "connection" },
+          query: { limit: 2 }
+        })
+      ).json()
+    );
+    expect(
+      page.items.map((item) => ({
+        name: item.name,
+        health: item.attributes?.health,
+        revision: item.revision
+      }))
+    ).toEqual([
+      { name: "a-tested", health: "failed", revision: 1 },
+      { name: "b-untested", health: "unknown", revision: 1 }
+    ]);
+    expect(stateRead).toHaveBeenCalledExactlyOnceWith({
+      clientInstanceId,
+      connectionAssetIds: [first, second, third]
+    });
+    const states = await t.stores.connections.listConnectionStates({
+      clientInstanceId,
+      connectionAssetIds: [first]
+    });
+    expect(states.map((state) => state.connectionAssetId)).toEqual([first]);
+    expect(
+      await t.stores.connections.listConnectionStates({ clientInstanceId, connectionAssetIds: [] })
+    ).toEqual([]);
   });
 
   it("test says unavailable, not network_denied, when the listed host does not resolve", async () => {

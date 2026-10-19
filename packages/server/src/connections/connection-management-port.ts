@@ -84,7 +84,8 @@ export interface ConnectionManagementPort {
   /** `agents` are the agents the caller may read: the answer names no other. */
   get(
     name: string,
-    agents: readonly { name: string; title: string; toolNames: readonly string[] }[]
+    agents: readonly { name: string; title: string; toolNames: readonly string[] }[],
+    readable?: (resource: AccessResource) => boolean
   ): Promise<ConnectionDetail>;
   /** The type's bounded test, through the one connector context. Writes the health. */
   test(

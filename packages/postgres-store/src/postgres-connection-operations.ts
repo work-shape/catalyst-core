@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type {
   ConnectionStateRecord,
   ConnectionsStore,
@@ -140,11 +140,19 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
         .limit(1);
       return row ? mapState(row) : undefined;
     },
-    async listConnectionStates({ clientInstanceId }) {
+    async listConnectionStates({ clientInstanceId, connectionAssetIds }) {
+      if (connectionAssetIds?.length === 0) return [];
       const rows = await db
         .select()
         .from(connectionState)
-        .where(eq(connectionState.clientInstanceId, clientInstanceId))
+        .where(
+          and(
+            eq(connectionState.clientInstanceId, clientInstanceId),
+            connectionAssetIds === undefined
+              ? undefined
+              : inArray(connectionState.connectionAssetId, [...connectionAssetIds])
+          )
+        )
         .orderBy(asc(connectionState.connectionAssetId));
       return rows.map(mapState);
     },
