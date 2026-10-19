@@ -25,6 +25,7 @@ import { useTranslation } from "../../shared/i18n";
 import type { PageBuildError, SurfaceOf } from "../../chat/surface/surface";
 import { createPageBridge, type PageBridge } from "./bridge-host";
 import { useFrameCallTexts } from "./frame-call-texts";
+import { FrameApprovalWait, type FrameWait } from "./frame-approval-wait";
 import { createFrameCalls, type FrameAddress } from "./frame-calls";
 import {
   keepPageAddress,
@@ -446,6 +447,11 @@ export function LivePagePreview({
   const frameRef = useRef<HTMLIFrameElement>(null);
   const bridgeRef = useRef<PageBridge | undefined>(undefined);
   const routeRef = useRef(route);
+  // A call that waits for an approval belongs to the frame session it was made from: a frame
+  // that shows another document no longer waits on it.
+  const [wait, setWait] = useState<FrameWait>();
+  const waitingRun = wait?.session === session ? wait.runId : undefined;
+  const endWait = useCallback(() => setWait(undefined), []);
   const context: AppBridgeContext | undefined = host
     ? {
         ...host,
@@ -490,7 +496,8 @@ export function LivePagePreview({
       },
       // The frame fills the surface, whatever height the Page's content has.
       onResize: () => undefined,
-      calls: () => callsRef.current
+      calls: () => callsRef.current,
+      onCallWaits: (runId) => setWait({ session, runId })
     });
     bridgeRef.current = bridge;
     const onMessage = (event: MessageEvent) => bridge.receive(event);
@@ -510,6 +517,19 @@ export function LivePagePreview({
   }, [mode, theme]);
 
   return (
-    <PreviewPane frameRef={frameRef} source={{ kind: "bundle", url }} state="ready" title={title} />
+    <div className="relative size-full">
+      {/* While a call waits, the frame stays loaded but takes no keys and no pointer. */}
+      <div className="size-full" inert={waitingRun !== undefined}>
+        <PreviewPane
+          frameRef={frameRef}
+          source={{ kind: "bundle", url }}
+          state="ready"
+          title={title}
+        />
+      </div>
+      {waitingRun === undefined ? null : (
+        <FrameApprovalWait key={waitingRun} runId={waitingRun} onEnd={endWait} />
+      )}
+    </div>
   );
 }

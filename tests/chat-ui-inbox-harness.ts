@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
+  type ApprovalRevisionHost,
+  ApprovalRevisionHostProvider,
   approvalActionFailure,
   formatInboxAge,
   InboxAreaView,
@@ -117,12 +119,17 @@ export function renderItem(
     kinds?: readonly InboxItemKind[];
     /** What an item's own reads find answered. Without it they are still loading. */
     queryClient?: QueryClient;
+    /** The workspace the item is read in. Without it the item stands alone. */
+    host?: ApprovalRevisionHost;
   } = {}
 ): string {
-  const view = createElement(InboxItemView, {
+  const itemView = createElement(InboxItemView, {
     state: { status: "ready", request: item(overrides) },
     actions: options.actions ?? idleActions
   });
+  const view = options.host
+    ? createElement(ApprovalRevisionHostProvider, { value: options.host }, itemView)
+    : itemView;
   // An item may read for itself, as the held publish of an App does, inside the workspace's
   // client like the Inbox it stands in.
   const reads = createElement(

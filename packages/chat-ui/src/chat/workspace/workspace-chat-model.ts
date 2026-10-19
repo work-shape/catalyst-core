@@ -47,6 +47,7 @@ import {
   editWithBuildingAgent
 } from "../../studio/agents/agents-model";
 import { appsRowShown, NO_APP_RIGHTS, resolveAppRights } from "../../studio/apps/app-model";
+import { inboxPlaces } from "../inbox/inbox-places";
 import {
   instanceTimeZoneOf,
   resolveWorkflowRights,
@@ -1040,7 +1041,14 @@ export function useWorkspaceChatModel({
       openConversation: (conversationId) =>
         routeState.showRoute({ kind: "legacy-conversation", conversationId }),
       openInboxItem: (itemId) => routeState.showRoute({ kind: "inbox-item", itemId }),
-      openRoute: (route) => routeState.showRoute(route)
+      openRoute: (route) => routeState.showRoute(route),
+      places: inboxPlaces({
+        context: platformContextQuery.data,
+        workspaces: collaborationWorkspace.collaborationWorkspaces,
+        ownerLabel: meQuery.data && (meQuery.data.displayLabel || meQuery.data.email),
+        appsOpen: appsEnabled,
+        workflowsOpen: workflowsOpen === "open"
+      })
     }
   };
 }

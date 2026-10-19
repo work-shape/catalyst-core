@@ -33,6 +33,7 @@ import { ApprovalRefreshButton, ApprovalStatusBadge } from "../approvals/approva
 import { isInboxConfirmation } from "../approvals/operation-call-preview";
 import { useAttachmentContentContext } from "../files/attachment-content";
 import { useTranslation } from "../../shared/i18n";
+import { RouteLink } from "../../studio/route-link";
 import { INBOX_REFETCH_MS } from "./inbox-api";
 import { useInboxItemActions, type InboxItemActions } from "./inbox-item-actions";
 import {
@@ -42,6 +43,7 @@ import {
   type InboxDecisionEntries,
   type InboxItemKind
 } from "./inbox-item-kinds";
+import { inboxItemPlaces } from "./inbox-places";
 
 /**
  * One item of the Inbox in the surface slot. It follows the item's live state, so it shows the
@@ -246,8 +248,11 @@ function InboxItemFoot({
     host && item.requestedBy.id === host.currentUserId ? item.origin?.conversationId : undefined;
   const opensConversation =
     originConversationId !== undefined && originConversationId !== openConversationId;
+  // Where what is asked can be read in full, for a reader who may open it there.
+  const place = inboxItemPlaces(item).find(({ route }) => host?.places?.opens(route) === true);
+  const leads = opensConversation || place !== undefined;
 
-  if (!canDecide && !canWithdraw && !canRevert && !opensConversation && !actions.failure) {
+  if (!canDecide && !canWithdraw && !canRevert && !leads && !actions.failure) {
     return null;
   }
 
@@ -292,7 +297,7 @@ function InboxItemFoot({
           <Textarea rows={2} value={comment} readOnly data-testid="inbox-item-kept-comment" />
         </Field>
       ) : null}
-      {canWithdraw || canRevert || opensConversation ? (
+      {canWithdraw || canRevert || leads ? (
         <div className="flex flex-wrap items-center gap-2">
           {canWithdraw ? (
             <Button
@@ -314,11 +319,22 @@ function InboxItemFoot({
               {t("approvalRevert")}
             </Button>
           ) : null}
+          {place ? (
+            <RouteLink
+              route={place.route}
+              variant="link"
+              className="ml-auto px-0"
+              data-testid="inbox-item-place"
+              onOpen={(route) => host?.openRoute?.(route)}
+            >
+              {t(place.label)}
+            </RouteLink>
+          ) : null}
           {opensConversation ? (
             <Button
               size="sm"
               variant="ghost"
-              className="ml-auto"
+              className={place ? undefined : "ml-auto"}
               onClick={() => host?.openConversation(originConversationId)}
             >
               <MessageSquare aria-hidden="true" />

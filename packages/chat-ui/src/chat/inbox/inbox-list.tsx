@@ -7,8 +7,10 @@ import {
   InlineError,
   List,
   ListRow,
+  ScopeChip,
   SkeletonList
 } from "@work-shape/catalyst-ui";
+import type { InboxWorkspace } from "../approvals/approval-revision-host";
 import { ApprovalStatusBadge } from "../approvals/approval-status-badge";
 import { isInboxConfirmation } from "../approvals/operation-call-preview";
 import { useTranslation } from "../../shared/i18n";
@@ -32,6 +34,8 @@ export function InboxList({
   selectedItemId,
   now,
   agentDisplayName,
+  workspaceOf,
+  filtered = false,
   onOpenItem
 }: {
   tab: InboxTab;
@@ -40,6 +44,10 @@ export function InboxList({
   /** The moment the ages are counted from. */
   now: Date;
   agentDisplayName?(agentName: string): string | undefined;
+  /** The workspace an item comes from, where the reader belongs to it. */
+  workspaceOf?(item: ApprovalRequestView): InboxWorkspace | undefined;
+  /** The filter row narrows the list: an empty list says so, not that nothing waits. */
+  filtered?: boolean;
   onOpenItem(itemId: string): void;
 }) {
   const { locale, t } = useTranslation();
@@ -59,7 +67,11 @@ export function InboxList({
     );
   }
   if (state.items.length === 0) {
-    return <EmptyState data-testid="inbox-empty">{t(inboxTabEmptyKeys[tab])}</EmptyState>;
+    return (
+      <EmptyState data-testid="inbox-empty">
+        {t(filtered ? "inbox.emptyFiltered" : inboxTabEmptyKeys[tab])}
+      </EmptyState>
+    );
   }
 
   const titleOf = (item: ApprovalRequestView) =>
@@ -87,6 +99,7 @@ export function InboxList({
         const detail = kind?.rowDetail?.(item, t);
         // Two requests alike in title and requester are told apart by when each was asked.
         const askedAt = alike.has(item.id) ? formatMomentShort(item.createdAt, locale) : undefined;
+        const workspace = workspaceOf?.(item);
         return (
           <ListRow
             key={item.id}
@@ -94,18 +107,30 @@ export function InboxList({
             data-item-id={item.id}
             leading={<KindIcon className="size-4 text-muted-foreground" aria-hidden="true" />}
             title={titleOf(item)}
-            // The decided list mixes outcomes, and a person's own list mixes all states. In
-            // To decide every row is pending, so the state would say nothing.
             chips={
-              tab === "to_decide" ? undefined : (
-                <ApprovalStatusBadge
-                  status={item.status}
-                  applyResult={item.applyResult}
-                  confirmation={isInboxConfirmation(item)}
-                  notice={item.kind === "notice"}
-                  size="sm"
-                />
-              )
+              <>
+                {workspace ? (
+                  <ScopeChip
+                    scope="workspace"
+                    size="sm"
+                    name={workspace.name}
+                    emoji={workspace.emoji}
+                  />
+                ) : null}
+                {
+                  // The decided list mixes outcomes, and a person's own list mixes all states.
+                  // In To decide every row is pending, so the state would say nothing.
+                  tab === "to_decide" ? null : (
+                    <ApprovalStatusBadge
+                      status={item.status}
+                      applyResult={item.applyResult}
+                      confirmation={isInboxConfirmation(item)}
+                      notice={item.kind === "notice"}
+                      size="sm"
+                    />
+                  )
+                }
+              </>
             }
             descriptionLeading={<Avatar kind="person" name={requester} size="xs" />}
             description={[asked, detail, askedAt].filter(Boolean).join(" · ")}

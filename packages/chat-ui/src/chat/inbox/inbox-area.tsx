@@ -1,10 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { List as ListIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   EmptyState,
+  FilterBar,
   Page,
   PageHeader,
+  Select,
   Tabs,
   TabsContent,
   TabsList,
@@ -17,21 +20,27 @@ import {
   useApprovalPendingCountQuery,
   useApprovalRequestQuery
 } from "../../shared/api/approval-request-api";
-import { useApprovalRevisionHost } from "../approvals/approval-revision-host";
+import { useApprovalRevisionHost, type InboxWorkspace } from "../approvals/approval-revision-host";
 import { useTranslation } from "../../shared/i18n";
 import { SurfaceSlot } from "../surface/surface-slot";
 import { useInboxListQuery } from "./inbox-api";
 import { useInboxItemKindLookup } from "./inbox-item-kinds";
 import { inboxItemSurface } from "./inbox-item-surface";
 import { InboxList, type InboxListState } from "./inbox-list";
+import { inboxItemWorkspaceId } from "./inbox-places";
 import {
+  filterInboxItems,
+  inboxFilterActive,
+  inboxFilterOptions,
   inboxListOutdatesItem,
   inboxTabCount,
   inboxTabLabelKeys,
   inboxTabOfItem,
   inboxTabs,
+  NO_INBOX_FILTER,
   orderInboxItems,
   type InboxCounts,
+  type InboxFilter,
   type InboxTab
 } from "./inbox-model";
 
@@ -62,6 +71,7 @@ export function InboxArea({
   /** Told whether the item covers the lists. */
   onCoveringChange(covering: boolean): void;
 }) {
+  const { t } = useTranslation();
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const api = { apiBaseUrl, authScope: APPROVAL_AUTH_SCOPE, client };
   const counts = useApprovalPendingCountQuery({ ...api, enabled: true }).data;
@@ -74,6 +84,9 @@ export function InboxArea({
   const canReview = counts?.canReview ?? false;
   const tabs = inboxTabs(canReview);
   const [chosenTab, setChosenTab] = useState<InboxTab | undefined>();
+  // One filter for every list: switching tabs keeps what the reader narrowed to.
+  const [filter, setFilter] = useState<InboxFilter>(NO_INBOX_FILTER);
+  const places = host?.places;
   const tab: InboxTab =
     chosenTab !== undefined && tabs.includes(chosenTab)
       ? chosenTab
@@ -144,6 +157,9 @@ export function InboxArea({
       now={now}
       covered={covering && itemId !== undefined}
       agentDisplayName={host?.agentDisplayName}
+      {...(places ? { workspace: (workspaceId) => places.workspace(workspaceId, t) } : {})}
+      filter={filter}
+      onFilterChange={setFilter}
       onTabChange={setChosenTab}
       onOpenItem={(nextItemId) => {
         // The reader chose it from a list, so the list stays.
@@ -171,6 +187,9 @@ export function InboxAreaView({
   now,
   covered = false,
   agentDisplayName,
+  workspace,
+  filter,
+  onFilterChange,
   onTabChange,
   onOpenItem,
   onCloseItem,
@@ -188,6 +207,10 @@ export function InboxAreaView({
   /** The open item covers the lists, so they leave the tab order. */
   covered?: boolean;
   agentDisplayName?(agentName: string): string | undefined;
+  /** A workspace of the reader's by its id. */
+  workspace?(workspaceId: string): InboxWorkspace | undefined;
+  filter: InboxFilter;
+  onFilterChange(filter: InboxFilter): void;
   onTabChange(tab: InboxTab): void;
   onOpenItem(itemId: string): void;
   onCloseItem(): void;
@@ -198,17 +221,44 @@ export function InboxAreaView({
   const kindOf = useInboxItemKindLookup();
   const titleRef = useRef<HTMLDivElement>(null);
   const surface = itemId === undefined ? undefined : inboxItemSurface(itemId, item, kindOf, t);
+  // Only the reader's own workspaces are named and filtered by; another stays unnamed.
+  const workspaceIdOf = (entry: ApprovalRequestView) => {
+    const workspaceId = inboxItemWorkspaceId(entry);
+    return workspaceId !== undefined && workspace?.(workspaceId) ? workspaceId : undefined;
+  };
+  const filtered = inboxFilterActive(filter);
+  const shown: InboxListState =
+    state.status === "ready"
+      ? { status: "ready", items: filterInboxItems(state.items, filter, workspaceIdOf) }
+      : state;
+  const filters =
+    state.status === "ready" ? (
+      <InboxFilters
+        options={inboxFilterOptions(state.items, filter, workspaceIdOf)}
+        filter={filter}
+        workspace={workspace}
+        onChange={onFilterChange}
+      />
+    ) : null;
   const list = (
-    <InboxList
-      tab={tab}
-      state={state}
-      selectedItemId={itemId}
-      now={now}
-      agentDisplayName={agentDisplayName}
-      onOpenItem={onOpenItem}
-    />
+    <div className="grid min-w-0 gap-3">
+      {filters}
+      <InboxList
+        tab={tab}
+        state={shown}
+        selectedItemId={itemId}
+        now={now}
+        agentDisplayName={agentDisplayName}
+        workspaceOf={(entry) => {
+          const workspaceId = workspaceIdOf(entry);
+          return workspaceId === undefined ? undefined : workspace?.(workspaceId);
+        }}
+        filtered={filtered}
+        onOpenItem={onOpenItem}
+      />
+    </div>
   );
-  const hasRows = state.status === "ready" && state.items.length > 0;
+  const hasRows = shown.status === "ready" && shown.items.length > 0;
 
   // The area's title takes the focus when the area opens, as on every full page.
   useEffect(() => {
@@ -281,5 +331,71 @@ export function InboxAreaView({
         onCoveringChange={onCoveringChange}
       />
     </section>
+  );
+}
+
+/**
+ * The filter row above a list: by kind and by workspace. The kind control shows where its list
+ * has two kinds or one is chosen; the workspace control wherever a known workspace is listed.
+ */
+function InboxFilters({
+  options,
+  filter,
+  workspace,
+  onChange
+}: {
+  options: { kinds: readonly string[]; workspaceIds: readonly string[] };
+  filter: InboxFilter;
+  workspace?(workspaceId: string): InboxWorkspace | undefined;
+  onChange(filter: InboxFilter): void;
+}) {
+  const { t } = useTranslation();
+  const kindOf = useInboxItemKindLookup();
+  const offersKinds = options.kinds.length > 1 || filter.kind !== undefined;
+  // One workspace is still a choice: it narrows away the items of the instance.
+  const offersWorkspaces = options.workspaceIds.length > 0;
+  if (!offersKinds && !offersWorkspaces) {
+    return null;
+  }
+  return (
+    <FilterBar
+      data-testid="inbox-filters"
+      filters={
+        <>
+          {offersKinds ? (
+            <Select
+              className="w-full font-medium sm:w-52"
+              aria-label={t("inbox.filterKind")}
+              value={filter.kind ?? ""}
+              onChange={(event) => onChange({ ...filter, kind: event.target.value || undefined })}
+            >
+              <option value="">{t("inbox.allKinds")}</option>
+              {options.kinds.map((kind) => (
+                <option key={kind} value={kind}>
+                  {t(kindOf(kind)?.label ?? "inbox.kindUnknown")}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+          {offersWorkspaces ? (
+            <Select
+              className="w-full font-medium sm:w-52"
+              aria-label={t("inbox.filterWorkspace")}
+              value={filter.workspaceId ?? ""}
+              onChange={(event) =>
+                onChange({ ...filter, workspaceId: event.target.value || undefined })
+              }
+            >
+              <option value="">{t("inbox.allWorkspaces")}</option>
+              {options.workspaceIds.map((workspaceId) => (
+                <option key={workspaceId} value={workspaceId}>
+                  {workspace?.(workspaceId)?.name}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+        </>
+      }
+    />
   );
 }

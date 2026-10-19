@@ -10,6 +10,8 @@ export const pages = defineTranslations({
     "pages.connectionUseDeniedUnnamedPage":
       "You may not use a connection this preview needs, so this cannot load. Trying again will not help. An administrator can give you the right under Settings > Instance > Access.",
     "pages.buildErrors": "{count} build errors",
+    "pages.callWaits": "This action is waiting for an approval.",
+    "pages.callWaitsOpen": "Open in Inbox",
     "pages.buildErrorsOne": "1 build error",
     "pages.cardBuilding": "Building the preview",
     "pages.cardErrors": "The preview could not be built",
@@ -50,6 +52,8 @@ export const pages = defineTranslations({
     "pages.connectionUseDeniedUnnamedPage":
       "Du darfst eine Verbindung nicht nutzen, die diese Vorschau braucht, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht. Ein Administrator kann dir das Recht unter Einstellungen > Instanz > Zugriff geben.",
     "pages.buildErrors": "{count} Build-Fehler",
+    "pages.callWaits": "Diese Aktion wartet auf eine Freigabe.",
+    "pages.callWaitsOpen": "Im Eingang öffnen",
     "pages.buildErrorsOne": "1 Build-Fehler",
     "pages.cardBuilding": "Die Vorschau wird gebaut",
     "pages.cardErrors": "Die Vorschau konnte nicht gebaut werden",

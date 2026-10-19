@@ -144,15 +144,25 @@ export function createPageBridge(input: {
    * Page is told that no call can be made, and its context names no action.
    */
   calls?(): FrameCalls | undefined;
+  /**
+   * A call of the Page was answered that it waits for an approval, under this run. The host
+   * says so over the frame: the Page is told only the answer.
+   */
+  onCallWaits?(runId: string): void;
 }): PageBridge {
   let page: PageWindow | undefined;
   let storageWrites = Promise.resolve();
-  /** Posts to the window that sent a message, while it is still the frame's one child. */
-  const post = (to: PageWindow, message: AppBridgeHostMessage) => {
+  /**
+   * Posts to the window that sent a message, while it is still the frame's one child. Says
+   * whether it was.
+   */
+  const post = (to: PageWindow, message: AppBridgeHostMessage): boolean => {
     const frame = input.frame();
     if (frame?.length === 1 && frame[0] === to) {
       to.postMessage(message, "*");
+      return true;
     }
+    return false;
   };
   return {
     receive(event) {
@@ -243,7 +253,16 @@ export function createPageBridge(input: {
           // The Page always gets an answer to a call, so that it never waits for nothing.
           .catch((): FrameCallAnswer => ({ ok: false, error: NOT_MADE }))
           .then((result) => {
-            post(source, callResultMessage(input.session, requestId, result));
+            const told = post(source, callResultMessage(input.session, requestId, result));
+            // A frame that was replaced meanwhile has nobody waiting on the call.
+            if (
+              told &&
+              result.ok &&
+              "runId" in result.result &&
+              result.result.status === "pending_approval"
+            ) {
+              input.onCallWaits?.(result.result.runId);
+            }
           })
           .catch(() => undefined);
       }

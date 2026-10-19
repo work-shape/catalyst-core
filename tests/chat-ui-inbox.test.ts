@@ -512,7 +512,8 @@ describe("inbox area", () => {
     counts: InboxCounts,
     tab: InboxTab,
     items: readonly ApprovalRequestView[],
-    locale: "de" | "en" = "de"
+    locale: "de" | "en" = "de",
+    extra: Partial<Parameters<typeof InboxAreaView>[0]> = {}
   ): string {
     return render(
       createElement(
@@ -524,6 +525,9 @@ describe("inbox area", () => {
           counts,
           state: { status: "ready", items },
           now,
+          filter: {},
+          onFilterChange: () => undefined,
+          ...extra,
           onTabChange: () => undefined,
           onOpenItem: () => undefined,
           onCloseItem: () => undefined
@@ -565,6 +569,118 @@ describe("inbox area", () => {
     expect(markup).not.toContain('role="tab"');
     expect(markup).not.toContain("To decide");
     expect(markup).toContain("Awaiting approval");
+  });
+
+  // DAILY-WINS 5: the lists filter by kind and workspace, and a row names its workspace.
+  describe("filters", () => {
+    const counts: InboxCounts = {
+      count: 3,
+      canReview: true,
+      decided: 0,
+      mine: { pending: 0, total: 0 }
+    };
+    const heldIn = (id: string, workspaceId: string, kind = "app_publish") =>
+      item({
+        id,
+        kind,
+        canDecide: true,
+        preview: {
+          runId: `opr_${id}`,
+          operation: "app.action",
+          effect: "changing",
+          actor: { kind: "user", id: "user-anna", label: "Anna Beispiel" },
+          origin: { kind: "user" },
+          workspaceId,
+          inputs: []
+        }
+      });
+    const names: Record<string, string> = { cw_1: "Vertrieb", cw_2: "Einkauf" };
+    const workspace = (id: string) => (names[id] ? { name: names[id], emoji: null } : undefined);
+    const items = [heldIn("a", "cw_1"), heldIn("b", "cw_2"), item({ id: "c", canDecide: true })];
+    const rows = (markup: string) => markup.match(/data-testid="inbox-row"/gu)?.length ?? 0;
+
+    it("offers kind and workspace where the list mixes them, and names each row's workspace", () => {
+      const markup = renderArea(counts, "to_decide", items, "en", { workspace });
+      expect(markup).toContain('data-testid="inbox-filters"');
+      expect(markup).toContain('aria-label="Filter by kind"');
+      expect(markup).toContain(">All kinds</option>");
+      expect(markup).toContain('aria-label="Filter by workspace"');
+      expect(markup).toContain(">All workspaces</option>");
+      expect(markup).toContain('<option value="cw_2">Einkauf</option>');
+      expect(rows(markup)).toBe(3);
+      expect(markup).toMatch(/data-testid="inbox-row".*Vertrieb/su);
+      expect(markup).toMatch(/data-testid="inbox-row".*Einkauf/su);
+
+      const german = renderArea(counts, "to_decide", items, "de", { workspace });
+      expect(german).toContain(">Alle Arten</option>");
+      expect(german).toContain(">Alle Arbeitsbereiche</option>");
+    });
+
+    it("shows only what matches, on any tab, and says when nothing does", () => {
+      const inEinkauf = renderArea(counts, "to_decide", items, "en", {
+        workspace,
+        filter: { workspaceId: "cw_2" }
+      });
+      expect(rows(inEinkauf)).toBe(1);
+      expect(inEinkauf).toContain('data-item-id="b"');
+
+      const skills = renderArea(counts, "mine", items, "en", {
+        workspace,
+        filter: { kind: "skill_change" }
+      });
+      expect(rows(skills)).toBe(1);
+      expect(skills).toContain('data-item-id="c"');
+
+      const none = renderArea(counts, "decided", items, "en", {
+        workspace,
+        filter: { kind: "skill_change", workspaceId: "cw_1" }
+      });
+      expect(rows(none)).toBe(0);
+      expect(none).toContain("No request matches these filters.");
+      // The filter stays in reach to be undone.
+      expect(none).toContain('data-testid="inbox-filters"');
+      expect(
+        renderArea(counts, "to_decide", items, "de", {
+          workspace,
+          filter: { kind: "skill_change", workspaceId: "cw_1" }
+        })
+      ).toContain("Keine Anfrage passt zu diesen Filtern.");
+    });
+
+    it("offers the workspace from one known workspace, and no filter where there is nothing to choose", () => {
+      // One known workspace beside instance items can be narrowed to; one kind offers no kind filter.
+      const one = renderArea(
+        counts,
+        "to_decide",
+        [heldIn("a", "cw_1"), item({ id: "c", kind: "app_publish", canDecide: true })],
+        "en",
+        { workspace }
+      );
+      expect(one).toContain('aria-label="Filter by workspace"');
+      expect(one).toContain('<option value="cw_1">Vertrieb</option>');
+      expect(one).not.toContain('aria-label="Filter by kind"');
+      // Instance items alone name no workspace.
+      const instance = renderArea(counts, "to_decide", [item({ id: "c", canDecide: true })], "en", {
+        workspace
+      });
+      expect(instance).not.toContain('data-testid="inbox-filters"');
+      // A workspace the reader does not have stays unnamed and is not offered.
+      const foreign = renderArea(
+        counts,
+        "to_decide",
+        [heldIn("a", "cw_9"), heldIn("b", "cw_9")],
+        "en",
+        { workspace }
+      );
+      expect(foreign).not.toContain('data-testid="inbox-filters"');
+      const loading = renderArea(counts, "to_decide", [], "en", {
+        workspace,
+        state: { status: "loading" },
+        filter: { workspaceId: "cw_1" }
+      });
+      expect(loading).not.toContain('data-testid="inbox-filters"');
+      expect(loading).not.toContain("No request matches these filters.");
+    });
   });
 
   it("tells a reviewer with an empty queue that nothing waits", () => {

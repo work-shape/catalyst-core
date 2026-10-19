@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { TranslationContextValue } from "../../shared/i18n";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 
 /**
@@ -30,6 +31,24 @@ export interface ApprovalRevisionHost {
   openInboxItem?(itemId: string): void;
   /** Opens a place of the workspace, such as the run or the App a notice links to. */
   openRoute?(route: WorkspaceRoute): void;
+  /** Where the Inbox's items come from and lead to, as far as this reader may know. */
+  places?: InboxPlaces;
+}
+
+/** A workspace as a row of the Inbox names it. */
+export interface InboxWorkspace {
+  name: string;
+  emoji: string | null;
+}
+
+/**
+ * What the Inbox knows of the places its items come from: the reader's workspaces by name, and
+ * whether the reader may open a place an item leads to. A link that would end on "You may not
+ * read this" is never drawn.
+ */
+export interface InboxPlaces {
+  workspace(workspaceId: string, t: TranslationContextValue["t"]): InboxWorkspace | undefined;
+  opens(route: WorkspaceRoute): boolean;
 }
 
 export interface ApprovalRevisionStart {

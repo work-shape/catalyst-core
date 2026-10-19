@@ -92,6 +92,7 @@ export { AssetOpenedChip } from "../../packages/chat-ui/src/chat/conversation/co
 export { useSubjectTitle } from "../../packages/chat-ui/src/chat/conversation/subject-title";
 export { useAgentOpens } from "../../packages/chat-ui/src/chat/conversation/use-agent-opens";
 export {
+  type ApprovalRevisionHost,
   ApprovalRevisionHostProvider,
   type ApprovalRevisionRunInput,
   startApprovalRevision
@@ -260,6 +261,9 @@ export {
   inboxTabs,
   orderInboxItems
 } from "../../packages/chat-ui/src/chat/inbox";
+export { inboxListQueryKey } from "../../packages/chat-ui/src/chat/inbox/inbox-api";
+export { inboxPlaces } from "../../packages/chat-ui/src/chat/inbox/inbox-places";
+export { FrameApprovalWait } from "../../packages/chat-ui/src/studio/pages/frame-approval-wait";
 export { WorkspaceDraftsProvider } from "../../packages/chat-ui/src/chat/workspace/workspace-drafts";
 export {
   chosenLocale,
@@ -514,3 +518,5 @@ export { attachedFilesTitle } from "../../packages/chat-ui/src/chat/workspace/wo
 export { ThreadMessage } from "../../packages/chat-ui/src/chat/assistant/assistant-message";
 export { AssistantToolRegistry } from "../../packages/chat-ui/src/chat/assistant/assistant-tool-registry";
 export { ToolDecisionsProvider } from "../../packages/chat-ui/src/chat/approvals/tool-decision-context";
+
+export { LivePagePreview } from "../../packages/chat-ui/src/studio/pages/page-surface";

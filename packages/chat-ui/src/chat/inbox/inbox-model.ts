@@ -152,3 +152,47 @@ export function inboxListOutdatesItem(
   }
   return row.status !== item.status || row.updatedAt > item.updatedAt;
 }
+
+/** What the filter row narrows every list to. A field left out keeps every value. */
+export interface InboxFilter {
+  kind?: string;
+  workspaceId?: string;
+}
+
+export const NO_INBOX_FILTER: InboxFilter = {};
+
+/** Whether the filter narrows anything. */
+export function inboxFilterActive(filter: InboxFilter): boolean {
+  return filter.kind !== undefined || filter.workspaceId !== undefined;
+}
+
+/** The items of a list the filter keeps. `workspaceOf` names the workspace an item comes from. */
+export function filterInboxItems(
+  items: readonly ApprovalRequestView[],
+  filter: InboxFilter,
+  workspaceOf: (item: ApprovalRequestView) => string | undefined
+): ApprovalRequestView[] {
+  return items.filter(
+    (item) =>
+      (filter.kind === undefined || item.kind === filter.kind) &&
+      (filter.workspaceId === undefined || workspaceOf(item) === filter.workspaceId)
+  );
+}
+
+/**
+ * What the filter row offers on a list: the kinds and workspaces its items have, in the order
+ * they first appear, and the chosen ones even where this list has none of them.
+ */
+export function inboxFilterOptions(
+  items: readonly ApprovalRequestView[],
+  filter: InboxFilter,
+  workspaceOf: (item: ApprovalRequestView) => string | undefined
+): { kinds: string[]; workspaceIds: string[] } {
+  const distinct = (values: readonly (string | undefined)[]) => [
+    ...new Set(values.filter((value): value is string => value !== undefined))
+  ];
+  return {
+    kinds: distinct([filter.kind, ...items.map((item) => item.kind)]),
+    workspaceIds: distinct([filter.workspaceId, ...items.map(workspaceOf)])
+  };
+}

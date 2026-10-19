@@ -15,8 +15,11 @@ import {
   workflowRunResultMessage,
   frameSessionProof,
   type ArrivedMessage,
+  type FrameCallAnswer,
   type FrameCalls
 } from "@work-shape/catalyst-chat-ui/pages";
+
+const NOT_ASKED = { code: "failed", message: "not asked" };
 
 // The calls a Page asks the interface to make: what the bridge does with a call message, and
 // how the interface names the frame to the instance.
@@ -63,7 +66,7 @@ function frames() {
 describe("a call a Page asks the interface to make", () => {
   const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-  function bridge(calls: FrameCalls | undefined) {
+  function bridge(calls: FrameCalls | undefined, onCallWaits?: (runId: string) => void) {
     const windows = frames();
     let frame: { length: number; [index: number]: unknown } | undefined = windows.holder;
     const made = createPageBridge({
@@ -72,7 +75,8 @@ describe("a call a Page asks the interface to make", () => {
       context: () => context,
       onNavigate: () => undefined,
       onResize: () => undefined,
-      calls: () => calls
+      calls: () => calls,
+      ...(onCallWaits ? { onCallWaits } : {})
     });
     return {
       ...windows,
@@ -173,6 +177,42 @@ describe("a call a Page asks the interface to make", () => {
     await settled();
 
     expect(posted).toEqual([]);
+  });
+
+  // DAILY-WINS 9: a call held for an approval is said by the host over the frame, so the
+  // bridge tells it which run waits, for that answer alone and only to a frame still shown.
+  it("tells the host which run waits when a call is held for an approval", async () => {
+    const answers: FrameCallAnswer[] = [
+      { ok: true, result: { runId: "run-held", status: "pending_approval" } },
+      { ok: true, result: { runId: "run-done", status: "done", result: 1 } },
+      { ok: true, result: { status: "dry_run", message: "Would send", result: {} } },
+      { ok: false, error: { code: "forbidden", message: "No" } }
+    ];
+    const waits: string[] = [];
+    const { made, page, from, message, setFrame } = bridge(
+      {
+        writeStorage: () => Promise.resolve(),
+        can: () => Promise.resolve(undefined),
+        run: () => Promise.resolve(answers.shift() ?? { ok: false, error: NOT_ASKED }),
+        workflowRun: () => Promise.reject(new Error("not asked"))
+      },
+      (runId) => waits.push(runId)
+    );
+    const call = (requestId: string) =>
+      from(page, message({ type: "action", session: "s-1", requestId, name: "send", input: {} }));
+
+    for (const requestId of ["r-1", "r-2", "r-3", "r-4"]) {
+      made.receive(call(requestId));
+      await settled();
+    }
+    expect(waits).toEqual(["run-held"]);
+
+    // A frame that shows another document by the answer has nobody waiting on it.
+    answers.push({ ok: true, result: { runId: "run-late", status: "pending_approval" } });
+    made.receive(call("r-5"));
+    setFrame({ length: 1, 0: { postMessage() {} } });
+    await settled();
+    expect(waits).toEqual(["run-held"]);
   });
 
   // Fails before the removal: the bridge made the call of a Connection operation the Page named.
