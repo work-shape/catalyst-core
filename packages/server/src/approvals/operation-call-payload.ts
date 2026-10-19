@@ -35,6 +35,8 @@ export const payloadSchema = z.object({
   operation: z.string().min(1),
   effect: z.enum(OPERATION_EFFECTS),
   input: z.unknown().optional(),
+  /** The kind preview retained after the executable input is removed. */
+  asset: z.record(z.string(), z.json()).optional(),
   /** What the call is about, as `approval` of its operation froze it when it was held. */
   subject: z.record(z.string(), z.json()).optional(),
   /**

@@ -714,6 +714,37 @@ describe("refused save", () => {
     }
   });
 
+  // ACCEPT-FIX-9 E6: a save that waits for an approval showed a red refusal, and "Applies
+  // immediately" stood beside it.
+  it("says a change that waits for an approval in a neutral tone, without applying at once", () => {
+    const waiting: BuildWriteOutcome = {
+      ok: false,
+      conflict: false,
+      refusals: [{ message: "This change waits for approval by Mara Lindqvist.", waiting: true }]
+    };
+    const changed = (answer: BuildWriteOutcome | undefined) =>
+      render(
+        createElement(AssetEditorShell, {
+          frame: frame({ asset: storedAsset("agent", agentBase) }),
+          title: "Assistant",
+          sections: [{ id: "details", label: "Details", body: null }],
+          control: { changes: 1, submit: saved, discard: noop },
+          outcome: answer,
+          saving: false,
+          saveLabel: "Save changes"
+        })
+      );
+    const markup = changed(waiting);
+
+    expect(markup).toMatch(
+      /data-testid="build-save-waiting"[^>]*>[\s\S]*This change waits for approval by Mara Lindqvist\./u
+    );
+    expect(markup).toContain('data-tone="info"');
+    expect(markup).not.toContain('data-tone="error"');
+    expect(markup).not.toContain("Applies to new conversations immediately.");
+    expect(changed(undefined)).toContain("Applies to new conversations immediately.");
+  });
+
   it("shows what the frame says of a conflict above the save bar", () => {
     const markup = page(
       { ok: false, conflict: true },

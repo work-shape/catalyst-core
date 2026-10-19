@@ -1,4 +1,4 @@
-import { createContext, useContext, type MouseEvent } from "react";
+import { createContext, useContext, useState, type MouseEvent } from "react";
 import { ArrowRight, FileText } from "lucide-react";
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
 import { DATA_STORE_ASSET_KIND, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
@@ -78,16 +78,24 @@ export function ConversationSubjectLine({
 /**
  * "Opened <name> · Go to it": an asset the agent opened that the person was not taken to, in
  * another tab, from a page they went to on their own, after a reload, or one that waits for the
- * person. The press is the person's own step to it.
+ * person. The press is the person's own step to it. Going to one that waits for the person first
+ * makes it the conversation's subject, so the button shows that it works until the page opens.
  */
 export function AssetOpenedChip({
   open,
   onGoTo
 }: {
   open: AssetOpen;
-  onGoTo(open: AssetOpen): void;
+  onGoTo(open: AssetOpen): Promise<void>;
 }) {
   const { t } = useTranslation();
+  const [going, setGoing] = useState(false);
+  const goTo = () => {
+    setGoing(true);
+    onGoTo(open)
+      .catch(() => undefined)
+      .finally(() => setGoing(false));
+  };
   return (
     <Banner
       tone="info"
@@ -96,7 +104,7 @@ export function AssetOpenedChip({
       data-testid="asset-opened-chip"
       data-awaits-person={open.awaitsPerson ? "" : undefined}
       action={
-        <Button variant="secondary" size="sm" onClick={() => onGoTo(open)}>
+        <Button variant="secondary" size="sm" loading={going} onClick={goTo}>
           {t("conversationOpenedGoTo")}
           <ArrowRight aria-hidden="true" />
         </Button>

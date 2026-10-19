@@ -134,12 +134,11 @@ export const operations = defineTranslations({
     "operations.callHeadlineReading": "{actor} wants to run a reading action.",
     "operations.callEffect":
       "If you approve, it runs once as {actor}. If you decline, nothing runs.",
-    "operations.callAssetCreateIn":
-      "{actor} wants to create {kind} “{title}” in the Namespace {namespace}.",
     "operations.callAssetCreate": "{actor} wants to create {kind} “{title}”.",
-    "operations.callAssetChangeIn":
-      "{actor} wants to change {kind} “{title}” in the Namespace {namespace}.",
     "operations.callAssetChange": "{actor} wants to change {kind} “{title}”.",
+    "operations.callAssetSave": "{actor} wants to save {kind} “{title}”.",
+    "operations.callAssetStale":
+      "This request is out of date: “{title}” was changed after it was made. Approving it changes nothing. Ask {actor} to submit a new change.",
     "operations.callAssetKindSkill": "the skill",
     "operations.callAssetKindAgent": "the agent",
     "operations.callAssetKindConnection": "the Connection",
@@ -158,8 +157,8 @@ export const operations = defineTranslations({
     "operations.callSkillDescription": "Description",
     "operations.callSkillRemovedResources": "Removed references",
     "operations.callSkillSameText": "The text of the skill stays as it is.",
-    "operations.callSkillBeforeWithheld":
-      "You may not read this skill as it is now, so only the new text is shown and nothing is compared.",
+    "operations.callAssetWithheld":
+      "You may not read {kind}, so neither its current content nor the proposed content is shown.",
     "operations.callDetails": "Technical details",
     "operations.callFullInput": "Full input",
     "operations.callCalledBy": "Called by",
@@ -182,6 +181,8 @@ export const operations = defineTranslations({
     "operations.callOutcomeExpired": "Expired before it was decided. Nothing was executed.",
     "operations.callOutcomeHeld":
       "Allowed. The call now waits for an approver; nothing was executed yet.",
+    "operations.callOutcomeStale":
+      "Not applied: “{title}” was changed after this request was made, so nothing changed. Submit a new change if it is still needed.",
     "operations.callOutcomeReason": "Reason: {reason}",
     "operations.callExpires": "Expires",
     "operations.callExpiresHint": "After that the call expires and does not run.",
@@ -360,12 +361,11 @@ export const operations = defineTranslations({
     "operations.callHeadlineReading": "{actor} möchte eine lesende Aktion ausführen.",
     "operations.callEffect":
       "Wenn du freigibst, läuft sie einmal als {actor}. Wenn du ablehnst, läuft nichts.",
-    "operations.callAssetCreateIn":
-      "{actor} möchte {kind} „{title}“ im Namespace {namespace} anlegen.",
     "operations.callAssetCreate": "{actor} möchte {kind} „{title}“ anlegen.",
-    "operations.callAssetChangeIn":
-      "{actor} möchte {kind} „{title}“ im Namespace {namespace} ändern.",
     "operations.callAssetChange": "{actor} möchte {kind} „{title}“ ändern.",
+    "operations.callAssetSave": "{actor} möchte {kind} „{title}“ speichern.",
+    "operations.callAssetStale":
+      "Diese Anfrage ist veraltet: „{title}“ wurde geändert, nachdem die Anfrage gestellt wurde. Eine Freigabe ändert nichts. Bitte {actor} um eine neue Änderung.",
     "operations.callAssetKindSkill": "den Skill",
     "operations.callAssetKindAgent": "den Agenten",
     "operations.callAssetKindConnection": "die Connection",
@@ -384,8 +384,8 @@ export const operations = defineTranslations({
     "operations.callSkillDescription": "Beschreibung",
     "operations.callSkillRemovedResources": "Entfernte Referenzen",
     "operations.callSkillSameText": "Der Text des Skills bleibt, wie er ist.",
-    "operations.callSkillBeforeWithheld":
-      "Du darfst diesen Skill in seinem jetzigen Stand nicht lesen. Deshalb steht hier nur der neue Text, und nichts wird verglichen.",
+    "operations.callAssetWithheld":
+      "Du darfst {kind} nicht lesen. Deshalb wird weder der jetzige noch der vorgeschlagene Inhalt gezeigt.",
     "operations.callDetails": "Technische Details",
     "operations.callFullInput": "Vollständige Eingabe",
     "operations.callCalledBy": "Aufgerufen von",
@@ -410,6 +410,8 @@ export const operations = defineTranslations({
       "Abgelaufen, bevor entschieden wurde. Es wurde nichts ausgeführt.",
     "operations.callOutcomeHeld":
       "Erlaubt. Der Aufruf wartet jetzt auf eine Freigabe; noch wurde nichts ausgeführt.",
+    "operations.callOutcomeStale":
+      "Nicht übernommen: „{title}“ wurde nach dieser Anfrage geändert, deshalb hat sich nichts geändert. Reiche eine neue Änderung ein, wenn sie noch nötig ist.",
     "operations.callOutcomeReason": "Grund: {reason}",
     "operations.callExpires": "Läuft ab",
     "operations.callExpiresHint": "Danach verfällt der Aufruf und läuft nicht.",

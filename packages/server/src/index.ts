@@ -91,7 +91,7 @@ export {
   HELD_OPERATION_CALLS_PER_ACTOR,
   HELD_OPERATION_CALLS_PER_INSTANCE,
   HELD_OPERATION_INPUT_MAX_BYTES
-} from "./approvals/operation-call-approval-handler";
+} from "./approvals/operation-approval-filer";
 export type { ChatServerJobOptions, ChatServerJobs } from "./jobs";
 export {
   DELETION_MAX_ATTEMPTS,
