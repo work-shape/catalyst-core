@@ -49,6 +49,8 @@ const workflowRunErrorSchema = z.object({
   message: z.string(),
   /** Where the run's principal was refused for a right it does not hold: that right. */
   action: z.string().optional(),
+  /** The Connection of a refused connection.use call, as the step recorded it. */
+  connection: z.string().optional(),
   /** On a run: the step run it ended at. */
   stepRunId: z.string().optional()
 });

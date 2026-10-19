@@ -62,6 +62,8 @@ export interface WorkflowRunError {
   message: string;
   /** Where the run's principal was refused for a right it does not hold: that right. */
   action?: string;
+  /** The Connection of a refused connection.use call, as the step recorded it. */
+  connection?: string;
   /** On a run: the step run it ended at. */
   stepRunId?: WorkflowStepRunId;
 }
