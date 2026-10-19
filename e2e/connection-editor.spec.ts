@@ -334,6 +334,7 @@ test("cancel after a failed connect asks, then deletes the Connection", async ({
     await field("testPath").fill("/nothing");
     await dialog.locator("[data-connection-connect]").click();
     await expect(field("url")).toHaveAttribute("aria-invalid", "true");
+    await expect(dialog).toContainText("The test path gave no successful answer.");
     expect((await page.request.get(`${apiBaseUrl}/api/v1/connections/${id}`)).ok()).toBe(true);
 
     await page.keyboard.press("Escape");
@@ -347,6 +348,9 @@ test("cancel after a failed connect asks, then deletes the Connection", async ({
     await removeConnection(page, id);
   }
 });
+
+/** A health path of the sample server that answers only with its key. */
+const KEYED_HEALTH = "/rest/api/monitoring/instance/demo-local/datev-connect-health";
 
 /** The draft the agent answers for the Connection `id`: the sample server's health, read. */
 /** The title the agent drafts with; an existing Connection keeps its own. */
@@ -538,8 +542,13 @@ for (const locale of LOCALES) {
       await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();
       expect(existingWrites).toEqual(["PUT /api/v1/assets/connection/:name"]);
 
-      // For an id no Connection has, the New connection dialog opens filled, without a key.
-      await sendToolCall(page, "platform.connections.draft_tools", healthDraft(fresh));
+      // For an id no Connection has, the New connection dialog opens filled, without a key. Its
+      // drafted test path needs the key, so a wrong key fails Verbinden.
+      await sendToolCall(page, "platform.connections.draft_tools", {
+        ...healthDraft(fresh),
+        headerNames: ["x-client-instance-id"],
+        testPath: KEYED_HEALTH
+      });
       await page
         .locator(`[data-testid="connection-draft-card"][data-connection="${fresh}"]`)
         .locator("[data-connection-draft-open]")
@@ -553,13 +562,19 @@ for (const locale of LOCALES) {
       await expect(field("url")).toHaveValue(sampleBase);
       await expect(create.locator('[data-name-with-address-field="address"]')).toHaveValue(fresh);
       await expect(field("secret")).toHaveValue("");
-      await expect(field("headers").locator("input").nth(0)).toHaveValue("x-e2e");
-      await field("headers").locator("input").nth(1).fill("catalyst");
-      await field("testPath").fill("/healthz");
+      await expect(field("headers").locator("input").nth(0)).toHaveValue("x-client-instance-id");
+      await field("headers").locator("input").nth(1).fill("demo-local");
+      await expect(field("testPath")).toHaveValue(KEYED_HEALTH);
       await shootModes(page, locale, "new-form");
       expect(freshWrites).toEqual([]);
 
+      await field("secret").fill(`${sampleKey}-wrong`);
+      await create.locator("[data-connection-connect]").click();
+      await expect(field("secret")).toHaveAttribute("aria-invalid", "true");
+      await expect(create.locator('li[data-approval-tool="health"]')).toHaveCount(0);
+
       // Connected, the drafted tools wait in the approval list; approving them saves them.
+      await field("secret").fill(sampleKey);
       await create.locator("[data-connection-connect]").click();
       await expect(create.locator('li[data-approval-tool="health"]')).toBeVisible();
       await shootModes(page, locale, "new-approve");

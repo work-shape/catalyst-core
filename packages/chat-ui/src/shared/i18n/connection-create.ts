@@ -50,6 +50,8 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.stepKey": "Checking the key",
     "connectionCreate.stepTools": "Read tools",
     "connectionCreate.errorUrl": "No server answers at this address. Check it and connect again.",
+    "connectionCreate.errorTestPath":
+      "The test path gave no successful answer. Check the address, the key and the test path, then connect again.",
     "connectionCreate.errorEgress":
       "The operator's network rule blocks this destination. To have it allowed, send the operator the host {host}.",
     "connectionCreate.errorKey":
@@ -185,6 +187,8 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.stepTools": "Tools lesen",
     "connectionCreate.errorUrl":
       "Unter dieser Adresse antwortet kein Server. Prüf sie und verbinde erneut.",
+    "connectionCreate.errorTestPath":
+      "Der Testpfad hat nicht erfolgreich geantwortet. Prüf Adresse, Schlüssel und Testpfad und verbinde erneut.",
     "connectionCreate.errorEgress":
       "Eine Netzwerkregel des Betreibers sperrt dieses Ziel. Damit es erlaubt wird, schick dem Betreiber den Host {host}.",
     "connectionCreate.errorKey":

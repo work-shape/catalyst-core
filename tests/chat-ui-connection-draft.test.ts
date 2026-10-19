@@ -358,48 +358,54 @@ describe("the card", () => {
   });
 });
 
+/** The New connection dialog the card opens for `opened`, as markup, and the writes it made. */
+async function renderDraftDialog(opened: ConnectionDraft) {
+  const writes: unknown[] = [];
+  await openConnectionDraft(opened, {
+    connectorTypeOf: async () => undefined,
+    showConnection: () => undefined,
+    requestCreateDialog: () => undefined
+  });
+  const source: ConnectionSource = {
+    mayTest: () => true,
+    useDetail: () => ({ status: "loading" }),
+    readDetail: async () => connectionDetail(),
+    test: async () => ({ status: "ready", testedAt: "2026-10-14T10:00:00.000Z" }),
+    setSecret: async () => undefined,
+    discover: async () => undefined,
+    useTest: () => ({ run: { status: "idle" }, start: () => undefined }),
+    useHolders: () => ({ status: "hidden" }),
+    principalHref: () => "",
+    oauthStart: async () => {
+      throw new Error("This test signs nothing in.");
+    }
+  };
+  const markup = renderToStaticMarkup(
+    createElement(
+      TranslationProvider,
+      { children: null, locale: "en" },
+      createElement(ConnectionCreateFlow, {
+        source,
+        namespaces: [],
+        mayNameFreely: true,
+        checkName: async () => ({ available: true as const }),
+        put: async (input) => {
+          writes.push(input);
+          return { revision: 1 };
+        },
+        remove: async () => undefined,
+        mayDelete: () => true,
+        onClose: () => undefined,
+        onCreated: () => undefined
+      })
+    )
+  );
+  return { markup, writes };
+}
+
 describe("the New connection dialog opened from a card", () => {
   it("starts at the REST API's form with the draft's name, address and header names, and no key", async () => {
-    const writes: unknown[] = [];
-    await openConnectionDraft(draft(), {
-      connectorTypeOf: async () => undefined,
-      showConnection: () => undefined,
-      requestCreateDialog: () => undefined
-    });
-    const source: ConnectionSource = {
-      mayTest: () => true,
-      useDetail: () => ({ status: "loading" }),
-      readDetail: async () => connectionDetail(),
-      test: async () => ({ status: "ready", testedAt: "2026-10-14T10:00:00.000Z" }),
-      setSecret: async () => undefined,
-      discover: async () => undefined,
-      useTest: () => ({ run: { status: "idle" }, start: () => undefined }),
-      useHolders: () => ({ status: "hidden" }),
-      principalHref: () => "",
-      oauthStart: async () => {
-        throw new Error("This test signs nothing in.");
-      }
-    };
-    const markup = renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale: "en" },
-        createElement(ConnectionCreateFlow, {
-          source,
-          namespaces: [],
-          mayNameFreely: true,
-          checkName: async () => ({ available: true as const }),
-          put: async (input) => {
-            writes.push(input);
-            return { revision: 1 };
-          },
-          remove: async () => undefined,
-          mayDelete: () => true,
-          onClose: () => undefined,
-          onCreated: () => undefined
-        })
-      )
-    );
+    const { markup, writes } = await renderDraftDialog(draft());
     expect(markup).toContain('data-connection-create-form="http_api"');
     expect(markup).toContain('value="Exampledata"');
     expect(markup).toContain('value="https://api.exampledata.com"');
@@ -409,5 +415,14 @@ describe("the New connection dialog opened from a card", () => {
     expect(markup).not.toContain(SECRET);
     // Nothing is written before Verbinden, and the tools wait for the approval after it.
     expect(writes).toEqual([]);
+  });
+
+  it("shows a drafted test path under an open Technical details, also without headers", async () => {
+    const opened = draft();
+    const { markup } = await renderDraftDialog({
+      ...opened,
+      connection: { ...opened.connection, headerNames: [] }
+    });
+    expect(markup).toContain('value="/api/monitoring/health"');
   });
 });

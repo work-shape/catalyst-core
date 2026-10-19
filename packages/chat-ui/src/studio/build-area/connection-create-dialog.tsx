@@ -137,9 +137,12 @@ export function ConnectionCreateFlow({
           sendAs: "bearer"
         }
   );
-  // A drafted id or header names show under "Technical details", open from the start.
+  // A drafted id, header names or test path show under "Technical details", open from the start.
   const [detailsOpen] = useState(
-    () => fields.typedId !== undefined || fields.form.headers.length > 0
+    () =>
+      fields.typedId !== undefined ||
+      fields.form.headers.length > 0 ||
+      fields.form.testPath.trim() !== ""
   );
   const [errors, setErrors] = useState<CreateFieldErrors>({});
   const [steps, setSteps] = useState<{ step: ConnectStep; state: ConnectStepState }[]>([]);
@@ -295,7 +298,12 @@ export function ConnectionCreateFlow({
             url:
               outcome.reason === "network_denied"
                 ? egressRefusal(fields.form.url, t)
-                : t("connectionCreate.errorUrl")
+                : t(
+                    // A test path that answers without success may be refusing the key.
+                    rest && fields.form.testPath.trim() !== ""
+                      ? "connectionCreate.errorTestPath"
+                      : "connectionCreate.errorUrl"
+                  )
           });
         }
         return;

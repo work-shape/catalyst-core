@@ -340,8 +340,11 @@ describe("the Connector type http_api", () => {
       expect(w.server.requests.map((request) => request.url)).toEqual(["/datevconnect/health"]);
       expect(w.server.requests[0]?.headers.authorization).toBe(`Bearer ${w.key}`);
 
-      w.server.answer(status(404));
-      expect(await w.test()).toEqual({ status: "unavailable" });
+      // A redirect, as many APIs answer without a valid key, does not pass the test path.
+      for (const code of [302, 404]) {
+        w.server.answer(status(code));
+        expect(await w.test()).toEqual({ status: "unavailable" });
+      }
       w.server.answer(status(401));
       expect(await w.test()).toEqual({ status: "unauthorized" });
     });
