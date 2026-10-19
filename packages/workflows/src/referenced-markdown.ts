@@ -83,7 +83,9 @@ function withAddresses(markdown: string): string | undefined {
   const tree = parse(markdown);
   const definitions = new Map<string, string>();
   const collect = (node: Nodes) => {
-    if (node.type === "definition") definitions.set(node.identifier, node.url);
+    // CommonMark takes the first definition of a label: a later one changes no link.
+    if (node.type === "definition" && !definitions.has(node.identifier))
+      definitions.set(node.identifier, node.url);
     if ("children" in node) for (const child of node.children) collect(child);
   };
   collect(tree);

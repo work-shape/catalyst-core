@@ -539,6 +539,12 @@ describe("a Markdown field mapped as one reference (MAIL-2)", () => {
     expect(referencedMarkdown("Siehe [Akte][a].\n\n[a]: https://evil.example/akte")).toBe(
       "Siehe Akte (<https://evil.example/akte>).\n\n"
     );
+    // A label defined twice links to its first definition, as CommonMark reads it.
+    expect(
+      referencedMarkdown(
+        "[Akte][a]\n\n[a]: https://kanzlei.example/akte\n[a]: https://evil.example"
+      )
+    ).toBe("Akte (<https://kanzlei.example/akte>)\n\n\n");
     expect(referencedMarkdown("| x |\n| --- |\n| [a](https://e.example/a\\|b) |")).toBe(
       "| x |\n| --- |\n| a (<https://e.example/a%7Cb>) |"
     );
