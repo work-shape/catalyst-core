@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   NoopAuditRecorder,
   asClientInstanceId,
@@ -51,7 +52,7 @@ type Read = (string | null)[] | "error";
 interface Shape {
   name: string;
   sql: string;
-  parameters?: unknown[];
+  parameters?: string[][];
   expected: Record<Viewer, Read>;
 }
 const rows = (assigned: Read, all: Read, none: Read = []): Record<Viewer, Read> => ({
@@ -377,17 +378,15 @@ describe("SQL shapes on a scoped table (SCOPE-1)", () => {
       audit: new NoopAuditRecorder()
     });
   };
+  const resultSchema = z.object({ rows: z.array(z.object({ m: z.string().nullable() })) });
   const read = async (w: World, shape: Shape, viewer: ActorAccess) => {
     try {
-      const result = (await query(
-        w,
-        {
-          sql: shape.sql,
-          ...(shape.parameters ? { parameters: shape.parameters } : {})
-        } as JsonObject,
-        viewer
-      )) as { rows: { m: string | null }[] };
-      return { m: result.rows.map((row) => row.m).sort() as Read, text: JSON.stringify(result) };
+      const input: JsonObject = shape.parameters
+        ? { sql: shape.sql, parameters: shape.parameters }
+        : { sql: shape.sql };
+      const result = resultSchema.parse(await query(w, input, viewer));
+      const m: Read = result.rows.map((row) => row.m).sort();
+      return { m, text: JSON.stringify(result) };
     } catch (error) {
       return {
         m: "error" as const,
@@ -399,7 +398,7 @@ describe("SQL shapes on a scoped table (SCOPE-1)", () => {
   it("returns only the viewer's rows for every shape; all reads 103, nobody unassigned reads any", async () => {
     const w = await world();
     for (const shape of shapes) {
-      for (const viewer of Object.keys(viewers) as Viewer[]) {
+      for (const viewer of ["assigned", "all", "none"] satisfies Viewer[]) {
         const { m, text } = await read(w, shape, viewers[viewer]);
         const label = `${shape.name} (${viewer}): ${JSON.stringify(shape.sql)}`;
         if (viewer !== "all") expect.soft(text, label).not.toContain("secret-103");

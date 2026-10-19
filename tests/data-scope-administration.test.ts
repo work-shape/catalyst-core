@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import { asUserId } from "@work-shape/catalyst-core";
 import { setupAccessInstance, clientInstanceId } from "./support/access-instance";
 
 const scopes = { mandant: { label: "Mandant", valueType: "text" as const } };
@@ -114,12 +116,12 @@ describe("data scope administration", () => {
         query: { holderKind: "user", holderId: member.id }
       });
       expect(read.statusCode, read.body).toBe(200);
-      return (read.json() as { effective: unknown }).effective;
+      return z.object({ effective: z.unknown() }).parse(read.json()).effective;
     };
     expect(await effective()).toEqual({ mandant: ["101"] });
     await signIn(["auditors"]);
     expect(
-      (await world.stores.users.getUser({ clientInstanceId, userId: member.id }))?.groups
+      (await world.stores.users.getUser({ clientInstanceId, userId: asUserId(member.id) }))?.groups
     ).toEqual(["auditors"]);
     expect(await effective()).toEqual({ mandant: ["102"] });
   });
