@@ -8,32 +8,30 @@ test("an administrator edits data scope assignments in both languages, at short 
   page,
   accessState: _accessState
 }) => {
-  const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
-    data: { email: "e2e-admin@example.test", password: "e2e-admin-password", rememberMe: true }
-  });
-  expect(signedIn.ok()).toBe(true);
+  const signIn = async (email: string, password: string) => {
+    const response = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+      data: { email, password, rememberMe: true }
+    });
+    expect(response.ok()).toBe(true);
+    const me: { id: string } = await (await page.request.get(`${apiBaseUrl}/api/v1/me`)).json();
+    return me;
+  };
   // Nobody writes their own assignment, so the administrator edits E2E User's.
-  const listed: { items: { id: string; email?: string }[] } = await (
-    await page.request.get(`${apiBaseUrl}/api/v1/instance/users?limit=200`)
-  ).json();
-  const member = listed.items.find((user) => user.email === "e2e-user@example.test");
-  expect(member).toBeDefined();
+  const member = await signIn("e2e-user@example.test", "e2e-user-password");
+  await signIn("e2e-admin@example.test", "e2e-admin-password");
   const clear = () =>
     requestWithOrigin(page, "put", assignmentPath, {
       data: {
         dimension: "mandant",
         holderKind: "user",
-        holderId: member?.id,
+        holderId: member.id,
         effect: "allow",
         values: []
       }
     });
   // The tab opens on the administrator's own assignment, which they cannot save.
   const chooseMember = async () => {
-    await page
-      .getByRole("tabpanel")
-      .getByRole("button", { name: "E2E Admin", exact: true })
-      .click();
+    await page.getByRole("button", { name: "E2E Admin", exact: true }).click();
     await page.getByRole("option", { name: /E2E User/u }).click();
     await expect(page.getByRole("listbox")).toHaveCount(0);
   };
