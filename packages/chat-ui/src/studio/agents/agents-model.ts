@@ -87,13 +87,18 @@ export function buildingAgentNameFor(
 export function editWithBuildingAgent(
   buildingAgentName: string | undefined,
   selectAgent: (name: string) => void,
-  startAbout: (subject: { kind: string; name: string }) => Promise<void>
-): ((subject: { kind: string; name: string }) => Promise<void>) | undefined {
+  startAbout: (
+    subject: { kind: string; name: string },
+    workspaceId: string | undefined
+  ) => Promise<void>
+):
+  | ((subject: { kind: string; name: string }, workspaceId: string | undefined) => Promise<void>)
+  | undefined {
   if (buildingAgentName === undefined) {
     return undefined;
   }
-  return (subject) => {
+  return (subject, workspaceId) => {
     selectAgent(buildingAgentName);
-    return startAbout(subject);
+    return startAbout(subject, workspaceId);
   };
 }

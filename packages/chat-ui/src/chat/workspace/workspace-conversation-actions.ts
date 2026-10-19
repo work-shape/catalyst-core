@@ -181,16 +181,18 @@ export function createWorkspaceConversationActions({
   }
 
   /**
-   * A conversation of the open workspace about one asset, opened once the instance made it.
+   * A conversation about one asset, opened once the instance made it: in `workspaceId`, the
+   * workspace that owns the asset, or else in the open workspace.
    * What a conversation is about is set when it is made, so it is made before its first turn;
    * it opens in the dock of the asset's page, with `prompt` in its composer where one is given.
    * Every caller names its prompt, also none, so a prompt is never dropped on the way.
    */
   async function startConversationAbout(
     subject: { kind: string; name: string },
-    prompt: string | undefined
+    prompt: string | undefined,
+    workspaceId: string | undefined = activeCollaborationWorkspaceId
   ): Promise<void> {
-    if (!activeCollaborationWorkspaceId) {
+    if (!workspaceId) {
       throw new Error("A conversation about an asset belongs to a workspace");
     }
     // The dock already holds a conversation about this asset: it opens again, also where the
@@ -205,7 +207,7 @@ export function createWorkspaceConversationActions({
             ? selectedConversationAbout
             : workspaceCache.knownThreadAbout(dockConversationId),
       subject,
-      workspaceId: activeCollaborationWorkspaceId,
+      workspaceId,
       prompt,
       draftText:
         dockConversationId === undefined
@@ -217,7 +219,7 @@ export function createWorkspaceConversationActions({
     });
     if (reused !== undefined) {
       openConversationAbout(
-        { id: reused, collaborationWorkspaceId: activeCollaborationWorkspaceId },
+        { id: reused, collaborationWorkspaceId: workspaceId },
         subject,
         prompt,
         { routeState, dock, draftController }
@@ -229,7 +231,7 @@ export function createWorkspaceConversationActions({
     const conversation = await client.conversations.create({
       body: {
         locale: activeLocale,
-        collaborationWorkspaceId: activeCollaborationWorkspaceId,
+        collaborationWorkspaceId: workspaceId,
         subject
       }
     });

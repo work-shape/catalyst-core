@@ -81,6 +81,19 @@ const WORDS: Record<
 
 const revisionSchema = z.object({ revision: z.number() });
 const idSchema = z.object({ id: z.string() });
+const threadSchema = z.object({
+  conversation: z.object({ collaborationWorkspaceId: z.string() }),
+  messages: z.array(
+    z.object({
+      role: z.string(),
+      metadata: z
+        .object({
+          agentRuntime: z.object({ result: z.object({ status: z.string() }).optional() }).optional()
+        })
+        .nullish()
+    })
+  )
+});
 
 const FIRST = "create table leads (id bigint primary key, name text not null);";
 const LATER = "alter table leads add column note text;";
@@ -388,6 +401,78 @@ test("a Data Store's later draft is published, edited with the agent and deleted
           data: { expectedRevision: revisionSchema.parse(await left.json()).revision }
         });
     }
+  }
+});
+
+// The agent reads a workspace's store from that workspace's conversations alone: "Edit with the
+// agent" on a team's store starts its conversation in the team, whichever workspace is open, and
+// the agent reads the store there. Fails without the change: the conversation belonged to the
+// open Personal Workspace, and the agent's read was refused.
+test("Edit with the agent on a team's Data Store works in the team, from Personal", async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  await signIn(page, apiOrigin);
+  const personal = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces/personal`);
+  expect(personal.ok()).toBe(true);
+  const personalId = idSchema.parse(await personal.json()).id;
+  const team = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces`, {
+    data: {
+      name: `Store team ${randomUUID().slice(0, 8)}`,
+      defaultConversationVisibility: "private"
+    }
+  });
+  expect(team.ok(), await team.text()).toBe(true);
+  const teamId = idSchema.parse(await team.json()).id;
+  const name = `team-store-${randomUUID().slice(0, 8)}`;
+  const title = "Team store leads";
+  const address = `${apiOrigin}/api/v1/assets/data_store/${name}`;
+  try {
+    const put = await requestWithOrigin(page, "put", address, {
+      data: { workspaceId: teamId, expectedRevision: null, files: storeFiles(name, title, [FIRST]) }
+    });
+    expect(put.ok(), await put.text()).toBe(true);
+
+    // Personal is the open workspace when the team's store page opens.
+    await page.setViewportSize(WIDE);
+    await page.goto(`/w/${personalId}`);
+    await view(page, `/build/data-stores/${name}`, title, "en", "light");
+    await page.getByRole("button", { name: EDIT, exact: true }).click();
+    await expect(page).toHaveURL((url) => (url.searchParams.get("chat") ?? "") !== "");
+    const conversationId = new URL(page.url()).searchParams.get("chat") ?? "";
+    const thread = async () => {
+      const response = await page.request.get(
+        `${apiOrigin}/api/v1/conversations/${conversationId}/thread`
+      );
+      expect(response.ok(), await response.text()).toBe(true);
+      return threadSchema.parse(await response.json());
+    };
+    expect((await thread()).conversation.collaborationWorkspaceId).toBe(teamId);
+    await expect(page.getByTestId("dock-head")).toHaveAttribute("data-subject-kind", "data_store");
+
+    // The agent reads the store from the conversation the entry started.
+    await page
+      .getByPlaceholder("Message")
+      .fill(`/tool platform.assets.get ${JSON.stringify({ kind: "data_store", name })}`);
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect
+      .poll(
+        async () =>
+          (await thread()).messages.find((message) => message.role === "tool")?.metadata
+            ?.agentRuntime?.result?.status,
+        { timeout: 60_000 }
+      )
+      .toBe("success");
+  } finally {
+    await page.goto("about:blank");
+    const left = await page.request.get(`${address}?workspaceId=${teamId}`);
+    if (left.ok())
+      await requestWithOrigin(page, "post", `${address}/delete`, {
+        data: {
+          workspaceId: teamId,
+          expectedRevision: revisionSchema.parse(await left.json()).revision
+        }
+      });
   }
 });
 

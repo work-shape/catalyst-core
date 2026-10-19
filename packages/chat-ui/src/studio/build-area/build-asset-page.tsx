@@ -275,9 +275,14 @@ export function ViewedAssetPage({
   usePageShown(page, read.status);
   const { editWithAgent } = source;
   const asset = read.status === "ready" ? read.asset : undefined;
+  const agentPlace = asset === undefined ? undefined : agentWorkspaceOf(source.rights, asset);
   const agent = useBuildEditWithAgent(
-    asset && editsWithAgent && editWithAgent && mayOnAsset(source.rights, "write", asset)
-      ? () => editWithAgent({ kind, name })
+    asset &&
+      agentPlace &&
+      editsWithAgent &&
+      editWithAgent &&
+      mayOnAsset(source.rights, "write", asset)
+      ? () => editWithAgent({ kind, name }, agentPlace.workspaceId)
       : undefined
   );
   if (read.status === "ready") {
@@ -463,9 +468,10 @@ function LoadedAssetPage({
   // and an earlier revision becomes its content.
   const agentDraftRead = useRef<number | null>(stored.agentDraft?.revision ?? null);
   const { editWithAgent } = source;
+  const agentPlace = agentWorkspaceOf(source.rights, stored);
   const agent = useBuildEditWithAgent(
-    entry.editsWithAgent && editWithAgent && canWrite
-      ? () => editWithAgent({ kind: entry.kind, name: stored.name })
+    entry.editsWithAgent && editWithAgent && agentPlace && canWrite
+      ? () => editWithAgent({ kind: entry.kind, name: stored.name }, agentPlace.workspaceId)
       : undefined
   );
   const Editor = entry.Editor;
@@ -815,6 +821,23 @@ function LoadedAssetPage({
       </ConfirmDialog>
     </>
   );
+}
+
+/**
+ * Where "Edit with the agent" starts its conversation: in the workspace that owns the asset, as
+ * the agent reads a workspace's asset from that workspace's conversations alone, and in the open
+ * workspace for an asset of the instance (`workspaceId` undefined). Undefined where the reader is
+ * no member of the owner, so may start no conversation there, and the entry is absent.
+ */
+function agentWorkspaceOf(
+  rights: BuildRights,
+  asset: BuildAsset
+): { workspaceId: string | undefined } | undefined {
+  if (asset.scope.kind !== "workspace") return { workspaceId: undefined };
+  const { workspaceId } = asset.scope;
+  return rights.workspaces.some((workspace) => workspace.id === workspaceId && workspace.member)
+    ? { workspaceId }
+    : undefined;
 }
 
 /** What the instance names a caller may do to an asset beyond reading it. */

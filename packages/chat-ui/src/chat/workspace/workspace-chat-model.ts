@@ -482,8 +482,10 @@ export function useWorkspaceChatModel({
     chrome.requestComposerFocus();
   }
   const buildWithAgent = buildingAgentName === undefined ? undefined : startBuilding;
-  const editWithAgent = editWithBuildingAgent(buildingAgentName, setSelectedAgentName, (subject) =>
-    startConversationAbout(subject, undefined)
+  const editWithAgent = editWithBuildingAgent(
+    buildingAgentName,
+    setSelectedAgentName,
+    (subject, workspaceId) => startConversationAbout(subject, undefined, workspaceId)
   );
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
 

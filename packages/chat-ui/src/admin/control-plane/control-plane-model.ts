@@ -78,7 +78,10 @@ export interface ControlPlaneModelInput {
   /** See `buildWithAgent` of the settings page's context. */
   buildWithAgent?(prompt: string): void;
   /** See `editWithAgent` of the settings page's context. */
-  editWithAgent?(subject: { kind: string; name: string }): Promise<void>;
+  editWithAgent?(
+    subject: { kind: string; name: string },
+    workspaceId: string | undefined
+  ): Promise<void>;
   /** Opens the dock beside the open page with a new conversation and this text to send. */
   startDockedChat?: (prompt: string) => void;
 }

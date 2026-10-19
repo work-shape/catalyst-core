@@ -207,6 +207,15 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "team-store-from-personal",
+    reason:
+      "Chromium's own log line: the team's store page opens while Studio is on Personal or the " +
+      "instance, so the page asks those owners first, gets 404, and finds it in the team.",
+    matches: requestAnswered(404),
+    path: /^\/api\/v1\/assets\/data_store\/team-store-[0-9a-f]{8}$/u,
+    tests: ["Edit with the agent on a team's Data Store works in the team, from Personal"]
+  },
+  {
     name: "refused-asset-in-build",
     reason:
       "Chromium's own log line: the test saves an agent with a tool its Namespace does not " +

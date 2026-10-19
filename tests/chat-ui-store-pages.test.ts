@@ -180,6 +180,8 @@ interface MountInput {
   allowed?: NonNullable<BuildAsset["allowed"]>;
   canDelete?: boolean;
   editWithAgent?: BuildSource["editWithAgent"];
+  /** The workspaces whose assets the reader holds a right on: the reader's own unless given. */
+  workspaces?: BuildSource["rights"]["workspaces"];
   publish?: (input: { revision: number }) => void;
   remove?: (input: { expectedRevision?: number }) => void;
   stores?: DataStoreSource;
@@ -204,7 +206,7 @@ async function mount(asset: BuildAsset, input: MountInput = {}): Promise<HTMLEle
     kinds: [{ kind: asset.kind, canCreate: true, canDelete: input.canDelete ?? true }],
     rights: {
       ...resolveBuildRights({ permissions: ["config_assets.write"] }, platformContext()),
-      workspaces: [{ id: "ws_1", name: "Mine", member: true, personal: true }]
+      workspaces: input.workspaces ?? [{ id: "ws_1", name: "Mine", member: true, personal: true }]
     },
     loading: false,
     error: undefined,
@@ -433,7 +435,31 @@ describe("Edit with the agent on a store's page", () => {
     const control = await editWithAgentControl(page);
     expect(control).toBeDefined();
     await act(async () => control?.click());
-    expect(editWithAgent).toHaveBeenCalledWith({ kind: "data_store", name: "leads" });
+    expect(editWithAgent).toHaveBeenCalledWith({ kind: "data_store", name: "leads" }, "ws_1");
+  });
+
+  it("starts it in the workspace that owns the store, whichever workspace is open", async () => {
+    const editWithAgent = vi.fn(async () => undefined);
+    const team: BuildAsset = { ...published, scope: { kind: "workspace", workspaceId: "ws_team" } };
+    const page = await mount(team, {
+      editWithAgent,
+      workspaces: [
+        { id: "ws_1", name: "Mine", member: true, personal: true },
+        { id: "ws_team", name: "Team", member: true }
+      ]
+    });
+    await act(async () => (await editWithAgentControl(page))?.click());
+    expect(editWithAgent).toHaveBeenCalledWith({ kind: "data_store", name: "leads" }, "ws_team");
+  });
+
+  it("is absent where the reader is no member of the workspace that owns the store", async () => {
+    const editWithAgent = vi.fn(async () => undefined);
+    const team: BuildAsset = { ...published, scope: { kind: "workspace", workspaceId: "ws_team" } };
+    const page = await mount(team, {
+      editWithAgent,
+      workspaces: [{ id: "ws_team", name: "Team", member: false }]
+    });
+    expect(await editWithAgentControl(page)).toBeUndefined();
   });
 
   it("starts one about the Knowledge Base", async () => {
@@ -442,7 +468,25 @@ describe("Edit with the agent on a store's page", () => {
     const control = await editWithAgentControl(page);
     expect(control).toBeDefined();
     await act(async () => control?.click());
-    expect(editWithAgent).toHaveBeenCalledWith({ kind: "knowledge_base", name: "handbook-kb" });
+    // The instance owns it: the conversation belongs to the open workspace.
+    expect(editWithAgent).toHaveBeenCalledWith(
+      { kind: "knowledge_base", name: "handbook-kb" },
+      undefined
+    );
+  });
+
+  it("starts the Knowledge Base's in the workspace that owns it", async () => {
+    const editWithAgent = vi.fn(async () => undefined);
+    const team: BuildAsset = { ...handbook, scope: { kind: "workspace", workspaceId: "ws_team" } };
+    const page = await mount(team, {
+      editWithAgent,
+      workspaces: [{ id: "ws_team", name: "Team", member: true }]
+    });
+    await act(async () => (await editWithAgentControl(page))?.click());
+    expect(editWithAgent).toHaveBeenCalledWith(
+      { kind: "knowledge_base", name: "handbook-kb" },
+      "ws_team"
+    );
   });
 
   it("is absent without an agent that builds, and for a reader who may not change the asset", async () => {
@@ -631,12 +675,12 @@ describe("the agent that edits an asset", () => {
     const start = editWithBuildingAgent(
       "builder",
       (name) => calls.push(`select ${name}`),
-      async (subject) => {
-        calls.push(`start ${subject.kind}/${subject.name}`);
+      async (subject, workspaceId) => {
+        calls.push(`start ${subject.kind}/${subject.name} in ${workspaceId ?? "the open one"}`);
       }
     );
-    await start?.({ kind: "data_store", name: "leads" });
-    expect(calls).toEqual(["select builder", "start data_store/leads"]);
+    await start?.({ kind: "data_store", name: "leads" }, "ws_team");
+    expect(calls).toEqual(["select builder", "start data_store/leads in ws_team"]);
   });
 
   it("is absent where no agent builds assets: the Build Agent's Module is off", () => {

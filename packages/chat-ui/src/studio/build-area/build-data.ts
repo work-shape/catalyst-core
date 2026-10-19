@@ -193,9 +193,13 @@ export interface BuildSource {
   buildWithAgent?(prompt: string): void;
   /**
    * Opens the dock beside the asset's page with a conversation about it, with the agent that
-   * builds assets. Absent where no such agent is offered.
+   * builds assets, in `workspaceId` (see the settings page's context). Absent where no such
+   * agent is offered.
    */
-  editWithAgent?(subject: { kind: string; name: string }): Promise<void>;
+  editWithAgent?(
+    subject: { kind: string; name: string },
+    workspaceId: string | undefined
+  ): Promise<void>;
 }
 
 /**
