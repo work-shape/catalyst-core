@@ -186,7 +186,11 @@ export function workflowFacts(config: unknown, name: string): WorkflowFacts | un
       const mapping = z
         .record(
           z.string(),
-          z.object({ value: z.unknown().optional(), ref: z.unknown().optional() })
+          z.object({
+            value: z.unknown().optional(),
+            ref: z.unknown().optional(),
+            text: z.unknown().optional()
+          })
         )
         .safeParse(step.input ?? {});
       const input = Object.fromEntries(
@@ -194,7 +198,9 @@ export function workflowFacts(config: unknown, name: string): WorkflowFacts | un
       );
       let dynamic =
         !mapping.success ||
-        Object.values(mapping.data ?? {}).some((source) => source.ref !== undefined);
+        Object.values(mapping.data ?? {}).some(
+          (source) => source.ref !== undefined || source.text !== undefined
+        );
       if (step.type === "workflow" && step.key !== undefined) {
         // A key's references are resolved only during the run, like the child's other input.
         dynamic = true;

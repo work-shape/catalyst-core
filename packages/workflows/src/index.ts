@@ -139,6 +139,12 @@ export { createWorkflowDatasets } from "./datasets";
 export type { WorkflowDatasets, WorkflowDatasetsOptions } from "./datasets";
 
 export { checkDatasetContracts } from "./dataset-contracts";
+export {
+  WORKFLOW_TEXT_INPUT_INVALID,
+  WORKFLOW_TEXT_PART_INVALID,
+  escapeMarkdownText,
+  joinText
+} from "./text-join";
 
 export { enqueueDatasetCleanup } from "./dataset-lifetime";
 

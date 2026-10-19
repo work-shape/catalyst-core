@@ -68,7 +68,14 @@ import {
   type WorkflowOperationCalls
 } from "./operation-step";
 import { operationWaitMs, operationWaitOutcome, stillRunningError } from "./operation-wait";
-import { resolveInput, resolveReference, resolveRunKey, type ReferenceScope } from "./references";
+import {
+  resolveInput,
+  resolveReference,
+  resolveRunKey,
+  type ReferenceScope,
+  type TextSchemas
+} from "./references";
+import { workflowStepSchemas } from "./dataset-contracts";
 import { workflowRunActor } from "./run-identity";
 import { WorkflowStepFailure } from "./step-failure";
 import { testRunCall } from "./test-run";
@@ -169,6 +176,25 @@ export function createStepExecutor(options: StepExecutorOptions) {
   }
 
   /**
+   * The schemas a text of the attempt's step joins with (EW-TEXT): its input schema and the
+   * schemas of what its references name. Read only when its mapping holds a text.
+   */
+  function textSchemasOf(attempt: StepAttempt): () => Promise<TextSchemas> {
+    return async () => {
+      const schemas = await workflowStepSchemas(
+        attempt.definition,
+        definitions,
+        operationCalls.registry
+      );
+      const step = attempt.stepRun.stepId;
+      return {
+        input: schemas.input(step),
+        reference: (reference) => schemas.reference(step, reference)
+      };
+    };
+  }
+
+  /**
    * What a code step does before its script runs: its input from the steps before it, checked
    * against the schema it declares, and its script from the files of the run's revision. The
    * script is not run here: this process does not reach the sandbox.
@@ -185,7 +211,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
       run,
       stepRun
     };
-    const input = await resolveInput(scope, step.input);
+    const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
     withinStepData(input, "The input of the step");
     await recordInput(scope, input);
     fitsSchema(
@@ -366,7 +392,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "workflow": {
           const ended = await childStepOutcome(stores, run, stepRun);
           if (stepRun.status === "waiting" && ended) return ended;
-          const input = await resolveInput(scope, step.input);
+          const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(input, "The child input");
           const child = await definitions.read(step.workflow);
           if (child && options.datasets)
@@ -414,7 +440,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           };
         }
         case "operation": {
-          const input = await resolveInput(scope, step.input);
+          const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(input, "The input of the step");
           await recordInput(scope, input);
           if (options.datasets)
@@ -629,7 +655,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "code":
           return await stageCode(attempt, step);
         case "output": {
-          const output = await resolveInput(scope, step.input);
+          const output = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(output, "The result of the run");
           await recordInput(scope, output);
           const schema = compileJsonSchema(

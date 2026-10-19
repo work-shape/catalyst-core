@@ -537,7 +537,11 @@ interface StepNames {
 function stepSources(input: unknown, known: StepNames): WorkflowStepSource[] {
   const sources: WorkflowStepSource[] = [];
   const seen = new Set<string>();
-  for (const field of isRecord(input) ? Object.values(input) : []) {
+  // A field is a literal, a reference, or a text whose parts may each be a reference.
+  const references = (isRecord(input) ? Object.values(input) : []).flatMap((field) =>
+    isRecord(field) && Array.isArray(field.text) ? field.text : [field]
+  );
+  for (const field of references) {
     const step = isRecord(field) && isRecord(field.ref) ? text(field.ref.step) : undefined;
     if (step === undefined || seen.has(step)) {
       continue;

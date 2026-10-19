@@ -153,7 +153,7 @@ function loadChangesRows(input: WorkflowInputMapping | undefined): boolean {
 function resourceOf(operation: NeededRightOperation, input: WorkflowInputMapping | undefined) {
   const literal: Record<string, JsonValue> = {};
   for (const [field, value] of Object.entries(input ?? {}))
-    if (value.ref === undefined) literal[field] = value.value;
+    if (value.value !== undefined) literal[field] = value.value;
   try {
     return operation.resource(literal);
   } catch {

@@ -7,7 +7,7 @@ import {
   type JsonObject,
   type JsonValue,
   type WorkflowInputMapping,
-  type WorkflowInputValue,
+  type WorkflowLiteralOrReference,
   type WorkflowReference,
   type WorkflowRun,
   type WorkflowRunsStore,
@@ -15,10 +15,13 @@ import {
 } from "@work-shape/catalyst-core";
 import type { WorkflowStepIndex } from "./definition";
 import { WORKFLOW_ITERATION_LABEL_MAX_CHARS } from "./limits";
+import { schemaAt } from "./dataset-schema";
 import { WorkflowStepFailure } from "./step-failure";
+import { isTextValue, joinText, type TextPartValue } from "./text-join";
 
 // How a step reads what earlier steps left: a reference names a step and a dotted path into
-// its output. A mapping holds literals and references and no expression.
+// its output. A mapping holds literals, references and texts joined from parts, and no
+// expression.
 
 /** The field a dotted path names. A segment is a key of an object or an index of a list. */
 export function fieldAt(value: JsonValue, path: string): { found: boolean; value: JsonValue } {
@@ -143,17 +146,52 @@ export async function resolveReference(
   throw unresolved(reference, "no step of that id ran before this one");
 }
 
-/** The input of a step: each field of its mapping as a literal or as what a reference names. */
+/**
+ * What joining a text needs of the step's schemas: the step's input schema, for a field's
+ * `format` and `maxLength`, and the schema of what a reference names, for the columns of a
+ * table. Read only when the mapping holds a text.
+ */
+export interface TextSchemas {
+  input: JsonObject | undefined;
+  reference(reference: WorkflowReference): JsonObject | undefined;
+}
+
+/**
+ * The input of a step: each field of its mapping as a literal, as what a reference names, or
+ * as the text its parts join to (EW-TEXT).
+ */
 export async function resolveInput(
   scope: ReferenceScope,
-  mapping: WorkflowInputMapping
+  mapping: WorkflowInputMapping,
+  textSchemas?: () => Promise<TextSchemas>
 ): Promise<JsonObject> {
   const input: JsonObject = {};
+  let schemas: TextSchemas | undefined;
   for (const [field, source] of Object.entries(mapping)) {
-    input[field] = source.ref ? await resolveReference(scope, source.ref) : source.value;
+    if (isTextValue(source)) {
+      schemas ??= textSchemas ? await textSchemas() : undefined;
+      const parts: TextPartValue[] = [];
+      for (const [position, part] of source.text.entries()) {
+        parts.push(
+          typeof part === "string"
+            ? { literal: part }
+            : {
+                value: await resolveReference(scope, part.ref),
+                part: position + 1,
+                ...withSchema(schemas?.reference(part.ref))
+              }
+        );
+      }
+      const schema = schemas?.input ? schemaAt(schemas.input, field) : undefined;
+      input[field] = joinText({ name: field, ...withSchema(schema) }, parts);
+    } else {
+      input[field] = source.ref ? await resolveReference(scope, source.ref) : source.value;
+    }
   }
   return input;
 }
+
+const withSchema = (schema: JsonObject | undefined) => (schema === undefined ? {} : { schema });
 
 /**
  * The run key of a `workflow` step: its literals and what its references name, each a text or
@@ -163,7 +201,7 @@ export async function resolveInput(
  */
 export async function resolveRunKey(
   scope: ReferenceScope,
-  parts: readonly WorkflowInputValue[]
+  parts: readonly WorkflowLiteralOrReference[]
 ): Promise<string> {
   const values: string[] = [];
   for (const [position, part] of parts.entries()) {

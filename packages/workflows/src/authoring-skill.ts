@@ -487,10 +487,17 @@ The \`input\` of a step is a mapping: one entry per field, and each entry is exa
 
 - \`value: <any JSON>\`: a literal, and
 - \`ref: { step: <id of an earlier step>, path: <dotted path into its output> }\`: a field of
-  what an earlier step answered.
+  what an earlier step answered, and
+- \`text: [<part>, ...]\` for a field whose schema is a string: literal strings and
+  \`{ ref: { step, path } }\` parts, joined in order, such as
+  \`subject: { text: ["Prüfergebnis ", { ref: { step: start, path: input.month } }] }\`. A
+  referenced part is a text, a number or a yes-or-no value; \`null\` joins as empty text. In a
+  field whose schema has \`format: markdown\`, such as the body of a mail, a referenced list of
+  strings joins as a bulleted list and a list of flat records as a table of at most 100 rows
+  and 8 columns, every referenced value is escaped, and a dataset is refused.
 
-A mapping holds no expression, no template and no arithmetic. What needs computing is done by
-the operation a step calls.
+A mapping holds no expression, no template and no arithmetic; joining text only joins. What
+needs computing is done by the operation a step calls or by a code step.
 
 - A reference names a step that ran before the step it stands in. A step outside a loop cannot
   name a step inside it.

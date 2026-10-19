@@ -727,3 +727,26 @@ describe("a run that ended before its last step", () => {
     expect(going.groups[0]?.status).toBeUndefined();
   });
 });
+
+describe("the sources of a step whose field is text joined from parts (EW-TEXT)", () => {
+  it("counts each part's reference, once per step", () => {
+    const mail: Step = {
+      ...operation("mail", "mail.send"),
+      input: {
+        subject: {
+          text: [
+            "Prüfergebnis ",
+            { ref: { step: "start", path: "input.month" } },
+            { ref: { step: "read", path: "name" } }
+          ]
+        },
+        body: { text: [{ ref: { step: "read", path: "rows" } }] }
+      }
+    };
+    const view = definition([trigger, operation("read"), mail, output]);
+    expect(view.steps.find((step) => step.id === "mail")?.sources).toEqual([
+      { from: "run_input" },
+      { from: "step", name: "Step read" }
+    ]);
+  });
+});

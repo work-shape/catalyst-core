@@ -119,9 +119,15 @@ export function workflowStepsDeep(
 const referenceOf = (value: unknown): string[] =>
   isRecord(value) && typeof value.step === "string" ? [value.step] : [];
 
+// A mapped value is a literal, a reference, or a text whose parts may each be a reference.
 const mappedReferences = (values: unknown): string[] =>
   (Array.isArray(values) ? values : isRecord(values) ? Object.values(values) : []).flatMap(
-    (value) => (isRecord(value) ? referenceOf(value.ref) : [])
+    (value) =>
+      !isRecord(value)
+        ? []
+        : Array.isArray(value.text)
+          ? value.text.flatMap((part) => (isRecord(part) ? referenceOf(part.ref) : []))
+          : referenceOf(value.ref)
   );
 
 /**

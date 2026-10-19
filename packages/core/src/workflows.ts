@@ -174,16 +174,19 @@ export interface WorkflowReference {
 }
 
 /**
- * One field of a step's input: a literal, or a reference, and never both. A mapping holds no
- * expression.
+ * A literal or a reference, and never both: a part of a child's run key and a run label, which
+ * take no text joined from parts.
  */
-export type WorkflowInputValue =
-  { value: JsonValue; ref?: never } | { ref: WorkflowReference; value?: never };
+export type WorkflowLiteralOrReference =
+  | { value: JsonValue; ref?: never; text?: never }
+  | { ref: WorkflowReference; value?: never; text?: never };
 
-/** One field of a mapping as a definition's schema reads it: exactly one of the two keys. */
-export const workflowInputValueSchema = z.union([
+const workflowReferenceSchema = z.strictObject({ step: z.string().min(1), path: z.string() });
+
+/** A literal or a reference as a definition's schema reads it: exactly one of the two keys. */
+export const workflowLiteralOrReferenceSchema = z.union([
   z.strictObject({ value: z.json() }),
-  z.strictObject({ ref: z.strictObject({ step: z.string().min(1), path: z.string() }) })
+  z.strictObject({ ref: workflowReferenceSchema })
 ]);
 
 /**
@@ -196,10 +199,9 @@ export const workflowInputValueSchema = z.union([
 export type WorkflowTextPart = string | { ref: WorkflowReference };
 
 /**
- * A string field of a step's input joined from parts, in order (EW-TEXT). It sits beside
- * `{ value }` and `{ ref }` once EW-TEXT adds it to `workflowInputValueSchema` with the
- * reference check per part and the join at run time; MAIL-0 only freezes its shape. A joined
- * text longer than its field allows fails the step with `input_invalid`.
+ * A string field of a step's input joined from parts, in order (EW-TEXT). The reference check
+ * at save and publish covers each part; the engine joins the parts when the step runs. A
+ * joined text longer than its field allows fails the step with `input_invalid`.
  */
 export interface WorkflowInputText {
   text: readonly WorkflowTextPart[];
@@ -216,12 +218,28 @@ export {
 
 export const workflowTextPartSchema = z.union([
   z.string(),
-  z.strictObject({ ref: z.strictObject({ step: z.string().min(1), path: z.string() }) })
+  z.strictObject({ ref: workflowReferenceSchema })
 ]);
 
 export const workflowInputTextSchema = z.strictObject({
   text: z.array(workflowTextPartSchema).min(1).max(WORKFLOW_TEXT_MAX_PARTS)
 });
+
+/**
+ * One field of a step's input: a literal, a reference, or text joined from parts, and exactly
+ * one of them. A mapping holds no expression; joining text is the one exception, and it only
+ * joins.
+ */
+export type WorkflowInputValue =
+  | { value: JsonValue; ref?: never; text?: never }
+  | { ref: WorkflowReference; value?: never; text?: never }
+  | WorkflowInputText;
+
+/** One field of a mapping as a definition's schema reads it: exactly one of the three keys. */
+export const workflowInputValueSchema = z.union([
+  ...workflowLiteralOrReferenceSchema.options,
+  workflowInputTextSchema
+]);
 
 /** The input of a step, by the field names of its input schema. */
 export type WorkflowInputMapping = Readonly<Record<string, WorkflowInputValue>>;
@@ -281,7 +299,7 @@ export type WorkflowStep =
        * `WORKFLOW_RUN_KEY_SEPARATOR`. A step answered an existing run links to it
        * (`WorkflowStepRunLink`).
        */
-      key?: readonly WorkflowInputValue[];
+      key?: readonly WorkflowLiteralOrReference[];
     })
   /**
    * Runs its steps in order for each item of a list or of a dataset. Its output is
@@ -587,7 +605,7 @@ export interface WorkflowManifest {
    * The labels every run of the Workflow carries: each a literal or a reference into the
    * output of the trigger step. Within `WORKFLOW_RUN_LABEL_LIMITS`.
    */
-  labels?: WorkflowInputMapping;
+  labels?: Readonly<Record<string, WorkflowLiteralOrReference>>;
   /** Who hears of a run that ends `failed` or `limit_reached`. `notify` when left out. */
   onFailure?: WorkflowOnFailure;
   /** How long the datasets of a run's result are kept. The release default when left out. */

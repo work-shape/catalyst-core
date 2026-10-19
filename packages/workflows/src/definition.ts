@@ -10,6 +10,7 @@ import {
   workflowBlockIssues,
   workflowInputValueSchema,
   workflowLimitsSchema,
+  workflowLiteralOrReferenceSchema,
   workflowLoopOptionsSchema,
   workflowOnFailureSchema,
   workflowPaginateSchema,
@@ -19,6 +20,7 @@ import {
   type JsonValue,
   type WorkflowBlockIssue,
   type WorkflowManifest,
+  type WorkflowReference,
   type WorkflowStep,
   type WorkflowStepType
 } from "@work-shape/catalyst-core";
@@ -28,6 +30,7 @@ import { workflowValueSchema } from "./dataset-schema";
 import { codeFileIssue } from "./code-step";
 import { isTimeZone, parseCron } from "./cron";
 import { workflowOperationTimeoutSchema } from "./operation-wait";
+import { sourceReferences } from "./text-join";
 import {
   holdsBrokenDatasetReference,
   jsonObjectSchema,
@@ -127,7 +130,7 @@ const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
       type: z.literal("workflow"),
       workflow: z.string().min(1),
       input: inputMappingSchema,
-      key: z.array(workflowInputValueSchema).optional()
+      key: z.array(workflowLiteralOrReferenceSchema).optional()
     }),
     z.strictObject({
       ...named,
@@ -210,7 +213,7 @@ const manifestSchema = z.strictObject({
   kind: z.enum(WORKFLOW_KINDS).optional(),
   inputs: jsonObjectSchema,
   outputs: jsonObjectSchema,
-  labels: inputMappingSchema.optional(),
+  labels: z.record(z.string().min(1), workflowLiteralOrReferenceSchema).optional(),
   onFailure: workflowOnFailureSchema.optional(),
   retention: workflowRetentionSchema.optional(),
   limits: workflowLimitsSchema.optional(),
@@ -454,19 +457,29 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
       });
     }
     const keyParts = step.type === "workflow" ? (step.key ?? []) : [];
-    const references =
+    const references: { ref: WorkflowReference; field?: string; part?: number }[] =
       step.type === "loop"
-        ? [step.items]
-        : [...mapped.map(([, source]) => source), ...keyParts].flatMap((source) =>
-            source.ref ? [source.ref] : []
-          );
-    for (const reference of references) {
-      if (!index.has(reference.step)) {
-        issues.push({
-          path: `steps.${id}`,
-          message: `The step '${id}' refers to '${reference.step}', and no step has that id`
-        });
-      }
+        ? [{ ref: step.items }]
+        : [
+            ...mapped.flatMap(([field, source]) =>
+              sourceReferences(source).map((found) => ({ ...found, field }))
+            ),
+            ...keyParts.flatMap((source) => (source.ref ? [{ ref: source.ref }] : []))
+          ];
+    for (const { ref: reference, field, part } of references) {
+      if (index.has(reference.step)) continue;
+      // A part of a text is named by its field and its number, so the author finds it.
+      issues.push(
+        part === undefined
+          ? {
+              path: `steps.${id}`,
+              message: `The step '${id}' refers to '${reference.step}', and no step has that id`
+            }
+          : {
+              path: `steps.${id}.input.${field}.text.${part - 1}`,
+              message: `Part ${part} of '${field}' of the step '${id}' refers to '${reference.step}', and no step has that id`
+            }
+      );
     }
   }
   return [...issues, ...datasetKeyIssues(manifest)];

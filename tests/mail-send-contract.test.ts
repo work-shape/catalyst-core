@@ -411,7 +411,8 @@ describe("the text value form", () => {
     expect([WORKFLOW_MARKDOWN_MAX_ROWS, WORKFLOW_MARKDOWN_MAX_COLUMNS]).toEqual([100, 8]);
   });
 
-  it("is not yet a value of a mapping: EW-TEXT adds it with the check per part", () => {
-    expect(workflowInputValueSchema.safeParse({ text: ["a"] }).success).toBe(false);
+  it("is a value of a mapping beside a literal and a reference (EW-TEXT)", () => {
+    expect(workflowInputValueSchema.safeParse({ text: ["a"] }).success).toBe(true);
+    expect(workflowInputValueSchema.safeParse({ text: ["a"], value: "b" }).success).toBe(false);
   });
 });

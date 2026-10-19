@@ -1,4 +1,8 @@
-import type { WorkflowInputValue, WorkflowManifest } from "@work-shape/catalyst-core";
+import type {
+  WorkflowInputValue,
+  WorkflowLiteralOrReference,
+  WorkflowManifest
+} from "@work-shape/catalyst-core";
 import { indexWorkflowSteps } from "./definition";
 import type { WorkflowDefinitionSource } from "./definition-source";
 
@@ -18,7 +22,9 @@ export interface WorkflowDefinitionWarning {
   message: string;
 }
 
-function sameSource(left: WorkflowInputValue, right: WorkflowInputValue): boolean {
+function sameSource(left: WorkflowLiteralOrReference, right: WorkflowInputValue): boolean {
+  // A text joined from parts is no source a key part can repeat.
+  if (right.text !== undefined) return false;
   if (left.ref && right.ref)
     return left.ref.step === right.ref.step && left.ref.path === right.ref.path;
   return left.ref === undefined && right.ref === undefined && left.value === right.value;
