@@ -133,7 +133,12 @@ export async function mountBuildPage(
   /** The agent fields the instance lets people change. */
   editableAgentFields: readonly EditableAgentField[] = [],
   /** The reader, a plain user unless given, and the instance's answer to a save. */
-  reader: { user?: ApiUser; put?: BuildSource["writes"]["put"] } = {}
+  reader: {
+    user?: ApiUser;
+    put?: BuildSource["writes"]["put"];
+    /** Opens the kind's list instead of the asset's page, and records where the page goes. */
+    list?: { opened: { kindPath?: string; name?: string }[] };
+  } = {}
 ): Promise<HTMLElement> {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const fetchImpl: typeof fetch = async (input, init) => {
@@ -200,8 +205,10 @@ export async function mountBuildPage(
                     BuildNavigationProvider,
                     {
                       value: {
-                        location: { kindPath, name: asset.name },
-                        open: () => undefined,
+                        location: reader.list ? { kindPath } : { kindPath, name: asset.name },
+                        open: (place) => {
+                          reader.list?.opened.push(place);
+                        },
                         href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
                       }
                     },

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import type {
   ConnectionDetail,
   ConnectionOAuthStart,
@@ -214,6 +215,16 @@ export function useConnectionSource(): ConnectionSource {
             ? DISCOVERY_POLL_MS
             : false
       });
+      // A write starts a new wait: the Connection is read again at once, so what the write
+      // changed shows before the next poll.
+      const since = wait?.since;
+      const waited = useRef(since);
+      const { refetch } = query;
+      useEffect(() => {
+        if (since === waited.current) return;
+        waited.current = since;
+        refetch().catch(() => undefined);
+      }, [since, refetch]);
       // What was read stays while it is read again: the page does not blink after a test.
       if (query.data) {
         return { status: "ready", detail: query.data };
