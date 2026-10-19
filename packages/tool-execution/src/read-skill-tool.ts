@@ -104,7 +104,9 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
       if (!allowedSkillNames.has(input.name)) {
         return toolFailed(
           "not_allowed",
-          `Agent '${agentName}' is not allowed to read skill '${input.name}'`
+          context.locale === "de"
+            ? "Dieser Agent hat diesen Skill nicht in seinen Anleitungen. Eine Person, die den Agenten bearbeiten darf, kann ihn dort hinzufügen. Um den Skill zu bearbeiten, öffne eine eigene Unterhaltung über ihn und lies ihn mit den Asset-Werkzeugen. In einer geteilten Unterhaltung können diese kein anderes Asset öffnen. Es wurde nichts geändert."
+            : "This agent does not have this skill in its instructions. Someone who may edit the agent can add it there. To edit the skill, open a private conversation about it and read it with the asset tools. In a shared conversation those cannot open another asset. Nothing was changed."
         );
       }
 

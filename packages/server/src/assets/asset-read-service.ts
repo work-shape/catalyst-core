@@ -24,7 +24,8 @@ import {
   type Namespace,
   type OperationAuthorization,
   type LocaleCode,
-  type StorePage
+  type StorePage,
+  type PolicyTarget
 } from "@work-shape/catalyst-core";
 import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
 import { accessResource, decide, listedTo, readsAssetDraft, type AssetCall } from "./asset-access";
@@ -41,6 +42,8 @@ import {
 import type { AssetWorkflowOptions } from "../types";
 import { assetTitle } from "./asset-reference-labels";
 import { unavailablePublishNarrative } from "../publish-narrative/publish-narrator";
+import { createPlatformAssetPolicy } from "../platform/platform-asset-policy";
+import { visibleApproverNamesFor } from "../approvals/visible-approvers";
 
 /**
  * Who is told of an agent's pending draft: a holder of `agent.write` on it, and the holder of
@@ -61,6 +64,11 @@ export interface AssetReadHost {
   target(address: AssetAddress): Promise<AssetTarget>;
   /** A kind of a module that is off does not exist here, whatever the store still holds. */
   kind(kind: string): WorkflowAssetKind;
+  policyTargets(address: {
+    kind: string;
+    name?: string;
+    workspaceId?: string;
+  }): Promise<PolicyTarget[]>;
 }
 
 /**
@@ -296,7 +304,25 @@ export class AssetReadWorkflow {
     // What the caller may do here, decided as each write decides it, so the page offers no
     // action the instance refuses and hides none it allows (AD-4).
     const allowed = allowedOn(target.kind, call, target.resource);
+    const saveApproval =
+      target.kind.kind === "skill" &&
+      allowed.includes("write") &&
+      !isAuthenticatedServicePrincipal(call.actor) &&
+      (await createPlatformAssetPolicy(this.options, this.host).centralFloor(
+        ["assets.put"],
+        address
+      )) === "approval"
+        ? {
+            approverNames: await visibleApproverNamesFor(
+              this.options,
+              call.actor,
+              "operations.approve",
+              target.resource
+            )
+          }
+        : undefined;
     return {
+      ...(saveApproval ? { saveApproval } : {}),
       ...(agentStatus ?? {}),
       ...(draftSummary ? { agentDraft: draftSummary } : {}),
       id: asset.id,

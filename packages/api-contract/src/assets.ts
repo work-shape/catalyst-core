@@ -260,6 +260,12 @@ export const assetSchema = z.object({
    * published revision names no `publish`. Left out by an instance from before AD-4.
    */
   allowed: z.array(assetVerbSchema).optional(),
+  /**
+   * A save of this asset by the caller files a request and takes effect once it is approved,
+   * as the instance's policy asks. Names up to three people the caller shares a workspace with
+   * who may decide it; none where none is known. Left out where a save takes effect at once.
+   */
+  saveApproval: z.object({ approverNames: z.array(z.string()) }).optional(),
   updatedAt: timestampSchema
 });
 

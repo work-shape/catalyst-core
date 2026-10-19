@@ -29939,6 +29939,20 @@
               "$ref": "#/components/schemas/AssetVerb"
             }
           },
+          "saveApproval": {
+            "type": "object",
+            "properties": {
+              "approverNames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "approverNames"
+            ]
+          },
           "updatedAt": {
             "$ref": "#/components/schemas/Timestamp"
           }

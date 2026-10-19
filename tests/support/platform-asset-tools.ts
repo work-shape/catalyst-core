@@ -3,7 +3,8 @@ import {
   WORKFLOW_ASSET_KIND,
   asClientInstanceId,
   type AgentEditableField,
-  type ClientInstanceId
+  type ClientInstanceId,
+  type CentralPolicySetting
 } from "@work-shape/catalyst-core";
 import type { ChildProcess } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -137,7 +138,15 @@ interface AssetToolsFixture {
 export async function createAssetToolsFixture(
   agentRuns: "in_process" | "separate" = "in_process",
   editableAgentFields: AgentEditableField[] = [],
-  { filesStore = false, publishTool = false }: { filesStore?: boolean; publishTool?: boolean } = {}
+  {
+    filesStore = false,
+    publishTool = false,
+    centralPolicySettings
+  }: {
+    filesStore?: boolean;
+    publishTool?: boolean;
+    centralPolicySettings?: () => CentralPolicySetting[];
+  } = {}
 ): Promise<AssetToolsFixture> {
   // No release names `read_skill` here: the skill of a subject is readable all the same.
   const config = createTestConfig({
@@ -164,6 +173,7 @@ export async function createAssetToolsFixture(
   };
   if (publishTool) config.executionWorkspaces.enabled = true;
   config.administration.agentConfiguration.enabled = true;
+  config.administration.agentConfiguration.allowSkillEditing = true;
   config.administration.agentConfiguration.editableAgentFields = editableAgentFields;
   if (filesStore) {
     const root = await mkdtemp(join(tmpdir(), "catalyst-asset-tools-files-"));
@@ -177,6 +187,7 @@ export async function createAssetToolsFixture(
   }
   const app = await createTestInstance({
     config,
+    ...(centralPolicySettings ? { operations: { centralPolicySettings } } : {}),
     env: publishTool
       ? { CHAT_SESSION_TOKEN_SECRET: "workflow-publish-test-session-key-32-characters" }
       : {},

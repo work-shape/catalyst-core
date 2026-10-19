@@ -49,6 +49,42 @@ async function setup(server?: AccessInstanceOptions["server"]) {
 }
 
 describe("the preview of a held asset save", () => {
+  it("ACCEPT-FIX-13 C2: the skill read predicts the same approval and people before saving", async () => {
+    const { t, holding, hold, preview } = await setup();
+    const name = "kai-approval-fact";
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "skill", name },
+      payload: { config: skill(name, stored) }
+    });
+    const workspaceId = await t.sharedWorkspace("Visible approvers");
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: workspaceId,
+      userId: t.kai.id,
+      role: "member"
+    });
+    const read = async (userId = t.kai.id) =>
+      (await t.expectOk(userId, "assets.get", { params: { kind: "skill", name } })).json();
+    expect((await read()).saveApproval).toBeUndefined();
+    holding("assets.put");
+    const before = await read();
+    expect(before.saveApproval).toEqual({ approverNames: [t.admin.displayLabel] });
+    expect(before.revision).toBe(1);
+    const requestId = await hold("assets.put", "skill", name, {
+      config: skill(name, changed),
+      expectedRevision: 1
+    });
+    expect((await preview(t.kai.id, requestId)).approverNames).toEqual(
+      before.saveApproval.approverNames
+    );
+    await t.grant(t.lena.id, "skill.read", { assetId: await t.assetId("skill", name) });
+    expect((await read(t.lena.id)).saveApproval).toBeUndefined();
+    await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, status: "disabled" });
+    expect((await read()).saveApproval).toEqual({ approverNames: [] });
+    holding();
+    expect((await read()).saveApproval).toBeUndefined();
+  });
+
   it("ACCEPT-2b E4: keeps the original skill comparison after approval for requester and approver", async () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {

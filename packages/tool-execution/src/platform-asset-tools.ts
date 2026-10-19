@@ -77,6 +77,8 @@ interface PlatformAssetRead {
   shows: (typeof APP_MODES)[number];
   /** The workspace that owns the asset, by its id. Missing for an asset of the instance. */
   workspaceId?: string;
+  /** Saving this asset files a request and changes nothing until an approver decides. */
+  saveApproval?: { approverNames: string[] };
 }
 
 /** The asset an agent opened: what it read, and the name people read for the asset. */
@@ -302,6 +304,7 @@ const configSchema = z
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 const readOutputSchema = z.object({
+  saveApproval: z.object({ approverNames: z.array(z.string()) }).optional(),
   kind: z.string(),
   name: z.string(),
   config: jsonObjectSchema,
@@ -462,7 +465,7 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
         "Read the definition of an asset of the platform, such as a Workflow, an App or an agent: its config and the revision it is at.",
         `Without 'kind' and 'name' it reads the asset the conversation is about. With them it reads that asset and changes nothing: the conversation stays about what it was, and the person sees nothing beside the chat. To work on that asset, open it with ${open.name}.`,
         "It reads with the rights of the person you act for: an asset they may not read is answered as one that does not exist. A conversation shared with a workspace reads no asset but the one it is about.",
-        "Answers the draft where one differs from the published revision, and says which of the two it shows. 'publishedRevision' is the revision that runs; it is missing while nothing is published, and on a kind without drafts, such as a skill, whose saves are live at once. For an agent with a shared pending draft, a holder of agent.write reads its draft content: 'revision' and 'publishedRevision' name the live revision and 'draftRevision' names the draft, null when none is pending.",
+        "Answers the draft where one differs from the published revision, and says which of the two it shows. 'publishedRevision' is the revision that runs; it is missing while nothing is published, and on a kind without drafts, such as a skill. When saveApproval is present, this person's save files a request and changes nothing until approval; name its approverNames. Without it, an authorized save applies immediately. For an agent with a shared pending draft, a holder of agent.write reads its draft content: 'revision' and 'publishedRevision' name the live revision and 'draftRevision' names the draft, null when none is pending.",
         "Read before you change anything, and send the 'revision' you read as 'expectedRevision' when you save. For an agent also send 'draftRevision' as 'expectedDraftRevision', null where no draft was pending."
       ].join(" "),
       inputSchema: readInputSchema,
@@ -534,8 +537,8 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
         "A draft save changes nothing that runs: it publishes nothing and starts nothing, and the published revision stays what it is until a person publishes the draft. That is why it runs on your call without a confirmation, unless an administrator set it stricter. When the person asks to publish an App or Workflow, call assets.publish to offer their confirmation; nothing goes live before their click.",
         "Send the whole config and, as 'expectedRevision', the revision you read. A kind written as files, such as a Data Store, is sent as 'files' instead: every file of the asset, its manifest among them, as a read of it lists them. Answers the new draft revision; or the issues the definition is refused for, with nothing saved; or REVISION_CONFLICT where somebody saved since you read: read again, apply your change to what is there now and save with the new revision.",
         "For an existing agent, every Build conversation and author shares one pending draft. The live agent stays unchanged until a person publishes the draft. Send the live 'revision' as 'expectedRevision' and the 'draftRevision' as 'expectedDraftRevision', null when no draft is pending. A draft conflict identifies its current revision, last author and change time: read again and apply your change to the shared draft before saving.",
-        "Creating an agent or skill is live at once and waits for the person's confirmation of the exact call. Before Allow nothing is written. Report the workspaceId from the successful result as the actual owner; a name prefix never selects an owner or workspace. A new agent stays unavailable: direct the person to Studio > Agents > the agent > Available in > Selected workspaces, select the requested workspace and Save changes (German: Studio > Agenten > Verfügbar in > Ausgewählte Arbeitsbereiche > Änderungen speichern). Never report that it is available before this step.",
-        "A skill that exists is refused: a save of it would be live at once. Say what you would change, and the person changes it on the skill's page.",
+        "Creating an agent or skill normally waits for the person's confirmation of the exact call. A configured approval policy can instead file a request. Nothing is written before the required decision, and it is live only after a successful save. Report the workspaceId from the successful result as the actual owner; a name prefix never selects an owner or workspace. A new agent stays unavailable: direct the person to Studio > Agents > the agent > Available in > Selected workspaces, select the requested workspace and Save changes (German: Studio > Agenten > Verfügbar in > Ausgewählte Arbeitsbereiche > Änderungen speichern). Never report that it is available before this step.",
+        "A skill that exists is refused: the person changes it on the skill's page. Read it first and explain the exact outcome in saveApproval, including its approverNames when approval is required. Say what you would change, never that it has already changed.",
         `To make a new asset, leave 'expectedRevision' out and name its 'kind' and 'name'. That save creates a Workflow or a Data Store as a draft (a Data Store with its first migration among its files), or an agent or a skill. In a conversation that is about no asset yet it becomes the asset the conversation is about and the person is taken to its page. An agent made so is offered to nobody until a person makes it available on its page. Read ${PLATFORM_ASSET_TOOLS.get.name} of a similar asset first where you do not know the shape of the kind's config. For a new agent leave model settings out unless the person explicitly requests a model change; never copy modelBindingId, provider or model from the example. Add read_skill whenever skillNames is nonempty.`,
         "You may also create one while the conversation is about another asset, such as the Workflow or the Data Store an App needs: say first what you create and why, in a sentence such as \"Dafür legen wir zuerst den Workflow an.\" Such a draft stays beside the asset the conversation is about: the answer has 'besideSubject', the conversation stays about that asset and the person stays on the page they are on, offered a link to the new draft. Build what an App needs first and the App last.",
         "Without a new asset to make, the save works on the asset this conversation is about, naming none: open an asset that existed before with " +

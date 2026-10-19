@@ -11,7 +11,8 @@ import {
   type SkillConfig,
   type ToolExecutionContext,
   type ToolExecutionRequest,
-  type ToolOperationRunner
+  type ToolOperationRunner,
+  type LocaleCode
 } from "@work-shape/catalyst-core";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { createTestToolRunner } from "./support/tool-runner";
@@ -43,6 +44,38 @@ const packagedSkill: SkillConfig = {
 };
 
 describe("client skills", () => {
+  it.each(["de", "en"] as const)(
+    "ACCEPT-FIX-13 C2: explains an unoffered skill read and recovery in %s",
+    async (locale) => {
+      const execution = createExecution({
+        agents: [agent("allowed_agent", [])],
+        skills: [supportSkill]
+      });
+      const result = await executeReadSkill(
+        execution,
+        request("allowed_agent", "support_review"),
+        locale
+      );
+      expect(result).toMatchObject({
+        status: "failed",
+        error: {
+          code: "not_allowed",
+          message: expect.stringContaining(
+            locale === "de"
+              ? "Dieser Agent hat diesen Skill nicht"
+              : "This agent does not have this skill"
+          )
+        }
+      });
+      if (result.status !== "failed") throw new Error("Expected skill refusal");
+      expect(result.error.message).toContain(
+        locale === "de" ? "eigene Unterhaltung" : "private conversation"
+      );
+      expect(result.error.message).toContain(
+        locale === "de" ? "Es wurde nichts geändert" : "Nothing was changed"
+      );
+    }
+  );
   it("rejects legacy agent and skill config-file keys with migration guidance", async () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-catalyst-skills-"));
     await mkdir(join(root, "config"));
@@ -99,7 +132,7 @@ describe("client skills", () => {
       status: "failed",
       error: {
         code: "not_allowed",
-        message: "Agent 'test_agent' is not allowed to read skill 'platform-docs'"
+        message: expect.stringContaining("This agent does not have this skill")
       }
     });
   });
@@ -256,8 +289,13 @@ function request(
   };
 }
 
-async function executeReadSkill(execution: ToolOperationRunner, toolRequest: ToolExecutionRequest) {
+async function executeReadSkill(
+  execution: ToolOperationRunner,
+  toolRequest: ToolExecutionRequest,
+  locale: LocaleCode = "en"
+) {
   const context: ToolExecutionContext = {
+    locale,
     clientInstanceId: asClientInstanceId("test-client"),
     correlationId: "corr_test",
     user: {

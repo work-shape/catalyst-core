@@ -127,7 +127,8 @@ export class AssetWorkflow {
     });
     this.reads = new AssetReadWorkflow(options, {
       target: (address) => this.target(address),
-      kind: (kind) => this.kind(kind)
+      kind: (kind) => this.kind(kind),
+      policyTargets: (address) => this.policyTargets(address)
     });
     this.drafts = new AssetDraftWorkflow(options, {
       target: (address) => this.target(address),

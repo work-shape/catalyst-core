@@ -32,6 +32,37 @@ import {
 } from "./support/platform-asset-tools";
 
 describe("a conversation about a Workflow", () => {
+  it("ACCEPT-FIX-13 C2: the agent's skill read carries the same save-approval fact as the skill page", async () => {
+    let holding = false;
+    const t = await createAssetToolsFixture("in_process", [], {
+      centralPolicySettings: () =>
+        holding ? [{ operation: "assets.put", value: "approval", assetKind: "skill" }] : []
+    });
+    const named = { kind: "skill", name: "approval-fact" };
+    await t.ok(
+      t.app.call("assets.put", {
+        params: named,
+        payload: {
+          config: {
+            name: named.name,
+            title: "Approval fact",
+            description: "A synthetic skill",
+            content: "# Skill"
+          },
+          expectedRevision: null
+        }
+      })
+    );
+    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(named))).json());
+    holding = true;
+    const page = z
+      .object({ saveApproval: z.object({ approverNames: z.array(z.string()) }) })
+      .parse((await t.ok(t.app.call("assets.get", { params: named }))).json());
+    const read = await t.call(id, "platform.assets.get");
+    expect(read).toMatchObject({ saveApproval: page.saveApproval });
+    expect(page.saveApproval.approverNames).toEqual([]);
+  });
+
   beforeAll(() => {
     // The demo provider paces every word of its tool-result echo by 20 ms. These tests
     // exercise asset tools, not token animation: keep its real completion, without pacing.

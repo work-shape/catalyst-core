@@ -368,6 +368,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       name: read.name,
       config: proposed?.config ?? read.config ?? {},
       revision,
+      ...(read.saveApproval ? { saveApproval: read.saveApproval } : {}),
       ...(asset.kind === "agent" ? { draftRevision: proposed?.revision ?? null } : {}),
       ...(published === undefined ? {} : { publishedRevision: published }),
       shows: !proposed && published !== undefined && published === revision ? "published" : "draft",

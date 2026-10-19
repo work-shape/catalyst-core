@@ -1,5 +1,9 @@
-import { POLICY_VALUES, resolvePolicy, type PolicyValue } from "@work-shape/catalyst-core";
-import type { AssetWorkflow } from "../assets/asset-service";
+import {
+  POLICY_VALUES,
+  resolvePolicy,
+  type PolicyValue,
+  type PolicyTarget
+} from "@work-shape/catalyst-core";
 import type { AssetWorkflowOptions } from "../types";
 
 type AssetAddress = { kind: string; name?: string; workspaceId?: string };
@@ -8,7 +12,12 @@ const stricterOf = (left: PolicyValue | undefined, right: PolicyValue): PolicyVa
   left === undefined || POLICY_VALUES.indexOf(right) > POLICY_VALUES.indexOf(left) ? right : left;
 
 /** Policy of the operations projected by the Build Agent, with the live-write floor. */
-export function createPlatformAssetPolicy(options: AssetWorkflowOptions, workflow: AssetWorkflow) {
+export function createPlatformAssetPolicy(
+  options: AssetWorkflowOptions,
+  workflow: {
+    policyTargets(address: AssetAddress): Promise<PolicyTarget[]>;
+  }
+) {
   /**
    * The strictest value an administrator set on any of `operations` for the asset at
    * `address`, read as the value that was set: a tool's own mode stands where no setting names

@@ -3,7 +3,8 @@ import {
   authenticatedUserFromRecord,
   type ApprovalRequest,
   type ApprovalRequestHandler,
-  type AuthenticatedUser
+  type AuthenticatedUser,
+  type AccessResource
 } from "@work-shape/catalyst-core";
 import { resourceOfRequest } from "./approval-request-service";
 import type { ChatServerOptions } from "../types";
@@ -17,10 +18,25 @@ const APPROVER_WORKSPACES_MAX = 20;
 
 /** Only co-members the requester can see are considered; every named person's right is current. */
 export async function visibleApproverNames(
-  options: ChatServerOptions,
+  options: Pick<ChatServerOptions, "authorizer" | "clientInstanceId" | "stores">,
   user: AuthenticatedUser,
   handler: ApprovalRequestHandler,
   request: ApprovalRequest
+): Promise<string[]> {
+  return visibleApproverNamesFor(
+    options,
+    user,
+    handler.requiredPermission,
+    resourceOfRequest(handler, request)
+  );
+}
+
+/** The same deciding people before a request exists, for an authorized save preview. */
+export async function visibleApproverNamesFor(
+  options: Pick<ChatServerOptions, "authorizer" | "clientInstanceId" | "stores">,
+  user: AuthenticatedUser,
+  permission: string,
+  resource?: AccessResource
 ): Promise<string[]> {
   if (!options.authorizer) return [];
   const clientInstanceId = options.clientInstanceId;
@@ -39,7 +55,7 @@ export async function visibleApproverNames(
     // Workspace managers are the most useful first people to ask, but need the approval right too.
     members.sort((a, b) => Number(a.role === "member") - Number(b.role === "member"));
     for (const member of members) {
-      if (member.userId !== request.requestedBy.id) candidates.add(member.userId);
+      if (member.userId !== user.id) candidates.add(member.userId);
       if (candidates.size >= APPROVER_CANDIDATES_MAX) break;
     }
     if (candidates.size >= APPROVER_CANDIDATES_MAX) break;
@@ -60,7 +76,7 @@ export async function visibleApproverNames(
       identity: { authSource: "approval-help", externalUserId: record.id }
     });
     const access = await options.authorizer.forActor(actor);
-    if (access.authorize(handler.requiredPermission, resourceOfRequest(handler, request)).allowed) {
+    if (access.authorize(permission, resource).allowed) {
       if (!names.includes(record.displayLabel)) names.push(record.displayLabel);
       if (names.length === APPROVER_NAMES_MAX) break;
     }
