@@ -1,4 +1,8 @@
-import { checkWorkflowOwnRights, publishWorkflowOwnAccount } from "./workflow-owned-account";
+import {
+  checkWorkflowOwnRights,
+  publishWorkflowOwnAccount,
+  type WorkflowOwnRightsModules
+} from "./workflow-owned-account";
 import { checkWorkflowPersonContexts } from "./workflow-person-context";
 import {
   getSubjectUserId,
@@ -130,6 +134,8 @@ export function createWorkflowAssetKind(
       | undefined;
     /** The clock of the engine, for a test of due times. */
     now?: () => Date;
+    /** The modules of the instance: a right of a kind whose module is off is refused. */
+    modules?: WorkflowOwnRightsModules;
     /**
      * The ceilings of release config and the step slots, which a publish holds a Workflow's
      * `limits` to and the publish question measures a raise by.
@@ -322,6 +328,7 @@ export function createWorkflowAssetKind(
         manifest: result.manifest,
         actor,
         access,
+        ...(options.modules ? { modules: options.modules } : {}),
         rights: await resolveWorkflowNeededRights(
           { ...options, configAssets: stores.configAssets, registry: () => registryFor(stores) },
           result.manifest
@@ -456,7 +463,8 @@ export function createWorkflowAssetKind(
         checkWorkflowOwnRights(
           result.manifest,
           await resolveWorkflowNeededRights(options, result.manifest),
-          input
+          input,
+          options.modules
         );
       } else
         await createWorkflowLiveCheck(

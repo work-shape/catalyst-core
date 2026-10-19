@@ -288,6 +288,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
               apiAccess: stores.apiAccess,
               configAssets: stores.configAssets,
               access: stores.access,
+              modules,
               limits: {
                 ceilings: workflowLimitCeilingsOf(config.workflows),
                 stepSlots: config.workflows.stepSlots

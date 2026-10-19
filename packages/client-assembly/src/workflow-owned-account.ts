@@ -5,21 +5,32 @@ import {
   asUserId,
   isAuthenticatedServicePrincipal,
   isPrincipalGrantableAction,
+  moduleOffError,
   requireHeldRights,
   workflowNeededRightResource,
   type ActorAccess,
   type AuthenticatedIdentity,
   type ClientInstanceId,
+  type ModuleSnapshot,
   type PlatformStores,
   type WorkflowManifest,
   type WorkflowNeededRight
 } from "@work-shape/catalyst-core";
+import { kindOfAction, maySeeAsset } from "@work-shape/catalyst-server";
 
-/** AP-10: only use rights on existing, named assets become the Workflow's grants. */
+/** The modules of the instance, asked whether the kind of a right is switched off. */
+export type WorkflowOwnRightsModules = Pick<ModuleSnapshot, "offModuleOf">;
+
+/**
+ * AP-10: only use rights on existing, named assets become the Workflow's grants, asked by the
+ * rules of the grant write (`checkPrincipalGrant`): a use right of a kind whose module is on,
+ * on an asset the publisher may read (`not_visible`) and holds the right on.
+ */
 export function checkWorkflowOwnRights(
   manifest: WorkflowManifest,
   rights: readonly WorkflowNeededRight[],
-  caller: { actor: AuthenticatedIdentity; access: ActorAccess }
+  caller: { actor: AuthenticatedIdentity; access: ActorAccess },
+  modules?: WorkflowOwnRightsModules
 ): void {
   if (isAuthenticatedServicePrincipal(caller.actor))
     throw new AppError("FORBIDDEN", "A person publishes a Workflow", { reason: "user_only" });
@@ -33,6 +44,8 @@ export function checkWorkflowOwnRights(
           action: right.action
         }
       );
+    const module = modules?.offModuleOf("kind", kindOfAction(right.action));
+    if (module !== undefined) throw moduleOffError(module);
     if (right.asset.assetId === undefined)
       throw new AppError(
         "VALIDATION_FAILED",
@@ -40,6 +53,15 @@ export function checkWorkflowOwnRights(
         {
           reason: "invalid_scope",
           action: right.action
+        }
+      );
+    if (!maySeeAsset(caller.access, workflowNeededRightResource(right)))
+      throw new AppError(
+        "FORBIDDEN",
+        "You may not read this resource, so you cannot give a right on it",
+        {
+          reason: "not_visible",
+          action: `${right.asset.kind}.read`
         }
       );
   }
@@ -63,6 +85,7 @@ export async function publishWorkflowOwnAccount(
     rights: readonly WorkflowNeededRight[];
     actor: AuthenticatedIdentity;
     access: ActorAccess;
+    modules?: WorkflowOwnRightsModules;
   }
 ): Promise<void> {
   const { clientInstanceId, assetId, manifest, rights } = input;
@@ -76,7 +99,7 @@ export async function publishWorkflowOwnAccount(
       });
     return;
   }
-  checkWorkflowOwnRights(manifest, rights, input);
+  checkWorkflowOwnRights(manifest, rights, input, input.modules);
   const principal =
     existing ??
     (await stores.apiAccess.createServicePrincipal({

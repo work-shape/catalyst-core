@@ -2,7 +2,13 @@ import { prepareSyncPrefix, syncAssetsAtPrefix } from "./support/asset-operation
 import { z } from "zod";
 import { workflowRunPrincipal } from "@work-shape/catalyst-workflows";
 import { afterEach, describe, expect, it } from "vitest";
-import { type OperationDefinition, type WorkflowManifest } from "@work-shape/catalyst-core";
+import {
+  asClientInstanceId,
+  createActorAccess,
+  type OperationDefinition,
+  type WorkflowManifest
+} from "@work-shape/catalyst-core";
+import { checkWorkflowOwnRights } from "@work-shape/catalyst-client-assembly";
 import { clientInstanceId } from "./support/access-instance";
 import { runSchema, workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
 
@@ -38,7 +44,14 @@ async function ready() {
   open = t;
   await t.seedCrm();
   t.setBehaviour(async () => ({ value: "customers" }));
-  for (const action of ["workflow.read", "workflow.write", "workflow.publish", "workflow.use"])
+  // A publisher gives the account a right only on what it may read (RIGHTS-1, `not_visible`).
+  for (const action of [
+    "workflow.read",
+    "workflow.write",
+    "workflow.publish",
+    "workflow.use",
+    "connection.read"
+  ])
     await t.allow({ kind: "user", id: t.kai.id }, action);
   return t;
 }
@@ -52,8 +65,8 @@ async function save(
     payload: { config: { name: address.name, manifest: definition }, expectedRevision }
   });
 }
-function publish(t: WorkflowFixture, revision = 1) {
-  return t.call(t.kai.id, "assets.publish", { params: address, payload: { revision } });
+function publish(t: WorkflowFixture, revision = 1, userId: string = t.kai.id) {
+  return t.call(userId, "assets.publish", { params: address, payload: { revision } });
 }
 async function owned(t: WorkflowFixture) {
   const assetId = await t.assetId("workflow", address.name);
@@ -107,7 +120,6 @@ describe("the Workflow's own account (LIVE-1)", () => {
 
   it("refuses a publisher who lacks the transferable right and creates nothing", async () => {
     const t = await ready();
-    await t.allow({ kind: "user", id: t.kai.id }, "connection.read");
     await save(t);
     const refused = await publish(t);
     expect(refused.statusCode).toBe(403);
@@ -119,9 +131,82 @@ describe("the Workflow's own account (LIVE-1)", () => {
     ).toBeUndefined();
   });
 
+  it("refuses a publisher who may use the Connection but not read it, and creates nothing", async () => {
+    const t = await ready();
+    const crm = await t.assetId("connection", "crm");
+    await t.allow({ kind: "user", id: t.kai.id }, "connection.use");
+    await save(t);
+    await t.grant(t.kai.id, "connection.read", { assetId: crm }, "deny");
+    const refused = await publish(t);
+    expect(refused.statusCode, refused.body).toBe(403);
+    expect(refused.json()).toMatchObject({
+      error: { details: { reason: "not_visible", action: "connection.read" } }
+    });
+    expect(await owned(t)).toBeUndefined();
+    expect(
+      (await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address }))
+        ?.publishedRevision
+    ).toBeUndefined();
+  });
+
+  it("asks a republish by another person that person's rights", async () => {
+    const t = await ready();
+    await t.allow({ kind: "user", id: t.kai.id }, "connection.use");
+    for (const action of ["workflow.read", "workflow.write", "workflow.publish", "connection.read"])
+      await t.allow({ kind: "user", id: t.lena.id }, action);
+    await save(t);
+    expect((await publish(t)).statusCode).toBe(200);
+    const principal = await owned(t);
+    if (!principal) throw new Error("missing owned account");
+    const refused = await publish(t, 1, t.lena.id);
+    expect(refused.statusCode, refused.body).toBe(403);
+    expect(refused.json()).toMatchObject({ error: { details: { action: "connection.use" } } });
+    expect(await grants(t, principal.id)).toHaveLength(1);
+    await save(t, manifest(false), 1);
+    const without = await publish(t, 2, t.lena.id);
+    expect(without.statusCode, without.body).toBe(200);
+    expect((await owned(t))?.id).toBe(principal.id);
+    expect(await grants(t, principal.id)).toEqual([]);
+  });
+
+  it("refuses a right of a kind whose module is off", () => {
+    const instance = asClientInstanceId("owned-account-module-off");
+    const actor = {
+      id: "kai",
+      externalUserId: "kai",
+      displayLabel: "Kai",
+      roles: ["user" as const],
+      permissionRefs: [],
+      clientInstanceId: instance,
+      authSource: "test"
+    };
+    const access = createActorAccess(
+      { kind: "user", id: "kai", clientInstanceId: instance, roles: ["user"], permissionRefs: [] },
+      { holderActive: true, grants: [] }
+    );
+    const right = {
+      action: "data_store.insert",
+      asset: { kind: "data_store", name: "orders", assetId: "asset-orders" },
+      steps: ["load"],
+      neededFor: "publish" as const
+    };
+    expect(() =>
+      checkWorkflowOwnRights(
+        manifest(),
+        [right],
+        { actor, access },
+        {
+          offModuleOf: (contribution, name) =>
+            contribution === "kind" && name === "data_store" ? "dataStores" : undefined
+        }
+      )
+    ).toThrow(
+      expect.objectContaining({ details: expect.objectContaining({ module: "dataStores" }) })
+    );
+  });
+
   it("refuses an administration right on the owned account even when the publisher holds it", async () => {
     const t = await ready();
-    await t.allow({ kind: "user", id: t.kai.id }, "connection.read");
     await t.allow({ kind: "user", id: t.kai.id }, "connection.write");
     const base = await t.operationCalls.registry.resolve("connection.crm.echo");
     if (!base) throw new Error("missing CRM operation");

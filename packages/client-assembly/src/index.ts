@@ -64,6 +64,7 @@ export {
   createWorkflowAssetKind,
   type PublishedWorkflow
 } from "./workflow-assets";
+export { checkWorkflowOwnRights, type WorkflowOwnRightsModules } from "./workflow-owned-account";
 export {
   assertSandboxMemoryFitsHost,
   sandboxMemoryNeeded,
