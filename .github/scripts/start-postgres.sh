@@ -42,9 +42,13 @@ cores=$(nproc)
 workers=$(( cores > 1 ? cores - 1 : 1 ))
 max_connections=$(( workers * (40 + 1) + 3 ))
 
-docker run --detach --name "$name" \
+# A test database keeps nothing: in memory and without durability, the settings of
+# scripts/test-postgres-server.mjs.
+docker run --detach --name "$name" --tmpfs /var/lib/postgresql/data \
   --env "POSTGRES_USER=$user" --env "POSTGRES_PASSWORD=$password" --env "POSTGRES_DB=$database" \
-  --publish "$port:5432" "$image" -c "max_connections=$max_connections" >/dev/null
+  --publish "$port:5432" "$image" -c "max_connections=$max_connections" \
+  -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c checkpoint_timeout=1d \
+  -c max_wal_size=4GB -c shared_buffers=512MB >/dev/null
 
 # Over TCP: the server that runs the first-start scripts listens on the socket only, and the
 # database is ready when the one after it answers on the port.

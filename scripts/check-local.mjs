@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // Runs `pnpm check` in the current repository against a container of its own of the instance's
-// Postgres image, the one docker/postgres/pinned-image names.
+// Postgres image, the one docker/postgres/pinned-image names, run as scripts/test-postgres-server.mjs
+// says: in memory and without durability.
 // The container gets a unique name and a free local port, and is removed when the check
 // ends, fails or is interrupted.
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { connectionsForWorkers, defaultTestWorkers } from "./test-postgres-capacity.mjs";
+import { testPostgresDockerOptions, testPostgresServerArguments } from "./test-postgres-server.mjs";
 
 const image = readFileSync(new URL("../docker/postgres/pinned-image", import.meta.url), "utf8")
   .split("\n")
@@ -60,9 +62,11 @@ const started = docker(
   // An empty host port lets Docker choose a free one.
   "--publish",
   "127.0.0.1::5432",
+  ...testPostgresDockerOptions(),
   image,
   "-c",
-  `max_connections=${maxConnections}`
+  `max_connections=${maxConnections}`,
+  ...testPostgresServerArguments()
 );
 if (started.status !== 0) {
   remove();

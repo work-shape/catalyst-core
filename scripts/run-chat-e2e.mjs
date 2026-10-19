@@ -9,6 +9,10 @@ import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { balanceTests, reportTests } from "./e2e-duration-shards.mjs";
+import {
+  TEST_POSTGRES_DATA_DIRECTORY,
+  testPostgresServerArguments
+} from "./test-postgres-server.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -272,20 +276,27 @@ async function startPostgres() {
     console.log(`\n[e2e] using the Postgres provided on ${e2eHost}:${e2ePostgresPort}`);
     return;
   }
-  if (e2eWorktree) {
-    composeOverrideDir = await mkdtemp(resolve(tmpdir(), "catalyst-e2e-compose-"));
-    const overridePath = resolve(composeOverrideDir, "worktree.json");
-    // Compose accepts JSON as YAML. Escape dollars so interpolation preserves the exact label.
-    const labels = { "catalyst.worktree": e2eWorktree.replaceAll("$", () => "$$") };
-    await writeFile(
-      overridePath,
-      JSON.stringify({
-        services: { postgres: { labels } },
-        volumes: { "postgres-data": { labels } }
-      })
-    );
-    composeArgs.push("-f", overridePath);
-  }
+  composeOverrideDir = await mkdtemp(resolve(tmpdir(), "catalyst-e2e-compose-"));
+  const overridePath = resolve(composeOverrideDir, "e2e.json");
+  // Compose accepts JSON as YAML. Escape dollars so interpolation preserves the exact label.
+  const labels = e2eWorktree
+    ? { "catalyst.worktree": e2eWorktree.replaceAll("$", () => "$$") }
+    : undefined;
+  // The run's database keeps nothing (scripts/test-postgres-server.mjs): the data directory's
+  // mount becomes memory, since Compose merges a service's volumes by their target.
+  const postgresService = {
+    ...(labels && { labels }),
+    command: testPostgresServerArguments(),
+    volumes: [{ type: "tmpfs", target: TEST_POSTGRES_DATA_DIRECTORY }]
+  };
+  await writeFile(
+    overridePath,
+    JSON.stringify({
+      services: { postgres: postgresService },
+      ...(labels && { volumes: { "postgres-data": { labels } } })
+    })
+  );
+  composeArgs.push("-f", overridePath);
   const composeEnv = {
     ...process.env,
     COMPOSE_PROJECT_NAME: e2eComposeProject,

@@ -20,6 +20,10 @@ import { execFileSync } from "node:child_process";
 import { sourceFingerprint, treeHash } from "./fingerprints.mjs";
 import { hash, LIMITS, validateReceipt, parsePinnedImage } from "./safety.mjs";
 import { until } from "./processes.mjs";
+import {
+  testPostgresDockerOptions,
+  testPostgresServerArguments
+} from "../test-postgres-server.mjs";
 
 const RESERVED_PORTS = new Set([
   4100, 4101, 4111, 5174, 5373, 5374, 4373, 4374, 55373, 55374, 55434, 9091
@@ -319,9 +323,11 @@ export async function coldStack(root, folder, supervisor, deadline, choice) {
       "POSTGRES_PASSWORD",
       "-p",
       `127.0.0.1:${ports.postgres}:5432`,
+      ...testPostgresDockerOptions(),
       image,
       "-c",
-      "max_connections=618"
+      "max_connections=618",
+      ...testPostgresServerArguments()
     ],
     "pinned Postgres",
     { ...minimalEnv(), POSTGRES_PASSWORD: secrets.postgres }
