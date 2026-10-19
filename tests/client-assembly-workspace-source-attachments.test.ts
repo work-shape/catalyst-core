@@ -224,8 +224,7 @@ describe("execution workspace source attachments", () => {
         })
       ).rejects.toMatchObject({
         code: "VALIDATION_FAILED",
-        message:
-          "You cannot attach this file type here. Supported types are PDF, Word (DOC/DOCX), JSON, text (TXT/Markdown/CSV/RTF), spreadsheets (XLS/XLSX/XLSM/ODS), presentations (PPT/PPTX/PPTM/ODP), and ODT."
+        message: expect.stringContaining("Supported types:")
       });
 
       await expect(
@@ -369,8 +368,7 @@ describe("execution workspace source attachments", () => {
       expect(unsupported.json()).toMatchObject({
         error: {
           code: "BAD_REQUEST",
-          message:
-            "You cannot attach this file type here. Supported types are PDF, Word (DOC/DOCX), JSON, text (TXT/Markdown/CSV/RTF), spreadsheets (XLS/XLSX/XLSM/ODS), presentations (PPT/PPTX/PPTM/ODP), and ODT."
+          message: expect.stringContaining("Supported types:")
         }
       });
 

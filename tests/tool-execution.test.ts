@@ -278,6 +278,45 @@ describe("an agent's tool call as an operation", () => {
     expect(runs).toEqual([]);
   });
 
+  it.each(["knowledge.search", "knowledge.add_files"])(
+    "localizes unreadable input for %s before dispatch",
+    async (tool) => {
+      const { runTool, runs } = setup();
+      for (const locale of ["en", "de"] as const) {
+        for (const [code, english, german] of [
+          [
+            "invalid_json",
+            "Tool input must be valid JSON",
+            "Die Eingabe muss ein gültiges JSON-Objekt sein."
+          ],
+          [
+            "invalid_text",
+            "Text cannot be stored",
+            "Die Eingabe enthält ein NUL-Zeichen oder ein halbes Surrogatpaar, das sich nicht speichern lässt. Sende den Aufruf ohne es noch einmal."
+          ],
+          ["unknown", "Unreadable input", "Die Eingabe für diesen Aufruf ist nicht lesbar."]
+        ] as const) {
+          const result = await runTool(
+            request(tool, {}),
+            { ...context(), locale },
+            {
+              unreadableInput: { code, message: english }
+            }
+          );
+          expect(result).toMatchObject({
+            status: "failed",
+            error: {
+              code: "validation_failed",
+              message: locale === "de" ? german : english
+            }
+          });
+        }
+      }
+      expect(runs).toEqual([]);
+      expect(executed).toEqual([]);
+    }
+  );
+
   it("answers an input that could not be read with what the reader said", async () => {
     const { runTool } = setup();
     const result = await runTool(request("demo.echo", {}), context(), {

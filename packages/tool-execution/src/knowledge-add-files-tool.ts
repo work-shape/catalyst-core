@@ -1,3 +1,4 @@
+import { unreadableInputMessage } from "./unreadable-input";
 import {
   type ToolExecutionRequest,
   type RuntimeCallContext,
@@ -65,7 +66,12 @@ export async function runKnowledgeAddFiles(
   run: ToolOperationRunner
 ): Promise<ToolExecutionResult | ToolDecisionWait> {
   const parsed = knowledgeAddFilesInput.safeParse(request.input);
-  if (!parsed.success || options.unreadableInput)
+  if (options.unreadableInput)
+    return failed(
+      "validation_failed",
+      unreadableInputMessage(options.unreadableInput, context.locale)
+    );
+  if (!parsed.success)
     return failed(
       "validation_failed",
       "Name a Knowledge Base and conversationId/fileId pairs under files."

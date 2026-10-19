@@ -1,3 +1,4 @@
+import { unreadableInputMessage } from "./unreadable-input";
 import { z } from "zod";
 import {
   fuseByReciprocalRank,
@@ -94,7 +95,10 @@ export async function runKnowledgeSearch(
   takeRefs: (runId: AgentRunId, count: number) => number
 ): Promise<ToolExecutionResult> {
   if (options?.unreadableInput) {
-    return failed("validation_failed", options.unreadableInput.message);
+    return failed(
+      "validation_failed",
+      unreadableInputMessage(options.unreadableInput, context.locale)
+    );
   }
   const parsed = searchToolInputSchema.safeParse(request.input);
   if (!parsed.success) {
