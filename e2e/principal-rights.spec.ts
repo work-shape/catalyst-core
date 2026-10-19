@@ -199,8 +199,8 @@ test("a superadmin gives a service principal a Connection, is refused one that i
     await test.step("the Connection's page lists the principal beside the person, told apart, and links to it", async () => {
       await page.goto(`/build/connections/${crm.name}`);
       const access = page.locator("#access");
-      await expect(access.getByRole("heading", { name: "Who may use it" })).toBeVisible();
-      const holders = access.getByRole("list", { name: "Who may use it" });
+      await expect(access.getByRole("heading", { name: "Additional use rights" })).toBeVisible();
+      const holders = access.getByRole("list", { name: "Additional use rights" });
       const personRow = holders.locator('[data-holder-kind="person"]');
       const service = holders.locator('[data-holder-kind="service_principal"]');
       await expect(personRow).toHaveCount(1);
@@ -273,7 +273,7 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await page.goto(`/build/connections/${crm.name}`);
       await expect(page.getByRole("heading", { name: "Sample CRM", level: 1 })).toBeVisible();
       const access = page.locator("#access");
-      await expect(access.getByRole("heading", { name: "Who may use it" })).toBeVisible();
+      await expect(access.getByRole("heading", { name: "Additional use rights" })).toBeVisible();
       await expect(access.locator('[data-holder-kind="person"]')).toHaveCount(1);
       // RIGHTS-1a: the role holds `service_principals.manage`, so the list shows principals.
       await expect(access.locator('[data-holder-kind="service_principal"]')).toHaveCount(1);

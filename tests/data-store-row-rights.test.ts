@@ -2,11 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   ROLE_DEFAULT_ACTIONS,
   asUserId,
+  asCollaborationWorkspaceId,
+  createPlatformId,
   type AuthenticatedUser,
   type DataStoreRecord,
   type JsonObject
 } from "@work-shape/catalyst-core";
-import { runOperation } from "@work-shape/catalyst-tool-execution";
+import {
+  createToolOperationRunner,
+  ToolRegistry,
+  runOperation
+} from "@work-shape/catalyst-tool-execution";
 import {
   clientInstanceId,
   useDataStoreInstance,
@@ -152,6 +158,147 @@ describe("Data Store row rights for people", () => {
     const denied = await on("two");
     expect(denied.statusCode).toBe(403);
     expect(denied.json()).toMatchObject({ error: { details: { action: "data_store.insert" } } });
+  });
+
+  it("uses the conversation workspace for an agent's policy, approval and run on another workspace's store (AVAIL-1b)", async () => {
+    const world = await start(true, "allow", {
+      enabled: true,
+      defaultUserId: "user-1",
+      users: [
+        ...users,
+        ...["owner-approver", "caller-approver", "instance-approver"].map((id) => ({
+          id,
+          externalUserId: id,
+          displayLabel: id,
+          roles: ["user"]
+        }))
+      ]
+    });
+    const actor = await person(world, "cross-workspace", ["user"]);
+    const ownerResponse = await world.api.call("workspaces.create", {
+      payload: { name: "Store owner" }
+    });
+    const callerResponse = await world.api.call("workspaces.create", {
+      payload: { name: "Conversation" }
+    });
+    expect(ownerResponse.statusCode).toBe(200);
+    expect(callerResponse.statusCode).toBe(200);
+    const owner = asCollaborationWorkspaceId(ownerResponse.json<{ id: string }>().id);
+    const caller = asCollaborationWorkspaceId(callerResponse.json<{ id: string }>().id);
+    const store = await makeStore(world, "cross-workspace", owner);
+    const admin = await person(world, "cross-admin", ["user", "admin", "superadmin"]);
+    await world.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: caller,
+      userId: asUserId(actor.id),
+      role: "member"
+    });
+    await world.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: actor.id,
+      action: "data_store.insert",
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: store.id,
+      grantedBy: asUserId(admin.id)
+    });
+    const conversation = await world.stores.conversations.createConversation({
+      clientInstanceId,
+      collaborationWorkspaceId: caller,
+      createdByUserId: actor.id,
+      createdByExternalUserId: actor.externalUserId,
+      title: "Cross workspace",
+      visibility: "private",
+      retainedUntil: "2099-01-01T00:00:00.000Z"
+    });
+    const operation = "data_store.cross-workspace.insert";
+    const source = required(world.execution.modulesStarted.dataToolSources[0]);
+    const base = world.execution.operationCalls.deps;
+    const runner = createToolOperationRunner(
+      {
+        ...base,
+        agentToolNames: async () => [operation],
+        policy: {
+          ...base.policy,
+          centralSettings: () => [
+            { operation, value: "deny", workspaceId: owner },
+            { operation, value: "approval", workspaceId: caller }
+          ]
+        }
+      },
+      new ToolRegistry({ tools: [] }),
+      { source }
+    );
+    const result = await runner(
+      {
+        toolName: operation,
+        agentName: "assistant",
+        conversationId: conversation.id,
+        agentRunId: createPlatformId("agr"),
+        toolCallId: createPlatformId("tc"),
+        input: inputs.insert
+      },
+      { clientInstanceId, user: actor, correlationId: "cross-workspace-policy" }
+    );
+    expect(result, JSON.stringify(result)).toMatchObject({ status: "waiting_for_decision" });
+    const run = required(
+      (await world.stores.operationRuns.list({ clientInstanceId })).find(
+        (run) => run.correlationId === "cross-workspace-policy"
+      )
+    );
+    expect(run).toMatchObject({
+      workspaceId: caller,
+      status: "pending_approval",
+      operation,
+      conversationId: conversation.id
+    });
+    const request = required(
+      await world.stores.approvals.getApprovalRequest({
+        clientInstanceId,
+        requestId: required(run.approvalRequestId)
+      })
+    );
+    expect(request).toMatchObject({
+      status: "pending",
+      payload: { workspaceId: caller, operation }
+    });
+    // Generic operation approvals still require the instance-wide right; neither workspace
+    // membership nor a right scoped to the owner or the Conversation is enough.
+    for (const [label, workspaceId] of [
+      ["owner-approver", owner],
+      ["caller-approver", caller],
+      ["instance-approver", undefined]
+    ] as const) {
+      const headers = { "x-dev-user-id": label };
+      const me = await world.api.call("me.get", { headers });
+      expect(me.statusCode).toBe(200);
+      const holderId = me.json<{ id: string }>().id;
+      await world.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId,
+        action: "operations.approve",
+        effect: "allow",
+        scopeKind: workspaceId ? "workspace" : "instance",
+        ...(workspaceId ? { scopeId: workspaceId } : {}),
+        grantedBy: asUserId(admin.id)
+      });
+      const view = await world.api.call("approval_requests.get", {
+        params: { requestId: request.id },
+        headers
+      });
+      expect(view.statusCode, view.body).toBe(workspaceId ? 404 : 200);
+      if (!workspaceId) expect(view.json()).toMatchObject({ canDecide: true });
+    }
+    expect(
+      (
+        await world.api.call("data_stores.query", {
+          params: { store: "cross-workspace" },
+          payload: { sql: "select count(*)::integer as count from holidays" }
+        })
+      ).json()
+    ).toMatchObject({ rows: [{ count: 0 }] });
   });
 
   it("workspace A's row grant misses workspace B's store", async () => {

@@ -12,7 +12,7 @@ import {
 } from "@work-shape/catalyst-core";
 
 // The rule of no escalation (RIGHTS-1a, check 38): a person gives or lends a right only where
-// the call holds it. "Holds" is the call's own `authorize`: role, rows, denies and the scopes of
+// the call holds it. "Holds" is the call's `authorizeTransfer`: role, rows, denies and the scopes of
 // a personal key. A refusal names the asset only to a caller who may read it (escalation path 6).
 
 const clientInstanceId = asClientInstanceId("held-rights-test");
@@ -55,6 +55,48 @@ describe("the rule of no escalation", () => {
       allowed: true
     });
     expect(authorizeHeldRights(accessWith(["user"], []), [], lends)).toEqual({ allowed: true });
+  });
+
+  it("never lends membership or availability, even when it masks a separate lasting grant", () => {
+    const member = (grants: PermissionGrant[]) =>
+      createActorAccess(holder(["user"]), {
+        holderActive: true,
+        grants,
+        memberWorkspaceIds: ["nordlicht"],
+        availableAssets: [{ kind: "connection", assetId: crm.assetId }]
+      });
+    expect(member([]).authorize("connection.use", crm)).toEqual({
+      allowed: true,
+      source: "membership"
+    });
+    expect(authorizeHeldRights(member([]), rights, lends)).toMatchObject({
+      allowed: false,
+      action: "connection.use",
+      reason: "no_grant"
+    });
+    expect(authorizeHeldRights(member([row({})]), rights, lends)).toEqual({ allowed: true });
+    expect(authorizeHeldRights(member([row({ effect: "deny" })]), rights, lends)).toMatchObject({
+      allowed: false,
+      reason: "denied"
+    });
+    const app = {
+      kind: "app",
+      assetId: "app",
+      workspaceId: "nordlicht",
+      appAvailability: { audience: "instance" as const }
+    };
+    expect(member([]).authorize("app.use", app).allowed).toBe(true);
+    expect(
+      authorizeHeldRights(member([]), [{ action: "app.use", resource: app }], lends)
+    ).toMatchObject({ allowed: false });
+    // Workspace grants remain lendable; membership of the owning workspace does not.
+    expect(
+      authorizeHeldRights(
+        member([row({ action: "app.use", scopeKind: "workspace", scopeId: "nordlicht" })]),
+        [{ action: "app.use", resource: app }],
+        lends
+      )
+    ).toEqual({ allowed: true });
   });
 
   it("names the asset to a caller who may read it, and only that there is one to who may not", () => {

@@ -7,6 +7,8 @@ import {
   type ActorAccess,
   type AssetScope,
   type AuditRecorder,
+  type AuditEventStore,
+  type ClientInstanceId,
   type AuthenticatedIdentity,
   type CollaborationWorkspaceId,
   type ConversationId,
@@ -37,6 +39,25 @@ export interface AssetCall {
   workspaceId?: CollaborationWorkspaceId;
   /** The language the request names, where a person's request made the call. */
   runtime?: Pick<OperationCallRuntime, "locale">;
+}
+
+/** Mutation events inside an asset transaction commit with the state they describe. */
+export function transactionalAssetCall(
+  call: AssetCall,
+  clientInstanceId: ClientInstanceId,
+  audit: AuditEventStore
+): AssetCall {
+  return {
+    ...call,
+    audit: {
+      record: (input) =>
+        audit.appendAuditEvent({
+          ...input,
+          clientInstanceId,
+          metadata: { ...input.metadata, ...(call.runId ? { operationRunId: call.runId } : {}) }
+        })
+    }
+  };
 }
 
 /** What a right on one asset is decided on: its kind, its name, its id and its owner. */

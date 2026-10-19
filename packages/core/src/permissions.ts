@@ -1,5 +1,6 @@
 import type { AppAvailability } from "./app-audience";
 import {
+  WORKSPACE_USE_ASSET_KINDS,
   ACCESS_SOURCES,
   ACTIONS,
   SERVICE_PRINCIPAL_PERMISSIONS as CONTRACT_SERVICE_PRINCIPAL_PERMISSIONS,
@@ -152,6 +153,9 @@ export type AccessDecision =
       reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" | "outside_key_scope";
     };
 
+export { WORKSPACE_USE_ASSET_KINDS };
+export type WorkspaceUseAssetKind = (typeof WORKSPACE_USE_ASSET_KINDS)[number];
+
 export interface PersistedAccess {
   holderActive: boolean;
   grants: PermissionGrant[];
@@ -161,17 +165,23 @@ export interface PersistedAccess {
    * runs beside it. A service principal is a member of none.
    */
   memberWorkspaceIds?: readonly string[];
+  /** Only use is inherited from availability; settings, writes and secrets stay explicit. */
+  availableAssets?: readonly { assetId: string; kind: WorkspaceUseAssetKind }[];
 }
 
 export interface AccessStore {
   loadPersistedAccess(input: {
     clientInstanceId: ClientInstanceId;
     holder: { kind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; id: string };
+    /** Absent: inspect rights across memberships. Null: call outside a workspace. */
+    workspaceId?: string | null;
   }): Promise<PersistedAccess>;
 }
 
 export interface ActorAccess {
   authorize(action: string, resource?: AccessResource): AccessDecision;
+  /** Rights that may be handed on: excludes membership and availability, preserving denies and key scopes. */
+  authorizeTransfer(action: string, resource?: AccessResource): AccessDecision;
   /** Throws FORBIDDEN with the action and reason. */
   require(action: string, resource?: AccessResource): void;
   /**
@@ -185,7 +195,10 @@ export interface ActorAccess {
 }
 
 export interface Authorizer {
-  forActor(actor: AuthenticatedIdentity): Promise<ActorAccess>;
+  forActor(
+    actor: AuthenticatedIdentity,
+    scope?: { workspaceId: string | null }
+  ): Promise<ActorAccess>;
 }
 
 /** The free-text reference `x` of a tool is checked as the action `ref:x`. */
@@ -315,6 +328,15 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
         source: "membership"
       });
     }
+  }
+  for (const asset of persisted.availableAssets ?? []) {
+    entries.push({
+      action: `${asset.kind}.use`,
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: asset.assetId,
+      source: "membership"
+    });
   }
   const ownRows = persisted.grants.filter(
     (grant) =>
@@ -460,16 +482,29 @@ function evaluateRegisteredAction(
  * legacy key or a registered action; any covering deny refuses; any covering allow permits;
  * otherwise nothing grants it. A legacy key stands for all of its actions at instance scope.
  */
-export function evaluateAccess(input: {
+interface AccessEvaluationInput {
   holder: AccessHolder;
   persisted: PersistedAccess;
   action: string;
   resource?: AccessResource;
-}): AccessDecision {
+}
+
+export function evaluateAccess(input: AccessEvaluationInput): AccessDecision {
+  return evaluateAccessEntries(input, listAccessEntries(input.holder, input.persisted));
+}
+
+/** Membership and availability authorize use in place, never the transfer of a lasting right. */
+export function transferableAccessEntries(entries: readonly AccessEntry[]): AccessEntry[] {
+  return entries.filter((entry) => entry.source !== "membership");
+}
+
+function evaluateAccessEntries(
+  input: AccessEvaluationInput,
+  entries: readonly AccessEntry[]
+): AccessDecision {
   if (!input.persisted.holderActive) {
     return { allowed: false, reason: "holder_inactive" };
   }
-  const entries = listAccessEntries(input.holder, input.persisted);
   if (input.action.startsWith(PERMISSION_REF_ACTION_PREFIX)) {
     // A reference has one source, the holder's own list. No role, row or deny names one.
     return entries.some((entry) => entry.source === "legacy_ref" && entry.action === input.action)
@@ -526,8 +561,11 @@ export function createActorAccess(
   persisted: PersistedAccess,
   keyScopes?: readonly string[]
 ): ActorAccess {
-  const authorize = (action: string, resource?: AccessResource): AccessDecision => {
-    const decision = evaluateAccess({ holder, persisted, action, resource });
+  const decide = (
+    decision: AccessDecision,
+    action: string,
+    resource?: AccessResource
+  ): AccessDecision => {
     if (!decision.allowed || keyScopes === undefined || decision.source === "legacy_ref") {
       // A reference names a tool the holder may use, which a key neither widens nor narrows.
       return decision;
@@ -537,8 +575,23 @@ export function createActorAccess(
       ? decision
       : { allowed: false, reason: "outside_key_scope" };
   };
+  const authorize: ActorAccess["authorize"] = (action, resource) =>
+    decide(evaluateAccess({ holder, persisted, action, resource }), action, resource);
   return {
     authorize,
+    authorizeTransfer(action, resource) {
+      const transferable = transferableAccessEntries(listAccessEntries(holder, persisted));
+      // Availability is permission to use here, never authority to give a lasting right away.
+      const { appAvailability: _availability, ...target } = resource ?? {};
+      return decide(
+        evaluateAccessEntries(
+          { holder, persisted, action, resource: resource === undefined ? undefined : target },
+          transferable
+        ),
+        action,
+        resource
+      );
+    },
     require(action, resource) {
       const decision = authorize(action, resource);
       if (!decision.allowed) {
@@ -566,47 +619,19 @@ export function createActorAccess(
 }
 
 /**
- * The rights of a call in a test run of a Workflow draft (ADR-0031): the person testing,
- * bounded by the service principal the Workflow runs as. An action is allowed only where both
- * hold it, so a test lends nobody the principal's grants and does not pass where the live run
- * would fail. A refusal on the principal's side names the principal.
- */
-export function boundedActorAccess(
-  tester: ActorAccess,
-  principal: ActorAccess,
-  boundBy: { id: string; label: string }
-): ActorAccess {
-  return {
-    authorize(action, resource) {
-      const own = tester.authorize(action, resource);
-      return own.allowed ? principal.authorize(action, resource) : own;
-    },
-    require(action, resource) {
-      tester.require(action, resource);
-      const bound = principal.authorize(action, resource);
-      if (!bound.allowed) {
-        throw operationDenialError({ kind: "forbidden", action, reason: bound.reason, boundBy });
-      }
-    },
-    holdsGrantAt: (action, scopeKinds) =>
-      tester.holdsGrantAt(action, scopeKinds) && principal.holdsGrantAt(action, scopeKinds),
-    denials: (action) => [...tester.denials(action), ...principal.denials(action)]
-  };
-}
-
-/**
  * Loads the persisted state once per call of `forActor` and keeps nothing beyond it. Without a
  * store the holder's own record is the only source: no grant row applies and nothing reports
  * the holder inactive.
  */
 export function createAuthorizer(accessStore?: AccessStore): Authorizer {
   return {
-    async forActor(actor) {
+    async forActor(actor, scope) {
       const holder = accessHolderFromIdentity(actor);
       const persisted = accessStore
         ? await accessStore.loadPersistedAccess({
             clientInstanceId: holder.clientInstanceId,
-            holder: { kind: holder.kind, id: holder.id }
+            holder: { kind: holder.kind, id: holder.id },
+            ...(scope ? { workspaceId: scope.workspaceId } : {})
           })
         : { holderActive: true, grants: [] };
       return createActorAccess(
@@ -644,6 +669,13 @@ export interface GrantScopeAsset {
 
 /** The store behind grants and Namespaces: the evaluator's port plus the administration writes. */
 export interface AccessAdministrationStore extends AccessStore, RightsLock {
+  /** Non-admin people who inherit use through availability, with their own rows for the evaluator. */
+  listAvailabilityMembers(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    action: string;
+    page: StorePage;
+  }): Promise<{ userId: UserId; displayLabel: string; grants: PermissionGrant[] }[]>;
   /**
    * Throws CONFLICT `duplicate_grant`, VALIDATION_FAILED `unknown_namespace` for an
    * unregistered prefix, `userInDeletionError` for a user whose deletion was requested, and

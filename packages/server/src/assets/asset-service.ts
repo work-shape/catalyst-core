@@ -1,6 +1,7 @@
 import { requireAppAudience } from "../apps/app-audience";
 import type { AppAudience } from "@work-shape/catalyst-core";
 import { upsertAsset, type AssetUpsert } from "./asset-upsert";
+import { publishAgentDraft } from "./agent-publication";
 import { AgentDraftWorkflow } from "./agent-drafts";
 import {
   AppError,
@@ -110,21 +111,21 @@ export class AssetWorkflow {
     this.options = options;
     this.agentDrafts = new AgentDraftWorkflow(options, {
       target: (address) => this.target(address),
-      publish: async (call, target, draft) => {
-        await authorizeInteractiveWrite(
+      publish: (call, target, draft, makeDependenciesAvailable, expectedAvailability) =>
+        publishAgentDraft(
           options,
-          call.actor,
           call,
-          call.audit,
-          draft.author.release
-        );
-        return this.upsert(call, target, draft.config, {
-          expectedRevision: draft.baseRevision,
-          agentPublish: draft.revision,
-          releaseDraft: draft.author.release,
-          audit: "config_asset.updated"
-        });
-      }
+          target,
+          draft,
+          { makeDependenciesAvailable, expectedAvailability },
+          (within, called) =>
+            new AssetWorkflow(within).upsert(called, target, draft.config, {
+              expectedRevision: draft.baseRevision,
+              agentPublish: draft.revision,
+              releaseDraft: draft.author.release,
+              audit: "config_asset.updated"
+            })
+        )
     });
     this.reads = new AssetReadWorkflow(options, {
       target: (address) => this.target(address),
@@ -157,7 +158,11 @@ export class AssetWorkflow {
    */
   async authorizePublish(
     caller: { actor: AuthenticatedIdentity; access: ActorAccess; origin: OperationOrigin },
-    address: AssetAddress & { revision: number; audience?: AppAudience }
+    address: AssetAddress & {
+      revision: number;
+      audience?: AppAudience;
+      makeDependenciesAvailable?: boolean;
+    }
   ): Promise<OperationAuthorization> {
     const { access, origin } = caller;
     if (address.kind === "app") requireAppAudience(access, address.audience);
@@ -536,7 +541,7 @@ export class AssetWorkflow {
     const revision = allocatedRevision(result, kind.kind, name);
     await recordCommitted(this.options, call, [
       () =>
-        this.record(call, "config_asset.deleted", {
+        recordAssetEvent(call, "config_asset.deleted", {
           kind: kind.kind,
           name,
           revision,
@@ -779,10 +784,6 @@ export class AssetWorkflow {
       const now = await this.target(target.address);
       throw await revisionConflictOf(this.options, call.access, now);
     }
-  }
-
-  private record(call: AssetCall, type: string, metadata: JsonObject): Promise<void> {
-    return recordAssetEvent(call, type, metadata);
   }
 
   /** A kind of a module that is off does not exist here, whatever the store still holds. */

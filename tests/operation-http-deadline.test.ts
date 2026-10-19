@@ -455,3 +455,46 @@ it("records an abort during the approved run claim as unexecuted", async () => {
     }
   });
 });
+
+it.each(["knowledge_base.use", "connection.use"] as const)(
+  "keeps a resumed %s refusal as localized permission help (AVAIL-1)",
+  async (action) => {
+    const f = await direct(async () => ({}));
+    const origin = {
+      kind: "agent",
+      agentRunId: asAgentRunId("avail-resumed"),
+      agentName: "probe",
+      conversationId: asConversationId("avail-conversation"),
+      toolName: f.call.operation,
+      toolCallId: asToolCallId("avail-call")
+    } as const;
+    f.call.origin = origin;
+    f.deps.agentToolNames = () => [f.call.operation];
+    const done = await f.run();
+    const denial = { kind: "forbidden", action, reason: "no_grant" } as const;
+    f.deps.approvedToolCall = async () => ({
+      execution: "refused",
+      run: { ...done.run, status: "denied", denial },
+      error: { code: "FORBIDDEN", message: "Legacy refusal" }
+    });
+    vi.spyOn(f.deps.runs, "get").mockResolvedValue({
+      ...done.run,
+      status: "pending_approval",
+      decision: { mode: "approved", by: f.actor.id, at: new Date().toISOString() }
+    });
+    f.deps.useRightRefusal = vi.fn(async () => "Dir fehlt das Recht. Frag Mara.");
+    const answer = await createDecidedToolCallRunner(f.deps)(
+      { request: { ...origin, input: {} }, operationRunId: done.run.id, frozenInput: {} },
+      { user: f.actor, clientInstanceId, locale: "de", correlationId: "avail" }
+    );
+    expect(answer).toEqual({
+      status: "failed",
+      error: {
+        code: "permission_missing",
+        message: "Dir fehlt das Recht. Frag Mara.",
+        details: undefined
+      }
+    });
+    expect(f.deps.useRightRefusal).toHaveBeenCalledWith(action, "de");
+  }
+);

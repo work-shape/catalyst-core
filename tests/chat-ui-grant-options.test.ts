@@ -146,3 +146,62 @@ describe("the giver's grant choices", () => {
     expect(options.places("app", ["write"])).toEqual(["asset"]);
   });
 });
+
+describe("rights held only through membership or availability", () => {
+  const workflows = {
+    workflow: {
+      failed: false,
+      items: [
+        {
+          id: "flow-a",
+          name: "A",
+          resource: { kind: "workflow", name: "flow-a", assetId: "flow-a" }
+        }
+      ]
+    }
+  };
+  const member = (
+    action: string,
+    scopeKind: "asset" | "workspace",
+    scopeId: string
+  ): EffectivePermissions["items"][number] => ({
+    action,
+    effect: "allow",
+    scopeKind,
+    scopeId,
+    source: "membership"
+  });
+
+  it("are not offered to hand on", () => {
+    expect(
+      grantOptions(entries([member("workflow.use", "asset", "flow-a")]), workflows, workspaces)
+        .kinds
+    ).toEqual([]);
+    expect(
+      grantOptions(entries([member("app.read", "workspace", "w-a")]), assets, workspaces).kinds
+    ).toEqual([]);
+  });
+  it("leave an explicit allow on the same place offered", () => {
+    const options = grantOptions(
+      entries([
+        member("workflow.use", "asset", "flow-a"),
+        allow("workflow.use", "asset", "flow-a")
+      ]),
+      workflows,
+      workspaces
+    );
+    expect(options.verbs("workflow", "asset", "flow-a")).toEqual(["use"]);
+  });
+  it("never outweigh a deny", () => {
+    const options = grantOptions(
+      entries([
+        member("workflow.use", "asset", "flow-a"),
+        allow("workflow.use", "instance"),
+        { ...allow("workflow.use", "asset", "flow-a"), effect: "deny" }
+      ]),
+      workflows,
+      workspaces
+    );
+    expect(options.verbs("workflow", "asset", "flow-a")).toEqual([]);
+  });
+});

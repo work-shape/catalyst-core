@@ -78,6 +78,10 @@ function within(now: ActorAccess, admitted: ActorAccess): ActorAccess {
   };
   return {
     authorize,
+    authorizeTransfer(action, resource) {
+      const decision = now.authorizeTransfer(action, resource);
+      return decision.allowed ? admitted.authorizeTransfer(action, resource) : decision;
+    },
     require(action, resource) {
       const decision = authorize(action, resource);
       if (!decision.allowed) {

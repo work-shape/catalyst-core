@@ -570,6 +570,39 @@ describe("source sync operations (KB 74, 75)", () => {
       },
       { holderActive: true, grants: [] }
     );
+    const connectionId = required(
+      await world.instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "connection",
+        name: "fixture"
+      })
+    ).id;
+    const memberAccess = createActorAccess(
+      { clientInstanceId, kind: "user", id: "publisher", roles: [], permissionRefs: [] },
+      {
+        holderActive: true,
+        grants: [],
+        availableAssets: [{ kind: "connection", assetId: connectionId }]
+      }
+    );
+    expect(memberAccess.authorize("connection.use", { assetId: connectionId }).allowed).toBe(true);
+    await expect(
+      world.instance.stores.transaction((stores) =>
+        world.knowledge.publish(stores, {
+          access: memberAccess,
+          assetId: asset.id,
+          revision: 1,
+          config: definition,
+          replaced: undefined
+        })
+      )
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { action: "connection.use", reason: "no_grant" }
+    });
+    expect(
+      await world.instance.stores.apiAccess.findServicePrincipalByOwner({ clientInstanceId, owner })
+    ).toBeUndefined();
     const publish = () =>
       world.instance.stores.transaction((stores) =>
         world.knowledge.publish(stores, {

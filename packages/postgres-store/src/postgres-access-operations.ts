@@ -1,4 +1,15 @@
-import { and, asc, eq, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  sql,
+  type SQLWrapper
+} from "drizzle-orm";
 import {
   AppError,
   LEGACY_PERMISSION_ACTIONS,
@@ -10,6 +21,7 @@ import {
   type AccessAdministrationStore,
   type Namespace,
   type NamespaceUsage,
+  type PersistedAccess,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
@@ -31,6 +43,25 @@ const LEGACY_KEY_ACTIONS: string[] = PERMISSIONS.flatMap((key) => [
   ...LEGACY_PERMISSION_ACTIONS[key]
 ]);
 type NamespaceRow = typeof namespaces.$inferSelect;
+
+/** One membership rule for runtime rights and the audience read, against asset/availability aliases. */
+function availableThroughMembership(
+  clientInstanceId: string,
+  userId: string | SQLWrapper,
+  workspaceId?: string | null
+) {
+  return sql`exists (
+    select 1 from collaboration_workspace_memberships membership
+    join collaboration_workspaces workspace on workspace.id = membership.collaboration_workspace_id
+    where membership.client_instance_id = ${clientInstanceId}
+      and membership.user_id = ${userId}
+      and (${workspaceId === undefined} or membership.collaboration_workspace_id = ${workspaceId ?? null})
+      and (availability.mode = 'all'
+        or (availability.personal_workspaces and workspace.kind = 'personal')
+        or exists (select 1 from config_asset_workspace_availability selected
+          where selected.asset_id = asset.id and selected.collaboration_workspace_id = workspace.id))
+  )`;
+}
 
 /** `inTransaction` is true for the store of a transaction, the only one that holds a lock. */
 export function createPostgresAccessStore(
@@ -60,7 +91,18 @@ export function createPostgresAccessStore(
                   from collaboration_workspace_memberships membership
                   where membership.client_instance_id = ${input.clientInstanceId}
                     and membership.user_id = ${input.holder.id}
-                ), '{}'::text[])`
+                ), '{}'::text[])`,
+                // Availability contributes use through a current workspace membership. Read
+                // it with the holder, keeping authorization at two statements per call.
+                availableAssets: sql<NonNullable<PersistedAccess["availableAssets"]>>`coalesce((
+                  select jsonb_agg(jsonb_build_object('assetId', asset.id, 'kind', asset.kind))
+                  from config_assets asset
+                  join config_asset_availability availability on availability.asset_id = asset.id
+                  where asset.client_instance_id = ${input.clientInstanceId}
+                    and availability.client_instance_id = ${input.clientInstanceId}
+                    and asset.status = 'active' and asset.kind in ('knowledge_base', 'connection')
+                    and ${availableThroughMembership(input.clientInstanceId, input.holder.id, input.workspaceId)}
+                ), '[]'::jsonb)`
               })
               .from(productUsers)
               .where(
@@ -74,7 +116,8 @@ export function createPostgresAccessStore(
               // A service principal is a member of no workspace.
               .select({
                 status: servicePrincipals.status,
-                memberWorkspaceIds: sql<string[]>`'{}'::text[]`
+                memberWorkspaceIds: sql<string[]>`'{}'::text[]`,
+                availableAssets: sql<NonNullable<PersistedAccess["availableAssets"]>>`'[]'::jsonb`
               })
               .from(servicePrincipals)
               .where(
@@ -105,8 +148,58 @@ export function createPostgresAccessStore(
           input.holder.kind === "service_principal" && holder[0] === undefined
             ? []
             : grantRows.map(mapGrant),
-        memberWorkspaceIds: holder[0]?.memberWorkspaceIds ?? []
+        memberWorkspaceIds: holder[0]?.memberWorkspaceIds ?? [],
+        availableAssets: holder[0]?.availableAssets ?? []
       };
+    },
+
+    async listAvailabilityMembers(input) {
+      const order = [sql`${productUsers.displayLabel} COLLATE "C"`, productUsers.id];
+      const members = await db
+        .select({ userId: productUsers.id, displayLabel: productUsers.displayLabel })
+        .from(productUsers)
+        .where(
+          and(
+            eq(productUsers.clientInstanceId, input.clientInstanceId),
+            eq(productUsers.status, "active"),
+            isNull(productUsers.deletionRequestedAt),
+            // Role-default administrators are already part of every audience, as before.
+            sql`not (${productUsers.roles} @> '["admin"]'::jsonb or ${productUsers.roles} @> '["superadmin"]'::jsonb)`,
+            sql`exists (select 1 from config_assets asset join config_asset_availability availability on availability.asset_id = asset.id
+          where asset.id = ${input.assetId} and asset.client_instance_id = ${input.clientInstanceId}
+            and availability.client_instance_id = ${input.clientInstanceId} and asset.status = 'active'
+            and ${availableThroughMembership(input.clientInstanceId, productUsers.id)})`,
+            keysetFilter(input.page, order, false)
+          )
+        )
+        .orderBy(...order)
+        .limit(input.page.limit);
+      if (!members.length) return [];
+      const rows = await db
+        .select()
+        .from(permissionGrants)
+        .where(
+          and(
+            eq(permissionGrants.clientInstanceId, input.clientInstanceId),
+            eq(permissionGrants.holderKind, "user"),
+            inArray(
+              permissionGrants.holderId,
+              members.map((member) => member.userId)
+            ),
+            eq(permissionGrants.action, input.action)
+          )
+        );
+      const byUser = new Map<string, PermissionGrant[]>();
+      for (const row of rows) {
+        const list = byUser.get(row.holderId) ?? [];
+        list.push(mapGrant(row));
+        byUser.set(row.holderId, list);
+      }
+      return members.map((member) => ({
+        userId: asUserId(member.userId),
+        displayLabel: member.displayLabel,
+        grants: byUser.get(member.userId) ?? []
+      }));
     },
 
     async createGrant(input) {

@@ -1,3 +1,4 @@
+import { executeApprovedOperation } from "@work-shape/catalyst-tool-execution";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CONNECTION_MAX_PARALLEL_CALLS,
@@ -39,6 +40,150 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("a call of a Connection's operation", () => {
+  it("lets only members of an available workspace use a Connection through an agent; a deny wins (AVAIL-1)", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm");
+    const workspaceId = await t.sharedWorkspace("Nordlicht");
+    const otherWorkspaceId = await t.sharedWorkspace("Other team");
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: workspaceId,
+      userId: t.kai.id,
+      role: "member"
+    });
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: otherWorkspaceId,
+      userId: t.lena.id,
+      role: "member"
+    });
+    t.state.agentTools.set("assistant", ["connection.crm.echo"]);
+    const ask = (user: typeof t.kai, usedIn = workspaceId) =>
+      t.invoke(
+        user,
+        "connection.crm.echo",
+        { text: "hello" },
+        { origin: agentOrigin("connection.crm.echo"), workspaceId: usedIn }
+      );
+    expect((await ask(t.kai)).result).toMatchObject({
+      status: "denied",
+      reason: { action: "connection.use" }
+    });
+    expect(t.executed).toEqual([]);
+    await t.expectOk(t.admin.id, "assets.set_availability", {
+      params: { kind: "connection", name: "crm" },
+      payload: { mode: "selected", collaborationWorkspaceIds: [workspaceId] }
+    });
+    expect((await ask(t.kai)).result).toMatchObject({ status: "done", output: { text: "hello" } });
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: otherWorkspaceId,
+      userId: t.kai.id,
+      role: "member"
+    });
+    expect((await ask(t.kai, otherWorkspaceId)).result).toMatchObject({
+      status: "denied",
+      reason: { action: "connection.use" }
+    });
+    expect((await ask(t.lena)).result).toMatchObject({
+      status: "denied",
+      reason: { action: "connection.use" }
+    });
+    await t.expectRefused(
+      t.kai.id,
+      "assets.get",
+      { params: { kind: "connection", name: "crm" } },
+      t.forbidden("connection.read", "no_grant")
+    );
+    await t.grant(t.kai.id, "connection.use", { assetId }, "deny");
+    const calls = t.executed.length;
+    expect((await ask(t.kai)).result).toMatchObject({
+      status: "denied",
+      reason: { action: "connection.use", reason: "denied" }
+    });
+    expect(t.executed).toHaveLength(calls);
+    await t.expectOk(t.admin.id, "assets.set_availability", {
+      params: { kind: "connection", name: "crm" },
+      payload: { mode: "selected" }
+    });
+    expect((await ask(t.lena)).result).toMatchObject({ status: "denied" });
+  });
+
+  it("gives localized use-right help once, without a redundant English refusal (AVAIL-1b)", async () => {
+    const t = await fixture();
+    await t.seed("crm");
+    expect(await t.operationCalls.deps.useRightRefusal?.("connection.use", "en")).toBe(
+      "You do not have permission to use this Connection. Ask an instance admin."
+    );
+    expect(await t.operationCalls.deps.useRightRefusal?.("knowledge_base.use", "de")).toBe(
+      "Dir fehlt das Recht, diese Wissensbasis zu verwenden. Frag einen Instanz-Admin. Diese Abfrage wurde deshalb nicht ausgeführt."
+    );
+  });
+
+  it("refuses a resumed call when this workspace loses availability even while another workspace keeps it (AVAIL-1)", async () => {
+    const t = await fixture();
+    await t.seed("crm", {
+      operations: [operationOf("write", { effect: "changing", policy: "approval" })]
+    });
+    // This fixture supplies the agent's tools; only the Connection narrows while waiting.
+    t.operationCalls.deps.agentAvailable = async () => true;
+    const a = await t.sharedWorkspace("A"),
+      b = await t.sharedWorkspace("B");
+    for (const collaborationWorkspaceId of [a, b])
+      await t.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId,
+        userId: t.kai.id,
+        role: "member"
+      });
+    const place = (ids: (typeof a)[]) =>
+      t.expectOk(t.admin.id, "assets.set_availability", {
+        params: { kind: "connection", name: "crm" },
+        payload: { mode: "selected", collaborationWorkspaceIds: ids }
+      });
+    await place([a, b]);
+    t.state.agentTools.set("assistant", ["connection.crm.write"]);
+    const origin = agentOrigin("connection.crm.write");
+    if (origin.kind !== "agent") throw new Error("Expected an agent origin");
+    const waiting = await t.invoke(
+      t.kai,
+      "connection.crm.write",
+      {},
+      { origin, workspaceId: b, effect: "changing", idempotencyKey: "avail-waiting" }
+    );
+    expect(waiting.result.status).toBe("pending_approval");
+    await place([a]);
+    const actor = {
+      id: t.kai.id,
+      clientInstanceId,
+      externalUserId: t.kai.id,
+      displayLabel: t.kai.displayLabel,
+      roles: t.kai.roles,
+      permissionRefs: t.kai.permissionRefs,
+      authSource: "test"
+    };
+    const result = await executeApprovedOperation(
+      {
+        runId: waiting.run.id,
+        call: {
+          operation: "connection.crm.write",
+          effect: "changing",
+          input: {},
+          actor,
+          origin,
+          workspaceId: b,
+          correlationId: "avail-resumed",
+          idempotencyKey: "avail-waiting"
+        }
+      },
+      { id: t.admin.id, label: t.admin.displayLabel, at: new Date().toISOString() },
+      t.operationCalls.deps
+    );
+    expect(result.execution).toBe("refused");
+    expect(result.run?.denial).toMatchObject({ kind: "forbidden", action: "connection.use" });
+    expect(t.executed).toEqual([]);
+  });
+
   it("takes one order: resolve, run, right, policy, read again, egress, credential, connector, record", async () => {
     const t = await fixture();
     const assetId = await t.seed("crm");

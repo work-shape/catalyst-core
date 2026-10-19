@@ -1053,3 +1053,6 @@ export type WorkflowKind = (typeof WORKFLOW_KINDS)[number];
 /** Wire formats for a streamed Workflow result dataset. */
 export const WORKFLOW_DATASET_DOWNLOAD_FORMATS = ["jsonl", "csv"] as const;
 export type WorkflowDatasetDownloadFormat = (typeof WORKFLOW_DATASET_DOWNLOAD_FORMATS)[number];
+
+/** Instance resources whose use may be inherited through workspace availability. */
+export const WORKSPACE_USE_ASSET_KINDS = ["knowledge_base", "connection"] as const;
