@@ -81,6 +81,10 @@ interface WorkspaceConversationActionsInput {
   messages: readonly Message[];
   selectedConversationRunning: boolean;
   setNotice(notice: string | undefined): void;
+  /** The next new conversation of the open workspace starts private. */
+  startsPrivate: boolean;
+  /** Names the workspace whose next new conversation starts private, or none. */
+  setPrivateStartIn(collaborationWorkspaceId: string | undefined): void;
 }
 
 /** Conversation navigation, creation and approval revisions share one render's workspace. */
@@ -101,7 +105,9 @@ export function createWorkspaceConversationActions({
   messagesLoaded,
   messages,
   selectedConversationRunning,
-  setNotice
+  setNotice,
+  startsPrivate,
+  setPrivateStartIn
 }: WorkspaceConversationActionsInput) {
   const { route } = routeState;
 
@@ -152,7 +158,8 @@ export function createWorkspaceConversationActions({
         locale: activeLocale,
         ...(activeCollaborationWorkspaceId
           ? { collaborationWorkspaceId: activeCollaborationWorkspaceId }
-          : {})
+          : {}),
+        ...(startsPrivate && !docked ? { visibility: "private" as const } : {})
       }
     });
   }
@@ -286,7 +293,27 @@ export function createWorkspaceConversationActions({
     goToActiveCollaborationWorkspaceChat({ replace: true });
   }
 
+  /**
+   * Goes on privately after a build was refused because others read the open conversation:
+   * the workspace's start page with the request in its composer, as a new chat opens. Nothing
+   * exists until the first send, which makes the conversation private (ACCEPT-2e).
+   */
+  function continuePrivatelyWith(prompt: string) {
+    if (!activeCollaborationWorkspaceId) {
+      throw new Error("A private conversation belongs to a workspace");
+    }
+    draftController.setDraft(
+      { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
+      prompt
+    );
+    goToActiveCollaborationWorkspaceChat();
+    setPrivateStartIn(activeCollaborationWorkspaceId);
+    setNotice(undefined);
+    chrome.requestComposerFocus();
+  }
+
   function startNewConversation() {
+    setPrivateStartIn(undefined);
     goToActiveCollaborationWorkspaceChat();
     setNotice(undefined);
     chrome.requestComposerFocus();
@@ -369,6 +396,7 @@ export function createWorkspaceConversationActions({
     showConversationForFiles,
     startConversationAbout,
     startPrivateConversationWith,
+    continuePrivatelyWith,
     returnToStartPageAfterDraftEmptied,
     startNewConversation,
     startNewConversationWith,

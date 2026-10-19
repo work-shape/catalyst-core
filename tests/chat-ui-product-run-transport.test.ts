@@ -120,6 +120,43 @@ describe("chat UI product run transport", () => {
     ]);
   });
 
+  it("asks for a private conversation with the first message where the person goes on privately", async () => {
+    const calls: unknown[] = [];
+    const client = {
+      conversations: {
+        runs: {
+          async create(input: { body: unknown }) {
+            calls.push(input.body);
+            return createStartResponse({ conversationId: "conv_private" });
+          },
+          async start() {
+            throw new Error("startRun should not be called");
+          }
+        }
+      }
+    };
+
+    await startProductConversationRun({
+      client,
+      collaborationWorkspaceId: "cw_shared",
+      idempotencyKey: "idem-private",
+      locale: "de",
+      text: "Baue die App für Fristen.",
+      visibility: "private"
+    });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        conversation: {
+          title: "Baue die App für Fristen.",
+          locale: "de",
+          collaborationWorkspaceId: "cw_shared",
+          visibility: "private"
+        }
+      })
+    ]);
+  });
+
   it("starts an existing conversation through the product startConversationRun API", async () => {
     const calls: unknown[] = [];
     const client = {

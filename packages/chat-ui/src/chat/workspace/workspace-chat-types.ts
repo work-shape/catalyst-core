@@ -295,6 +295,8 @@ export interface SelectedChatModel {
    * after a build was refused because others read the open one. Settles once it opened.
    */
   continuePrivately?(prompt: string): Promise<void>;
+  /** The first message on the start page makes a private conversation: "Continue privately". */
+  startsPrivate?: boolean;
 }
 
 export interface ToolDisplayModel {

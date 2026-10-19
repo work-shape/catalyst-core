@@ -209,6 +209,10 @@ export function useWorkspaceChatModel({
     showSettings: routeState.showSettings
   });
   const activeCollaborationWorkspaceId = collaborationWorkspace.activeCollaborationWorkspaceId;
+  // The workspace whose next new conversation starts private, after "Continue privately".
+  const [privateStartIn, setPrivateStartIn] = useState<string | undefined>();
+  const startsPrivate =
+    privateStartIn !== undefined && privateStartIn === activeCollaborationWorkspaceId;
   const railConversations = useRailConversations({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -375,6 +379,7 @@ export function useWorkspaceChatModel({
     showConversationForFiles,
     startConversationAbout,
     startPrivateConversationWith,
+    continuePrivatelyWith,
     returnToStartPageAfterDraftEmptied,
     startNewConversation,
     startNewConversationWith,
@@ -405,7 +410,9 @@ export function useWorkspaceChatModel({
     messagesLoaded,
     messages,
     selectedConversationRunning,
-    setNotice
+    setNotice,
+    startsPrivate,
+    setPrivateStartIn
   });
 
   const draftAttachmentController = useDraftAttachmentController({
@@ -708,6 +715,7 @@ export function useWorkspaceChatModel({
       replace: route.kind === "new-conversation"
     });
     setNotice(undefined);
+    setPrivateStartIn(undefined);
     workspaceCache.invalidateConversationStarted(conversationId);
   }
 
@@ -732,6 +740,7 @@ export function useWorkspaceChatModel({
       replace: route.kind === "new-conversation"
     });
     setNotice(undefined);
+    setPrivateStartIn(undefined);
     conversationListRefresh.runAccepted(response);
   }
 
@@ -977,11 +986,12 @@ export function useWorkspaceChatModel({
       cancelSelectedRun,
       continuePrivately: async (prompt: string) => {
         try {
-          await startPrivateConversationWith(prompt, false);
+          continuePrivatelyWith(prompt);
         } catch {
           setNotice(createTranslationContext(activeLocale).t("conversationPrivateStartFailed"));
         }
-      }
+      },
+      startsPrivate
     },
     controlPlane,
     toolDisplay: {

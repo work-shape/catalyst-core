@@ -9,6 +9,7 @@ import { expect, test } from "./test";
 // turn, and a build refused in a shared conversation offers one press to go on in such a
 // conversation, with the person's request in its composer. Fails without the change: New was
 // missing in such a workspace, and the refusal left the person with an error line only.
+// "Continue privately" opens the start page and makes the private conversation with its send.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = {
@@ -119,14 +120,17 @@ test("a build refused in a shared conversation goes on privately with the reques
   expect(await conversation(page, sharedId)).toMatchObject({ visibility: "workspace" });
   expect((await page.request.get(`${apiBaseUrl}/api/v1/assets/workflow/${id}`)).status()).toBe(404);
 
-  // One press: a private conversation of the same workspace, with the request to send again.
+  // One press: the workspace's start page with the request to send again. As a new chat, it
+  // makes no conversation before the send (ACCEPT-2e: an empty one stayed when the person left).
   await offer
     .getByRole("button", { name: /^(?:Continue privately|Privat weitermachen)$/u })
     .click();
+  await expect(page).toHaveURL((url) => url.pathname.replace(/\/$/u, "") === `/w/${workspaceId}`);
+  await expect(composerOf(page)).toHaveValue(request);
+  await page.getByRole("button", { name: /^(?:Send message|Nachricht senden)$/u }).click();
   await expect(page).toHaveURL(
     (url) => url.pathname.startsWith(`/w/${workspaceId}/c/`) && url.pathname !== sharedPath
   );
-  await expect(composerOf(page)).toHaveValue(request);
   const privateId = new URL(page.url()).pathname.split("/").at(-1) ?? "";
   expect(await conversation(page, privateId)).toMatchObject({
     collaborationWorkspaceId: workspaceId,

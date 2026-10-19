@@ -114,7 +114,8 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
           collaborationWorkspaceId: body.conversation?.collaborationWorkspaceId
             ? asCollaborationWorkspaceId(body.conversation.collaborationWorkspaceId)
             : undefined,
-          ...(body.conversation?.subject ? { subject: body.conversation.subject } : {})
+          ...(body.conversation?.subject ? { subject: body.conversation.subject } : {}),
+          ...(body.conversation?.visibility ? { visibility: body.conversation.visibility } : {})
         }
       );
       return createStartRunResponse(

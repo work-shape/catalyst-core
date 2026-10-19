@@ -1869,6 +1869,39 @@ describe("Conversation visibility", () => {
     await app.close();
   });
 
+  // ACCEPT-2e: "Continue privately" makes its conversation with the first message, private in a
+  // workspace whose members read the others, and nothing before it.
+  it("makes a conversation private with its first run where asked, in a shared workspace", async () => {
+    const app = await createWorkspaceApp();
+    await currentUser(app, "owner");
+    const workspaceId = await createSharedWorkspace(app, "owner", "Shared by default");
+    const start = (key: string, visibility?: "private") =>
+      app.call(
+        "conversations.runs.create",
+        {
+          payload: {
+            idempotencyKey: key,
+            message: { text: "Baue die App für Fristen." },
+            conversation: {
+              collaborationWorkspaceId: workspaceId,
+              ...(visibility ? { visibility } : {})
+            }
+          }
+        },
+        "owner"
+      );
+
+    const shared = await start("shared-first-run");
+    expect(shared.statusCode).toBe(200);
+    expect(shared.json()).toMatchObject({ conversation: { visibility: "workspace" } });
+    const privately = await start("private-first-run", "private");
+    expect(privately.statusCode).toBe(200);
+    expect(privately.json()).toMatchObject({
+      conversation: { collaborationWorkspaceId: workspaceId, visibility: "private" },
+      thread: { conversation: { visibility: "private" } }
+    });
+  });
+
   it("stamps the workspace default at creation and never rewrites existing conversations", async () => {
     const app = await createWorkspaceApp();
     for (const actor of ["owner", "admin", "member"]) await currentUser(app, actor);

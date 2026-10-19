@@ -134,6 +134,7 @@ function AssistantRuntimePane({
     streamError: onStreamError,
     cancelSelectedRun: onCancelRun,
     continuePrivately,
+    startsPrivate,
     followUpSource
   } = chat;
   const { t } = useTranslation();
@@ -234,7 +235,8 @@ function AssistantRuntimePane({
             conversationId,
             idempotencyKey: createRunIdempotencyKey(),
             locale,
-            text: trimmedText
+            text: trimmedText,
+            ...(startsPrivate && !docked ? { visibility: "private" as const } : {})
           })
         )
         .then((response) => {
@@ -270,6 +272,7 @@ function AssistantRuntimePane({
       attachmentsKey,
       client,
       collaborationWorkspaceId,
+      docked,
       locale,
       onMessageSubmitted,
       onRunStarted,
@@ -280,7 +283,8 @@ function AssistantRuntimePane({
       sendDisabledReason,
       sendStagedFiles,
       setRootSubmitPendingIfActive,
-      startComposerRef
+      startComposerRef,
+      startsPrivate
     ]
   );
 
