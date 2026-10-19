@@ -273,26 +273,33 @@ function refusedAsShared(parts: readonly SubjectRunPart[]): boolean {
   );
 }
 
-/** The person's last request in the conversation, which a private conversation takes along. */
-function lastUserRequest(messages: readonly { role: string; text: string }[]): string | undefined {
-  const text = messages.findLast((message) => message.role === "user")?.text.trim();
-  return text === undefined || text === "" ? undefined : text;
+/** A run, with the person who started it and the message it answers. */
+interface RefusableRun {
+  ownerUserId?: string;
+  inputMessageId?: string;
+  parts: readonly SubjectRunPart[];
 }
 
 /**
- * The request a private conversation takes along (E3): the person's last request, where the
- * latest run that answers it was refused because others read the conversation. That is the run
- * still going, unless it answered an earlier message, or else the last run a message after the
- * request names. A refusal of an earlier run offers nothing for a later request.
+ * The request a private conversation takes along (E3): the last request in the conversation,
+ * where the latest run that answers it was refused because others read the conversation. That
+ * is the run still going, unless it answered an earlier message, or else the last run a message
+ * after the request names. A refusal of an earlier run offers nothing for a later request.
+ *
+ * A message names no author, so the run vouches for it: only the person who started the refused
+ * run, with that request as its input, is offered it. Another member, or a reader whose identity
+ * or the run's is unknown, gets nothing, so nobody carries someone else's words away.
  */
 export function refusedRequest(input: {
-  messages: readonly { role: string; text: string; runId: string | undefined }[];
-  activeRun: { runId: string; parts: readonly SubjectRunPart[] } | undefined;
-  completedRuns: Readonly<Record<string, { parts: readonly SubjectRunPart[] }>>;
+  currentUserId: string | undefined;
+  messages: readonly { id: string; role: string; text: string; runId: string | undefined }[];
+  activeRun: (RefusableRun & { runId: string }) | undefined;
+  completedRuns: Readonly<Record<string, RefusableRun>>;
 }): string | undefined {
-  const { messages, activeRun, completedRuns } = input;
+  const { currentUserId, messages, activeRun, completedRuns } = input;
   const request = messages.findLastIndex((message) => message.role === "user");
-  if (request === -1) return undefined;
+  const requestMessage = messages[request];
+  if (requestMessage === undefined || currentUserId === undefined) return undefined;
   const earlier = new Set(messages.slice(0, request).map((message) => message.runId));
   const answeredBy = messages
     .slice(request + 1)
@@ -303,8 +310,13 @@ export function refusedRequest(input: {
       : answeredBy === undefined
         ? undefined
         : completedRuns[answeredBy];
-  return latest !== undefined && refusedAsShared(latest.parts)
-    ? lastUserRequest(messages)
+  const text = requestMessage.text.trim();
+  return latest !== undefined &&
+    latest.ownerUserId === currentUserId &&
+    latest.inputMessageId === requestMessage.id &&
+    refusedAsShared(latest.parts) &&
+    text !== ""
+    ? text
     : undefined;
 }
 
