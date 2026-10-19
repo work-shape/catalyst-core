@@ -31,6 +31,19 @@ describe("agent presentation config", () => {
     ).toBeUndefined();
   });
 
+  it("greets in the reader's language when neither the agent nor the instance sets a greeting", () => {
+    const config = parseClientInstanceConfig(
+      baseConfig({ localization: { defaultLocale: "en", supportedLocales: ["en", "de"] } })
+    );
+    const greeting = (requestedLocale: "en" | "de") =>
+      createSafeConfigView(config, createAssets({}), resolveInstanceModules(config, []).snapshot, {
+        requestedLocale
+      }).ui.welcomeMessage;
+
+    expect(greeting("de")).toBe("Wie kann ich helfen?");
+    expect(greeting("en")).toBe("How can I help?");
+  });
+
   it("allows an empty subtitle so deployments can hide the empty-state subline", () => {
     const config = parseClientInstanceConfig(baseConfig());
     const assets = createAssets({

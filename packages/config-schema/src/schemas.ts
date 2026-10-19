@@ -252,6 +252,8 @@ const docsUrlSchema = z
     message: "'ui.docsUrl' must be an http or https address"
   });
 
+const DEFAULT_WELCOME_MESSAGE = { en: "How can I help?", de: "Wie kann ich helfen?" };
+
 export const uiConfigSchema = z
   .object({
     clientName: localizedStringSchema.optional(),
@@ -265,7 +267,9 @@ export const uiConfigSchema = z
     logoInvertOnDark: z.boolean().default(false),
     faviconUrl: z.string().url().or(z.string().startsWith("/")).optional(),
     title: localizedStringSchema.default("Workshape Catalyst"),
-    welcomeMessage: localizedStringSchema.default("How can I help?"),
+    // A greeting in every language the interface ships, so an agent without one never greets
+    // a German reader in English.
+    welcomeMessage: localizedStringSchema.default(DEFAULT_WELCOME_MESSAGE),
     // The start page names the agent beside its icon; when false it shows the
     // icon alone, as a conversation always does.
     showAgentName: z.boolean().default(true),
@@ -281,7 +285,7 @@ export const uiConfigSchema = z
   })
   .default({
     title: "Workshape Catalyst",
-    welcomeMessage: "How can I help?",
+    welcomeMessage: DEFAULT_WELCOME_MESSAGE,
     showAgentName: true,
     showAgentDescriptions: true,
     resources: {},
