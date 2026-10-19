@@ -7,6 +7,7 @@ import {
   SUBJECT_TOOL_PREFIX,
   systemClock,
   unknownToJsonValue,
+  type AgentConfig,
   type KnowledgeCitationSource,
   type AgentRunId,
   type AgentRunResumeState,
@@ -73,7 +74,7 @@ export class TurnLoop {
     context: RuntimeCallContext
   ): Promise<RunSetup> {
     const assets = await this.options.assetSource.getSnapshot();
-    const listed: import("@work-shape/catalyst-core").AgentConfig = input.workflowAgent
+    const listed: AgentConfig = input.workflowAgent
       ? {
           name: input.agentName,
           instructions: input.workflowAgent.instructions,
@@ -95,6 +96,7 @@ export class TurnLoop {
           user: context.user
         });
     const withheld = new Set(offer?.withheldToolNames ?? []);
+    // A subagent starts none of its own, and a Workflow step's agent never gets `run_agent`.
     const agent = {
       ...listed,
       toolNames: [
@@ -103,7 +105,9 @@ export class TurnLoop {
           ...(offer?.toolNames ?? [])
         ])
       ].filter(
-        (toolName) => !withheld.has(toolName) && !(context.subagent && isRunAgentCall(toolName))
+        (toolName) =>
+          !withheld.has(toolName) &&
+          !((context.subagent || input.workflowAgent) && isRunAgentCall(toolName))
       )
     };
     const modelSelection = this.modelInput.getModelSelectionForAgent(
@@ -411,19 +415,18 @@ export class TurnLoop {
           };
           const issue = invalid(assistantText);
           if (issue) {
+            const repairPrompt = `The output is invalid at ${issue}. Repair the rejected answer to match the output schema. Return JSON only. No tools may be called.`;
+            // The repair prompt is kept with the answer it rejects, so the transcript shows it.
             await this.runEvents.beforeEffect("assistant_message", runId);
             await this.options.conversationHistory.appendAssistantMessage({
               clientInstanceId: context.clientInstanceId,
               conversationId: input.conversationId,
               text: assistantText,
-              metadata: { workflowRejectedOutput: true }
+              metadata: { workflowRejectedOutput: true, workflowRepairPrompt: repairPrompt }
             });
             messages.push(
               { role: "assistant", content: assistantText },
-              {
-                role: "user",
-                content: `The output is invalid at ${issue}. Repair the rejected answer to match the output schema. Return JSON only. No tools may be called.`
-              }
+              { role: "user", content: repairPrompt }
             );
             const repair = await this.modelInput.callModel(
               runId,

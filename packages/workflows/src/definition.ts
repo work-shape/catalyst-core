@@ -1,4 +1,6 @@
 import {
+  AGENTS_RUN_OPERATION,
+  RUN_AGENT_TOOL_NAME,
   NOTIFY_CHANNELS,
   NOTICE_ID_PATTERN,
   WORKFLOW_KINDS,
@@ -405,6 +407,13 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
       issues.push({ path: "steps", message: "The one output step is the last step" });
     }
   });
+  // A Workflow step's agent never starts a subagent (CR-2).
+  if (
+    [...index.values()].some(({ step }) => step.type === "agent") &&
+    manifest.tools?.some((tool) => tool === RUN_AGENT_TOOL_NAME || tool === AGENTS_RUN_OPERATION)
+  ) {
+    issues.push({ path: "tools", message: "An agent step cannot start subagents" });
+  }
   for (const [id, { step, sequence }] of index) {
     const refused = step.type === "operation" ? stepOperationRefusal(step.operation) : undefined;
     if (refused) issues.push({ path: `steps.${id}.operation`, ...refused });

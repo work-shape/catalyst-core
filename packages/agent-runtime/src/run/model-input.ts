@@ -262,7 +262,11 @@ export class ModelInput {
             conversationId: input.conversationId,
             runId,
             agentName: input.agentName,
-            ...(input.workflowAgent ? {} : { userId: getRuntimeSubjectUserId(context) })
+            // A published step's run acts as its principal and counts to its Workflow Run; a
+            // draft test's run acts as the tester and counts to them (check 103).
+            ...(input.workflowAgent && !context.workflowDraft
+              ? {}
+              : { userId: getRuntimeSubjectUserId(context) })
           },
           clientInstanceId: context.clientInstanceId,
           correlationId: context.correlationId,
