@@ -89,6 +89,13 @@ describe("the input of mail.send", () => {
     expect(mailSendInputSchema.safeParse({ ...mail, to: ["not an address"] }).success).toBe(false);
   });
 
+  it("takes an empty cc and bcc, as a referenced list with nobody in it resolves", () => {
+    const parsed = mailSendInputSchema.parse({ ...mail, cc: [], bcc: [] });
+    expect(parsed).toMatchObject({ cc: [], bcc: [] });
+    const many = Array.from({ length: MAIL_SEND_MAX_ADDRESSES + 1 }, (_, i) => `p${i}@kanzlei.de`);
+    expect(mailSendInputSchema.safeParse({ ...mail, cc: many }).success).toBe(false);
+  });
+
   it("refuses a workspace as Reply-To and a language the instance has no frame in", () => {
     expect(mailSendInputSchema.safeParse({ ...mail, replyTo: { workspace: "ws" } }).success).toBe(
       false

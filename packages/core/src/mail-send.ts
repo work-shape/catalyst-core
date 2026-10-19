@@ -38,6 +38,7 @@ export {
   MAIL_WORKFLOW_MESSAGE_TEMPLATE,
   mailAddressSchema,
   mailBodySchema,
+  mailCopyRecipientListSchema,
   mailPreviewRecipientSchema,
   mailRecipientDomainSchema,
   mailRecipientListSchema,

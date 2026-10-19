@@ -151,16 +151,19 @@ export type MailSendRecipient = z.infer<typeof mailRecipientSchema>;
  * whose people have no address is `no_recipient`. Mixing literal recipients and a referenced
  * list in one field needs a list form of the mapping, which no ticket has yet.
  */
-export const mailRecipientListSchema = z.union([
-  mailAddressSchema,
-  z
-    .array(
-      z.union([mailAddressSchema, mailRecipientSchema, z.looseObject({ email: mailAddressSchema })])
-    )
-    .min(1)
-    .max(MAIL_SEND_MAX_ADDRESSES)
-]);
+const recipientEntries = z
+  .array(
+    z.union([mailAddressSchema, mailRecipientSchema, z.looseObject({ email: mailAddressSchema })])
+  )
+  .max(MAIL_SEND_MAX_ADDRESSES);
+export const mailRecipientListSchema = z.union([mailAddressSchema, recipientEntries.min(1)]);
 export type MailSendRecipientList = z.infer<typeof mailRecipientListSchema>;
+
+/**
+ * What `cc` and `bcc` take: as `to`, and an empty list too, since a referenced list of copy
+ * recipients may hold nobody and the mail still goes to `to`.
+ */
+export const mailCopyRecipientListSchema = z.union([mailAddressSchema, recipientEntries]);
 
 /** One address, or a person of the instance. The recipient rule applies to it as to `to`. */
 export const mailReplyToSchema = z.union([
@@ -208,8 +211,8 @@ export const mailSenderNameSchema = z
 export const mailSendInputSchema = z.strictObject({
   sender: mailSenderIdSchema.default(MAIL_SENDER_SYSTEM),
   to: mailRecipientListSchema,
-  cc: mailRecipientListSchema.optional(),
-  bcc: mailRecipientListSchema.optional(),
+  cc: mailCopyRecipientListSchema.optional(),
+  bcc: mailCopyRecipientListSchema.optional(),
   subject: mailSubjectSchema,
   body: mailBodySchema,
   senderName: mailSenderNameSchema.optional(),
