@@ -216,7 +216,7 @@ export class RunStartWorkflow {
 
     try {
       const { agentName, modelBindingId, reasoningEffort } = await this.resolveRunSelection(
-        await this.conversations.requireMemberWorkspace(
+        await this.conversations.resolveTargetWorkspace(
           user,
           conversation.collaborationWorkspaceId
         ),

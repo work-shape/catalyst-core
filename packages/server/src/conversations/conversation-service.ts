@@ -26,6 +26,7 @@ import { PLATFORM_ASSET_TOOLS } from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
 import { getModelSelectionForConversationTitles } from "@work-shape/catalyst-config-schema";
 import { CollaborationWorkspaceWorkflow } from "../workspaces/collaboration-workspace-service";
+import { requireWorkspaceToWorkIn } from "../workspaces/workspace-access";
 import { attemptConversationDataCleanup } from "../deletion/conversation-cleanup";
 import { requireChatConversationAccess, requireConversationAccess } from "./conversation-access";
 import { assertConversationIdle } from "./conversation-idle";
@@ -91,11 +92,11 @@ export class ConversationWorkflow {
       if (!personal) return [];
       collaborationWorkspaceId = personal.id;
     }
-    await this.workspaces.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    const { member } = await requireWorkspaceToWorkIn(this.options, user, collaborationWorkspaceId);
     return this.options.stores.conversations.listConversationsWithActiveRun({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
-      scope: { kind: "viewer", userId: getSubjectUserId(user) },
+      scope: { kind: member ? "viewer" : "author", userId: getSubjectUserId(user) },
       titleQuery,
       page
     });
@@ -107,7 +108,10 @@ export class ConversationWorkflow {
     command: CreateConversationCommand
   ): Promise<Conversation> {
     const subjectUserId = getSubjectUserId(user);
-    const workspace = await this.resolveTargetWorkspace(user, command.collaborationWorkspaceId);
+    const { workspace, member } = await this.workspaceToWorkIn(
+      user,
+      command.collaborationWorkspaceId
+    );
     if (command.subject) {
       await requireReadableSubject(this.options, user, command.subject);
     }
@@ -117,9 +121,11 @@ export class ConversationWorkflow {
       createdByUserId: subjectUserId,
       createdByExternalUserId: user.externalUserId,
       // The transcript of a conversation about an asset holds the asset's definition, and a
-      // member of the workspace need not hold the read right on it: it is its creator's alone.
+      // member of the workspace need not hold the read right on it: it is its creator's alone,
+      // as every conversation of a holder of a bundle who is no member is.
       visibility:
-        (command.subject || command.visibility === "private") && workspace.kind !== "personal"
+        (command.subject || command.visibility === "private" || !member) &&
+        workspace.kind !== "personal"
           ? "private"
           : workspace.defaultConversationVisibility,
       title: command.title ?? "New conversation",
@@ -531,12 +537,33 @@ export class ConversationWorkflow {
     user: AuthenticatedUser,
     collaborationWorkspaceId: CollaborationWorkspaceId | undefined
   ): Promise<CollaborationWorkspace> {
-    return collaborationWorkspaceId
-      ? this.requireMemberWorkspace(user, collaborationWorkspaceId)
-      : this.options.stores.workspaces.ensurePersonalWorkspace({
-          clientInstanceId: this.options.clientInstanceId,
-          userId: asUserId(getSubjectUserId(user))
-        });
+    return (await this.workspaceToWorkIn(user, collaborationWorkspaceId)).workspace;
+  }
+
+  /**
+   * The workspace a conversation of the user is started or continued in: the named one, as
+   * `requireWorkspaceToWorkIn` lets the user work there, or the user's Personal Workspace.
+   */
+  async workspaceToWorkIn(
+    user: AuthenticatedUser,
+    collaborationWorkspaceId: CollaborationWorkspaceId | undefined
+  ): Promise<{ workspace: CollaborationWorkspace; member: boolean }> {
+    if (!collaborationWorkspaceId) {
+      const workspace = await this.options.stores.workspaces.ensurePersonalWorkspace({
+        clientInstanceId: this.options.clientInstanceId,
+        userId: asUserId(getSubjectUserId(user))
+      });
+      return { workspace, member: true };
+    }
+    const { member } = await requireWorkspaceToWorkIn(this.options, user, collaborationWorkspaceId);
+    const workspace = await this.options.stores.workspaces.getWorkspace(
+      this.options.clientInstanceId,
+      collaborationWorkspaceId
+    );
+    if (!workspace) {
+      throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
+    }
+    return { workspace, member };
   }
 
   async requireMemberWorkspace(

@@ -27,6 +27,7 @@ import {
   type Authorizer,
   type CentralPolicySetting,
   type ClientInstanceId,
+  type AuthenticatedIdentity,
   type CollaborationWorkspaceId,
   type ConversationId,
   type JsonObject,
@@ -152,14 +153,14 @@ export interface RunOperationDeps {
     conversationId: ConversationId
   ): Promise<CollaborationWorkspaceId | undefined>;
   /**
-   * Whether a person is a member of a workspace now. Asked before a call that waited for an
-   * approval is executed in a workspace, for an agent's call and for an operation whose right
-   * is a named action: whoever left the workspace meanwhile no longer acts there. An operation
-   * that decides its right itself is asked by its own rule instead. Without it this process
-   * does not ask.
+   * Whether a person works in a workspace now: as its member, or as a holder of Builder or
+   * Publisher there. Asked before a call that waited for an approval is executed in a
+   * workspace, for an agent's call and for an operation whose right is a named action: whoever
+   * left the workspace meanwhile no longer acts there. An operation that decides its right
+   * itself is asked by its own rule instead. Without it this process does not ask.
    */
-  workspaceMember?(input: {
-    userId: string;
+  worksInWorkspace?(input: {
+    actor: AuthenticatedIdentity;
     workspaceId: CollaborationWorkspaceId;
   }): Promise<boolean>;
   /**

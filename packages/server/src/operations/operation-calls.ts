@@ -1,7 +1,8 @@
 import {
   asUserId,
   createOperationRegistry,
-  isAgentAvailableInWorkspace
+  isAgentAvailableInWorkspace,
+  isAuthenticatedServicePrincipal
 } from "@work-shape/catalyst-core";
 import type { RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 import {
@@ -21,6 +22,7 @@ import { createNoticeHandler } from "../notices/notice-kind";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
 import { resolveOperationResource } from "./operation-resource";
 import { createAuditingEventEmitter } from "./event-emitter";
+import { holdsWorkspaceBundle } from "../workspaces/workspace-access";
 import type { GuardrailRunner } from "../guardrails/guardrail-runner";
 import { createPublishNarrator } from "../publish-narrative/publish-narrator";
 import type { PublishNarrativeStoredData } from "@work-shape/catalyst-core";
@@ -172,12 +174,14 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       const asset = action === "connection.use" ? "this Connection" : "this Knowledge Base";
       return `You do not have permission to use ${asset}. ${admin ? `Ask an instance admin, for example ${admin}.` : "Ask an instance admin."}`;
     },
-    workspaceMember: async ({ userId, workspaceId }) =>
+    worksInWorkspace: async ({ actor, workspaceId }) =>
       (await options.stores.workspaces.getMembership({
         clientInstanceId,
         collaborationWorkspaceId: workspaceId,
-        userId: asUserId(userId)
-      })) !== undefined,
+        userId: asUserId(actor.id)
+      })) !== undefined ||
+      (!isAuthenticatedServicePrincipal(actor) &&
+        (await holdsWorkspaceBundle(options, actor, workspaceId))),
     agentAvailable: async ({ agentName, workspaceId }) => {
       const [workspace, availability] = await Promise.all([
         options.stores.workspaces.getWorkspace(clientInstanceId, workspaceId),

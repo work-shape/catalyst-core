@@ -296,7 +296,7 @@ export const unusedRunOperationDeps: RunOperationDeps = {
     return unsupported();
   },
   agentToolNames: unsupported,
-  workspaceMember: unsupported,
+  worksInWorkspace: unsupported,
   agentAvailable: unsupported,
   get logger() {
     return unsupported();

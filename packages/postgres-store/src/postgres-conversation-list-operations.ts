@@ -55,10 +55,15 @@ export function listedConversations(db: PostgresConnection, input: ListConversat
     ...(scope.kind === "lifecycle"
       ? []
       : [
-          or(
-            eq(conversations.visibility, "workspace"),
-            eq(conversations.createdByUserId, scope.userId)
-          ),
+          scope.kind === "author"
+            ? and(
+                eq(conversations.visibility, "private"),
+                eq(conversations.createdByUserId, scope.userId)
+              )
+            : or(
+                eq(conversations.visibility, "workspace"),
+                eq(conversations.createdByUserId, scope.userId)
+              ),
           // A Conversation without messages is an unsent draft: only its creator sees it,
           // and only while it still holds draft attachments.
           or(

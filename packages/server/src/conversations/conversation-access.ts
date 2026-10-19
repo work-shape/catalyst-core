@@ -7,12 +7,13 @@ import {
   type ConversationId
 } from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "../types";
-import { requireWorkspaceAccess } from "../workspaces/workspace-access";
+import { requireWorkspaceToWorkIn } from "../workspaces/workspace-access";
 
 /**
  * The single read check of a Conversation: it is active, the user reaches its Collaboration
- * Workspace, and a private one is its author's. Every refusal reads as a Conversation that
- * does not exist, so an answer never tells a closed one from one that never was.
+ * Workspace, and a private one is its author's. A holder of a bundle who is no member reaches
+ * only their own private ones. Every refusal reads as a Conversation that does not exist, so an
+ * answer never tells a closed one from one that never was.
  */
 export async function requireConversationAccess(
   options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
@@ -35,18 +36,23 @@ export async function requireConversationAccess(
     await requireConversationAccess(options, conversation.parentConversationId, user);
     return conversation;
   }
+  let member: boolean;
   try {
-    await requireWorkspaceAccess(options, user, conversation.collaborationWorkspaceId);
+    ({ member } = await requireWorkspaceToWorkIn(
+      options,
+      user,
+      conversation.collaborationWorkspaceId
+    ));
   } catch (error) {
     if (isAppError(error) && error.code === "NOT_FOUND") {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
     throw error;
   }
-  if (
+  const ownPrivate =
     conversation.visibility === "private" &&
-    conversation.createdByUserId !== getSubjectUserId(user)
-  ) {
+    conversation.createdByUserId === getSubjectUserId(user);
+  if (member ? conversation.visibility === "private" && !ownPrivate : !ownPrivate) {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
   return conversation;

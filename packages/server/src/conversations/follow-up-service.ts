@@ -111,7 +111,7 @@ export function createFollowUpDispatchHandler(options: ChatServerOptions) {
           scope.conversationId,
           user
         );
-        await conversations.requireMemberWorkspace(user, conversation.collaborationWorkspaceId);
+        await conversations.resolveTargetWorkspace(user, conversation.collaborationWorkspaceId);
         step = "start";
         await new RunStartWorkflow(options, (fn) => control.transaction(fn)).startMessageRun(
           scope.conversationId,

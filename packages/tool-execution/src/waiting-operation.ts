@@ -459,8 +459,8 @@ async function admitAgain(
   if (
     membershipIsTheRule &&
     call.workspaceId !== undefined &&
-    deps.workspaceMember &&
-    !(await deps.workspaceMember({ userId: call.actor.id, workspaceId: call.workspaceId }))
+    deps.worksInWorkspace &&
+    !(await deps.worksInWorkspace({ actor: call.actor, workspaceId: call.workspaceId }))
   ) {
     return refuse(
       {

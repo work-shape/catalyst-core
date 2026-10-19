@@ -1,7 +1,9 @@
 import {
   AppError,
   asUserId,
+  createAuthorizer,
   getSubjectUserId,
+  isAppError,
   isSuperadmin,
   type AuthenticatedUser,
   type CollaborationWorkspace,
@@ -51,6 +53,46 @@ export async function requireWorkspaceAccess(
     throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
   }
   return { userId, role, membershipRole };
+}
+
+/** The bundles whose holder works in a Shared Workspace without being its member. */
+const WORKSPACE_BUNDLES = ["builder", "publisher"] as const;
+
+/**
+ * Whether the user works in a workspace, and as what. A member does as `requireWorkspaceAccess`
+ * says. A holder of Builder or Publisher in a Shared Workspace who is no member builds and tries
+ * there in private conversations of their own (WS-BUILD-1): membership stays the only way to
+ * its other conversations, its Projects and its members' files (ADR-0015), so every other check
+ * asks `requireWorkspaceAccess`. Anyone else is answered as for a workspace that does not exist.
+ */
+export async function requireWorkspaceToWorkIn(
+  options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
+  user: AuthenticatedUser,
+  collaborationWorkspaceId: CollaborationWorkspaceId
+): Promise<{ member: boolean }> {
+  try {
+    await requireWorkspaceAccess(options, user, collaborationWorkspaceId);
+    return { member: true };
+  } catch (error) {
+    if (!isAppError(error) || error.code !== "NOT_FOUND") throw error;
+    if (!(await holdsWorkspaceBundle(options, user, collaborationWorkspaceId))) throw error;
+    return { member: false };
+  }
+}
+
+/** A bundle of a Shared Workspace, read anew on every call, so a revoked one ends at once. */
+export async function holdsWorkspaceBundle(
+  options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
+  user: AuthenticatedUser,
+  workspaceId: CollaborationWorkspaceId
+): Promise<boolean> {
+  const workspace = await options.stores.workspaces.getWorkspace(
+    options.clientInstanceId,
+    workspaceId
+  );
+  if (workspace?.kind !== "shared") return false;
+  const access = await createAuthorizer(options.stores.access).forActor(user);
+  return WORKSPACE_BUNDLES.some((bundle) => access.authorize(bundle, { workspaceId }).allowed);
 }
 
 /** Membership decides, except that a superadmin is Owner of every Shared Workspace. */

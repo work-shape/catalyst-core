@@ -32,10 +32,12 @@ export type ConversationVisibility = (typeof CONVERSATION_VISIBILITIES)[number];
 /**
  * Who a workspace Conversation listing is for. `viewer` hides other users' private
  * Conversations and Conversations without messages, except the viewer's own while they still
- * hold draft attachments; `lifecycle` is for retention and deletion workflows that must see
- * every row.
+ * hold draft attachments; `author` lists only the user's own private ones, for a holder of a
+ * bundle who is no member; `lifecycle` is for retention and deletion workflows that
+ * must see every row.
  */
-export type ConversationListScope = { kind: "viewer"; userId: string } | { kind: "lifecycle" };
+export type ConversationListScope =
+  { kind: "viewer" | "author"; userId: string } | { kind: "lifecycle" };
 
 /**
  * The asset a conversation is about, by its kind and its name, such as a Workflow whose draft
