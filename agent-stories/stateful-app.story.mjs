@@ -1,3 +1,4 @@
+import { until } from "../scripts/agent-stories/processes.mjs";
 import { test, expect, selected, session, frame, saveObservation, sql } from "./support.mjs";
 import { CASES } from "../scripts/agent-stories/catalog.mjs";
 import { appOracle } from "../scripts/agent-stories/oracles.mjs";
@@ -16,6 +17,38 @@ test(id, async ({ story, browser }) => {
   await choice.click();
   await expect(choice).toBeChecked();
   await dialog.getByRole("button", { name: "Publish", exact: true }).click();
+  // Keep the shipped policy: where sharing asks for review, the setup reviewer
+  // with the shipped approve right decides the frozen request through the Inbox.
+  const published = await until(
+    async () => {
+      const [asset] = await sql`select published_revision_id from config_assets where id=${app.id}`;
+      const [approval] =
+        await sql`select id from approval_requests where kind='app_publish' and status='pending' and payload#>>'{subject,assetId}'=${app.id} and requested_by->>'id'=${story.actor.me.id}`;
+      return { revision: asset?.published_revision_id, approval };
+    },
+    (state) => Boolean(state.revision || state.approval),
+    story.deadline
+  );
+  if (published.approval) {
+    story.watch(story.root);
+    const reviewer = await story.root.newPage();
+    await reviewer.goto(`/inbox/${published.approval.id}`);
+    await expect(reviewer.getByTestId("publish-review")).toBeVisible();
+    await reviewer.locator('button[data-decision="approve"]').click();
+    const approved = await until(
+      async () =>
+        (await sql`select published_revision_id from config_assets where id=${app.id}`)[0],
+      (asset) => Boolean(asset?.published_revision_id),
+      story.deadline
+    );
+    expect(approved.published_revision_id).toBe(app.revisionId);
+    story.observations.approvals = [
+      { id: published.approval.id, kind: "app_publish", status: "approved" }
+    ];
+    await reviewer.close();
+    if (await dialog.isVisible())
+      await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
+  }
   await expect(dialog).toBeHidden();
   const path = `/w/${story.workspace.id}/apps/${app.name}`;
   await page.goto(path);

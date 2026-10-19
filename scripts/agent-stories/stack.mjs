@@ -561,6 +561,8 @@ export async function reuseStack(root, file, supervisor, deadline) {
     fingerprint: expected
   };
   supervisor.stack = stack;
+  // Attribute only new calls even when an idle/readiness check refuses reuse.
+  await supervisor.onDatabase?.(stack);
   const [active] =
     await stack.sql`select (select count(*) from agent_runs where status not in ('completed','failed','cancelled')) as runs,(select count(*) from model_usage_events where status in ('pending','abandoned')) as pending`;
   const jobs =
@@ -571,7 +573,6 @@ export async function reuseStack(root, file, supervisor, deadline) {
   if (JSON.stringify(migrations) !== JSON.stringify(held.migrationRows))
     throw new Error("Refusing stale migration state");
   await ready(stack, deadline, () => supervisor.check());
-  await supervisor.onDatabase?.(stack);
   return stack;
 }
 export async function cleanStack(stack, supervisor, keep = false, beforeRemove = async () => {}) {

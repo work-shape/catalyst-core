@@ -54,6 +54,7 @@ test(id, async ({ story }) => {
   collect(story, "denied", await state(name, denied.conversationId));
   const [refused] = await sql`select status from operation_runs where id=${first.id}`;
   story.observations.deniedStatus = refused.status;
+  story.observations.operations[0].status = refused.status;
   // A fresh request and conversation, never a retry of the denied mutation.
   const allowedName = `synthetic-consent-${randomUUID().slice(0, 8)}`;
   const allowed = await story.start(prompt.replace("{name}", allowedName));

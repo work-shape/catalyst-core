@@ -324,14 +324,31 @@ test("warm reuse permits a future passive tick but refuses future model jobs and
     dedupe_key: "schedule:usage.reconcile",
     run_after: "2026-12-01T00:00:00Z"
   };
-  requireIdle({ runs: 0, pending: 0, jobs: [job] }, 0);
+  for (const kind of [
+    "usage.reconcile",
+    "agent_run.adopt",
+    "workspace_command.adopt_legacy",
+    "workspace_command.clean_temp_state",
+    "connection_bindings.keep_alive",
+    "notice.deliver_mail",
+    "data_store.measure_size_tick",
+    "data_store.upgrade_owned_tick"
+  ])
+    requireIdle(
+      { runs: 0, pending: 0, jobs: [{ ...job, kind, dedupe_key: `schedule:${kind}` }] },
+      0
+    );
   for (const change of [
     { kind: "conversation.generate_title" },
+    { kind: "agent_run.execute" },
     { kind: "unknown" },
     { status: "running" },
     { run_after: "1970-01-01T00:00:00Z" }
-  ])
-    assert.throws(() => requireIdle({ runs: 0, pending: 0, jobs: [{ ...job, ...change }] }, 0));
+  ]) {
+    const candidate = { ...job, ...change };
+    if (change.kind) candidate.dedupe_key = `schedule:${change.kind}`;
+    assert.throws(() => requireIdle({ runs: 0, pending: 0, jobs: [candidate] }, 0));
+  }
   assert.throws(() => requireIdle({ runs: 1, pending: 0, jobs: [] }, 0));
   assert.throws(() => requireIdle({ runs: 0, pending: 1, jobs: [] }, 0));
 });
@@ -398,4 +415,29 @@ test("Playwright cleanup cannot erase its sibling stack credentials, manifest or
   } finally {
     await rm(folder, { recursive: true, force: true });
   }
+});
+
+test("warm baseline retains inherited spend without rebilling old calls when readiness refuses", async () => {
+  const cancelled = [];
+  const watcher = new UsageWatchdog({
+    deadline: 10,
+    limits: { tokens: 1000, micros: 50 },
+    cancel: async (reason) => cancelled.push(reason)
+  });
+  watcher.baseline = new Set(["earlier"]);
+  watcher.inheritedMicros = 50;
+  const usage = await watcher.sample(
+    [
+      {
+        id: "earlier",
+        status: "settled",
+        total_tokens: 99,
+        customer_billable_cost: { status: "settled", totalCostMicros: 50 }
+      }
+    ],
+    0
+  );
+  assert.equal(usage.tokens, 0);
+  assert.equal(usage.micros, 0);
+  assert.deepEqual(cancelled, ["spend"]);
 });

@@ -14,7 +14,7 @@ export const CASES = [
     deadlineMs: 12 * 60_000,
     prerequisite: "normal demo seed shared Workflow account, workflows and notify",
     prompt:
-      "Create a draft manually started bookkeeping check. Calculate 19 + 23 and return an output object with total equal to the result. Include an Inbox notice to me after the calculation. It needs no input. Use an existing shared account available in this platform. Save the draft for me to Test from its canvas; do not run or publish it."
+      "Create a draft manually started bookkeeping check named {name}. Calculate 19 + 23 and return an output object with total equal to the result. Include an Inbox notice to me after the calculation. It needs no input. Use an existing shared account available in this platform. Save the draft for me to Test from its canvas; do not run or publish it."
   },
   {
     id: "live-skill-consent",

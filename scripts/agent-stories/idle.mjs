@@ -2,6 +2,14 @@
 // schedules may wait on an otherwise idle normal demo; every unknown job is refused.
 const PASSIVE_TICKS = new Set([
   "conversation.expire",
+  // Adopters cannot start model work when the active-run/reservation checks below are zero.
+  "agent_run.adopt",
+  "workspace_command.adopt_legacy",
+  "workspace_command.clean_temp_state",
+  "connection_bindings.keep_alive",
+  "notice.deliver_mail",
+  "data_store.measure_size_tick",
+  "data_store.upgrade_owned_tick",
   "execution_workspace.cleanup",
   "audit.prune",
   "platform_jobs.prune",

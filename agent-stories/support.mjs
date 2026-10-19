@@ -243,7 +243,7 @@ export const test = base.extend({
           const rows =
             await sql`select a.id,a.name,a.kind,a.scope_kind as "scopeKind",a.scope_id as "scopeId",a.active_revision_id as "revisionId",a.created_at as "createdAt",r.actor->>'userId' as "actorId",r.revision,
           coalesce(c.conversation_id,r.origin->>'conversationId') as "conversationId",
-          o.origin->>'agentRunId' as "runId"
+          o.origin->>'agentRunId' as "runId",o.id as "operationId",o.operation as "operation"
           from config_assets a join config_asset_revisions r on r.asset_id=a.id and r.revision=1
           left join conversation_created_assets c on c.asset_id=a.id
           join operation_runs o on o.conversation_id=${run.conversationId} and o.status='done'
@@ -261,6 +261,10 @@ export const test = base.extend({
             seededIds: stack.seededIds,
             kind
           });
+          observations.operations = [
+            ...(observations.operations ?? []).filter((item) => item.id !== row.operationId),
+            { id: row.operationId, operation: row.operation, status: "done" }
+          ];
           observations.id = row.id;
           observations.name = row.name;
           observations.actorId = row.actorId;
@@ -344,8 +348,8 @@ export const test = base.extend({
         for (const asset of instanceAssets)
           await json(
             root.request,
-            "DELETE",
-            `/api/v1/assets/${asset.kind}/${encodeURIComponent(asset.name)}`,
+            "POST",
+            `/api/v1/assets/${asset.kind}/${encodeURIComponent(asset.name)}/delete`,
             { expectedRevision: asset.revision },
             [200, 202, 204]
           ).catch(() => errors.push("asset cleanup failed"));

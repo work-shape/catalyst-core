@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { test, expect, selected, sql, json, saveObservation } from "./support.mjs";
 import { CASES } from "../scripts/agent-stories/catalog.mjs";
 import { workflowOracle } from "../scripts/agent-stories/oracles.mjs";
@@ -21,7 +22,12 @@ async function deliverySnapshot(story) {
 }
 test(id, async ({ story }) => {
   test.skip(!selected(id));
-  const run = await story.start(CASES.find((c) => c.id === id).prompt);
+  const run = await story.start(
+    CASES.find((c) => c.id === id).prompt.replace(
+      "{name}",
+      `synthetic-check-${randomUUID().slice(0, 8)}`
+    )
+  );
   await story.waitRun(run);
   const workflow = await story.created("workflow", run);
   const before = await deliverySnapshot(story);
@@ -66,12 +72,15 @@ test(id, async ({ story }) => {
   const jobs =
     await sql`select id,kind,status from platform_jobs where subject=${runId} or payload::text like ${"%" + runId + "%"}`;
   story.observations.jobs = jobs;
-  story.observations.operations = operations.map(({ id, operation, status, target }) => ({
-    id,
-    operation,
-    status,
-    target
-  }));
+  story.observations.operations = [
+    ...(story.observations.operations ?? []),
+    ...operations.map(({ id, operation, status, target }) => ({
+      id,
+      operation,
+      status,
+      target
+    }))
+  ];
   const after = await deliverySnapshot(story);
   const [current] =
     await sql`select published_revision_id from config_assets where id=${workflow.id}`;

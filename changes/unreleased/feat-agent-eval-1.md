@@ -9,3 +9,5 @@ section: Added
 - Exercise cold startup against the committed commented Postgres pin and seed adapter, preserve shipped setup rights, keep Playwright artifacts separate from stack metadata, and retain accounting when a case reaches its deadline. Deterministic probes catch each startup boundary without model access.
 
 - Read generated assets in their owning scope and representation, test the active Workflow draft, and delete fixtures through the owner’s confirmed lifecycle before warm reuse. Cleanup failures retain the primary case evidence.
+
+- Follow required App sharing review in the normal Inbox, isolate Workflow names across retained revision history, recognize the normal demo’s idle maintenance schedules, and keep warm-start accounting separate from inherited spend.
