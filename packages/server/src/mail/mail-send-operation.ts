@@ -15,6 +15,7 @@ import {
   asUserId,
   auditActorFromIdentity,
   isAuthenticatedServicePrincipal,
+  mailCopyRecipientListSchema,
   mailDomainAllowed,
   mailDomainOf,
   mailRecipientSchema,
@@ -70,6 +71,14 @@ export interface MailSendOperationOptions {
   /** The frame's language where a call names none. */
   defaultLocale: LocaleCode;
 }
+
+/**
+ * The input the operation parses: the contract's, with a `to` that may hold nobody. A step's
+ * reference can resolve to an empty list, and such a mail is refused as `no_recipient` and
+ * recorded, as one whose people have no address is. A literal `to` still needs one entry at
+ * save, and an agent's tool still names one.
+ */
+const mailSendCallInputSchema = mailSendInputSchema.extend({ to: mailCopyRecipientListSchema });
 
 /** A recipient as the send uses it: an address, and whether it is a person of the instance. */
 interface ResolvedRecipient {
@@ -348,7 +357,10 @@ export function mailSendOperation(
   }
 
   async function recordRefusal(
-    context: Pick<OperationSimulationContext, "audit" | "actor" | "correlationId" | "origin">,
+    context: Pick<
+      OperationSimulationContext,
+      "audit" | "actor" | "correlationId" | "origin" | "runId"
+    >,
     input: MailSendInput,
     target: "live" | "dry_run",
     refusal: MailRefusal
@@ -361,6 +373,7 @@ export function mailSendOperation(
       subject: input.sender,
       reason: refusal.reason,
       metadata: {
+        operationRunId: context.runId,
         origin: originOf(context.origin),
         sender: input.sender,
         target,
@@ -398,7 +411,7 @@ export function mailSendOperation(
     retriedReasons: [MAIL_SEND_UNSENT_REASON],
     scope: null,
     auth: "principal",
-    inputSchema: mailSendInputSchema,
+    inputSchema: mailSendCallInputSchema,
     outputSchema: mailSendContract.outputSchema,
     // The sender a call names, `system` where it names none: a step's mapping leaves the field
     // out, and the publish asks the right on what the mapping says before any run.
@@ -495,6 +508,7 @@ export function mailSendOperation(
         correlationId: context.correlationId,
         subject: input.sender,
         metadata: {
+          operationRunId: context.runId,
           origin,
           sender: input.sender,
           target: "live",

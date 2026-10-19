@@ -2,6 +2,7 @@ import {
   AppError,
   MAIL_SEND_ERROR_CODES,
   MAIL_SEND_OPERATION,
+  mailCopyRecipientListSchema,
   mailDomainAllowed,
   mailDomainOf,
   mailRecipientListSchema,
@@ -75,8 +76,9 @@ export async function mailSendStepRefusal(
       ["senderName", mailSenderNameSchema],
       ["replyTo", mailReplyToSchema],
       ["to", mailRecipientListSchema],
-      ["cc", mailRecipientListSchema],
-      ["bcc", mailRecipientListSchema]
+      // A copy list may hold nobody: the mail still goes to `to`.
+      ["cc", mailCopyRecipientListSchema],
+      ["bcc", mailCopyRecipientListSchema]
     ];
     for (const [field, schema] of fields) {
       const value = literalOf(step, field);
@@ -91,7 +93,7 @@ export async function mailSendStepRefusal(
     for (const field of ["to", "cc", "bcc", "replyTo"]) {
       const value = literalOf(step, field);
       if (value === undefined) continue;
-      const list = mailRecipientListSchema.safeParse(
+      const list = mailCopyRecipientListSchema.safeParse(
         typeof value === "object" && value !== null && !Array.isArray(value) ? [value] : value
       );
       if (!list.success) continue;

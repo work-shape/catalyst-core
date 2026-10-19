@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { EVENTS } from "@work-shape/catalyst-core";
 import type { MailSendResult, MailTransport, RenderedMail } from "@work-shape/catalyst-mail";
 import { clientInstanceId } from "./support/access-instance";
 import { required } from "./support/assertions";
@@ -98,14 +99,28 @@ async function run(t: WorkflowFixture, workflow: string, input: Record<string, u
   return { run: ended, step };
 }
 
+/** The mail events so far, each held to its payload in the event registry. */
 async function mailEvents() {
-  return withTestSql(
+  const rows = await withTestSql(
     (sql) =>
-      sql<{ type: string; metadata: Record<string, unknown> }[]>`
+      sql<{ type: "mail.sent" | "mail.refused"; metadata: Record<string, unknown> }[]>`
         select type, metadata from audit_events
         where client_instance_id = ${clientInstanceId} and type in ('mail.sent', 'mail.refused')
         order by created_at`
   );
+  for (const { type, metadata } of rows) {
+    const { required: needed, properties } = EVENTS[type].payload;
+    expect(
+      Object.keys(metadata).filter((key) => !Object.hasOwn(properties, key)),
+      type
+    ).toEqual([]);
+    expect(
+      needed.filter((key) => !Object.hasOwn(metadata, key)),
+      type
+    ).toEqual([]);
+    expect(metadata.operationRunId, type).toEqual(expect.stringMatching(/^oprun_/u));
+  }
+  return rows;
 }
 
 async function person(t: WorkflowFixture, displayLabel: string, email?: string) {
@@ -257,6 +272,37 @@ describe("mail.send from a Workflow (MAIL-1)", () => {
     expect(t.capturedMail()[0]?.recipients.to).toEqual([
       { email: "anna@kanzlei.de" },
       { email: "bert@kanzlei.de" }
+    ]);
+  });
+
+  it("sends with an empty cc and bcc, and refuses a referenced to that holds nobody", async () => {
+    const t = await ready({ mail: { recipientDomains: ["kanzlei.de"] } });
+    await grantSystem(t);
+    await save(
+      t,
+      mailFlow("copies", {
+        ...basic({ value: "a@kanzlei.de" }),
+        cc: { value: [] },
+        bcc: { value: [] }
+      })
+    );
+    expect((await run(t, "copies")).run.status).toBe("done");
+    expect(t.capturedMail()[0]?.recipients).toEqual({
+      to: [{ email: "a@kanzlei.de" }],
+      cc: [],
+      bcc: []
+    });
+    // A literal to names someone; a reference may resolve to nobody, which the run refuses.
+    const literal = await put(t, mailFlow("nobody", basic({ value: [] })));
+    expect(literal.json()).toMatchObject({ error: { details: { reason: "input_invalid" } } });
+    await save(t, mailFlow("empty", basic(ref("people"))));
+    const empty = await run(t, "empty", { people: [] });
+    expect(empty.run.status).toBe("failed");
+    expect(empty.step.error).toMatchObject({ code: "no_recipient" });
+    expect(t.capturedMail()).toHaveLength(1);
+    expect(await mailEvents()).toMatchObject([
+      { type: "mail.sent", metadata: { recipients: { to: 1, cc: 0, bcc: 0 } } },
+      { type: "mail.refused", metadata: { reason: "no_recipient", target: "live" } }
     ]);
   });
 
@@ -433,5 +479,8 @@ describe("a test run of a mail.send step", () => {
     const outside = await test("otto@outside.test");
     expect(outside.error).toMatchObject({ code: "recipient_not_allowed" });
     expect(t.capturedMail()).toEqual([]);
+    expect(await mailEvents()).toMatchObject([
+      { type: "mail.refused", metadata: { reason: "recipient_not_allowed", target: "dry_run" } }
+    ]);
   });
 });
