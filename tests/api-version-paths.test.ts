@@ -224,6 +224,13 @@ describe("the operation catalog", () => {
         "platform.docs.get  GET /api/v1/context/docs",
         "platform.references.get  GET /api/v1/context/references",
         "ready.get  GET /ready",
+        "roles.create  POST /api/v1/instance/access/roles",
+        "roles.delete  DELETE /api/v1/instance/access/roles/:roleId",
+        "roles.get  GET /api/v1/instance/access/roles/:roleId",
+        "roles.list  GET /api/v1/instance/access/roles",
+        "roles.pending.decide  POST /api/v1/instance/access/roles/:roleId/pending",
+        "roles.reset  POST /api/v1/instance/access/roles/:roleId/reset",
+        "roles.update  PATCH /api/v1/instance/access/roles/:roleId",
         "scope_assignments.list  GET /api/v1/instance/access/scope-assignments",
         "scope_assignments.set  PUT /api/v1/instance/access/scope-assignments",
         "service_principals.create  POST /api/v1/instance/service-principals",
@@ -468,7 +475,7 @@ describe("a running instance", () => {
     // files of a workspace. Then the check of a new asset's name and the switch of a
     // guardrail the release ships. Then a person's decision on a call their Agent Run waits on.
     // Then the queued follow-ups of a conversation, the change proposal of an agent and the
-    // Try conversation beside it.
+    // Try conversation beside it. Then the roles of the instance.
     const added: readonly ApiOperationName[] = [
       "scope_assignments.list",
       "scope_assignments.set",
@@ -589,7 +596,14 @@ describe("a running instance", () => {
       "conversations.subagents.list",
       "connections.disconnect",
       "workspaces.limits.list",
-      "workspaces.limits.update"
+      "workspaces.limits.update",
+      "roles.list",
+      "roles.get",
+      "roles.create",
+      "roles.update",
+      "roles.delete",
+      "roles.reset",
+      "roles.pending.decide"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

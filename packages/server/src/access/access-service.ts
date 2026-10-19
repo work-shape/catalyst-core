@@ -204,7 +204,9 @@ export class AccessWorkflow {
     if (command.holderKind !== "user") {
       throw refused(
         "invalid_scope",
-        "A grant can be written for a user or a service principal only"
+        command.holderKind === "role"
+          ? "A role's grants are changed on the role (roles.update)"
+          : "A grant can be written for a user or a service principal only"
       );
     }
     if (!isPlatformAction(command.action)) {
@@ -320,6 +322,9 @@ export class AccessWorkflow {
     });
     if (!existing) {
       throw new AppError("NOT_FOUND", "Grant not found");
+    }
+    if (existing.holderKind === "role") {
+      throw refused("invalid_scope", "A role's grants are changed on the role (roles.update)");
     }
     if (existing.holderKind === "user") {
       const holder = await this.findUser(existing.holderId);

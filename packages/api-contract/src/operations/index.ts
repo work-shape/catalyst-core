@@ -22,6 +22,7 @@ import { pageOperations } from "./pages";
 import { personalApiKeyOperations } from "./personal-api-keys";
 import { platformOperations } from "./platform";
 import { referenceOperations } from "./reference";
+import { roleOperations } from "./roles";
 import { systemOperations } from "./system";
 import { userOperations } from "./users";
 import { workflowOperations } from "./workflows";
@@ -32,6 +33,7 @@ export const apiOperations = {
   ...approvalRequestOperations,
   ...accountOperations,
   ...instanceOperations,
+  ...roleOperations,
   ...collaborationWorkspaceOperations,
   ...conversationOperations,
   ...conversationFileOperations,

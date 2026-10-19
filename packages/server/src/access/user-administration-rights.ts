@@ -1,10 +1,10 @@
 import {
   PERMISSION_REF_ACTION_PREFIX,
-  ROLE_DEFAULT_ACTIONS,
   asUserId,
   isAuthenticatedServicePrincipal,
   isPermission,
   isSuperadmin,
+  isSuperadminGrantedAction,
   type ActorAccess,
   type AuthenticatedIdentity,
   type HeldRight,
@@ -16,19 +16,16 @@ import { authorizeHeldRightsWithin } from "./held-rights-within";
 import { personRights } from "./person-rights";
 import { requireAuthorized } from "./rights-held";
 import { RELEASE_KEY } from "./principal-rights";
+import {
+  carriesSuperadminGrantedAction,
+  currentRoleGrants,
+  rightsOfGrants,
+  type RoleRightsOptions
+} from "./role-rights";
 import type { ChatServerOptions } from "../types";
 
 /** The right every user administration operation asks for, on the instance. */
 const USERS_MANAGE_ACTION = "users.manage";
-
-/**
- * Rights only a superadmin gives or takes away, granted or revoked (`!right`). An admin does
- * not change them for anybody, themselves included.
- */
-const SUPERADMIN_ASSIGNED_PERMISSIONS: ReadonlySet<string> = new Set([
-  "api_access.manage",
-  "agent_models.manage"
-]);
 
 /** What a call changes about a user's roles and directly held rights, as far as it names them. */
 interface UserRightsChange {
@@ -151,9 +148,16 @@ async function userAdministrationRule(
   target: UserRecord | undefined,
   call: Omit<UserAdministrationCall, "userId">
 ): Promise<OperationAuthorization> {
-  const named = superadminRuleAgainst(caller.actor, target, call);
+  const roleRights = {
+    clientInstanceId: options.clientInstanceId,
+    access: options.stores.access,
+    roles: options.stores.roles
+  };
+  const named =
+    superadminRuleAgainst(caller.actor, target, call) ??
+    (await superadminRoleRuleAgainst(roleRights, caller.actor, target, call));
   if (named !== undefined) return superadminRuleRefusal(operationId, named);
-  const given = rightsGiven(target, call);
+  const given = await rightsGiven(roleRights, target, call);
   if (target !== undefined && target.id === caller.actor.id && given.length > 0) {
     return {
       allowed: false,
@@ -178,24 +182,27 @@ async function userAdministrationRule(
 }
 
 /**
- * What a call gives: each role it adds, as the actions the role holds by default on the whole
- * instance; each legacy key it adds or whose revocation it removes; and each reference of a
- * tool it adds, as the action `ref:<reference>`, which only a holder of the reference holds.
- * Removing a role, a key or a reference, or adding a revocation, takes away and gives nothing.
- * An entry that is no key, and the release key, which a person never carries, are left to the
- * operation, which refuses them by name.
+ * What a call gives: each role it adds, as the rights the role holds now, each at its scope;
+ * each legacy key it adds or whose revocation it removes; and each reference of a tool it
+ * adds, as the action `ref:<reference>`, which only a holder of the reference holds. Removing
+ * a role, a key or a reference, or adding a revocation, takes away and gives nothing. An entry
+ * that is no key, the release key, which a person never carries, and a role the instance does
+ * not have are left to the operation, which refuses them by name.
  */
-function rightsGiven(
+async function rightsGiven(
+  options: RoleRightsOptions,
   target: Pick<UserRecord, "roles" | "permissions" | "permissionRefs"> | undefined,
   call: UserRightsChange
-): HeldRight[] {
+): Promise<HeldRight[]> {
   const refs = (call.permissionRefs ?? [])
     .filter((ref) => !target?.permissionRefs.includes(ref))
-    .map((ref) => `${PERMISSION_REF_ACTION_PREFIX}${ref}`);
-  const roles = (call.roles ?? []).filter((role) => !target?.roles.includes(role));
-  const roleActions = roles.flatMap((role): readonly string[] =>
-    role === "user" || role === "admin" || role === "superadmin" ? ROLE_DEFAULT_ACTIONS[role] : []
-  );
+    .map((ref) => ({ action: `${PERMISSION_REF_ACTION_PREFIX}${ref}` }));
+  const roleRights: HeldRight[] = [];
+  for (const role of addedRoles(target, call)) {
+    const grants = (await currentRoleGrants(options, role)) ?? [];
+    const allows = grants.filter((grant) => grant.effect === "allow");
+    roleRights.push(...(await rightsOfGrants(options, allows)));
+  }
   const existing = target?.permissions ?? [];
   const keys = changedPermissionEntries(call.permissions, existing)
     .flatMap((entry) => {
@@ -203,8 +210,36 @@ function rightsGiven(
       // A revocation that the call removes gives the key back.
       return existing.includes(entry) ? [entry.slice(1)] : [];
     })
-    .filter((key) => isPermission(key) && key !== RELEASE_KEY);
-  return [...new Set([...roleActions, ...keys, ...refs])].map((action) => ({ action }));
+    .filter((key) => isPermission(key) && key !== RELEASE_KEY)
+    .map((action) => ({ action }));
+  const rights = new Map<string, HeldRight>();
+  for (const right of [...roleRights, ...keys, ...refs]) rights.set(JSON.stringify(right), right);
+  return [...rights.values()];
+}
+
+function addedRoles(target: Pick<UserRecord, "roles"> | undefined, call: UserRightsChange) {
+  return (call.roles ?? []).filter((role) => !target?.roles.includes(role));
+}
+
+/**
+ * Only a superadmin gives or takes a role that carries a right only a superadmin hands out
+ * (`SUPERADMIN_GRANTED_ACTIONS`), as it is now. The sentence a refused caller reads, or nothing.
+ */
+async function superadminRoleRuleAgainst(
+  options: RoleRightsOptions,
+  actor: AuthenticatedIdentity,
+  target: Pick<UserRecord, "roles"> | undefined,
+  call: UserRightsChange
+): Promise<string | undefined> {
+  if (isSuperadminActor(actor) || call.roles === undefined) return undefined;
+  const removed = (target?.roles ?? []).filter((role) => !call.roles?.includes(role));
+  for (const role of [...addedRoles(target, call), ...removed]) {
+    const grants = await currentRoleGrants(options, role);
+    if (grants && carriesSuperadminGrantedAction(grants)) {
+      return `Only a superadmin may give or take the role '${role}', which carries a right only a superadmin hands out`;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -226,7 +261,7 @@ function superadminRuleAgainst(
   }
   const assigned = changedPermissionEntries(call.permissions, target?.permissions)
     .map((permission) => permission.replace(/^!/u, ""))
-    .find((permission) => SUPERADMIN_ASSIGNED_PERMISSIONS.has(permission));
+    .find((permission) => isSuperadminGrantedAction(permission));
   return assigned === undefined
     ? undefined
     : `Only a superadmin may give or take the right '${assigned}'`;

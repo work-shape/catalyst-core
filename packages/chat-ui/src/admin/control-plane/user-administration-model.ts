@@ -5,9 +5,11 @@ import type {
   UpsertAdministeredUserIdentityRequest
 } from "@work-shape/catalyst-api-client";
 import {
+  BUILT_IN_ROLES,
   LEGACY_PERMISSION_ACTIONS,
   PERMISSIONS,
   ROLE_DEFAULT_ACTIONS,
+  type BuiltInRole,
   type Permission
 } from "@work-shape/catalyst-core";
 import type { TranslationKey } from "../../shared/i18n";
@@ -41,7 +43,7 @@ export interface IdentityFormState {
 
 export type FormNoticeState = { kind: "success" | "error"; text: string } | undefined;
 
-export type AccessLevel = "user" | "admin" | "superadmin";
+export type AccessLevel = BuiltInRole;
 
 export const ACCESS_LEVEL_OPTIONS: Array<{
   value: AccessLevel;
@@ -118,7 +120,7 @@ export function userStatusFilterOf(value: string): UserStatusFilter {
 
 export const DEFAULT_ROWS_PER_PAGE = 10;
 
-const ROLE_ORDER = ["superadmin", "admin", "user"];
+const ROLE_ORDER: readonly string[] = [...BUILT_IN_ROLES].reverse();
 
 export function filterUsers(
   users: AdministeredUser[],
@@ -237,7 +239,7 @@ export function rolesToAccessLevel(roles: string[]): AccessLevel {
 
 export function accessLevelToRoles(accessLevel: AccessLevel): string[] {
   if (accessLevel === "superadmin") {
-    return ["user", "admin", "superadmin"];
+    return [...BUILT_IN_ROLES];
   }
   if (accessLevel === "admin") {
     return ["user", "admin"];

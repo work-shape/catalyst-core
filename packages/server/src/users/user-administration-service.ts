@@ -30,6 +30,8 @@ import {
   requireMayAdministerUser,
   requireUserAdministration
 } from "../access/user-administration-rights";
+import { isKnownRole } from "../access/role-rights";
+import { requireActiveSuperadminRemains } from "./last-superadmin";
 
 /** What a changing user administration operation takes from its Operation Run. */
 type ChangeContext = Pick<
@@ -127,6 +129,7 @@ export class UserAdministrationWorkflow {
         permissionRefs: command.permissionRefs,
         permissions: command.permissions
       });
+      await held.requireKnownRoles(command.roles ?? []);
       const user = await held.options.stores.users.createUser({
         clientInstanceId: this.options.clientInstanceId,
         displayLabel: command.displayLabel,
@@ -164,6 +167,13 @@ export class UserAdministrationWorkflow {
       const existing = await held.getUserOrThrow(command.userId);
       requireNotInDeletion(existing);
       held.requireAssignablePermissions(command.permissions, existing.permissions);
+      await held.requireKnownRoles(
+        (command.roles ?? []).filter((role) => !existing.roles.includes(role))
+      );
+      await requireActiveSuperadminRemains(held.options, existing, {
+        roles: command.roles ?? existing.roles,
+        status: command.status ?? existing.status
+      });
       return held.options.stores.users.updateUser({
         clientInstanceId: this.options.clientInstanceId,
         userId: command.userId,
@@ -205,7 +215,7 @@ export class UserAdministrationWorkflow {
             superadminOnly: true
           });
           const existing = await held.getUserOrThrow(command.userId);
-          await held.requireAtLeastOneRemainingSuperadmin(existing);
+          await requireActiveSuperadminRemains(held.options, existing, "deleted");
           return mark(held.options.stores);
         })
     );
@@ -592,18 +602,19 @@ export class UserAdministrationWorkflow {
     }
   }
 
-  private async requireAtLeastOneRemainingSuperadmin(deletedUser: UserRecord): Promise<void> {
-    if (!isSuperadmin(deletedUser)) {
-      return;
-    }
-    const users = await this.options.stores.users.listUsers({
-      clientInstanceId: this.options.clientInstanceId
-    });
-    const remainingActiveSuperadmin = users.some(
-      (user) => user.id !== deletedUser.id && user.status === "active" && isSuperadmin(user)
-    );
-    if (!remainingActiveSuperadmin) {
-      throw new AppError("VALIDATION_FAILED", "At least one active superadmin must remain");
+  /** A role given to a person is one the instance has: a built-in one or a stored custom role. */
+  private async requireKnownRoles(roles: readonly string[]): Promise<void> {
+    const options = {
+      clientInstanceId: this.options.clientInstanceId,
+      access: this.options.stores.access,
+      roles: this.options.stores.roles
+    };
+    for (const role of roles) {
+      if (!(await isKnownRole(options, role))) {
+        throw new AppError("VALIDATION_FAILED", `'${role}' is not a role of this instance`, {
+          reason: "unknown_role"
+        });
+      }
     }
   }
 
