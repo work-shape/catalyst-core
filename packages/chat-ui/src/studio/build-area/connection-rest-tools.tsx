@@ -321,8 +321,9 @@ export function RestToolsSection({
       />
       {pasting || opened.draft ? (
         <AddToolsDialog
-          // A draft opened over a paste in progress starts its own dialog.
-          key={opened.draft ? "drafted" : "pasted"}
+          // A draft opened over a paste in progress, or over an earlier draft, starts its own
+          // dialog.
+          key={opened.draft ? `drafted:${opened.arrival}` : "pasted"}
           title={title}
           {...(opened.draft ? { drafted: opened.draft } : {})}
           onClose={() => {

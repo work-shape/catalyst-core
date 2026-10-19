@@ -4,6 +4,7 @@ import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { asClientInstanceId, type OperationOrigin } from "@work-shape/catalyst-core";
 import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { required } from "./support/assertions";
+import { BOOKKEEPING_OPERATIONS, BOOKKEEPING_OPERATION_NAMES } from "./support/bookkeeping-draft";
 import { createTestConfig } from "./support/fixtures";
 import { json, startRestTestServer, type RestTestServer } from "./support/rest-test-server";
 import { generateSecretStoreKey, generateTestSecret } from "./support/test-connector";
@@ -236,6 +237,30 @@ describe("an http_api Connection made on the instance", () => {
     });
     expect(read.body).not.toContain(key);
     expect(JSON.stringify(await w.runs())).not.toContain(key);
+  });
+
+  // ACCEPT-2c E4: the first approval of five drafted read tools kept four, without
+  // list_buchungen. The five as the approval list saves them, in one write, are all kept.
+  it("keeps all five drafted read operations of one approval, list_buchungen among them", async () => {
+    const w = await world();
+    expect((await w.put(w.definition(), null)).statusCode).toBe(200);
+    const approved = BOOKKEEPING_OPERATIONS.map((operation) => ({
+      ...operation,
+      exposure: ["agent"],
+      enabled: true
+    }));
+    expect((await w.put(w.definition({ operations: approved }), 1)).statusCode).toBe(200);
+    const read = await w.instance.call("assets.get", {
+      params: { kind: "connection", name: NAME }
+    });
+    expect(read.statusCode).toBe(200);
+    const saved = z
+      .object({ config: z.object({ operations: z.array(z.object({ name: z.string() })) }) })
+      .parse(read.json()).config.operations;
+    expect(saved.map(({ name }) => name)).toEqual(BOOKKEEPING_OPERATION_NAMES);
+    expect((await w.detail()).operations.map(({ name }) => name)).toEqual(
+      BOOKKEEPING_OPERATION_NAMES
+    );
   });
 
   it("refuses every operation scope value at save and in release config with SCOPE-2", async () => {
