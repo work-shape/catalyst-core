@@ -12,7 +12,7 @@ import { useAppsHost } from "./apps-host";
  * draft is saved and its builder can use it now; others see the change once it is shared, and
  * the live revision keeps the audience it has. The agent never shares. "Share" opens the App's
  * Publish dialog, which asks "For whom?", for a reader who may publish Apps in the workspace.
- * "Open draft" leads who may write Apps there to the draft's page.
+ * "Open" leads who may write Apps there to the draft's page.
  */
 export function AppSavedLine({ saved }: { saved: AppSaved }) {
   const { t } = useTranslation();
@@ -40,7 +40,7 @@ export function AppSavedLine({ saved }: { saved: AppSaved }) {
           data-testid="app-saved-open"
           onOpen={(route) => host.showRoute(route)}
         >
-          {t("apps.openDraft")}
+          {t("apps.open")}
         </RouteLink>
       ) : null}
       {mayShare ? (

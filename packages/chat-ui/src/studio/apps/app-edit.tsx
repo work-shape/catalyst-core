@@ -90,8 +90,11 @@ export function AppEdit({ app }: { app: string }) {
   const record = useApp(workspace?.id ?? "", app, workspace !== undefined);
   const rights = host && appRightsOn(host.rights, record.app);
   const writes = useAppWrites(workspace?.id);
-  // Where the App's data comes from, as its page says to whoever uses it.
-  const dataSources = useAppDataSources(app);
+  // Where the App's data comes from, as its page says to whoever uses it. Only a published
+  // App has sources to read, and lines cached from an earlier record are not shown.
+  const livePublished = record.app?.publishedRevision;
+  const liveSources = useAppDataSources(app, livePublished !== undefined);
+  const dataSources = livePublished === undefined ? undefined : liveSources;
   const [turn, setTurn] = useState(0);
   const [view, setView] = useState<AppDraftView>("preview");
   const [detailsOpen, setDetailsOpen] = useState(readStoredDetailsOpen);

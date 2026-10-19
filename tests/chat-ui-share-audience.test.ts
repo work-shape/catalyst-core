@@ -385,12 +385,12 @@ describe("the line the first save of an App leaves", () => {
   // DAILY-WINS 8: the line leads its builder to the draft, beside Share.
   it("opens the draft for a reader who may write Apps, beside Share", () => {
     const open = new RegExp(
-      `<a[^>]*data-testid="app-saved-open"[^>]*href="/w/${workspace.id}/app-drafts/findings"[^>]*>Open the draft</a>`,
+      `<a[^>]*data-testid="app-saved-open"[^>]*href="/w/${workspace.id}/app-drafts/findings"[^>]*>Open</a>`,
       "u"
     );
     expect(line(host(true))).toMatch(open);
     expect(line(host(false))).toMatch(open);
-    expect(line(host(true), "de")).toContain(">Entwurf öffnen</a>");
+    expect(line(host(true), "de")).toMatch(/<a[^>]*data-testid="app-saved-open"[^>]*>Öffnen<\/a>/u);
     const reader: AppsHost = { ...host(false), rights: { ...host(false).rights, write: false } };
     expect(line(reader)).not.toContain("app-saved-open");
     expect(line(undefined)).not.toContain("app-saved-open");
