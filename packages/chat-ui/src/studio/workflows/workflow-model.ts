@@ -481,7 +481,7 @@ function failedConnection(
 export function failureHappened(
   failure: Pick<
     WorkflowFailure,
-    "reason" | "action" | "connection" | "connectionTitle" | "workflow"
+    "reason" | "action" | "connection" | "connectionTitle" | "workflow" | "operation"
   > & {
     detail?: string;
   },
@@ -491,6 +491,9 @@ export function failureHappened(
   const connection = failedConnection(failure, known);
   if (failure.workflow !== undefined && failure.reason === "runKeyCycle") {
     return t("workflows.reason.runKeyCycleNamed", { workflow: failure.workflow });
+  }
+  if (failure.operation !== undefined && failure.reason === "confirmationUnattended") {
+    return t("workflows.reason.confirmationUnattendedNamed", { operation: failure.operation });
   }
   if (failure.action !== undefined && failure.reason === "missingRight") {
     if (failure.action === CONNECTION_ACTIONS.use) {

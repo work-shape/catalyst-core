@@ -539,7 +539,7 @@ export function createToolOperationRunner(
         result.reason.kind === "policy" &&
         result.reason.reason === "confirmation_unattended"
       ) {
-        throw new ConfirmationUnattendedError();
+        throw new ConfirmationUnattendedError(result.reason.operation);
       }
       if (result.status === "pending_confirmation" || result.status === "pending_approval") {
         // Both decisions hold the step open; neither is a successful tool result.
@@ -637,7 +637,7 @@ async function knowledgeQueryRequest(
       )
     };
   }
-  const listed = (await deps.agentToolNames?.(request.agentName)) ?? [];
+  const listed = (await deps.agentToolNames?.(request.agentName, request.conversationId)) ?? [];
   if (!listed.includes(call.operation)) {
     return {
       refusal: failed(

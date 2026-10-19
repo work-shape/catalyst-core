@@ -68,6 +68,8 @@ export interface WorkflowRunError {
   action?: string;
   /** The Connection of a refused connection.use call, as the step recorded it. */
   connection?: string;
+  /** On `confirmation_unattended`: the operation an agent step called that needed one. */
+  operation?: string;
   /** On a run: the step run it ended at. */
   stepRunId?: WorkflowStepRunId;
 }

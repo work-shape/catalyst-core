@@ -87,6 +87,8 @@ interface ErrorResource {
   connection?: string;
   /** That Connection's title, where the reader may read or use it. */
   connectionTitle?: string;
+  /** On `confirmation_unattended`: the operation that needed a confirmation. */
+  operation?: string;
 }
 
 interface TimesResource {
@@ -192,6 +194,7 @@ function toFailure(error: ErrorResource | undefined) {
       ...(error.action === undefined ? {} : { action: error.action }),
       ...(error.connection === undefined ? {} : { connection: error.connection }),
       ...(error.connectionTitle === undefined ? {} : { connectionTitle: error.connectionTitle }),
+      ...(error.operation === undefined ? {} : { operation: error.operation }),
       ...(workflow === undefined ? {} : { workflow })
     }
   };

@@ -54,6 +54,8 @@ const workflowRunErrorSchema = z.object({
   connection: z.string().optional(),
   /** That Connection's display name, where the reader may read or use it. */
   connectionTitle: z.string().optional(),
+  /** On `confirmation_unattended`: the operation an agent step called that needed one. */
+  operation: z.string().optional(),
   /** On a run: the step run it ended at. */
   stepRunId: z.string().optional()
 });

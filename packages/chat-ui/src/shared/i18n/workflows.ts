@@ -5,6 +5,8 @@ export const workflows = defineTranslations({
   en: {
     "workflows.reason.confirmationUnattended":
       "The agent asked for confirmation, but nobody is present to confirm it.",
+    "workflows.reason.confirmationUnattendedNamed":
+      "The agent called “{operation}”, which needs a confirmation, but nobody is present to confirm it.",
     "workflows.advice.confirmationUnattended":
       "Ask an administrator to require approval for this action, then start a new run.",
     "workflows.panel.agentInput": "Input",
@@ -403,6 +405,8 @@ export const workflows = defineTranslations({
   de: {
     "workflows.reason.confirmationUnattended":
       "Der Agent hat um eine Bestätigung gebeten, aber niemand ist anwesend, um sie zu geben.",
+    "workflows.reason.confirmationUnattendedNamed":
+      "Der Agent hat „{operation}“ aufgerufen. Das braucht eine Bestätigung, aber niemand ist anwesend, um sie zu geben.",
     "workflows.advice.confirmationUnattended":
       "Bitte einen Administrator, für diese Aktion eine Freigabe zu verlangen. Starte den Lauf dann erneut.",
     "workflows.panel.agentInput": "Eingabe",

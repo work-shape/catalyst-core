@@ -30,6 +30,8 @@ export interface RunFailureError {
   code: string;
   message: string;
   category: AgentRunFailureCategory;
+  /** The operation that needed a confirmation, on `confirmation_unattended`. */
+  tool?: string;
   usageLimit?: ModelUsageRefusal;
 }
 

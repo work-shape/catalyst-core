@@ -30,11 +30,13 @@ export async function agentStepOutcome(
       error: {
         code: child.error?.code ?? "agent_cancelled",
         message:
-          child.error?.code === "confirmation_unattended"
-            ? "The agent step asked for confirmation while unattended"
-            : child.error?.code === "output_invalid"
-              ? child.error.message
-              : "The agent step failed"
+          child.error?.code === "confirmation_unattended" || child.error?.code === "output_invalid"
+            ? child.error.message
+            : "The agent step failed",
+        // The operation that needed a confirmation, so the step says which one (check 101).
+        ...(child.error?.code === "confirmation_unattended" && child.error.tool
+          ? { operation: child.error.tool }
+          : {})
       }
     };
   const definition = await stores.workflowRuns.readRunDefinition({

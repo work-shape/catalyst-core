@@ -83,8 +83,13 @@ export class ModelNotPricedError extends AppError {
  * What a failed run carries of an error besides its message: the error's own code, or the
  * narrower one of a refusal a client words itself, and for a usage limit which limit it was.
  */
-export function runFailureOf(error: AppError): { code: string; usageLimit?: ModelUsageRefusal } {
+export function runFailureOf(error: AppError): {
+  code: string;
+  tool?: string;
+  usageLimit?: ModelUsageRefusal;
+} {
   const code = runFailureCodeOf(error);
+  if (error instanceof ConfirmationUnattendedError) return { code, tool: error.operation };
   if (error instanceof ModelUsageLimitReachedError) {
     const { period, metric, scope } = error.refusal;
     return { code, usageLimit: { period, metric, scope } };
@@ -98,9 +103,13 @@ export class WorkflowAgentOutputInvalidError extends AppError {
   }
 }
 
+/** A Workflow agent step's call that needs a confirmation: nobody is present to give it. */
 export class ConfirmationUnattendedError extends AppError {
-  constructor() {
-    super("POLICY_DENIED", "A Workflow agent step cannot ask for confirmation");
+  constructor(readonly operation: string) {
+    super(
+      "POLICY_DENIED",
+      `The operation '${operation}' needs a confirmation, and a Workflow agent step has nobody to give it`
+    );
   }
 }
 

@@ -236,6 +236,8 @@ export interface WorkflowFailure {
   connectionTitle?: string;
   /** On a run key held in the call chain: the name of the Workflow the step would start. */
   workflow?: string;
+  /** On a confirmation an agent step could not get: the operation that needed it. */
+  operation?: string;
 }
 
 /** The start of what a run or a step returned, as JSON. */
