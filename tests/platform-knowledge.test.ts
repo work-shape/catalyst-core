@@ -210,7 +210,14 @@ describe("the platform's knowledge of an agent", () => {
       "If propose_skill_change is in your tool list, propose the change with it; that files a request"
     );
     expect(offer.orientation).toContain(
-      "that save files a request an admin decides in the Inbox, and the skill stays as it was until then"
+      "someone who may approve skill changes decides it in the Inbox (Eingang), and nothing changes before"
+    );
+    expect(offer.orientation).toContain("An asset read or open can return saveApproval.");
+    expect(offer.orientation).toContain(
+      "name the people in saveApproval.approverNames as the approvers"
+    );
+    expect(offer.orientation).toContain(
+      "When absent, an authorized save takes effect immediately."
     );
   });
 
