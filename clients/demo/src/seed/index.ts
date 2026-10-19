@@ -14,6 +14,7 @@ export {
   workflowCheckQuestions,
   workspace,
   workspaceAssets,
+  workspaceBundles,
   type CheckReason
 } from "./company";
 /** All the company brings, for a test that checks every entry of a kind. */

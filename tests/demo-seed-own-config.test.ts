@@ -44,7 +44,7 @@ describe("the demo seed on the demo's own config", () => {
 
   it("creates the same company and changes nothing on a second run", () => {
     expect(createdBy(seeded().first)).toEqual({
-      people: 8,
+      people: 9,
       "service principals": 1,
       "API keys": 1,
       "the instance's own agents and skills": 2,
@@ -57,6 +57,7 @@ describe("the demo seed on the demo's own config", () => {
       "connection grant rows": 9,
       workspaces: 1,
       "workspace members": 4,
+      "workspace bundles": 2,
       "workspace assets": 2,
       apps: 3,
       workflows: 1

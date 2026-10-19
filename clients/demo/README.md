@@ -41,14 +41,16 @@ Every seeded person signs in with the address below and the password in `DEMO_SE
 | Lena Hoffmann  | `lena.hoffmann@nordlicht-beratung.test`  | user  | deactivated              |                                            |
 | Noah Fischer   | `noah.fischer@nordlicht-beratung.test`   | user  | invited, never signed in |                                            |
 | Kai Berger     | `kai.berger@nordlicht-beratung.test`     | user  | active                   |                                            |
+| Fabian Wolf    | `fabian.wolf@nordlicht-beratung.test`    | user  | active                   |                                            |
 
-The superadmin is the one of the demo's config, so the instance has nine people in three roles.
+The superadmin is the one of the demo's config, so the instance has ten people in three roles.
 
 - Four Namespaces: `tax-` (Steuern), `hr-` (Personal), `sales-` (Vertrieb) and `kai-` (Kai). `tax-` has a tool list (`read_skill`, `show_view`, `demo.workflow_summary`) and a model list (`primary`, `gpt56Luna`); the other three inherit everything.
 - Eight agents and seven skills from the working copy under `seed/`, pushed with the config CLI: two agents and two skills in each of `tax-`, `hr-` and `sales-`, and the agents `meeting-notes` and `travel-weather` and the skill `plain-language` outside every Namespace. The agent `tax-vat-checker` has two revisions: a draft Jonas Brandt saved in the interface's way, and the pushed definition over it.
 - Thirty-four grant rows on existing assets: allows for the current tax, HR and sales assets, denies on the tax checker and HR agents, and six rows on Kai Berger's two drafts. No new Namespace grant is written.
 - Kai Berger holds read, write and delete on `kai-helper`, and read, write and publish on `kai-client-years`. An admin prepares these drafts, then Kai saves their next revisions in his session. His Workflow stays unpublished: publishing lends the principal's rights, which he does not hold. He has no right on an App or to create other instance assets. The seed leaves his Workflow out when the Workflows module is off.
 - Three grant rows on the Connection `sample-business`, which the release config brings and not the seed: Sven Olsen may see and use it, Tobias Keller may use it. The two admins hold every right on it by their role and the other users hold none, so an agent of Elif Aydin is refused when it calls one of the Connection's tools. See [docs/try-connections.md](docs/try-connections.md).
+- Fabian Wolf, an outside builder, holds Builder and Publisher in the workspace Nordlicht Beratung, two grant rows an instance admin writes on Instance > Access, and is no member of it. He reads, writes and publishes what the workspace owns, works there in private conversations of his own and sees none of its other conversations. He holds no right on the REST Connection the firm's people use.
 - One service principal, `Local config CLI`, with one key.
 - Two approvals waiting in the Inbox, held by the demo, see below. Mara Lindqvist asks for the new skill `hr-parental-leave-faq` ("Elternzeit: häufige Fragen"), which the Inbox shows whole. Elif Aydin asks to replace one paragraph of the pushed skill `hr-leave-policy` ("Urlaubsrichtlinie"), which the Inbox shows as before and after.
 - One Shared Workspace, `Nordlicht Beratung`: Mara Lindqvist owns it, and Jonas Brandt, Tobias Keller, Elif Aydin and Sven Olsen are its members.
@@ -71,7 +73,7 @@ The seed asks for the change only while the request for the new skill waits: tha
 
 ### Running it again
 
-A rerun puts back what the seed owns and leaves everything else alone. The seed owns what it finds by its own names: the eight people by their address, the four Namespaces by their prefix, the agents and skills of `seed/` and the agent and Workflow of Kai Berger by their name.
+A rerun puts back what the seed owns and leaves everything else alone. The seed owns what it finds by its own names: the nine people by their address, the four Namespaces by their prefix, the agents and skills of `seed/` and the agent and Workflow of Kai Berger by their name.
 
 - A seeded person gets the seeded label, role, rights and status again. So a seeded person you deactivated is active after a rerun, and Lena Hoffmann is deactivated again.
 - A seeded Namespace gets its seeded name, tool list and model list again.

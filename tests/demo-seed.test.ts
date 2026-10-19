@@ -66,7 +66,7 @@ const seeded = useSeededInstance({
 describe("the demo seed on the fixture instance", () => {
   it("creates the company on an empty instance and says how much of each", () => {
     expect(createdBy(seeded().first)).toEqual({
-      people: 8,
+      people: 9,
       "service principals": 1,
       "API keys": 1,
       "the instance's own agents and skills": 2,
@@ -79,6 +79,7 @@ describe("the demo seed on the fixture instance", () => {
       "connection grant rows": 0,
       workspaces: 1,
       "workspace members": 4,
+      "workspace bundles": 2,
       "workspace assets": 2,
       apps: 2,
       workflows: 1
@@ -237,15 +238,26 @@ describe("the demo seed on the fixture instance", () => {
     expect(agent?.shown).not.toBe("all");
   });
 
-  it("writes only asset-scoped allow and deny rows", () => {
-    const { grants } = seeded().before;
+  it("writes asset-scoped allow and deny rows, and the outside builder's two bundles", () => {
+    const { grants, users, workspace } = seeded().before;
     const count = (effect: string, scopeKind: string) =>
       grants.filter((row) => row.effect === effect && row.scopeKind === scopeKind).length;
-    expect(grants).toHaveLength(34);
+    expect(grants).toHaveLength(36);
     expect(count("allow", "namespace")).toBe(0);
     expect(count("allow", "asset")).toBe(31);
     expect(count("deny", "namespace")).toBe(0);
     expect(count("deny", "asset")).toBe(3);
+    // Fabian Wolf is no member of the workspace he builds and publishes in.
+    const fabian = users.find((user) => user.displayLabel === "Fabian Wolf");
+    expect(
+      grants
+        .filter((row) => row.scopeKind === "workspace")
+        .map((row) => [row.holderId, row.action, row.scopeId])
+        .sort()
+    ).toEqual([
+      [fabian?.id, "builder", workspace?.id],
+      [fabian?.id, "publisher", workspace?.id]
+    ]);
   });
 
   it("lets Kai Berger edit two drafts with rights only on those assets", async () => {

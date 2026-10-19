@@ -48,6 +48,7 @@ import {
   namespaces,
   people,
   personOf,
+  workspaceBundles,
   type PersonKey
 } from "./company";
 import type { SeedStep } from "./step";
@@ -167,6 +168,7 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
   await seedHeldCalls(root, as, steps);
   await seedConnections(root, as, userIds, modules, steps);
   const workspaceId = await seedWorkspace(as, steps);
+  await seedWorkspaceBundles(root, as, userIds, workspaceId, steps);
   await seedWorkspaceAssets(as, workspaceId, steps);
   await seedApps(modules, as, workspaceId, instance.assetsDir, steps);
   const seededWorkflows = await seedWorkflows(root, modules, instance.assetsDir);
@@ -545,6 +547,47 @@ async function seedGrants(
     }
   }
   steps.push({ name: "grant rows", created, existing: total - created });
+}
+
+/** Builder and Publisher in the company's workspace for its outside builder, one row each. */
+async function seedWorkspaceBundles(
+  root: SeedApi,
+  as: (key: PersonKey) => Promise<SeedApi>,
+  userIds: ReadonlyMap<PersonKey, string>,
+  workspaceId: string,
+  steps: SeedStep[]
+): Promise<void> {
+  const holderId = userIds.get(workspaceBundles.holder);
+  if (!holderId) throw new Error(`The seed has no user for '${workspaceBundles.holder}'`);
+  const existing = await root.listGrants();
+  let created = 0;
+  for (const action of workspaceBundles.bundles) {
+    const there = existing.some(
+      (row) =>
+        row.holderKind === "user" &&
+        row.holderId === holderId &&
+        row.action === action &&
+        row.scopeKind === "workspace" &&
+        row.scopeId === workspaceId
+    );
+    if (there) continue;
+    await (
+      await as(workspaceBundles.grantedBy)
+    ).grant({
+      holderKind: "user",
+      holderId,
+      action,
+      effect: "allow",
+      scopeKind: "workspace",
+      scopeId: workspaceId
+    });
+    created += 1;
+  }
+  steps.push({
+    name: "workspace bundles",
+    created,
+    existing: workspaceBundles.bundles.length - created
+  });
 }
 
 /**

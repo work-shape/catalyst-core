@@ -2,7 +2,8 @@
 // firm with a tax, an HR and a sales team. Every name here is made up. The agents and skills of
 // the company live as a config working copy under `clients/demo/seed`.
 
-export type PersonKey = "mara" | "jonas" | "tobias" | "elif" | "sven" | "lena" | "noah" | "kai";
+export type PersonKey =
+  "mara" | "jonas" | "tobias" | "elif" | "sven" | "lena" | "noah" | "kai" | "fabian";
 
 export interface SeedPerson {
   key: PersonKey;
@@ -37,7 +38,7 @@ const person = (
 });
 
 /**
- * Two admins and six users. The instance's own seeded superadmin is the one superadmin and
+ * Two admins and seven users. The instance's own seeded superadmin is the one superadmin and
  * the account the seed signs in with first.
  */
 export const people: SeedPerson[] = [
@@ -53,7 +54,9 @@ export const people: SeedPerson[] = [
   person("lena", "Lena Hoffmann", ["user"], { status: "disabled" }),
   person("noah", "Noah Fischer", ["user"], { invited: true }),
   // A member who builds: his rows on his drafts are all he holds.
-  person("kai", "Kai Berger", ["user"])
+  person("kai", "Kai Berger", ["user"]),
+  // An outside builder: Builder and Publisher in the company's workspace, no member of it.
+  person("fabian", "Fabian Wolf", ["user"])
 ];
 
 /** The seeded person of a key. */
@@ -107,6 +110,16 @@ export const workspace: {
   createdBy: "mara",
   members: ["jonas", "tobias", "elif", "sven"]
 };
+
+/**
+ * The bundles of the company's workspace held without membership (WS-BUILD-1): Fabian builds
+ * and publishes what it owns and sees none of its conversations.
+ */
+export const workspaceBundles: {
+  holder: PersonKey;
+  bundles: ("builder" | "publisher")[];
+  grantedBy: PersonKey;
+} = { holder: "fabian", bundles: ["builder", "publisher"], grantedBy: "mara" };
 
 /**
  * What the company's workspace owns of its own: one skill and one agent that names it, saved
@@ -318,8 +331,12 @@ export const connectionGrants: SeedConnectionGrant[] = [
   { holder: "sven", verbs: ["read", "use"], grantedBy: "jonas" },
   // Tax may ask an agent for the figures and does not see the Connection itself.
   { holder: "tobias", verbs: ["use"], grantedBy: "mara" },
+  // Every active person of the firm; the outside builder works for it and is none of them.
   ...people
-    .filter((person) => person.status === "active" && !person.invited)
+    .filter(
+      (person) =>
+        person.status === "active" && !person.invited && person.key !== workspaceBundles.holder
+    )
     .map((person): SeedConnectionGrant => ({
       connection: "sample-accounting-rest",
       holder: person.key,
