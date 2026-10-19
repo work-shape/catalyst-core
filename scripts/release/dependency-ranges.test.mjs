@@ -11,7 +11,13 @@ const exact = new Set([
   "drizzle-orm",
   "fastify",
   "@fastify/cors",
-  "@fastify/multipart"
+  "@fastify/multipart",
+  "@assistant-ui/react",
+  "@assistant-ui/core",
+  "@assistant-ui/store",
+  "@assistant-ui/tap",
+  "ai",
+  "@ai-sdk/react"
 ]);
 const patch = new Set([
   "postgres",
@@ -19,9 +25,7 @@ const patch = new Set([
   "re2js",
   "js-yaml",
   "@tanstack/react-query",
-  "@tanstack/react-router",
-  "@assistant-ui/react",
-  "ai"
+  "@tanstack/react-router"
 ]);
 
 test("published runtime dependencies and peers stay on the tested auth, data, validation and UI lines", () => {

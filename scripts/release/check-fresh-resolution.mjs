@@ -77,6 +77,13 @@ export async function checkFreshResolution(
         }
       )
     );
+    await step("Require core's tested chat runtime versions", () =>
+      run(
+        process.execPath,
+        [resolve(repoRoot, "scripts/release/check-runtime-pins.mjs"), consumer, root],
+        { cwd: consumer }
+      )
+    );
     for (const target of ["server", "ui"]) {
       await step(`Build deployment ${target} from installed release tarballs`, () =>
         run("pnpm", ["run", `build:${target}`], { cwd: consumer })

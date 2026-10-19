@@ -52,7 +52,7 @@
     "@work-shape/catalyst-model-provider": "workspace:*",
     "@work-shape/catalyst-tool-execution": "workspace:*",
     "@work-shape/catalyst-usage-governance": "workspace:*",
-    "ai": "~6.0.224",
+    "ai": "6.0.224",
     "fastify": "5.12.7",
     "zod": "4.4.3"
   },

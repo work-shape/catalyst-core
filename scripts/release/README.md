@@ -81,7 +81,13 @@ range test checks their starting versions against core's lock):
 | re2js                                         | ~2.8.6              | Compiles guardrail validation patterns.                                                            |
 | ajv                                           | ~8.20.0             | Validates connector inputs and outputs at the data boundary.                                       |
 | @tanstack/react-query, @tanstack/react-router | ~5.101.0, ~1.170.16 | Cache and route transitions carry signed-in UI state.                                              |
+| @assistant-ui/react, core, store, tap         | 0.14.26, 0.2.20, 0.2.19, 0.9.3 | react 0.14.29 with tap 0.9.23 loops on the workspace start page (tap's `useSyncExternalStore`). |
+| ai, @ai-sdk/react                             | 6.0.224, 3.0.226    | Stream and message contracts of the chat runtime; they float together with assistant-ui.           |
 
-The existing `@assistant-ui/react` and `ai` minor bounds and other exact pins stay in place.
+chat-ui declares core, store and tap directly although it imports none of them: a range in a
+dependency's own manifest (react 0.14.26 asks for tap `^0.9.3`) would otherwise float in a
+lock-free consumer. The fresh consumer gate checks the result
+(`check-runtime-pins.mjs`): one resolved version of each, the one in core's lock.
+Other exact pins stay in place.
 Unrelated UI helpers and tooling keep their existing ranges. Changes to these lines require
 a deliberate manifest/lock update and both the frozen-lock Check and fresh consumer gate.

@@ -233,7 +233,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup-check
       - name: Release tooling regressions
-        run: node --test scripts/release/registry.test.mjs scripts/release/notes.test.mjs scripts/release/dependency-ranges.test.mjs scripts/release/react-peers.test.mjs scripts/release/fresh-resolution.test.mjs
+        run: node --test scripts/release/registry.test.mjs scripts/release/notes.test.mjs scripts/release/dependency-ranges.test.mjs scripts/release/react-peers.test.mjs scripts/release/runtime-pins.test.mjs scripts/release/fresh-resolution.test.mjs
       - name: Packages are fit to publish
         run: pnpm release:check --skip-build
   # Builds the API and UI images of the demo client in the layout of a deployment's build

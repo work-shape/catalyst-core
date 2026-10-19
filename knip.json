@@ -27,6 +27,12 @@
         "*.config.{ts,js,mjs}"
       ],
       "project": ["src/**/*.{ts,tsx,mts,cts,js}", "*.{ts,mts,cts,js,mjs}"],
+      "ignoreDependencies": [
+        "@ai-sdk/react",
+        "@assistant-ui/core",
+        "@assistant-ui/store",
+        "@assistant-ui/tap"
+      ],
       "vite": false
     },
     "packages/docs": {

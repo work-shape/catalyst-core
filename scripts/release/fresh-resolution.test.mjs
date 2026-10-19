@@ -82,10 +82,13 @@ test("packs the local release and installs a lock-free consumer before both depl
       calls.push(["smoke"]);
     }
   );
-  const peerCheck = calls.splice(1, 1)[0];
+  const [peerCheck, pinCheck] = calls.splice(1, 2);
   assert.equal(peerCheck[0], process.execPath);
   assert.match(peerCheck[1], /check-react-peers\.mjs$/u);
   assert.equal(peerCheck[2], consumer);
+  assert.equal(pinCheck[0], process.execPath);
+  assert.match(pinCheck[1], /check-runtime-pins\.mjs$/u);
+  assert.deepEqual(pinCheck.slice(2), [consumer, root]);
   assert.deepEqual(calls, [
     ["pnpm", "install", "--ignore-workspace", "--no-frozen-lockfile"],
     ["pnpm", "run", "build:server"],
