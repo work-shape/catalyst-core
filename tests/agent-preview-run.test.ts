@@ -88,15 +88,29 @@ afterEach(() => vi.restoreAllMocks());
 
 async function fixture(startAgentRunJobs = true) {
   const config = createTestConfig({
-    toolNames: [...PLATFORM_TOOL_NAMES, "propose_skill_change", read.name, locked.name],
-    tools: [read, write, locked].map(({ name }) => ({ name, enabled: true }))
+    toolNames: [
+      ...PLATFORM_TOOL_NAMES,
+      "propose_skill_change",
+      "read_skill",
+      read.name,
+      locked.name
+    ],
+    tools: [read.name, write.name, locked.name, "read_skill"].map((name) => ({
+      name,
+      enabled: true
+    }))
   });
   config.modules = { assetManagement: { enabled: true } };
   config.conversationTitles.enabled = false;
   config.administration.agentConfiguration.enabled = true;
   config.administration.agentConfiguration.agentSkillChanges.enabled = true;
   config.tools.push({ name: "propose_skill_change", enabled: true, config: {} });
-  config.administration.agentConfiguration.editableAgentFields = ["instructions", "toolNames"];
+  config.administration.agentConfiguration.allowSkillEditing = true;
+  config.administration.agentConfiguration.editableAgentFields = [
+    "instructions",
+    "toolNames",
+    "skillNames"
+  ];
   const app = await createTestInstance({
     config,
     env: {},
@@ -382,5 +396,44 @@ describe("agent preview turns (TRY-1b2)", () => {
     );
     expect(rows).toEqual([]);
     expect((await t.live()).revision).toBe(1);
+  });
+
+  it("reads the skills the draft lists, not those of the live agent", async () => {
+    const t = await fixture();
+    for (const name of ["live_skill", "draft_skill"])
+      await t.ok(
+        t.app.call("assets.put", {
+          params: { kind: "skill", name },
+          payload: {
+            config: { name, title: name, description: name, content: `${name} content` },
+            expectedRevision: null
+          }
+        })
+      );
+    const withSkills = async (skillNames: string[]) => {
+      const asset = await t.live();
+      return t.ok(
+        t.app.call("assets.put", {
+          params: AGENT,
+          payload: {
+            config: { ...asset.config, skillNames },
+            expectedRevision: asset.revision,
+            expectedDraftRevision: null
+          }
+        })
+      );
+    };
+    await withSkills(["live_skill"]);
+    await t.ok(t.app.call("assets.publish", { params: AGENT, payload: { revision: 1 } }));
+    await withSkills(["draft_skill"]);
+    const id = await t.open();
+    const lastTool = async (text: string) =>
+      (await t.say(id, text)).filter((message) => message.role === "tool").at(-1)?.text;
+    expect(await lastTool('/tool read_skill {"name":"draft_skill"}')).toContain(
+      "draft_skill content"
+    );
+    expect(await lastTool('/tool read_skill {"name":"live_skill"}')).toContain(
+      "not allowed to read skill 'live_skill'"
+    );
   });
 });

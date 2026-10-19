@@ -247,6 +247,7 @@ function toolCallOf(
       deadline: context.runtime.deadline,
       signal: context.runtime.signal,
       runFence: context.runtime.runFence,
+      ...(context.runtime.agentPreview ? { agentPreview: context.runtime.agentPreview } : {}),
       toolRequest: request,
       operationRun: {
         id: context.runId,
@@ -534,6 +535,7 @@ export function createToolOperationRunner(
           ...(context.subagent ? { subagent: true } : {}),
           ...(context.workflowAgent ? { workflowAgent: true } : {}),
           ...(context.unattended ? { unattended: true } : {}),
+          ...(context.agentPreview ? { agentPreview: context.agentPreview } : {}),
           unreadableInput: options.unreadableInput
         }
       );

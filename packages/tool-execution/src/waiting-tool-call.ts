@@ -5,6 +5,7 @@ import {
   type ToolDecisionRunner,
   type ToolExecutionResult
 } from "@work-shape/catalyst-core";
+import { previewToolDeps } from "./agent-preview";
 import { isUseRightAction, type RunOperationDeps } from "./operation-execution";
 import { toolResultFromOperationResult } from "./tool-operation";
 import { failed } from "./tool-results";
@@ -19,8 +20,10 @@ import { executeConfirmedOperation, type ApprovedOperationEnd } from "./waiting-
  * executes nothing. A call that was not executed answers the agent why: declined with the
  * person's reason, expired, or refused as the person is now.
  */
-export function createDecidedToolCallRunner(callDeps: RunOperationDeps): ToolDecisionRunner {
+export function createDecidedToolCallRunner(baseDeps: RunOperationDeps): ToolDecisionRunner {
   return async ({ request, operationRunId, frozenInput }, context) => {
+    // A Try turn's call is asked again against the draft's tools, as it was made.
+    const callDeps = previewToolDeps(baseDeps, context);
     const run = await callDeps.runs.get({
       clientInstanceId: callDeps.clientInstanceId,
       id: operationRunId

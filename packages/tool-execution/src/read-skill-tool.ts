@@ -99,17 +99,20 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
 
       // The skills the platform ships are offered to a conversation of an agent that holds the
       // platform's tools, and no agent's definition needs to list them. They are stored skills,
-      // read like any other.
+      // read like any other. A Try turn reads the skills of its frozen draft, with no offer.
       const conversationId = context.toolRequest?.conversationId;
       const assets = await options.assetSource.getSnapshot();
-      const agent = assets.agents.find((candidate) => candidate.name === agentName);
-      const offer = conversationId
-        ? await options.conversationOffer?.offerOf({
-            clientInstanceId: context.clientInstanceId,
-            conversationId,
-            agentToolNames: agent?.toolNames ?? []
-          })
-        : undefined;
+      const draft = context.agentPreview?.config;
+      const preview = draft?.name === agentName ? draft : undefined;
+      const agent = preview ?? assets.agents.find((candidate) => candidate.name === agentName);
+      const offer =
+        conversationId && !preview
+          ? await options.conversationOffer?.offerOf({
+              clientInstanceId: context.clientInstanceId,
+              conversationId,
+              agentToolNames: agent?.toolNames ?? []
+            })
+          : undefined;
       const allowedSkillNames = new Set([
         ...(agent?.skillNames ?? []),
         ...(offer?.skillNames ?? [])
