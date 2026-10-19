@@ -29,7 +29,7 @@ export const uiGuardHints: Record<UiGuardCategory, string> = {
   roles:
     "Use the library's Dialog, Picker, DropdownMenu or Tabs; they own these roles and their keyboard handling.",
   palette: "Use a theme token (for example text-success-soft-foreground), not a palette colour.",
-  hex: "Use a theme token. Only packages/ui/src/theme may hold colour values.",
+  hex: "Use a theme token. Only packages/ui/src/theme and mail HTML in packages/mail may hold colour values.",
   "font-size": "Use one of the nine type styles (text-title … text-code), not an arbitrary size.",
   radius: "Use rounded-sm, -md, -lg, -xl or -full, not an arbitrary radius.",
   scrollbar:
@@ -45,6 +45,8 @@ export const uiGuardHints: Record<UiGuardCategory, string> = {
 
 const LIBRARY_ROOT = "packages/ui/src/";
 const LIBRARY_THEME_ROOT = "packages/ui/src/theme/";
+/** Mail HTML writes its colours inline: a mail client loads no stylesheet and knows no theme token. */
+const MAIL_ROOT = "packages/mail/src/";
 const RAW_ELEMENTS = new Set(["button", "input", "select", "textarea", "dialog"]);
 const OWNED_ROLES = new Set(["dialog", "listbox", "menu", "tab", "tablist"]);
 const LIBRARY_IMPORTS = new Set([
@@ -173,7 +175,7 @@ function scanSource(file: string, text: string, findings: UiGuardFinding[]): voi
     for (const match of value.matchAll(PALETTE)) {
       add(node, "palette", match[0]);
     }
-    if (!file.startsWith(LIBRARY_THEME_ROOT)) {
+    if (!file.startsWith(LIBRARY_THEME_ROOT) && !file.startsWith(MAIL_ROOT)) {
       for (const match of value.matchAll(HEX)) {
         add(node, "hex", match[0]);
       }

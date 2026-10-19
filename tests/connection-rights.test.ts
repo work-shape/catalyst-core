@@ -106,15 +106,20 @@ describe("the vocabulary of Connection rights", () => {
     // written there too. No workspace owns a Connection, so no right on Connections is written
     // at workspace scope. A right no legacy key carries is also written for the whole instance
     // (RIGHTS-1c, D3); agent and skill rights are carried by legacy keys, so they are not.
+    // Sending mail is granted on one named sender and never for the whole instance, so a grant
+    // given for `system` reaches no sender added later (MAIL-1, check 133).
     expect(GRANTABLE_ACTION_SCOPES["connection.use"]).toEqual(["asset", "instance"]);
     expect(GRANTABLE_ACTION_SCOPES["guardrail.publish"]).toEqual(["workspace", "instance"]);
+    expect(GRANTABLE_ACTION_SCOPES["mail_sender.use"]).toEqual(["asset"]);
     for (const action of GRANTABLE_ACTIONS) {
       const scopes: readonly string[] = GRANTABLE_ACTION_SCOPES[action];
       expect(scopes.includes("workspace"), action).toBe(
         /^(?:agent|skill|app|data_store|guardrail)\./u.test(action)
       );
       expect(scopes.includes("instance"), action).toBe(
-        !/^(?:agent|skill)\./u.test(action) && action !== "workflow.read_run_data"
+        !/^(?:agent|skill)\./u.test(action) &&
+          action !== "workflow.read_run_data" &&
+          action !== "mail_sender.use"
       );
     }
   });
