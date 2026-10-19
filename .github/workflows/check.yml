@@ -363,6 +363,14 @@ jobs:
             test-results/browser-durations.json
             .tmp/e2e/shard-${{ matrix.shard }}.txt
           retention-days: 3
+      - name: Keep data scope assignment screenshots
+        if: ${{ !cancelled() && hashFiles('test-results/**/data-scope-*.png') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: true
+        with:
+          name: data-scope-assignments-${{ matrix.shard }}
+          path: test-results/**/data-scope-*.png
+          retention-days: 3
       - name: Keep Connection person-context evidence
         if: ${{ !cancelled() && hashFiles('test-results/**/person-context-*.png') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

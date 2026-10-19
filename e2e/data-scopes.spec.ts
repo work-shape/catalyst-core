@@ -75,7 +75,10 @@ test("an administrator edits data scope assignments in both languages, at short 
           )
         ).toBe(true);
         await test.info().attach(`scope-${locale}-${theme}`, {
-          body: await page.screenshot({ fullPage: true }),
+          body: await page.screenshot({
+            path: test.info().outputPath(`data-scope-${locale}-${theme}.png`),
+            fullPage: true
+          }),
           contentType: "image/png"
         });
       }
