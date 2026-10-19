@@ -387,16 +387,18 @@ export function useCollaborationWorkspaceModel(
 }
 
 /**
- * Whether `listed` was read for somebody other than `userId`: it holds Personal Workspaces, and
- * none of them is theirs.
+ * Whether `listed` is not known to be the list of `userId`. The read of a person's list creates
+ * their Personal Workspace when it is missing, so every list read for them holds it; a list
+ * without it was read for somebody else, as before that person's first visit.
  */
 function listsAnotherPerson(
   listed: readonly CollaborationWorkspaceWithRole[] | undefined,
   userId: string | undefined
 ): boolean {
   if (listed === undefined || userId === undefined) return false;
-  const personal = listed.filter((workspace) => workspace.kind === "personal");
-  return personal.length > 0 && !personal.some((workspace) => workspace.personalUserId === userId);
+  return !listed.some(
+    (workspace) => workspace.kind === "personal" && workspace.personalUserId === userId
+  );
 }
 
 function isPageOutsideCollaborationWorkspace(route: WorkspaceRoute): boolean {
