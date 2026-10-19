@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { localManifest, packPackages } from "../../packages/deployment-kit/lib/pack-local.mjs";
-import { smokeConsumer, step } from "./fresh-consumer-smoke.mjs";
+import { freePort, smokeConsumer, step } from "./fresh-consumer-smoke.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const runCommand = (command, args, options) =>
@@ -84,9 +84,15 @@ export async function checkFreshResolution(
         { cwd: consumer }
       )
     );
+    // The UI is built against the port the smoke's server will listen on, as a deployment
+    // builds against its API's address.
+    const apiPort = await freePort();
     for (const target of ["server", "ui"]) {
       await step(`Build deployment ${target} from installed release tarballs`, () =>
-        run("pnpm", ["run", `build:${target}`], { cwd: consumer })
+        run("pnpm", ["run", `build:${target}`], {
+          cwd: consumer,
+          env: { ...process.env, VITE_CHAT_API_URL: `http://127.0.0.1:${apiPort}` }
+        })
       );
     }
     // The same artifacts required by catalyst-deploy check and the kit's Dockerfile.
@@ -98,8 +104,10 @@ export async function checkFreshResolution(
         }
       }
     });
-    await smoke(consumer);
-    console.log("\nfresh-resolution: builds, sign-in and authenticated /api/v1/me passed");
+    await smoke(consumer, { apiPort });
+    console.log(
+      "\nfresh-resolution: builds, sign-in, authenticated /api/v1/me and composer typing passed"
+    );
 
     if (proveAuthDrift) {
       // Reproduce the rc.1 deployment resolution through the same tarballs and HTTP probe.
@@ -111,7 +119,7 @@ export async function checkFreshResolution(
       run("pnpm", ["install", "--ignore-workspace", "--no-frozen-lockfile"], { cwd: consumer });
       run("pnpm", ["run", "build:server"], { cwd: consumer });
       try {
-        await smoke(consumer);
+        await smoke(consumer, { apiPort });
       } catch (error) {
         if (error.message === "fresh-resolution: sign-in returned 500 (expected 200)") {
           console.log("fresh-resolution: rejected better-auth 1.7.10 + zod 4.4.3 at sign-in (500)");

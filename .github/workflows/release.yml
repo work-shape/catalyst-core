@@ -21,9 +21,11 @@ jobs:
         with:
           build: "false"
       - name: Verify the fresh-resolution gate
-        run: node --test scripts/release/fresh-resolution.test.mjs scripts/release/fresh-consumer-smoke.test.mjs scripts/release/dependency-ranges.test.mjs scripts/release/react-peers.test.mjs scripts/release/runtime-pins.test.mjs
+        run: node --test scripts/release/fresh-resolution.test.mjs scripts/release/fresh-consumer-smoke.test.mjs scripts/release/dependency-ranges.test.mjs scripts/release/react-peers.test.mjs scripts/release/runtime-pins.test.mjs scripts/release/composer-probe.test.mjs
       - name: Build release packages from the frozen core lock
         run: pnpm -r --filter './packages/*' build
+      - name: Chromium for the composer typing probe
+        run: pnpm exec playwright install --with-deps --only-shell chromium
       - name: Sign in to the registry for the test Postgres image
         env:
           TOKEN: ${{ github.token }}

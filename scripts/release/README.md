@@ -51,7 +51,14 @@ the consumer through the deployments' own entries: `dist/migrate.js` (compose's 
 service) against a hosted test Postgres whose password the job generates,
 `dist/seed-auth.js` (the deployments' `seed:auth`) for a disposable standalone user, and
 `dist/server.js` until `/ready` answers 200. It signs in over HTTP and requires a session
-cookie plus a 200 from `GET /api/v1/me` (401 without the cookie). Any failure blocks
+cookie plus a 200 from `GET /api/v1/me` (401 without the cookie). Then it makes one agent
+available (a seeded superadmin creates an API key, the consumer's own `catalyst config push`
+sends a one-agent package), serves the built UI, which was built against the server's port, and
+in Chromium signs in, opens the workspace start page and types in the composer
+(`composer-probe.mjs`). A page error, a composer that disappears or one that loses the text
+fails the step: the chat runtime drift of 0.8.0-rc.2 passed every HTTP probe and threw here.
+Before the builds, `check-runtime-pins.mjs` requires the chat runtime versions of core's
+lock. Any failure blocks
 publication and names its step on the run's summary page (`Fresh consumer gate failed at:
 <step>`); a failure after the server starts also prints the server's last 200 log lines.
 The child server and scratch consumer are removed even on failure. The job takes about two minutes

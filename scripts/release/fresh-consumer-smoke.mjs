@@ -1,10 +1,11 @@
 import { spawn, execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { once } from "node:events";
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { pushSmokeAgent, serveBuiltUi, typeInComposer } from "./composer-probe.mjs";
 
 // A stalled consumer fails the release gate rather than holding publication indefinitely.
 const STARTUP_TIMEOUT_MS = 30_000;
@@ -13,6 +14,7 @@ const STOP_TIMEOUT_MS = 5_000;
 const POLL_INTERVAL_MS = 100;
 const SERVER_LOG_LINES = 200;
 const EMAIL = "release-smoke@example.test";
+const ADMIN_EMAIL = "release-smoke-admin@example.test";
 
 /**
  * Runs one named phase of the gate. A failure keeps its message (the auth drift proof matches
@@ -28,7 +30,7 @@ export async function step(name, action) {
   }
 }
 
-async function freePort() {
+export async function freePort() {
   const server = createServer();
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -99,14 +101,21 @@ function captureLog(child, redact) {
   };
 }
 
-export async function smokeConsumer(consumer) {
+/**
+ * `apiPort` is the port the UI was built against (VITE_CHAT_API_URL); without a built UI the
+ * smoke stops after the HTTP probe.
+ */
+export async function smokeConsumer(consumer, { apiPort, browser } = {}) {
   const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
   if (!databaseUrl)
     throw new Error("fresh-resolution: POSTGRES_STORE_TEST_DATABASE_URL is required");
-  const port = await freePort();
+  const port = apiPort ?? (await freePort());
   const baseUrl = `http://127.0.0.1:${port}`;
+  const uiOrigin = `http://127.0.0.1:${await freePort()}`;
   const configPath = join(consumer, "smoke-config.json");
   const password = randomBytes(24).toString("base64url");
+  // Signs in only to create the API key that makes the composer probe's agent available.
+  const adminPassword = randomBytes(24).toString("base64url");
   // JSON is valid YAML. This assembly needs no model key, Docker sandbox or customer assets.
   writeFileSync(
     configPath,
@@ -121,13 +130,19 @@ export async function smokeConsumer(consumer) {
         standalone: {
           enabled: true,
           baseUrl: `${baseUrl}/api/auth`,
-          trustedOrigins: [baseUrl],
+          trustedOrigins: [baseUrl, uiOrigin],
           seedUsers: [
             {
               email: EMAIL,
               displayLabel: "Release smoke",
               passwordEnvName: "RELEASE_SMOKE_PASSWORD",
               roles: ["user"]
+            },
+            {
+              email: ADMIN_EMAIL,
+              displayLabel: "Release smoke administrator",
+              passwordEnvName: "RELEASE_SMOKE_ADMIN_PASSWORD",
+              roles: ["user", "admin", "superadmin"]
             }
           ]
         }
@@ -137,12 +152,16 @@ export async function smokeConsumer(consumer) {
     })
   );
   const secret = randomBytes(32).toString("base64url");
+  // Exchanges the probe agent's API key for the access token the config CLI sends.
+  const serviceTokenSecret = randomBytes(32).toString("base64url");
   // Register every generated value with the runner before any entry can print it. The log
   // tail below also redacts them and the database URL, should an entry echo its environment.
   if (process.env.GITHUB_ACTIONS) {
-    for (const value of [secret, password]) console.log(`::add-mask::${value}`);
+    for (const value of [secret, serviceTokenSecret, password, adminPassword]) {
+      console.log(`::add-mask::${value}`);
+    }
   }
-  const hidden = [secret, password, databaseUrl];
+  const hidden = [secret, serviceTokenSecret, password, adminPassword, databaseUrl];
   const redact = (line) => hidden.reduce((text, value) => text.replaceAll(value, "***"), line);
   const env = {
     ...process.env,
@@ -152,7 +171,9 @@ export async function smokeConsumer(consumer) {
     CLIENT_CONFIG_PATH: configPath,
     DATABASE_URL: databaseUrl,
     BETTER_AUTH_SECRET: secret,
-    RELEASE_SMOKE_PASSWORD: password
+    SERVICE_ACCESS_TOKEN_SECRET: serviceTokenSecret,
+    RELEASE_SMOKE_PASSWORD: password,
+    RELEASE_SMOKE_ADMIN_PASSWORD: adminPassword
   };
   // The deployments' own entries: compose's `migrate` service and their `seed:auth` script.
   const runEntry = (entry) =>
@@ -197,6 +218,25 @@ export async function smokeConsumer(consumer) {
       }
     });
     await signedInRequest(baseUrl, password);
+    const ui = join(consumer, "dist/client");
+    if (existsSync(join(ui, "index.html"))) {
+      await step("Make one agent available with the consumer's config push", () =>
+        pushSmokeAgent(consumer, baseUrl, configPath, env)
+      );
+      await step("Type in the start-page composer of the built UI in Chromium", async () => {
+        const stopUi = await serveBuiltUi(ui, Number(new URL(uiOrigin).port));
+        try {
+          const errors = await typeInComposer(uiOrigin, EMAIL, password, browser);
+          if (errors.length > 0) {
+            throw new Error(
+              `fresh-resolution: the start-page composer failed: ${[...new Set(errors)].join(" | ")}`
+            );
+          }
+        } finally {
+          await stopUi();
+        }
+      });
+    }
   } catch (error) {
     failed = true;
     throw error;
