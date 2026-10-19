@@ -1,17 +1,16 @@
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import {
   CONNECTION_ACTIONS,
+  CONNECTION_ASSET_KIND,
   isGuardrailEvent,
   PLATFORM_EVENT_ALLOW,
   strictestOutcome,
-  CONNECTION_ASSET_KIND,
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   asCollaborationWorkspaceId,
   asUserId,
-  type AccessResource,
   type ActorAccess,
   type AssetKindRegistry,
   type AssetScope,
@@ -46,6 +45,8 @@ import {
 } from "./narrative-copy";
 import { appFacts, workflowFacts, type AppFacts, type WorkflowFacts } from "./narrative-facts";
 import { workspaceDisplayName, type NamedWorkspace } from "./workspace-name";
+import { assetTitles, connectionTitles } from "./asset-titles";
+import { accountRightWarning } from "./policy-warning-copy";
 
 // Keeps outside input checks from holding the publish question; unchecked steps say they may stop.
 const NARRATION_BUDGET_MS = 3_000;
@@ -162,47 +163,9 @@ async function withinNarrationBudget<T>(work: Promise<T>): Promise<T> {
   }
 }
 
-const displayNameSchema = z.object({ displayName: z.string().min(1) });
 const titleSchema = z.object({ title: z.string().min(1) });
 /** A Workflow's name people read is its manifest's `name`, as its kind summarizes it. */
 const workflowTitleSchema = z.object({ manifest: z.object({ name: z.string().min(1) }) });
-
-/**
- * The names people read of the assets of one kind, by name, each read once: the title of each
- * one the reader may be shown by one of `rights`; its name, which the revision itself names,
- * for any other.
- */
-function assetTitles(
-  options: PublishNarratorOptions,
-  access: ActorAccess,
-  kind: string,
-  rights: readonly string[],
-  title: (config: unknown) => string | undefined
-) {
-  const read = new Map<string, Promise<string>>();
-  return (name: string): Promise<string> => {
-    let found = read.get(name);
-    if (!found) {
-      found = options.stores.configAssets
-        .getConfigAsset({ clientInstanceId: options.clientInstanceId, kind, name })
-        .then((asset) => {
-          if (asset?.status !== "active") return name;
-          const resource: AccessResource = {
-            kind: asset.kind,
-            name: asset.name,
-            assetId: asset.id,
-            ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
-          };
-          const shown = rights.some((right) => access.authorize(right, resource).allowed);
-          return oneLine(
-            (shown ? title(asset.publishedConfig ?? asset.config) : undefined) ?? name
-          );
-        });
-      read.set(name, found);
-    }
-    return found;
-  };
-}
 
 function namers(options: PublishNarratorOptions, access: ActorAccess, locale: LocaleCode) {
   const person = async (id: string) =>
@@ -213,13 +176,7 @@ function namers(options: PublishNarratorOptions, access: ActorAccess, locale: Lo
       })
     )?.displayLabel;
   return {
-    connection: assetTitles(
-      options,
-      access,
-      CONNECTION_ASSET_KIND,
-      [CONNECTION_ACTIONS.read, CONNECTION_ACTIONS.use],
-      (config) => displayNameSchema.safeParse(config).data?.displayName
-    ),
+    connection: connectionTitles(options, access),
     store: assetTitles(
       options,
       access,
@@ -319,14 +276,58 @@ async function narrateWorkflow(
       )
     )
   );
-  const [sentence, stops] = await Promise.all([
+  const [sentence, stops, missingRights] = await Promise.all([
     workflowSentence(options, input, facts, definitions),
-    stepStops(options, facts, definitions, deadline)
+    stepStops(options, facts, definitions, deadline),
+    accountRightWarnings(options, input, facts)
   ]);
   return {
     summary: workflowSummary(sentence, input.locale),
-    warnings: stopWarnings(stops, input.locale)
+    warnings: [...stopWarnings(stops, input.locale), ...missingRights]
   };
+}
+
+/**
+ * A warning for each Connection a step calls that the Workflow's own account may not use, for
+ * the revision under review. It reads what the publish screen reads (`principalRights`, from
+ * `workflowNeededRights` and the one rights check); a child Workflow's account is warned about
+ * where that child is published.
+ */
+async function accountRightWarnings(
+  options: PublishNarratorOptions,
+  input: PublishNarrateInput,
+  facts: WorkflowFacts
+): Promise<string[]> {
+  if (!input.config) return [];
+  const accounts = await options.kinds
+    ?.get(WORKFLOW_ASSET_KIND)
+    ?.principalRights?.(input.name, input.config)
+    .catch(() => undefined);
+  const own = accounts?.find((entry) => entry.workflow === input.name);
+  // A missing or disabled account holds nothing; the publish says so on its own.
+  if (!own?.account || own.account.status !== "active") return [];
+  const names = namers(options, input.access, input.locale);
+  const stepNames = new Map(facts.calls.map((step) => [step.id, oneLine(step.name)]));
+  const advise = input.access.authorize("service_principals.manage").allowed;
+  const missing = own.rights.filter(
+    (right) =>
+      !right.held &&
+      right.action === CONNECTION_ACTIONS.use &&
+      right.asset.kind === CONNECTION_ASSET_KIND
+  );
+  return Promise.all(
+    missing.map(async (right) =>
+      accountRightWarning(
+        {
+          account: oneLine(own.account?.label ?? own.runAs),
+          connection: await names.connection(right.asset.name),
+          steps: right.steps.map((step) => stepNames.get(step) ?? step),
+          advise
+        },
+        input.locale
+      )
+    )
+  );
 }
 
 async function workflowSentence(

@@ -69,6 +69,7 @@ export const runSchema = z.object({
       message: z.string(),
       action: z.string().optional(),
       connection: z.string().optional(),
+      connectionTitle: z.string().optional(),
       stepRunId: z.string().optional()
     })
     .optional(),
@@ -108,7 +109,8 @@ export const stepRunsSchema = z.object({
           code: z.string(),
           message: z.string(),
           action: z.string().optional(),
-          connection: z.string().optional()
+          connection: z.string().optional(),
+          connectionTitle: z.string().optional()
         })
         .optional(),
       outputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional()
@@ -312,9 +314,9 @@ export async function workflowFixture(
           ...(options.moduleOn === false ? {} : { workflows: { enabled: true } }),
           ...(options.personalKeys ? { personalApiKeys: { enabled: true } } : {})
         },
-        server(stores, config) {
+        server(stores, config, kinds) {
           const server = {
-            ...connectionOptions.server?.(stores, config),
+            ...connectionOptions.server?.(stores, config, kinds),
             ...(options.personalKeys ? personalKeyServer(stores) : {})
           };
           if (!server.operationCalls) throw new Error("The instance built no call path");

@@ -206,9 +206,10 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   /**
    * The rights the accounts a publish of the asset's newest revision runs as need, by the
    * asset's name: its own and each child's. Nothing where no asset has the name. The check of
-   * the publish asks the same list.
+   * the publish asks the same list. With `config`, the revision of that config is the one asked
+   * about in place of the newest: what a publish review shows.
    */
-  principalRights?(name: string): Promise<WorkflowAccountRights[] | undefined>;
+  principalRights?(name: string, config?: JsonObject): Promise<WorkflowAccountRights[] | undefined>;
   authorizeLive?(input: {
     actor: AuthenticatedIdentity;
     access: ActorAccess;

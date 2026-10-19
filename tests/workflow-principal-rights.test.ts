@@ -4,6 +4,7 @@ import { workflowPrincipalRightsSchema } from "@work-shape/catalyst-api-contract
 import type { WorkflowManifest } from "@work-shape/catalyst-core";
 import { child, parent } from "./support/workflow-children";
 import { workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
+import { operationOf } from "./support/connection-operations";
 
 // The publish screen's read of what the accounts of a parent and its child need, and the grant
 // an administrator gives from it: one confirmed step through the ordinary grant write.
@@ -140,6 +141,73 @@ describe("the rights the accounts of a Workflow publish need", () => {
         expect.objectContaining({ servicePrincipalId: t.principal.id, scopeId: crm })
       ])
     );
+  });
+
+  // ACCEPT-FIX-13 C3: the publish review warns of a step's Connection its account may not use,
+  // read from the same rights the screen lists, and says where an administrator allows it.
+  it("warns in the publish review of a Connection the account may not use, until it may", async () => {
+    const t = await workflowFixture({ definitions: "assets" });
+    open = t;
+    await t.seedCrm();
+    await put(t, child());
+    const warnings = async (userId = t.admin.id) => {
+      const read = await t.expectOk(userId, "assets.get", {
+        params: { kind: "workflow", name: "child" }
+      });
+      return z
+        .object({ publishNarrative: z.object({ warnings: z.array(z.string()) }) })
+        .parse(read.json()).publishNarrative.warnings;
+    };
+    expect(await warnings()).toEqual([
+      `The account “${t.principal.displayLabel}” may not use the Connection “Connection crm”, so every run fails at the step “Read”. Allow it for the account under Settings › API access, then publish.`
+    ]);
+    // Someone who may change the Workflow but administers no account is told who can allow it.
+    await t.allow({ kind: "user", id: t.kai.id }, "workflow.write");
+    await t.allow({ kind: "user", id: t.kai.id }, "connection.read");
+    await t.expectOk(t.kai.id, "me.update", { payload: { locale: "de" } });
+    expect(await warnings(t.kai.id)).toEqual([
+      `Das Konto „${t.principal.displayLabel}“ darf die Verbindung „Connection crm“ nicht verwenden. Deshalb schlägt jeder Lauf beim Schritt „Read“ fehl. Ein Administrator kann es dem Konto erlauben.`
+    ]);
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "connection.use");
+    expect(await warnings()).toEqual([]);
+  });
+
+  // The review of an older revision warns of that revision's account and Connection, never of
+  // the newest draft's (review finding on ACCEPT-FIX-13 C3).
+  it("warns of the account and Connection of the revision under review", async () => {
+    const t = await workflowFixture({ definitions: "assets" });
+    open = t;
+    await t.seedCrm();
+    await t.seed("erp", { operations: [operationOf("echo", { exposure: ["workflow"] })] });
+    const erpAccount = await t.stores.apiAccess.createServicePrincipal({
+      clientInstanceId: t.principal.clientInstanceId,
+      displayLabel: "erp-account"
+    });
+    await put(t, child());
+    const second = child("child", erpAccount.name);
+    const read = second.steps.find((step) => step.id === "read");
+    if (read?.type !== "operation") throw new Error("The child reads through an operation step");
+    read.operation = "connection.erp.echo";
+    await t.expectOk(t.root.id, "assets.put", {
+      params: { kind: "workflow", name: "child" },
+      payload: { expectedRevision: 1, config: { name: "child", manifest: second } }
+    });
+    const warningsOf = async (revision: string) => {
+      const response = await t.expectOk(t.admin.id, "assets.get", {
+        params: { kind: "workflow", name: "child" },
+        query: { revision }
+      });
+      return z
+        .object({ publishNarrative: z.object({ warnings: z.array(z.string()) }) })
+        .parse(response.json()).publishNarrative.warnings;
+    };
+    const advice = " Allow it for the account under Settings › API access, then publish.";
+    expect(await warningsOf("1")).toEqual([
+      `The account “${t.principal.displayLabel}” may not use the Connection “Connection crm”, so every run fails at the step “Read”.${advice}`
+    ]);
+    expect(await warningsOf("draft")).toEqual([
+      `The account “${erpAccount.displayLabel}” may not use the Connection “Connection erp”, so every run fails at the step “Read”.${advice}`
+    ]);
   });
 
   it("keeps a deny on a deleted child in the rights needed to publish", async () => {

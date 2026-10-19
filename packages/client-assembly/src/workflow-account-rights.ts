@@ -58,22 +58,24 @@ export async function workflowRunAccount(
 /**
  * What a publish of the Workflow's newest revision needs of the accounts it runs as: its own
  * account, and the account of each published child it reaches, each once. An account that is
- * disabled or missing holds nothing.
+ * disabled or missing holds nothing. `reviewed` is the manifest of another revision under
+ * review, such as one a held publish froze; it stands in for the newest draft.
  */
 export async function workflowAccountRights(
   options: WorkflowRightsOptions,
   definitions: Pick<WorkflowDefinitionSource, "read"> & {
     draft(id: string): Promise<WorkflowDefinitionRevision | undefined>;
   },
-  workflow: string
+  workflow: string,
+  reviewed?: WorkflowManifest
 ): Promise<WorkflowAccountRights[] | undefined> {
-  const root = await definitions.draft(workflow);
+  const root = reviewed ?? (await definitions.draft(workflow))?.manifest;
   if (!root) return undefined;
   const open: {
     id: string;
     manifest: WorkflowManifest;
     revision: WorkflowAccountRights["revision"];
-  }[] = [{ id: workflow, manifest: root.manifest, revision: "draft" }];
+  }[] = [{ id: workflow, manifest: root, revision: "draft" }];
   const seen = new Set([workflow]);
   const answer: WorkflowAccountRights[] = [];
   for (let next = open.shift(); next; next = open.shift()) {

@@ -319,7 +319,7 @@ export async function fixtureOn<Instance extends AccessInstance>(
   const t = await setup({
     modules: { connections: { enabled: true } },
     furtherKinds: [createConnectionAssetKind({ connectorTypes, egress })],
-    server(stores, config) {
+    server(stores, config, kinds) {
       const resolver = createConnectionCredentialResolver({
         clientInstanceId,
         keyring,
@@ -368,6 +368,8 @@ export async function fixtureOn<Instance extends AccessInstance>(
         modules: resolveInstanceModules(config, []).snapshot,
         operations,
         approvalRequests,
+        // The kinds, as the assembly hands them: the publish review reads a Workflow's account.
+        ...(kinds ? { configAssets: { kinds } } : {}),
         agentToolNames: (agentName) => state.agentTools.get(agentName) ?? []
       });
       deps = { clientInstanceId, stores, connectorTypes, egress, credentials, logger };

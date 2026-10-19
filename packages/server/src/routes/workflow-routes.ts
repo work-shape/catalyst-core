@@ -12,6 +12,7 @@ import {
   type OperationResource,
   type ClientInstanceId,
   type PlatformStores,
+  type WorkflowRunError,
   type WorkflowRunView,
   type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
@@ -20,12 +21,13 @@ import { decide } from "../assets/asset-access";
 import type { ModuleRoutes, RouteRegistration } from "../http/route";
 import { listedWorkflowActions, workflowOf } from "../workflows/workflow-listing";
 import type { WorkflowRunsPort } from "../workflows/workflow-runs-port";
+import { connectionTitles, type AssetTitleSource } from "../publish-narrative/asset-titles";
 
 type WorkflowSubjects = {
   clientInstanceId: ClientInstanceId;
   stores: {
     conversations: Pick<PlatformStores["conversations"], "getConversation" | "createdAsset">;
-  };
+  } & AssetTitleSource["stores"];
 };
 
 /** The module these operations belong to. */
@@ -91,6 +93,27 @@ function registerWorkflowRoutes(
       throw new AppError("NOT_FOUND", "There is no such Workflow Run");
     }
     return run;
+  }
+
+  /**
+   * The runs or step runs with the display name of the Connection a refusal names, where the
+   * reader may be shown it, so a failure never names a Connection by its machine name alone.
+   */
+  async function withConnectionTitles<View extends { error?: WorkflowRunError }>(
+    access: ActorAccess,
+    views: View[]
+  ): Promise<View[]> {
+    const titleOf = connectionTitles(subjects, access);
+    return Promise.all(
+      views.map(async (view) => {
+        const connection = view.error?.connection;
+        if (!view.error || connection === undefined) return view;
+        const connectionTitle = await titleOf(connection);
+        return connectionTitle === connection
+          ? view
+          : { ...view, error: { ...view.error, connectionTitle } };
+      })
+    );
   }
 
   const mayRead =
@@ -253,13 +276,12 @@ function registerWorkflowRoutes(
           : input.keyPrefix !== undefined
             ? { prefix: input.keyPrefix }
             : undefined;
-      return (
-        await required().listRuns({
-          workflow: input.workflow,
-          ...(key ? { key } : {}),
-          ...(context.paging ? { page: context.paging } : {})
-        })
-      ).map(toRunResource);
+      const runs = await required().listRuns({
+        workflow: input.workflow,
+        ...(key ? { key } : {}),
+        ...(context.paging ? { page: context.paging } : {})
+      });
+      return withConnectionTitles(context.access, runs.map(toRunResource));
     }
   });
 
@@ -291,8 +313,11 @@ function registerWorkflowRoutes(
       authorizeOnRun(input.runId, mayReadRun(access, actor, origin)),
     resource: runResource,
     module: WORKFLOWS_MODULE,
-    execute: async (input, { access, actor, origin }) =>
-      toRunResource(await runOf(input.runId, mayReadRun(access, actor, origin)))
+    execute: async (input, { access, actor, origin }) => {
+      const run = toRunResource(await runOf(input.runId, mayReadRun(access, actor, origin)));
+      const [titled = run] = await withConnectionTitles(access, [run]);
+      return titled;
+    }
   });
 
   route.operation(apiOperations["workflows.list_step_runs"], {
@@ -327,7 +352,7 @@ function registerWorkflowRoutes(
         },
         ...(context.paging ? { page: context.paging } : {})
       });
-      return stepRuns.map(toStepRunResource);
+      return withConnectionTitles(context.access, stepRuns.map(toStepRunResource));
     }
   });
 

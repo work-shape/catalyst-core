@@ -63,7 +63,9 @@ async function fixture() {
     .mockResolvedValue(false);
   // Only these methods may be reached: any other store access fails the unit probe.
   const stores = {
-    conversations: { getConversation, createdAsset }
+    conversations: { getConversation, createdAsset },
+    // A failure's Connection is titled from its asset; this probe names none.
+    configAssets: { getConfigAsset: vi.fn().mockResolvedValue(undefined) }
   };
   const test = vi.fn<WorkflowRunsPort["test"]>().mockRejectedValue(new Error("engine reached"));
   const workflows: WorkflowRunsPort = {

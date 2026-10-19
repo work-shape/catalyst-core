@@ -188,7 +188,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
   const access = await setupAccessInstance({
     modules: { ...options.modules, apps: { enabled: true } },
     furtherKinds: [options.appKind ?? createAppAssetKind(), ...(options.furtherKinds ?? [])],
-    server: (stores, config) => ({
+    server: (stores, config, kinds) => ({
       pages: {
         ...pages,
         assetBuilds: createPageBuildClient({
@@ -209,7 +209,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
       ...(options.explicitCredentials
         ? { authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" as const } }
         : {}),
-      ...options.server?.(stores, config)
+      ...options.server?.(stores, config, kinds)
     }),
     ...(options.register ? { register: options.register } : {})
   });

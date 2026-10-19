@@ -324,10 +324,12 @@ describe("a loop that continues past a failed item", () => {
     });
     const run = await t.finish((await start(t)).id);
     expect(run.status).toBe("failed");
+    // The failure names the Connection by its display name too (ACCEPT-FIX-13 C3).
     expect(run.error).toMatchObject({
       code: "FORBIDDEN",
       action: "connection.use",
-      connection: "crm"
+      connection: "crm",
+      connectionTitle: "Connection crm"
     });
     // The sentence names who lacks the right: the run's principal, and no person.
     expect(run.error?.message).toBe(
@@ -338,15 +340,33 @@ describe("a loop that continues past a failed item", () => {
     });
     const response = apiOperations["workflows.list_runs"].response.schema.parse(listed.json());
     expect(response.items.find((item) => item.id === run.id)).toMatchObject({
-      error: { connection: "crm" }
+      error: { connection: "crm", connectionTitle: "Connection crm" }
     });
+    // A reader who may read the Workflow but not the Connection is not told its title.
+    await t.allow({ kind: "user", id: t.kai.id }, "workflow.read");
+    const unnamed = apiOperations["workflows.list_runs"].response.schema.parse(
+      (
+        await t.expectOk(t.kai.id, "workflows.list_runs", { params: { workflow: run.workflow } })
+      ).json()
+    );
+    expect(unnamed.items.find((item) => item.id === run.id)?.error).toMatchObject({
+      connection: "crm"
+    });
+    expect(
+      unnamed.items.find((item) => item.id === run.id)?.error?.connectionTitle
+    ).toBeUndefined();
     expect(run.error?.message).not.toContain("person");
     expect(writesOf(t)).toHaveLength(1);
     const stepRuns = await stepRunsOf(t, run.id);
     expect(stepRuns.at(-1)).toMatchObject({
       key: "each_client[1].send",
       status: "failed",
-      error: { code: "FORBIDDEN", action: "connection.use", connection: "crm" }
+      error: {
+        code: "FORBIDDEN",
+        action: "connection.use",
+        connection: "crm",
+        connectionTitle: "Connection crm"
+      }
     });
     expect(stepRuns.find((stepRun) => stepRun.key === "each_client")?.status).toBe("failed");
   });

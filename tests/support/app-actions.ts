@@ -112,10 +112,9 @@ export interface AppActionsOptions extends Pick<
   personContextHeader?: string;
   /** Further server options, made with the ones the fixture built, such as its call path. */
   server?: (
-    ...input: [
-      ...Parameters<NonNullable<AppInstanceOptions["server"]>>,
-      built: ReturnType<NonNullable<AppInstanceOptions["server"]>>
-    ]
+    stores: Parameters<NonNullable<AppInstanceOptions["server"]>>[0],
+    config: Parameters<NonNullable<AppInstanceOptions["server"]>>[1],
+    built: ReturnType<NonNullable<AppInstanceOptions["server"]>>
   ) => ReturnType<NonNullable<AppInstanceOptions["server"]>>;
 }
 
@@ -125,9 +124,9 @@ const instance = (further: AppActionsOptions) =>
       setupAppInstance({
         modules: { ...options.modules, ...further.modules },
         furtherKinds: [...(options.furtherKinds ?? []), ...(further.furtherKinds ?? [])],
-        server: (stores, config) => {
+        server: (stores, config, kinds) => {
           const built = {
-            ...options.server?.(stores, config),
+            ...options.server?.(stores, config, kinds),
             ...(further.rateLimiter ? { rateLimiter: further.rateLimiter } : {})
           };
           return { ...built, ...further.server?.(stores, config, built) };

@@ -443,13 +443,19 @@ export function createWorkflowAssetKind(
           })
         : [];
     },
-    // What the accounts of a publish need, for the screen that asks it before the publish.
-    principalRights: (workflow) =>
-      workflowAccountRights(
-        options,
-        createWorkflowAssetDefinitions({ clientInstanceId, configAssets: options.configAssets }),
-        workflow
-      ),
+    // What the accounts of a publish need, for the screen that asks it before the publish, and
+    // for the publish review of the revision it reads.
+    principalRights: (workflow, config) => {
+      const definitions = createWorkflowAssetDefinitions({
+        clientInstanceId,
+        configAssets: options.configAssets
+      });
+      if (config === undefined) return workflowAccountRights(options, definitions, workflow);
+      const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
+      return parsed.ok
+        ? workflowAccountRights(options, definitions, workflow, parsed.manifest)
+        : Promise.resolve(undefined);
+    },
     async authorizeLive(input) {
       const config = workflowConfigSchema.parse(input.config);
       const result = parseStoredManifest(config.manifest);

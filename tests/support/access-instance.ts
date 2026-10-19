@@ -9,6 +9,7 @@ import {
   asApiCredentialId,
   asClientInstanceId,
   type CollaborationWorkspaceId,
+  type AssetKindRegistry,
   type DataToolSource,
   asServicePrincipalId,
   authScopeForPermission,
@@ -314,7 +315,11 @@ export interface AccessInstanceOptions {
    * Further server options, built from the stores and the config of the instance. They
    * replace the ones this file sets, such as the call path with a further operation source.
    */
-  server?: (stores: TestStore, config: ReturnType<typeof configWith>) => Partial<TestServerOptions>;
+  server?: (
+    stores: TestStore,
+    config: ReturnType<typeof configWith>,
+    kinds?: AssetKindRegistry<WorkflowAssetKind>
+  ) => Partial<TestServerOptions>;
   /** Registers further operations beside the product's, as the assembly does for a module. */
   register?: (route: TestRoute) => void;
 }
@@ -340,6 +345,13 @@ export async function setupAccessInstance(
       ...furtherToolNames
     ]
   };
+  const kinds =
+    furtherKinds.length === 0
+      ? undefined
+      : createAssetKindRegistry([
+          ...createTestAssetKinds({ config, validationRefs }).kinds,
+          ...furtherKinds
+        ]);
   const instance = await createTestInstanceWith(
     (stores) => ({
       config,
@@ -360,16 +372,9 @@ export async function setupAccessInstance(
               })
             }
           : {}),
-        ...(furtherKinds.length === 0
-          ? {}
-          : {
-              kinds: createAssetKindRegistry([
-                ...createTestAssetKinds({ config, validationRefs }).kinds,
-                ...furtherKinds
-              ])
-            })
+        ...(kinds ? { kinds } : {})
       },
-      ...options.server?.(stores, config)
+      ...options.server?.(stores, config, kinds)
     }),
     options.register
   );

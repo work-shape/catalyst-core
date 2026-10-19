@@ -52,3 +52,33 @@ const COPY: Record<LocaleCode, (input: PolicyStopWarningInput) => string> = { en
 export function policyStopWarning(input: PolicyStopWarningInput, locale: LocaleCode): string {
   return COPY[locale](input);
 }
+
+export interface AccountRightWarningInput {
+  /** The account the Workflow runs as, by the label people read. */
+  account: string;
+  /** The Connection the account may not use, by the title the reader may be shown. */
+  connection: string;
+  /** The steps that call it, by their names. */
+  steps: readonly string[];
+  /** The reader may give the account the right: the warning says where. */
+  advise: boolean;
+}
+
+const quotedSteps = (steps: readonly string[], locale: LocaleCode, open: string, close: string) =>
+  new Intl.ListFormat(locale, { type: "conjunction" }).format(
+    steps.map((step) => `${open}${step}${close}`)
+  );
+
+/**
+ * The publish warning for a Connection a step calls that the Workflow's account may not use.
+ * The publish goes ahead; each run fails at that step until the account holds `connection.use`.
+ */
+export function accountRightWarning(input: AccountRightWarningInput, locale: LocaleCode): string {
+  const { account, connection, steps, advise } = input;
+  if (locale === "de") {
+    const named = quotedSteps(steps, locale, "„", "“");
+    return `Das Konto „${account}“ darf die Verbindung „${connection}“ nicht verwenden. Deshalb schlägt ${steps.length > 1 ? `jeder Lauf bei den Schritten ${named}` : `jeder Lauf beim Schritt ${named}`} fehl.${advise ? " Erlaube es dem Konto unter Einstellungen › API-Zugang und veröffentliche dann." : " Ein Administrator kann es dem Konto erlauben."}`;
+  }
+  const named = quotedSteps(steps, locale, "“", "”");
+  return `The account “${account}” may not use the Connection “${connection}”, so every run fails at the ${steps.length > 1 ? "steps" : "step"} ${named}.${advise ? " Allow it for the account under Settings › API access, then publish." : " An administrator can allow it for the account."}`;
+}
