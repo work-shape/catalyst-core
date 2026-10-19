@@ -745,6 +745,37 @@ describe("refused save", () => {
     expect(changed(undefined)).toContain("Applies to new conversations immediately.");
   });
 
+  // ACCEPT-2e C-2: Elif's save of a skill waited for Mara or Jonas, but before the save the bar
+  // said it applied at once. The bar now says so before the save, with who decides.
+  it("names who approves before a save that would wait for an approval", () => {
+    const skillAsset = storedAsset("skill", { name: "hr-leave-policy" });
+    const bar = (asset: BuildAsset, locale: LocaleCode) =>
+      render(
+        createElement(AssetEditorShell, {
+          frame: frame({ asset }),
+          title: "Urlaubsrichtlinie",
+          sections: [{ id: "details", label: "Details", body: null }],
+          control: { changes: 1, submit: saved, discard: noop },
+          outcome: undefined,
+          saving: false,
+          saveLabel: "Save changes"
+        }),
+        locale
+      );
+    const held = (approverNames: string[]) => ({ ...skillAsset, saveApproval: { approverNames } });
+
+    const de = bar(held(["Mara Lindqvist", "Jonas Brandt"]), "de");
+    expect(de).toContain(
+      "Speichern schickt eine Anfrage. Wirksam wird sie erst nach Freigabe durch Mara Lindqvist oder Jonas Brandt."
+    );
+    expect(de).not.toContain("Gilt sofort");
+    expect(bar(held([]), "en")).toContain(
+      "Saving sends a request. It takes effect only once it is approved."
+    );
+    // A save the instance does not hold still applies at once.
+    expect(bar(skillAsset, "en")).toContain("Applies to new conversations immediately.");
+  });
+
   it("shows what the frame says of a conflict above the save bar", () => {
     const markup = page(
       { ok: false, conflict: true },

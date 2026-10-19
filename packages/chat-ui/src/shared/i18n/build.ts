@@ -78,6 +78,8 @@ export const build = defineTranslations({
     "build.pendingApprovalBy":
       "This change waits for approval by {names}. Nothing has changed yet and your text is still here.",
     "build.readOnly": "You can read this but not change it.",
+    "build.saveWaits": "Saving sends a request. It takes effect only once it is approved.",
+    "build.saveWaitsFor": "Saving sends a request. It takes effect once {names} approves it.",
     "build.readOnlyInstance":
       "Belongs to no Namespace. Only a person who may edit on the whole instance can change it.",
     "build.readOnlyNamespace":
@@ -225,6 +227,9 @@ export const build = defineTranslations({
     "build.pendingApprovalBy":
       "Diese Änderung wartet auf Freigabe durch {names}. Es wurde noch nichts geändert und dein Text ist noch da.",
     "build.readOnly": "Du kannst dies lesen, aber nicht ändern.",
+    "build.saveWaits": "Speichern schickt eine Anfrage. Wirksam wird sie erst nach einer Freigabe.",
+    "build.saveWaitsFor":
+      "Speichern schickt eine Anfrage. Wirksam wird sie erst nach Freigabe durch {names}.",
     "build.readOnlyInstance":
       "Gehört zu keinem Namespace. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
     "build.readOnlyNamespace":

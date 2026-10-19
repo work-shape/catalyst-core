@@ -191,6 +191,17 @@ export function AssetEditorShell({
   };
   // A change that waits for an approval is no refusal: it says so in a neutral tone.
   const waiting = waitingNotice(outcome);
+  // Where the reader's save would wait for an approval, the save bar says so before the save,
+  // with who decides, as the instance names them.
+  const approvers = asset?.saveApproval?.approverNames;
+  const approvalHint =
+    approvers === undefined
+      ? undefined
+      : approvers.length > 0
+        ? t("build.saveWaitsFor", {
+            names: new Intl.ListFormat(locale, { type: "disjunction" }).format(approvers)
+          })
+        : t("build.saveWaits");
   const general = waiting === undefined ? refusalsOf(outcome, undefined) : [];
 
   return (
@@ -346,7 +357,9 @@ export function AssetEditorShell({
                 discardLabel={isNew ? undefined : t("build.discard")}
                 onDiscard={isNew ? undefined : control.discard}
                 // While a change waits for an approval it does not apply at once.
-                hint={waiting ? undefined : (saveHint ?? t("configAppliesImmediately"))}
+                hint={
+                  waiting ? undefined : (approvalHint ?? saveHint ?? t("configAppliesImmediately"))
+                }
               />
             ) : null}
           </PageFooter>
