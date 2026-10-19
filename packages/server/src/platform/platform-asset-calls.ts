@@ -6,8 +6,6 @@ import {
   type AuditRecorder,
   type Conversation,
   type ConversationSubject,
-  type JsonObject,
-  type LocaleCode,
   type OperationAuthorization,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
@@ -36,6 +34,8 @@ import { assetWriteEvent } from "../guardrails/asset-guardrail-events";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { AssetWorkflow } from "../assets/asset-service";
 import { listCallableOperations } from "./platform-callable-operations";
+import { authorizePlatformAssetPut } from "./platform-asset-preflight";
+import { assetTitle } from "../assets/asset-reference-labels";
 import { createPlatformAssetPolicy } from "./platform-asset-policy";
 import { readPlatformContext } from "./platform-context";
 import { workflowAuthoringContext } from "./workflow-authoring-context";
@@ -98,6 +98,7 @@ const namedBy = (input: { kind?: string; name?: string }): ConversationSubject |
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
   const { centralFloor, putFloor } = createPlatformAssetPolicy(options, workflow);
+  const titleOf = assetTitle.bind(undefined, options.configAssets.kinds.kinds);
 
   const pageApps = new PageApps(options);
 
@@ -376,24 +377,6 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     };
   }
 
-  /**
-   * The name people read for an asset, as a list shows it, in the language of the one the run
-   * is for: its name where none is told.
-   */
-  function titleOf(
-    kind: string,
-    name: string,
-    config: JsonObject,
-    locale: LocaleCode | undefined
-  ): string {
-    const assetKind = options.configAssets.kinds.kinds.find((each) => each.kind === kind);
-    try {
-      return assetKind?.summarize(config, locale).title ?? name;
-    } catch {
-      return name;
-    }
-  }
-
   /** The kinds that exist here: a kind of a module that is off does not. */
   const existingKinds = () =>
     options.configAssets.kinds.kinds.filter(
@@ -575,6 +558,22 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         if (refused && "issues" in refused) return { issues: refused.issues };
         throw error;
       }
+    },
+
+    async authorizePut(input, context) {
+      // Draft saves keep their structured validation result. Live creates must pass before Allow.
+      if (input.expectedRevision !== undefined) return { allowed: true };
+      if (context.origin.kind !== "agent") return { allowed: false, reason: "user_only" };
+      const conversation = await options.stores.conversations.getConversation(
+        options.clientInstanceId,
+        context.origin.conversationId
+      );
+      if (!conversation) throw subjectUnavailable();
+      const target = await putTarget(conversation, input);
+      if (!target || options.configAssets.kinds.get(target.kind)?.lifecycle === "draft_published")
+        return { allowed: true };
+      await requireOwnTranscript(options, conversation);
+      return authorizePlatformAssetPut(options, workflow, target, input, context);
     },
 
     async put(context, input) {

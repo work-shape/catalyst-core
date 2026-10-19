@@ -364,6 +364,42 @@ export const dataStoreOperations = {
     errors: ["NOT_FOUND", "CONFLICT", "TIMEOUT"],
     rateClass: "write"
   }),
+  "data_stores.update": defineRegisteredOperation({
+    id: "data_stores.update",
+    method: "POST",
+    path: "/api/v1/data-stores/:store/update",
+    summary: "Change rows of one Data Store by primary key",
+    tag: "Data Stores",
+    auth: "principal",
+    scope: "data_store_rows:write",
+    requires: [],
+    effect: "changing",
+    body: z.strictObject({
+      table: tableNameSchema,
+      rows: z.array(z.strictObject({ key: rowSchema, set: rowSchema })).min(1)
+    }),
+    response: json(z.strictObject({ table: z.string(), updated: z.number().int().min(0) })),
+    errors: ["NOT_FOUND", "CONFLICT", "TIMEOUT"],
+    rateClass: "write"
+  }),
+  "data_stores.delete_rows": defineRegisteredOperation({
+    id: "data_stores.delete_rows",
+    method: "POST",
+    path: "/api/v1/data-stores/:store/delete_rows",
+    summary: "Remove rows of one Data Store by primary key",
+    tag: "Data Stores",
+    auth: "principal",
+    scope: "data_store_rows:write",
+    requires: [],
+    effect: "changing",
+    body: z.strictObject({
+      table: tableNameSchema,
+      keys: z.array(rowSchema).min(1)
+    }),
+    response: json(z.strictObject({ table: z.string(), deleted: z.number().int().min(0) })),
+    errors: ["NOT_FOUND", "CONFLICT", "TIMEOUT"],
+    rateClass: "write"
+  }),
   "data_stores.describe": defineRegisteredOperation({
     ...READ,
     scope: "config_assets:read",

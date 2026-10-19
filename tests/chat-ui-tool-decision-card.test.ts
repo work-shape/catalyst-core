@@ -110,11 +110,168 @@ describe("the confirmation card", () => {
     expect(markup).not.toContain('data-testid="tool-decision-outcome"');
   });
 
+  it("says in words which agent a save creates, with its definition only under details (ACCEPT-FIX-7 E5)", () => {
+    const agentSave: ToolDecision = {
+      ...waiting,
+      operationId: "assets.put",
+      inputPreview: {
+        kind: "agent",
+        name: "protokollant",
+        config: {
+          name: "protokollant",
+          displayName: { de: "Protokollant", en: "Minute taker" },
+          instructions: "Mach aus Stichpunkten ein kurzes Besprechungsprotokoll mit Datum.",
+          skillNames: ["meeting-minutes"],
+          toolNames: ["web_search", "read_skill"],
+          welcomeMessage: { de: "Schick mir deine Stichpunkte", en: "Send me your notes" }
+        }
+      }
+    };
+    const markup = renderView(agentSave);
+    const summary = /data-testid="tool-decision-agent".*?<\/dl>/su.exec(markup)?.[0] ?? "";
+    expect(text(summary)).toContain("Name Minute taker");
+    expect(text(summary)).toContain(
+      "Instructions Mach aus Stichpunkten ein kurzes Besprechungsprotokoll mit Datum."
+    );
+    expect(text(summary)).toContain("Skills meeting-minutes");
+    expect(text(summary)).toContain("Tools web_search read_skill");
+    // The raw definition is folded under Technical details, which renders no content here.
+    expect(markup).not.toContain('data-input-key="config.welcomeMessage"');
+    expect(markup).not.toContain("Send me your notes");
+    expect(markup).toContain('data-testid="tool-decision-details"');
+    const german = text(renderView(agentSave, {}, "de"));
+    expect(german).toContain("Name Protokollant");
+    expect(german).toContain("Anweisungen Mach aus Stichpunkten");
+    expect(german).toContain("Skills meeting-minutes");
+    // Another call keeps its input as the card's body.
+    expect(renderView(waiting)).not.toContain('data-testid="tool-decision-agent"');
+    const noSkills = text(
+      renderView({
+        ...agentSave,
+        inputPreview: { kind: "agent", name: "leer", config: { displayName: "Leer" } }
+      })
+    );
+    expect(noSkills).toContain("Skills None");
+    expect(noSkills).toContain("Tools None");
+  });
+
+  it("summarises the agent a chat agent's save creates, which waits under its tool name (ACCEPT-FIX-7 E5)", () => {
+    // An agent's call waits under the name the agent called it by (`tool-operation.ts`), so an
+    // agent created in chat reaches the card as `platform.assets.put`.
+    const chatSave: ToolDecision = {
+      ...waiting,
+      operationId: "platform.assets.put",
+      inputPreview: {
+        kind: "agent",
+        name: "protokollant",
+        config: {
+          displayName: "Protokollant",
+          instructions: "Mach aus Stichpunkten ein Protokoll.",
+          skillNames: [],
+          toolNames: ["web_search"],
+          modelBindingId: "primary"
+        }
+      }
+    };
+    const markup = renderView(chatSave, {}, "de");
+    const summary = /data-testid="tool-decision-agent".*?<\/dl>/su.exec(markup)?.[0] ?? "";
+    expect(text(summary)).toContain("Name Protokollant");
+    expect(text(summary)).toContain("Anweisungen Mach aus Stichpunkten ein Protokoll.");
+    expect(text(summary)).toContain("Skills Keine");
+    expect(text(summary)).toContain("Tools web_search");
+    expect(markup).not.toContain('data-input-key="config.modelBindingId"');
+    // A save of another kind keeps its input as the card's body.
+    expect(
+      renderView({ ...chatSave, inputPreview: { kind: "skill", name: "notes", config: {} } })
+    ).not.toContain('data-testid="tool-decision-agent"');
+  });
+
   it("says in German what it asks", () => {
     const markup = text(renderView(waiting, {}, "de"));
     expect(markup).toContain("Läuft erst, wenn du es erlaubst.");
     expect(markup).toContain("Erlauben Ablehnen Grund angeben");
     expect(markup).toMatch(/Läuft ab am 16\.10\.2026/u);
+  });
+
+  it("asks what a Data Store row write changes and lists each row's key and values (RECORDS-AGENT)", () => {
+    // The title is the one the run named the call's target with: the store's own.
+    const rowWrite = (
+      verb: string,
+      inputPreview: unknown,
+      targetTitle = "Holiday requests"
+    ): ToolDecision => ({
+      ...waiting,
+      operationId: `data_store.ds_7f3a.${verb}`,
+      ...(targetTitle ? { targetTitle } : {}),
+      inputPreview
+    });
+    const summaryOf = (markup: string) =>
+      /data-testid="operation-call-summary"[^>]*>([^<]*)</u.exec(markup)?.[1];
+    const alex = { employee: "Alex", starts_on: "2026-11-02", ends_on: "2026-11-06" };
+
+    const insert = renderView(rowWrite("insert", { table: "holiday_requests", rows: [alex] }));
+    expect(summaryOf(insert)).toBe("Add 1 row to Holiday requests?");
+    expect(insert).toMatch(/data-input-key="Table"[\s\S]*?holiday_requests/u);
+    expect(insert).toMatch(
+      /data-input-key="Row 1"[\s\S]*employee: Alex[\s\S]*ends_on: 2026-11-06/u
+    );
+    expect(insert).not.toContain("ds_7f3a");
+    expect(
+      summaryOf(
+        renderView(
+          rowWrite("insert", { table: "holiday_requests", rows: [alex, alex] }, "Urlaubsanträge"),
+          {},
+          "de"
+        )
+      )
+    ).toBe("2 Datensätze zu Urlaubsanträge hinzufügen?");
+
+    const update = rowWrite("update", {
+      table: "holiday_requests",
+      rows: [{ key: { id: 7 }, set: { ends_on: "2026-11-05" } }]
+    });
+    expect(summaryOf(renderView(update))).toBe("Change 1 row in Holiday requests?");
+    const german = renderView(update, {}, "de");
+    expect(summaryOf(german)).toBe("1 Datensatz in Holiday requests ändern?");
+    expect(german).toMatch(/data-input-key="Tabelle"[\s\S]*?holiday_requests/u);
+    expect(german).toMatch(/data-input-key="Datensatz 1, Schlüssel"[\s\S]*id: 7/u);
+    expect(german).toMatch(/data-input-key="Datensatz 1, neue Werte"[\s\S]*ends_on: 2026-11-05/u);
+
+    const removal = rowWrite("delete_rows", {
+      table: "holiday_requests",
+      keys: [{ id: 7 }, { id: 8 }]
+    });
+    expect(summaryOf(renderView(removal))).toBe("Delete 2 rows from Holiday requests?");
+    // Without the store's title the question names the table, and still not the id.
+    const untitled = rowWrite(
+      "delete_rows",
+      { table: "holiday_requests", keys: [{ id: 7 }, { id: 8 }] },
+      ""
+    );
+    expect(summaryOf(renderView(untitled, {}, "de"))).toBe(
+      "2 Datensätze aus holiday_requests löschen?"
+    );
+
+    // Not a row write, or not its shape: the input field by field, with no question.
+    for (const decision of [
+      waiting,
+      rowWrite("query", { table: "holiday_requests", rows: [alex] }),
+      rowWrite("delete_rows", { table: "holiday_requests", keys: [] })
+    ]) {
+      expect(renderView(decision)).not.toContain('data-testid="operation-call-summary"');
+    }
+
+    // The question stands once on the card, in either language.
+    for (const decision of [
+      rowWrite("insert", { table: "holiday_requests", rows: [alex] }),
+      update,
+      removal
+    ]) {
+      for (const locale of ["en", "de"] as const) {
+        const markup = renderView(decision, {}, locale);
+        expect(markup.match(/data-testid="operation-call-summary"/gu)).toHaveLength(1);
+      }
+    }
   });
 
   it("says what the person answered and offers nothing more until the run records it", () => {

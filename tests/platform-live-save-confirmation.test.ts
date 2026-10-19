@@ -21,10 +21,15 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
     app = undefined;
   });
 
-  async function fixture(settings: CentralPolicySetting[]) {
+  async function fixture(
+    settings: CentralPolicySetting[],
+    roles = ["user", "admin", "superadmin"],
+    creationAllowed = true
+  ) {
     const model = createToolCallingModel();
     const config = createTestConfig({
       toolNames: [...PLATFORM_TOOL_NAMES],
+      modelBindings: [{ id: "primary", providerId: "local", model: "local" }],
       developmentAuth: {
         enabled: true,
         defaultUserId: "owner",
@@ -33,14 +38,14 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
             id: "owner",
             externalUserId: "owner",
             displayLabel: "Owner",
-            roles: ["user", "admin", "superadmin"]
+            roles
           }
         ]
       }
     });
     config.modules.assetManagement = { enabled: true };
     config.administration.agentConfiguration.enabled = true;
-    config.administration.agentConfiguration.allowAgentCreation = true;
+    config.administration.agentConfiguration.allowAgentCreation = creationAllowed;
     config.administration.agentConfiguration.editableAgentFields = [
       "displayName",
       "instructions",
@@ -69,10 +74,101 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
     return { instance, clientInstanceId, conversation };
   }
 
+  it.each<{
+    name: string;
+    extra: Record<string, unknown>;
+    expected: string;
+    status: string;
+    creationAllowed?: boolean;
+    omitConfig?: boolean;
+  }>([
+    {
+      name: "missing-config",
+      extra: {},
+      expected: "config definition",
+      status: "failed",
+      omitConfig: true
+    },
+    {
+      name: "creation-disabled",
+      extra: {},
+      expected: "creation is disabled",
+      status: "failed",
+      creationAllowed: false
+    },
+    {
+      name: "copied-model",
+      extra: { modelBindingId: "primary" },
+      expected: "agent_models.manage",
+      status: "denied"
+    },
+    {
+      name: "skill-without-reader",
+      extra: { skillNames: ["platform-docs"] },
+      expected: "invalid",
+      status: "failed"
+    },
+    {
+      name: "invalid-instructions",
+      extra: { instructions: [] },
+      expected: "invalid",
+      status: "failed"
+    },
+    {
+      name: "invalid-tool",
+      extra: { toolNames: ["tool_that_does_not_exist"] },
+      expected: "invalid",
+      status: "failed"
+    }
+  ])(
+    "refuses $name before offering Allow",
+    async ({ name, extra, expected, status, creationAllowed = true, omitConfig = false }) => {
+      const t = await fixture([], ["user", "admin"], creationAllowed);
+      const config = {
+        name,
+        displayName: "Protocol writer",
+        instructions: "Write minutes.",
+        toolNames: [],
+        skillNames: [],
+        ...extra
+      };
+      const started = await injectStartConversationRun(
+        t.instance,
+        t.conversation.id,
+        `/tool platform.assets.put ${JSON.stringify({ kind: "agent", name, ...(omitConfig ? {} : { config }) })}`
+      );
+      const runId = asAgentRunId(started.run.id);
+      await waitUntil(async () => {
+        const run = await t.instance.stores.agentRuns.getAgentRun({
+          clientInstanceId: t.clientInstanceId,
+          runId
+        });
+        return run?.status === "completed" || run?.status === "waiting_for_decision";
+      }, "the invalid save settles before confirmation");
+      const rows = (
+        await t.instance.stores.operationRuns.list({ clientInstanceId: t.clientInstanceId })
+      ).filter((row) => row.origin.kind === "agent" && row.origin.agentRunId === runId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.status).toBe(status);
+      expect(JSON.stringify(rows[0]?.error)).toContain(expected);
+      if (name === "copied-model")
+        expect(rows[0]?.error?.message).toContain("Instance admin (superadmin)");
+      if (name === "skill-without-reader") expect(rows[0]?.error?.message).toContain("read_skill");
+      expect(rows.some((row) => row.status === "pending_confirmation")).toBe(false);
+      expect(
+        await t.instance.stores.configAssets.getConfigAsset({
+          clientInstanceId: t.clientInstanceId,
+          kind: "agent",
+          name
+        })
+      ).toBeUndefined();
+    }
+  );
+
   it.each(["skill", "agent"])(
     "writes a new %s once after Allow, never before, even under central allow",
     async (kind) => {
-      const t = await fixture([{ operation: "assets.put", value: "allow" }]);
+      const t = await fixture([{ operation: "assets.put", value: "allow" }], ["user", "admin"]);
       const name = `hr-${kind}`;
       const config =
         kind === "skill"
@@ -80,7 +176,6 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
           : {
               name,
               displayName: "Leave reviewer",
-              modelProviderId: "local",
               initialPrompts: [],
               instructions: "Ask for cover.",
               toolNames: [],

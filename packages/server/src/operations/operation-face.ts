@@ -272,9 +272,10 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
               .header("content-type", download.contentType)
               .header(
                 "content-disposition",
-                `attachment; filename="${encodeURIComponent(download.filename)}"`
+                `${download.inline === true ? "inline" : "attachment"}; filename="${encodeURIComponent(download.filename)}"`
               )
               .header("cache-control", "private, no-store")
+              .header("x-content-type-options", "nosniff")
               .send(Readable.from(download.body));
           }
           if (

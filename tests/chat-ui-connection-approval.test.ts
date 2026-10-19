@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import {
   ConnectionApprovalList,
+  discoveredCandidates,
   pastedCandidates,
   readConnectionDraft,
   type ApprovalSurface
@@ -119,3 +120,105 @@ for (const source of ["pasted", "drafted"] as const) {
     );
   });
 }
+
+function renderList(
+  props: Partial<Parameters<typeof ConnectionApprovalList>[0]> &
+    Pick<Parameters<typeof ConnectionApprovalList>[0], "candidates">,
+  locale: "en" | "de" = "en"
+): string {
+  return renderToStaticMarkup(
+    createElement(
+      TranslationProvider,
+      { locale, children: null },
+      createElement(ConnectionApprovalList, {
+        choice: {
+          selected: new Set(props.candidates.map((candidate) => candidate.name)),
+          surfaces: new Set<ApprovalSurface>(["agent"])
+        },
+        onSelectedChange: () => undefined,
+        onSurfacesChange: () => undefined,
+        ...props
+      })
+    )
+  );
+}
+
+/** The opening tag of a list row's own check box, by the row's tool. */
+function rowCheckbox(markup: string, name: string): string {
+  const row = markup.split(`data-approval-tool="${name}"`)[1] ?? "";
+  return /<button[^>]*role="checkbox"[^>]*>/u.exec(row)?.[0] ?? "";
+}
+
+describe("pasted operations outside the reading cut (ACCEPT-FIX-7 C8)", () => {
+  const read = pastedCandidates(`
+- name: list_clients
+  path: /clients
+- name: create_client
+  method: POST
+  path: /clients
+`);
+  if (!read.ok) throw new Error("Expected pasted declarations");
+
+  it.each([
+    [
+      "en",
+      "This connection only reads: an operation that changes data or does not use GET cannot be approved. 1 operation cannot be selected."
+    ],
+    [
+      "de",
+      "Diese Verbindung liest nur: Eine Operation, die Daten ändert oder nicht GET nutzt, lässt sich nicht freigeben. 1 Operation ist nicht auswählbar."
+    ]
+  ] as const)("cannot be ticked, and the list says why once (%s)", (locale, reason) => {
+    const markup = renderList({ candidates: read.candidates, declared: true }, locale);
+    expect(rowCheckbox(markup, "create_client")).toMatch(/ disabled=""/u);
+    expect(rowCheckbox(markup, "create_client")).toContain('aria-checked="false"');
+    expect(rowCheckbox(markup, "list_clients")).not.toMatch(/ disabled=""/u);
+    expect(markup.split(reason)).toHaveLength(2);
+    expect(markup).not.toContain("first cut");
+  });
+});
+
+describe("the effect of a discovered tool at approval (ACCEPT-FIX-7 C10)", () => {
+  const candidates = discoveredCandidates([
+    { name: "read_wiki", proposedEffect: "changing", fingerprint: "a".repeat(64) }
+  ]);
+
+  it.each(["en", "de"] as const)(
+    "offers reads or changes per tool, starting with what the hint proposed (%s)",
+    (locale) => {
+      const markup = renderList({ candidates, onEffectsChange: () => undefined }, locale);
+      const select = /<select[^>]*data-approval-effect="read_wiki"[^>]*>.*?<\/select>/su.exec(
+        markup
+      )?.[0];
+      expect(select).toContain(
+        locale === "en" ? 'aria-label="Effect of Read wiki"' : 'aria-label="Wirkung von Read wiki"'
+      );
+      expect(select).toMatch(/<option value="changing" selected="">/u);
+      expect(select).toContain(locale === "en" ? ">reads<" : ">liest<");
+      const chosen = renderList(
+        {
+          candidates,
+          onEffectsChange: () => undefined,
+          choice: {
+            selected: new Set(["read_wiki"]),
+            surfaces: new Set<ApprovalSurface>(["agent"]),
+            effects: new Map([["read_wiki", "reading" as const]])
+          }
+        },
+        locale
+      );
+      expect(chosen).toMatch(/<option value="reading" selected="">/u);
+    }
+  );
+
+  it("offers no choice for a REST API's declarations, which only read", () => {
+    const read = pastedCandidates("- name: list_clients\n  path: /clients");
+    if (!read.ok) throw new Error("Expected pasted declarations");
+    const markup = renderList({
+      candidates: read.candidates,
+      declared: true,
+      onEffectsChange: () => undefined
+    });
+    expect(markup).not.toContain("data-approval-effect");
+  });
+});

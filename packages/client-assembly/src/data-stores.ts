@@ -85,6 +85,8 @@ const registerStoreRoutes: RouteRegistration = (routes) => {
   });
   routes.resourceOperation(apiOperations["data_stores.query"], bind("query"));
   routes.resourceOperation(apiOperations["data_stores.insert"], bind("insert"));
+  routes.resourceOperation(apiOperations["data_stores.update"], bind("update"));
+  routes.resourceOperation(apiOperations["data_stores.delete_rows"], bind("delete_rows"));
   routes.resourceOperation(apiOperations["data_stores.describe"], bind("describe"));
   routes.resourceOperation(apiOperations["data_stores.preview_rows"], bind("preview_rows"));
   // The state of a store is its own operation, which reads no row and no database of a store.

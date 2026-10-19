@@ -49,9 +49,14 @@ const stand = (name: string) =>
   });
 
 /** What a conversation of an agent that lists `agentToolNames` is offered. */
-async function offerFor(agentToolNames: string[], subject?: { kind: string; name: string }) {
+async function offerFor(
+  agentToolNames: string[],
+  subject?: { kind: string; name: string },
+  connections = false
+) {
   const harness = await createWorkspaceHarness();
   const modules = createModuleRegistry(platformModules).snapshot({
+    connections: { enabled: connections },
     apps: { enabled: true },
     workflows: { enabled: true },
     assetManagement: { enabled: true }
@@ -60,6 +65,7 @@ async function offerFor(agentToolNames: string[], subject?: { kind: string; name
   platform.registry(
     [
       stand("read_skill"),
+      stand("platform.connections.draft_tools"),
       stand("workspace.open"),
       stand("workspace.write_file"),
       ...platform.tools
@@ -142,6 +148,40 @@ describe("the platform's knowledge of an agent", () => {
     expect(guide).toContain("**Wissen**");
     expect(guide).toContain("**Wissensbasis**, plural **Wissensbasen**");
     expect(offer.orientation).not.toContain("Wissensdatenbank");
+  });
+
+  it("keeps truncated row reads and draft rows honest in the offered guidance", async () => {
+    const offer = await offerFor(PLATFORM_TOOLS);
+    expect(offer.orientation).toContain(
+      "a migration that creates its table with a primary key and no rows"
+    );
+    expect(offer.orientation).toContain(
+      "If query says truncated, say so and page with an ordered query"
+    );
+    expect(offer.orientation).toContain("a truncated answer cannot prove absence");
+    expect(offer.orientation).toContain("it is not a row editor");
+  });
+
+  it("offers connection drafting to platform agents by default only while Connections is enabled", async () => {
+    const offered = await offerFor(PLATFORM_TOOLS, undefined, true);
+    expect(offered.toolNames).toContain("platform.connections.draft_tools");
+    expect((await offerFor(PLATFORM_TOOLS)).toolNames).not.toContain(
+      "platform.connections.draft_tools"
+    );
+    expect((await offerFor(["read_skill"], undefined, true)).toolNames).not.toContain(
+      "platform.connections.draft_tools"
+    );
+    expect(
+      (await offerFor(["read_skill"], { kind: "connection", name: "crm" }, true)).toolNames
+    ).toContain("platform.connections.draft_tools");
+    expect(offered.orientation).toContain("never dump HTTP or YAML");
+  });
+
+  it("leaves new agents on the default model and requires a reader for their skills", async () => {
+    const offer = await offerFor(PLATFORM_TOOLS);
+    expect(offer.orientation).toContain("leave all model settings out");
+    expect(offer.orientation).toContain("Never copy a model binding");
+    expect(offer.orientation).toContain("An agent with skills needs read_skill");
   });
 
   it("is none of the tools, the orientation or the docs for an agent that lists no platform tool, also about a Workflow", async () => {

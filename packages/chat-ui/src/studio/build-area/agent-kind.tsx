@@ -158,7 +158,8 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
               ...(knowledgeRead.status === "ready" && knowledgeRead.data.more !== undefined
                 ? { more: knowledgeRead.data.more }
                 : {}),
-              onSearch: (text) => setKnowledgeSearch(text.trim())
+              onSearch: (text) => setKnowledgeSearch(text.trim()),
+              workspaceOwned: owner !== undefined
             }
           : undefined
       }

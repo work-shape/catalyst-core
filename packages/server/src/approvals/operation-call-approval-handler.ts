@@ -1,5 +1,6 @@
 import {
   AppError,
+  DATA_STORE_OPERATION_PREFIX,
   approvalExecutionOf,
   asUserId,
   isAppError,
@@ -151,8 +152,26 @@ export function createOperationCallApprovalHandler(
         about && call.subject && context.status === "pending"
           ? await about.review(call.subject, context.viewer?.inList ?? false, context.viewer)
           : undefined;
+      const [storeName, verb, ...rest] = call.operation.startsWith(DATA_STORE_OPERATION_PREFIX)
+        ? call.operation.slice(DATA_STORE_OPERATION_PREFIX.length).split(".")
+        : [];
+      const store =
+        context.status === "pending" &&
+        !call.inputRemoved &&
+        storeName &&
+        rest.length === 0 &&
+        verb &&
+        ["insert", "update", "delete_rows"].includes(verb)
+          ? await options.configAssets.getConfigAsset({
+              clientInstanceId,
+              kind: "data_store",
+              name: storeName
+            })
+          : undefined;
+      const target = z.object({ title: z.string() }).safeParse(store?.publishedConfig);
       return toJsonObject({
         ...previewOf(call),
+        ...(target.success ? { targetTitle: target.data.title } : {}),
         ...(asset ? { asset } : {}),
         ...(review ? { review } : {})
       });
@@ -644,6 +663,7 @@ export function createOperationApprovalFiler(
       run,
       call,
       heldInput,
+      resource,
       runtime,
       expiresAt,
       policySource,
@@ -746,7 +766,7 @@ export function createOperationApprovalFiler(
           {
             kind,
             // The name of the operation. The Inbox words the item in the reader's language.
-            summary: run.operation,
+            summary: resource?.title ?? run.operation,
             payload: toJsonObject(payload),
             // Only the person the call acts for sees and decides their confirmation.
             ...(confirmation ? { addresseeUserId: actor.id } : {}),

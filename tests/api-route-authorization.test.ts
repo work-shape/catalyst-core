@@ -8,7 +8,11 @@ import {
 } from "@work-shape/catalyst-api-contract";
 import { HmacSessionTokenIssuer } from "@work-shape/catalyst-auth";
 import { platformModules } from "@work-shape/catalyst-client-assembly";
-import { createModuleRegistry, type PlatformAction } from "@work-shape/catalyst-core";
+import {
+  LEGACY_PERMISSION_ACTIONS,
+  createModuleRegistry,
+  type PlatformAction
+} from "@work-shape/catalyst-core";
 import {
   FIRST_PARTY_AUTH_SCOPES,
   INSTANCE_ACTIONS,
@@ -53,6 +57,8 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
   "knowledge_bases.remove_documents": { documentIds: ["missing"] },
   "data_stores.query": { sql: "select 1" },
   "data_stores.insert": { table: "missing", rows: [{ id: 1 }] },
+  "data_stores.update": { table: "missing", rows: [{ key: { id: 1 }, set: { value: "test" } }] },
+  "data_stores.delete_rows": { table: "missing", keys: [{ id: 1 }] },
   "service_principals.create": { displayLabel: "Service" },
   "service_principals.update": { displayLabel: "Service" },
   "api_credentials.create": { name: "Credential" },
@@ -187,9 +193,12 @@ describe("every operation of the catalog", () => {
   );
 
   // What a caller of the role `user` holds an action through: its legacy key, or for a right of
-  // the instance itself no key at all, so the caller lacks it whatever keys it holds.
+  // the instance itself or a newer action with no legacy key, no key at all.
   const heldBy = (action: PlatformAction): string =>
-    INSTANCE_ACTIONS.some((candidate) => candidate === action)
+    INSTANCE_ACTIONS.some((candidate) => candidate === action) ||
+    !PERMISSIONS.some((permission) =>
+      LEGACY_PERMISSION_ACTIONS[permission].some((candidate) => candidate === action)
+    )
       ? action
       : legacyPermissionFor(action);
   const requiring = authenticated.flatMap(({ name, operation }) => {

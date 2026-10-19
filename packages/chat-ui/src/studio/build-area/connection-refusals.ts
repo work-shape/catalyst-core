@@ -1,3 +1,4 @@
+import { EGRESS_DENIED } from "@work-shape/catalyst-core";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import { issueRefusal, readBuildRefusal, readRefusalDetails } from "./build-refusals";
 import type { CreateFieldErrors } from "./connection-create-form";
@@ -16,7 +17,7 @@ export interface ConnectionRefusal {
 
 /** The field of the New connection dialog an issue is about: the address for a refused egress. */
 function fieldOfIssue({ path, code }: { path: readonly unknown[]; code?: string }) {
-  if (code === "egress_denied") return "url";
+  if (code === EGRESS_DENIED) return "url";
   if (path.includes("url") || path.includes("baseUrl")) return "url";
   if (path.includes("headers")) return "headers";
   if (path.includes("testPath")) return "testPath";
@@ -35,14 +36,33 @@ const FIELD_FALLBACK: Record<ReturnType<typeof fieldOfIssue>, TranslationKey> = 
   general: "connections.refusedUnknown"
 };
 
+/** The host of an address as the operator allows it, such as `10.0.0.5:8080`. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url.trim()).host;
+  } catch {
+    return url.trim();
+  }
+}
+
+/**
+ * The address the operator's network rule blocks, said once: what blocks it and the host to
+ * send the operator. There is nothing more to say under Technical details.
+ */
+export function egressRefusal(url: string, t: Translate): string {
+  return t("connectionCreate.errorEgress", { host: hostOf(url) });
+}
+
 /**
  * Each refused field of a new Connection with its sentence in the reader's language, and the
- * instance's sentences for an administrator. A name taken meanwhile is told at the name.
+ * instance's sentences for an administrator. A name taken meanwhile is told at the name. A
+ * refused egress names the host of `url`, the address the person typed.
  */
 export function connectionWriteErrors(
   error: unknown,
   name: string,
-  t: Translate
+  t: Translate,
+  url?: string
 ): { errors: CreateFieldErrors; detail?: string } {
   const outcome = readBuildRefusal(error, t);
   if (!outcome.ok && outcome.conflict) {
@@ -57,14 +77,20 @@ export function connectionWriteErrors(
   const details: string[] = [];
   for (const issue of issues) {
     const field = fieldOfIssue(issue);
+    const egress = issue.code === EGRESS_DENIED;
     const known = issueRefusal(issue, t);
-    const message = known.asSent ? t(FIELD_FALLBACK[field]) : known.message;
-    details.push(issue.message);
+    const message =
+      egress && url !== undefined
+        ? egressRefusal(url, t)
+        : known.asSent
+          ? t(FIELD_FALLBACK[field])
+          : known.message;
+    if (!egress) details.push(issue.message);
     const before = errors[field];
     errors[field] =
       before === undefined || before.includes(message) ? message : `${before} ${message}`;
   }
-  return { errors, detail: details.join(" ") };
+  return details.length === 0 ? { errors } : { errors, detail: details.join(" ") };
 }
 
 /**

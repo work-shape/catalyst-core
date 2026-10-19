@@ -1,8 +1,10 @@
+import { collectKnowledgeCitations } from "./knowledge-citations";
 import {
   AppError,
   SUBJECT_TOOL_PREFIX,
   systemClock,
   unknownToJsonValue,
+  type KnowledgeCitationSource,
   type AgentRunId,
   type AgentRunResumeState,
   type LocaleCode,
@@ -313,6 +315,8 @@ export class TurnLoop {
   ): Promise<void> {
     const { modelSelection, tools, offeredDataTools, compactThresholdTokens, maxSteps } = setup;
     const { repeatedToolCalls } = entry;
+    const knowledgeSources = new Map<string, KnowledgeCitationSource>();
+    collectKnowledgeCitations(entry.messages, knowledgeSources);
     let { messages, providerContinuation, runCompacted, modelInputFrom } = entry;
     // True until the first answer: only then does a request carry a continuation from an earlier run.
     let carriesEarlierContinuation = providerContinuation !== undefined;
@@ -375,6 +379,9 @@ export class TurnLoop {
             runId,
             reasoning,
             sources: completion.sources,
+            knowledgeSources: [...knowledgeSources.values()].filter((source) =>
+              assistantText.includes(`[${source.ref}]`)
+            ),
             citations: completion.citations,
             modelContext
           }),
@@ -424,6 +431,7 @@ export class TurnLoop {
         messages,
         offeredDataTools
       );
+      collectKnowledgeCitations(messages, knowledgeSources);
       if (outcome.kind === "stopped") return;
       const stepResume = {
         step,

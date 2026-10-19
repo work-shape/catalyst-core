@@ -11,6 +11,8 @@ import {
   newConnectionConfig,
   pastedCandidates,
   readingNames,
+  selectedCandidates,
+  withApprovedOperations,
   type ConnectCalls,
   type ConnectMemory,
   type ConnectionSource
@@ -271,6 +273,56 @@ describe("the approval list", () => {
       effect: "reading",
       schemaFingerprint: "a".repeat(64)
     });
+  });
+
+  it("saves the effect the person chose for a tool over what its hint proposed (ACCEPT-FIX-7 C10)", () => {
+    const candidates = discoveredCandidates([
+      { name: "read_wiki", proposedEffect: "changing", fingerprint: "a".repeat(64) },
+      { name: "ask_question", proposedEffect: "changing", fingerprint: "b".repeat(64) }
+    ]);
+    // Without a hint nothing is ticked and everything changes, until the person says otherwise.
+    expect(readingNames(candidates)).toEqual([]);
+    const chosen = selectedCandidates(
+      candidates,
+      new Set(["read_wiki", "ask_question"]),
+      new Map([["read_wiki", "reading" as const]])
+    );
+    expect(chosen.map(({ name, effect }) => [name, effect])).toEqual([
+      ["read_wiki", "reading"],
+      ["ask_question", "changing"]
+    ]);
+    // The accepted effect goes into the one write of the definition, with its fingerprint.
+    const config = withApprovedOperations({ name: "deepwiki", operations: [] }, chosen, ["agent"]);
+    expect(config.operations).toEqual([
+      expect.objectContaining({
+        name: "read_wiki",
+        effect: "reading",
+        schemaFingerprint: "a".repeat(64)
+      }),
+      expect.objectContaining({ name: "ask_question", effect: "changing" })
+    ]);
+  });
+
+  it("never selects a pasted operation that changes data or is no GET (ACCEPT-FIX-7 C8)", () => {
+    const read = pastedCandidates(`
+- name: list_clients
+  path: /clients
+- name: create_client
+  method: POST
+  path: /clients
+- name: archive_client
+  effect: changing
+  path: /clients/{id}/archive
+`);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(readingNames(read.candidates)).toEqual(["list_clients"]);
+    // Even a choice that names them cannot send them.
+    const chosen = selectedCandidates(
+      read.candidates,
+      new Set(["list_clients", "create_client", "archive_client"])
+    );
+    expect(chosen.map((candidate) => candidate.name)).toEqual(["list_clients"]);
   });
 
   it("reads pasted operations with their method and path, and says what is wrong with a paste", () => {

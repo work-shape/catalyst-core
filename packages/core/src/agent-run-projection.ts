@@ -82,6 +82,7 @@ export function applyAgentRunObservation(
       decision: {
         operationRunId: event.operationRunId,
         operationId: event.operationId,
+        ...(event.targetTitle ? { targetTitle: event.targetTitle } : {}),
         mode: event.mode,
         inputPreview: event.inputPreview,
         expiresAt: event.expiresAt

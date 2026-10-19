@@ -1,3 +1,4 @@
+import { openKnowledgeDocument } from "./open-document";
 import { FIELD_OUTPUT_MIN_TOKENS } from "./field-budget";
 import {
   confirmKnowledgeProcessing,
@@ -106,6 +107,18 @@ export interface KnowledgeBases {
     handlers: RegisteredJobHandler[];
     retries: JobRetry[];
   };
+  /** Original bytes of a live document; the calling operation checks knowledge_base.use. */
+  openDocument(
+    files: KnowledgeFiles | undefined,
+    knowledgeBase: string,
+    documentId: string,
+    signal?: AbortSignal
+  ): Promise<{
+    filename: string;
+    contentType: string;
+    body: AsyncIterable<Uint8Array>;
+    inline?: boolean;
+  }>;
   /** Describes the one knowledge tool to an agent that lists Knowledge Bases. */
   readonly toolSource: DataToolSource;
   publishQuestion(input: {
@@ -149,6 +162,14 @@ export function createKnowledgeBases(input: {
     now: input.now ?? (() => new Date())
   };
   return {
+    async openDocument(files, knowledgeBase, documentId, signal) {
+      const asset = await input.stores.configAssets.getConfigAsset({
+        clientInstanceId: input.clientInstanceId,
+        kind: KNOWLEDGE_BASE_ASSET_KIND,
+        name: knowledgeBase
+      });
+      return openKnowledgeDocument(runtime, files, asset, documentId, signal);
+    },
     publishQuestion: async (question) => {
       const asset = await input.stores.configAssets.getConfigAsset({
         clientInstanceId: input.clientInstanceId,

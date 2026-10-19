@@ -193,10 +193,28 @@ describe("rights on a Workflow", () => {
 
 describe("rights on a Data Store", () => {
   it("list reviewing extracted fields after the verbs of the table, in its own words", () => {
-    expect(grantVerbs("data_store")).toEqual(["read", "write", "publish", "delete", "records"]);
+    expect(grantVerbs("data_store")).toEqual([
+      "read",
+      "insert",
+      "execute",
+      "write",
+      "publish",
+      "delete",
+      "records"
+    ]);
     const rows = [rowOf("data_store.records", 0)];
     expect(rights({ grants: rows })).toContain("Review extracted fields in data stores");
     expect(rights({ grants: rows }, "de")).toContain("Extrahierte Felder in Datenspeichern prüfen");
+  });
+
+  it("name the row rights in their own words, which a person may hold (RECORDS-AGENT)", () => {
+    const rows = [rowOf("data_store.insert", 0), rowOf("data_store.execute", 1)];
+    const english = rights({ grants: rows });
+    expect(english).toContain("Add rows to data stores");
+    expect(english).toContain("Change and delete rows in data stores");
+    const german = rights({ grants: rows }, "de");
+    expect(german).toContain("Datensätze zu Datenspeichern hinzufügen");
+    expect(german).toContain("Datensätze in Datenspeichern ändern und löschen");
   });
 });
 

@@ -24,6 +24,7 @@ import {
   type PersistedToolResult
 } from "./assistant-message-compat";
 import {
+  appendAssistantKnowledgeSourceParts,
   appendAssistantWebSourceParts,
   appendWorkspacePromotedArtifactsPart,
   appendWorkspacePromotedSurfacesPart,
@@ -344,6 +345,7 @@ function toCompletedRunProjectionUiMessage(
   appendAssistantWebSourceParts(parts, finalMessage, {
     includeSyntheticTool: false
   });
+  appendAssistantKnowledgeSourceParts(parts, finalMessage);
   appendWorkspacePromotedSurfacesPart(
     parts,
     dedupeToolSurfaceRefs([

@@ -77,3 +77,13 @@ env -u POSTGRES_STORE_TEST_DATABASE_URL pnpm --dir platform exec vitest run test
 For the existing local chat journey, run `pnpm --dir platform dev:demo` with its documented
 local configuration, open `http://127.0.0.1:5173`, send a chat and reload it. Docker and browser
 ports are required. The demo remains local.
+
+### Rows from chat: real model acceptance
+
+`POSTGRES_STORE_TEST_DATABASE_URL=<throwaway Postgres URL> pnpm exec vitest run --config vitest.records-live.config.ts tests/data-store-chat.live.ts`
+
+This explicit opt-in suite runs the EN/DE platform-agent journeys with the authenticated
+Opus CLI as its model transport. It sends the platform's messages and offered schemas;
+the CLI's native tools are disabled. Catalyst executes and confirms the row tools against
+synthetic fixtures. It starts no stack and writes its conversation evidence beside the
+platform checkout. The ordinary hosted suite covers the deterministic confirmation path.

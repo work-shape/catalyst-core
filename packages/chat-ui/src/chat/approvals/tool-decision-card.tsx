@@ -4,10 +4,12 @@ import {
   Banner,
   Button,
   Card,
+  Chip,
   Disclosure,
   DisclosureContent,
   DisclosureTrigger,
   Field,
+  FoldedText,
   KeyValue,
   KeyValueList,
   Spinner,
@@ -24,15 +26,18 @@ import { workspaceRoutePath } from "../../shared/routes";
 import { useApprovalRevisionHost } from "./approval-revision-host";
 import { ApprovalRequestCard } from "./approval-request-card";
 import { formatApprovalDate } from "./approval-request-model";
-import { CallInputs } from "./operation-call-body";
+import { dataStoreRowChange } from "./data-store-row-change";
+import { CallInputs, RowChangeInputs } from "./operation-call-body";
 import {
   useToolDecisionDecide,
   useWaitingOperationRunQuery,
   type ToolDecisionInput
 } from "./tool-decision-api";
 import {
+  agentSaveSummary,
   DECLINE_REASON_MAX_CHARS,
   toolDecisionInputRows,
+  type AgentSaveSummary,
   type ToolDecision,
   type ToolDecisionFailure,
   type ToolDecisionOutcome
@@ -213,13 +218,24 @@ export function ToolDecisionCardView({
   const rows = toolDecisionInputRows(decision.inputPreview).filter(
     (row) => ask === undefined || row.key !== "audience"
   );
+  // A row write of a Data Store asks what it changes in one question and lists its rows.
+  const rowChange = dataStoreRowChange(
+    decision.operationId,
+    decision.inputPreview,
+    decision.targetTitle
+  );
 
-  const inputs = (
+  const inputs = rowChange ? (
+    <RowChangeInputs change={rowChange} />
+  ) : (
     <CallInputs
       call={{ inputs: rows, inputFieldCount: rows.length, inputRemoved: false }}
       hiddenFields={0}
     />
   );
+  // A save of an agent says in words what it writes; its definition is a technical detail.
+  const agent = agentSaveSummary(decision, locale);
+  const inputsInDetails = ask !== undefined || agent !== undefined;
 
   function deny(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -260,11 +276,12 @@ export function ToolDecisionCardView({
       {ask && !outcome ? ask.node : null}
       {/* A call that asks its own question, as an App publish asks "For whom?", says in that
           question what it does: its raw inputs are technical details then. */}
-      {ask ? null : inputs}
+      {agent ? <AgentSummary agent={agent} /> : null}
+      {inputsInDetails ? null : inputs}
       <Disclosure data-testid="tool-decision-details">
         <DisclosureTrigger>{t("operations.callDetails")}</DisclosureTrigger>
         <DisclosureContent>
-          {ask ? <div className="pt-1">{inputs}</div> : null}
+          {inputsInDetails ? <div className="pt-1">{inputs}</div> : null}
           <KeyValueList className="pt-1">
             <KeyValue label={t("operations.operation")} data-field="operation">
               <span className="font-mono text-code wrap-anywhere">{decision.operationId}</span>
@@ -333,6 +350,41 @@ export function ToolDecisionCardView({
         </form>
       )}
     </Card>
+  );
+}
+
+/** The agent a save writes, as a person reads it: name, instructions, skills and tools. */
+function AgentSummary({ agent }: { agent: AgentSaveSummary }) {
+  const { t } = useTranslation();
+  const names = (list: string[]) =>
+    list.length === 0 ? (
+      t("toolDecisionAgentNone")
+    ) : (
+      <span className="flex min-w-0 flex-wrap gap-1">
+        {list.map((name) => (
+          <Chip key={name} size="sm">
+            {name}
+          </Chip>
+        ))}
+      </span>
+    );
+  return (
+    <KeyValueList data-testid="tool-decision-agent">
+      <KeyValue label={t("toolDecisionAgentName")} data-field="agent-name">
+        <span className="wrap-anywhere">{agent.title}</span>
+      </KeyValue>
+      {agent.instructions ? (
+        <KeyValue label={t("toolDecisionAgentInstructions")} data-field="agent-instructions">
+          <FoldedText>{agent.instructions}</FoldedText>
+        </KeyValue>
+      ) : null}
+      <KeyValue label={t("toolDecisionAgentSkills")} data-field="agent-skills">
+        {names(agent.skills)}
+      </KeyValue>
+      <KeyValue label={t("toolDecisionAgentTools")} data-field="agent-tools">
+        {names(agent.tools)}
+      </KeyValue>
+    </KeyValueList>
   );
 }
 

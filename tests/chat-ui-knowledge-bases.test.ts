@@ -21,7 +21,12 @@ import {
   type KnowledgeDocument,
   type KnowledgeRead
 } from "@work-shape/catalyst-chat-ui/build-area";
+import {
+  SettingsPageProvider,
+  type SettingsPageContextValue
+} from "@work-shape/catalyst-chat-ui/settings-page-context";
 import { WorkflowsHostProvider, type WorkflowsHost } from "@work-shape/catalyst-chat-ui/workflows";
+import { buildPageSettings } from "./chat-ui-build-page-harness";
 import { required } from "./support/assertions";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -126,13 +131,16 @@ function render(
     newAsset = false,
     state = needsAttention,
     locale = "en",
-    workflows
+    workflows,
+    settings
   }: {
     newAsset?: boolean;
     state?: KnowledgeBaseState;
     locale?: "en" | "de";
     /** The Workflows area is open to the reader in this workspace. */
     workflows?: WorkflowsHost;
+    /** The page sits in the settings page of an instance with this config. */
+    settings?: SettingsPageContextValue;
   } = {}
 ): string {
   const name = newAsset ? undefined : asset.name;
@@ -165,30 +173,45 @@ function render(
   };
   const planted = knowledgeBaseKindOn(() => ({ ...source, useState: () => ready(state) }));
   const kinds = buildAssetKinds.map((kind) => (kind.kind === "knowledge_base" ? planted : kind));
-  return renderToStaticMarkup(
+  const page = createElement(
+    TranslationProvider,
+    { children: null, locale },
     createElement(
-      TranslationProvider,
-      { children: null, locale },
+      BuildAssetKindsProvider,
+      { value: kinds },
       createElement(
-        BuildAssetKindsProvider,
-        { value: kinds },
-        createElement(
-          BuildNavigationProvider,
-          {
-            value: {
-              location: { kindPath: "knowledge-bases", ...(name === undefined ? {} : { name }) },
-              open: noop,
-              href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
-            }
-          },
-          createElement(WorkflowsHostProvider, {
-            value: workflows,
-            children: createElement(BuildFrame, { source: frame })
-          })
-        )
+        BuildNavigationProvider,
+        {
+          value: {
+            location: { kindPath: "knowledge-bases", ...(name === undefined ? {} : { name }) },
+            open: noop,
+            href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
+          }
+        },
+        createElement(WorkflowsHostProvider, {
+          value: workflows,
+          children: createElement(BuildFrame, { source: frame })
+        })
       )
     )
   );
+  return renderToStaticMarkup(
+    settings === undefined
+      ? page
+      : createElement(SettingsPageProvider, { value: settings, children: page })
+  );
+}
+
+/** The settings of an instance whose document processing is on or off as `documents` says. */
+function instanceSettings(documents: boolean): SettingsPageContextValue {
+  const settings = buildPageSettings(async () => new Response(null, { status: 404 }));
+  return {
+    ...settings,
+    config: {
+      ...settings.config,
+      modules: { ...settings.config.modules, documents: { enabled: documents } }
+    }
+  };
 }
 
 describe("Knowledge Bases in Build", () => {
@@ -384,6 +407,32 @@ describe("Knowledge Bases of documents", () => {
       expect(page).not.toContain("Choose a data store");
       expect(page).toContain("Publish the knowledge base to see its status and to add documents.");
       expect(page).toContain("Publish the knowledge base to try a search.");
+    } finally {
+      clearBuildStartRequest();
+    }
+  });
+
+  it("names on the create page exactly the formats the instance reads (ACCEPT-FIX-8, C13)", () => {
+    // Before the first publish the page has no read of the store, so the formats come from the
+    // instance: PDF and DOCX only with its document processing, else TXT and Markdown. Outside a
+    // settings page it names the text formats, which every instance reads.
+    try {
+      requestBuildStart("knowledge-bases", { name: "contracts-kb", title: "Contracts" });
+      for (const settings of [undefined, instanceSettings(false)]) {
+        const english = render(documentsKnowledgeBase(), { newAsset: true, settings });
+        expect(english).toContain("Files you add: TXT and Markdown.");
+        expect(english).not.toMatch(/PDF|DOCX/u);
+        const german = render(documentsKnowledgeBase(), { newAsset: true, locale: "de", settings });
+        expect(german).toContain("Dateien, die du hinzufügst: TXT und Markdown.");
+        expect(german).not.toMatch(/PDF|DOCX/u);
+      }
+      const settings = instanceSettings(true);
+      expect(render(documentsKnowledgeBase(), { newAsset: true, settings })).toContain(
+        "Files you add: TXT, Markdown, PDF, and DOCX."
+      );
+      expect(
+        render(documentsKnowledgeBase(), { newAsset: true, locale: "de", settings })
+      ).toContain("Dateien, die du hinzufügst: TXT, Markdown, PDF und DOCX.");
     } finally {
       clearBuildStartRequest();
     }

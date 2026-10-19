@@ -67,7 +67,7 @@ import {
   scopeChoice,
   wordsOfKind
 } from "./grant-words";
-import { actionLabel, verbLabel } from "./right-words";
+import { actionLabel, rightVerb, verbLabel } from "./right-words";
 
 import { grantOptions, type GrantChoices } from "./grant-options";
 
@@ -555,6 +555,12 @@ function GrantDialog({
     const parts = [sentence, note].flatMap((key) => (key === undefined ? [] : [t(key)]));
     return parts.length === 0 ? undefined : parts.join(" ");
   };
+  /** A right's words: its verb, or the action's own words where it is no verb of the table. */
+  const rightLabel = (verb: GrantVerb): string => {
+    const action = grantAction(kind, verb) ?? `${kind}.${verb}`;
+    const tableVerb = rightVerb(action);
+    return tableVerb ? verbLabel(tableVerb, t) : actionLabel(action, t);
+  };
   const workspace = allowedWorkspaces.find((candidate) => candidate.id === form.workspaceId);
   // With one place to choose there is nothing to ask: the step is left out.
   const verbs = options.verbs(
@@ -648,13 +654,7 @@ function GrantDialog({
           {verbs.map((verb) => (
             <Checkbox
               key={verb}
-              label={
-                verb === "read_run_data"
-                  ? actionLabel("workflow.read_run_data", t)
-                  : verb === "records"
-                    ? actionLabel("data_store.records", t)
-                    : verbLabel(verb, t)
-              }
+              label={rightLabel(verb)}
               description={rightDescription(verb)}
               checked={selectedVerbs.includes(verb)}
               onCheckedChange={(checked) =>

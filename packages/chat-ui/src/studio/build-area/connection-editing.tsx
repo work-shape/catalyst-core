@@ -1,7 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Button, EmptyState, FormNotice, SkeletonList } from "@work-shape/catalyst-ui";
+import {
+  Banner,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  FormNotice,
+  SkeletonList
+} from "@work-shape/catalyst-ui";
 import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
 import {
@@ -18,6 +25,7 @@ import {
 import {
   connectionConfigToForm,
   countConnectionFormChanges,
+  sendsSecret,
   withApprovedOperations,
   withConnectionForm
 } from "./connection-form-model";
@@ -68,15 +76,21 @@ export function ConnectionSettingsEditor({
   asset,
   frame,
   written,
-  view
+  view,
+  keyUsers
 }: {
   asset: BuildAsset;
   frame: BuildAssetEditorProps;
   written(): void;
   /** The settings as the page shows them while nobody edits them. */
   view: ReactNode;
+  /**
+   * The agents that carry the Connection's tools, where a key is stored: a change to no key
+   * deletes it (spec CS :373), and the form says whom that stops.
+   */
+  keyUsers?: ConnectionDetail["usedBy"];
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const stored = connectionConfigToForm(asset.config);
   const [form, setForm] = useState<typeof stored>();
   const write = useConnectionWrite(frame, written);
@@ -123,6 +137,11 @@ export function ConnectionSettingsEditor({
         onChange={setForm}
         offersOAuth={stored.authScheme === "oauth"}
       />
+      {keyUsers && sendsSecret(stored.authScheme) && form.authScheme === "none" ? (
+        <Banner layout="line" tone="warning" data-connection-key-clears="">
+          {keyRemovalWarning(keyUsers, locale, t)}
+        </Banner>
+      ) : null}
       {write.failure ? <RefusalNotice {...write.failure} /> : null}
       <div className="flex flex-wrap gap-2">
         <Button
@@ -141,20 +160,46 @@ export function ConnectionSettingsEditor({
   );
 }
 
+/** Whom deleting the key stops: the agents that carry the Connection's tools, and Workflows. */
+function keyRemovalWarning(
+  usedBy: ConnectionDetail["usedBy"],
+  locale: string,
+  t: TranslationContextValue["t"]
+): string {
+  const agents = usedBy.map((agent) => agent.title.trim() || agent.agentName);
+  return agents.length === 0
+    ? t("connections.secretRemoveNoAgents")
+    : t("connections.secretRemoveAgents", {
+        agents: new Intl.ListFormat(locale, { type: "conjunction" }).format(agents)
+      });
+}
+
 /**
  * The key of the Connection: entered, never shown. A new one replaces the version the page
- * read; somebody else's version in between refuses it.
+ * read; somebody else's version in between refuses it. A saved key is tested at once, so the
+ * status says whether the outside system takes it. "Remove key" saves the definition without a
+ * key, which deletes it, after a warning that names who uses the Connection.
  */
 export function ConnectionSecretEditor({
   name,
   secret,
   source,
-  written
+  written,
+  retest,
+  removal
 }: {
   name: string;
   secret: ConnectionDetail["secret"];
   source: ConnectionSource;
   written(): void;
+  /** Tests the Connection with the key just saved. */
+  retest?: () => void;
+  /** Where the reader may change the definition: the write that deletes the key. */
+  removal?: {
+    frame: BuildAssetEditorProps;
+    config: Record<string, unknown>;
+    usedBy: ConnectionDetail["usedBy"];
+  };
 }) {
   const { t } = useTranslation();
   const [value, setValue] = useState<string>();
@@ -163,17 +208,26 @@ export function ConnectionSecretEditor({
   if (value === undefined) {
     return (
       <div className="grid justify-items-start gap-1">
-        <Button
-          variant="outline"
-          size="sm"
-          data-connection-secret-open=""
-          onClick={() => {
-            setValue("");
-            setResult(undefined);
-          }}
-        >
-          {t(secret.state === "set" ? "connections.secretReplace" : "connections.secretEnter")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            data-connection-secret-open=""
+            onClick={() => {
+              setValue("");
+              setResult(undefined);
+            }}
+          >
+            {t(secret.state === "set" ? "connections.secretReplace" : "connections.secretEnter")}
+          </Button>
+          {removal && secret.state === "set" ? (
+            <ConnectionKeyRemoval
+              {...removal}
+              written={written}
+              onOpen={() => setResult(undefined)}
+            />
+          ) : null}
+        </div>
         {result ? <FormNotice tone={result.tone}>{result.text}</FormNotice> : null}
       </div>
     );
@@ -192,6 +246,7 @@ export function ConnectionSecretEditor({
               setValue(undefined);
               setResult({ tone: "success", text: t("connections.secretSaved") });
               written();
+              retest?.();
             },
             (error: unknown) =>
               setResult({
@@ -213,6 +268,66 @@ export function ConnectionSecretEditor({
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * "Remove key" and its question: the definition is saved without a key, which deletes the key
+ * stored for it (spec CS :373). A refusal stays in the question, beside the warning. Once
+ * saved, the Credential row says the Connection sends none.
+ */
+function ConnectionKeyRemoval({
+  frame,
+  config,
+  usedBy,
+  written,
+  onOpen
+}: {
+  frame: BuildAssetEditorProps;
+  config: Record<string, unknown>;
+  usedBy: ConnectionDetail["usedBy"];
+  written(): void;
+  onOpen(): void;
+}) {
+  const { locale, t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const write = useConnectionWrite(frame, written);
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={frame.saveBlocked}
+        data-connection-secret-remove=""
+        onClick={() => {
+          onOpen();
+          setOpen(true);
+        }}
+      >
+        {t("connections.secretRemove")}
+      </Button>
+      <ConfirmDialog
+        open={open}
+        title={t("connections.secretRemoveTitle")}
+        confirmLabel={t("connections.secretRemove")}
+        loading={write.saving === "key"}
+        onClose={() => setOpen(false)}
+        onConfirm={() => {
+          const form = connectionConfigToForm(config);
+          write
+            .write("key", withConnectionForm(config, { ...form, authScheme: "none" }))
+            .then((removed) => {
+              if (removed) setOpen(false);
+            })
+            .catch(() => undefined);
+        }}
+      >
+        <div className="grid gap-2">
+          <p data-connection-secret-remove-warning="">{keyRemovalWarning(usedBy, locale, t)}</p>
+          {write.failure ? <RefusalNotice {...write.failure} /> : null}
+        </div>
+      </ConfirmDialog>
+    </>
   );
 }
 
@@ -314,7 +429,7 @@ function DiscoveredApproval({
 }) {
   const { t } = useTranslation();
   const approval = useApprovalChoice(candidates);
-  const chosen = selectedCandidates(candidates, approval.choice.selected);
+  const chosen = selectedCandidates(candidates, approval.choice.selected, approval.choice.effects);
   return (
     <div className="grid gap-3" data-connection-discovered="">
       <ConnectionApprovalList
@@ -322,6 +437,7 @@ function DiscoveredApproval({
         choice={approval.choice}
         onSelectedChange={approval.setSelected}
         onSurfacesChange={approval.setSurfaces}
+        onEffectsChange={approval.setEffects}
         disabled={blocked}
       />
       <Button

@@ -1,7 +1,14 @@
+import { describeAgentDataTools } from "@work-shape/catalyst-agent-runtime";
 import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@work-shape/catalyst-server";
 import { HTTP_API_CONNECTOR_TYPE } from "@work-shape/catalyst-connections";
 import {
   RUN_AGENT_TOOL_NAME,
+  DATA_STORE_ASSET_KIND,
+  dataStoreOperationName,
+  resolvePolicy,
+  type PolicyDefaults,
+  type CentralPolicySetting,
+  type DataToolSource,
   SUBJECT_TOOL_PREFIX,
   type ConnectorTypeRegistry,
   type ConversationOfferSource,
@@ -9,12 +16,15 @@ import {
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import {
+  KNOWLEDGE_ADD_FILES_TOOL_NAME,
+  createKnowledgeAddFilesTool,
   APP_SAVE_TOOL_NAME,
   APP_PUBLISH_TOOL_NAME,
   createAppPublishTool,
   WORKSPACE_OPEN_TOOL_NAME,
   createAppSaveTool,
   createConnectionDraftTool,
+  CONNECTION_DRAFT_TOOL_NAME,
   createPlatformAssetBinding,
   createPlatformAssetTools,
   createPlatformDiscoveryTools,
@@ -72,6 +82,13 @@ function appToolNames(hasTool: (toolName: string) => boolean): string[] {
 interface ConversationOfferInput {
   stores: { conversations: Pick<PlatformStores["conversations"], "getConversation"> };
   modules: ModuleSnapshot;
+  /** Attached after module startup; the source drops draft and unavailable stores. */
+  dataTools?: () => DataToolSource | undefined;
+  dataToolDescribeTimeoutMs?: number;
+  policy?: {
+    instanceDefaults: PolicyDefaults;
+    centralSettings(): readonly CentralPolicySetting[] | Promise<readonly CentralPolicySetting[]>;
+  };
   /** Whether this process has a tool: registered, enabled and of no module that is off. */
   hasTool(toolName: string): boolean;
 }
@@ -89,14 +106,58 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
       // A skill nobody can read is not listed: it would promise what no tool answers.
       const skillNames =
         holds && input.hasTool(READ_SKILL_TOOL) ? offeredSkillNames(subject, input.modules) : [];
+      const rowNames =
+        holds && subject?.kind === DATA_STORE_ASSET_KIND
+          ? (["describe", "query", "preview_rows", "insert", "update", "delete_rows"] as const).map(
+              (verb) => dataStoreOperationName(subject.name, verb)
+            )
+          : [];
+      const source = input.dataTools?.();
+      // Use the run's existing bounded description path. An unavailable source offers nothing.
+      const rowTools = (
+        await describeAgentDataTools(
+          { toolNames: rowNames },
+          source
+            ? {
+                describe: (names) =>
+                  source.describe(names, { workspaceId: conversation.collaborationWorkspaceId })
+              }
+            : undefined,
+          input.dataToolDescribeTimeoutMs
+        )
+      ).described;
+      const centralSettings =
+        rowTools.length > 0 ? ((await input.policy?.centralSettings()) ?? []) : [];
+      const offeredRowTools = rowTools.filter(
+        (tool) =>
+          tool.permission?.mode !== "deny" &&
+          (!input.policy ||
+            resolvePolicy({
+              definition: { name: tool.name, effect: tool.effect },
+              origin: { kind: "user" },
+              instanceDefaults: input.policy.instanceDefaults,
+              centralSettings,
+              targets: [
+                {
+                  assetKind: DATA_STORE_ASSET_KIND,
+                  workspaceId: conversation.collaborationWorkspaceId
+                }
+              ],
+              callerCanConfirm: false,
+              canPause: true
+            }).value !== "deny")
+      );
       return {
         ...(subject ? { subject } : {}),
         toolNames: [
           ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
-          ...(holds ? WORKFLOW_TEST_TOOL_NAMES : []),
+          ...(holds ? [...WORKFLOW_TEST_TOOL_NAMES, KNOWLEDGE_ADD_FILES_TOOL_NAME] : []),
+          ...(holds || subject?.kind === "connection" ? [CONNECTION_DRAFT_TOOL_NAME] : []),
           ...appToolNames(input.hasTool),
           ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
-        ].filter((toolName) => input.hasTool(toolName)),
+        ]
+          .filter((toolName) => input.hasTool(toolName))
+          .concat(offeredRowTools.map((tool) => tool.name)),
         skillNames,
         ...(holds ? { orientation: PLATFORM_ORIENTATION } : {})
       };
@@ -129,7 +190,10 @@ export async function conversationToolNames(
  * only after that.
  */
 export function createPlatformTools(
-  input: Pick<ConversationOfferInput, "stores" | "modules"> & {
+  input: Pick<
+    ConversationOfferInput,
+    "stores" | "modules" | "dataTools" | "dataToolDescribeTimeoutMs" | "policy"
+  > & {
     /**
      * The Connections of the instance, where the module `connections` is on: the agent's draft
      * of a REST API's tools is checked against their Connector types.
@@ -152,6 +216,7 @@ export function createPlatformTools(
       ...createPlatformDiscoveryTools(platformAssets.calls),
       ...createPlatformAssetTools(platformAssets.calls),
       ...createWorkflowTestTools(),
+      createKnowledgeAddFilesTool(),
       createRunAgentTool(),
       createAppSaveTool(platformAssets.calls),
       createAppPublishTool(),
@@ -167,6 +232,11 @@ export function createPlatformTools(
     conversationOffer: createConversationOffer({
       stores: input.stores,
       modules: input.modules,
+      ...(input.dataTools ? { dataTools: input.dataTools } : {}),
+      ...(input.dataToolDescribeTimeoutMs === undefined
+        ? {}
+        : { dataToolDescribeTimeoutMs: input.dataToolDescribeTimeoutMs }),
+      ...(input.policy ? { policy: input.policy } : {}),
       hasTool: (toolName) => attached.tools?.has(toolName) ?? false
     }),
     /**

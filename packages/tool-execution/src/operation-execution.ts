@@ -1,3 +1,7 @@
+import {
+  KNOWLEDGE_ADD_FILES_TOOL_NAME,
+  isKnowledgeAddFilesOperation
+} from "./knowledge-add-files-tool";
 import { recordedResult } from "./operation-recorded-result";
 import { auditForRun, retainedOutput } from "./operation-run-recording";
 import {
@@ -365,7 +369,9 @@ export async function authorizeOrigin(
   }
   const { agentName, toolName, conversationId } = call.origin;
   const listed = (await deps.agentToolNames?.(agentName, conversationId)) ?? [];
-  return toolName === definition.name && listed.includes(toolName)
+  return toolName === definition.name &&
+    (listed.includes(toolName) ||
+      (isKnowledgeAddFilesOperation(toolName) && listed.includes(KNOWLEDGE_ADD_FILES_TOOL_NAME)))
     ? { allowed: true }
     : { allowed: false, action: `${AGENT_TOOL_ACTION_PREFIX}${toolName}`, reason: "no_grant" };
 }

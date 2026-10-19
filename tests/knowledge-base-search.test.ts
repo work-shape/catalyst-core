@@ -287,6 +287,32 @@ describe("searching the documents of a Knowledge Base", () => {
     expect(held[0]?.count).toBeGreaterThan(0);
   });
 
+  it("C12 finds relevant passages for full German and English questions without weakening explicit search syntax", async () => {
+    const instance = await instanceWith();
+    await publishKnowledgeBase(instance, "questions");
+    await addFiles(instance, "questions", [
+      {
+        filename: "notes.txt",
+        content: "Die Kaution beträgt drei Monatsmieten. The deposit equals three monthly rents."
+      }
+    ]);
+    for (const query of [
+      "Wie hoch ist die Kaution für diese Wohnung?",
+      "How much deposit is required for this apartment?"
+    ]) {
+      const answer = await search(instance, "questions", { query });
+      expect(answer.passages.some((hit) => hit.text.includes("drei Monatsmieten"))).toBe(true);
+    }
+    expect(
+      (await search(instance, "questions", { query: '\"Kaution Wohnung\"' })).passages
+    ).toEqual([]);
+    expect(
+      (await search(instance, "questions", { query: "Kaution -Monatsmieten" })).passages
+    ).toEqual([]);
+    expect((await search(instance, "questions", { query: "unfindableword" })).passages).toEqual([]);
+    expect((await search(instance, "questions", { query: "' ; --" })).passages).toEqual([]);
+  });
+
   it("ranks a passage in the keyword and the title list above one that is only first by words", async () => {
     const instance = await instanceWith();
     await publishKnowledgeBase(instance, "regeln");
@@ -348,7 +374,8 @@ describe("searching the documents of a Knowledge Base", () => {
       expect.objectContaining({
         knowledgeBase: "glossar",
         queryHash: sha256(marker),
-        results: 0,
+        // The plain-query fallback finds Darlehen even though the compound word is absent.
+        results: 1,
         signals: ["keyword", "title"]
       })
     );
