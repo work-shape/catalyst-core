@@ -77,6 +77,9 @@ export async function waitUntil(
  * failure when it still throws at the deadline. For an expectation that comes true a moment
  * after the call that causes it.
  */
-export function eventually<Result>(assertion: () => Result | Promise<Result>): Promise<Result> {
-  return vi.waitFor(assertion, { timeout: CONDITION_WAIT_MS, interval: 20 });
+export function eventually<Result>(
+  assertion: () => Result | Promise<Result>,
+  timeoutMs = CONDITION_WAIT_MS
+): Promise<Result> {
+  return vi.waitFor(assertion, { timeout: timeoutMs, interval: 20 });
 }

@@ -113,6 +113,8 @@ export function useDataStoreWorld(prefix: string) {
   const platformRoles: string[] = [];
   const platformDatabase = () => new URL(db.databaseUrl).pathname.slice(1);
 
+  // Dropping a database forces a checkpoint: the sixteen of a test on a busy machine outlast the
+  // default hook timeout.
   afterEach(async () => {
     await Promise.all(connections.splice(0).map((sql) => sql.end({ timeout: 1 })));
     await Promise.all(opened.splice(0).map((dataStores) => dataStores.close()));
@@ -130,7 +132,7 @@ export function useDataStoreWorld(prefix: string) {
       await db.sql.unsafe(`alter database "${platformDatabase()}" owner to current_user`);
       await db.sql.unsafe(`drop role if exists "${role}"`);
     }
-  });
+  }, 180_000);
 
   /** The Data Stores of one instance of a test, with the worker that serves their jobs. */
   async function setup(

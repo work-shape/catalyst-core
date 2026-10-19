@@ -369,12 +369,14 @@ describe("the store a Knowledge Base owns", () => {
     });
 
     const jobs = getTestJobs(instance.api);
+    // The drop job drops a database, which forces a checkpoint: on a busy machine that takes
+    // longer than a condition usually gets.
     await eventually(async () => {
       await jobs.runDue();
       expect(
         await instance.stores.dataStores.getDataStore({ clientInstanceId, id: record.id })
       ).toBeUndefined();
-    });
+    }, 60_000);
     const server = await connect("postgres");
     try {
       expect(await server`select 1 from pg_database where datname = ${database}`).toHaveLength(0);
@@ -399,7 +401,7 @@ describe("the store a Knowledge Base owns", () => {
     expect(
       await inDatabase(database, (sql) => sql`select 1 from catalyst_kb.contents`)
     ).toHaveLength(0);
-  });
+  }, 120_000);
 
   it("refuses search by meaning on an instance with no embedding model, and searches by words there", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
