@@ -24,15 +24,18 @@ import {
   EngineContext,
   FLOW_COMPACT_ZOOM,
   edgeTypes,
+  flowPlaceKey,
   nodeTypes,
   type EngineContextValue,
   type GroupRfNode,
+  type InsertRfNode,
   type NodeEnds,
   type RfEdge,
   type StepRfNode
 } from "./flow-engine-nodes";
 import {
   fitFlowViewport,
+  flowInsertSpots,
   layoutFlow,
   panIntoView,
   type FlowInsets,
@@ -41,13 +44,15 @@ import {
   type FlowViewport
 } from "./flow-layout";
 import { FlowMinimap, type FlowBox, type FlowMinimapItem } from "./flow-minimap";
-import type { FlowDirection, FlowGraph, FlowStatus } from "./flow-types";
+import type { FlowDirection, FlowGraph, FlowInsertPoints, FlowStatus } from "./flow-types";
 
 const MIN_ZOOM = 0.2;
 const HIDE_ATTRIBUTION = { hideAttribution: true };
 const MAX_ZOOM = 2;
 /** How far a press may drag the view, in pixels, and still be a press and no move. */
 const MOVE_SLACK = 3;
+/** The size an insert point is laid out at. It is centred on its place and never overlaps. */
+const INSERT_SIZE = { width: 28, height: 28 };
 /** How long the view takes to move where the token of an opening surface cannot be read. */
 const PAN_DURATION_FALLBACK = 200;
 
@@ -87,6 +92,7 @@ export interface FlowEngineProps {
   minimap: boolean;
   searchLabel?: string;
   panel?: ReactNode;
+  insertPoints?: FlowInsertPoints;
 }
 
 const noNodeClick = () => undefined;
@@ -137,9 +143,10 @@ function Engine({
   controls,
   minimap,
   searchLabel,
-  panel
+  panel,
+  insertPoints
 }: FlowEngineProps) {
-  const flow = useReactFlow<StepRfNode | GroupRfNode, RfEdge>();
+  const flow = useReactFlow<StepRfNode | GroupRfNode | InsertRfNode, RfEdge>();
   const updateNodeInternals = useUpdateNodeInternals();
   const rootRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState<ReadonlyMap<string, FlowSize>>(new Map());
@@ -188,9 +195,11 @@ function Engine({
     [flow]
   );
 
+  const moving = insertPoints?.mode === "move";
+  const room = insertPoints === undefined ? undefined : moving ? "target" : "point";
   const layout = useMemo(
-    () => layoutFlow({ graph, direction, sizes, collapsed }),
-    [graph, direction, sizes, collapsed]
+    () => layoutFlow({ graph, direction, sizes, collapsed, room }),
+    [graph, direction, sizes, collapsed, room]
   );
   const ready = layout.order.every((id) => sizes.has(id));
   useLayoutEffect(() => {
@@ -212,7 +221,28 @@ function Engine({
     const groups = new Map((graph.groups ?? []).map((group) => [group.id, group]));
     const steps = new Map(graph.nodes.map((node) => [node.id, node]));
     const ends = endsOf(layout);
-    const built: (StepRfNode | GroupRfNode)[] = [];
+    const spots = new Map<string, InsertRfNode[]>();
+    if (room !== undefined) {
+      for (const spot of flowInsertSpots(graph, layout, collapsed)) {
+        // In the flow's order: the node list is the order of the focus.
+        spots.set(spot.after, [
+          ...(spots.get(spot.after) ?? []),
+          {
+            id: `insert:${flowPlaceKey(spot.place)}`,
+            type: "insert",
+            position: { x: spot.x, y: spot.y },
+            measured: ready ? INSERT_SIZE : undefined,
+            zIndex: 1000,
+            data: { place: spot.place },
+            draggable: false,
+            selectable: false,
+            focusable: false,
+            connectable: false
+          }
+        ]);
+      }
+    }
+    const built: (StepRfNode | GroupRfNode | InsertRfNode)[] = [];
     for (const id of layout.order) {
       const box = layout.boxes.get(id);
       if (!box) {
@@ -252,6 +282,7 @@ function Engine({
           data: { item: step, marked, ends: ends.get(id) ?? noEnds, direction }
         });
       }
+      built.push(...(spots.get(id) ?? []));
     }
     const joined: RfEdge[] = layout.edges.map((edge) => ({
       id: edge.id,
@@ -265,7 +296,7 @@ function Engine({
       selectable: false
     }));
     return { nodes: built, edges: joined };
-  }, [graph, layout, ready, selectedId, found, direction]);
+  }, [graph, layout, ready, selectedId, found, direction, room, collapsed]);
 
   // A handle that appears or moves without its node changing size is measured again.
   useEffect(() => {
@@ -433,9 +464,10 @@ function Engine({
       report,
       collapsed,
       toggle,
-      selectable: onSelect !== undefined
+      selectable: onSelect !== undefined && !moving,
+      insert: insertPoints
     }),
-    [select, onAction, report, collapsed, toggle, onSelect]
+    [select, onAction, report, collapsed, toggle, onSelect, moving, insertPoints]
   );
 
   const matches = useMemo(() => {
@@ -500,7 +532,7 @@ function Engine({
         data-ready={opened ? "" : undefined}
         data-direction={direction}
         className={cn(
-          "absolute inset-0 transition-opacity duration-(--duration-color) motion-reduce:transition-none",
+          "group/flow absolute inset-0 transition-opacity duration-(--duration-color) motion-reduce:transition-none",
           opened ? "opacity-100" : "opacity-0"
         )}
         onKeyDownCapture={() => {
@@ -510,6 +542,11 @@ function Engine({
           keyboardRef.current = false;
         }}
         onKeyDown={(event) => {
+          if (event.key === "Escape" && moving && !event.defaultPrevented) {
+            event.preventDefault();
+            insertPoints?.onCancel?.();
+            return;
+          }
           if (event.key === "Escape" && selectedId !== undefined && !event.defaultPrevented) {
             onSelect?.(undefined);
             nodeElement(rootRef.current, selectedId)?.focus({ preventScroll: true });

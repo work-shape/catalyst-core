@@ -3,7 +3,7 @@ import type { HTMLAttributes, KeyboardEvent, ReactNode, Ref } from "react";
 import { cn } from "../cn";
 import { useUiLabels } from "../ui-root";
 import { FlowHead, flowStatusPresentations } from "./flow-node";
-import { flowChangeFrames } from "./flow-change";
+import { FlowChangeFrame } from "./flow-change";
 import type { FlowChange, FlowStatus } from "./flow-types";
 
 // A group's line is dashed, so a status colours it at full strength where a node's is soft.
@@ -127,7 +127,6 @@ export function FlowGroup({
       className={cn(
         "relative flex w-61 flex-col rounded-xl border-[1.5px] border-dashed bg-background/55 text-left text-body text-foreground outline-offset-2 focus-visible:focus-ring",
         groupFrames[status],
-        change !== undefined && flowChangeFrames[change],
         selected && "focus-ring",
         (status === "skipped" || change === "removed") && "opacity-55",
         change === "removed" &&
@@ -137,6 +136,7 @@ export function FlowGroup({
       onKeyDown={open}
       {...props}
     >
+      <FlowChangeFrame change={change} className="rounded-2xl" />
       <div
         ref={headRef}
         data-slot="flow-group-head"

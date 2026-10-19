@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
-import { useId, useRef, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
 import { Button } from "../actions/button";
 import { useUiLabels } from "../ui-root";
 import { Field } from "./field";
@@ -12,6 +12,8 @@ export interface FieldListKind {
   label: string;
   /** Allows one level of fields, for a record or a list of records. */
   children?: "record" | "records";
+  /** A value that is one of a list of choices, which the editor asks for: "one of a, b, c". */
+  choices?: boolean;
 }
 
 export interface FieldListItem {
@@ -22,6 +24,8 @@ export interface FieldListItem {
   required: boolean;
   description?: string;
   fields?: readonly FieldListItem[];
+  /** The choices of a kind that has them, in their order. */
+  choices?: readonly string[];
 }
 
 export interface FieldListEditorProps {
@@ -31,11 +35,16 @@ export interface FieldListEditorProps {
   onChange(value: readonly FieldListItem[]): void;
   error?: ReactNode;
   /** Errors keyed by stable item id, then by the field's property. */
-  errors?: Readonly<Record<string, { name?: string; kind?: string; description?: string }>>;
+  errors?: Readonly<
+    Record<string, { name?: string; kind?: string; description?: string; choices?: string }>
+  >;
   readOnly?: boolean;
 }
 
-/** A named list with button reordering and one nested level. Conversion to schemas is the caller's. */
+/**
+ * A named list with button reordering, one nested level and choices for a kind that has them.
+ * Conversion to schemas is the caller's.
+ */
 export function FieldListEditor({
   label,
   value,
@@ -47,12 +56,93 @@ export function FieldListEditor({
 }: FieldListEditorProps) {
   const labels = useUiLabels("FieldListEditor");
   const prefix = useId();
+  const errorId = useId();
   const nextId = useRef(0);
+  const rootRef = useRef<HTMLFieldSetElement>(null);
+  // What takes the focus once a removed row is gone: its neighbour's Remove, or the list's Add.
+  const focusNext = useRef<string>(undefined);
+  useLayoutEffect(() => {
+    const selector = focusNext.current;
+    if (selector === undefined) return;
+    focusNext.current = undefined;
+    rootRef.current?.querySelector<HTMLElement>(selector)?.focus();
+  });
+  const removeSelector = (id: string) =>
+    `[data-field-id="${CSS.escape(id)}"] > [data-field-actions] [data-field-remove]`;
+
+  const renderChoices = (item: FieldListItem, update: (patch: Partial<FieldListItem>) => void) => {
+    const choices = item.choices ?? [];
+    const set = (next: readonly string[]) => update({ choices: next });
+    const choiceError = errors?.[item.id]?.choices;
+    const choiceErrorId = `${prefix}-${item.id}-choices`;
+    return (
+      <fieldset
+        className="grid min-w-0 gap-2"
+        data-field-choices=""
+        aria-invalid={choiceError ? true : undefined}
+        aria-describedby={choiceError ? choiceErrorId : undefined}
+      >
+        <legend className="mb-2 text-label">{labels.fieldChoices}</legend>
+        {choices.map((choice, index) => {
+          const name = `${labels.fieldChoice} ${index + 1}`;
+          return (
+            // A choice is its text and its place: the list is edited in place.
+            <div key={index} className="flex min-w-0 items-center gap-1" data-choice={index}>
+              <Input
+                aria-label={name}
+                className="min-w-0 flex-1"
+                value={choice}
+                readOnly={readOnly}
+                onChange={(event) =>
+                  set(choices.map((entry, at) => (at === index ? event.target.value : entry)))
+                }
+              />
+              {readOnly ? null : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`${labels.remove}: ${choice || name}`}
+                  data-choice-remove=""
+                  onClick={() => {
+                    const neighbour = index < choices.length - 1 ? index : index - 1;
+                    focusNext.current =
+                      neighbour < 0
+                        ? `[data-field-id="${CSS.escape(item.id)}"] [data-choice-add]`
+                        : `[data-field-id="${CSS.escape(item.id)}"] [data-choice="${neighbour}"] [data-choice-remove]`;
+                    set(choices.filter((_, at) => at !== index));
+                  }}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              )}
+            </div>
+          );
+        })}
+        {readOnly ? null : (
+          <Button
+            variant="outline"
+            className="justify-self-start"
+            data-choice-add=""
+            onClick={() => set([...choices, ""])}
+          >
+            {labels.addChoice}
+          </Button>
+        )}
+        {choiceError ? (
+          <p id={choiceErrorId} role="alert" className="text-caption text-destructive">
+            {choiceError}
+          </p>
+        ) : null}
+      </fieldset>
+    );
+  };
+
   const renderList = (
     items: readonly FieldListItem[],
     change: (items: readonly FieldListItem[]) => void,
-    nested: boolean
+    parent: string | undefined
   ): ReactNode => {
+    const nested = parent !== undefined;
     const allowedKinds = nested ? kinds.filter((kind) => kind.children === undefined) : kinds;
     const update = (id: string, patch: Partial<FieldListItem>) =>
       change(items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
@@ -63,6 +153,14 @@ export function FieldListEditor({
       result.splice(index, 1);
       result.splice(index + delta, 0, item);
       change(result);
+    };
+    const remove = (index: number) => {
+      const neighbour = items[index + 1] ?? items[index - 1];
+      focusNext.current =
+        neighbour === undefined
+          ? `[data-field-add="${CSS.escape(parent ?? "")}"]`
+          : removeSelector(neighbour.id);
+      change(items.filter((_, at) => at !== index));
     };
     return (
       <div className="grid min-w-0 gap-3">
@@ -87,9 +185,16 @@ export function FieldListEditor({
                 <Select
                   value={item.kind}
                   disabled={readOnly}
-                  onChange={(event) =>
-                    update(item.id, { kind: event.target.value, fields: undefined })
-                  }
+                  onChange={(event) => {
+                    const next = allowedKinds.find(
+                      (candidate) => candidate.value === event.target.value
+                    );
+                    update(item.id, {
+                      kind: event.target.value,
+                      fields: undefined,
+                      choices: next?.choices ? (item.choices ?? [""]) : undefined
+                    });
+                  }}
                 >
                   {allowedKinds.map((entry) => (
                     <option key={entry.value} value={entry.value}>
@@ -98,6 +203,7 @@ export function FieldListEditor({
                   ))}
                 </Select>
               </Field>
+              {kind?.choices ? renderChoices(item, (patch) => update(item.id, patch)) : null}
               <Field label={labels.required} layout="inline">
                 <Switch
                   checked={item.required}
@@ -117,7 +223,7 @@ export function FieldListEditor({
                 />
               </Field>
               {readOnly ? null : (
-                <div className="flex gap-1">
+                <div className="flex gap-1" data-field-actions="">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -140,14 +246,15 @@ export function FieldListEditor({
                     variant="ghost"
                     size="icon"
                     aria-label={`${labels.remove}: ${name}`}
-                    onClick={() => change(items.filter((entry) => entry.id !== item.id))}
+                    data-field-remove=""
+                    onClick={() => remove(index)}
                   >
                     <Trash2 aria-hidden="true" />
                   </Button>
                 </div>
               )}
               {!nested && kind?.children !== undefined
-                ? renderList(item.fields ?? [], (fields) => update(item.id, { fields }), true)
+                ? renderList(item.fields ?? [], (fields) => update(item.id, { fields }), item.id)
                 : null}
             </fieldset>
           );
@@ -155,13 +262,20 @@ export function FieldListEditor({
         {readOnly ? null : (
           <Button
             variant="outline"
+            data-field-add={parent ?? ""}
             disabled={allowedKinds.length === 0}
             onClick={() => {
               const kind = allowedKinds[0];
               if (kind === undefined) return;
               change([
                 ...items,
-                { id: `${prefix}-${++nextId.current}`, name: "", kind: kind.value, required: false }
+                {
+                  id: `${prefix}-${++nextId.current}`,
+                  name: "",
+                  kind: kind.value,
+                  required: false,
+                  choices: kind.choices ? [""] : undefined
+                }
               ]);
             }}
           >
@@ -172,11 +286,17 @@ export function FieldListEditor({
     );
   };
   return (
-    <fieldset data-slot="field-list-editor" className="grid min-w-0 gap-3">
+    <fieldset
+      ref={rootRef}
+      data-slot="field-list-editor"
+      className="grid min-w-0 gap-3"
+      aria-invalid={error ? true : undefined}
+      aria-describedby={error ? errorId : undefined}
+    >
       <legend className="mb-2 text-label">{label}</legend>
-      {renderList(value, onChange, false)}
+      {renderList(value, onChange, undefined)}
       {error ? (
-        <p role="alert" className="text-caption text-destructive">
+        <p id={errorId} role="alert" className="text-caption text-destructive">
           {error}
         </p>
       ) : null}

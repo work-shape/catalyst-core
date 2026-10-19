@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import { useId, useMemo, type ReactNode } from "react";
+import type { UiLabels } from "../labels";
+import { Picker, PickerButton, type PickerOption } from "../overlays/picker";
 import { useUiLabels } from "../ui-root";
 import { Checkbox } from "./checkbox";
 import { Field } from "./field";
@@ -40,6 +42,38 @@ const frequencyLabels = {
   month: "scheduleMonth"
 } as const;
 
+/** The zone is a time zone the browser knows by its IANA id, such as "Europe/Berlin". */
+export function isScheduleZone(zone: string): boolean {
+  if (zone.trim() === "") return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A zone in words: "Berlin time" for "Europe/Berlin". The id itself is never shown. */
+function zoneWords(zone: string, labels: UiLabels): string {
+  if (zone === "UTC" || zone === "Etc/UTC") return labels.scheduleZoneUtc;
+  const city = (zone.split("/").at(-1) ?? zone).replaceAll("_", " ");
+  return labels.scheduleZoneCity.replace("{city}", city);
+}
+
+let knownZones: readonly string[] | undefined;
+function zoneIds(): readonly string[] {
+  if (knownZones === undefined) {
+    let ids: readonly string[] = [];
+    try {
+      ids = Intl.supportedValuesOf("timeZone");
+    } catch {
+      ids = [];
+    }
+    knownZones = ids.includes("UTC") ? ids : ["UTC", ...ids];
+  }
+  return knownZones;
+}
+
 /** A schedule in words, with product-owned values. Parsing and cron belong to the caller. */
 export function ScheduleField({
   label,
@@ -49,6 +83,16 @@ export function ScheduleField({
   readOnly = false
 }: ScheduleFieldProps) {
   const labels = useUiLabels("ScheduleField");
+  const errorId = useId();
+  const zones = useMemo<PickerOption[]>(
+    () =>
+      zoneIds()
+        .map((zone) => ({ value: zone, label: zoneWords(zone, labels), keywords: zone }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [labels]
+  );
+  const zoneValid = isScheduleZone(value.zone);
+  const zoneLabel = zoneValid ? zoneWords(value.zone, labels) : undefined;
   const changeKind = (kind: string) => {
     const time = value.kind === "hour" ? `09:${String(value.minute).padStart(2, "0")}` : value.time;
     const zone = value.zone;
@@ -69,7 +113,12 @@ export function ScheduleField({
     }
   };
   return (
-    <fieldset data-slot="schedule-field" className="grid min-w-0 gap-3">
+    <fieldset
+      data-slot="schedule-field"
+      className="grid min-w-0 gap-3"
+      aria-invalid={error ? true : undefined}
+      aria-describedby={error ? errorId : undefined}
+    >
       <legend className="mb-2 text-label">{label}</legend>
       <Field label={labels.scheduleFrequency}>
         <Select
@@ -144,15 +193,27 @@ export function ScheduleField({
           />
         </Field>
       )}
-      <Field label={labels.scheduleZone}>
-        <Input
-          value={value.zone}
-          readOnly={readOnly}
-          onChange={(event) => onChange({ ...value, zone: event.target.value })}
-        />
+      <Field label={labels.scheduleZone} error={zoneValid ? undefined : labels.scheduleZoneInvalid}>
+        {readOnly ? (
+          <Input readOnly value={zoneLabel ?? ""} />
+        ) : (
+          <Picker
+            label={labels.scheduleZone}
+            options={zones}
+            value={zoneValid ? value.zone : undefined}
+            search
+            onValueChange={(zone) => onChange({ ...value, zone })}
+          >
+            <PickerButton
+              label={labels.scheduleZone}
+              value={zoneLabel}
+              placeholder={labels.scheduleZoneChoose}
+            />
+          </Picker>
+        )}
       </Field>
       {error ? (
-        <p role="alert" className="text-caption text-destructive">
+        <p id={errorId} role="alert" className="text-caption text-destructive">
           {error}
         </p>
       ) : null}

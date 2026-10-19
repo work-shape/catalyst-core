@@ -5,7 +5,7 @@ import { Spinner } from "../feedback/spinner";
 import type { UiLabels } from "../labels";
 import { IconTile } from "../status/icon-tile";
 import { useUiLabels } from "../ui-root";
-import { flowChangeFrames, flowChangeLabels } from "./flow-change";
+import { FlowChangeFrame, flowChangeLabels } from "./flow-change";
 import type { FlowChange, FlowEdgeState, FlowStatus } from "./flow-types";
 
 interface StatusPresentation {
@@ -100,6 +100,8 @@ export interface FlowNodeRow {
   label: ReactNode;
   /** Stands on the row's outer edge: the handle of the row's exit. */
   handle?: ReactNode;
+  /** At the row's end inside the frame, such as the insert point of the exit. */
+  end?: ReactNode;
 }
 
 export interface FlowHeadProps {
@@ -324,6 +326,7 @@ export function FlowNode({
       onKeyDown={open}
       {...props}
     >
+      <FlowChangeFrame change={change} className="rounded-xl" />
       {stacked ? (
         <span
           aria-hidden="true"
@@ -337,12 +340,8 @@ export function FlowNode({
         className={cn(
           "relative rounded-lg border bg-background transition-[border-color,box-shadow] duration-(--duration-color)",
           presentation.frame,
-          change !== undefined && flowChangeFrames[change],
           skipped ? "" : "shadow-raised",
-          onOpen !== undefined &&
-            status === "idle" &&
-            change === undefined &&
-            "hover:border-input-strong"
+          onOpen !== undefined && status === "idle" && "hover:border-input-strong"
         )}
       >
         {main}
@@ -359,7 +358,10 @@ export function FlowNode({
                   compact ? "text-title-lg leading-6" : "text-caption"
                 )}
               >
-                <span className="truncate">{row.label}</span>
+                <span className="min-w-0 flex-1 truncate">{row.label}</span>
+                {row.end === undefined ? null : (
+                  <span className="-mr-1.5 ml-2 flex shrink-0">{row.end}</span>
+                )}
                 {row.handle}
               </div>
             ))}

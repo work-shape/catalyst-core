@@ -11,7 +11,7 @@ import { Skeleton } from "../feedback/skeleton";
 import { IconRegistryProvider, type IconRegistry } from "../status/registry-icon";
 import { useUiLabels } from "../ui-root";
 import type { FlowSize } from "./flow-layout";
-import type { FlowDirection, FlowGraph } from "./flow-types";
+import type { FlowDirection, FlowGraph, FlowInsertPoints } from "./flow-types";
 
 /** Under this width a canvas runs top to bottom and shows a panel as a sheet. */
 const FLOW_NARROW_WIDTH = 600;
@@ -52,6 +52,11 @@ export interface FlowCanvasProps extends Omit<HTMLAttributes<HTMLDivElement>, "o
    * selected node clear of it.
    */
   panel?: ReactNode;
+  /**
+   * Points on every edge, exit row and group end where a part can be put, or "Move here"
+   * targets while a part moves. Without it the graph has none.
+   */
+  insertPoints?: FlowInsertPoints;
 }
 
 type FlowEngineModule = typeof import("./flow-engine");
@@ -71,7 +76,8 @@ function loadFlowEngine(): Promise<FlowEngineModule | undefined> {
 
 /**
  * A graph on an area the reader pans and zooms. The layout is automatic and the graph is
- * read-only: a node can be selected, a group folded, nothing moved. It opens showing the whole
+ * read-only: a node can be selected, a group folded, nothing dragged; with `insertPoints` the
+ * caller is told where a part should be put or moved to. It opens showing the whole
  * graph, and below 60 % zoom a node shows its icon and title only. Tab walks the nodes in the
  * order of the flow, Enter opens the selected node's panel and Escape closes it. The canvas
  * fills its box, so the caller gives it a height.
@@ -91,6 +97,7 @@ export function FlowCanvas({
   minimap = true,
   searchLabel,
   panel,
+  insertPoints,
   className,
   ...props
 }: FlowCanvasProps) {
@@ -168,6 +175,7 @@ export function FlowCanvas({
               minimap={minimap}
               searchLabel={searchLabel}
               panel={panel}
+              insertPoints={insertPoints}
             />
           </IconRegistryProvider>
         </Suspense>

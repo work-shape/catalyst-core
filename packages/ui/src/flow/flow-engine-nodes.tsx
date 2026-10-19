@@ -19,11 +19,18 @@ import { useUiLabels } from "../ui-root";
 import { FlowEdge, flowEdgePath, type FlowEdgeEnd } from "./flow-edge";
 import { flowChangeLabels } from "./flow-change";
 import { FlowGroup } from "./flow-group";
+import { FlowInsertPoint } from "./flow-insert-point";
 import type { FlowPoint, FlowSize } from "./flow-layout";
 import { flowHandleClassName, FlowNode, flowStatusPresentations } from "./flow-node";
-import type { FlowDirection, FlowEdgeState, FlowGraphGroup, FlowGraphNode } from "./flow-types";
+import type {
+  FlowDirection,
+  FlowEdgeState,
+  FlowGraphGroup,
+  FlowGraphNode,
+  FlowInsertPlace,
+  FlowInsertPoints
+} from "./flow-types";
 
-/** Below this zoom a node shows its icon and title only. */
 /** Below this zoom a node is its icon and title: the rest could not be read. */
 export const FLOW_COMPACT_ZOOM = 0.6;
 
@@ -38,6 +45,7 @@ type StepData = { item: FlowGraphNode; marked: boolean; ends: NodeEnds; directio
 type GroupData = { item: FlowGraphGroup; marked: boolean; ends: NodeEnds; box: FlowSize };
 export type StepRfNode = Node<StepData, "step">;
 export type GroupRfNode = Node<GroupData, "container">;
+export type InsertRfNode = Node<{ place: FlowInsertPlace }, "insert">;
 type EdgeData = { state: FlowEdgeState; label?: string; waypoints?: readonly FlowPoint[] };
 export type RfEdge = Edge<EdgeData, "flow">;
 
@@ -48,6 +56,8 @@ export interface EngineContextValue {
   collapsed: ReadonlySet<string>;
   toggle(id: string): void;
   selectable: boolean;
+  /** The insert points the caller asked for. In `move` mode no node can be opened or acted on. */
+  insert?: FlowInsertPoints;
 }
 
 export const EngineContext = createContext<EngineContextValue | undefined>(undefined);
@@ -91,6 +101,41 @@ function useReportedSize(id: string, line = 0): (element: HTMLDivElement | null)
     };
   }, [element, id, line, report]);
   return setElement;
+}
+
+/** Names a place in one string, for a test or a stylesheet to find its point by. */
+export function flowPlaceKey(place: FlowInsertPlace): string {
+  switch (place.kind) {
+    case "edge":
+      return `edge:${place.source}:${place.target}`;
+    case "exit":
+      return `exit:${place.nodeId}:${place.exitId}`;
+    case "end":
+      return `end:${place.groupId}`;
+  }
+}
+
+/** The point of a place, or nothing where the caller asked for none there. */
+function PlacePoint({ place, className }: { place: FlowInsertPlace; className?: string }) {
+  const { insert } = useEngine();
+  if (!insert || !(insert.shows?.(place) ?? true)) {
+    return null;
+  }
+  return (
+    <FlowInsertPoint
+      data-place={flowPlaceKey(place)}
+      className={className}
+      label={insert.label(place)}
+      target={insert.mode === "move"}
+      reveal={insert.mode === "add"}
+      onClick={() => insert.onPress(place)}
+    />
+  );
+}
+
+/** An insert point on an edge or at a group's end: a part of its own, centred on its place. */
+function InsertNode({ data }: NodeProps<InsertRfNode>) {
+  return <PlacePoint place={data.place} className="-translate-x-1/2 -translate-y-1/2" />;
 }
 
 const sides: Record<Position, FlowEdgeEnd["side"]> = {
@@ -153,6 +198,7 @@ function StepNode({ id, data }: NodeProps<StepRfNode>) {
   const compact = useStore(compactSelector);
   const frameRef = useReportedSize(id);
   const { item, ends, direction } = data;
+  const acts = item.action !== undefined && engine.insert?.mode !== "move";
   return (
     <FlowNode
       data-flow-id={id}
@@ -174,15 +220,19 @@ function StepNode({ id, data }: NodeProps<StepRfNode>) {
         )
       }
       action={
-        item.action === undefined ? undefined : (
+        acts && item.action ? (
           <Button size="sm" variant="outline" onClick={() => engine.act(id)}>
             {item.action.label}
           </Button>
-        )
+        ) : undefined
       }
       rows={item.exits?.map((exit) => ({
         id: exit.id,
         label: exit.label,
+        end:
+          engine.insert === undefined ? undefined : (
+            <PlacePoint place={{ kind: "exit", nodeId: id, exitId: exit.id }} className="size-6" />
+          ),
         handle:
           ends.exits[exit.id] === undefined ? undefined : (
             <Handle
@@ -214,6 +264,7 @@ function GroupNode({ id, data }: NodeProps<GroupRfNode>) {
   const headRef = useReportedSize(id, GROUP_LINE);
   const { item, ends, box } = data;
   const counts = item.counts;
+  const acts = item.action !== undefined && engine.insert?.mode !== "move";
   const words = [
     item.countsLabel === undefined
       ? undefined
@@ -273,11 +324,11 @@ function GroupNode({ id, data }: NodeProps<GroupRfNode>) {
         )
       }
       action={
-        item.action === undefined ? undefined : (
+        acts && item.action ? (
           <Button size="sm" variant="outline" onClick={() => engine.act(id)}>
             {item.action.label}
           </Button>
-        )
+        ) : undefined
       }
       status={item.status}
       selected={data.marked}
@@ -326,5 +377,5 @@ function EngineEdge({
 }
 
 // Not `group`: the engine draws a frame of its own around a node of that type.
-export const nodeTypes = { step: StepNode, container: GroupNode };
+export const nodeTypes = { step: StepNode, container: GroupNode, insert: InsertNode };
 export const edgeTypes = { flow: EngineEdge };

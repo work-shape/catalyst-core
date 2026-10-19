@@ -10,7 +10,6 @@ import {
   type SourcedValue,
   type SourcedValueKind
 } from "../forms/sourced-value-field";
-import { useUiLabels } from "../ui-root";
 import type { GalleryEntry } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -19,12 +18,14 @@ function ValueSample({
   kind = "text",
   initial = { kind: "fixed", value: "" },
   readOnly = false,
+  pickedOnly = false,
   error
 }: {
   text: GalleryText;
   kind?: SourcedValueKind;
   initial?: SourcedValue;
   readOnly?: boolean;
+  pickedOnly?: boolean;
   error?: string;
 }) {
   const [value, setValue] = useState(initial);
@@ -36,7 +37,19 @@ function ValueSample({
       kind={kind}
       readOnly={readOnly}
       error={error}
-      options={[{ value: "result", label: text.flowLoadTitle, description: text.flowLoadSummary }]}
+      pickedOnly={pickedOnly}
+      options={[
+        {
+          heading: text.flowLoadTitle,
+          options: [
+            { value: "result", label: text.flowChipBookings, description: text.flowLoadSummary }
+          ]
+        },
+        {
+          heading: text.flowCheckTitle,
+          options: [{ value: "findings", label: text.flowChipFindings }]
+        }
+      ]}
       choices={[
         { value: "member", label: text.roleMember },
         { value: "admin", label: text.roleAdmin }
@@ -56,18 +69,26 @@ function FieldsSample({
   readOnly?: boolean;
   invalid?: boolean;
 }) {
-  const labels = useUiLabels("FieldsSample");
   const kinds: readonly FieldListKind[] = [
-    { value: "text", label: labels.fieldText },
-    { value: "number", label: labels.fieldNumber },
-    { value: "record", label: labels.fieldRecord, children: "record" },
-    { value: "records", label: labels.fieldRecords, children: "records" }
+    { value: "text", label: text.fieldText },
+    { value: "number", label: text.fieldNumber },
+    { value: "boolean", label: text.fieldYesNo },
+    { value: "choice", label: text.fieldChoiceKind, choices: true },
+    { value: "record", label: text.fieldRecord, children: "record" },
+    { value: "records", label: text.fieldRecords, children: "records" }
   ];
   const [value, setValue] = useState<readonly FieldListItem[]>(
     empty
       ? []
       : [
           { id: "summary", name: text.flowResultTitle, kind: "text", required: true },
+          {
+            id: "status",
+            name: text.fieldChoiceSample,
+            kind: "choice",
+            required: true,
+            choices: [text.roleMember, text.roleAdmin]
+          },
           {
             id: "record",
             name: text.flowLoadTitle,
@@ -85,7 +106,12 @@ function FieldsSample({
       kinds={kinds}
       onChange={setValue}
       readOnly={readOnly}
-      errors={invalid ? { summary: { name: text.nameError } } : undefined}
+      errors={
+        invalid
+          ? { summary: { name: text.nameError }, status: { choices: text.fieldChoicesError } }
+          : undefined
+      }
+      error={invalid ? text.fieldListError : undefined}
     />
   );
 }
@@ -159,6 +185,7 @@ export const editingFormsEntries: readonly GalleryEntry[] = [
           kind="textarea"
           initial={{ kind: "fixed", value: text.cardBody }}
         />
+        <ValueSample text={text} initial={{ kind: "picked", option: "findings" }} pickedOnly />
         <ValueSample text={text} initial={{ kind: "picked", option: "result" }} readOnly />
         <ValueSample
           text={text}

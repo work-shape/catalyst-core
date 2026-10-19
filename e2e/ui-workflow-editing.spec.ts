@@ -67,8 +67,14 @@ for (const mode of ["light", "dark"] as const) {
       await schedule.getByRole("checkbox", { name: "Friday" }).focus();
       await page.keyboard.press("Space");
       await expect(schedule.getByRole("checkbox", { name: "Friday" })).toBeChecked();
-      await schedule.getByLabel("Time zone", { exact: true }).fill("UTC");
-      await expect(schedule.getByLabel("Time zone", { exact: true })).toHaveValue("UTC");
+      const zone = schedule.getByRole("button", { name: /^Time zone: / });
+      await expect(zone).toHaveAccessibleName("Time zone: Berlin time");
+      await zone.focus();
+      await page.keyboard.press("Enter");
+      await page.keyboard.type("Vienna");
+      await page.keyboard.press("Enter");
+      await expect(zone).toHaveAccessibleName("Time zone: Vienna time");
+      await expect(zone).toBeFocused();
 
       // Switch away and back twice, so examples remount with their documented initial state.
       for (let i = 0; i < 2; i++) {
@@ -82,6 +88,36 @@ for (const mode of ["light", "dark"] as const) {
       await point.focus();
       await page.keyboard.press("Enter");
       await expect(point).toHaveAttribute("aria-pressed", "true");
+      // On a draft the + shows while the pointer is over the canvas or the point has the focus,
+      // and Tab walks parts and points in the order of the flow.
+      const draft = page.locator('[data-gallery-sample="flow-insert-add"]');
+      await draft.scrollIntoViewIfNeeded();
+      await expect(draft.locator('[data-slot="flow-engine"][data-ready]')).toHaveCount(1);
+      const edgePoint = draft.locator('[data-place="edge:trigger:load"]');
+      await page.mouse.move(0, 0);
+      await expect(edgePoint).toHaveCSS("opacity", "0");
+      await draft.hover({ position: { x: 8, y: 8 } });
+      await expect(edgePoint).toHaveCSS("opacity", "1");
+      await page.mouse.move(0, 0);
+      await draft.locator('[data-flow-id="trigger"]').focus();
+      await page.keyboard.press("Tab");
+      await expect(edgePoint).toBeFocused();
+      await expect(edgePoint).toHaveCSS("opacity", "1");
+      await page.keyboard.press("Tab");
+      await expect(draft.locator('[data-flow-id="load"]')).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Enter");
+      await expect(page.locator('[data-gallery-entry="FlowInsertPoint"]')).toContainText(
+        "Pressed: Add a step after"
+      );
+      const moving = page.locator('[data-gallery-sample="flow-insert-move"]');
+      await moving.scrollIntoViewIfNeeded();
+      const target = moving.getByRole("button", { name: /^Move here, after / }).first();
+      await expect(target).toBeVisible();
+      await target.focus();
+      await page.keyboard.press("Escape");
+      await expect(moving.locator("[data-target]")).toHaveCount(0);
+
       const marked = page
         .locator('[data-gallery-entry="Flow change marks"] [data-slot="flow-node"]')
         .first();

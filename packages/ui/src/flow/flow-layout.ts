@@ -6,6 +6,7 @@ import type {
   FlowGraph,
   FlowGraphGroup,
   FlowGraphNode,
+  FlowInsertPlace,
   FlowStatus
 } from "./flow-types";
 
@@ -32,6 +33,8 @@ interface FlowLaidOutEdge {
    * it turns into a free lane beside them and out of it again.
    */
   waypoints?: readonly FlowPoint[];
+  /** The edge joins the very parts the graph names, with no exit: a part can be put on it. */
+  place?: FlowInsertPlace & { kind: "edge" };
 }
 
 export interface FlowPoint {
@@ -55,7 +58,14 @@ export interface FlowLayoutInput {
   sizes?: ReadonlyMap<string, FlowSize>;
   /** The groups folded to their head. */
   collapsed?: ReadonlySet<string>;
+  /**
+   * Leaves room for insert points between parts and at the end of every group's body: for a
+   * "+", or for a "Move here" target, which is wider.
+   */
+  room?: FlowInsertRoom;
 }
+
+export type FlowInsertRoom = "point" | "target";
 
 /** The width of a node per direction. A group is wider by its padding on both sides. */
 export const FLOW_NODE_WIDTH: Record<FlowDirection, number> = { horizontal: 216, vertical: 300 };
@@ -70,6 +80,13 @@ const GAPS: Record<FlowDirection, { rank: number; node: number }> = {
 };
 /** Inside a group the parts stand closer. */
 const BODY_GAP = 22;
+/** Between two parts where an insert point stands between them, by the point's kind. */
+const ROOM_GAPS: Record<FlowInsertRoom, Record<FlowDirection, number>> = {
+  point: { horizontal: 48, vertical: 44 },
+  target: { horizontal: 176, vertical: 44 }
+};
+/** At the end of a group's body, for its insert point. */
+const END_ROOM = 44;
 
 type Item = (FlowGraphNode | FlowGraphGroup) & { group: boolean };
 
@@ -97,7 +114,19 @@ interface Join {
  * top to bottom whatever the direction, so a group stays narrow. Groups nest to any depth. An
  * edge to or from something inside a folded group is drawn to the group.
  */
-export function layoutFlow({ graph, direction, sizes, collapsed }: FlowLayoutInput): FlowLayout {
+export function layoutFlow({
+  graph,
+  direction,
+  sizes,
+  collapsed,
+  room
+}: FlowLayoutInput): FlowLayout {
+  const rootGaps =
+    room === undefined
+      ? GAPS[direction]
+      : { ...GAPS[direction], rank: Math.max(GAPS[direction].rank, ROOM_GAPS[room][direction]) };
+  const bodyGap = room === undefined ? BODY_GAP : ROOM_GAPS[room].vertical;
+  const endRoom = room === undefined ? 0 : END_ROOM;
   const items = new Map<string, Item>();
   for (const group of graph.groups ?? []) {
     items.set(group.id, { ...group, group: true });
@@ -186,6 +215,10 @@ export function layoutFlow({ graph, direction, sizes, collapsed }: FlowLayoutInp
       // Rows carry handles where the flow leaves sideways; below a node the edge names its exit.
       sourceExit: axis === "horizontal" ? exit : undefined,
       label: axis === "vertical" ? exitLabel : undefined,
+      place:
+        source === edge.source && target === edge.target && edge.sourceExit === undefined
+          ? { kind: "edge", source, target, edgeId: edge.id }
+          : undefined,
       state:
         edge.state ?? edgeStateOf(items.get(edge.source)?.status, items.get(edge.target)?.status),
       axis
@@ -214,7 +247,7 @@ export function layoutFlow({ graph, direction, sizes, collapsed }: FlowLayoutInp
     placedScopes.set(id, body);
     return {
       width: Math.max(head.width, body.width + 2 * FLOW_GROUP_PADDING),
-      height: head.height + body.height + 2 * FLOW_GROUP_PADDING
+      height: head.height + body.height + endRoom + 2 * FLOW_GROUP_PADDING
     };
   };
 
@@ -224,8 +257,8 @@ export function layoutFlow({ graph, direction, sizes, collapsed }: FlowLayoutInp
     const along: FlowDirection = scope === undefined ? direction : "vertical";
     const joins = scopeEdges.get(scope) ?? [];
     return joins.length === 0
-      ? stack(ids, scopeSizes, along, scope === undefined ? GAPS[direction].rank : BODY_GAP)
-      : rank(ids, scopeSizes, joins, along, scope === undefined ? GAPS[direction] : undefined);
+      ? stack(ids, scopeSizes, along, scope === undefined ? rootGaps.rank : bodyGap)
+      : rank(ids, scopeSizes, joins, along, scope === undefined ? rootGaps : bodyGap);
   };
 
   const root = placeScope(undefined);
@@ -250,7 +283,7 @@ export function layoutFlow({ graph, direction, sizes, collapsed }: FlowLayoutInp
       order.push(id);
       const body = placedScopes.get(id);
       if (body && !collapsed?.has(id)) {
-        const head = absolute.height - body.height - 2 * FLOW_GROUP_PADDING;
+        const head = absolute.height - body.height - endRoom - 2 * FLOW_GROUP_PADDING;
         settle(
           body,
           absolute.x + (absolute.width - body.width) / 2,
@@ -268,6 +301,104 @@ export function layoutFlow({ graph, direction, sizes, collapsed }: FlowLayoutInp
     edges: edges.map((edge) => ({ ...edge, waypoints: routes.get(edge.id) })),
     bounds: { x: 0, y: 0, width: root.width, height: root.height }
   };
+}
+
+/** An insert point of an edge or of a group's end, as the canvas draws it. */
+export interface FlowInsertSpot {
+  place: FlowInsertPlace & { kind: "edge" | "end" };
+  /** Where the point's centre stands, in the graph's own measures. */
+  x: number;
+  y: number;
+  /** The part after which the point comes in the order of the flow, and so of Tab. */
+  after: string;
+}
+
+/**
+ * The insert points on edges and at the end of every open group, in the order of the flow: a
+ * point on an edge follows its source with everything the source holds, and a group's end
+ * follows the last part it holds. An edge stands halfway between its ends, which is where its
+ * curve passes, or halfway along the lane it takes past other parts. Exit rows hold their own.
+ */
+export function flowInsertSpots(
+  graph: FlowGraph,
+  layout: FlowLayout,
+  collapsed?: ReadonlySet<string>
+): FlowInsertSpot[] {
+  const parents = new Map(
+    [...graph.nodes, ...(graph.groups ?? [])].map((item) => [item.id, item.parentId])
+  );
+  const depthOf = (id: string) => {
+    let depth = 0;
+    const seen = new Set<string>();
+    for (let at = parents.get(id); at !== undefined && !seen.has(at); at = parents.get(at)) {
+      seen.add(at);
+      depth += 1;
+    }
+    return depth;
+  };
+  // The last part shown inside each part, itself where it holds none.
+  const last = new Map<string, string>();
+  for (const id of layout.order) {
+    last.set(id, id);
+    const seen = new Set<string>();
+    for (let at = parents.get(id); at !== undefined && !seen.has(at); at = parents.get(at)) {
+      seen.add(at);
+      last.set(at, id);
+    }
+  }
+  const spots: (FlowInsertSpot & { depth: number; end: boolean; index: number })[] = [];
+  for (const edge of layout.edges) {
+    const source = layout.boxes.get(edge.source);
+    const target = layout.boxes.get(edge.target);
+    if (edge.place === undefined || !source || !target) {
+      continue;
+    }
+    const [first, second] = edge.waypoints ?? [];
+    const from =
+      edge.axis === "horizontal"
+        ? { x: source.x + source.width, y: source.y + source.height / 2 }
+        : { x: source.x + source.width / 2, y: source.y + source.height };
+    const to =
+      edge.axis === "horizontal"
+        ? { x: target.x, y: target.y + target.height / 2 }
+        : { x: target.x + target.width / 2, y: target.y };
+    const [a, b] = first && second ? [first, second] : [from, to];
+    spots.push({
+      place: edge.place,
+      x: (a.x + b.x) / 2,
+      y: (a.y + b.y) / 2,
+      after: last.get(edge.source) ?? edge.source,
+      depth: depthOf(edge.source),
+      end: false,
+      index: spots.length
+    });
+  }
+  for (const group of graph.groups ?? []) {
+    const box = layout.boxes.get(group.id);
+    if (!box || collapsed?.has(group.id)) {
+      continue;
+    }
+    spots.push({
+      place: { kind: "end", groupId: group.id },
+      x: box.x + box.width / 2,
+      y: box.y + box.height - FLOW_GROUP_PADDING - END_ROOM / 2,
+      after: last.get(group.id) ?? group.id,
+      depth: depthOf(group.id),
+      end: true,
+      index: spots.length
+    });
+  }
+  const position = new Map(layout.order.map((id, index) => [id, index]));
+  // After one part: what is deeper first, a group's end before the edge that leaves the group.
+  return spots
+    .sort(
+      (a, b) =>
+        (position.get(a.after) ?? 0) - (position.get(b.after) ?? 0) ||
+        b.depth - a.depth ||
+        Number(b.end) - Number(a.end) ||
+        a.index - b.index
+    )
+    .map(({ place, x, y, after }) => ({ place, x, y, after }));
 }
 
 /** Parts with no order among them: one after the other along the axis, centred across it. */
@@ -310,13 +441,14 @@ function rank(
   sizes: ReadonlyMap<string, FlowSize>,
   joins: readonly Join[],
   along: FlowDirection,
-  gaps: { rank: number; node: number } | undefined
+  /** The gaps of the top level, or the one gap inside a group. */
+  gaps: { rank: number; node: number } | number
 ): Placed {
   const graph = new graphlib.Graph({ multigraph: true });
   graph.setGraph({
     rankdir: along === "horizontal" ? "LR" : "TB",
-    ranksep: gaps?.rank ?? BODY_GAP,
-    nodesep: gaps?.node ?? BODY_GAP,
+    ranksep: typeof gaps === "number" ? gaps : gaps.rank,
+    nodesep: typeof gaps === "number" ? BODY_GAP : gaps.node,
     marginx: 0,
     marginy: 0
   });

@@ -4,6 +4,24 @@ export interface FlowGalleryText {
   flowChanges: string;
   sidePanelEditing: string;
   scheduleIncomplete: string;
+  fieldText: string;
+  fieldNumber: string;
+  fieldYesNo: string;
+  fieldChoiceKind: string;
+  fieldRecord: string;
+  fieldRecords: string;
+  fieldChoiceSample: string;
+  fieldChoicesError: string;
+  fieldListError: string;
+  flowAddAfter: string;
+  flowMoveAfter: string;
+  flowAddOnExit: string;
+  flowAddAtEnd: string;
+  flowEditCanvas: string;
+  flowMoveCanvas: string;
+  flowMoveStep: string;
+  flowMoveCancel: string;
+  flowPressed: string;
   flowLinear: string;
   flowRun: string;
   flowLarge: string;
@@ -104,6 +122,24 @@ export const flowGalleryText: Record<"en" | "de", FlowGalleryText> = {
     flowChanges: "Change marks",
     sidePanelEditing: "Editing in a side panel",
     scheduleIncomplete: "Choose at least one day, a time and a time zone.",
+    fieldText: "Text",
+    fieldNumber: "Number",
+    fieldYesNo: "Yes or no",
+    fieldChoiceKind: "One of a list",
+    fieldRecord: "Record",
+    fieldRecords: "List of records",
+    fieldChoiceSample: "Status",
+    fieldChoicesError: "Give at least two choices.",
+    fieldListError: "Two fields may not have the same name.",
+    flowAddAfter: "Add a step after {name}",
+    flowMoveAfter: "after {name}",
+    flowAddOnExit: "Add a step on {name}",
+    flowAddAtEnd: "Add a step at the end of {name}",
+    flowEditCanvas: "A draft with insert points on edges, exits and the end of a loop",
+    flowMoveCanvas: "The same draft while a step moves: every insert point is a target",
+    flowMoveStep: "Move a step",
+    flowMoveCancel: "Stop moving",
+    flowPressed: "Pressed: {name}",
     flowLinear: "A linear graph that is only described, with a loop as a group",
     flowRun: "Something that runs: statuses, counts, a selected node and its panel",
     flowLarge: "A large graph: a condition, a parallel block, a loop and a subflow",
@@ -203,6 +239,26 @@ export const flowGalleryText: Record<"en" | "de", FlowGalleryText> = {
     flowChanges: "Änderungsmarkierungen",
     sidePanelEditing: "Bearbeiten im Seitenbereich",
     scheduleIncomplete: "Wähle mindestens einen Tag, eine Uhrzeit und eine Zeitzone.",
+    fieldText: "Text",
+    fieldNumber: "Zahl",
+    fieldYesNo: "Ja oder nein",
+    fieldChoiceKind: "Einer aus einer Liste",
+    fieldRecord: "Datensatz",
+    fieldRecords: "Liste von Datensätzen",
+    fieldChoiceSample: "Status",
+    fieldChoicesError: "Gib mindestens zwei Auswahlwerte an.",
+    fieldListError: "Zwei Felder dürfen nicht denselben Namen haben.",
+    flowAddAfter: "Schritt nach {name} hinzufügen",
+    flowMoveAfter: "nach {name}",
+    flowAddOnExit: "Schritt bei {name} hinzufügen",
+    flowAddAtEnd: "Schritt am Ende von {name} hinzufügen",
+    flowEditCanvas:
+      "Ein Entwurf mit Einfügepunkten an Kanten, Ausgängen und am Ende einer Schleife",
+    flowMoveCanvas:
+      "Derselbe Entwurf, während ein Schritt verschoben wird: jeder Einfügepunkt ist ein Ziel",
+    flowMoveStep: "Schritt verschieben",
+    flowMoveCancel: "Verschieben beenden",
+    flowPressed: "Gedrückt: {name}",
     flowLinear: "Ein linearer Graph, nur beschrieben, mit einer Schleife als Gruppe",
     flowRun: "Etwas, das läuft: Status, Zähler, ein ausgewählter Knoten und sein Panel",
     flowLarge: "Ein großer Graph: Bedingung, paralleler Block, Schleife und Unterablauf",

@@ -35,10 +35,14 @@ export interface UiLabels {
   friday: string;
   saturday: string;
   sunday: string;
-  fieldText: string;
-  fieldNumber: string;
-  fieldRecord: string;
-  fieldRecords: string;
+  fieldChoices: string;
+  fieldChoice: string;
+  addChoice: string;
+  /** A zone by its city, where `{city}` stands for the city: "{city} time". */
+  scheduleZoneCity: string;
+  scheduleZoneUtc: string;
+  scheduleZoneChoose: string;
+  scheduleZoneInvalid: string;
   moveHere: string;
   close: string;
   cancel: string;
@@ -104,10 +108,13 @@ export interface UiLabels {
 }
 
 export const uiLabelsEn: UiLabels = {
-  fieldText: "Text",
-  fieldNumber: "Number",
-  fieldRecord: "Record",
-  fieldRecords: "List of records",
+  fieldChoices: "Choices",
+  fieldChoice: "Choice",
+  addChoice: "Add choice",
+  scheduleZoneCity: "{city} time",
+  scheduleZoneUtc: "UTC",
+  scheduleZoneChoose: "Choose a time zone",
+  scheduleZoneInvalid: "Choose a time zone from the list.",
   moveHere: "Move here",
 
   changeNew: "New",
@@ -190,10 +197,13 @@ export const uiLabelsEn: UiLabels = {
 };
 
 export const uiLabelsDe: UiLabels = {
-  fieldText: "Text",
-  fieldNumber: "Zahl",
-  fieldRecord: "Datensatz",
-  fieldRecords: "Liste von Datensätzen",
+  fieldChoices: "Auswahlwerte",
+  fieldChoice: "Auswahlwert",
+  addChoice: "Auswahlwert hinzufügen",
+  scheduleZoneCity: "Ortszeit {city}",
+  scheduleZoneUtc: "UTC",
+  scheduleZoneChoose: "Zeitzone auswählen",
+  scheduleZoneInvalid: "Wähle eine Zeitzone aus der Liste.",
   moveHere: "Hierher verschieben",
 
   changeNew: "Neu",
@@ -213,7 +223,7 @@ export const uiLabelsDe: UiLabels = {
   scheduleFrequency: "Wiederholt sich",
   scheduleHour: "Jede Stunde",
   scheduleDay: "Jeden Tag",
-  scheduleWeekday: "Jeden Werktag",
+  scheduleWeekday: "Montag bis Freitag",
   scheduleWeek: "Jede Woche",
   scheduleMonth: "Jeden Monat",
   scheduleTime: "Um",

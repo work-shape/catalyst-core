@@ -104,6 +104,36 @@ export interface FlowGraphEdge {
   state?: FlowEdgeState;
 }
 
+/**
+ * A place where a part can be put: on an edge between two parts, on an exit row of a
+ * `condition`, or at the end of a group's body.
+ */
+export type FlowInsertPlace =
+  | { kind: "edge"; source: string; target: string; edgeId?: string }
+  | { kind: "exit"; nodeId: string; exitId: string }
+  | { kind: "end"; groupId: string };
+
+/**
+ * Points on the canvas where a part can be put. `add` shows a "+" at every place, seen while
+ * the pointer is over the canvas or the point has the focus. `move` shows a "Move here" target
+ * at every place and turns the nodes' own controls off, so the next press picks a place.
+ */
+export interface FlowInsertPoints {
+  mode: "add" | "move";
+  /**
+   * The place in words. A "+" is named by it alone, so it says what the press does: "Add a step
+   * after Load the clients". A "Move here" target says "Move here" and then this: "after Load
+   * the clients".
+   */
+  label(place: FlowInsertPlace): string;
+  /** Called with the place whose point was pressed. */
+  onPress(place: FlowInsertPlace): void;
+  /** Leaves places out, such as those beside the part that moves. Without it every place shows. */
+  shows?(place: FlowInsertPlace): boolean;
+  /** Called by Escape while the canvas is in `move` mode. */
+  onCancel?(): void;
+}
+
 /** A graph as plain data. It carries no positions: the canvas lays it out. */
 export interface FlowGraph {
   nodes: readonly FlowGraphNode[];

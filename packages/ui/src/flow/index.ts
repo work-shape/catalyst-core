@@ -30,4 +30,4 @@ export type {
 } from "./flow-types";
 
 export { FlowInsertPoint, type FlowInsertPointProps } from "./flow-insert-point";
-export type { FlowChange } from "./flow-types";
+export type { FlowChange, FlowInsertPlace, FlowInsertPoints } from "./flow-types";

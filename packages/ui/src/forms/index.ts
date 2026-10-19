@@ -45,6 +45,7 @@ export {
 } from "./field-list-editor";
 export {
   ScheduleField,
+  isScheduleZone,
   type ScheduleFieldProps,
   type ScheduleValue,
   type ScheduleWeekday

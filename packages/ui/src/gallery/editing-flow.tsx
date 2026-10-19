@@ -1,16 +1,24 @@
 import { useState } from "react";
 import { Button } from "../actions/button";
+import { FlowCanvas } from "../flow/flow-canvas";
 import { flowChangeLabels } from "../flow/flow-change";
 import { FlowInsertPoint } from "../flow/flow-insert-point";
 import { FlowGroup } from "../flow/flow-group";
 import { FlowNode } from "../flow/flow-node";
-import type { FlowChange, FlowStatus } from "../flow/flow-types";
+import type {
+  FlowChange,
+  FlowGraph,
+  FlowInsertPlace,
+  FlowInsertPoints,
+  FlowStatus
+} from "../flow/flow-types";
 import { Field } from "../forms/field";
 import { Input, Textarea } from "../forms/input";
 import { SaveBar } from "../forms/save-bar";
 import { SidePanel } from "../overlays/side-panel";
 import { useUiLabels } from "../ui-root";
-import type { GalleryEntry } from "./entry";
+import { Samples, type GalleryEntry } from "./entry";
+import { largeGraph } from "./flow-graphs";
 import type { GalleryText } from "./text";
 
 const changes: readonly FlowChange[] = ["new", "changed", "removed", "unsaved"];
@@ -77,19 +85,88 @@ function ChangeSamples({ text }: { text: GalleryText }) {
   );
 }
 
+const named = (template: string, name: string) => template.replace("{name}", name);
+
 function InsertSamples({ text }: { text: GalleryText }) {
-  const labels = useUiLabels("InsertSamples");
   const [selected, setSelected] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-3">
       <FlowInsertPoint
-        label={`${text.addItem}: ${text.flowLoadTitle}`}
+        label={named(text.flowAddAfter, text.flowLoadTitle)}
         onClick={() => setSelected(!selected)}
         aria-pressed={selected}
       />
-      <FlowInsertPoint label={labels.moveHere} target onClick={() => setSelected(!selected)} />
-      <FlowInsertPoint label={text.disabled} disabled />
-      <FlowInsertPoint label={text.addItem} hidden />
+      <FlowInsertPoint
+        label={named(text.flowMoveAfter, text.flowLoadTitle)}
+        target
+        onClick={() => setSelected(!selected)}
+      />
+      <FlowInsertPoint label={named(text.flowAddAfter, text.flowLoadTitle)} disabled />
+    </div>
+  );
+}
+
+/** The words of a place, from the titles of the parts it lies by. */
+function placeWords(graph: FlowGraph, text: GalleryText, place: FlowInsertPlace, move: boolean) {
+  const title = (id: string) =>
+    [...graph.nodes, ...(graph.groups ?? [])].find((item) => item.id === id)?.title ?? id;
+  switch (place.kind) {
+    case "edge":
+      return named(move ? text.flowMoveAfter : text.flowAddAfter, title(place.source));
+    case "exit": {
+      const exit = graph.nodes
+        .find((node) => node.id === place.nodeId)
+        ?.exits?.find((candidate) => candidate.id === place.exitId);
+      return named(text.flowAddOnExit, exit?.label ?? place.exitId);
+    }
+    case "end":
+      return named(text.flowAddAtEnd, title(place.groupId));
+  }
+}
+
+/** A draft whose insert points report their place, and turn into targets while a step moves. */
+function InsertCanvas({ text, moving: startMoving }: { text: GalleryText; moving: boolean }) {
+  const [moving, setMoving] = useState(startMoving);
+  const [pressed, setPressed] = useState<string>();
+  const graph = largeGraph(text);
+  const draft: FlowGraph = {
+    ...graph,
+    nodes: graph.nodes.map((node) => (node.id === "check" ? { ...node, change: "new" } : node))
+  };
+  const insertPoints: FlowInsertPoints = {
+    mode: moving ? "move" : "add",
+    label: (place) => placeWords(draft, text, place, moving),
+    // A step does not move next to where it stands.
+    shows: (place) => !moving || !(place.kind === "edge" && place.source === "check"),
+    onPress: (place) => {
+      setPressed(placeWords(draft, text, place, moving));
+      setMoving(false);
+    },
+    onCancel: () => setMoving(false)
+  };
+  return (
+    <div className="grid w-full min-w-0 gap-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="outline" onClick={() => setMoving(!moving)}>
+          {moving ? text.flowMoveCancel : text.flowMoveStep}
+        </Button>
+        <p aria-live="polite" className="text-caption text-muted-foreground">
+          {pressed === undefined ? null : named(text.flowPressed, pressed)}
+        </p>
+      </div>
+      <div
+        data-gallery-sample={startMoving ? "flow-insert-move" : "flow-insert-add"}
+        className="relative h-140 w-full min-w-0 overflow-hidden rounded-lg border"
+      >
+        <FlowCanvas
+          embedded
+          graph={draft}
+          label={text.flowCanvasLabel}
+          emptyLabel={text.flowEmptyLabel}
+          onSelect={() => undefined}
+          insertPoints={insertPoints}
+        />
+      </div>
     </div>
   );
 }
@@ -157,7 +234,17 @@ export const editingFlowEntries: readonly GalleryEntry[] = [
   {
     name: "FlowInsertPoint",
     components: ["FlowInsertPoint"],
-    render: (text) => <InsertSamples text={text} />
+    render: (text) => (
+      <div className="grid w-full min-w-0 gap-5">
+        <InsertSamples text={text} />
+        <Samples label={text.flowEditCanvas}>
+          <InsertCanvas text={text} moving={false} />
+        </Samples>
+        <Samples label={text.flowMoveCanvas}>
+          <InsertCanvas text={text} moving />
+        </Samples>
+      </div>
+    )
   },
   {
     name: "SidePanel editing",

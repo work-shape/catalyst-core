@@ -7,15 +7,22 @@ export interface FlowInsertPointProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
   "children" | "aria-label"
 > {
-  /** Names the location, such as "Add a step after Load the clients" or "Move here". */
+  /**
+   * The place in words. A "+" is named by it alone: "Add a step after Load the clients". A
+   * target says "Move here" and then this: "after Load the clients".
+   */
   label: string;
+  /** A "Move here" target, as the canvas shows while a part moves. */
   target?: boolean;
+  /** Seen only while the pointer is over the canvas or the point has the focus. */
+  reveal?: boolean;
 }
 
-/** A caller-placed insertion or move target on an edge, exit or container end. */
+/** A place on an edge, an exit or a container's end where a part can be put or moved to. */
 export function FlowInsertPoint({
   label,
   target = false,
+  reveal = false,
   hidden = false,
   className,
   onClick,
@@ -31,18 +38,28 @@ export function FlowInsertPoint({
         event.stopPropagation();
         onClick?.(event);
       }}
-      aria-label={label}
+      aria-label={target ? undefined : label}
       data-slot="flow-insert-point"
       data-target={target ? "" : undefined}
+      data-reveal={reveal && !target ? "" : undefined}
       className={cn(
-        "nodrag nopan inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-input-strong bg-background text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-50",
+        "nodrag nopan inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-input-strong bg-background text-muted-foreground transition-[color,border-color,opacity] duration-(--duration-color) focus-visible:focus-ring enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none",
         target &&
-          "w-auto gap-1.5 border-primary bg-primary-soft px-2.5 text-caption font-medium text-primary-soft-foreground",
+          "w-auto gap-1.5 border-primary bg-linear-to-r from-primary-soft to-primary-soft px-2.5 text-caption font-medium whitespace-nowrap text-primary-soft-foreground",
+        // A pointer that cannot hover sees every point.
+        reveal &&
+          !target &&
+          "opacity-0 group-hover/flow:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
         className
       )}
     >
       <Plus aria-hidden="true" className="size-4" />
-      {target ? labels.moveHere : null}
+      {target ? (
+        <>
+          {labels.moveHere}
+          <span className="sr-only">, {label}</span>
+        </>
+      ) : null}
     </button>
   );
 }
