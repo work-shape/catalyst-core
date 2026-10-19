@@ -1,4 +1,4 @@
-import { CalendarDays, Calculator, LayoutGrid, MoreHorizontal } from "lucide-react";
+import { CalendarDays, Calculator, LayoutGrid, MoreHorizontal, Plus } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { AssetSummary, LocaleCode } from "@work-shape/catalyst-api-client";
 import {
@@ -163,6 +163,7 @@ export function AppsPage() {
         // The agent opens in the dock, as a New button opens it. Where the dock creates nothing,
         // in a workspace whose conversations its members read, a new chat opens instead.
         onBuild={host.startNew ?? host.startChat}
+        {...(host.startNew ? { onNew: host.startNew } : {})}
       />
       {detailsOf ? (
         <AppDetailsDialog
@@ -197,7 +198,8 @@ export function AppsPageView({
   now,
   onOpenRoute,
   onAction,
-  onBuild
+  onBuild,
+  onNew
 }: {
   workspace: AppsWorkspace;
   rights: AppRights;
@@ -207,10 +209,22 @@ export function AppsPageView({
   onAction(action: AppMenuAction, app: AssetSummary): void;
   /** Opens the agent with this text in its composer: offered to a reader who may build Apps. */
   onBuild(prompt: string): void;
+  /**
+   * "New app": the dock opens with a conversation whose first save creates the App, this text
+   * in its composer. Absent where nobody here builds one with an agent.
+   */
+  onNew?(prompt: string): void;
 }) {
   const { locale, t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const rows = list.rows;
+  const newButton =
+    onNew && rights.write ? (
+      <Button onClick={() => onNew(t("apps.promptStart"))}>
+        <Plus aria-hidden="true" />
+        {t("apps.new")}
+      </Button>
+    ) : undefined;
 
   // The area's title takes the focus when the area opens, as on every full page.
   useEffect(() => {
@@ -233,7 +247,13 @@ export function AppsPageView({
         className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [container-type:size] max-md:[--layout-page-inset:var(--layout-header)]"
       >
         <Page>
-          <PageHeader title={t("apps.title")} description={t("apps.description")} />
+          <PageHeader
+            title={t("apps.title")}
+            description={t("apps.description")}
+            // The empty list offers the agent itself, so the head drops New once the list has
+            // answered with none. While it loads, New stands: making one never waits for the list.
+            primaryAction={rows?.length === 0 ? undefined : newButton}
+          />
           {list.failed ? (
             <InlineError className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <span>{t("apps.listFailed")}</span>

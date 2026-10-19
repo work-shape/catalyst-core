@@ -353,6 +353,17 @@ export class AssetReadWorkflow {
     // action the instance refuses and hides none it allows (AD-4).
     const allowed = allowedOn(target.kind, call, target.resource);
     const saveApproval = await this.saveApproval(call, target);
+    // The draft header names the publish, which can be by someone other than its author.
+    const publication =
+      target.kind.kind === "app" && !publishedOnly && asset.publishedRevision !== undefined
+        ? await this.options.stores.audit
+            .getAssetPublication({
+              clientInstanceId: this.options.clientInstanceId,
+              assetId: asset.id,
+              revision: asset.publishedRevision
+            })
+            .catch(() => undefined)
+        : undefined;
     return {
       ...(saveApproval ? { saveApproval } : {}),
       ...(agentStatus ?? {}),
@@ -369,6 +380,7 @@ export class AssetReadWorkflow {
       ...content,
       ...(runsAs === undefined ? {} : { runsAs }),
       ...(stepFacts === undefined ? {} : { stepFacts }),
+      ...(publication ? { publication } : {}),
       ...(publishQuestion?.length ? { publishQuestion } : {}),
       ...(publishNarrative ? { publishNarrative } : {}),
       ...(appAudience ? { appAudience } : {}),

@@ -60,6 +60,25 @@ function appsPage(rows: readonly AssetSummary[] | undefined, rights: AppRights, 
 }
 
 describe("the Apps page", () => {
+  it("offers New app in the head to a reader who may build one, and only there", () => {
+    const READER: AppRights = { ...NO_APP_RIGHTS, read: true };
+    const withNew = (rights: AppRights, rows: readonly AssetSummary[] | undefined = [summary()]) =>
+      createElement(AppsPageView, {
+        ...appsPage(rows, rights).props,
+        onNew() {}
+      });
+    const newButton = /<button[^>]*>(?:(?!<\/button>).)*New app<\/button>/u;
+
+    expect(render(withNew(ALL))).toMatch(newButton);
+    expect(render(withNew(ALL), "de")).toContain(`${de("apps.new")}</button>`);
+    // While the list loads New stands; an empty list offers the agent itself instead.
+    expect(render(withNew(ALL, undefined))).toMatch(newButton);
+    expect(render(withNew(ALL, []))).not.toMatch(newButton);
+    // A reader who may not write Apps, or a host that builds none with an agent, gets no New.
+    expect(render(withNew(READER))).not.toContain("New app");
+    expect(render(appsPage([summary()], ALL))).not.toContain("New app");
+  });
+
   it("shows name, description, workspace, state and the menu of each App", () => {
     const markup = render(
       appsPage(

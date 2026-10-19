@@ -6,12 +6,9 @@ import {
   Badge,
   Button,
   ConfirmDialog,
-  Dialog,
   DropdownMenuItem,
   DropdownMenuSeparator,
   InlineError,
-  KeyValue,
-  KeyValueList,
   LoadError,
   Tabs,
   TabsContent,
@@ -22,51 +19,34 @@ import {
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
-import {
-  narrativeHolds,
-  PublishDetails,
-  PublishNarrativeReadLead,
-  type PublishNarrativeRead
-} from "../../shared/publish-narrative";
+import { formatMoment } from "../../shared/locale-format";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../../shared/routes";
 import { AppDraftActions } from "./actions-view";
-import {
-  useApp,
-  useAppPublishData,
-  useAppPublishNarrative,
-  useAppWrites,
-  type AppAudience,
-  type AppAudienceOffer,
-  type AppPublishDataRead
-} from "./app-data";
+import { useApp, useAppDataSources, useAppWrites } from "./app-data";
 import { AppDraftFiles } from "./app-draft-files";
-import { AppDeleteDialog, AppFrame, AppHeader, AppStateBadge, NameList } from "./app-header";
+import {
+  AppDataSourcesButton,
+  AppDeleteDialog,
+  AppFrame,
+  AppHeader,
+  AppStateBadge
+} from "./app-header";
 import {
   APP_RIGHT_NAMES,
   appDescription,
   appDraftRevision,
   appDraftShown,
-  appManifestSummary,
-  appReadsStoredData,
   appRefusalText,
   appRightsOn,
   appTitle,
-  type AppManifestSummary,
   type AppRights
 } from "./app-model";
 import { HeadAgentAction } from "../head-agent-action";
 import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { AppPreview, AppPreviewNotice } from "./app-preview";
-import { AppPublishDataView, AppStoredDataFact } from "./app-publish-data";
-import {
-  AppAudienceChange,
-  AppAudienceQuestion,
-  appPublishBody,
-  appPublishMaySend,
-  useAppPublishSend,
-  useSharePublishQuestion
-} from "./app-publish-question";
+import { AskedPublishDialog, askToPublish, type PublishAsk } from "./app-publish-dialog";
+import { AppStoredDataFact } from "./app-publish-data";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { RevisionsDrawer } from "./revisions-drawer";
 
@@ -96,26 +76,6 @@ function storeDetailsOpen(open: boolean): void {
   }
 }
 
-/** The revision a publish names, with what its manifest reaches. */
-interface PublishAsk {
-  revision: number;
-  /** The live revision, where one is: publishing it again may change only its audience. */
-  live?: number | undefined;
-  summary: AppManifestSummary;
-  /** Its manifest has a reading `sql` action: the question names who sees which stored data. */
-  readsStoredData: boolean;
-}
-
-/** What the config of the revision a publish names asks the question to say. */
-function askToPublish(revision: number, live: number | undefined, config: unknown): PublishAsk {
-  return {
-    revision,
-    live,
-    summary: appManifestSummary(config),
-    readsStoredData: appReadsStoredData(config)
-  };
-}
-
 /**
  * The draft of one App (layout 3): the draft revision in the frame, and the place it is
  * published, discarded or deleted from. The screen is the surface alone; the conversation
@@ -130,6 +90,8 @@ export function AppEdit({ app }: { app: string }) {
   const record = useApp(workspace?.id ?? "", app, workspace !== undefined);
   const rights = host && appRightsOn(host.rights, record.app);
   const writes = useAppWrites(workspace?.id);
+  // Where the App's data comes from, as its page says to whoever uses it.
+  const dataSources = useAppDataSources(app);
   const [turn, setTurn] = useState(0);
   const [view, setView] = useState<AppDraftView>("preview");
   const [detailsOpen, setDetailsOpen] = useState(readStoredDetailsOpen);
@@ -250,6 +212,8 @@ export function AppEdit({ app }: { app: string }) {
         rights={rights}
         draftRevision={draft}
         publishedRevision={published}
+        publication={asset?.publication}
+        dataSources={dataSources}
         view={view}
         onViewChange={setView}
         draftConfig={asset?.config}
@@ -439,6 +403,8 @@ export function AppEditFrame({
   rights,
   draftRevision,
   publishedRevision,
+  publication,
+  dataSources,
   view,
   draftConfig,
   detailsOpen = false,
@@ -461,6 +427,10 @@ export function AppEditFrame({
   /** The number of the draft, once the record arrived. */
   draftRevision?: number;
   publishedRevision?: number;
+  /** Who made the live revision live and when, as far as the instance still records it. */
+  publication?: { at: string; by?: string } | undefined;
+  /** Where the App's data comes from, one sentence per filler, once it is known. */
+  dataSources?: readonly string[] | undefined;
   /** The side that is shown. Left out, the head has no switch. */
   view?: AppDraftView;
   /**
@@ -480,9 +450,10 @@ export function AppEditFrame({
   onRevisions?: () => void;
   onDelete?: () => void;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const missingRightId = useId();
   const known = rights.write && draftRevision !== undefined;
+  const hasSources = dataSources !== undefined && dataSources.length > 0;
   const ahead = appDraftIsAhead(draftRevision, publishedRevision);
   const missingRight = known && !rights.publish;
   const editWithAgent = useAppEditWithAgent(app, rights);
@@ -551,6 +522,7 @@ export function AppEditFrame({
             primaryAction={
               known ? (
                 <span className="flex items-center gap-2">
+                  {hasSources ? <AppDataSourcesButton lines={dataSources} /> : null}
                   {editWithAgent.action === undefined ? null : (
                     <HeadAgentAction action={editWithAgent.action} />
                   )}
@@ -589,6 +561,23 @@ export function AppEditFrame({
               ) : undefined
             }
           />
+          {/* What a draft does, and what is live beside it, in one line under the head. */}
+          {known ? (
+            <Banner layout="page" className="shrink-0" data-testid="app-draft-line">
+              {t("apps.draftSimulates")}
+              {" · "}
+              {publishedRevision === undefined
+                ? t("apps.notPublishedYet")
+                : publication
+                  ? publication.by
+                    ? t("apps.liveSinceBy", {
+                        date: formatMoment(publication.at, locale),
+                        name: publication.by
+                      })
+                    : t("apps.liveSince", { date: formatMoment(publication.at, locale) })
+                  : t("apps.live")}
+            </Banner>
+          ) : null}
           {/* The head is one row; what the reader may not do is said in a line under it. */}
           {missingRight ? (
             <Banner layout="page" className="shrink-0">
@@ -624,208 +613,5 @@ export function AppEditFrame({
       {frame}
       {editWithAgent.dialog}
     </Tabs>
-  );
-}
-
-/** A dialog asked without the instance's sentence, as in a sample. */
-const NO_NARRATIVE: PublishNarrativeRead = { status: "none" };
-
-type PublishDialogProps = {
-  name: string;
-  workspace: AppsWorkspace;
-  ask: PublishAsk;
-  loading: boolean;
-  error: string | undefined;
-  onConfirm(): void;
-  onClose(): void;
-};
-
-/** "For whom?" as the dialog holds it: the instance's offer and the choice shown. */
-interface PublishAudienceAsk {
-  /** Absent while the first answer loads, and where the instance offers no choice. */
-  offer: AppAudienceOffer | undefined;
-  selected: AppAudience | undefined;
-  onChange(audience: AppAudience): void;
-}
-
-/**
- * The Publish dialog for the revision it asks about, which sends the publish itself with the
- * audience chosen in "For whom?" (SHARE-1). The sentence and the lines on who sees which stored
- * data are read for that revision's number and that audience, whether it is the draft, the
- * first publish or an older revision from the revisions drawer. A publish held for approval
- * says so in the dialog, and Close leaves it.
- */
-function AskedPublishDialog({ app, ...props }: PublishDialogProps & { app: string }) {
-  const [chosen, setChosen] = useState<AppAudience>();
-  const question = useAppPublishNarrative(props.workspace.id, app, props.ask.revision, chosen);
-  const publishing = useAppPublishSend(props.workspace.id, app);
-  // What is sent is what is shown: the choice, or the audience the instance proposed.
-  const selected = chosen ?? question.audience?.selected;
-  const shared = {
-    ...props,
-    loading: publishing.busy,
-    error: publishing.error,
-    waits: publishing.waits,
-    narrative: question.narrative,
-    audience: {
-      offer: question.audience,
-      selected,
-      onChange: setChosen
-    },
-    onConfirm: () => {
-      publishing
-        .send(props.ask.revision, question.audience === undefined ? undefined : selected)
-        .then((outcome) => {
-          // A held publish stays in the dialog, which says it waits; Close leaves it.
-          if (outcome === "published") props.onClose();
-        })
-        .catch(() => undefined);
-    }
-  };
-  return props.ask.readsStoredData ? (
-    <PublishDialogWithData app={app} {...shared} />
-  ) : (
-    <PublishDialog {...shared} />
-  );
-}
-
-function PublishDialogWithData({
-  app,
-  ...props
-}: Parameters<typeof PublishDialog>[0] & { app: string }) {
-  return <PublishDialog {...props} storedData={useAppPublishData(app, props.ask.revision)} />;
-}
-
-/**
- * Publish of an App's draft from outside its page, as "Share" on the line a save leaves in the
- * conversation: the same dialog, once the draft is read, for a reader who may publish. It also
- * asks where the draft is what is live, so only who it is for can change.
- */
-export function SharePublishDialog({ app, onClose }: { app: string; onClose(): void }) {
-  const share = useSharePublishQuestion(app, onClose);
-  return share ? (
-    <AskedPublishDialog
-      app={app}
-      {...share}
-      loading={false}
-      error={undefined}
-      onConfirm={() => undefined}
-      onClose={onClose}
-    />
-  ) : null;
-}
-
-/**
- * Asks once before a revision becomes what its audience is served. It opens with "For whom?"
- * (SHARE-1) where the instance offers the choice, then says what that revision reaches for the
- * audience chosen: the instance's sentence, the Connections it uses, the hosts outside the
- * instance it calls and, where it reads stored data, who sees which (DS-13b). Publish waits
- * until those lines are there for the choice shown: the question is not asked without them.
- */
-export function PublishDialog({
-  name,
-  workspace,
-  ask,
-  loading,
-  error,
-  storedData,
-  narrative = NO_NARRATIVE,
-  audience,
-  waits = false,
-  onConfirm,
-  onClose
-}: PublishDialogProps & {
-  /** The lines on stored data, read for `ask.revision`. Absent where it reads none. */
-  storedData?: AppPublishDataRead;
-  /** The instance's sentence on the publish, read for `ask.revision` and the audience shown. */
-  narrative?: PublishNarrativeRead;
-  /** "For whom?". Absent, as in a sample, the dialog asks as before SHARE-1. */
-  audience?: PublishAudienceAsk;
-  /** The publish was sent and waits for an approver. */
-  waits?: boolean;
-}) {
-  const { t } = useTranslation();
-  const offer = audience?.offer;
-  const selected = audience?.selected;
-  // The offer names the people of the audience it was read for; for another choice it waits.
-  const audienceLabel = offer && offer.selected === selected ? offer.label : undefined;
-  const waitsForData =
-    (storedData !== undefined && storedData.status !== "ready") ||
-    narrativeHolds(narrative) ||
-    (offer !== undefined && audienceLabel === undefined);
-  // The live revision for its own audience again changes nothing: Publish waits for a change.
-  const changes = appPublishMaySend(ask, offer, selected);
-  const body = appPublishBody(offer ? selected : undefined, ask.revision, workspace.name, t);
-  const lists = (
-    <KeyValueList>
-      <KeyValue label={t("apps.publishConnections")}>
-        <NameList names={ask.summary.connections} />
-      </KeyValue>
-      <KeyValue label={t("apps.publishHosts")}>
-        <NameList names={ask.summary.hosts} />
-      </KeyValue>
-      {storedData ? (
-        <AppPublishDataView
-          read={storedData}
-          audienceLabel={audienceLabel}
-          audiencePeople={selected === "self" ? undefined : offer?.people}
-          audiencePending={offer !== undefined && audienceLabel === undefined}
-        />
-      ) : null}
-    </KeyValueList>
-  );
-  return (
-    <Dialog
-      open
-      size="sm"
-      title={t("apps.publishTitle", { name })}
-      {...(narrative.status === "none" && offer === undefined ? { description: body } : {})}
-      onClose={onClose}
-      footer={
-        waits ? (
-          <Button variant="outline" onClick={onClose}>
-            {t("close")}
-          </Button>
-        ) : (
-          <>
-            <Button variant="outline" disabled={loading} onClick={onClose}>
-              {t("cancel")}
-            </Button>
-            <Button loading={loading} disabled={waitsForData || !changes} onClick={onConfirm}>
-              {t("apps.publish")}
-            </Button>
-          </>
-        )
-      }
-    >
-      <div className="grid gap-4">
-        {offer && selected !== undefined ? (
-          <AppAudienceQuestion
-            offer={offer}
-            selected={selected}
-            workspaceName={workspace.name}
-            disabled={loading || waits}
-            onChange={(next) => audience?.onChange(next)}
-          />
-        ) : null}
-        <AppAudienceChange offer={offer} selected={selected} workspaceName={workspace.name} />
-        <div className="grid gap-3">
-          <PublishNarrativeReadLead read={narrative} />
-          {narrative.status === "none" && offer === undefined ? (
-            lists
-          ) : (
-            // The sentence leads; which revision goes live for whom is a detail of it.
-            <PublishDetails>
-              <p className="text-body text-muted-foreground" data-testid="app-publish-body">
-                {body}
-              </p>
-              {lists}
-            </PublishDetails>
-          )}
-          {waits ? <Banner data-testid="app-publish-waits">{t("apps.publishWaits")}</Banner> : null}
-          {error ? <InlineError>{error}</InlineError> : null}
-        </div>
-      </div>
-    </Dialog>
   );
 }

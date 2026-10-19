@@ -414,6 +414,60 @@ describe("the draft of an App (layout 3)", () => {
     );
   });
 
+  const headed = (extra: Partial<Parameters<typeof AppEditFrame>[0]>, locale: "en" | "de" = "en") =>
+    render(
+      createElement(AppEditFrame, {
+        name: "Angebotsrechner",
+        workspace,
+        rights: ALL,
+        draftRevision: 3,
+        publishedRevision: 2,
+        children: createElement("p", null, "the draft"),
+        onBack() {},
+        ...extra
+      }),
+      locale
+    );
+  const draftLine = (markup: string) =>
+    /data-testid="app-draft-line"[^>]*>((?:(?!<\/div>).)*)/u
+      .exec(markup)?.[1]
+      ?.replace(/<[^>]*>/gu, "") ?? "";
+
+  // DAILY-WINS 6: the head says what a draft does and what is live beside it (Apps check 45).
+  it("says the draft reads live data and simulates changes, and who made what is live when", () => {
+    const at = "2026-10-12T14:05:00.000Z";
+    const moment = (locale: "en" | "de") =>
+      new Date(at).toLocaleString(locale, { dateStyle: "long", timeStyle: "short" });
+    const live = { publication: { at, by: "Anna Beispiel" } };
+
+    expect(draftLine(headed(live))).toBe(
+      `Draft · reads live data · changes are simulated · Live since ${moment("en")}, published by Anna Beispiel`
+    );
+    expect(draftLine(headed(live, "de"))).toBe(
+      `Entwurf · liest Live-Daten · Änderungen werden simuliert · Live seit ${moment("de")}, veröffentlicht von Anna Beispiel`
+    );
+    // An event without a person names the time alone; one that audit retention removed, neither.
+    expect(draftLine(headed({ publication: { at } }))).toBe(
+      `Draft · reads live data · changes are simulated · Live since ${moment("en")}`
+    );
+    expect(draftLine(headed({}))).toBe("Draft · reads live data · changes are simulated · Live");
+    expect(draftLine(headed({ publishedRevision: undefined }))).toBe(
+      "Draft · reads live data · changes are simulated · Not published yet"
+    );
+    expect(draftLine(headed({ publishedRevision: undefined }, "de"))).toBe(
+      "Entwurf · liest Live-Daten · Änderungen werden simuliert · Noch nicht veröffentlicht"
+    );
+    expect(headed({ rights: NO_APP_RIGHTS, ...live })).not.toContain("app-draft-line");
+  });
+
+  // DAILY-WINS 7: the draft says where its data comes from, as the open App does.
+  it("offers where the data comes from in the draft's head", () => {
+    const sources = ["Kunden is filled by the Workflow “Nachtimport”."];
+    expect(headed({ dataSources: sources })).toContain('aria-label="Where the data comes from"');
+    expect(headed({ dataSources: [] })).not.toContain("Where the data comes from");
+    expect(headed({})).not.toContain("Where the data comes from");
+  });
+
   it("shows a reader without the write right no action at all", () => {
     const markup = frame(NO_APP_RIGHTS);
 

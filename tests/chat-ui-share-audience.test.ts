@@ -381,6 +381,20 @@ describe("the line the first save of an App leaves", () => {
     expect(line(host(false))).not.toContain('data-testid="app-saved-share"');
     expect(line(undefined)).not.toContain('data-testid="app-saved-share"');
   });
+
+  // DAILY-WINS 8: the line leads its builder to the draft, beside Share.
+  it("opens the draft for a reader who may write Apps, beside Share", () => {
+    const open = new RegExp(
+      `<a[^>]*data-testid="app-saved-open"[^>]*href="/w/${workspace.id}/app-drafts/findings"[^>]*>Open the draft</a>`,
+      "u"
+    );
+    expect(line(host(true))).toMatch(open);
+    expect(line(host(false))).toMatch(open);
+    expect(line(host(true), "de")).toContain(">Entwurf öffnen</a>");
+    const reader: AppsHost = { ...host(false), rights: { ...host(false).rights, write: false } };
+    expect(line(reader)).not.toContain("app-saved-open");
+    expect(line(undefined)).not.toContain("app-saved-open");
+  });
 });
 
 const storedSources = (holders: AppDataSources["audience"] = undefined): AppDataSources => ({

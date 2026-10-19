@@ -56,6 +56,12 @@ export interface AuditEventInput {
 }
 
 export interface AuditEventStore {
+  /** The latest retained successful publish of this asset's live revision. */
+  getAssetPublication(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    revision: number;
+  }): Promise<{ at: ISODateString; by?: string } | undefined>;
   appendAuditEvent(input: AuditEventInput): Promise<AuditEvent>;
   listAuditEvents(input: {
     clientInstanceId: ClientInstanceId;

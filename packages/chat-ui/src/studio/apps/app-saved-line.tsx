@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Button, RegistryIcon } from "@work-shape/catalyst-ui";
 import type { AppSaved } from "../../chat/conversation/subject-run";
 import { useTranslation } from "../../shared/i18n";
-import { SharePublishDialog } from "./app-edit";
+import { RouteLink } from "../route-link";
+import { SharePublishDialog } from "./app-publish-dialog";
 import { useAppsHost } from "./apps-host";
 
 /**
@@ -11,14 +12,15 @@ import { useAppsHost } from "./apps-host";
  * draft is saved and its builder can use it now; others see the change once it is shared, and
  * the live revision keeps the audience it has. The agent never shares. "Share" opens the App's
  * Publish dialog, which asks "For whom?", for a reader who may publish Apps in the workspace.
+ * "Open draft" leads who may write Apps there to the draft's page.
  */
 export function AppSavedLine({ saved }: { saved: AppSaved }) {
   const { t } = useTranslation();
   const host = useAppsHost();
   const [sharing, setSharing] = useState(false);
-  const mayShare = Boolean(
-    host?.enabled && host.workspace && host.rights.write && host.rights.publish
-  );
+  const workspace = host?.enabled ? host.workspace : undefined;
+  const mayOpen = Boolean(workspace && host?.rights.write);
+  const mayShare = mayOpen && Boolean(host?.rights.publish);
   return (
     <div
       className="chat-tool-part my-1 flex max-w-3xl flex-wrap items-center gap-x-2 gap-y-1 text-caption text-muted-foreground"
@@ -30,6 +32,17 @@ export function AppSavedLine({ saved }: { saved: AppSaved }) {
       <span className="min-w-0 flex-1">
         {t(saved.created ? "apps.savedLine" : "apps.savedDraftLine", { title: saved.title })}
       </span>
+      {host && workspace && mayOpen ? (
+        <RouteLink
+          route={{ kind: "app-edit", collaborationWorkspaceId: workspace.id, app: saved.name }}
+          variant="link"
+          className="px-0"
+          data-testid="app-saved-open"
+          onOpen={(route) => host.showRoute(route)}
+        >
+          {t("apps.openDraft")}
+        </RouteLink>
+      ) : null}
       {mayShare ? (
         <Button
           variant="outline"

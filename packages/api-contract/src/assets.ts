@@ -225,6 +225,8 @@ export const workflowStepFactSchema = workflowOperationFactSchema.partial().exte
 });
 
 export const assetSchema = z.object({
+  /** The retained publish event for the live revision, for a reader of an App draft. */
+  publication: z.object({ at: z.string().datetime(), by: z.string().optional() }).optional(),
   id: z.string(),
   kind: z.string(),
   name: z.string(),

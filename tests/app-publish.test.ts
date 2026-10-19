@@ -194,6 +194,61 @@ describe("an App with a draft and a published revision", () => {
     expect(removed.audit.map((event) => event.type)).toContain("config_asset.deleted");
   });
 
+  it("names the live publisher and publish time, separately from the draft author, only after an authorized read", async () => {
+    const name = "publication-credit";
+    await created(name, "saved by Admin");
+    const read = (userId: string) =>
+      t.call(userId, "assets.get", {
+        params: { kind: "app", name },
+        query: { workspaceId: t.workspaceId }
+      });
+    expect((await read(t.admin.id)).json()).not.toHaveProperty("publication");
+    const published = await traced(t.root.id, "assets.publish", {
+      params: { kind: "app", name },
+      payload: { revision: 1, workspaceId: t.workspaceId }
+    });
+    expectStatus(published.response, 200);
+    const event = published.audit.find((row) => row.type === "app.published");
+    expect(event).toBeDefined();
+    await t.putApp(t.admin.id, name, appFiles("newer draft by Admin"));
+    // A later audit row about another App must not supply the credit.
+    await t.stores.audit.appendAuditEvent({
+      clientInstanceId,
+      type: "app.published",
+      status: "success",
+      correlationId: randomUUID(),
+      actor: { displayLabel: "Someone else", roles: [] },
+      metadata: { kind: "app", name: "another-app", revision: 1 }
+    });
+    expect((await read(t.admin.id)).json()).toMatchObject({
+      draftRevision: 2,
+      publishedRevision: 1,
+      publication: { by: "Root", at: event?.createdAt }
+    });
+    // A member's published-only read does not acquire the draft's publication detail.
+    expect((await read(t.kai.id)).json()).not.toHaveProperty("publication");
+    expectStatus(await read(t.lena.id), 403);
+    // Attribution is optional: an unavailable audit read cannot stop editing the App.
+    const lookup = vi
+      .spyOn(t.stores.audit, "getAssetPublication")
+      .mockRejectedValueOnce(new Error("unavailable"));
+    try {
+      const withoutCredit = await read(t.admin.id);
+      expectStatus(withoutCredit, 200);
+      expect(withoutCredit.json()).toMatchObject({ publishedRevision: 1 });
+      expect(withoutCredit.json()).not.toHaveProperty("publication");
+    } finally {
+      lookup.mockRestore();
+    }
+    expect(
+      await t.stores.audit.getAssetPublication({
+        clientInstanceId,
+        assetId: "missing",
+        revision: 1
+      })
+    ).toBeUndefined();
+  });
+
   it("serves a member the published revision, moves with a publish and goes back with a publish of the earlier number", async () => {
     await created("catalog", "one");
     const first = await t.publish(t.admin.id, "catalog", 1);

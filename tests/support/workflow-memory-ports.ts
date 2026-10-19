@@ -251,6 +251,7 @@ export const unusedConfigAssetStore: ConfigAssetStore = {
   setAgentAvailability: unsupported
 };
 export const unusedAuditEventStore: AuditEventStore = {
+  getAssetPublication: unsupported,
   appendAuditEvent: unsupported,
   listAuditEvents: unsupported,
   deleteAuditEventsOlderThan: unsupported
