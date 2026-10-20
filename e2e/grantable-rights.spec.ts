@@ -10,6 +10,20 @@ async function signIn(page: Page, email: string, password: string) {
   });
   expect(response.ok(), await response.text()).toBe(true);
 }
+/** The people a test made. They and their rows go before the test gives up its turn. */
+const made: string[] = [];
+test.afterEach(async ({ page }) => {
+  for (const holderId of made.splice(0)) {
+    const listed = await page.request.get(
+      `${api}/api/v1/instance/access/grants?holderKind=user&holderId=${holderId}&limit=100`
+    );
+    const rows: { items: { id: string }[] } = listed.ok() ? await listed.json() : { items: [] };
+    for (const grant of rows.items) {
+      await requestWithOrigin(page, "delete", `${api}/api/v1/instance/access/grants/${grant.id}`);
+    }
+    await requestWithOrigin(page, "delete", `${api}/api/v1/instance/users/${holderId}`);
+  }
+});
 async function prepare(root: Page, manager: Page) {
   manager.setDefaultTimeout(10_000);
   await signIn(root, "e2e-superadmin@example.test", "e2e-superadmin-password");
@@ -57,6 +71,7 @@ async function prepare(root: Page, manager: Page) {
   });
   expect(recipientResponse.ok()).toBe(true);
   const recipient: { id: string; displayLabel: string } = await recipientResponse.json();
+  made.push(user.id, recipient.id);
   return { user, workspaceId, asset, name, email, recipient };
 }
 async function openAccess(page: Page) {
