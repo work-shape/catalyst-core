@@ -15,20 +15,22 @@ import { expect, test } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "refused-right-for-a-principal",
-      reason:
-        "Chromium's own log line: the test gives a service principal a right on a Connection " +
-        "that was deleted meanwhile, the instance answers 422, and the dialog says what was " +
-        "refused and what to do, which the test asserts.",
-      matches: requestAnswered(422),
-      path: /^\/api\/v1\/instance\/access\/grants$/u,
-      tests: [
-        "a superadmin gives a service principal a Connection, is refused one that is gone, and removes the right"
-      ]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "refused-right-for-a-principal",
+        reason:
+          "Chromium's own log line: the test gives a service principal a right on a Connection " +
+          "that was deleted meanwhile, the instance answers 422, and the dialog says what was " +
+          "refused and what to do, which the test asserts.",
+        matches: requestAnswered(422),
+        path: /^\/api\/v1\/instance\/access\/grants$/u,
+        tests: [
+          "a superadmin gives a service principal a Connection, is refused one that is gone, and removes the right"
+        ]
+      }
+    ]
+  }
 });
 
 // What a service principal may use, on the instance's own answers: the section of the

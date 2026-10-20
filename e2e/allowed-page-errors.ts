@@ -17,6 +17,15 @@ export interface AllowedPageError {
   tests?: readonly string[];
 }
 
+/**
+ * A spec's own allowed messages: `test.use({ allowedPageErrors: { errors: [...] } })`. The list
+ * is wrapped because Playwright reads an array given to `test.use` as a value and its options,
+ * which took a spec's second entry for the options of its first.
+ */
+export interface SpecPageErrors {
+  readonly errors: readonly AllowedPageError[];
+}
+
 export const REQUEST_FAILED = /^Failed to load resource: net::ERR_(?:CONNECTION_)?FAILED$/u;
 export const requestAnswered = (status: number) =>
   new RegExp(`^Failed to load resource: the server responded with a status of ${status} `, "u");
@@ -26,7 +35,7 @@ export const BESIDE_TOP_ANCHORED_TURN = " (beside a turn anchored to the top)";
 
 /**
  * The entries more than one spec meets. An entry for one spec's tests lives in that spec, as
- * `test.use({ allowedPageErrors: [...] })`, so a new spec does not edit this list.
+ * `test.use({ allowedPageErrors: { errors: [...] } })`, so a new spec does not edit this list.
  */
 const allowedPageErrors: readonly AllowedPageError[] = [
   {

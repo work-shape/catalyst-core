@@ -6,21 +6,23 @@ import { apiOrigin } from "./view-fixtures";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "workflow-or-agent-that-is-not-there",
-      reason:
-        "Chromium's own log line: the tests open the address of a Workflow and of an agent that " +
-        "do not exist, the instance answers 404 and the page shows the not-found state.",
-      matches: requestAnswered(404),
-      path: /^\/api\/v1\/assets\/(?:workflow\/e2e-missing-workflow|agent\/e2e_missing_agent)$/u,
-      tests: [
-        "a Workflow that is not there waits for the answer, then says so and leads to the list",
-        "an agent's address without an agent waits for the answer, then says so without the id",
-        "pictures of the not-found state on each surface, wide and narrow, light and dark, in both languages"
-      ]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "workflow-or-agent-that-is-not-there",
+        reason:
+          "Chromium's own log line: the tests open the address of a Workflow and of an agent that " +
+          "do not exist, the instance answers 404 and the page shows the not-found state.",
+        matches: requestAnswered(404),
+        path: /^\/api\/v1\/assets\/(?:workflow\/e2e-missing-workflow|agent\/e2e_missing_agent)$/u,
+        tests: [
+          "a Workflow that is not there waits for the answer, then says so and leads to the list",
+          "an agent's address without an agent waits for the answer, then says so without the id",
+          "pictures of the not-found state on each surface, wide and narrow, light and dark, in both languages"
+        ]
+      }
+    ]
+  }
 });
 
 /** Ids nobody creates: the instance answers 404 for each, as it does for a deleted one. */

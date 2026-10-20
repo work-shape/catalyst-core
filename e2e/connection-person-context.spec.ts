@@ -10,35 +10,37 @@ const PERSON_CONTEXT_TEST =
 
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "person-context-save-that-is-stale",
-      reason:
-        "Chromium's own log line: the test saves a mapping from an outdated version, the " +
-        "instance answers 409 and the test asserts that the page refuses the stale save.",
-      matches: requestAnswered(409),
-      path: /^\/api\/v1\/connections\/e2e-person-context-[0-9a-f]{8}\/person-context$/u,
-      tests: [PERSON_CONTEXT_TEST]
-    },
-    {
-      name: "person-context-read-that-fails",
-      reason:
-        "Chromium's own log line: the test answers the read of a Connection's person context " +
-        "mappings with 500 and asserts that the page says so.",
-      matches: requestAnswered(500),
-      path: /^\/api\/v1\/connections\/e2e-person-context-[0-9a-f]{8}\/person-context$/u,
-      tests: [PERSON_CONTEXT_TEST]
-    },
-    {
-      name: "person-context-user-list-that-fails-or-is-refused",
-      reason:
-        "Chromium's own log line: the test replaces the list of the instance's users with a 500 " +
-        "failure and a 403 refusal and asserts the page's failure and no-permission states.",
-      matches: new RegExp(`${requestAnswered(500).source}|${requestAnswered(403).source}`, "u"),
-      path: /^\/api\/v1\/instance\/users$/u,
-      tests: [PERSON_CONTEXT_TEST]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "person-context-save-that-is-stale",
+        reason:
+          "Chromium's own log line: the test saves a mapping from an outdated version, the " +
+          "instance answers 409 and the test asserts that the page refuses the stale save.",
+        matches: requestAnswered(409),
+        path: /^\/api\/v1\/connections\/e2e-person-context-[0-9a-f]{8}\/person-context$/u,
+        tests: [PERSON_CONTEXT_TEST]
+      },
+      {
+        name: "person-context-read-that-fails",
+        reason:
+          "Chromium's own log line: the test answers the read of a Connection's person context " +
+          "mappings with 500 and asserts that the page says so.",
+        matches: requestAnswered(500),
+        path: /^\/api\/v1\/connections\/e2e-person-context-[0-9a-f]{8}\/person-context$/u,
+        tests: [PERSON_CONTEXT_TEST]
+      },
+      {
+        name: "person-context-user-list-that-fails-or-is-refused",
+        reason:
+          "Chromium's own log line: the test replaces the list of the instance's users with a 500 " +
+          "failure and a 403 refusal and asserts the page's failure and no-permission states.",
+        matches: new RegExp(`${requestAnswered(500).source}|${requestAnswered(403).source}`, "u"),
+        path: /^\/api\/v1\/instance\/users$/u,
+        tests: [PERSON_CONTEXT_TEST]
+      }
+    ]
+  }
 });
 
 // The person context mappings on the page of a REST API Connection (CS-15). A runtime http_api

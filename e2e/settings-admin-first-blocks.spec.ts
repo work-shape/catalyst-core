@@ -6,21 +6,23 @@ import { expect, test } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "settings-refusals-that-name-an-admin",
-      reason:
-        "Chromium's own log line: the tests answer a read or a change on Usage, API keys and " +
-        "Members with 403 and assert that the refusal names an instance admin to ask.",
-      matches: requestAnswered(403),
-      path: /^\/api\/v1\/(?:instance\/usage|me\/api-keys(?:\/[^/]+\/revoke)?|workspaces\/[^/]+\/access-requests\/[^/]+\/approve)$/u,
-      tests: [
-        "Usage opens with the month's cost of its budget and the tokens under it, and a refusal names an instance admin",
-        "API keys open with the person's keys, and refusals name an instance admin",
-        "Members come first, requests show only while somebody asks, and a refusal names an instance admin in its section"
-      ]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "settings-refusals-that-name-an-admin",
+        reason:
+          "Chromium's own log line: the tests answer a read or a change on Usage, API keys and " +
+          "Members with 403 and assert that the refusal names an instance admin to ask.",
+        matches: requestAnswered(403),
+        path: /^\/api\/v1\/(?:instance\/usage|me\/api-keys(?:\/[^/]+\/revoke)?|workspaces\/[^/]+\/access-requests\/[^/]+\/approve)$/u,
+        tests: [
+          "Usage opens with the month's cost of its budget and the tokens under it, and a refusal names an instance admin",
+          "API keys open with the person's keys, and refusals name an instance admin",
+          "Members come first, requests show only while somebody asks, and a refusal names an instance admin in its section"
+        ]
+      }
+    ]
+  }
 });
 
 // Settings for an admin (UXA-5): Usage opens with the month's cost of its budget and the tokens

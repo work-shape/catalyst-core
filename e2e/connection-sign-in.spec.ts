@@ -11,20 +11,22 @@ import { toolRow } from "./tool-packages";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "oauth-start-without-a-client",
-      reason:
-        "Chromium's own log line: the provider of the sample registers no client, the start of " +
-        "the sign-in is answered with 409, and the test asserts that the step asks for the client " +
-        "the provider issued.",
-      matches: requestAnswered(409),
-      path: /^\/api\/v1\/connections\/[^/]+\/oauth\/start$/u,
-      tests: [
-        "en: a provider that registers no client asks for the one it issued, and an unticked permission is not asked for"
-      ]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "oauth-start-without-a-client",
+        reason:
+          "Chromium's own log line: the provider of the sample registers no client, the start of " +
+          "the sign-in is answered with 409, and the test asserts that the step asks for the client " +
+          "the provider issued.",
+        matches: requestAnswered(409),
+        path: /^\/api\/v1\/connections\/[^/]+\/oauth\/start$/u,
+        tests: [
+          "en: a provider that registers no client asks for the one it issued, and an unticked permission is not asked for"
+        ]
+      }
+    ]
+  }
 });
 
 // The shared OAuth sign-in of an MCP Connection (CS-4b4) against the demo's sample MCP server,

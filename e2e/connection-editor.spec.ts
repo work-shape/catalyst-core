@@ -17,21 +17,23 @@ import { expect, test } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "drafted-connection-that-is-new",
-      reason:
-        "Chromium's own log line: the card of the agent's draft reads the Connection of its id, " +
-        "for a new id the instance answers 404 and the card opens the New connection dialog, " +
-        "which the test asserts.",
-      matches: requestAnswered(404),
-      path: /^\/api\/v1\/assets\/connection\/e2e-draft-new-/u,
-      tests: ["en", "de"].map(
-        (locale) =>
-          `${locale}: the agent's draft is a card that opens the approval list, and only the approval saves it`
-      )
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "drafted-connection-that-is-new",
+        reason:
+          "Chromium's own log line: the card of the agent's draft reads the Connection of its id, " +
+          "for a new id the instance answers 404 and the card opens the New connection dialog, " +
+          "which the test asserts.",
+        matches: requestAnswered(404),
+        path: /^\/api\/v1\/assets\/connection\/e2e-draft-new-/u,
+        tests: ["en", "de"].map(
+          (locale) =>
+            `${locale}: the agent's draft is a card that opens the approval list, and only the approval saves it`
+        )
+      }
+    ]
+  }
 });
 
 // The New connection dialog against the demo's sample MCP server, which this file starts on

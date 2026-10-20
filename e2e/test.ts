@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test as base, type BrowserContext } from "@playwright/test";
 import { takeInstanceTurn } from "./instance-turn";
-import { BESIDE_TOP_ANCHORED_TURN, isAllowed, type AllowedPageError } from "./allowed-page-errors";
+import { BESIDE_TOP_ANCHORED_TURN, isAllowed, type SpecPageErrors } from "./allowed-page-errors";
 
 /**
  * The budget for one holder of the instance state, also used to reclaim an abandoned lock.
@@ -73,7 +73,7 @@ async function agentReaders(reading: string): Promise<string[]> {
 export const test = base.extend<{
   pageErrors: PageErrorWatch;
   /** The messages a spec's own tests cause on purpose, beside the shared ones. */
-  allowedPageErrors: readonly AllowedPageError[];
+  allowedPageErrors: SpecPageErrors;
   accessState: void;
   instanceAgents: void;
   instanceAgentsChange: void;
@@ -182,12 +182,12 @@ export const test = base.extend<{
     // Healthy queue time is unbounded and does not consume the test's own timeout.
     { timeout: 0 }
   ],
-  allowedPageErrors: [[], { option: true }],
+  allowedPageErrors: [{ errors: [] }, { option: true }],
   pageErrors: [
     async ({ context, allowedPageErrors }, use, testInfo) => {
       const reported: string[] = [];
       const report = (kind: "pageerror" | "console.error", text: string, address = "") => {
-        if (!isAllowed(text, address, testInfo.title, allowedPageErrors)) {
+        if (!isAllowed(text, address, testInfo.title, allowedPageErrors.errors)) {
           reported.push(address ? `${kind}: ${text} (${address})` : `${kind}: ${text}`);
         }
       };

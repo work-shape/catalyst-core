@@ -15,30 +15,32 @@ import { expect, test } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "connection-test-that-is-refused",
-      reason:
-        "Chromium's own log line: the test answers one test of a Connection with 403 and asserts " +
-        "that the page says the reader may not test it.",
-      matches: requestAnswered(403),
-      path: /^\/api\/v1\/connections\/[^/]+\/test$/u,
-      tests: [
-        "a Connection's page shows its definition, its state in every case and the test, and writes nothing"
-      ]
-    },
-    {
-      name: "connection-state-that-fails",
-      reason:
-        "Chromium's own log line: the test answers the read of a Connection's state with 500 and " +
-        "asserts that the page says so, offers a retry and still shows the definition.",
-      matches: requestAnswered(500),
-      path: /^\/api\/v1\/connections\/[^/]+$/u,
-      tests: [
-        "a Connection's page shows its definition, its state in every case and the test, and writes nothing"
-      ]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "connection-test-that-is-refused",
+        reason:
+          "Chromium's own log line: the test answers one test of a Connection with 403 and asserts " +
+          "that the page says the reader may not test it.",
+        matches: requestAnswered(403),
+        path: /^\/api\/v1\/connections\/[^/]+\/test$/u,
+        tests: [
+          "a Connection's page shows its definition, its state in every case and the test, and writes nothing"
+        ]
+      },
+      {
+        name: "connection-state-that-fails",
+        reason:
+          "Chromium's own log line: the test answers the read of a Connection's state with 500 and " +
+          "asserts that the page says so, offers a retry and still shows the definition.",
+        matches: requestAnswered(500),
+        path: /^\/api\/v1\/connections\/[^/]+$/u,
+        tests: [
+          "a Connection's page shows its definition, its state in every case and the test, and writes nothing"
+        ]
+      }
+    ]
+  }
 });
 
 // The page of one Connection, `/build/connections/<name>`, on the instance's own answers. The

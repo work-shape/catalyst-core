@@ -8,19 +8,21 @@ import { expect, test } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "asset-of-another-owner",
-      reason:
-        "Chromium's own log line: Studio is set to the instance while the Data Store is a " +
-        "workspace's, so its page asks the instance first, gets 404, and finds it in the workspace.",
-      matches: requestAnswered(404),
-      path: /^\/api\/v1\/assets\/data_store\/team-[0-9a-f]{6}$/u,
-      tests: [
-        "a workspace's Data Store opens from the Working on line and by its address after Studio was set to another owner"
-      ]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "asset-of-another-owner",
+        reason:
+          "Chromium's own log line: Studio is set to the instance while the Data Store is a " +
+          "workspace's, so its page asks the instance first, gets 404, and finds it in the workspace.",
+        matches: requestAnswered(404),
+        path: /^\/api\/v1\/assets\/data_store\/team-[0-9a-f]{6}$/u,
+        tests: [
+          "a workspace's Data Store opens from the Working on line and by its address after Studio was set to another owner"
+        ]
+      }
+    ]
+  }
 });
 
 // The page of an asset a workspace owns reads it where it is, whatever owner Studio was set to

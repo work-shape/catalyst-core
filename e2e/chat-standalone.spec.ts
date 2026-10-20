@@ -10,68 +10,72 @@ import { z } from "zod";
 import { REQUEST_FAILED, requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "reply-remote-image-refused",
-      reason:
-        "Chromium's own log line for an image the interface's content policy refused. The test " +
-        "plants remote images in a Mermaid diagram of a reply and asserts no request left.",
-      matches:
-        /^Loading the image 'https:\/\/outside-pixel\.example\.test\/[^']*' violates the following Content Security Policy directive: "img-src [^"]*"\. The action has been blocked\.\s*$/u,
-      tests: ["a reply with remote images, also in a Mermaid diagram, makes no request outside"]
-    },
-    {
-      name: "planted-request-failure",
-      reason:
-        "Chromium's own log line for a request the test aborts on purpose. What the page makes " +
-        "of the failure is what these tests assert.",
-      matches: REQUEST_FAILED,
-      path: /^\/api\/v1\/(?:instance\/config|conversations|conversations\/runs)$/u,
-      tests: [
-        "a configuration the interface cannot read shows an error that a retry recovers from",
-        "the rail shows placeholder rows while its list loads and offers a retry when the load failed",
-        "a first message that fails leaves the start page with the agent and its name"
-      ]
-    },
-    {
-      name: "workspace-that-is-gone",
-      reason:
-        "Chromium's own log line: these tests open a workspace that does not exist or was just " +
-        "deleted, the instance answers 404 and the page falls back, which they assert.",
-      matches: requestAnswered(404),
-      path: /^\/api\/v1\/(?:conversations|workspaces\/cw_not_a_workspace(?:\/agents)?)$/u,
-      tests: [
-        "collaboration workspaces scope navigation, settings, and discovery",
-        "collaboration workspace settings delete a workspace and fall back to personal"
-      ]
-    },
-    {
-      name: "refused-config-asset",
-      reason:
-        "Chromium's own log line: the test saves an asset that does not validate and one that " +
-        "changed meanwhile, and asserts what the page shows for the 422 and the 412.",
-      matches: new RegExp(`${requestAnswered(422).source}|${requestAnswered(412).source}`, "u"),
-      path: /^\/api\/v1\/assets\//u,
-      tests: ["superadmin manages config assets with validation and conflict protection"]
-    },
-    {
-      name: "asset-that-is-not-there",
-      reason:
-        "Chromium's own log line: the test opens the address of an agent that does not exist, " +
-        "the instance answers 404 and the page says that there is no such agent.",
-      matches: requestAnswered(404),
-      path: /^\/api\/v1\/assets\/agent\/not_an_agent$/u,
-      tests: ["Studio opens on a list, and a list and an asset each have an address"]
-    },
-    {
-      name: "unread-configuration-diagnostic",
-      reason:
-        "The interface writes this line itself when the instance configuration does not fit it, " +
-        "for whoever operates the instance. The test serves such a configuration on purpose.",
-      matches: /^The instance configuration does not fit this interface at: /u,
-      tests: ["a configuration the interface cannot read shows an error that a retry recovers from"]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "reply-remote-image-refused",
+        reason:
+          "Chromium's own log line for an image the interface's content policy refused. The test " +
+          "plants remote images in a Mermaid diagram of a reply and asserts no request left.",
+        matches:
+          /^Loading the image 'https:\/\/outside-pixel\.example\.test\/[^']*' violates the following Content Security Policy directive: "img-src [^"]*"\. The action has been blocked\.\s*$/u,
+        tests: ["a reply with remote images, also in a Mermaid diagram, makes no request outside"]
+      },
+      {
+        name: "planted-request-failure",
+        reason:
+          "Chromium's own log line for a request the test aborts on purpose. What the page makes " +
+          "of the failure is what these tests assert.",
+        matches: REQUEST_FAILED,
+        path: /^\/api\/v1\/(?:instance\/config|conversations|conversations\/runs)$/u,
+        tests: [
+          "a configuration the interface cannot read shows an error that a retry recovers from",
+          "the rail shows placeholder rows while its list loads and offers a retry when the load failed",
+          "a first message that fails leaves the start page with the agent and its name"
+        ]
+      },
+      {
+        name: "workspace-that-is-gone",
+        reason:
+          "Chromium's own log line: these tests open a workspace that does not exist or was just " +
+          "deleted, the instance answers 404 and the page falls back, which they assert.",
+        matches: requestAnswered(404),
+        path: /^\/api\/v1\/(?:conversations|workspaces\/cw_not_a_workspace(?:\/agents)?)$/u,
+        tests: [
+          "collaboration workspaces scope navigation, settings, and discovery",
+          "collaboration workspace settings delete a workspace and fall back to personal"
+        ]
+      },
+      {
+        name: "refused-config-asset",
+        reason:
+          "Chromium's own log line: the test saves an asset that does not validate and one that " +
+          "changed meanwhile, and asserts what the page shows for the 422 and the 412.",
+        matches: new RegExp(`${requestAnswered(422).source}|${requestAnswered(412).source}`, "u"),
+        path: /^\/api\/v1\/assets\//u,
+        tests: ["superadmin manages config assets with validation and conflict protection"]
+      },
+      {
+        name: "asset-that-is-not-there",
+        reason:
+          "Chromium's own log line: the test opens the address of an agent that does not exist, " +
+          "the instance answers 404 and the page says that there is no such agent.",
+        matches: requestAnswered(404),
+        path: /^\/api\/v1\/assets\/agent\/not_an_agent$/u,
+        tests: ["Studio opens on a list, and a list and an asset each have an address"]
+      },
+      {
+        name: "unread-configuration-diagnostic",
+        reason:
+          "The interface writes this line itself when the instance configuration does not fit it, " +
+          "for whoever operates the instance. The test serves such a configuration on purpose.",
+        matches: /^The instance configuration does not fit this interface at: /u,
+        tests: [
+          "a configuration the interface cannot read shows an error that a retry recovers from"
+        ]
+      }
+    ]
+  }
 });
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";

@@ -11,24 +11,26 @@ const SESSION_CHANGE_TESTS = [
 
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "session-change-refused-upload",
-      reason:
-        "The account-switch tests deliberately refuse A's unsupported file before switching to B.",
-      matches: requestAnswered(422),
-      path: /^\/api\/v1\/conversations\/[^/]+\/draft-attachments$/u,
-      tests: SESSION_CHANGE_TESTS
-    },
-    {
-      name: "session-change-foreign-reads",
-      reason:
-        "Reads already in flight before the tab learns of B can be refused. After the session changes, the tests assert no A state or closed-link workspace read reaches B.",
-      matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(404).source}`, "u"),
-      path: /^\/api\/v1\/(?:conversations(?:\/[^/]+\/(?:thread|draft-attachments|resources|runs|subagents))?|workspaces\/[^/]+\/agents)$/u,
-      tests: SESSION_CHANGE_TESTS
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "session-change-refused-upload",
+        reason:
+          "The account-switch tests deliberately refuse A's unsupported file before switching to B.",
+        matches: requestAnswered(422),
+        path: /^\/api\/v1\/conversations\/[^/]+\/draft-attachments$/u,
+        tests: SESSION_CHANGE_TESTS
+      },
+      {
+        name: "session-change-foreign-reads",
+        reason:
+          "Reads already in flight before the tab learns of B can be refused. After the session changes, the tests assert no A state or closed-link workspace read reaches B.",
+        matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(404).source}`, "u"),
+        path: /^\/api\/v1\/(?:conversations(?:\/[^/]+\/(?:thread|draft-attachments|resources|runs|subagents))?|workspaces\/[^/]+\/agents)$/u,
+        tests: SESSION_CHANGE_TESTS
+      }
+    ]
+  }
 });
 
 // ACCEPT-FIX-1 F3: a person who signs out, or whose browser is signed in as somebody else,

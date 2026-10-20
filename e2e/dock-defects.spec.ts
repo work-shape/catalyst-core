@@ -6,17 +6,19 @@ import { expect, test } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "dock-thread-rate-limited",
-      reason:
-        "Chromium's own log line: the test answers the dock's thread once with 429 and asserts " +
-        "that it is asked for again.",
-      matches: requestAnswered(429),
-      path: /^\/api\/v1\/conversations\/[^/]+\/thread$/u,
-      tests: ["a thread answered once with 429 is tried again and shows in the dock"]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "dock-thread-rate-limited",
+        reason:
+          "Chromium's own log line: the test answers the dock's thread once with 429 and asserts " +
+          "that it is asked for again.",
+        matches: requestAnswered(429),
+        path: /^\/api\/v1\/conversations\/[^/]+\/thread$/u,
+        tests: ["a thread answered once with 429 is tried again and shows in the dock"]
+      }
+    ]
+  }
 });
 
 // Defects the DOCK-1 verifier found (PR 54). The first two failed on d31cb094 and pass on

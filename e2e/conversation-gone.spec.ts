@@ -8,18 +8,20 @@ import { apiOrigin } from "./view-fixtures";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "conversation-that-is-gone",
-      reason:
-        "Chromium's own log line: the test opens addresses of conversations that were deleted, " +
-        "expired, are another person's or never were. The instance answers 404 to the thread and " +
-        "to the reads beside it, and the chat says the conversation is gone, which the test asserts.",
-      matches: requestAnswered(404),
-      path: /^\/api\/v1\/conversations\/[^/]+\/(?:thread|subagents|resources|draft-attachments)$/u,
-      tests: ["a conversation that is gone says so, however it went, and leads to a new chat"]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "conversation-that-is-gone",
+        reason:
+          "Chromium's own log line: the test opens addresses of conversations that were deleted, " +
+          "expired, are another person's or never were. The instance answers 404 to the thread and " +
+          "to the reads beside it, and the chat says the conversation is gone, which the test asserts.",
+        matches: requestAnswered(404),
+        path: /^\/api\/v1\/conversations\/[^/]+\/(?:thread|subagents|resources|draft-attachments)$/u,
+        tests: ["a conversation that is gone says so, however it went, and leads to a new chat"]
+      }
+    ]
+  }
 });
 
 // An address of a conversation that is gone opened an empty chat: no messages, no title, only

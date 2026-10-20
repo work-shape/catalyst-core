@@ -7,18 +7,20 @@ import { apiOrigin, uiOrigin } from "./view-fixtures";
 
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
-  allowedPageErrors: [
-    {
-      name: "outside-app-font-refused",
-      reason:
-        "The font spec deliberately names Google Fonts and proves CSP prevents a network request.",
-      matches:
-        /^Loading the font 'https:\/\/fonts\.googleapis\.com\/blocked\.woff2' violates the following Content Security Policy directive: "font-src 'self' data:"\. The action has been blocked\.\s*$/u,
-      tests: [
-        "folder, kit and data fonts render in draft and published Apps without outside requests"
-      ]
-    }
-  ]
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "outside-app-font-refused",
+        reason:
+          "The font spec deliberately names Google Fonts and proves CSP prevents a network request.",
+        matches:
+          /^Loading the font 'https:\/\/fonts\.googleapis\.com\/blocked\.woff2' violates the following Content Security Policy directive: "font-src 'self' data:"\. The action has been blocked\.\s*$/u,
+        tests: [
+          "folder, kit and data fonts render in draft and published Apps without outside requests"
+        ]
+      }
+    ]
+  }
 });
 
 const TITLE =
