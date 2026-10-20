@@ -553,11 +553,15 @@ test("form controls show the strong edge and a field wires its control", async (
   const privateOption = visibility.getByRole("radio", { name: "Private" });
   await expect(discoverable).toBeChecked();
   await discoverable.focus();
-  // The choice follows the focus while the key is down, so the key is held for a moment.
-  await page.keyboard.press("ArrowDown", { delay: 50 });
-  await expect(privateOption).toBeChecked();
+  // The choice follows the focus while the key is down. The focus moves in a timer after the
+  // keydown, so the key is held until it has arrived: a fixed hold is outrun on a slow host.
+  await page.keyboard.down("ArrowDown");
   await expect(privateOption).toBeFocused();
-  await page.keyboard.press("ArrowDown", { delay: 50 });
+  await page.keyboard.up("ArrowDown");
+  await expect(privateOption).toBeChecked();
+  await page.keyboard.down("ArrowDown");
+  await expect(discoverable).toBeFocused();
+  await page.keyboard.up("ArrowDown");
   await expect(discoverable).toBeChecked();
   await expect(visibility.getByRole("radio", { name: "Archived" })).toBeDisabled();
 });

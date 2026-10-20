@@ -118,9 +118,13 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   await expect(agentSelector).toBeVisible();
   await expect(agentSelector.locator("svg").first()).toBeVisible();
   await expect(agentSelector).toHaveAccessibleName("Select agent: Research Assistant");
-  const narrowChipBox = await agentSelector.boundingBox();
-  expect(narrowChipBox?.width).toBe(wideChipBox?.width);
-  expect(narrowChipBox?.height).toBe(wideChipBox?.height);
+  // The narrow layout settles after the resize; a box read at once can still sit beside the rail.
+  await expect
+    .poll(async () => {
+      const box = await agentSelector.boundingBox();
+      return { width: box?.width, height: box?.height };
+    })
+    .toEqual({ width: wideChipBox?.width, height: wideChipBox?.height });
 
   const appShell = page.locator("main").first();
   const backgroundBefore = await appShell.evaluate((element) =>

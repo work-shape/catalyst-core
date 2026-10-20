@@ -375,11 +375,14 @@ test("a plain HTML Page has the platform's margin, type and colours, follows dar
   const narrow = await look();
   expect(narrow.gutter).not.toBe("0px");
   expect(narrow.padding).toBe(narrow.gutter);
-  expect(
-    await built
-      .locator("html")
-      .evaluate((root) => root.scrollWidth <= root.clientWidth && root.clientWidth <= 390)
-  ).toBe(true);
+  // The Page's frame takes the narrow width after the resize, so its width is read until it has.
+  await expect
+    .poll(() =>
+      built
+        .locator("html")
+        .evaluate((root) => root.scrollWidth <= root.clientWidth && root.clientWidth <= 390)
+    )
+    .toBe(true);
   if (shotsDir) {
     await page.screenshot({ path: join(shotsDir, "plain-page-dark-390.png") });
   }
