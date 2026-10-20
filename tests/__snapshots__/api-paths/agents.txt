@@ -1,0 +1,3 @@
+agents.draft.discard  POST /api/v1/agents/:name/draft/discard
+agents.draft.get  GET /api/v1/agents/:name/draft
+agents.try.open  POST /api/v1/agents/:name/try

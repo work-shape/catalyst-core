@@ -1,0 +1,10 @@
+workflows.cancel_run  POST /api/v1/workflow-runs/:runId/cancel
+workflows.download_dataset  GET /api/v1/workflow-runs/:runId/datasets/:datasetId
+workflows.get_run  GET /api/v1/workflow-runs/:runId
+workflows.get_step_transcript  GET /api/v1/workflow-runs/:runId/steps/:stepRunId/transcript
+workflows.list  GET /api/v1/workflows
+workflows.list_runs  GET /api/v1/workflows/:workflow/runs
+workflows.list_step_runs  GET /api/v1/workflow-runs/:runId/steps
+workflows.start  POST /api/v1/workflows/:workflow/runs
+workflows.test  POST /api/v1/workflows/:workflow/test-runs
+workflows.unpublish  POST /api/v1/workflows/:workflow/unpublish

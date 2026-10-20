@@ -1,0 +1,7 @@
+approval_requests.count_pending  GET /api/v1/approval-requests/pending-count
+approval_requests.decide  POST /api/v1/approval-requests/:requestId/decide
+approval_requests.get  GET /api/v1/approval-requests/:requestId
+approval_requests.list  GET /api/v1/approval-requests
+approval_requests.list_mine  GET /api/v1/approval-requests/mine
+approval_requests.revert  POST /api/v1/approval-requests/:requestId/revert
+approval_requests.withdraw  POST /api/v1/approval-requests/:requestId/withdraw

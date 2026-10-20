@@ -1,0 +1,10 @@
+connections.disconnect  POST /api/v1/connections/:name/disconnect
+connections.discover  POST /api/v1/connections/:name/discover
+connections.get  GET /api/v1/connections/:name
+connections.list_tools  GET /api/v1/connection-tools
+connections.oauth_complete  GET /api/v1/connections/:name/oauth/callback
+connections.oauth_start  POST /api/v1/connections/:name/oauth/start
+connections.person_context  GET /api/v1/connections/:name/person-context
+connections.set_person_context  PUT /api/v1/connections/:name/person-context
+connections.set_secret  PUT /api/v1/connections/:name/secret
+connections.test  POST /api/v1/connections/:name/test

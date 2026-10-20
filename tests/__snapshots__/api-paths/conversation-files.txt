@@ -1,0 +1,11 @@
+conversations.artifacts.get_content  GET /api/v1/conversations/:conversationId/artifacts/:artifactId/content
+conversations.artifacts.get_preview  GET /api/v1/conversations/:conversationId/artifacts/:artifactId/preview
+conversations.artifacts.retry_preview  POST /api/v1/conversations/:conversationId/artifacts/:artifactId/preview/retry
+conversations.artifacts.start_preview  POST /api/v1/conversations/:conversationId/artifacts/:artifactId/preview
+conversations.attachments.get_preview  GET /api/v1/conversations/:conversationId/attachments/:attachmentId/preview
+conversations.attachments.start_preview  POST /api/v1/conversations/:conversationId/attachments/:attachmentId/preview
+conversations.draft_attachments.delete  DELETE /api/v1/conversations/:conversationId/draft-attachments/:attachmentId
+conversations.draft_attachments.list  GET /api/v1/conversations/:conversationId/draft-attachments
+conversations.draft_attachments.retry  POST /api/v1/conversations/:conversationId/draft-attachments/:attachmentId/retry
+conversations.draft_attachments.upload  POST /api/v1/conversations/:conversationId/draft-attachments
+conversations.files.get_content  GET /api/v1/conversations/:conversationId/files/:fileId/content

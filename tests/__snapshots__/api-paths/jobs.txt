@@ -1,0 +1,3 @@
+instance.jobs.list  GET /api/v1/instance/jobs
+instance.jobs.retry  POST /api/v1/instance/jobs/:jobId/retry
+instance.jobs.summary  GET /api/v1/instance/jobs/summary

@@ -1,0 +1,7 @@
+roles.create  POST /api/v1/instance/access/roles
+roles.delete  DELETE /api/v1/instance/access/roles/:roleId
+roles.get  GET /api/v1/instance/access/roles/:roleId
+roles.list  GET /api/v1/instance/access/roles
+roles.pending.decide  POST /api/v1/instance/access/roles/:roleId/pending
+roles.reset  POST /api/v1/instance/access/roles/:roleId/reset
+roles.update  PATCH /api/v1/instance/access/roles/:roleId

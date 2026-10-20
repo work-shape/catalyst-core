@@ -1,0 +1,8 @@
+users.create  POST /api/v1/instance/users
+users.delete  DELETE /api/v1/instance/users/:userId
+users.identities.delete  DELETE /api/v1/instance/users/:userId/identities/:authSource/:externalUserId
+users.identities.upsert  PUT /api/v1/instance/users/:userId/identities
+users.invitation.send  POST /api/v1/instance/users/:userId/invitation
+users.list  GET /api/v1/instance/users
+users.password.reset  POST /api/v1/instance/users/:userId/password
+users.update  PATCH /api/v1/instance/users/:userId

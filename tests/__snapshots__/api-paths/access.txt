@@ -1,0 +1,8 @@
+permissions.effective  GET /api/v1/instance/access/effective
+permissions.grant  POST /api/v1/instance/access/grants
+permissions.list  GET /api/v1/instance/access/grants
+permissions.revoke  DELETE /api/v1/instance/access/grants/:grantId
+scope_assignments.list  GET /api/v1/instance/access/scope-assignments
+scope_assignments.set  PUT /api/v1/instance/access/scope-assignments
+workspaces.limits.list  GET /api/v1/instance/access/workspaces
+workspaces.limits.update  PATCH /api/v1/instance/access/workspaces/:collaborationWorkspaceId

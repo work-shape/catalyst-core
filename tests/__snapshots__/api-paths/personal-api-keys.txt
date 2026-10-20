@@ -1,0 +1,9 @@
+connect_codes.redeem  POST /api/v1/auth/connect-codes/redeem
+connect_codes.start  POST /api/v1/auth/connect-codes
+me.api_keys.create  POST /api/v1/me/api-keys
+me.api_keys.list  GET /api/v1/me/api-keys
+me.api_keys.revoke  POST /api/v1/me/api-keys/:keyId/revoke
+me.connect_codes.confirm  POST /api/v1/me/connect-codes/:userCode/confirm
+me.connect_codes.get  GET /api/v1/me/connect-codes/:userCode
+personal_api_keys.list  GET /api/v1/instance/personal-api-keys
+personal_api_keys.revoke  POST /api/v1/instance/personal-api-keys/:keyId/revoke

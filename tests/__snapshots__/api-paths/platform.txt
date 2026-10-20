@@ -1,0 +1,3 @@
+platform.context.get  GET /api/v1/context
+platform.docs.get  GET /api/v1/context/docs
+platform.references.get  GET /api/v1/context/references

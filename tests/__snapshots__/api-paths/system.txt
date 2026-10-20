@@ -1,0 +1,7 @@
+app_content.files.get  GET /app-content/*
+app_kit.files.get  GET /app-runtime/kit/:version/*
+captured_mail.list  GET /api/v1/dev/captured-mail
+health.get  GET /health
+ready.get  GET /ready
+view_runtime.files.get  GET /app-runtime/view/:version/:file
+view_shell.files.get  GET /app-runtime/view-shell/:version/:file

@@ -1,0 +1,1 @@
+workflows.principal_rights  GET /api/v1/workflows/:workflow/principal-rights

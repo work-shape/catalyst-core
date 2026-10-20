@@ -1,0 +1,3 @@
+audit_activities.list  GET /api/v1/instance/audit-activities
+audit_events.list  GET /api/v1/instance/audit-events
+usage.get_summary  GET /api/v1/instance/usage

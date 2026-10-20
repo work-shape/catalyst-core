@@ -1,0 +1,8 @@
+scheduled_starts.create  POST /api/v1/scheduled-starts
+scheduled_starts.delete  DELETE /api/v1/scheduled-starts/:scheduledStartId
+scheduled_starts.handover  POST /api/v1/scheduled-starts/:scheduledStartId/handover
+scheduled_starts.list  GET /api/v1/scheduled-starts
+scheduled_starts.run_now  POST /api/v1/scheduled-starts/:scheduledStartId/run
+scheduled_starts.runs  GET /api/v1/scheduled-starts/:scheduledStartId/runs
+scheduled_starts.set_state  POST /api/v1/scheduled-starts/:scheduledStartId/state
+scheduled_starts.update  PATCH /api/v1/scheduled-starts/:scheduledStartId

@@ -1,0 +1,2 @@
+docs.get  GET /api/v1/docs
+openapi.get  GET /api/v1/openapi.json

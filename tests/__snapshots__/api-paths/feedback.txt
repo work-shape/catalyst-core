@@ -1,0 +1,8 @@
+feedback.annotate  POST /api/v1/feedback/:feedbackId/annotation
+feedback.get  GET /api/v1/feedback/:feedbackId
+feedback.list  GET /api/v1/feedback
+feedback.list_own  GET /api/v1/conversations/:conversationId/feedback
+feedback.mark_handled  POST /api/v1/feedback/:feedbackId/handled
+feedback.send  POST /api/v1/conversations/:conversationId/feedback
+feedback.update  POST /api/v1/conversations/:conversationId/feedback/:feedbackId
+feedback.withdraw  POST /api/v1/conversations/:conversationId/feedback/:feedbackId/withdraw

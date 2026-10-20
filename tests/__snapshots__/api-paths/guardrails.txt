@@ -1,0 +1,6 @@
+guardrails.dry_run  POST /api/v1/guardrails/:name/dry-run
+guardrails.list_hits  GET /api/v1/guardrails/:name/hits
+guardrails.list_shipped  GET /api/v1/guardrails/shipped
+guardrails.switch_shipped  POST /api/v1/guardrails/shipped/:name/switch
+guardrails.test  POST /api/v1/guardrails/:name/test
+guardrails.unpublish  POST /api/v1/guardrails/:name/unpublish

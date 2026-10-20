@@ -1,0 +1,2 @@
+config_assets.get_overview  GET /api/v1/instance/config/assets
+instance.workspaces.list  GET /api/v1/instance/workspaces

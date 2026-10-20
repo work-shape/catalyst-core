@@ -1,0 +1,5 @@
+branding.get  GET /api/v1/instance/branding
+config.get  GET /api/v1/instance/config
+instance.infrastructure.check  POST /api/v1/instance/infrastructure/check
+instance.infrastructure.get  GET /api/v1/instance/infrastructure
+instance.modules.list  GET /api/v1/instance/modules
