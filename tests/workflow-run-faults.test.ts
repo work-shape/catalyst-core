@@ -112,7 +112,7 @@ describe("a worker that stops inside a call", () => {
 
 describe("a changing call whose first attempt left no outcome", () => {
   /** The step run of the first item, queued, and a first call under its key that still runs. */
-  async function firstCallRunning(t: WorkflowFixture, runId: string, startedAt: Date) {
+  async function firstCallRunning(t: WorkflowFixture, runId: string, startedAt?: Date) {
     const worker = t.worker();
     for (let pass = 0; pass < 3; pass++) await worker.runDue();
     const listed = (await stepRunsOf(t, runId)).find(
@@ -122,6 +122,7 @@ describe("a changing call whose first attempt left no outcome", () => {
       ? await t.stores.workflowRuns.getStepRun({ clientInstanceId, id: listed.id })
       : undefined;
     if (!stepRun) throw new Error("The loop did not start its first item");
+    // The first call starts after its step is prepared; setup time spends none of its wait.
     const first = await t.stores.operationRuns.create({
       id: createPlatformId<"OperationRunId">("oprun"),
       clientInstanceId,
@@ -135,7 +136,7 @@ describe("a changing call whose first attempt left no outcome", () => {
       idempotencyKey: workflowStepIdempotencyKey(stepRun.id),
       inputHash: "the-hash-of-the-first-call",
       correlationId: "corr_first_call",
-      startedAt: startedAt.toISOString()
+      startedAt: (startedAt ?? new Date()).toISOString()
     });
     if (!first) throw new Error("The first call could not be recorded");
     return { worker, stepRun, first };
@@ -145,7 +146,7 @@ describe("a changing call whose first attempt left no outcome", () => {
     const t = await ready({ limits: { operationOutcomeWaitMs: 400 } });
     const started = await start(t);
     // The worker of the first attempt died in the call: its Operation Run runs for ever.
-    const { worker, stepRun, first } = await firstCallRunning(t, started.id, new Date());
+    const { worker, stepRun, first } = await firstCallRunning(t, started.id);
 
     const run = await t.finish(started.id, worker);
     expect(run.status).toBe("failed");
@@ -172,7 +173,7 @@ describe("a changing call whose first attempt left no outcome", () => {
   it("waits while the first call may still end, with the id of its Operation Run on the step run", async () => {
     const t = await ready({ limits: { operationOutcomeWaitMs: 1_500 } });
     const started = await start(t);
-    const { worker, stepRun, first } = await firstCallRunning(t, started.id, new Date());
+    const { worker, stepRun, first } = await firstCallRunning(t, started.id);
 
     const waited = deferred<void>();
     const release = deferred<void>();
