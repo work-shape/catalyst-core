@@ -50,10 +50,11 @@ describe("the name of a skill file that states none", () => {
 describe("the packages a browser bundle loads", () => {
   // chat-ui imports core and api-contract, and both import asset-schemas. A Node module in
   // any of them fails every page when the bundle loads it.
-  it.each(["asset-schemas", "core", "api-contract"])(
+  // Keep complete package paths visible to the affected-test selector.
+  it.each(["packages/asset-schemas", "packages/core", "packages/api-contract"])(
     "%s imports no Node module",
-    async (packageName) => {
-      const source = resolve(import.meta.dirname, "../packages", packageName, "src");
+    async (packagePath) => {
+      const source = resolve(import.meta.dirname, "..", packagePath, "src");
       const files = await readdir(source, { recursive: true });
       const offenders: string[] = [];
       for (const file of files.filter((name) => /\.tsx?$/u.test(name))) {
