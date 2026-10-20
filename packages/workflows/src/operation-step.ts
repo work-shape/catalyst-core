@@ -28,7 +28,8 @@ import {
 } from "@work-shape/catalyst-core";
 import { runOperation, type RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
-import { indexWorkflowSteps, stepOperationRefusal } from "./definition";
+import { indexWorkflowSteps } from "./definition";
+import { stepOperationRefusal } from "./steps/operation";
 import { jsonValueSchema } from "./json";
 import { WORKFLOW_STEP_JOB_MAX_ATTEMPTS } from "./limits";
 import { WorkflowStepFailure, type WorkflowStepFailureOptions } from "./step-failure";

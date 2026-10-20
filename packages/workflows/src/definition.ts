@@ -1,26 +1,17 @@
 import {
   AGENTS_RUN_OPERATION,
   RUN_AGENT_TOOL_NAME,
-  NOTIFY_CHANNELS,
-  NOTICE_ID_PATTERN,
   WORKFLOW_KINDS,
   WORKFLOW_DATASET_KEY,
   WORKFLOW_START_KEY_INPUT,
-  WORKFLOW_ERROR_CODES,
   WORKFLOW_STEP_TYPES,
   readYamlData,
   workflowBlockIssues,
-  workflowInputValueSchema,
   workflowLimitsSchema,
   workflowLiteralOrReferenceSchema,
-  workflowLoopOptionsSchema,
   workflowOnFailureSchema,
-  workflowPaginateSchema,
   workflowRetentionSchema,
-  workflowScheduleOptionsSchema,
-  workflowStepDatasetSchema,
   type JsonValue,
-  type WorkflowBlockIssue,
   type WorkflowManifest,
   type WorkflowReference,
   type WorkflowStep
@@ -28,23 +19,19 @@ import {
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { workflowValueSchema } from "./dataset-schema";
-import { agentOutputSchemaSupported } from "./agent-schema";
-import { codeFileIssue } from "./code-step";
-import { isTimeZone, parseCron } from "./cron";
-import { workflowOperationTimeoutSchema } from "./operation-wait";
 import { sourceReferences } from "./text-join";
-import {
-  holdsBrokenDatasetReference,
-  jsonObjectSchema,
-  jsonValueSchema,
-  namesDatasetType
-} from "./json";
+import { holdsBrokenDatasetReference, jsonObjectSchema, jsonValueSchema } from "./json";
+import { stepStructuralIssues, stepUnsupportedIssues, workflowStepSchema } from "./steps";
+import { notSupported } from "./steps/module";
+import type { WorkflowDefinitionIssue } from "./definition-issue";
 import {
   WORKFLOW_DATASET_MAX_BYTES,
   WORKFLOW_DEFINITION_MAX_STEPS,
   WORKFLOW_MANIFEST_MAX_BYTES,
   WORKFLOW_MANIFEST_MAX_NESTING
 } from "./limits";
+
+export { WORKFLOW_LIMIT_ABOVE_CEILING, type WorkflowDefinitionIssue } from "./definition-issue";
 
 // `workflow.yaml` as a definition the engine runs: its shape, and what must hold between its
 // steps before a run is started from it. Nothing here reads a file or a store. Saving a
@@ -53,149 +40,11 @@ import {
 /** The step types this release executes. A definition that names another is not accepted. */
 export const WORKFLOW_EXECUTED_STEP_TYPES = WORKFLOW_STEP_TYPES;
 
-/**
- * One thing that keeps a definition from being run: where it is, and a sentence to show. An
- * issue the contract names carries its code: what `workflowBlockIssues` refuses, and
- * `not_supported_yet` for what the file form holds and this engine does not run.
- */
-export interface WorkflowDefinitionIssue {
-  path: string;
-  message: string;
-  code?:
-    | WorkflowBlockIssue["code"]
-    | typeof WORKFLOW_OPERATION_NOT_CALLABLE
-    | typeof WORKFLOW_LIMIT_ABOVE_CEILING
-    | "process_workflow_write_operation";
-}
-
 export type WorkflowDefinitionResult =
   { ok: true; manifest: WorkflowManifest } | { ok: false; issues: WorkflowDefinitionIssue[] };
 
 /** The id of a Workflow: part of `workflow.<id>.start`, so it holds no dot. */
 const WORKFLOW_ID = /^[a-z][a-z0-9_-]{0,62}$/u;
-/** The id of a step: part of a step run's key, which separates with `.` and `[`. */
-const STEP_ID = /^[a-z][a-z0-9_-]{0,62}$/u;
-
-const referenceSchema = z.strictObject({ step: z.string().min(1), path: z.string() });
-const inputMappingSchema = z.record(z.string().min(1), workflowInputValueSchema);
-const stepId = z.string().regex(STEP_ID, "A step id is lowercase letters, digits, '_' and '-'");
-
-/** What every step carries: its id, and what a person calls it and reads about it. */
-const named = { id: stepId, name: z.string().min(1), description: z.string().optional() };
-const declared = { inputSchema: jsonObjectSchema, outputSchema: jsonObjectSchema };
-
-// Every step the file form holds, the reserved blocks among them, so that a file written for
-// a later engine is read here and refused by name instead of as a file nobody understands.
-const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
-  z.discriminatedUnion("type", [
-    z.strictObject({
-      ...named,
-      type: z.literal("trigger"),
-      triggers: z
-        .array(
-          z.discriminatedUnion("kind", [
-            z.strictObject({ kind: z.literal("manual") }),
-            z.strictObject({
-              kind: z.literal("schedule"),
-              cron: z.string().min(1),
-              timeZone: z
-                .string()
-                .min(1)
-                .refine(isTimeZone, "Use an IANA time zone such as Europe/Berlin, or UTC")
-                .optional(),
-              ...workflowScheduleOptionsSchema.shape
-            }),
-            z.strictObject({ kind: z.literal("parent") })
-          ])
-        )
-        .min(1)
-    }),
-    z.strictObject({
-      ...named,
-      type: z.literal("operation"),
-      operation: z.string().min(1),
-      input: inputMappingSchema,
-      dataset: workflowStepDatasetSchema.optional(),
-      paginate: workflowPaginateSchema.optional(),
-      timeout: workflowOperationTimeoutSchema.optional()
-    }),
-    z.strictObject({
-      ...named,
-      type: z.literal("workflow"),
-      workflow: z.string().min(1),
-      input: inputMappingSchema,
-      key: z.array(workflowLiteralOrReferenceSchema).optional()
-    }),
-    z.strictObject({
-      ...named,
-      type: z.literal("loop"),
-      items: referenceSchema,
-      itemName: z.string().min(1).optional(),
-      itemLabel: z.string().min(1).optional(),
-      ...workflowLoopOptionsSchema.shape,
-      steps: z.array(stepSchema).min(1)
-    }),
-    z.strictObject({
-      ...named,
-      ...declared,
-      type: z.literal("code"),
-      file: z.string().min(1),
-      input: inputMappingSchema
-    }),
-    z.strictObject({ ...named, type: z.literal("output"), input: inputMappingSchema }),
-    z.strictObject({
-      ...named,
-      ...declared,
-      type: z.literal("agent"),
-      instructions: z.string().min(1),
-      input: inputMappingSchema
-    }),
-    z.strictObject({
-      ...named,
-      type: z.literal("notify"),
-      to: z
-        .strictObject({
-          users: z.array(z.string().regex(NOTICE_ID_PATTERN)).optional(),
-          workspaces: z.array(z.string().regex(NOTICE_ID_PATTERN)).optional()
-        })
-        .refine(
-          (to) => (to.users?.length ?? 0) + (to.workspaces?.length ?? 0) > 0,
-          "A notify step needs recipients"
-        ),
-      channels: z
-        .array(z.enum(NOTIFY_CHANNELS))
-        .min(1)
-        .refine((channels) => channels.includes("inbox"), "A notice always includes inbox"),
-      title: workflowInputValueSchema,
-      text: workflowInputValueSchema,
-      link: z
-        .discriminatedUnion("kind", [
-          z.strictObject({ kind: z.literal("run") }),
-          z.strictObject({
-            kind: z.literal("app"),
-            workspaceId: z.string().min(1),
-            app: z.string().min(1)
-          })
-        ])
-        .optional()
-    }),
-    z.strictObject({
-      ...named,
-      type: z.literal("condition"),
-      when: z.strictObject({ ref: referenceSchema, op: z.string().min(1), value: jsonValueSchema }),
-      then: z.array(stepSchema),
-      else: z.array(stepSchema).optional()
-    }),
-    z.strictObject({
-      ...named,
-      type: z.literal("parallel"),
-      branches: z.array(
-        z.strictObject({ id: stepId, name: z.string().min(1), steps: z.array(stepSchema) })
-      ),
-      concurrency: z.number().int().min(1).optional()
-    })
-  ])
-);
 
 // Strict, so a file that carries a `wiring`, an edge or a position is refused: the steps run
 // in the order of the list and a block holds its own.
@@ -214,42 +63,8 @@ const manifestSchema = z.strictObject({
   types: z.record(z.string().min(1), jsonObjectSchema).optional(),
   tools: z.array(z.string().min(1)).optional(),
   packages: z.array(z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/u)).optional(),
-  steps: z.array(stepSchema).min(1)
+  steps: z.array(workflowStepSchema).min(1)
 });
-
-const notSupported = (path: string, what: string): WorkflowDefinitionIssue => ({
-  path,
-  code: WORKFLOW_ERROR_CODES.notSupported,
-  message: `This engine does not run ${what} yet (${WORKFLOW_ERROR_CODES.notSupported})`
-});
-
-/** The code of a limit that lies above the ceiling of release config. Asked at publish. */
-export const WORKFLOW_LIMIT_ABOVE_CEILING = "limit_above_ceiling";
-
-/** The code of a step that names an operation no step of a Workflow may call. */
-export const WORKFLOW_OPERATION_NOT_CALLABLE = "operation_not_callable";
-
-/** The operations that read and change the platform's own assets: `assets.put` and its kin. */
-const PLATFORM_ASSET_OPERATION_PREFIX = "assets.";
-
-/**
- * Why a step of a Workflow may not call this operation, or nothing where it may. A step calls
- * what the Workflow does with data: a Connection, a Data Store, a Knowledge Base, an App's
- * action, another Workflow. The operations of the platform's own assets are none of that. A
- * run acts as a service principal, and a change to an agent, a skill, an App or a Workflow is
- * made by a person or by an agent for one, under the rights, drafts and confirmations of that
- * path. So no step names one, whatever its principal holds, and a save refuses it by name.
- */
-export function stepOperationRefusal(
-  operation: string
-): { code: typeof WORKFLOW_OPERATION_NOT_CALLABLE; message: string } | undefined {
-  return operation.startsWith(PLATFORM_ASSET_OPERATION_PREFIX)
-    ? {
-        code: WORKFLOW_OPERATION_NOT_CALLABLE,
-        message: `The operation '${operation}' works on the platform's own assets, which a step of a Workflow may not call`
-      }
-    : undefined;
-}
 
 /**
  * What the file form holds and this engine does not run, each by the name of its field. The
@@ -274,31 +89,8 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
       if (known.includes(step.type) && !executed.includes(step.type)) {
         issues.push(notSupported(`${at}.type`, `a step of the type '${step.type}'`));
       }
-      if (step.type === "trigger") {
-        // A trigger that is read and never fires would look like one that is kept.
-        step.triggers.forEach((trigger, number) => {
-          const here = `${at}.triggers[${number}]`;
-          if (trigger.kind !== "schedule") return;
-          // A schedule fires the latest of the due times it missed and skips a due time
-          // that meets an open run. The other ways are read and not built.
-          if (trigger.missed !== undefined && trigger.missed !== "last") {
-            issues.push(notSupported(`${here}.missed`, `'missed: ${trigger.missed}'`));
-          }
-          if (trigger.overlap !== undefined && trigger.overlap !== "skip") {
-            issues.push(notSupported(`${here}.overlap`, `'overlap: ${trigger.overlap}'`));
-          }
-        });
-      }
-      if (step.type === "operation") {
-        if (step.paginate && !step.dataset)
-          issues.push({ path: `${at}.paginate`, message: "paginate needs dataset.at" });
-      }
-      if (step.type === "agent" && namesDatasetType(step.inputSchema))
-        issues.push(notSupported(`${at}.inputSchema`, "a dataset in an agent input (EW-14)"));
+      issues.push(...stepUnsupportedIssues(step, at));
       if (step.type === "loop") {
-        // Collection is the paging slice, separate from the loop's failures dataset.
-        if (step.collect !== undefined)
-          issues.push(notSupported(`${at}.collect`, "'collect' (EW-13)"));
         walk(step.steps, `${at}.steps`);
       }
     });
@@ -414,29 +206,7 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
     issues.push({ path: "tools", message: "An agent step cannot start subagents" });
   }
   for (const [id, { step, sequence }] of index) {
-    const refused = step.type === "operation" ? stepOperationRefusal(step.operation) : undefined;
-    if (refused) issues.push({ path: `steps.${id}.operation`, ...refused });
-    if (step.type === "agent" && !agentOutputSchemaSupported(step.outputSchema)) {
-      issues.push({
-        path: `steps.${id}.outputSchema`,
-        message:
-          "An agent output schema supports named objects, arrays, strings, numbers, booleans, enums and required fields, without references or recursion"
-      });
-    }
-    if (step.type === "code") {
-      const file = codeFileIssue(step.file);
-      if (file) issues.push({ path: `steps.${id}.file`, message: file });
-    }
-    if (step.type === "trigger") {
-      for (const trigger of step.triggers) {
-        if (trigger.kind === "schedule" && !parseCron(trigger.cron)) {
-          issues.push({
-            path: `steps.${id}.triggers`,
-            message: `'${trigger.cron}' is no cron expression of five fields: minute, hour, day of month, month and day of week`
-          });
-        }
-      }
-    }
+    issues.push(...stepStructuralIssues(step, id));
     if (sequence.loop !== undefined && (step.type === "trigger" || step.type === "output")) {
       issues.push({
         path: `steps.${id}`,
