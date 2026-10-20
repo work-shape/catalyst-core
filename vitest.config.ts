@@ -58,8 +58,8 @@ export default defineConfig({
     testTimeout: 30000, // check-limit
     include: ["tests/**/*.test.ts"],
     // A scale test proves a property at the volume a customer reaches and takes minutes. It runs
-    // in the nightly hosted check and before a release, which set CATALYST_SCALE_TESTS=1, and not
-    // in the lander's gate or a PR's checks.
+    // in the nightly hosted check and before a release, which turn CATALYST_SCALE_TESTS on, and
+    // not in the lander's gate or a PR's checks.
     exclude:
       process.env.CATALYST_SCALE_TESTS === "1"
         ? configDefaults.exclude
