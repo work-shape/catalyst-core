@@ -38,7 +38,7 @@ export interface DocsLinkProps {
   path: string;
   /**
    * What the link is read as: its label, its topic and that it opens a new tab, such as
-   * "Learn more about Namespaces, opens in a new tab".
+   * "Learn more about workspaces, opens in a new tab".
    */
   accessibleName: string;
   /** The label: "Learn more" after a sentence, a name of its own where the link stands alone. */

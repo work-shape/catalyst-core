@@ -54,7 +54,7 @@ export const platformDocsSkill: ShippedSkill = {
   name: PLATFORM_DOCS_SKILL_NAME,
   title: "Platform documentation",
   description:
-    "The product documentation of this platform: agents and skills in Studio, building Apps and their actions, the CLI, release config, modules, rights and Namespaces, tools, deployment, governance and limits. Read it when the user asks how the platform works in detail, how to configure, extend or operate it, or what a term means.",
+    "The product documentation of this platform: agents and skills in Studio, building Apps and their actions, the CLI, release config, modules, rights, tools, deployment, governance and limits. Read it when the user asks how the platform works in detail, how to configure, extend or operate it, or what a term means.",
   content,
   resources: generated.pages.map((page) => ({
     path: referencePath(page.path),

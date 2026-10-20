@@ -58,19 +58,18 @@ const SCOPE_OF_VERB = {
 const VERBS = ["read", "write", "delete", "publish"] as const;
 
 /**
- * The actions of the registered kinds a caller can use: the ones its grants allow on what
- * `name` says and its credential's scopes let it call. With a Namespace prefix that is the
- * Namespace, without a name the instance's own assets as a whole.
+ * The actions of the registered kinds a caller can use on the instance's own assets as a
+ * whole: the ones its grants allow there and its credential's scopes let it call.
  */
-export function usableActions(options: ContextOptions, caller: Caller, name?: string): string[] {
-  return actionsOn(options, caller, name === undefined ? {} : { name });
+export function usableActions(options: ContextOptions, caller: Caller): string[] {
+  return actionsOn(options, caller, {});
 }
 
 /** The actions of the kinds the place lets the caller use, where its credential lets it call. */
 function actionsOn(
   options: ContextOptions,
   caller: Caller,
-  place: { name?: string; workspaceId?: string }
+  place: { workspaceId?: string }
 ): string[] {
   const usable = VERBS.filter((verb) => hasAuthScope(caller.actor, SCOPE_OF_VERB[verb]));
   return options.configAssets.kinds.kinds
@@ -198,7 +197,7 @@ async function visibleSections(
   const writes =
     hasAuthScope(caller.actor, SCOPE_OF_VERB.write) &&
     (caller.access.authorize(WORKFLOW_ACTIONS.write, { kind: WORKFLOW_ASSET_KIND }).allowed ||
-      caller.access.holdsGrantAt(WORKFLOW_ACTIONS.write, ["namespace", "asset"]));
+      caller.access.holdsGrantAt(WORKFLOW_ACTIONS.write, ["asset"]));
   if (writes) {
     return ["workflows"];
   }
@@ -224,19 +223,16 @@ async function visibleSections(
 }
 
 /**
- * The context of one caller. A Namespace is listed for a caller who holds at least one action
- * of a registered kind in it, through any grant that covers its names, and whose credential
- * carries the scope the action is called with: the answer never names an action this
- * credential could not use.
+ * The context of one caller. A workspace is listed for a caller who holds at least one action
+ * of a registered kind on what it owns, and whose credential carries the scope the action is
+ * called with: the answer never names an action this credential could not use.
  */
 export async function readPlatformContext(
   options: ContextOptions,
   caller: Caller
 ): Promise<PlatformContext> {
   const { kinds } = options.configAssets.kinds;
-  // The Namespaces alone: no count is shown here, so none is computed.
-  const [namespaces, sections, workspaces] = await Promise.all([
-    options.stores.access.listNamespaceRecords({ clientInstanceId: options.clientInstanceId }),
+  const [sections, workspaces] = await Promise.all([
     visibleSections(options, caller),
     usableWorkspaces(options, caller)
   ]);
@@ -288,12 +284,6 @@ export async function readPlatformContext(
     ),
     useActions: heldUseActions(options, caller),
     authoringActions: heldAuthoringActions(options, caller),
-    namespaces: namespaces.flatMap((namespace) => {
-      const actions = usableActions(options, caller, namespace.prefix);
-      return actions.length > 0
-        ? [{ prefix: namespace.prefix, displayName: namespace.displayName, actions }]
-        : [];
-    }),
     workspaces,
     visibleSections: sections
   };

@@ -83,29 +83,50 @@ export function connectCodeAsksUseLevel(search: string): boolean {
   return new URLSearchParams(search).getAll("level").includes("use");
 }
 
-/** A Namespace prefix as the instance writes one: lowercase words joined by hyphens, `kai-`. */
-const NAMESPACE_PREFIX = /^[a-z][a-z0-9]*(-[a-z0-9]+)*-$/u;
+/** An asset's id as a key's scope may name it: the characters any kind's names are made of. */
+const SCOPE_ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u;
 
-/** Whether a typed Namespace is one the instance would take. Empty means no limit. */
-function isNamespacePrefix(value: string): boolean {
-  return NAMESPACE_PREFIX.test(value.trim());
+/** Whether a typed asset id is one the instance would take in a scope. Empty means none. */
+function isScopeAssetName(value: string): boolean {
+  return SCOPE_ASSET_NAME.test(value.trim());
+}
+
+/** Where a key's scopes are limited to: what one workspace owns, or one asset of it. */
+export interface PersonalKeyLimit {
+  /** Empty for no limit. */
+  workspaceId: string;
+  /** Empty for every asset of the workspace. Ignored without a workspace. */
+  assetName: string;
 }
 
 /**
- * The scopes of a new key: each chosen action, limited to the Namespace where one is given,
- * as `agent.write:kai-`.
+ * The scopes of a new key: each chosen action, limited to the workspace where one is given, as
+ * `agent.write:<workspace id>`, and within it to one asset, `agent.write:<workspace id>/<id>`.
  */
-export function buildPersonalKeyScopes(actions: readonly string[], namespace: string): string[] {
-  const prefix = namespace.trim();
-  return actions.map((action) => (prefix ? `${action}:${prefix}` : action));
+export function buildPersonalKeyScopes(
+  actions: readonly string[],
+  limit: PersonalKeyLimit
+): string[] {
+  const workspaceId = limit.workspaceId.trim();
+  const assetName = limit.assetName.trim();
+  const resource = workspaceId && (assetName ? `${workspaceId}/${assetName}` : workspaceId);
+  return actions.map((action) => (resource ? `${action}:${resource}` : action));
 }
 
-/** A scope of an issued key, read back: its action, and the prefix it is limited to. */
-export function personalKeyScopeParts(scope: string): { action: string; prefix?: string } {
+/** A scope of an issued key, read back: its action, and the workspace and asset it is limited to. */
+export function personalKeyScopeParts(scope: string): {
+  action: string;
+  workspaceId?: string;
+  assetName?: string;
+} {
   const colon = scope.indexOf(":");
-  return colon < 0
-    ? { action: scope }
-    : { action: scope.slice(0, colon), prefix: scope.slice(colon + 1) };
+  if (colon < 0) return { action: scope };
+  const action = scope.slice(0, colon);
+  const resource = scope.slice(colon + 1);
+  const slash = resource.indexOf("/");
+  return slash < 0
+    ? { action, workspaceId: resource }
+    : { action, workspaceId: resource.slice(0, slash), assetName: resource.slice(slash + 1) };
 }
 
 /**
@@ -172,8 +193,10 @@ export function instanceUrl(apiBaseUrl: string, origin: string): string {
 export interface PersonalKeyDraft {
   name: string;
   actions: string[];
-  /** Empty for a key over every Namespace the person holds the actions in. */
-  namespace: string;
+  /** Empty for a key over everywhere the person holds the actions. */
+  workspaceId: string;
+  /** Empty for every asset of the workspace. */
+  assetName: string;
   expiryDays: PersonalKeyExpiryDays;
 }
 
@@ -190,20 +213,23 @@ export function initialPersonalKeyDraft(
   return {
     name,
     actions: [...actions],
-    namespace: "",
+    workspaceId: "",
+    assetName: "",
     expiryDays: DEFAULT_PERSONAL_KEY_EXPIRY_DAYS
   };
 }
 
 /** The first thing the draft lacks before it can be sent. */
-export type PersonalKeyDraftProblem = "name" | "scopes" | "namespace";
+export type PersonalKeyDraftProblem = "name" | "scopes" | "assetName";
 
 export function personalKeyDraftProblem(
   draft: PersonalKeyDraft
 ): PersonalKeyDraftProblem | undefined {
   if (!draft.name.trim()) return "name";
   if (draft.actions.length === 0) return "scopes";
-  if (draft.namespace.trim() && !isNamespacePrefix(draft.namespace)) return "namespace";
+  if (draft.workspaceId && draft.assetName.trim() && !isScopeAssetName(draft.assetName)) {
+    return "assetName";
+  }
   return undefined;
 }
 
@@ -215,7 +241,7 @@ export function personalKeyRequest(
   if (personalKeyDraftProblem(draft)) return undefined;
   return {
     name: draft.name.trim(),
-    scopes: buildPersonalKeyScopes(draft.actions, draft.namespace),
+    scopes: buildPersonalKeyScopes(draft.actions, draft),
     expiresAt: personalKeyExpiresAt(draft.expiryDays, now)
   };
 }

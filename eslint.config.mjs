@@ -38,8 +38,13 @@ export default [
   },
   {
     // The rule's vocabulary and its negative fixtures must keep naming the terms they reject.
+    // The tests of the migrations that brought a term in and took it out seed and read the
+    // tables that name it. A moved page keeps its old address.
     files: [
+      "packages/docs/astro.config.mjs",
       "packages/quality-config/retired-terms-rule.mjs",
+      "tests/access-legacy-equivalence.test.ts",
+      "tests/ns-retire-migration.test.ts",
       "tests/quality-collector.test.ts",
       "tests/support/quality-lint-fixtures.ts"
     ],

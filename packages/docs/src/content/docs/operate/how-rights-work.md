@@ -593,7 +593,3 @@ A release push reaches every agent and skill of the instance and is not held bac
 | See what was called, by whom, and what was refused | Settings > Instance > Operations               | View audit log                                              |
 | See who changed which right                        | Settings > Instance > Audit                    | View audit log                                              |
 | Switch a feature on or off, set the policy         | Release config, then a deploy                  | The operator                                                |
-
-## Namespaces registered earlier
-
-Rights were once scoped by a Namespace, a registered name prefix such as `tax-`. The server now refuses new Namespace grant rows for every right, through the API as well as the dialog. Existing rows keep their allow or deny effect on matching instance-owned assets and can still be listed and revoked. The **Namespaces** tab and its tool and model limits remain until retirement is complete; those limits still bind agent saves, including release pushes. A Namespace never covers a workspace-owned asset. [Rights for one person or asset](/operate/rights-for-one-person/#namespaces-registered-earlier) has the remaining maintenance steps. Give new rights in a workspace, on one asset or for the whole instance where the action supports it.

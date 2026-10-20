@@ -10,7 +10,7 @@ import { readBuildRefusal } from "./build-refusals";
 type Translate = TranslationContextValue["t"];
 
 /**
- * The instance's answer as the field shows it. A refused check, such as of a Namespace the
+ * The instance's answer as the field shows it. A refused check, such as of a workspace the
  * reader may not write in, shows the refusal; a check that failed blocks nothing, and the
  * create meets the instance's answer.
  */

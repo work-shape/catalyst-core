@@ -348,12 +348,12 @@ describe("AP-4 migration: legacy lists become grant rows", () => {
     await seedUser(sql, { id: "usr_scoped", roles: ["user"], permissions: ["config_assets.read"] });
     await sql`
       insert into permission_grants (
-        id, client_instance_id, holder_kind, holder_id, action, scope_kind, scope_id, namespace,
-        effect, granted_by, created_at
+        id, client_instance_id, holder_kind, holder_id, action, scope_kind, scope_id, effect,
+        granted_by, created_at
       ) values
-        ('grant_kept_allow', ${instance}, 'user', 'usr_revoked', 'audit.view', 'instance', null, null, 'allow', 'usr_boss', '2026-10-01'),
-        ('grant_kept_deny', ${instance}, 'user', 'usr_denied', 'usage.view', 'instance', null, null, 'deny', 'usr_boss', '2026-10-01'),
-        ('grant_workspace', ${instance}, 'user', 'usr_scoped', 'agent.read', 'workspace', 'ws_1', null, 'allow', 'usr_boss', '2026-10-01')
+        ('grant_kept_allow', ${instance}, 'user', 'usr_revoked', 'audit.view', 'instance', null, 'allow', 'usr_boss', '2026-10-01'),
+        ('grant_kept_deny', ${instance}, 'user', 'usr_denied', 'usage.view', 'instance', null, 'deny', 'usr_boss', '2026-10-01'),
+        ('grant_workspace', ${instance}, 'user', 'usr_scoped', 'agent.read', 'workspace', 'ws_1', 'allow', 'usr_boss', '2026-10-01')
     `;
 
     await database.migrate();

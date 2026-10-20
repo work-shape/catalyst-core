@@ -1092,7 +1092,7 @@ describe("config asset admin routes", () => {
     expect(pruned.json()).toMatchObject({ version: 6, hiddenAgentNames: ["kai-law"] });
   });
 
-  it("requires the release right for a sync that names no Namespace", async () => {
+  it("requires the release right for a sync that names no workspace", async () => {
     const fixture = await createFixture();
     const interactiveToken = await mintToken(fixture.server, {
       scopes: ["config_assets:read", "config_assets:write"],
@@ -1102,10 +1102,10 @@ describe("config asset admin routes", () => {
       agents: [agentConfig("Not a release")]
     });
 
-    // Without the right the batch is no release: it has to name its Namespace, and nothing
+    // Without the right the batch is no release: it has to name its workspace, and nothing
     // of it is written.
     expect(response.statusCode).toBe(422);
-    expect(JSON.stringify(response.json())).toContain("names the Namespace");
+    expect(JSON.stringify(response.json())).toContain("names the workspace it belongs to");
     expect(
       await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,

@@ -6,11 +6,12 @@ import { clientInstanceId } from "./support/access-instance";
 import type { AccessInstanceOptions } from "./support/access-instance";
 import type { CentralPolicySetting } from "@work-shape/catalyst-core";
 import { agent, skill } from "./support/access-instance";
-import { setupNamespaceHolder } from "./support/asset-operations";
+import { setupWorkspaceHolder } from "./support/asset-operations";
 
 // What the person who decides a held `assets.put` is shown of the asset it saves. The tests
 // that read an `asset` block fail without it: the preview named the operation and listed the
-// definition as one escaped line. The test of `assets.delete` holds what stays as it was.
+// definition as one escaped line. The test of `assets.delete` holds what stays as it was. Kai
+// saves the skills and agents of Kai's team, a Shared Workspace.
 
 const OLD_PARAGRAPH = "Sick notes are due on the third day.";
 const NEW_PARAGRAPH = "Sick notes are due on the first day.";
@@ -24,21 +25,24 @@ const listedSchema = z.object({
 /** An instance that holds nothing until `holding` names a setting. */
 async function setup(server?: AccessInstanceOptions["server"]) {
   let settings: CentralPolicySetting[] = [];
-  const t = await setupNamespaceHolder({
+  const t = await setupWorkspaceHolder({
     operations: { centralPolicySettings: () => settings },
     ...(server ? { server } : {})
   });
   const holding = (...operations: string[]) => {
     settings = operations.map((operation) => ({ operation, value: "approval" }));
   };
-  /** Makes the call as Kai and answers the id of the request it waits on. */
+  /** Makes the call as Kai in Kai's team and answers the id of the request it waits on. */
   const hold = async (
     operation: "assets.put" | "assets.delete",
     kind: string,
     name: string,
     payload: Record<string, unknown>
   ) => {
-    const held = await t.call(t.kai.id, operation, { params: { kind, name }, payload });
+    const held = await t.call(t.kai.id, operation, {
+      params: { kind, name },
+      payload: { ...payload, workspaceId: t.kaiTeam }
+    });
     expect(held.statusCode).toBe(202);
     const { approvalRequestId = "" } = operationRunSchema.parse(held.json());
     return approvalRequestId;
@@ -54,7 +58,7 @@ describe("the preview of a held asset save", () => {
     const name = "kai-approval-fact";
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name },
-      payload: { config: skill(name, stored) }
+      payload: { config: skill(name, stored), workspaceId: t.kaiTeam }
     });
     const workspaceId = await t.sharedWorkspace("Visible approvers");
     await t.stores.workspaces.addMembership({
@@ -64,7 +68,12 @@ describe("the preview of a held asset save", () => {
       role: "member"
     });
     const read = async (userId = t.kai.id) =>
-      (await t.expectOk(userId, "assets.get", { params: { kind: "skill", name } })).json();
+      (
+        await t.expectOk(userId, "assets.get", {
+          params: { kind: "skill", name },
+          query: { workspaceId: t.kaiTeam }
+        })
+      ).json();
     expect((await read()).saveApproval).toBeUndefined();
     holding("assets.put");
     const before = await read();
@@ -99,7 +108,7 @@ describe("the preview of a held asset save", () => {
       (
         await t.expectOk(t.kai.id, "assets.check_name", {
           params: { kind: "skill" },
-          payload: { name }
+          payload: { name, workspaceId: t.kaiTeam }
         })
       ).json();
     expect(await check()).toEqual({ available: true });
@@ -168,7 +177,7 @@ describe("the preview of a held asset save", () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", stored) }
+      payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
     });
     holding("assets.put");
     const requestId = await hold("assets.put", "skill", "kai-leave", {
@@ -191,7 +200,7 @@ describe("the preview of a held asset save", () => {
       expect(item.payload.actor.authSource).toBeUndefined();
     }
     // Retained before-text is still gated after the request ended, including its payload copy.
-    await t.seedHistoricalGrant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
+    await t.grant(t.admin.id, "skill.read", { workspaceId: t.kaiTeam }, "deny");
     const withheld = (
       await t.expectOk(t.admin.id, "approval_requests.get", { params: { requestId } })
     ).json();
@@ -206,7 +215,7 @@ describe("the preview of a held asset save", () => {
       const { t, holding, hold } = await setup();
       await t.expectOk(t.kai.id, "assets.put", {
         params: { kind: "skill", name: "kai-leave" },
-        payload: { config: skill("kai-leave", stored) }
+        payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
       });
       holding("assets.put");
       const requestId = await hold("assets.put", "skill", "kai-leave", {
@@ -247,7 +256,7 @@ describe("the preview of a held asset save", () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", stored) }
+      payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
     });
     await t.grant(
       t.kai.id,
@@ -280,7 +289,7 @@ describe("the preview of a held asset save", () => {
     holding();
     await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "agent", name: "kai-new" },
-      payload: { config: agent("kai-new"), expectedRevision: null }
+      payload: { config: agent("kai-new"), expectedRevision: null, workspaceId: t.kaiTeam }
     });
     expect((await preview(t.admin.id, requestId)).asset.isStale).toBe(true);
     // Non-readers learn nothing about the stored revision.
@@ -299,7 +308,7 @@ describe("the preview of a held asset save", () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", stored) }
+      payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
     });
     holding("assets.put");
     const requestId = await hold("assets.put", "skill", "kai-leave", {
@@ -310,7 +319,11 @@ describe("the preview of a held asset save", () => {
     holding();
     await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", "A newer policy"), expectedRevision: 1 }
+      payload: {
+        config: skill("kai-leave", "A newer policy"),
+        expectedRevision: 1,
+        workspaceId: t.kaiTeam
+      }
     });
     const stale = (await preview(t.admin.id, requestId)).asset;
     expect(stale.isStale).toBe(true);
@@ -340,7 +353,7 @@ describe("the preview of a held asset save", () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", stored) }
+      payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
     });
     holding("assets.put");
     const outdatedId = await hold("assets.put", "skill", "kai-leave", {
@@ -359,7 +372,11 @@ describe("the preview of a held asset save", () => {
     holding();
     await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", "A newer policy"), expectedRevision: 1 }
+      payload: {
+        config: skill("kai-leave", "A newer policy"),
+        expectedRevision: 1,
+        workspaceId: t.kaiTeam
+      }
     });
     expect((await preview(t.admin.id, outdatedId)).asset.isStale).toBe(true);
     await t.expectOk(t.admin.id, "approval_requests.decide", {
@@ -386,7 +403,7 @@ describe("the preview of a held asset save", () => {
     const { t, holding, hold } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", stored) }
+      payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
     });
     // A request filed by an earlier build froze its preview without the revision it asked
     // for: its call input still names that revision.
@@ -408,7 +425,11 @@ describe("the preview of a held asset save", () => {
     holding();
     await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", "A newer policy"), expectedRevision: 1 }
+      payload: {
+        config: skill("kai-leave", "A newer policy"),
+        expectedRevision: 1,
+        workspaceId: t.kaiTeam
+      }
     });
     await t.expectOk(t.admin.id, "approval_requests.decide", {
       params: { requestId },
@@ -477,7 +498,7 @@ describe("the preview of a held asset save", () => {
     expect((await preview(t.kai.id, requestId)).approverNames).toEqual([]);
   });
 
-  it("shows a new skill with its title, its Namespace and its whole text", async () => {
+  it("shows a new skill with its title and its whole text", async () => {
     const { t, holding, hold, preview } = await setup();
     holding("assets.put");
     const requestId = await hold("assets.put", "skill", "kai-leave", {
@@ -490,7 +511,7 @@ describe("the preview of a held asset save", () => {
       kind: "skill",
       name: "kai-leave",
       title: "Leave policy",
-      namespace: "kai-",
+      workspaceId: t.kaiTeam,
       isNew: true,
       description: "A skill",
       content: {
@@ -521,7 +542,7 @@ describe("the preview of a held asset save", () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", stored) }
+      payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
     });
     holding("assets.put");
     const requestId = await hold("assets.put", "skill", "kai-leave", {
@@ -534,7 +555,7 @@ describe("the preview of a held asset save", () => {
     expect(shown.asset).toMatchObject({
       kind: "skill",
       title: "Leave policy",
-      namespace: "kai-",
+      workspaceId: t.kaiTeam,
       isNew: false,
       previous: { title: "kai-leave" },
       content: {
@@ -551,13 +572,13 @@ describe("the preview of a held asset save", () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", stored) }
+      payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
     });
-    await t.seedHistoricalGrant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
+    await t.grant(t.admin.id, "skill.read", { workspaceId: t.kaiTeam }, "deny");
     await t.expectRefused(
       t.admin.id,
       "assets.get",
-      { params: { kind: "skill", name: "kai-leave" } },
+      { params: { kind: "skill", name: "kai-leave" }, query: { workspaceId: t.kaiTeam } },
       t.forbidden("skill.read", "denied")
     );
     holding("assets.put");
@@ -611,7 +632,7 @@ describe("the preview of a held asset save", () => {
     const { t, holding, hold } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", stored) }
+      payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
     });
     await t.grant(
       t.admin.id,
@@ -652,14 +673,14 @@ describe("the preview of a held asset save", () => {
     const { t, holding, hold, preview } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", stored) }
+      payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
     });
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-faq" },
-      payload: { config: skill("kai-faq", stored) }
+      payload: { config: skill("kai-faq", stored), workspaceId: t.kaiTeam }
     });
-    await t.seedHistoricalGrant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
-    await t.seedHistoricalGrant(t.kai.id, "skill.delete", { namespace: "kai-" });
+    await t.grant(t.admin.id, "skill.read", { workspaceId: t.kaiTeam }, "deny");
+    await t.grant(t.kai.id, "skill.delete", { workspaceId: t.kaiTeam });
     holding("assets.put");
     // A call that creates under a name that is taken, and a change of a skill that is then
     // deleted while the request waits.
@@ -674,7 +695,7 @@ describe("the preview of a held asset save", () => {
     });
     await t.expectOk(t.kai.id, "assets.delete", {
       params: { kind: "skill", name: "kai-faq" },
-      payload: { expectedRevision: 1 }
+      payload: { expectedRevision: 1, workspaceId: t.kaiTeam }
     });
 
     // A non-reader sees only the submitted title and that comparison is withheld.
@@ -686,7 +707,7 @@ describe("the preview of a held asset save", () => {
         kind: "skill",
         name,
         title: name,
-        namespace: "kai-",
+        workspaceId: t.kaiTeam,
         beforeWithheld: true
       });
     }
@@ -703,7 +724,7 @@ describe("the preview of a held asset save", () => {
       kind: "skill",
       name: "kai-leave",
       title: "kai-leave",
-      namespace: "kai-",
+      workspaceId: t.kaiTeam,
       beforeWithheld: true
     });
   });
@@ -756,7 +777,7 @@ describe("the preview of a held asset save", () => {
       kind: "agent",
       name: "kai-intake",
       title: "Intake",
-      namespace: "kai-",
+      workspaceId: t.kaiTeam,
       isNew: true
     });
     expect(shown.inputs).toEqual(
@@ -770,7 +791,7 @@ describe("the preview of a held asset save", () => {
 
   it("describes no asset for an operation that is not assets.put", async () => {
     const { t, holding, hold, preview } = await setup();
-    await t.put(t.kai.id, "agent", "kai-intake");
+    await t.put(t.kai.id, "agent", "kai-intake", t.kaiTeam);
     holding("assets.delete");
     const requestId = await hold("assets.delete", "agent", "kai-intake", { expectedRevision: 1 });
 
@@ -781,12 +802,12 @@ describe("the preview of a held asset save", () => {
   });
 
   // The Inbox asks for a page of requests every few seconds for everyone who decides. A row
-  // names the asset from the call itself: the list reads the Namespaces once and no asset.
+  // names the asset from the call itself: the list reads no asset.
   it("reads no asset for the rows of a list", async () => {
     const { t, holding, hold } = await setup();
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-leave" },
-      payload: { config: skill("kai-leave", stored) }
+      payload: { config: skill("kai-leave", stored), workspaceId: t.kaiTeam }
     });
     holding("assets.put");
     await hold("assets.put", "skill", "kai-leave", {
@@ -795,21 +816,20 @@ describe("the preview of a held asset save", () => {
     });
     await hold("assets.put", "skill", "kai-faq", { config: skill("kai-faq") });
     const assetReads = vi.spyOn(t.stores.configAssets, "getConfigAsset");
-    const namespaceReads = vi.spyOn(t.stores.access, "listNamespaceRecords");
 
     const listed = await t.expectOk(t.admin.id, "approval_requests.list", {
       query: { status: "pending" }
     });
 
     const assets = listedSchema.parse(listed.json()).items.map((item) => item.preview.asset);
+    const workspaceId = t.kaiTeam;
     expect(assets).toEqual(
       expect.arrayContaining([
-        { kind: "skill", name: "kai-leave", title: "kai-leave", namespace: "kai-", isNew: false },
-        { kind: "skill", name: "kai-faq", title: "kai-faq", namespace: "kai-", isNew: true }
+        { kind: "skill", name: "kai-leave", title: "kai-leave", workspaceId, isNew: false },
+        { kind: "skill", name: "kai-faq", title: "kai-faq", workspaceId, isNew: true }
       ])
     );
     expect(assets).toHaveLength(2);
     expect(assetReads).not.toHaveBeenCalled();
-    expect(namespaceReads).toHaveBeenCalledTimes(1);
   });
 });

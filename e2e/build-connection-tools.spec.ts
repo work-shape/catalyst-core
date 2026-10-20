@@ -51,7 +51,7 @@ async function deleteAgent(admin: Page, name: string): Promise<void> {
 // could be given an operation of a Connection on its page.
 test("an operation of a Connection is ticked on an agent, saved and still ticked after a reload", async ({
   page,
-  // The test stores an agent; the turn on the agents holds the one on the Namespaces.
+  // The test stores an agent; the turn on the agents holds the one on the grants.
   instanceAgentsChange: _instanceAgentsChange,
   // It plants a Connection no release config names.
   releaseConnections: _releaseConnections

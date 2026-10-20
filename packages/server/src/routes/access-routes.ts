@@ -20,7 +20,6 @@ import {
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type CollaborationWorkspace,
-  type Namespace,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
 import { AccessWorkflow, type GrantViewContext } from "../access/access-service";
@@ -29,9 +28,9 @@ import { requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 /**
- * Governance records. The six changing operations are operations of the registry: each call
- * is an Operation Run, and the caller's right is asked before the policy. The four reads are
- * plain routes.
+ * Governance records. The three changing operations are operations of the registry: each
+ * call is an Operation Run, and the caller's right is asked before the policy. The three reads
+ * are plain routes.
  */
 export function registerAccessRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new AccessWorkflow(options);
@@ -200,30 +199,6 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
     workflow.effective(user, access, query)
   );
 
-  route.operation(apiOperations["namespaces.create"], {
-    resource: namespaceResource,
-    changeClass: "reversible",
-    execute: async (input, context) => {
-      const user = personOf(context.actor);
-      return namespaceView(
-        await workflow.createNamespace(user, context, input),
-        await workflow.hiddenUserIds(user)
-      );
-    }
-  });
-
-  route.operation(apiOperations["namespaces.update"], {
-    resource: namespaceResource,
-    changeClass: "reversible",
-    execute: async (input, context) => {
-      const user = personOf(context.actor);
-      return namespaceView(
-        await workflow.updateNamespace(user, context, { ...input, prefix: prefixParam(input) }),
-        await workflow.hiddenUserIds(user)
-      );
-    }
-  });
-
   route(apiOperations["workspaces.limits.list"], async () =>
     (await workflow.listWorkspaceLimits()).map(workspaceLimitsView)
   );
@@ -243,27 +218,6 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
           ...lists
         })
       )
-  });
-
-  route(apiOperations["namespaces.list"], async ({ user }) => {
-    const hidden = await workflow.hiddenUserIds(user);
-    return (await workflow.listNamespaces()).map((namespace) => ({
-      ...namespaceView(namespace, hidden),
-      grantCount: namespace.grantCount,
-      assetCount: namespace.assetCount
-    }));
-  });
-
-  route.operation(apiOperations["namespaces.delete"], {
-    resource: namespaceResource,
-    changeClass: "reversible",
-    execute: async (input, context) => {
-      const user = personOf(context.actor);
-      return namespaceView(
-        await workflow.deleteNamespace(user, context, prefixParam(input)),
-        await workflow.hiddenUserIds(user)
-      );
-    }
   });
 }
 
@@ -286,14 +240,6 @@ function personOf(actor: AuthenticatedIdentity): AuthenticatedUser {
     throw new AppError("FORBIDDEN", "Service principals cannot access user-scoped routes");
   }
   return actor;
-}
-
-function namespaceResource(input: { prefix: string }) {
-  return { kind: "namespace", id: input.prefix };
-}
-
-function prefixParam(params: { prefix: string }): string {
-  return requirePathParam(params.prefix, "Missing Namespace prefix");
 }
 
 /**
@@ -326,20 +272,5 @@ function grantView(
         }
       : {}),
     ...(context.hiddenUserIds.has(grantedBy) ? {} : { grantedBy })
-  };
-}
-
-/**
- * On the wire a list that does not restrict is `null`, so it cannot be mistaken for empty.
- * `createdBy` is left out when the caller is not shown the user who registered the Namespace.
- */
-function namespaceView(namespace: Namespace, hidden: ReadonlySet<string>) {
-  return {
-    prefix: namespace.prefix,
-    displayName: namespace.displayName,
-    allowedToolNames: namespace.allowedToolNames ?? null,
-    allowedModelBindingIds: namespace.allowedModelBindingIds ?? null,
-    ...(hidden.has(namespace.createdBy) ? {} : { createdBy: namespace.createdBy }),
-    createdAt: namespace.createdAt
   };
 }

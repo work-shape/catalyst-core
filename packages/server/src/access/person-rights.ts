@@ -17,12 +17,12 @@ export interface PersonRightsOptions extends PrincipalRightsOptions {
 }
 
 /** Where a row or an entry holds its action: the scope fields both carry. */
-type ScopedRight = Pick<AccessEntry, "action" | "scopeKind" | "scopeId" | "namespace">;
+type ScopedRight = Pick<AccessEntry, "action" | "scopeKind" | "scopeId">;
 
 /**
  * Every right a person holds, as whoever changes the person's account must hold it: each role
- * default and instance-wide row as its action, each row in a workspace, a Namespace or on one
- * asset on that resource, each membership of a Shared Workspace as the rights it carries
+ * default and instance-wide row as its action, each row in a workspace or on one asset on that
+ * resource, each membership of a Shared Workspace as the rights it carries
  * there, and each reference of a tool as the action `ref:<reference>`. A right a deny of the
  * person takes away is left out. The person's own Personal Workspace is the account itself, which
  * every account has and nobody gives, so its membership is not asked.
@@ -74,14 +74,14 @@ export async function personRights(
 
 /**
  * The right a row or an entry names, on the resource of its scope: an asset by kind, name, id
- * and owner where the store knows it and by its id alone where not, a workspace by its id, a
- * Namespace by its prefix, and the whole instance as no resource.
+ * and owner where the store knows it and by its id alone where not, a workspace by its id, and
+ * the whole instance as no resource.
  */
 export function rightAtScope(
   row: ScopedRight,
   assets: ReadonlyMap<string, Pick<GrantScopeAsset, "id" | "kind" | "name" | "workspaceId">>
 ): HeldRight {
-  const { action, scopeId, namespace } = row;
+  const { action, scopeId } = row;
   switch (row.scopeKind) {
     case "asset": {
       const asset = scopeId === undefined ? undefined : assets.get(scopeId);
@@ -90,8 +90,6 @@ export function rightAtScope(
     }
     case "workspace":
       return { action, resource: { workspaceId: scopeId ?? "" } };
-    case "namespace":
-      return { action, resource: { name: namespace ?? "" } };
     default:
       return { action };
   }

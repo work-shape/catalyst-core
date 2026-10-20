@@ -11,7 +11,7 @@ import {
 
 export interface AssetProvenance {
   instance: string;
-  /** The instance's config version; a working copy of one Namespace does not read it. */
+  /** The instance's config version; a working copy of one workspace does not read it. */
   version?: number;
 }
 

@@ -26,7 +26,7 @@ import {
   offeredNowhere,
   type SeedApi
 } from "./api";
-import { seedApps, seedWorkspace } from "./apps";
+import { seedApps, seedWorkspaces } from "./apps";
 import { seedBuilder } from "./builder";
 import { seedWorkflows } from "./workflows";
 import { seedWorkspaceAssets } from "./workspace-assets";
@@ -45,9 +45,10 @@ import {
   grants,
   heldSkill,
   heldSkillChange,
-  namespaces,
+  hrWorkspace,
   people,
   personOf,
+  workspace,
   workspaceBundles,
   type PersonKey
 } from "./company";
@@ -160,16 +161,26 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
   const userIds = await seedPeople(root, password, moduleOn("userInvitations"), steps);
   const apiKey = await seedCliKey(root, instance, secrets, steps);
   await seedInstanceAssets(root, instance, apiKey, steps);
-  await seedNamespaces(root, as, steps);
   await seedAssets(root, as, instance, apiKey, steps);
   await seedBuilder(root, as, modules, instance.assetsDir, steps, () =>
     seedGrants(root, as, userIds, steps)
   );
-  await seedHeldCalls(root, as, steps);
+  const [workspaceId, hrWorkspaceId] = await seedWorkspaces(as, [workspace, hrWorkspace], steps);
+  if (!workspaceId || !hrWorkspaceId) throw new Error("The seed found no id of a seeded workspace");
+  await seedWorkspaceLimits(root, hrWorkspaceId);
+  await seedWorkspaceBundles(
+    root,
+    as,
+    userIds,
+    [
+      { workspaceId, ...workspaceBundles },
+      { workspaceId: hrWorkspaceId, ...hrWorkspace.bundles }
+    ],
+    steps
+  );
+  await seedWorkspaceAssets(as, workspaceId, hrWorkspaceId, steps);
+  await seedHeldCalls(root, as, hrWorkspaceId, steps);
   await seedConnections(root, as, userIds, modules, steps);
-  const workspaceId = await seedWorkspace(as, steps);
-  await seedWorkspaceBundles(root, as, userIds, workspaceId, steps);
-  await seedWorkspaceAssets(as, workspaceId, steps);
   await seedApps(modules, as, workspaceId, instance.assetsDir, steps);
   const seededWorkflows = await seedWorkflows(root, modules, instance.assetsDir);
   if (seededWorkflows) steps.push(seededWorkflows);
@@ -250,36 +261,31 @@ async function seedPeople(
 const sameList = (left: readonly string[] | null, right: readonly string[] | null) =>
   left === null || right === null ? left === right : sameSet(left, right);
 
-async function seedNamespaces(
-  root: SeedApi,
-  as: (key: PersonKey) => Promise<SeedApi>,
-  steps: SeedStep[]
-): Promise<void> {
-  const [existing, overview] = await Promise.all([root.listNamespaces(), root.assetsOverview()]);
+/**
+ * The tools and models the HR workspace's agents may use. Of the listed models it keeps the
+ * ones the instance has. A list changed since is set back.
+ */
+async function seedWorkspaceLimits(root: SeedApi, workspaceId: string): Promise<void> {
+  const [existing, overview] = await Promise.all([
+    root.listWorkspaceLimits(),
+    root.assetsOverview()
+  ]);
   const instanceModels = overview.references.modelBindingIds;
-  let created = 0;
-  for (const namespace of namespaces) {
-    const wanted = {
-      displayName: namespace.displayName,
-      allowedToolNames: namespace.allowedToolNames ?? null,
-      allowedModelBindingIds:
-        namespace.allowedModelBindingIds?.filter((id) => instanceModels.includes(id)) ?? null
-    };
-    const found = existing.find((candidate) => candidate.prefix === namespace.prefix);
-    if (!found) {
-      await (
-        await as(namespace.registeredBy)
-      ).createNamespace({ prefix: namespace.prefix, ...wanted });
-      created += 1;
-    } else if (
-      found.displayName !== wanted.displayName ||
-      !sameList(found.allowedToolNames, wanted.allowedToolNames) ||
-      !sameList(found.allowedModelBindingIds, wanted.allowedModelBindingIds)
-    ) {
-      await root.updateNamespace(namespace.prefix, wanted);
-    }
+  const wanted = {
+    allowedToolNames: hrWorkspace.allowedToolNames,
+    allowedModelBindingIds: hrWorkspace.allowedModelBindingIds.filter((id) =>
+      instanceModels.includes(id)
+    )
+  };
+  const found = existing.find((candidate) => candidate.id === workspaceId);
+  if (!found)
+    throw new Error(`The instance lists no limits of the workspace '${hrWorkspace.name}'`);
+  if (
+    !sameList(found.allowedToolNames, wanted.allowedToolNames) ||
+    !sameList(found.allowedModelBindingIds, wanted.allowedModelBindingIds)
+  ) {
+    await root.updateWorkspaceLimits(workspaceId, wanted);
   }
-  steps.push({ name: "namespaces", created, existing: namespaces.length - created });
 }
 
 type InstanceOptions = Pick<
@@ -510,7 +516,7 @@ async function seedGrants(
   for (const grant of grants) {
     const holderId = userIds.get(grant.holder);
     if (!holderId) throw new Error(`The seed has no user for '${grant.holder}'`);
-    // Prefixes select existing assets only; they never create a Namespace grant.
+    // A prefix selects the assets whose names start with it: each gets rows of its own.
     const selection = grant.scope;
     const selected =
       "prefix" in selection
@@ -549,62 +555,71 @@ async function seedGrants(
   steps.push({ name: "grant rows", created, existing: total - created });
 }
 
-/** Builder and Publisher in the company's workspace for its outside builder, one row each. */
+/**
+ * Bundles held in a workspace without membership, one row each: Builder and Publisher in the
+ * company's workspace for its outside builder, Builder in the HR workspace for Elif Aydin.
+ */
 async function seedWorkspaceBundles(
   root: SeedApi,
   as: (key: PersonKey) => Promise<SeedApi>,
   userIds: ReadonlyMap<PersonKey, string>,
-  workspaceId: string,
+  held: readonly {
+    workspaceId: string;
+    holder: PersonKey;
+    bundles: readonly string[];
+    grantedBy: PersonKey;
+  }[],
   steps: SeedStep[]
 ): Promise<void> {
-  const holderId = userIds.get(workspaceBundles.holder);
-  if (!holderId) throw new Error(`The seed has no user for '${workspaceBundles.holder}'`);
   const existing = await root.listGrants();
   let created = 0;
-  for (const action of workspaceBundles.bundles) {
-    const there = existing.some(
-      (row) =>
-        row.holderKind === "user" &&
-        row.holderId === holderId &&
-        row.action === action &&
-        row.scopeKind === "workspace" &&
-        row.scopeId === workspaceId
-    );
-    if (there) continue;
-    await (
-      await as(workspaceBundles.grantedBy)
-    ).grant({
-      holderKind: "user",
-      holderId,
-      action,
-      effect: "allow",
-      scopeKind: "workspace",
-      scopeId: workspaceId
-    });
-    created += 1;
+  let total = 0;
+  for (const { workspaceId, holder, bundles, grantedBy } of held) {
+    const holderId = userIds.get(holder);
+    if (!holderId) throw new Error(`The seed has no user for '${holder}'`);
+    const granter = await as(grantedBy);
+    for (const action of bundles) {
+      total += 1;
+      const there = existing.some(
+        (row) =>
+          row.holderKind === "user" &&
+          row.holderId === holderId &&
+          row.action === action &&
+          row.scopeKind === "workspace" &&
+          row.scopeId === workspaceId
+      );
+      if (there) continue;
+      await granter.grant({
+        holderKind: "user",
+        holderId,
+        action,
+        effect: "allow",
+        scopeKind: "workspace",
+        scopeId: workspaceId
+      });
+      created += 1;
+    }
   }
-  steps.push({
-    name: "workspace bundles",
-    created,
-    existing: workspaceBundles.bundles.length - created
-  });
+  steps.push({ name: "workspace bundles", created, existing: total - created });
 }
 
 /**
  * Leaves two calls waiting for an approval, where the instance sends such calls to one: a new
- * skill, and a change of one paragraph of a skill the seed pushed. The change is asked for
- * only while the request for the new skill waits. That request is how the seed knows that the
- * instance holds such a call: on an instance that holds none, the change would be written at
- * once and pushed away again by the next run.
+ * skill in the HR workspace, and a change of one paragraph of the skill that workspace owns.
+ * The change is asked for only while the request for the new skill waits. That request is how
+ * the seed knows that the instance holds such a call: on an instance that holds none, the
+ * change would be written at once and set back again by the next run.
  */
 async function seedHeldCalls(
   root: SeedApi,
   as: (key: PersonKey) => Promise<SeedApi>,
+  workspaceId: string,
   steps: SeedStep[]
 ): Promise<void> {
   let created = 0;
   let existing = 0;
   const notes: string[] = [];
+  const inWorkspace = `in the workspace '${hrWorkspace.name}'`;
   const waits = async (person: PersonKey, skillName: string) =>
     (await (await as(person)).listOwnApprovalRequests()).some(
       (request) =>
@@ -613,7 +628,7 @@ async function seedHeldCalls(
 
   const newName = heldSkill.config.name;
   let holds = false;
-  if (await root.getAsset("skill", newName)) {
+  if (await root.getAsset("skill", newName, workspaceId)) {
     notes.push(
       `The skill '${newName}' exists: its request was decided, or the instance asks for no approval.`
     );
@@ -621,42 +636,44 @@ async function seedHeldCalls(
     existing += 1;
     holds = true;
   } else if (
-    (await (await as(heldSkill.requestedBy)).saveAsset("skill", heldSkill.config)) ===
-    "pending_approval"
+    (await (
+      await as(heldSkill.requestedBy)
+    ).saveAsset("skill", heldSkill.config, undefined, workspaceId)) === "pending_approval"
   ) {
     created += 1;
     holds = true;
   } else {
     notes.push(
-      `The instance asks for no approval of a new skill in 'hr-', so '${newName}' was created at once and nothing waits in the Inbox.`
+      `The instance asks for no approval of a new skill ${inWorkspace}, so '${newName}' was created at once and nothing waits in the Inbox.`
     );
   }
 
-  const { skillName, before, after } = heldSkillChange;
-  if (await waits(heldSkillChange.requestedBy, skillName)) {
+  const { skill, before, after } = heldSkillChange;
+  if (await waits(heldSkillChange.requestedBy, skill.name)) {
     existing += 1;
   } else if (!holds) {
     notes.push(
-      `No change of '${skillName}' was requested: the seed asks for it only while the request for '${newName}' waits.`
+      `No change of '${skill.name}' was requested: the seed asks for it only while the request for '${newName}' waits.`
     );
   } else {
-    const stored = await root.getAsset("skill", skillName);
+    const stored = await root.getAsset("skill", skill.name, workspaceId);
     const content = stored?.config.content;
     if (!stored || typeof content !== "string" || !content.includes(before)) {
-      throw new Error(`The skill '${skillName}' has no paragraph '${before}' to change`);
+      throw new Error(`The skill '${skill.name}' has no paragraph '${before}' to change`);
     }
     const outcome = await (
       await as(heldSkillChange.requestedBy)
     ).saveAsset(
       "skill",
-      { ...stored.config, name: skillName, content: content.replace(before, after) },
-      stored.revision
+      { ...stored.config, name: skill.name, content: content.replace(before, after) },
+      stored.revision,
+      workspaceId
     );
     if (outcome === "pending_approval") {
       created += 1;
     } else {
       notes.push(
-        `The instance asks for no approval of a changed skill in 'hr-', so '${skillName}' was changed at once.`
+        `The instance asks for no approval of a changed skill ${inWorkspace}, so '${skill.name}' was changed at once.`
       );
     }
   }

@@ -53,7 +53,7 @@ const cliOffer = {
   actions: ["agent.read", "agent.write"],
   useActions: [],
   setupActions: [],
-  namespaces: [],
+  workspaces: [],
   settled: true
 };
 
@@ -64,7 +64,7 @@ function key(overrides: Partial<PersonalApiKey> = {}): PersonalApiKey {
     ownerDisplayLabel: "Fabian Kai",
     name: "fabian-mbp",
     keyPrefix: "cat.apic_1f0c2a9e-7b6d-4c3a-9e8f-0a1b2c3d4e5f.",
-    scopes: ["agent.write:kai-", "skill.read"],
+    scopes: ["agent.write:ws-tax", "skill.read"],
     createdAt: "2026-10-01T10:00:00.000Z",
     expiresAt: "2027-01-01T10:00:00.000Z",
     ...overrides
@@ -145,24 +145,38 @@ describe("personal API key model", () => {
     expect(personalKeyDraftProblem(initialPersonalKeyDraft("laptop"))).toBe("scopes");
   });
 
-  it("limits every chosen action to the Namespace where one is given", () => {
-    expect(buildPersonalKeyScopes(["agent.write", "skill.read"], "")).toEqual([
+  it("limits every chosen action to the workspace, and to one asset in it, where one is chosen", () => {
+    const everywhere = { workspaceId: "", assetName: "" };
+    expect(buildPersonalKeyScopes(["agent.write", "skill.read"], everywhere)).toEqual([
       "agent.write",
       "skill.read"
     ]);
-    expect(buildPersonalKeyScopes(["agent.write"], " kai- ")).toEqual(["agent.write:kai-"]);
+    expect(
+      buildPersonalKeyScopes(["agent.write"], { ...everywhere, workspaceId: "ws-tax" })
+    ).toEqual(["agent.write:ws-tax"]);
+    expect(
+      buildPersonalKeyScopes(["agent.write", "skill.read"], {
+        workspaceId: "ws-tax",
+        assetName: " vat-helper "
+      })
+    ).toEqual(["agent.write:ws-tax/vat-helper", "skill.read:ws-tax/vat-helper"]);
+    // An asset is one of a workspace: without a workspace its id limits nothing.
+    expect(
+      buildPersonalKeyScopes(["agent.write"], { ...everywhere, assetName: "vat-helper" })
+    ).toEqual(["agent.write"]);
   });
 
-  it("sends a draft once it has a name, a scope and a well-formed Namespace", () => {
+  it("sends a draft once it has a name, a scope and a well-formed asset id", () => {
     const draft = { ...initialPersonalKeyDraft("laptop"), actions: ["agent.write"] };
-    expect(draft.expiryDays).toBe(90);
+    expect(draft).toMatchObject({ expiryDays: 90, workspaceId: "", assetName: "" });
     expect(personalKeyDraftProblem({ ...draft, name: " " })).toBe("name");
     expect(personalKeyDraftProblem({ ...draft, actions: [] })).toBe("scopes");
-    expect(personalKeyDraftProblem({ ...draft, namespace: "Kai" })).toBe("namespace");
-    expect(personalKeyRequest({ ...draft, namespace: "Kai" }, now)).toBeUndefined();
-    expect(personalKeyRequest({ ...draft, namespace: "kai-", expiryDays: 30 }, now)).toEqual({
+    const spaced = { ...draft, workspaceId: "ws-tax", assetName: "vat helper" };
+    expect(personalKeyDraftProblem(spaced)).toBe("assetName");
+    expect(personalKeyRequest(spaced, now)).toBeUndefined();
+    expect(personalKeyRequest({ ...draft, workspaceId: "ws-tax", expiryDays: 30 }, now)).toEqual({
       name: "laptop",
-      scopes: ["agent.write:kai-"],
+      scopes: ["agent.write:ws-tax"],
       expiresAt: "2026-11-12T12:00:00.000Z"
     });
   });
@@ -188,10 +202,15 @@ describe("personal API key model", () => {
     expect(connectCodeOfSearch("")).toBe("");
   });
 
-  it("reads a scope back as its action and the prefix it is limited to", () => {
-    expect(personalKeyScopeParts("agent.write:kai-")).toEqual({
+  it("reads a scope back as its action and the workspace and asset it is limited to", () => {
+    expect(personalKeyScopeParts("agent.write:ws-tax")).toEqual({
       action: "agent.write",
-      prefix: "kai-"
+      workspaceId: "ws-tax"
+    });
+    expect(personalKeyScopeParts("agent.write:ws-tax/vat-helper")).toEqual({
+      action: "agent.write",
+      workspaceId: "ws-tax",
+      assetName: "vat-helper"
     });
     expect(personalKeyScopeParts("skill.read")).toEqual({ action: "skill.read" });
   });
@@ -311,7 +330,8 @@ function keysTable(locale: "en" | "de", keys: PersonalApiKey[], showOwner = fals
         loading: false,
         showOwner,
         revoking: false,
-        onRevoke: async () => undefined
+        onRevoke: async () => undefined,
+        workspaceName: (id) => (id === "ws-tax" ? "Tax" : undefined)
       })
     )
   );
@@ -343,16 +363,22 @@ function heads(markup: string): { text: string; folds: boolean; narrowest: boole
 // UI-KEYS, from the design reviews of 2026-10-17: the table showed raw scope ids and key
 // prefixes, times with seconds, and at 1280 Status and Revoke sat behind a sideways scroll.
 describe("You > API keys in plain words", () => {
-  it("names each scope as the rights screens do, with its prefix, in English and German", () => {
+  it("names each scope as the rights screens do, with its workspace, in English and German", () => {
     const english = keysTable("en", [key()]);
-    expect(english).toContain("Edit agents in kai-");
+    expect(english).toContain("Edit agents in Tax");
     expect(english).toContain("View skills");
     expect(english).not.toContain("agent.write");
     expect(english).not.toContain("skill.read");
     const german = keysTable("de", [key()]);
-    expect(german).toContain("Agenten bearbeiten in kai-");
+    expect(german).toContain("Agenten bearbeiten in Tax");
     expect(german).toContain("Skills ansehen");
     expect(german).toContain("Was der Schlüssel darf");
+    // One asset is named by its id; a workspace the reader is not shown, by its id too.
+    const narrowed = keysTable("en", [
+      key({ scopes: ["agent.write:ws-tax/vat-helper", "skill.read:ws-gone"] })
+    ]);
+    expect(narrowed).toContain("Edit agents: vat-helper in Tax");
+    expect(narrowed).toContain("View skills in ws-gone");
   });
 
   // Badges of rights stacked and were cut at 390; one muted line breaks between words instead.
@@ -361,7 +387,7 @@ describe("You > API keys in plain words", () => {
     const rights = elementSaying(
       keysTable("en", [key()]),
       "span",
-      "Edit agents in kai-, View skills"
+      "Edit agents in Tax, View skills"
     );
     expect(rights.classList.contains("text-muted-foreground")).toBe(true);
   });
@@ -430,7 +456,11 @@ describe("You > API keys in plain words", () => {
               createdAt: "2026-10-13T11:58:00.000Z",
               expiresAt: "2026-10-13T12:13:00.000Z"
             },
-            offer: { ...cliOffer, actions: ["agent.write", "workflow.publish"] },
+            offer: {
+              ...cliOffer,
+              actions: ["agent.write", "workflow.publish"],
+              workspaces: [{ id: "ws-tax", name: "Tax" }, { id: "ws-own" }]
+            },
             pending: false,
             onConfirm: async () => undefined
           })
@@ -446,6 +476,11 @@ describe("You > API keys in plain words", () => {
     expect(english).not.toContain("sm:grid-cols-2");
     expect(english).toContain("Where you use the key, such as your laptop or a script.");
     expect(english).toContain("If you lose a right later, the key loses it too.");
+    // The key is limited by choosing a workspace, everywhere until one is chosen; the asset
+    // field waits for a workspace.
+    expect(english).toContain("Limit to a workspace");
+    expect(english).toContain("Everywhere");
+    expect(english).not.toContain("Limit to one asset");
     const german = render("de");
     expect(german).toContain("Agenten bearbeiten");
     expect(german).toContain("Workflows veröffentlichen");

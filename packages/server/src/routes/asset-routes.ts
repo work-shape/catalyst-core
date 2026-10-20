@@ -33,7 +33,7 @@ const ASSET_WRITE_MODULE = "assetManagement";
  * a whole, which are plain reads. Each call on an asset is an Operation Run. The right is the kind's
  * own and is decided on the asset the call names, so every operation brings its check: the
  * registry asks it before the policy, and the workflow asks it again on the asset it loaded.
- * The policy is asked about the kind, the owner and the Namespace of every asset a call names.
+ * The policy is asked about the kind and the owner of every asset a call names.
  */
 export function registerAssetRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new AssetWorkflow(options);

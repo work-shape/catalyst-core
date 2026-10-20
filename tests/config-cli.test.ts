@@ -91,21 +91,21 @@ import {
 } from "@work-shape/catalyst-cli";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import {
-  agentConfig as namespaceAgentConfig,
-  grantKaiNamespace,
+  agentConfig as personalAgentConfig,
+  grantKaiWorkspace,
   inDays,
   setupPersonalKeyInstance,
   type PersonalKeyInstance
 } from "./support/personal-api-keys";
 import {
-  agent as namespaceAgent,
+  agent as accessAgent,
   clientInstanceId as accessInstanceId,
   recordAuthAdapter,
   setupAccessInstance,
   skill as accessSkill
 } from "./support/access-instance";
 import { IBAN as GUARDRAIL_IBAN, guardedEvents, ibanPattern } from "./support/guardrails";
-import { setupNamespaceHolder } from "./support/asset-operations";
+import { setupWorkspaceHolder } from "./support/asset-operations";
 import { appFiles, expectStatus, setupAppInstance } from "./support/app-instance";
 
 const servers: TestInstance[] = [];
@@ -299,7 +299,7 @@ skills:
     const manifest = parseManifest(`instances:
   production:
     url: https://catalyst.test
-    namespace: tax-
+    workspace: cws_tax
 agents: []
 skills: []
 `);
@@ -2859,26 +2859,26 @@ describe("config CLI help", () => {
   });
 });
 
-/** A working copy of the Namespace `kai-` with one agent of each side of its border. */
-async function kaiWorkingCopy(): Promise<string> {
+/** A working copy bound to one workspace, with one agent. */
+async function kaiWorkingCopy(workspaceId = "cws_kai", agentName = "kai-tax"): Promise<string> {
   const directory = await createTemporaryDirectory();
   await writeFile(
     join(directory, "catalyst.yaml"),
-    "instances:\n  production:\n    url: https://catalyst.test\n    namespace: kai-\ndefaultInstance: production\nagents:\n  - agents/*.agent.yaml\nskills:\n  - skills/*/SKILL.md\n"
+    `instances:\n  production:\n    url: https://catalyst.test\n    workspace: ${workspaceId}\ndefaultInstance: production\nagents:\n  - agents/*.agent.yaml\nskills:\n  - skills/*/SKILL.md\n`
   );
   await mkdir(join(directory, "agents"));
   await writeFile(
-    join(directory, "agents", "kai-tax.agent.yaml"),
-    serializeAgentYaml(namespaceAgentConfig("kai-tax"))
+    join(directory, "agents", `${agentName}.agent.yaml`),
+    serializeAgentYaml(personalAgentConfig(agentName))
   );
   return directory;
 }
 
 describe("catalyst login", () => {
-  it("saves the key of a confirmed code, and the CLI then works inside the person's Namespace only", async () => {
+  it("saves the key of a confirmed code, and the CLI then works inside the person's workspace only", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
-    const cwd = await kaiWorkingCopy();
+    await grantKaiWorkspace(t);
+    const cwd = await kaiWorkingCopy(t.kaiTeam);
     const configHome = await createTemporaryDirectory();
     const env = { CATALYST_CONFIG_HOME: configHome };
     const fetchImpl = createTestFetch(t.instance);
@@ -2895,7 +2895,7 @@ describe("catalyst login", () => {
         params: { userCode: code ?? "" },
         payload: {
           name: "Mini",
-          scopes: ["agent.read:kai-", "agent.write:kai-"],
+          scopes: [`agent.read:${t.kaiTeam}`, `agent.write:${t.kaiTeam}`],
           expiresAt: inDays(30)
         }
       });
@@ -2939,15 +2939,13 @@ describe("catalyst login", () => {
       "# Pulled from production.\n"
     );
 
-    // An agent outside the Namespace is refused, with the right that is missing.
-    await writeFile(
-      join(cwd, "agents", "other.agent.yaml"),
-      serializeAgentYaml(namespaceAgentConfig("other"))
-    );
+    // An agent of another workspace is refused, with the right that is missing.
+    const otherTeam = await t.sharedWorkspace("Other team");
+    const elsewhere = await kaiWorkingCopy(otherTeam, "other");
     const errors: string[] = [];
     expect(
       await runCli(["config", "push"], {
-        cwd,
+        cwd: elsewhere,
         env,
         fetchImpl,
         stdout,
@@ -2955,6 +2953,13 @@ describe("catalyst login", () => {
       })
     ).toBe(1);
     expect(errors.join("")).toMatch(/other/u);
+    expect(
+      await t.stores.configAssets.getConfigAsset({
+        clientInstanceId: accessInstanceId,
+        kind: "agent",
+        name: "other"
+      })
+    ).toBeUndefined();
 
     // Revoked in Settings, the saved key is refused on the next call.
     const keys = await t.expectOk(t.kai.id, "me.api_keys.list");
@@ -3190,8 +3195,8 @@ describe("catalyst asset commands against an instance", () => {
     expect((await run("guardrail", "test", "no-iban")).code).toBe(2);
   });
 
-  it("builds an agent with its own skill in the holder's Namespace and is refused outside it", async () => {
-    const t = await setupNamespaceHolder({
+  it("builds an agent with its own skill in the holder's workspace and is refused outside it", async () => {
+    const t = await setupWorkspaceHolder({
       furtherToolNames: ["read_skill"],
       // The CLI sends its token: the sign-in takes it beside the test header.
       server: () => ({
@@ -3211,16 +3216,14 @@ describe("catalyst asset commands against an instance", () => {
     );
     await writeFile(join(cwd, "skills", "kai-guide", "references", "rates.md"), "# Rates\n");
     const tax = { toolNames: ["read_skill"], skillNames: ["kai-guide"] };
-    await writeFile(join(cwd, "kai-tax.yaml"), serializeAgentYaml(namespaceAgent("kai-tax", tax)));
-    await writeFile(
-      join(cwd, "lena-tax.yaml"),
-      serializeAgentYaml(namespaceAgent("lena-tax", tax))
-    );
+    await writeFile(join(cwd, "kai-tax.yaml"), serializeAgentYaml(accessAgent("kai-tax", tax)));
+    await writeFile(join(cwd, "lena-tax.yaml"), serializeAgentYaml(accessAgent("lena-tax", tax)));
     const { run, requests } = cliAs(t.instance, t.kai.id, cwd);
+    const inKai = ["--workspace", t.kaiTeam];
 
     const context = await run("context");
     expect(context.code, context.err).toBe(0);
-    expect(context.out).toMatch(/kai- {2}kai-: .*agent\.write/u);
+    expect(context.out).toMatch(new RegExp(`${t.kaiTeam} {2}Kai's team: .*agent\\.write`, "u"));
 
     const skill = await run(
       "skill",
@@ -3229,7 +3232,8 @@ describe("catalyst asset commands against an instance", () => {
       "--from",
       "skills/kai-guide",
       "--if-revision",
-      "new"
+      "new",
+      ...inKai
     );
     expect(skill, skill.err).toMatchObject({
       code: 0,
@@ -3242,7 +3246,8 @@ describe("catalyst asset commands against an instance", () => {
       "--from",
       "kai-tax.yaml",
       "--if-revision",
-      "new"
+      "new",
+      ...inKai
     );
     expect(created.code, created.err).toBe(0);
     expect((await t.stored("agent", "kai-tax"))?.config).toMatchObject({
@@ -3252,13 +3257,28 @@ describe("catalyst asset commands against an instance", () => {
       resources: [{ path: "references/rates.md", content: "# Rates\n" }]
     });
 
-    const listed = await run("agent", "list");
+    const listed = await run("agent", "list", ...inKai);
     expect(listed.out).toContain("kai-tax");
     expect(listed.out).not.toContain("assistant");
-    expect((await run("agent", "show", "kai-tax")).out).toContain("- kai-guide");
-    expect((await run("agent", "history", "kai-tax")).out).toMatch(/^1 +create +Kai/mu);
+    expect((await run("agent", "show", "kai-tax", ...inKai)).out).toContain("- kai-guide");
+    expect((await run("agent", "history", "kai-tax", ...inKai)).out).toMatch(/^1 +create +Kai/mu);
 
-    // Outside the Namespace the instance refuses, and the CLI prints what it said.
+    // In another workspace, and on the instance, the instance refuses, and the CLI prints
+    // what it said.
+    const inOther = await run(
+      "agent",
+      "put",
+      "lena-tax",
+      "--from",
+      "lena-tax.yaml",
+      "--if-revision",
+      "new",
+      ...["--workspace", t.lenaTeam]
+    );
+    expect(inOther.code).toBe(1);
+    expect(inOther.err).toContain(
+      "Refused by the instance (HTTP 403 FORBIDDEN): Missing the right 'agent.write'"
+    );
     const outside = await run(
       "agent",
       "put",
@@ -3282,7 +3302,8 @@ describe("catalyst asset commands against an instance", () => {
       "--from",
       "kai-tax.yaml",
       "--if-revision",
-      "new"
+      "new",
+      ...inKai
     );
     expect(stale.code).toBe(1);
     expect(stale.err).toContain("REVISION_CONFLICT");
@@ -3317,16 +3338,25 @@ describe("catalyst asset commands against an instance", () => {
       err: "The definition names 'kai-tax', and the command 'kai-other'.\n"
     });
 
-    const deleted = await run("agent", "delete", "kai-tax", "--if-revision", "1");
+    const deleted = await run("agent", "delete", "kai-tax", "--if-revision", "1", ...inKai);
     expect(deleted, deleted.err).toMatchObject({ code: 0 });
     expect(deleted.out).toContain("its delete is revision 2");
-    const reverted = await run("agent", "revert", "kai-tax", "--to", "1", "--if-revision", "2");
+    const reverted = await run(
+      "agent",
+      "revert",
+      "kai-tax",
+      "--to",
+      "1",
+      "--if-revision",
+      "2",
+      ...inKai
+    );
     expect(reverted.code, reverted.err).toBe(0);
     expect((await t.stored("agent", "kai-tax"))?.revision).toBe(3);
   });
 
   it("puts back what show --json printed, and asks for the model right only where the model changes", async () => {
-    const t = await setupNamespaceHolder({
+    const t = await setupWorkspaceHolder({
       server: () => ({
         authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" }
       })
@@ -4092,7 +4122,11 @@ async function computerOf(t: PersonalKeyInstance) {
       const clientLabel = z.object({ clientLabel: z.string() }).parse(asking.json()).clientLabel;
       await t.expectOk(t.kai.id, "me.connect_codes.confirm", {
         params: { userCode },
-        payload: { name: clientLabel, scopes: ["agent.read:kai-"], expiresAt: inDays(30) }
+        payload: {
+          name: clientLabel,
+          scopes: [`agent.read:${t.kaiTeam}`],
+          expiresAt: inDays(30)
+        }
       });
       confirmed = true;
     };
@@ -4120,7 +4154,7 @@ async function savedKey(configHome: string): Promise<string> {
 describe("catalyst setup", () => {
   it("logs Claude Code in by a confirmed code, writes its skill, prints no key, and keeps the key on a second run", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
+    await grantKaiWorkspace(t);
     const computer = await computerOf(t);
     const skillPath = join(computer.home, ".claude", "skills", "catalyst", "SKILL.md");
 
@@ -4136,7 +4170,7 @@ describe("catalyst setup", () => {
     expect(first.out).toContain("&level=use");
     expect(first.out).toContain(`Instance: ${SETUP_INSTANCE}`);
     expect(first.out).toContain(`Logged in with the key 'Claude Code on ${hostname()}'`);
-    expect(first.out).toContain("agent.read:kai-");
+    expect(first.out).toContain(`agent.read:${t.kaiTeam}`);
     expect(first.out).toContain(`Wrote the Catalyst skill to ${skillPath}.`);
     expect(await readFile(skillPath, "utf8")).toBe(await renderCatalystSkill());
     const key = await savedKey(computer.env.CATALYST_CONFIG_HOME);
@@ -4167,7 +4201,7 @@ describe("catalyst setup", () => {
 
   it("keeps a different skill file and says so, and with --force keeps it as SKILL.md.bak", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
+    await grantKaiWorkspace(t);
     const computer = await computerOf(t);
     const skillPath = join(computer.home, ".claude", "skills", "catalyst", "SKILL.md");
     await mkdir(join(skillPath, ".."), { recursive: true });
@@ -4193,7 +4227,7 @@ describe("catalyst setup", () => {
 
   it("writes the skill of Codex and of another tool to ~/.agents/skills, and tells Other where it is", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
+    await grantKaiWorkspace(t);
     const computer = await computerOf(t);
     const skillPath = join(computer.home, ".agents", "skills", "catalyst", "SKILL.md");
 
@@ -4212,7 +4246,7 @@ describe("catalyst setup", () => {
 
   it("logs in again where the saved key was revoked", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
+    await grantKaiWorkspace(t);
     const computer = await computerOf(t);
     expect((await computer.setup(["codex", "--instance", SETUP_INSTANCE])).code).toBe(0);
     const keys = keysSchema.parse((await t.expectOk(t.kai.id, "me.api_keys.list")).json());
@@ -4228,7 +4262,7 @@ describe("catalyst setup", () => {
 
   it("writes Claude Code's skill below CLAUDE_CONFIG_DIR where that is set", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
+    await grantKaiWorkspace(t);
     const computer = await computerOf(t);
     const claudeHome = join(computer.home, "claude-elsewhere");
     const skillPath = join(claudeHome, "skills", "catalyst", "SKILL.md");
@@ -4244,7 +4278,7 @@ describe("catalyst setup", () => {
 
   it("logs in again only where the instance refuses the saved key, not on any other answer", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
+    await grantKaiWorkspace(t);
     const computer = await computerOf(t);
     expect((await computer.setup(["codex", "--instance", SETUP_INSTANCE])).code).toBe(0);
     const key = await savedKey(computer.env.CATALYST_CONFIG_HOME);
@@ -4314,7 +4348,7 @@ describe("catalyst setup", () => {
 describe("catalyst setup, verifier repros", () => {
   it("never deletes a person's own file: a second --force keeps the first .bak", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
+    await grantKaiWorkspace(t);
     const computer = await computerOf(t);
     const skillPath = join(computer.home, ".claude", "skills", "catalyst", "SKILL.md");
     await mkdir(join(skillPath, ".."), { recursive: true });
@@ -4339,7 +4373,7 @@ describe("catalyst setup, verifier repros", () => {
 
   it("the skill's first command works after setup outside a working copy with one saved instance", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
+    await grantKaiWorkspace(t);
     const computer = await computerOf(t);
     expect((await computer.setup(["claude-code", "--instance", SETUP_INSTANCE])).code).toBe(0);
 
@@ -4359,7 +4393,7 @@ describe("catalyst setup, verifier repros", () => {
 
   it("writes nothing outside the skill folder through a link at SKILL.md", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
+    await grantKaiWorkspace(t);
     const computer = await computerOf(t);
     const skillPath = join(computer.home, ".claude", "skills", "catalyst", "SKILL.md");
     await mkdir(join(skillPath, ".."), { recursive: true });
@@ -4371,7 +4405,7 @@ describe("catalyst setup, verifier repros", () => {
 
   it("writes nothing through a link at SKILL.md to an existing file that holds a skill setup wrote", async () => {
     const t = await setupPersonalKeyInstance();
-    await grantKaiNamespace(t);
+    await grantKaiWorkspace(t);
     const computer = await computerOf(t);
     const skillPath = join(computer.home, ".claude", "skills", "catalyst", "SKILL.md");
     await mkdir(join(skillPath, ".."), { recursive: true });

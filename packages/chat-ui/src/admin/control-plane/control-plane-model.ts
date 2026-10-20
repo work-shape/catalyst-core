@@ -100,7 +100,7 @@ export interface ControlPlaneModel {
   mayWriteConnections: boolean;
   /**
    * Present when the viewer may start a new agent in Studio: the Agents page offers it, with
-   * the Namespaces its dialog lets the viewer name the agent in.
+   * what its dialog lets the viewer choose.
    */
   agentCreation: AgentCreation | undefined;
   /** True while the UI library gallery's route is active for a user who may open it. */
@@ -284,8 +284,6 @@ export function useControlPlaneModel({
     agentCreation:
       canViewBuild && mayCreateAgents(buildRights, config?.features.configAssets)
         ? {
-            namespaces: buildRights.creatableNamespaces(AGENT_ASSET_KIND),
-            mayNameFreely: buildRights.instanceWrite,
             mayChooseAll: buildRights.instanceWrite,
             // Ids are unique on the instance: the check names no workspace.
             checkName: (name) =>

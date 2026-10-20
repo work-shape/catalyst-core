@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DATA_STORE_ASSET_KIND, DATA_STORE_MANIFEST_FILE } from "@work-shape/catalyst-core";
-import { setupNamespaceHolder } from "./support/asset-operations";
+import { setupWorkspaceHolder } from "./support/asset-operations";
 import { clientInstanceId as accessInstanceId, skill } from "./support/access-instance";
 import { z } from "zod";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
@@ -19,7 +19,7 @@ import { IBAN, guardedEvents, ibanPattern, judge, noIban } from "./support/guard
 describe("a guardrail on a revert", () => {
   // Fails without the change: a revert wrote the earlier revision back unchecked.
   it("refuses to revert to a revision with an IBAN that was written before the guardrail", async () => {
-    const t = await setupNamespaceHolder({
+    const t = await setupWorkspaceHolder({
       server: (stores) => ({
         operations: { events: guardedEvents(stores, { no_iban: noIban() }).events }
       })

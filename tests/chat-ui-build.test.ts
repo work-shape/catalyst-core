@@ -30,10 +30,10 @@ import {
 } from "@work-shape/catalyst-chat-ui/build-area";
 import {
   instanceActions,
-  legalNamespace,
+  legalWorkspace,
   platformContext,
-  taxNamespace,
-  type Namespaces
+  taxWorkspace,
+  type Workspaces
 } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
@@ -79,7 +79,7 @@ function asset(kind: string, name: string, overrides: Partial<BuildAsset> = {}):
 
 // In the order the instance answers them: by name.
 const agents: BuildAssetRow[] = [
-  row("agent", "tax-steuer_agent", { title: "Steuer-Agent", namespace: "tax-" }),
+  row("agent", "tax-steuer_agent", { title: "Steuer-Agent" }),
   row("agent", "workflow_assistant", {
     title: "Workflow Assistant",
     description: "Reviews a workflow and plans the next checks.",
@@ -94,7 +94,10 @@ const noop = () => undefined;
 interface SourceInput {
   /** The rights the session names on the whole instance. */
   permissions?: string[];
-  namespaces?: Namespaces;
+  /** The workspaces the reader holds rights in. */
+  workspaces?: Workspaces;
+  /** The workspace Studio works in, where a new asset is started. */
+  inWorkspace?: string;
   /** What a kind's list answers, where it differs from the fixed rows. */
   lists?: Record<string, Partial<BuildList>>;
   /** What the read of one asset answers, by `kind/name`. Any other asset is missing. */
@@ -108,7 +111,7 @@ interface SourceInput {
  */
 function source(input: SourceInput = {}): BuildSource {
   const permissions = input.permissions ?? ["config_assets.read", "config_assets.write"];
-  const context = platformContext(input.namespaces, instanceActions(permissions));
+  const context = platformContext(input.workspaces, instanceActions(permissions));
   const rights = resolveBuildRights({ permissions }, context);
   const rows: Record<string, BuildAssetRow[]> = { agent: agents, skill: skills };
   return {
@@ -116,7 +119,7 @@ function source(input: SourceInput = {}): BuildSource {
       .filter((kind) => rights.reads(kind.kind))
       .map((kind) => ({
         kind: kind.kind,
-        canCreate: rights.mayCreate(kind.kind),
+        canCreate: rights.mayCreate(kind.kind, input.inWorkspace),
         canDelete: true
       })),
     rights,
@@ -349,7 +352,7 @@ describe("Studio frame", () => {
       {
         source: source({
           permissions: [],
-          namespaces: [{ ...taxNamespace, actions: ["agent.read"] }]
+          workspaces: [{ ...taxWorkspace, actions: ["agent.read"] }]
         })
       }
     );
@@ -554,12 +557,12 @@ describe("Studio frame", () => {
   });
 });
 
-describe("Studio with access to prefixed assets", () => {
-  const holder = (namespaces: Namespaces, input: SourceInput = {}) =>
-    source({ permissions: [], namespaces, ...input });
+describe("Studio with rights in a workspace", () => {
+  const holder = (workspaces: Workspaces, input: SourceInput = {}) =>
+    source({ permissions: [], workspaces, inWorkspace: "ws-tax", ...input });
 
-  it("offers a new asset only for a kind the holder may write somewhere", () => {
-    const from = holder([taxNamespace]);
+  it("offers a new asset only for a kind the holder may write in the workspace", () => {
+    const from = holder([taxWorkspace]);
     const agentList = render({ kindPath: "agents" }, { source: from });
     const skillList = render({ kindPath: "skills" }, { source: from });
 
@@ -570,39 +573,22 @@ describe("Studio with access to prefixed assets", () => {
     expect(
       render(
         { kindPath: "skills" },
-        { source: holder([taxNamespace], { lists: { skill: { rows: [] } } }) }
+        { source: holder([taxWorkspace], { lists: { skill: { rows: [] } } }) }
       )
     ).toContain("No skills yet.");
-  });
-
-  it("names the Namespace of a row, and none on a row that belongs to none", () => {
-    const markup = render({ kindPath: "agents" }, { source: holder([taxNamespace]) });
-    const rowOf = (title: string) =>
-      markup.split("<li").find((item) => item.includes(`>${title}<`)) ?? "";
-
-    expect(rowOf("Steuer-Agent")).toContain(">Tax<");
-    expect(rowOf("Workflow Assistant")).not.toContain(">Tax<");
-  });
-
-  it("shows the prefix on a row whose Namespace the reader does not hold", () => {
-    const markup = render({ kindPath: "agents" });
-
-    expect(markup).toContain(">tax-<");
-  });
-
-  it("offers the Namespace filter only to a reader of more than one Namespace", () => {
-    const one = render({ kindPath: "agents" }, { source: holder([taxNamespace]) });
-    const two = render({ kindPath: "agents" }, { source: holder([taxNamespace, legalNamespace]) });
-
-    expect(two).toContain("All Namespaces");
-    expect(one).not.toContain("All Namespaces");
-    expect(render({ kindPath: "agents" })).not.toContain("All Namespaces");
+    // In a workspace where the holder only reads, nothing is offered to start.
+    expect(
+      render(
+        { kindPath: "agents" },
+        { source: holder([legalWorkspace], { inWorkspace: "ws-legal" }) }
+      )
+    ).not.toContain("New agent");
   });
 
   it("has no rail item for a kind the holder has no right on", () => {
     const agentsOnly = render(
       { kindPath: "skills" },
-      { source: holder([{ ...taxNamespace, actions: ["agent.read"] }]) }
+      { source: holder([{ ...taxWorkspace, actions: ["agent.read"] }]) }
     );
 
     // The address of the kind without an item lands on the first kind with one.
@@ -613,7 +599,7 @@ describe("Studio with access to prefixed assets", () => {
 
 describe("Studio asset page", () => {
   const taxSkill = asset("skill", "tax-review", {
-    namespace: "tax-",
+    scope: { kind: "workspace", workspaceId: "ws-tax" },
     config: {
       name: "tax-review",
       title: "Tax review",
@@ -624,17 +610,17 @@ describe("Studio asset page", () => {
   const page = (from: BuildSource) =>
     render({ kindPath: "skills", name: "tax-review" }, { kinds: pageKinds, source: from });
   const read = { "skill/tax-review": ready(taxSkill) };
-  const skillWriter: Namespaces[number] = {
-    ...taxNamespace,
+  const skillWriter: Workspaces[number] = {
+    ...taxWorkspace,
     actions: ["skill.read", "skill.write", "skill.delete"]
   };
 
   it("opens an asset the reader may not write read-only, with no way to save or delete", () => {
-    const markup = page(source({ permissions: [], namespaces: [taxNamespace], assets: read }));
+    const markup = page(source({ permissions: [], workspaces: [taxWorkspace], assets: read }));
 
     // The notice names whose asset it is and what editing needs.
     expect(markup).toMatch(
-      /data-build-read-only=""[^>]*>.*Belongs to the Namespace Tax\. Only a person/u
+      /data-build-read-only=""[^>]*>.*Belongs to the workspace Tax\. Only a person/u
     );
     expect(markup).toContain('value="Tax review"');
     // A field that is only read stays readable: read-only, not disabled, and not required.
@@ -649,8 +635,8 @@ describe("Studio asset page", () => {
     expect(markup).toContain("History");
   });
 
-  it("opens an asset of a Namespace the reader writes for editing", () => {
-    const markup = page(source({ permissions: [], namespaces: [skillWriter], assets: read }));
+  it("opens an asset of a workspace the reader writes for editing", () => {
+    const markup = page(source({ permissions: [], workspaces: [skillWriter], assets: read }));
 
     expect(markup).not.toContain("data-build-read-only");
     expect(markup).not.toMatch(/<input[^>]*readOnly=""[^>]*value="Tax review"/u);
@@ -679,21 +665,21 @@ describe("Studio asset page", () => {
     expect(unfolded).not.toContain("Copy to edit");
   });
 
-  it("reads only an asset outside the Namespaces the reader writes", () => {
+  it("reads only an asset outside the workspaces the reader writes", () => {
     const elsewhere = asset("skill", "tax-review", {
-      namespace: "legal-",
+      scope: { kind: "workspace", workspaceId: "ws-legal" },
       config: taxSkill.config
     });
     const markup = page(
       source({
         permissions: [],
-        namespaces: [skillWriter, legalNamespace],
+        workspaces: [skillWriter, legalWorkspace],
         assets: { "skill/tax-review": ready(elsewhere) }
       })
     );
 
     expect(markup).toContain(
-      "Belongs to the Namespace Legal. Only a person who may edit in this Namespace can change it."
+      "Belongs to the workspace Legal. Only a person who may edit in this workspace can change it."
     );
   });
 
@@ -707,12 +693,12 @@ describe("Studio asset page", () => {
     );
 
     expect(markup).toContain(
-      "Belongs to no Namespace. Only a person who may edit on the whole instance can change it."
+      "Belongs to the instance. Only a person who may edit on the whole instance can change it."
     );
   });
 
   it("ends the read-only notice with one link into the documentation, and with none on an instance without a docs address", () => {
-    const from = source({ permissions: [], namespaces: [taxNamespace], assets: read });
+    const from = source({ permissions: [], workspaces: [taxWorkspace], assets: read });
     const at = { kindPath: "skills", name: "tax-review" };
     const notice = (markup: string) =>
       /data-build-read-only=""[^>]*>(.*?)<\/div>\s*<\/div>/u.exec(markup)?.[1] ?? markup;
@@ -736,7 +722,7 @@ describe("Studio asset page", () => {
       /aria-label="Mehr erfahren darüber, wer das ändern darf, öffnet in neuem Tab"[^>]*>Mehr erfahren</u
     );
     // Without an address the notice is the same sentence and no link.
-    expect(page(from)).toContain("Belongs to the Namespace Tax. Only a person");
+    expect(page(from)).toContain("Belongs to the workspace Tax. Only a person");
     expect(page(from)).not.toContain("data-docs-link");
     expect(page(from)).not.toContain("Learn more");
   });
@@ -752,7 +738,7 @@ describe("Studio asset page", () => {
   });
 
   it("shows the sentence of a failed read as the instance said it", () => {
-    const sentence = "Namespace tax- is closed for maintenance until 14:00";
+    const sentence = "The skill store is closed for maintenance until 14:00";
     const markup = page(
       source({
         assets: { "skill/tax-review": { status: "failed", message: sentence, retry: noop } }

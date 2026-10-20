@@ -18,7 +18,7 @@ import { personalWorkspace, settingsUser, sharedWorkspace } from "./chat-ui-sett
 const catalog = settingsCatalog(administration);
 const buildOn: BuildAccess = { page: administration.build, enabled: true, ready: true };
 const buildOff: BuildAccess = { page: administration.build, enabled: false, ready: true };
-/** The instance has not said yet which Namespaces the viewer holds. */
+/** The instance has not said yet what the viewer holds in it. */
 const buildUnanswered: BuildAccess = { page: administration.build, enabled: true, ready: false };
 
 function viewer(
@@ -65,10 +65,12 @@ const instance = [
 ];
 
 const member = viewer();
-/** No permission on the instance, and a right in one Namespace. */
-const namespaceHolder: SettingsViewer = {
+/** No permission on the instance, and a right in one Shared Workspace the viewer is no member of. */
+const workspaceRightHolder: SettingsViewer = {
   ...viewer(),
-  platform: platformContext([{ prefix: "tax-", displayName: "Tax", actions: ["skill.read"] }])
+  platform: platformContext([
+    { id: "ws-tax", name: "Tax", kind: "shared", member: false, actions: ["skill.read"] }
+  ])
 };
 /** The instance answered, and the viewer holds nothing in it. */
 const answeredMember: SettingsViewer = { ...viewer(), platform: platformContext() };
@@ -191,19 +193,21 @@ describe("Settings catalog", () => {
     expect(targets.find((target) => target.id === "build")?.groupLabelKey).toBeUndefined();
   });
 
-  it("shows Studio to a holder of a Namespace who has no permission on the instance", () => {
+  it("shows Studio to a holder of a workspace right who has no permission on the instance", () => {
     const targets = (build: BuildAccess, of: SettingsViewer) =>
       settingsGoToTargets(catalog, build, of).map((target) => target.id);
 
-    expect(pageIds(namespaceHolder)).toEqual(you);
-    expect(targets(buildOn, namespaceHolder)).toEqual([
+    expect(pageIds(workspaceRightHolder)).toEqual(you);
+    expect(targets(buildOn, workspaceRightHolder)).toEqual([
       ...you.map((id) => `settings/${id}`),
       "build"
     ]);
-    expect(firstAdministrationRoute(catalog, buildOn, namespaceHolder)).toEqual({ kind: "build" });
-    // Studio is the instance's switch first: off, no Namespace opens it.
-    expect(targets(buildOff, namespaceHolder)).not.toContain("build");
-    expect(firstAdministrationRoute(catalog, buildOff, namespaceHolder)).toBeUndefined();
+    expect(firstAdministrationRoute(catalog, buildOn, workspaceRightHolder)).toEqual({
+      kind: "build"
+    });
+    // Studio is the instance's switch first: off, no workspace right opens it.
+    expect(targets(buildOff, workspaceRightHolder)).not.toContain("build");
+    expect(firstAdministrationRoute(catalog, buildOff, workspaceRightHolder)).toBeUndefined();
   });
 
   it("shows no Studio to a viewer who holds no right on an agent or a skill", () => {
@@ -294,7 +298,7 @@ describe("old addresses", () => {
     const open = { kind: "build", page: administration.build };
 
     expect(resolve(path, superadminWithoutMembership)).toEqual(open);
-    expect(resolve(path, namespaceHolder)).toEqual(open);
+    expect(resolve(path, workspaceRightHolder)).toEqual(open);
     // The session names an instance right, so its holder does not wait for the instance.
     expect(resolve(path, superadminWithoutMembership, buildUnanswered)).toEqual(open);
   });
@@ -311,14 +315,14 @@ describe("old addresses", () => {
 
   it.each(buildAddresses)("waits at %s until the instance said what the viewer may do", (path) => {
     expect(resolve(path, member, buildUnanswered)).toEqual({ kind: "pending" });
-    // Once it answered, the same viewer is told, and a holder of a Namespace is let in.
+    // Once it answered, the same viewer is told, and a holder of a workspace right is let in.
     expect(resolve(path, answeredMember, buildOn)).toMatchObject({ kind: "build-closed" });
-    expect(resolve(path, namespaceHolder, buildOn)).toMatchObject({ kind: "build" });
+    expect(resolve(path, workspaceRightHolder, buildOn)).toMatchObject({ kind: "build" });
   });
 
   it.each(buildAddresses)("leads %s away where the instance runs without Studio", (path) => {
     expect(resolve(path, member, buildOff)).toEqual({ kind: "chat" });
-    expect(resolve(path, namespaceHolder, buildOff)).toEqual({ kind: "chat" });
+    expect(resolve(path, workspaceRightHolder, buildOff)).toEqual({ kind: "chat" });
     expect(resolve(path, member, { ...buildOff, ready: false })).toEqual({ kind: "chat" });
     expect(resolve(path, instanceAdmin, buildOff)).toEqual({
       kind: "redirect",

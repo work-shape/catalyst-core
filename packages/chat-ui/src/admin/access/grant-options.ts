@@ -71,8 +71,8 @@ export function grantOptions(
     )
   );
   const holds = (action: string, resource?: AccessResource) => {
-    // A hidden asset's owner and name are unknown. Do not overlook a workspace or Namespace
-    // deny just because the loaded row cannot place it; the person can still revoke that row.
+    // A hidden asset's owner and name are unknown. Do not overlook a workspace deny
+    // just because the loaded row cannot place it; the person can still revoke that row.
     if (
       resource?.assetId !== undefined &&
       resource.kind === undefined &&

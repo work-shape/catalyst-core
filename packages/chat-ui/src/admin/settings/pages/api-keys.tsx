@@ -26,7 +26,10 @@ import {
 import { usePlatformContextQuery } from "../../../shared/api/workspace-queries";
 import type { RevealedSecret } from "../../control-plane/api-access-secret-fields";
 import { formatMomentShort } from "../../../shared/locale-format";
-import { PersonalKeyFields } from "../../control-plane/personal-api-key-fields";
+import {
+  PersonalKeyFields,
+  type PersonalKeyWorkspace
+} from "../../control-plane/personal-api-key-fields";
 import {
   KeyProblemNotice,
   PersonalApiKeysTable,
@@ -51,13 +54,14 @@ import { apiErrorMessage } from "../../../shared/workspace-utils";
 import { useOptionalSettingsPage, useSettingsPage } from "../../../shared/settings-page-context";
 import { isRefusal, refusalAskingInstanceAdmin } from "../ask-instance-admin";
 
-/** What the key fields offer: the actions, the use level and the Namespaces. */
+/** What the key fields offer: the actions, the use level and the workspaces. */
 interface KeyOffer {
   actions: string[];
   useActions: string[];
   /** What the key `catalyst setup` asks for starts with ticked (`setupKeyActions`). */
   setupActions: string[];
-  namespaces: string[];
+  /** The workspaces whose own assets the person holds a right on: a key can be limited to one. */
+  workspaces: PersonalKeyWorkspace[];
   /** The instance has answered what it offers, or failed to. */
   settled: boolean;
 }
@@ -82,7 +86,11 @@ export function ApiKeysPage() {
     actions: personalKeyActionOffer(context),
     useActions: personalKeyUseOffer(context),
     setupActions: setupKeyActions(context),
-    namespaces: (context?.namespaces ?? []).map((namespace) => namespace.prefix),
+    workspaces: (context?.workspaces ?? []).map((workspace) =>
+      workspace.kind === "personal"
+        ? { id: workspace.id }
+        : { id: workspace.id, name: workspace.name }
+    ),
     settled: !contextQuery.isPending
   };
   const [initialCode] = useState(() => connectCodeOfSearch(window.location.search));
@@ -110,6 +118,10 @@ export function ApiKeysPage() {
           <PersonalApiKeysTable
             keys={keysQuery.data ?? []}
             loading={keysQuery.isPending}
+            workspaceName={(id) => {
+              const workspace = offer.workspaces.find((candidate) => candidate.id === id);
+              return workspace && (workspace.name ?? t("personalApiKeys.workspacePersonal"));
+            }}
             revoking={mutations.revoke.isPending}
             onRevoke={(key) => mutations.revoke.mutateAsync(key.id)}
             revokeProblem={(caught) => keyProblem(caught, "personalApiKeys.revokeRefused")}
@@ -209,7 +221,7 @@ function NewKeyDialog({
           draft={draft}
           actions={offer.actions}
           useActions={offer.useActions}
-          namespaces={offer.namespaces}
+          workspaces={offer.workspaces}
           onChange={(next) => {
             setDraft(next);
             setProblem(undefined);
@@ -383,7 +395,7 @@ export function ConnectCodeConfirm({
         draft={draft}
         actions={offer.actions}
         useActions={offer.useActions}
-        namespaces={offer.namespaces}
+        workspaces={offer.workspaces}
         onChange={(next) => {
           setDraft(next);
           setProblem(undefined);

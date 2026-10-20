@@ -395,8 +395,6 @@ describe("the dialog's first step", () => {
         { children: null, locale },
         createElement(ConnectionCreateFlow, {
           source,
-          namespaces: [],
-          mayNameFreely: true,
           checkName: async () => ({ available: true as const }),
           put: async () => ({ revision: 1 }),
           remove: async () => undefined,

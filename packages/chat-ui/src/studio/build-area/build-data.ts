@@ -48,12 +48,10 @@ const BUILD_HISTORY_PAGE_SIZE = 50;
 /** How long the reader may pause typing before a search or a name check asks the instance. */
 export const BUILD_SEARCH_DELAY_MS = 250;
 
-/** What narrows a list. Both parts are answered by the instance. */
+/** What narrows a list. The instance answers it. */
 export interface BuildListFilter {
   /** Names and ids that contain this text. */
   text: string;
-  /** Only the assets of this Namespace, by prefix. */
-  namespace: string | undefined;
 }
 
 /** One kind's list as far as the reader has asked for it. */
@@ -204,7 +202,7 @@ export interface BuildSource {
 
 /**
  * Build on the asset operations: `platform.context.get` says which kinds exist and which
- * Namespaces the reader holds, `assets.list` answers a list page by page, `assets.get` one
+ * workspaces the reader holds rights in, `assets.list` answers a list page by page, `assets.get` one
  * asset. Nothing here reads the whole set of assets.
  */
 export function useBuildSource(): BuildSource {
@@ -346,8 +344,6 @@ export function useBuildSource(): BuildSource {
     useList(kind, filter) {
       const text = filter.text.trim();
       const owner = inScope(kind);
-      // A Namespace is a prefix among the instance's own assets alone.
-      const prefix = owner.workspaceId === undefined ? filter.namespace : undefined;
       // The first time the Skills list opens, an owner without skills would show an empty list
       // where another owner has some: the list opens on the owner in Studio when it has some,
       // otherwise on the first owner offered that has, and reads nothing before that is known.
@@ -401,7 +397,7 @@ export function useBuildSource(): BuildSource {
       }, [openingSettled, openOn, current, kind]);
       const query = useInfiniteQuery({
         enabled: !opening,
-        queryKey: [...assetsKey, "list", kind, owner.workspaceId ?? "", text, prefix ?? "", locale],
+        queryKey: [...assetsKey, "list", kind, owner.workspaceId ?? "", text, locale],
         queryFn: ({ pageParam, signal }) =>
           client.assets.list({
             params: { kind },
@@ -410,8 +406,7 @@ export function useBuildSource(): BuildSource {
               cursor: pageParam,
               locale,
               ...owner,
-              ...(text ? { text } : {}),
-              ...(prefix ? { prefix } : {})
+              ...(text ? { text } : {})
             },
             signal
           }),

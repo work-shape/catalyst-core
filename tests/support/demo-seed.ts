@@ -31,11 +31,13 @@ import {
   connectionCheckQuestions,
   demoOperations,
   demoTools,
+  hrWorkspace,
   people,
   seedDemo,
   workspace,
   workflowCheckQuestions,
   type CheckReason,
+  type PolicyInstance,
   type SeedReport
 } from "@work-shape/catalyst-demo/seed";
 import { pageBuildCommandFromSource } from "./page-build";
@@ -132,6 +134,7 @@ async function readInstance(input: SeededInstanceInput, fetchImpl: typeof fetch)
   });
   const workspaces = await listAll((paging) => client.workspaces.list({ query: paging }));
   const seededWorkspace = workspaces.find((candidate) => candidate.name === workspace.name);
+  const seededHrWorkspace = workspaces.find((candidate) => candidate.name === hrWorkspace.name);
   const [members, apps] = seededWorkspace
     ? await Promise.all([
         listAll((paging) =>
@@ -148,9 +151,9 @@ async function readInstance(input: SeededInstanceInput, fetchImpl: typeof fetch)
         )
       ])
     : [[], []];
-  const [users, namespaces, grants, principals, overview, approvals] = await Promise.all([
+  const [users, workspaceLimits, grants, principals, overview, approvals] = await Promise.all([
     listAll((paging) => client.users.list({ query: paging })),
-    listAll((paging) => client.namespaces.list({ query: paging })),
+    listAll((paging) => client.workspaces.limits.list({ query: paging })),
     listAll((paging) => client.permissions.list({ query: paging })),
     listAll((paging) => client.service_principals.list({ query: paging })),
     client.config_assets.get_overview(),
@@ -166,7 +169,6 @@ async function readInstance(input: SeededInstanceInput, fetchImpl: typeof fetch)
         identities: identities.length,
         signedIn: lastAuthenticatedAt !== undefined
       })),
-    namespaces,
     grants,
     principals: principals.map(({ principal, credentials }) => ({
       id: principal.id,
@@ -186,6 +188,9 @@ async function readInstance(input: SeededInstanceInput, fetchImpl: typeof fetch)
       id: seededWorkspace.id,
       members: members.map((member) => `${member.email}: ${member.role}`).sort()
     },
+    hrWorkspace:
+      seededHrWorkspace &&
+      workspaceLimits.find((candidate) => candidate.id === seededHrWorkspace.id),
     apps: apps.map(({ id, name, title, revision, draftRevision, publishedRevision }) => ({
       id,
       name,
@@ -228,11 +233,13 @@ export function useSeededInstance(input: SeededInstanceInput): () => SeededInsta
         }
       }
     };
+    // The demo's policy reads the instance's workspaces, which it finds here once it exists.
+    const running: { instance?: PolicyInstance } = {};
     const instance = await createTestInstance({
       config,
       tools: [...demoTools, ...(input.tools ?? [])],
       // The demo's own server runs with these.
-      operations: demoOperations,
+      operations: demoOperations(() => running.instance),
       seedAssets: false,
       env: {
         CHAT_UI_ORIGIN: input.origin,
@@ -244,6 +251,7 @@ export function useSeededInstance(input: SeededInstanceInput): () => SeededInsta
         ...input.env
       }
     });
+    running.instance = { config, store: instance.stores };
     const runtime = await getTestRuntime(instance);
     const fetchImpl: typeof fetch = (resource, init) => runtime.fetch(new Request(resource, init));
 
@@ -337,7 +345,6 @@ const NOTHING_CREATED = {
   "service principals": 0,
   "API keys": 0,
   "the instance's own agents and skills": 0,
-  namespaces: 0,
   agents: 0,
   skills: 0,
   "grant rows": 0,

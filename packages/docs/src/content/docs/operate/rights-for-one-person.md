@@ -62,18 +62,8 @@ A read that is allowed through a grant opens that asset. The overview of all age
 
 The tab gives a result only when it has everything it decides from: the person's rights, the grant rows and the agents and skills of the instance. While one of them loads, or when it could not be loaded, the tab says so and shows no result, because a result without them could miss a deny on one asset. It also gives no result for a name no asset can have.
 
-## Namespaces registered earlier
-
-Rights were once scoped by a Namespace, a registered name prefix such as `sales-`. Namespaces are retired. The page still has a tab **Namespaces**, and a later release removes it. Until then:
-
-- The server refuses new Namespace grant rows for every right. Existing allow and deny rows still apply to matching instance-owned assets and are listed and revoked like other rows. They never cover workspace-owned assets.
-- A Namespace's tool and model lists still bind every save of an agent whose name starts with the prefix, a release push included. The Check tab names these lists under its result.
-- A Namespace is deleted only when no row names it. Deleting it leaves the agents and skills as they are.
-
-Give new rights in a workspace, on one asset or for the whole instance where the action supports it.
-
 ## API
 
 Every person may read their own effective rights through `permissions.effective`, without `users.manage`. Reading another person’s effective rights or grant rows requires `users.manage`. A holder of `service_principals.manage` may read a technical account’s effective rights and grant rows; without `users.manage`, a grant-list request must explicitly select `holderKind=service_principal`. This gives no access to people’s rights. Credential scopes still apply.
 
-The page uses the eight operations under `/api/v1/instance/access`. See the [API reference](/reference/api/).
+The page uses the six operations under `/api/v1/instance/access`. See the [API reference](/reference/api/).

@@ -23,8 +23,6 @@ import {
   type GrantScopeAsset,
   type HeldRight,
   type JsonObject,
-  type Namespace,
-  type NamespaceUsage,
   type OperationAuthorization,
   type OperationExecutionContext,
   type PermissionGrant,
@@ -86,13 +84,12 @@ interface GrantCommand {
   action: string;
   scopeKind: PermissionGrant["scopeKind"];
   scopeId?: string;
-  namespace?: string;
   effect: PermissionGrant["effect"];
 }
 
 /**
- * Grants and Namespaces as an instance administrator writes them. The right itself,
- * `users.manage`, guards reads of other people and the Namespace writes. The two grant
+ * Grants as an instance administrator writes them. The right itself, `users.manage`, guards
+ * reads of other people and the build limits of a workspace. The two grant
  * writes check it themselves for a user's row, with the rule that a superadmin's rows are a
  * superadmin's alone. What is written is narrower than what the table holds. For a user: the
  * actions of `GRANTABLE_ACTION_SCOPES`, each at its scope kinds. For a service principal, under
@@ -443,56 +440,6 @@ export class AccessWorkflow {
     };
   }
 
-  async createNamespace(
-    actor: AuthenticatedUser,
-    context: AccessCallContext,
-    command: { prefix: string; displayName: string } & BuildLimitListsCommand
-  ): Promise<Namespace> {
-    const lists = buildLimitLists(this.options.configAssets.validationRefs, command);
-    const namespace = await this.options.stores.access.createNamespace({
-      clientInstanceId: this.options.clientInstanceId,
-      prefix: command.prefix,
-      displayName: command.displayName,
-      ...(lists.allowedToolNames ? { allowedToolNames: lists.allowedToolNames } : {}),
-      ...(lists.allowedModelBindingIds
-        ? { allowedModelBindingIds: lists.allowedModelBindingIds }
-        : {}),
-      createdBy: asUserId(actor.id)
-    });
-    await this.record(
-      actor,
-      context,
-      "namespace.created",
-      namespace.prefix,
-      namespaceAuditMetadata(namespace)
-    );
-    return namespace;
-  }
-
-  async updateNamespace(
-    actor: AuthenticatedUser,
-    context: AccessCallContext,
-    command: { prefix: string; displayName?: string } & BuildLimitListsCommand
-  ): Promise<Namespace> {
-    const namespace = await this.options.stores.access.updateNamespace({
-      clientInstanceId: this.options.clientInstanceId,
-      prefix: command.prefix,
-      ...(command.displayName === undefined ? {} : { displayName: command.displayName }),
-      ...buildLimitLists(this.options.configAssets.validationRefs, command)
-    });
-    if (!namespace) {
-      throw new AppError("NOT_FOUND", "Namespace not found");
-    }
-    await this.record(
-      actor,
-      context,
-      "namespace.updated",
-      namespace.prefix,
-      namespaceAuditMetadata(namespace)
-    );
-    return namespace;
-  }
-
   /** The Shared Workspaces with their build limits, as Instance > Workspaces lists them. */
   async listWorkspaceLimits(): Promise<CollaborationWorkspace[]> {
     const workspaces = await this.options.stores.workspaces.listSharedWorkspaces({
@@ -524,37 +471,9 @@ export class AccessWorkflow {
     return workspace;
   }
 
-  listNamespaces(): Promise<NamespaceUsage[]> {
-    return this.options.stores.access.listNamespaces({
-      clientInstanceId: this.options.clientInstanceId
-    });
-  }
-
-  async deleteNamespace(
-    actor: AuthenticatedUser,
-    context: AccessCallContext,
-    prefix: string
-  ): Promise<Namespace> {
-    const namespace = await this.options.stores.access.deleteNamespace({
-      clientInstanceId: this.options.clientInstanceId,
-      prefix
-    });
-    if (!namespace) {
-      throw new AppError("NOT_FOUND", "Namespace not found");
-    }
-    await this.record(
-      actor,
-      context,
-      "namespace.deleted",
-      namespace.prefix,
-      namespaceAuditMetadata(namespace)
-    );
-    return namespace;
-  }
-
   /** Where a person's row is written, with the right it gives there as the rule asks it. */
   private async grantScope(command: GrantCommand): Promise<{
-    scope: Pick<PermissionGrant, "scopeKind" | "scopeId" | "namespace">;
+    scope: Pick<PermissionGrant, "scopeKind" | "scopeId">;
     right: HeldRight;
   }> {
     const { action } = command;
@@ -563,14 +482,14 @@ export class AccessWorkflow {
       return { scope: { scopeKind: "asset", scopeId: asset.id }, right: assetRight(action, asset) };
     }
     if (command.scopeKind === "instance") {
-      if (command.scopeId !== undefined || command.namespace !== undefined) {
-        throw refused("invalid_scope", "An instance-wide grant names no scope id and no Namespace");
+      if (command.scopeId !== undefined) {
+        throw refused("invalid_scope", "An instance-wide grant names no scope id");
       }
       return { scope: { scopeKind: "instance" }, right: { action } };
     }
     if (command.scopeKind === "workspace") {
-      if (command.scopeId === undefined || command.namespace !== undefined) {
-        throw refused("invalid_scope", "A workspace grant names a workspace id and no Namespace");
+      if (command.scopeId === undefined) {
+        throw refused("invalid_scope", "A workspace grant names a workspace id");
       }
       // The store refuses a workspace that is not a Shared Workspace of this instance, under
       // the lock that keeps a row from appearing while the workspace is deleted.
@@ -627,9 +546,6 @@ export class AccessWorkflow {
 
   /** The active asset of the action's kind an asset grant names. */
   private async grantableAsset(command: GrantCommand): Promise<Omit<GrantScopeAsset, "active">> {
-    if (command.namespace !== undefined) {
-      throw refused("invalid_scope", "An asset grant names an asset id and no Namespace");
-    }
     return grantableAsset(this.options, command);
   }
 
@@ -673,7 +589,7 @@ export class AccessWorkflow {
 
   /**
    * The users whose ids the caller is not shown: the user list hides superadmins from everyone
-   * else, and so does the attribution of a grant or a Namespace.
+   * else, and so does the attribution of a grant.
    */
   async hiddenUserIds(actor: AuthenticatedUser): Promise<ReadonlySet<string>> {
     if (isSuperadmin(actor)) {
@@ -749,16 +665,6 @@ function grantAuditMetadata(grant: PermissionGrant): JsonObject {
     action: grant.action,
     effect: grant.effect,
     scopeKind: grant.scopeKind,
-    ...(grant.scopeId === undefined ? {} : { scopeId: grant.scopeId }),
-    ...(grant.namespace === undefined ? {} : { namespace: grant.namespace })
-  };
-}
-
-/** The prefix and whether each list restricts. The lists themselves stay out of the log. */
-function namespaceAuditMetadata(namespace: Namespace): JsonObject {
-  return {
-    prefix: namespace.prefix,
-    restrictsTools: namespace.allowedToolNames !== undefined,
-    restrictsModels: namespace.allowedModelBindingIds !== undefined
+    ...(grant.scopeId === undefined ? {} : { scopeId: grant.scopeId })
   };
 }

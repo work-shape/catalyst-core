@@ -18,8 +18,8 @@ export const common = defineTranslations({
     "docs.learnMoreReadOnlyName": "Learn more about who may change this, opens in a new tab",
     "docs.howRightsWork": "How rights work",
     "docs.howRightsWorkName": "How rights work, opens in a new tab",
-    "docs.namespaceOrWorkspace": "Namespace or workspace?",
-    "docs.namespaceOrWorkspaceName": "Namespace or workspace, opens in a new tab",
+    "docs.buildingAndUsing": "Building or using?",
+    "docs.buildingAndUsingName": "Building and using, opens in a new tab",
     exitFullscreen: "Exit fullscreen",
     email: "Email",
     interfaceOutdatedBody:
@@ -59,8 +59,8 @@ export const common = defineTranslations({
     "docs.learnMoreReadOnlyName": "Mehr erfahren darüber, wer das ändern darf, öffnet in neuem Tab",
     "docs.howRightsWork": "So funktionieren Rechte",
     "docs.howRightsWorkName": "So funktionieren Rechte, öffnet in neuem Tab",
-    "docs.namespaceOrWorkspace": "Namespace oder Arbeitsbereich?",
-    "docs.namespaceOrWorkspaceName": "Namespace oder Arbeitsbereich, öffnet in neuem Tab",
+    "docs.buildingAndUsing": "Bauen oder nutzen?",
+    "docs.buildingAndUsingName": "Bauen und Nutzen, öffnet in neuem Tab",
     exitFullscreen: "Vollbild schließen",
     email: "E-Mail",
     interfaceOutdatedBody:

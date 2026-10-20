@@ -229,9 +229,8 @@ export interface WorkflowFixture extends ConnectionOperationsFixture {
   finish(runId: string, worker?: JobWorker, passes?: number): Promise<z.infer<typeof runSchema>>;
   /**
    * Lets a holder do an action on everything of the instance. The grant is written to the
-   * store as it is, and the engine asks the real rights check: the administration of grants
-   * writes a row for one asset or a Namespace and none for the whole instance. What it writes
-   * for a Workflow and for a principal is in `workflow-rights-grants.test.ts`.
+   * store as it is, and the engine asks the real rights check. What the administration of
+   * grants writes for a Workflow and for a principal is in `workflow-rights-grants.test.ts`.
    */
   allow(holder: { kind: "user" | "service_principal"; id: string }, action: string): Promise<void>;
   /** Stores the Connection `crm` with `echo` and `write` exposed to Workflows. */

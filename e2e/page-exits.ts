@@ -470,8 +470,8 @@ export const pageLinks: readonly PageLink[] = [
     hidden: true
   },
   {
-    // An attribute with a namespace, which a filter of attribute names would not see.
-    name: "a link in an SVG that a script gives an address with a namespace",
+    // An attribute set through `setAttributeNS`, which a filter of attribute names would not see.
+    name: "a link in an SVG that a script gives an XLink address",
     html: () =>
       `<svg width="240" height="40"><a id="xlink-link"><rect width="240" height="40" fill="silver"/><text y="24">Open</text></a></svg>`,
     script: (address) =>

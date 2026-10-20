@@ -3,17 +3,19 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   WORKFLOW_ASSET_KIND,
+  asAgentRunId,
   asClientInstanceId,
   type CentralPolicySetting
 } from "@work-shape/catalyst-core";
+import { waitUntil } from "./support/assertions";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
 
 // An administrator's setting on assets.put holds the agent's first save as it holds the same
-// put through the API: it is asked of the kind and the name the save creates, so a Namespace
-// setting applies and a setting on another kind does not (NAV-2, Platform Access check 44).
-// The first case is the verifier's probe of PR 91.
+// put through the API: it is asked of the kind and the owner the save creates, so a setting on
+// a workspace applies to a save in its conversations and a setting on another kind does not
+// (NAV-2, Platform Access check 44). The first case grew from the verifier's probe of PR 91.
 
 const workflowConfig = (name: string) => ({
   name,
@@ -29,6 +31,12 @@ const workflowConfig = (name: string) => ({
     ]
   }
 });
+const skillConfig = (name: string) => ({
+  name,
+  title: name,
+  description: "A skill",
+  content: "Guidance."
+});
 
 describe("a setting on assets.put against the agent's first save", () => {
   let open: TestInstance | undefined;
@@ -37,8 +45,9 @@ describe("a setting on assets.put against the agent's first save", () => {
     open = undefined;
   });
 
-  /** An instance with the Namespace `fin-` and the settings the case gives. */
-  async function instanceWith(settings: CentralPolicySetting[]) {
+  /** An instance with the Shared Workspace Finance and the settings the case gives for it. */
+  async function instanceWith(settingsFor: (finance: string) => CentralPolicySetting[]) {
+    let settings: CentralPolicySetting[] = [];
     const config = createTestConfig({
       toolNames: [...PLATFORM_TOOL_NAMES],
       developmentAuth: {
@@ -56,6 +65,7 @@ describe("a setting on assets.put against the agent's first save", () => {
     });
     config.modules = { assetManagement: { enabled: true }, workflows: { enabled: true } };
     config.administration.agentConfiguration.enabled = true;
+    config.administration.agentConfiguration.allowSkillEditing = true;
     const app = await createTestInstance({
       config,
       env: {},
@@ -68,48 +78,90 @@ describe("a setting on assets.put against the agent's first save", () => {
       clientInstanceId,
       displayLabel: "workflow-runner"
     });
-    const namespace = await app.call("namespaces.create", {
-      payload: { prefix: "fin-", displayName: "Finance" }
-    });
-    expect(namespace.statusCode).toBe(200);
-    /** The agent's first save of the Workflow `name`, and whether it was stored. */
-    const firstSave = async (name: string) => {
-      const created = await app.call("conversations.create", { payload: { title: "New" } });
+    const workspace = await app.call("workspaces.create", { payload: { name: "Finance" } });
+    expect(workspace.statusCode, workspace.body).toBe(200);
+    const finance = z.object({ id: z.string() }).parse(workspace.json()).id;
+    settings = settingsFor(finance);
+    /**
+     * The agent's first save of the Workflow or skill `name`, in a private conversation of the
+     * workspace or of the caller's own, and what was stored.
+     */
+    const firstSave = async (
+      kind: typeof WORKFLOW_ASSET_KIND | "skill",
+      name: string,
+      collaborationWorkspaceId?: string
+    ) => {
+      const created = await app.call("conversations.create", {
+        payload: {
+          title: "New",
+          ...(collaborationWorkspaceId ? { collaborationWorkspaceId, visibility: "private" } : {})
+        }
+      });
       const id = z.object({ id: z.string() }).parse(created.json()).id;
-      const put = { kind: WORKFLOW_ASSET_KIND, name, config: workflowConfig(name) };
+      const config = kind === WORKFLOW_ASSET_KIND ? workflowConfig(name) : skillConfig(name);
+      const put = { kind, name, config };
       const started = await injectStartConversationRun(
         app,
         id,
         `/tool platform.assets.put ${JSON.stringify(put)}`
       );
-      await drainRunEvents(app, id, started.run.id);
-      return app.stores.configAssets.getConfigAsset({
-        clientInstanceId,
-        kind: WORKFLOW_ASSET_KIND,
-        name
+      let drained = false;
+      const observing = drainRunEvents(app, id, started.run.id).then(() => {
+        drained = true;
       });
+      // A new skill is live at once, so a save no setting refuses waits for its person, who
+      // confirms it here.
+      const runId = asAgentRunId(started.run.id);
+      await waitUntil(
+        async () =>
+          drained ||
+          (await app.stores.agentRuns.getAgentRun({ clientInstanceId, runId }))?.status ===
+            "waiting_for_decision",
+        "the save is decided or waits for its person",
+        60_000
+      );
+      if (!drained) {
+        const held = (await app.stores.operationRuns.list({ clientInstanceId })).find(
+          (run) =>
+            run.origin.kind === "agent" &&
+            run.origin.agentRunId === runId &&
+            run.status === "pending_confirmation"
+        );
+        if (!held) throw new Error("The save waits for no confirmation");
+        const confirmed = await app.call("operations.decide", {
+          params: { runId: held.id },
+          payload: { decision: "confirm" }
+        });
+        expect(confirmed.statusCode, confirmed.body).toBe(200);
+      }
+      await observing;
+      return app.stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
     };
-    return { app, firstSave };
+    return { app, firstSave, finance };
   }
 
-  it("refuses the first save in a Namespace the setting denies, as the API's put is refused", async () => {
-    const { app, firstSave } = await instanceWith([
-      { operation: "assets.put", value: "deny", assetKind: WORKFLOW_ASSET_KIND, namespace: "fin-" }
+  it("refuses the first save in a workspace the setting denies, as the API's put is refused", async () => {
+    const { app, firstSave, finance } = await instanceWith((finance) => [
+      { operation: "assets.put", value: "deny", assetKind: "skill", workspaceId: finance }
     ]);
     const api = await app.call("assets.put", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: "fin-close" },
-      payload: { config: workflowConfig("fin-close"), expectedRevision: null }
+      params: { kind: "skill", name: "close-guide" },
+      payload: { config: skillConfig("close-guide"), workspaceId: finance, expectedRevision: null }
     });
     expect(api.statusCode).toBe(403);
-    expect(await firstSave("fin-month")).toBeUndefined();
-    // Outside the Namespace the setting does not reach.
-    expect(await firstSave("payroll-month")).toBeDefined();
+    expect(api.json()).toMatchObject({ error: { code: "POLICY_DENIED" } });
+    expect(await firstSave("skill", "month-guide", finance)).toBeUndefined();
+    // Outside the workspace the setting does not reach.
+    expect(await firstSave("skill", "payroll-guide")).toBeDefined();
   }, 120_000);
 
-  it("creates a Workflow where a setting denies writing agents only", async () => {
-    const { firstSave } = await instanceWith([
+  it("creates a Workflow and a skill where a setting denies writing agents only", async () => {
+    const { firstSave, finance } = await instanceWith(() => [
       { operation: "assets.put", value: "deny", assetKind: "agent" }
     ]);
-    expect(await firstSave("fin-month")).toBeDefined();
+    expect(await firstSave(WORKFLOW_ASSET_KIND, "month-close")).toBeDefined();
+    expect(await firstSave("skill", "month-guide", finance)).toMatchObject({
+      scope: { kind: "workspace", workspaceId: finance }
+    });
   }, 120_000);
 });

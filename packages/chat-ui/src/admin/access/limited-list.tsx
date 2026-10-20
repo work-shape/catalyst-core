@@ -13,8 +13,8 @@ import { useTranslation } from "../../shared/i18n";
 const LIST_SEARCH_FROM_COUNT = 8;
 
 /**
- * One build limit, of a Namespace or a workspace: a switch, and while it is on, the picker
- * with what is chosen.
+ * One build limit of a workspace: a switch, and while it is on, the picker with what is
+ * chosen.
  * On with nothing chosen is a state of its own, and the hint says what it means.
  */
 export function LimitedList({

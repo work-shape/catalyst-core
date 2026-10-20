@@ -401,8 +401,8 @@ describe("the reads of a Data Store's page", () => {
     expect(await recordOf(world, world.id)).toMatchObject({ status: "ready" });
   });
 
-  it("neither lists nor opens a store of another Namespace to a holder of the read in one Namespace", async () => {
-    const world = await setup("namespaces");
+  it("neither lists nor opens another store to a holder of the read on one store", async () => {
+    const world = await setup("one_store");
     const storeOf = (name: string): StoreFile[] => [
       { ...manifest(), text: `id: ${name}\nname: ${name}\n` },
       init
@@ -421,8 +421,8 @@ describe("the reads of a Data Store's page", () => {
           holderId: member.id,
           action: "data_store.read",
           effect: "allow",
-          scopeKind: "namespace",
-          namespace: "sales-",
+          scopeKind: "asset",
+          scopeId: sales,
           grantedBy: asUserId(admin.id),
           createdAt: new Date().toISOString()
         }

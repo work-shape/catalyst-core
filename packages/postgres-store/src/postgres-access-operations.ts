@@ -1,15 +1,4 @@
-import {
-  and,
-  asc,
-  eq,
-  inArray,
-  isNull,
-  ne,
-  notInArray,
-  or,
-  sql,
-  type SQLWrapper
-} from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, notInArray, or, sql, type SQLWrapper } from "drizzle-orm";
 import {
   AppError,
   LEGACY_PERMISSION_ACTIONS,
@@ -21,8 +10,6 @@ import {
   createPlatformId,
   userInDeletionError,
   type AccessAdministrationStore,
-  type Namespace,
-  type NamespaceUsage,
   type PersistedAccess,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
@@ -33,7 +20,6 @@ import { lockRights } from "./rights-lock";
 import {
   collaborationWorkspaces,
   configAssets,
-  namespaces,
   permissionGrants,
   productUsers,
   servicePrincipals
@@ -45,7 +31,6 @@ type GrantRow = typeof permissionGrants.$inferSelect;
 const LEGACY_KEY_ACTIONS: string[] = PERMISSIONS.flatMap((key) => [
   ...LEGACY_PERMISSION_ACTIONS[key]
 ]);
-type NamespaceRow = typeof namespaces.$inferSelect;
 
 /** One membership rule for runtime rights and the audience read, against asset/availability aliases. */
 function availableThroughMembership(
@@ -336,23 +321,6 @@ export function createPostgresAccessStore(
             });
           }
         }
-        if (input.scopeKind === "namespace") {
-          const [registered] = await tx
-            .select({ prefix: namespaces.prefix })
-            .from(namespaces)
-            .where(
-              and(
-                eq(namespaces.clientInstanceId, input.clientInstanceId),
-                eq(namespaces.prefix, input.namespace ?? "")
-              )
-            )
-            .limit(1);
-          if (!registered) {
-            throw new AppError("VALIDATION_FAILED", "Namespace is not registered", {
-              reason: "unknown_namespace"
-            });
-          }
-        }
         if (input.scopeKind === "workspace") {
           // What a Shared Workspace owns. A Personal Workspace is one person's and shares
           // nothing. Held until the row is written: the deletion of the workspace removes
@@ -414,7 +382,6 @@ export function createPostgresAccessStore(
             effect: input.effect,
             scopeKind: input.scopeKind,
             scopeId: input.scopeId ?? null,
-            namespace: input.namespace ?? null,
             grantedBy: input.grantedBy,
             createdAt: new Date()
           })
@@ -514,132 +481,6 @@ export function createPostgresAccessStore(
       return rows.map(mapGrant);
     },
 
-    async createNamespace(input) {
-      return db.transaction(async (tx) => {
-        await lockRights(tx, { clientInstanceId: input.clientInstanceId });
-        // Two prefixes overlap when either one starts with the other.
-        const [overlapping] = await tx
-          .select({ prefix: namespaces.prefix })
-          .from(namespaces)
-          .where(
-            and(
-              eq(namespaces.clientInstanceId, input.clientInstanceId),
-              sql`(starts_with(${input.prefix}, ${namespaces.prefix}) or starts_with(${namespaces.prefix}, ${input.prefix}))`
-            )
-          )
-          .orderBy(asc(namespaces.prefix))
-          .limit(1);
-        if (overlapping) {
-          throw new AppError(
-            "CONFLICT",
-            `Namespace '${input.prefix}' overlaps the registered Namespace '${overlapping.prefix}'`,
-            { reason: "namespace_overlap", prefix: overlapping.prefix }
-          );
-        }
-        const [row] = await tx
-          .insert(namespaces)
-          .values({
-            clientInstanceId: input.clientInstanceId,
-            prefix: input.prefix,
-            displayName: input.displayName,
-            allowedToolNames: input.allowedToolNames ?? null,
-            allowedModelBindingIds: input.allowedModelBindingIds ?? null,
-            createdBy: input.createdBy,
-            createdAt: new Date()
-          })
-          .returning();
-        if (!row) {
-          throw new AppError("INTERNAL", "Namespace was not stored");
-        }
-        return mapNamespace(row);
-      });
-    },
-
-    async updateNamespace(input) {
-      const set: Partial<typeof namespaces.$inferInsert> = {};
-      if (input.displayName !== undefined) set.displayName = input.displayName;
-      if (input.allowedToolNames !== undefined) set.allowedToolNames = input.allowedToolNames;
-      if (input.allowedModelBindingIds !== undefined)
-        set.allowedModelBindingIds = input.allowedModelBindingIds;
-      const where = and(
-        eq(namespaces.clientInstanceId, input.clientInstanceId),
-        eq(namespaces.prefix, input.prefix)
-      );
-      const [row] =
-        Object.keys(set).length === 0
-          ? await db.select().from(namespaces).where(where).limit(1)
-          : await db.update(namespaces).set(set).where(where).returning();
-      return row ? mapNamespace(row) : undefined;
-    },
-
-    async deleteNamespace(input) {
-      return db.transaction(async (tx) => {
-        await lockRights(tx, { clientInstanceId: input.clientInstanceId });
-        const [referenced] = await tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(permissionGrants)
-          .where(
-            and(
-              eq(permissionGrants.clientInstanceId, input.clientInstanceId),
-              eq(permissionGrants.namespace, input.prefix)
-            )
-          );
-        const grantCount = referenced?.count ?? 0;
-        if (grantCount > 0) {
-          throw new AppError(
-            "CONFLICT",
-            `Namespace '${input.prefix}' is named by ${grantCount} grant row${grantCount === 1 ? "" : "s"}`,
-            { reason: "namespace_in_use", grantCount }
-          );
-        }
-        const [row] = await tx
-          .delete(namespaces)
-          .where(
-            and(
-              eq(namespaces.clientInstanceId, input.clientInstanceId),
-              eq(namespaces.prefix, input.prefix)
-            )
-          )
-          .returning();
-        return row ? mapNamespace(row) : undefined;
-      });
-    },
-
-    async listNamespaceRecords(input) {
-      const rows = await db
-        .select()
-        .from(namespaces)
-        .where(eq(namespaces.clientInstanceId, input.clientInstanceId))
-        .orderBy(sql`${namespaces.prefix} COLLATE "C"`);
-      return rows.map(mapNamespace);
-    },
-
-    async listNamespaces(input) {
-      const rows = await db
-        .select({
-          namespace: namespaces,
-          grantCount: sql<number>`(
-            select count(*)::int from ${permissionGrants}
-            where ${permissionGrants.clientInstanceId} = ${namespaces.clientInstanceId}
-              and ${permissionGrants.namespace} = ${namespaces.prefix}
-          )`,
-          assetCount: sql<number>`(
-            select count(*)::int from ${configAssets}
-            where ${configAssets.clientInstanceId} = ${namespaces.clientInstanceId}
-              and ${configAssets.status} = 'active'
-              and starts_with(${configAssets.name}, ${namespaces.prefix})
-          )`
-        })
-        .from(namespaces)
-        .where(eq(namespaces.clientInstanceId, input.clientInstanceId))
-        .orderBy(sql`${namespaces.prefix} COLLATE "C"`);
-      return rows.map((row): NamespaceUsage => ({
-        ...mapNamespace(row.namespace),
-        grantCount: row.grantCount,
-        assetCount: row.assetCount
-      }));
-    },
-
     async getGrantableAsset(input) {
       const [row] = await db
         .select({
@@ -707,22 +548,7 @@ function mapGrant(row: GrantRow): PermissionGrant {
     effect: row.effect,
     scopeKind: row.scopeKind,
     ...(row.scopeId === null ? {} : { scopeId: row.scopeId }),
-    ...(row.namespace === null ? {} : { namespace: row.namespace }),
     grantedBy: asUserId(row.grantedBy),
-    createdAt: row.createdAt.toISOString()
-  };
-}
-
-function mapNamespace(row: NamespaceRow): Namespace {
-  return {
-    clientInstanceId: asClientInstanceId(row.clientInstanceId),
-    prefix: row.prefix,
-    displayName: row.displayName,
-    ...(row.allowedToolNames === null ? {} : { allowedToolNames: row.allowedToolNames }),
-    ...(row.allowedModelBindingIds === null
-      ? {}
-      : { allowedModelBindingIds: row.allowedModelBindingIds }),
-    createdBy: asUserId(row.createdBy),
     createdAt: row.createdAt.toISOString()
   };
 }

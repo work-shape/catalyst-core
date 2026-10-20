@@ -129,8 +129,6 @@ export function AgentsPage({
       {newAgent && creating ? (
         <BuildCreateDialog
           entry={agentKind}
-          namespaces={newAgent.namespaces}
-          mayNameFreely={newAgent.mayNameFreely}
           startsIn={newAgent.startsIn}
           checkName={newAgent.checkName}
           onClose={() => setCreating(false)}

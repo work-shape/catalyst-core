@@ -85,7 +85,7 @@ const assetDefinitionSchema = configAssetConfigSchema.refine(
  * The scope a call addresses. Without it the call means the instance's own assets. An asset a
  * workspace owns is reached only by naming that workspace.
  */
-const workspaceIdSchema = z.string().min(1).optional();
+const workspaceIdSchema = nameText(z.string().min(1)).optional();
 
 /**
  * Set on the one asset that is the instance's default of its kind, and left out on every
@@ -148,8 +148,6 @@ export const assetSummarySchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   scope: assetScopeSchema,
-  /** The prefix of the Namespace the name belongs to, where it belongs to one. */
-  namespace: z.string().optional(),
   revision: revisionNumberSchema,
   ...pointerShape,
   isDefault: isDefaultSchema,
@@ -231,7 +229,6 @@ export const assetSchema = z.object({
   kind: z.string(),
   name: z.string(),
   scope: assetScopeSchema,
-  namespace: z.string().optional(),
   revision: revisionNumberSchema,
   ...pointerShape,
   config: configAssetConfigSchema,
@@ -287,7 +284,7 @@ export const assetSchema = z.object({
   chatAvailable: z.boolean().optional(),
   /**
    * What the caller may do to this asset, as the instance decides it on this asset: grants and
-   * denies on the instance, a Namespace, a workspace and the asset itself. A kind without a
+   * denies on the instance, a workspace and the asset itself. A kind without a
    * published revision names no `publish`. Left out by an instance from before AD-4.
    */
   allowed: z.array(assetVerbSchema).optional(),
@@ -304,7 +301,7 @@ export const assetSchema = z.object({
 export const assetWarningSchema = z.object({ code: z.string(), message: z.string() });
 
 export const listAssetsQuerySchema = z.object({
-  /** Only names that start with this text, such as a Namespace prefix. */
+  /** Only names that start with this text. */
   prefix: nameText(z.string().min(1).max(200)).optional(),
   /** Only assets whose name or title contains this text, whatever the case. */
   text: nameText(z.string().min(1).max(200)).optional(),
@@ -603,16 +600,9 @@ export const assetSyncItemSchema = z.discriminatedUnion("type", [
 
 export const syncAssetsRequestSchema = z.object({
   /**
-   * The prefix of the one Namespace the batch belongs to. No item may name an asset outside it.
-   * Only a holder of the release right may leave it out: a release names any asset of the
-   * instance.
-   */
-  namespace: nameText(z.string().min(1)).optional(),
-  /**
    * The workspace that owns every asset the batch names, as a CLI root bound with
    * `--workspace` sends it. Left out, the batch names the instance's own assets. A batch
-   * names a Namespace or a workspace, never both, and one that names a workspace is no
-   * release: its agents start hidden and its writer holds the rights on what the workspace
+   * that names a workspace is no release: its agents start hidden and its writer holds the rights on what the workspace
    * owns.
    */
   workspaceId: workspaceIdSchema,

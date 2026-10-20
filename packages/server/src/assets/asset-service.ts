@@ -10,7 +10,6 @@ import {
   AppError,
   asCollaborationWorkspaceId,
   auditActorFromIdentity,
-  findNamespaceOfAssetName,
   isAppError,
   operationDenialError,
   type AuthenticatedIdentity,
@@ -77,7 +76,6 @@ import {
   requireExpectedRevision,
   requireOwnScope,
   resolveAssetTarget,
-  scopeOf,
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
@@ -96,8 +94,8 @@ type MutationBatch = Omit<
 >;
 /**
  * One asset of any registered kind, read and written through the operation layer. Every call
- * addresses one scope and stays in it: a right on the instance's own assets, a Namespace
- * included, never reads or writes what a workspace owns, and the other way round.
+ * addresses one scope and stays in it: a right on the instance's own assets never reads or
+ * writes what a workspace owns, and the other way round.
  */
 export class AssetWorkflow {
   private readonly options: AssetWorkflowOptions;
@@ -309,8 +307,7 @@ export class AssetWorkflow {
           await loadAgentLists(
             this.options,
             target.scope.kind === "workspace" ? target.scope.workspaceId : undefined
-          ),
-          name
+          )
         )
       });
       if (action !== undefined) {
@@ -380,34 +377,19 @@ export class AssetWorkflow {
     return { allowed: true };
   }
 
-  /**
-   * What the policy is asked about for a call on one asset: its kind, its owner, and the
-   * Namespace its name belongs to.
-   */
-  async policyTargets(address: {
-    kind: string;
-    name?: string;
-    workspaceId?: string;
-  }): Promise<PolicyTarget[]> {
-    const namespace =
-      address.name === undefined
-        ? undefined
-        : findNamespaceOfAssetName(
-            await this.reads.namespaces(scopeOf(address.workspaceId)),
-            address.name
-          );
+  /** What the policy is asked about for a call on one asset: its kind and its owner. */
+  policyTargets(address: { kind: string; name?: string; workspaceId?: string }): PolicyTarget[] {
     return [
       {
         assetKind: address.kind,
-        ...(address.workspaceId === undefined ? {} : { workspaceId: address.workspaceId }),
-        ...(namespace ? { namespace: namespace.prefix } : {})
+        ...(address.workspaceId === undefined ? {} : { workspaceId: address.workspaceId })
       }
     ];
   }
 
-  /** What the policy is asked about for a batch: every kind and Namespace its items name. */
-  syncPolicyTargets(input: AssetSyncInput): Promise<PolicyTarget[]> {
-    return assetSyncPolicyTargets(this.options, input);
+  /** What the policy is asked about for a batch: every kind its items name, and the owner. */
+  syncPolicyTargets(input: AssetSyncInput): PolicyTarget[] {
+    return assetSyncPolicyTargets(input);
   }
 
   /**
@@ -592,7 +574,7 @@ export class AssetWorkflow {
   /**
    * Says what a put of this definition would be refused for, and writes nothing. It checks
    * what the write checks of the content: schema, name, references, the instance's own rules,
-   * the lists of the Namespace and the kind's check against what is stored, such as a
+   * the build limits of the workspace and the kind's check against what is stored, such as a
    * Workflow's child and dataset contracts. The caller's right to write is not part of the answer.
    * A reference to an asset the caller may not read is answered as one to nothing.
    */

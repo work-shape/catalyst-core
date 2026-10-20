@@ -7,7 +7,9 @@ import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import {
   assertLocalDevelopmentHost,
   builder,
+  heldSkill,
   heldSkillChange,
+  hrWorkspace,
   people,
   seedDemo,
   workflowCheckQuestions,
@@ -71,17 +73,16 @@ describe("the demo seed on the fixture instance", () => {
       "service principals": 1,
       "API keys": 1,
       "the instance's own agents and skills": 2,
-      namespaces: 4,
       agents: 8,
       skills: 7,
       "grant rows": 34,
       "builder assets": 2,
       "approval requests": 2,
       "connection grant rows": 0,
-      workspaces: 1,
+      workspaces: 2,
       "workspace members": 4,
-      "workspace bundles": 2,
-      "workspace assets": 2,
+      "workspace bundles": 3,
+      "workspace assets": 3,
       apps: 2,
       workflows: 1
     });
@@ -137,28 +138,21 @@ describe("the demo seed on the fixture instance", () => {
     );
   });
 
-  it("registers four Namespaces, one with a tool list and a model list", () => {
+  it("creates the HR workspace with a tool list and a model list, and Elif builds in it", () => {
+    const { hrWorkspace: limits, grants, users } = seeded().before;
+    expect(limits).toEqual({
+      id: expect.any(String),
+      name: hrWorkspace.name,
+      allowedToolNames: ["read_skill", "show_view", "demo.workflow_summary"],
+      // Of the two models the seed names, this instance has one.
+      allowedModelBindingIds: ["primary"]
+    });
+    const elif = users.find((user) => user.displayLabel === "Elif Aydin");
     expect(
-      seeded().before.namespaces.map(
-        ({ prefix, allowedToolNames, allowedModelBindingIds, assetCount }) => ({
-          prefix,
-          allowedToolNames,
-          allowedModelBindingIds,
-          assetCount
-        })
-      )
-    ).toEqual([
-      { prefix: "hr-", allowedToolNames: null, allowedModelBindingIds: null, assetCount: 4 },
-      { prefix: "kai-", allowedToolNames: null, allowedModelBindingIds: null, assetCount: 2 },
-      { prefix: "sales-", allowedToolNames: null, allowedModelBindingIds: null, assetCount: 4 },
-      {
-        prefix: "tax-",
-        allowedToolNames: ["read_skill", "show_view", "demo.workflow_summary"],
-        // Of the two models the seed names, this instance has one.
-        allowedModelBindingIds: ["primary"],
-        assetCount: 4
-      }
-    ]);
+      grants
+        .filter((row) => row.scopeKind === "workspace" && row.scopeId === limits?.id)
+        .map(({ holderId, action, effect }) => ({ holderId, action, effect }))
+    ).toEqual([{ holderId: elif?.id, action: "builder", effect: "allow" }]);
   });
 
   it("keeps Kai's teaching draft out of ordinary workspace agent pickers", async () => {
@@ -186,8 +180,13 @@ describe("the demo seed on the fixture instance", () => {
       "platform-docs",
       "workflow-authoring"
     ];
-    // The company's workspace owns two of its own, which the test below reads.
-    const workspaceOwn = [workspaceAssets.agent.name, workspaceAssets.skill.name];
+    // The company's workspace owns two of its own, which the test below reads, and the HR
+    // workspace one.
+    const workspaceOwn = [
+      workspaceAssets.agent.name,
+      workspaceAssets.skill.name,
+      heldSkillChange.skill.name
+    ];
     const assets = seeded().before.assets.filter(
       (asset) => !own.includes(asset.name) && !workspaceOwn.includes(asset.name)
     );
@@ -239,26 +238,31 @@ describe("the demo seed on the fixture instance", () => {
     expect(agent?.shown).not.toBe("all");
   });
 
-  it("writes asset-scoped allow and deny rows, and the outside builder's two bundles", () => {
-    const { grants, users, workspace } = seeded().before;
+  it("writes asset-scoped allow and deny rows, and the three workspace bundles", () => {
+    const { grants, users, workspace, hrWorkspace: hr } = seeded().before;
     const count = (effect: string, scopeKind: string) =>
       grants.filter((row) => row.effect === effect && row.scopeKind === scopeKind).length;
-    expect(grants).toHaveLength(36);
-    expect(count("allow", "namespace")).toBe(0);
+    expect(grants).toHaveLength(37);
     expect(count("allow", "asset")).toBe(31);
-    expect(count("deny", "namespace")).toBe(0);
     expect(count("deny", "asset")).toBe(3);
-    // Fabian Wolf is no member of the workspace he builds and publishes in.
-    const fabian = users.find((user) => user.displayLabel === "Fabian Wolf");
+    expect(count("allow", "workspace")).toBe(3);
+    // Fabian Wolf is no member of the workspace he builds and publishes in, and Elif Aydin
+    // none of the HR workspace.
+    const idOf = (label: string) => users.find((user) => user.displayLabel === label)?.id;
+    const byText = (left: unknown[], right: unknown[]) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right));
     expect(
       grants
         .filter((row) => row.scopeKind === "workspace")
         .map((row) => [row.holderId, row.action, row.scopeId])
-        .sort()
-    ).toEqual([
-      [fabian?.id, "builder", workspace?.id],
-      [fabian?.id, "publisher", workspace?.id]
-    ]);
+        .sort(byText)
+    ).toEqual(
+      [
+        [idOf("Fabian Wolf"), "builder", workspace?.id],
+        [idOf("Fabian Wolf"), "publisher", workspace?.id],
+        [idOf("Elif Aydin"), "builder", hr?.id]
+      ].sort(byText)
+    );
   });
 
   it("lets Kai Berger edit two drafts with rights only on those assets", async () => {
@@ -306,7 +310,7 @@ describe("the demo seed on the fixture instance", () => {
   });
 
   it("creates the config CLI's service principal with one key and leaves two calls waiting in the Inbox", async () => {
-    const { principals, approvals, assets } = seeded().before;
+    const { principals, approvals, assets, hrWorkspace: hr } = seeded().before;
     expect(principals).toEqual([
       {
         id: expect.any(String),
@@ -327,7 +331,7 @@ describe("the demo seed on the fixture instance", () => {
     );
     expect(approvals).toHaveLength(2);
     // Nothing was written yet: the skill exists once somebody approves.
-    expect(assets.some((asset) => asset.name === "hr-parental-leave-faq")).toBe(false);
+    expect(assets.some((asset) => asset.name === heldSkill.config.name)).toBe(false);
 
     // The Inbox reads one as a new skill and the other as one changed paragraph. Fails without
     // the second request, and without the asset block of the preview.
@@ -338,16 +342,18 @@ describe("the demo seed on the fixture instance", () => {
         return z.object({ asset: shownAssetSchema }).parse(preview).asset;
       })
     );
+    // Both are saves into the HR workspace, the one the demo holds skills of.
+    expect(hr?.id).toEqual(expect.any(String));
     expect(shown.find((asset) => asset.isNew)).toMatchObject({
       kind: "skill",
       title: "Elternzeit: häufige Fragen",
-      namespace: "hr-",
-      content: { newSkill: { name: "hr-parental-leave-faq" } }
+      workspaceId: hr?.id,
+      content: { newSkill: { name: heldSkill.config.name } }
     });
     expect(shown.find((asset) => !asset.isNew)).toMatchObject({
       kind: "skill",
-      title: "Urlaubsrichtlinie",
-      namespace: "hr-",
+      title: "Krankmeldung",
+      workspaceId: hr?.id,
       content: {
         changes: [
           {

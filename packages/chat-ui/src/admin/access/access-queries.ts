@@ -2,9 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listAll,
   type ApiClient,
-  type CreateNamespaceRequest,
   type CreatePermissionGrantRequest,
-  type UpdateNamespaceRequest,
   type UpdateWorkspaceBuildLimitsRequest
 } from "@work-shape/catalyst-api-client";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
@@ -19,8 +17,6 @@ interface AccessApiInput {
 
 const accessQueryKeys = {
   all: (apiBaseUrl: string, authScope: string) => ["access", apiBaseUrl, authScope] as const,
-  namespaces: (apiBaseUrl: string, authScope: string) =>
-    ["access", apiBaseUrl, authScope, "namespaces"] as const,
   grants: (apiBaseUrl: string, authScope: string) =>
     ["access", apiBaseUrl, authScope, "grants"] as const,
   effective: (apiBaseUrl: string, authScope: string, holderId: string | undefined) =>
@@ -60,13 +56,6 @@ export async function listGrantChoiceAssets(
       : [])
   ]);
   return lists.flat();
-}
-
-export function useNamespacesQuery(input: AccessApiInput) {
-  return useQuery({
-    queryKey: accessQueryKeys.namespaces(input.apiBaseUrl, input.authScope),
-    queryFn: () => listAll((paging) => input.client.namespaces.list({ query: paging }))
-  });
 }
 
 /** The Shared Workspaces with their build limits, as Instance > Workspaces lists them. */
@@ -155,19 +144,6 @@ export function useAccessMutations(input: AccessApiInput) {
     }
   };
 
-  const createNamespace = useMutation({
-    mutationFn: (body: CreateNamespaceRequest) => input.client.namespaces.create({ body }),
-    onSettled: refresh
-  });
-  const updateNamespace = useMutation({
-    mutationFn: (update: { prefix: string; body: UpdateNamespaceRequest }) =>
-      input.client.namespaces.update({ params: { prefix: update.prefix }, body: update.body }),
-    onSettled: refresh
-  });
-  const deleteNamespace = useMutation({
-    mutationFn: (prefix: string) => input.client.namespaces.delete({ params: { prefix } }),
-    onSettled: refresh
-  });
   /**
    * One row per request, in order. A row that exists already is left as it is, so sending a
    * form again after it stopped half way adds what is missing. It stops at any other refusal
@@ -207,14 +183,7 @@ export function useAccessMutations(input: AccessApiInput) {
     onSettled: refresh
   });
 
-  return {
-    createNamespace,
-    updateNamespace,
-    deleteNamespace,
-    grant,
-    revoke,
-    updateWorkspaceLimits
-  };
+  return { grant, revoke, updateWorkspaceLimits };
 }
 
 /**

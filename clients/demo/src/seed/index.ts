@@ -2,14 +2,16 @@
 // things the demo's server is assembled from.
 
 export { demoTools } from "../../tools";
-export { demoOperations } from "../policy";
+export { demoOperations, type PolicyInstance } from "../policy";
 export {
   SEED_EMAIL_SUFFIX,
   apps,
   builder,
   checkQuestions,
   connectionCheckQuestions,
+  heldSkill,
   heldSkillChange,
+  hrWorkspace,
   people,
   workflowCheckQuestions,
   workspace,

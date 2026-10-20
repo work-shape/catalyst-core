@@ -1,7 +1,7 @@
 import { AppError } from "@work-shape/catalyst-core";
 
 /**
- * The lists a Namespace or a Shared Workspace may restrict its agents to: its build limits.
+ * The lists a Shared Workspace may restrict its agents to: its build limits.
  * `null` lifts a restriction.
  */
 export interface BuildLimitListsCommand {
@@ -10,7 +10,7 @@ export interface BuildLimitListsCommand {
 }
 
 /**
- * The lists as a Namespace or a workspace keeps them, each entry once. An entry must exist on
+ * The lists as a workspace keeps them, each entry once. An entry must exist on
  * this instance: an enabled tool, a known model binding.
  */
 export function buildLimitLists(

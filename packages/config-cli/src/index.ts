@@ -105,16 +105,11 @@ Environment:
                         a key 'catalyst login' saved
   CATALYST_CONFIG_HOME  Folder of the saved keys (default: ~/.config/catalyst)
 
-A working copy that belongs to one Namespace names it beside the instance's url in
-catalyst.yaml, as 'namespace: tax-'. Its push names that Namespace, as the instance asks
-of everyone but the holder of the release right; its pull, diff and list read only the
-assets the key may read, never the instance's version or default agent.
-
-A working copy bound to a workspace names it the same way, as 'workspace: <id>', which the
-first 'catalyst config pull --workspace <id>' writes. It holds what that workspace owns, and
-everything its push creates is owned by that workspace, guardrails included. Its push is never
-a release: a new agent starts hidden until an instance admin offers it. A working copy without
-either holds the instance's own assets.
+A working copy bound to a workspace names it beside the instance's url in catalyst.yaml,
+as 'workspace: <id>', which the first 'catalyst config pull --workspace <id>' writes. It
+holds what that workspace owns, and everything its push creates is owned by that workspace,
+guardrails included. Its push is never a release: a new agent starts hidden until an instance
+admin offers it. A working copy without one holds the instance's own assets.
 
 Guardrails join the working copy where catalyst.yaml lists their globs under 'guardrails',
 such as 'guardrails/*/guardrail.yaml'. Each is a folder with its guardrail.yaml and, for a

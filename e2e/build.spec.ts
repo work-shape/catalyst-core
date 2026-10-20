@@ -1,5 +1,4 @@
 import { publishAgentDraft } from "./request-with-origin";
-import { seedHistoricalGrant } from "./legacy-grant";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { type Locator, type Page } from "@playwright/test";
@@ -19,7 +18,8 @@ const superadminUser = {
 const normalUser = { email: "e2e-user@example.test", password: "e2e-user-password" };
 const NARROW = { width: 390, height: 844 };
 const WIDE = { width: 1280, height: 800 };
-const namespacePath = `${apiBaseUrl}/api/v1/instance/access/namespaces`;
+const workspacesPath = `${apiBaseUrl}/api/v1/workspaces`;
+const limitsPath = `${apiBaseUrl}/api/v1/instance/access/workspaces`;
 const grantsPath = `${apiBaseUrl}/api/v1/instance/access/grants`;
 const agentPath = (name: string) => `${apiBaseUrl}/api/v1/assets/agent/${name}`;
 /** The reads Studio made before it worked on the asset operations: the whole set of assets. */
@@ -78,11 +78,11 @@ async function deleteAgent(admin: Page, name: string): Promise<void> {
   }
 }
 
-test("a Namespace holder builds an agent in the Namespace, is refused, meets a conflict and restores", async ({
+test("a workspace holder builds an agent in the workspace, is refused, meets a conflict and restores", async ({
   page,
   browser,
   pageErrors,
-  // The test stores two agents; the turn on the agents holds the one on the Namespaces.
+  // The test stores two agents; the turn on the agents holds the one on the grants.
   instanceAgentsChange: _instanceAgentsChange
 }) => {
   test.setTimeout(120_000);
@@ -91,7 +91,8 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
   const admin = await adminContext.newPage();
   await signInViaApi(admin, superadminUser);
 
-  // A person of their own, so that no other spec meets the rights this one hands out.
+  // A person and a workspace of their own, so that no other spec meets the rights this one
+  // hands out.
   const stamp = Date.now();
   const holder = {
     displayLabel: `E2E Builder ${stamp}`,
@@ -113,28 +114,39 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
   );
   expect(createdUser.ok()).toBe(true);
   const holderId = textField(await createdUser.json(), "id");
+  const workspaceName = `Kai team ${stamp}`;
+  const createdWorkspace = await requestWithOrigin(admin, "post", workspacesPath, {
+    data: { name: workspaceName }
+  });
+  expect(createdWorkspace.ok(), await createdWorkspace.text()).toBe(true);
+  const workspaceId = textField(await createdWorkspace.json(), "id");
+  const inWorkspace = (name: string) => `${agentPath(name)}?workspaceId=${workspaceId}`;
+  const scope = (reader: Page) => reader.getByRole("button", { name: /^Scope: /u });
 
   try {
-    // A historical Namespace grant still lets this holder build under kai-. Its tool limit still applies.
-    const namespace = await requestWithOrigin(admin, "post", namespacePath, {
-      data: { prefix: "kai-", displayName: "Kai", allowedToolNames: ["show_view"] }
+    // Rights in the workspace, without its membership, let this holder build what it owns.
+    // Its tool limit applies to them.
+    const limited = await requestWithOrigin(admin, "patch", `${limitsPath}/${workspaceId}`, {
+      data: { allowedToolNames: ["show_view"] }
     });
-    expect(namespace.ok()).toBe(true);
-    const context: unknown = await (await admin.request.get(`${apiBaseUrl}/api/v1/context`)).json();
-    const kinds: unknown = field(context, "kinds");
-    const agentKind: unknown = (Array.isArray(kinds) ? kinds : []).find(
-      (kind: unknown) => field(kind, "kind") === "agent"
-    );
-    for (const verb of ["read", "write", "delete"]) {
-      await seedHistoricalGrant(admin, {
-        holderId,
-        action: textField(field(agentKind, "actions"), verb),
-        namespace: "kai-"
+    expect(limited.ok(), await limited.text()).toBe(true);
+    for (const action of ["agent.read", "agent.write", "agent.delete"]) {
+      const granted = await requestWithOrigin(admin, "post", grantsPath, {
+        data: {
+          holderKind: "user",
+          holderId,
+          action,
+          effect: "allow",
+          scopeKind: "workspace",
+          scopeId: workspaceId
+        }
       });
+      expect(granted.ok(), await granted.text()).toBe(true);
     }
     const first = await requestWithOrigin(admin, "put", agentPath("kai-first"), {
       data: {
-        expectedRevision: await assetBaseRevision(admin, agentPath("kai-first")),
+        expectedRevision: null,
+        workspaceId,
         config: {
           name: "kai-first",
           displayName: "Kai First",
@@ -144,9 +156,9 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
         }
       }
     });
-    expect(first.ok()).toBe(true);
+    expect(first.ok(), await first.text()).toBe(true);
 
-    // The holder has a Studio row and sees the agents of the Namespace, nothing else.
+    // The holder has a Studio row and sees the agents of the workspace, nothing else.
     const wholeSetReads: string[] = [];
     page.on("request", (request) => {
       if (WHOLE_SET_READ.test(request.url())) {
@@ -158,35 +170,34 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await page.goto("/");
     await page.getByRole("button", { name: "Studio", exact: true }).click();
     await expect(page).toHaveURL(/\/build\/agents$/u);
+    await scope(page).click();
+    await page.getByRole("option", { name: workspaceName }).click();
+    await expect(scope(page)).toHaveAccessibleName(`Scope: ${workspaceName}`);
     await expect(agentList(page).getByRole("link")).toHaveCount(1);
     await expect(agentList(page).getByRole("link", { name: /Kai First/u })).toContainText("Kai");
     await expect(page.getByText("Research Assistant")).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Kinds in Studio" })).toHaveCount(0);
 
-    // A new agent is named in the Namespace: the dialog says what the id will be.
+    // A new agent's address is made from its name.
     await page.getByRole("button", { name: "New agent", exact: true }).click();
     const create = page.getByRole("dialog", { name: "New agent", exact: true });
-    await create.getByRole("textbox", { name: /^Display name/u }).fill("Kai Helper");
+    await create.getByRole("textbox", { name: /^Display name/u }).fill("Team Helper");
     await create.getByRole("button", { name: "Advanced", exact: true }).click();
-    await expect(create.getByText("The full address will be kai-kai-helper.")).toBeVisible();
-    await create.getByRole("textbox", { name: /^Address/u }).fill("helper");
-    await expect(create.getByText("The full address will be kai-helper.")).toBeVisible();
-    // Made outside a shared workspace by somebody who may not widen it, the agent starts hidden.
-    await expect(
-      create.getByText("Hidden until an instance admin makes it available")
-    ).toBeVisible();
+    await expect(create.getByRole("textbox", { name: /^Address/u })).toHaveValue("team-helper");
+    await expect(create.getByText("Made from the name. It cannot be changed later.")).toBeVisible();
+    // Somebody who may not widen where it is offered gets no choice of it.
     await expect(create.getByRole("combobox", { name: "Available in" })).toHaveCount(0);
     await create.getByRole("button", { name: "Continue", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Kai Helper", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Team Helper", level: 1 })).toBeVisible();
     await instructions(page).fill("You help Kai.");
 
-    // A tool outside the Namespace's list is refused, and the refusal stands at the tools.
+    // A tool outside the workspace's list is refused, and the refusal stands at the tools.
     const tools = page.locator("#tools");
     // An own tool of the instance is turned on with its row's switch.
     await switchToolPackage(tools, "own:demo.weather_forecast", true);
     await page.getByRole("button", { name: "Create agent", exact: true }).click();
     await expect(tools.locator("[data-field-refusal]")).toHaveText(
-      "The tool demo.weather_forecast is not allowed in Namespace kai-."
+      `The tool demo.weather_forecast is not allowed in the workspace ${workspaceName}. An instance admin sets its tools on Instance > Workspaces.`
     );
     await expect(instructions(page)).toHaveValue("You help Kai.");
     await switchToolPackage(tools, "own:demo.weather_forecast", false);
@@ -197,37 +208,41 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await closeToolPackage(tools, "package:results");
     await expect(toolRow(tools, "package:results").locator("[data-tool-count]")).toHaveText("1/2");
     await page.getByRole("button", { name: "Create agent", exact: true }).click();
-    await expect(page).toHaveURL(/\/build\/agents\/kai-helper$/u);
+    await expect(page).toHaveURL(/\/build\/agents\/team-helper$/u);
     await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
-    // An id that was used before keeps its history, so the revisions are counted from here.
-    const created = await assetRevision(admin, agentPath("kai-helper"));
+    // The agent is the workspace's; its revisions are counted from here.
+    const created = await assetRevision(admin, inWorkspace("team-helper"));
 
     // A change shows the save bar with its count, and a save hides it again.
     await instructions(page).fill("You help Kai every day.");
     await expect(page.getByText("1 change", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Save draft", exact: true }).click();
     await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
-    await publishAgentDraft(admin, agentPath("kai-helper"));
+    await publishAgentDraft(admin, inWorkspace("team-helper"));
     await page.reload();
-    await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 1);
+    await expect.poll(() => assetRevision(admin, inWorkspace("team-helper"))).toBe(created + 1);
 
     // Somebody else saves while the holder types: the holder's save meets the newer revision,
     // overwrites nothing and keeps the text.
     await instructions(page).fill("The holder's unsaved text.");
     await admin.setViewportSize(WIDE);
-    await admin.goto("/build/agents/kai-helper");
+    await admin.goto("/build/agents");
+    await scope(admin).click();
+    await admin.getByRole("option", { name: workspaceName }).click();
+    await expect(scope(admin)).toHaveAccessibleName(`Scope: ${workspaceName}`);
+    await admin.goto("/build/agents/team-helper");
     await instructions(admin).fill("The administrator was faster.");
     await admin.getByRole("button", { name: "Save draft", exact: true }).click();
-    await publishAgentDraft(admin, agentPath("kai-helper"));
+    await publishAgentDraft(admin, inWorkspace("team-helper"));
     // The administrator makes the saved draft live before the stale editor saves.
-    await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 2);
+    await expect.poll(() => assetRevision(admin, inWorkspace("team-helper"))).toBe(created + 2);
     await page.getByRole("button", { name: "Save draft", exact: true }).click();
     const conflict = page.locator("[data-build-conflict]");
     // Fails without the change: the notice said "Somebody" and offered no way to the history.
     await expect(conflict).toContainText(/saved this on .+, while you were editing\./u);
     await expect(conflict).not.toContainText("Somebody");
     await expect(instructions(page)).toHaveValue("The holder's unsaved text.");
-    await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 2);
+    await expect.poll(() => assetRevision(admin, inWorkspace("team-helper"))).toBe(created + 2);
     // While the conflict stands nothing is saved, and History restores nothing: the page
     // holds an older version than the newest one, which History marks as the current one.
     await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
@@ -258,30 +273,32 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     // The restored content is the asset now: the drawer closes on the editor that shows it.
     await expect(history).toBeHidden();
     await expect(page.locator("[data-build-restored]")).toHaveText(`Revision ${created} restored.`);
-    await publishAgentDraft(admin, agentPath("kai-helper"));
+    await publishAgentDraft(admin, inWorkspace("team-helper"));
     await page.reload();
     await expect(instructions(page)).toHaveValue("You help Kai.");
-    await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 3);
+    await expect.poll(() => assetRevision(admin, inWorkspace("team-helper"))).toBe(created + 3);
 
     // The list holds both agents now, and the holder deletes the one they made.
     await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
     await expect(agentList(page).getByRole("link")).toHaveCount(2);
     await agentList(page)
-      .getByRole("link", { name: /Kai Helper/u })
+      .getByRole("link", { name: /Team Helper/u })
       .click();
     await page.getByRole("button", { name: "More actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
     await page
-      .getByRole("dialog", { name: "Delete agent 'kai-helper'?", exact: true })
+      .getByRole("dialog", { name: "Delete agent 'team-helper'?", exact: true })
       .getByRole("button", { name: "Delete", exact: true })
       .click();
     await expect(page).toHaveURL(/\/build\/agents$/u);
     await expect(agentList(page).getByRole("link")).toHaveCount(1);
 
-    // An agent outside the Namespace is not the holder's: its address says so in the reader's
-    // language and offers nothing to try again.
+    // An agent of the instance is not where the holder may look: its address says so in the
+    // reader's language and offers nothing to try again.
     await page.goto("/build/agents/research_assistant");
-    await expect(page.getByText("You may not read this asset.", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("There is no agent at this address.", { exact: true })
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Try again", exact: true })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Research Assistant" })).toHaveCount(0);
     await expect(instructions(page)).toHaveCount(0);
@@ -289,15 +306,14 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     // Nothing on the way read the whole set of assets.
     expect(wholeSetReads).toEqual([]);
   } finally {
-    await deleteAgent(admin, "kai-helper");
-    await deleteAgent(admin, "kai-first");
+    // What the workspace owns goes with it.
+    await requestWithOrigin(admin, "delete", `${workspacesPath}/${workspaceId}`);
     const grants: unknown = await (
       await admin.request.get(`${grantsPath}?holderKind=user&holderId=${holderId}`)
     ).json();
     for (const grant of items(grants)) {
       await requestWithOrigin(admin, "delete", `${grantsPath}/${textField(grant, "id")}`);
     }
-    await requestWithOrigin(admin, "delete", `${namespacePath}/kai-`);
     await requestWithOrigin(admin, "delete", `${apiBaseUrl}/api/v1/instance/users/${holderId}`);
     await adminContext.close();
   }

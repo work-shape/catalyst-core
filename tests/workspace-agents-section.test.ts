@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { collaborationWorkspaceAgentsSchema } from "@work-shape/catalyst-api-contract";
-import type { AgentAvailability } from "@work-shape/catalyst-core";
+import { asUserId, type AgentAvailability } from "@work-shape/catalyst-core";
 import {
   SCOPES_HEADER,
   clientInstanceId,
@@ -90,13 +90,32 @@ describe("the Agents row the workspace's list of agents names", () => {
     });
   });
 
-  it("names the row with one agent to whoever may write an agent, on the instance or in a Namespace", async () => {
+  it("names the row with one agent to whoever may write an agent, on the instance or in the workspace", async () => {
     const t = await ready();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const team = await t.sharedWorkspace("Team");
+    for (const user of [t.kai, t.lena]) {
+      await t.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: team,
+        userId: asUserId(user.id),
+        role: "member"
+      });
+    }
+    await t.grant(t.kai.id, "agent.write", { workspaceId: team });
+    const sectionsInTeam = async (userId: string) =>
+      collaborationWorkspaceAgentsSchema.parse(
+        (
+          await t.expectOk(userId, "workspaces.agents.list", {
+            params: { collaborationWorkspaceId: team }
+          })
+        ).json()
+      ).visibleSections;
 
     expect((await listOf(t, t.admin.id)).visibleSections).toEqual(["agents"]);
-    expect((await listOf(t, t.kai.id)).visibleSections).toEqual(["agents"]);
+    expect(await sectionsInTeam(t.kai.id)).toEqual(["agents"]);
+    expect(await sectionsInTeam(t.lena.id)).toEqual([]);
+    // The right in Team is none in Kai's own workspace.
+    expect((await listOf(t, t.kai.id)).visibleSections).toEqual([]);
     expect((await listOf(t, t.lena.id)).visibleSections).toEqual([]);
   });
 

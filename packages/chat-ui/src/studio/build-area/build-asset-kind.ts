@@ -12,7 +12,7 @@ import type {
 import type { TranslationKey } from "../../shared/i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
 import type { BuildWithAgentCopy } from "../build-with-agent-empty";
-import type { BuildNamespace, BuildScope } from "../../shared/build-rights";
+import type { BuildScope } from "../../shared/build-rights";
 
 /** What a page puts at the end of its head: Publish, History and the "…" menu with Delete. */
 export type BuildHeadActions = Pick<PageHeaderProps, "primaryAction" | "secondaryActions" | "menu">;
@@ -25,7 +25,7 @@ export type BuildAsset = Asset;
 
 /** What the reader chose in the dialog that starts a new asset. */
 export interface BuildAssetStart {
-  /** The id, with the prefix of its Namespace. */
+  /** The id. */
   name: string;
   /** The name people read. */
   title: string;
@@ -129,12 +129,9 @@ export interface BuildAssetEditorProps {
 
 /**
  * What the frame hands a kind's own dialog for a new asset, in place of the one that asks for
- * the name and the id: the Namespaces the reader may name it in, and the writes of the asset.
+ * the name and the id: the check of the name, and the writes of the asset.
  */
 export interface BuildCreateDialogProps {
-  namespaces: readonly BuildNamespace[];
-  /** The reader may name the asset without a Namespace. */
-  mayNameFreely: boolean;
   /** Asks the instance whether the asset could take the name, as it is typed. */
   checkName: CheckName;
   /** Writes the asset's definition: creates it at `null`, else over the revision given. */
@@ -145,8 +142,8 @@ export interface BuildCreateDialogProps {
   }): Promise<{ revision: number }>;
   /** Deletes the asset the dialog made, where the reader may (`mayDelete`). */
   remove(input: { name: string; expectedRevision: number }): Promise<unknown>;
-  /** Whether the reader may delete an asset of the kind in this Namespace, by its prefix. */
-  mayDelete(namespace: string | undefined): boolean;
+  /** Whether the reader may delete the asset the dialog made. */
+  mayDelete(): boolean;
   onClose(): void;
   /**
    * The asset exists: the frame closes the dialog and opens its page. `then` runs once the
@@ -159,7 +156,6 @@ export interface BuildCreateDialogProps {
 export interface BuildListLeadFilter {
   /** What the reader typed, once they paused. */
   text: string;
-  namespace: string | undefined;
   /** The scope the list shows, for a kind that is listed per scope. */
   scope: BuildScope | undefined;
 }

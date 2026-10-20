@@ -33,7 +33,7 @@ import {
 import { applyAtCurrentRevisions } from "./asset-revisions";
 import { withTestSql } from "./test-sql";
 
-// The instance behind the grant and Namespace tests: four stored users, interactive agent
+// The instance behind the grant tests: four stored users, interactive agent
 // editing switched on, two tools and two model bindings.
 
 export const clientInstanceId = asClientInstanceId("demo-local");
@@ -259,20 +259,11 @@ export interface AccessInstance {
     expected: Refusal
   ): Promise<AccessError>;
   forbidden(action: string, reason: string): Refusal;
-  /** Written by the administrator. */
-  createNamespace(prefix: string, lists?: Record<string, unknown>): Promise<AccessResponse>;
   /** Written by the administrator, or for the administrator by the superadmin. Returns the id. */
   grant(
     holderId: string,
     action: string,
     scope: { assetId: string } | { workspaceId: string },
-    effect?: "allow" | "deny"
-  ): Promise<string>;
-  /** A row from before Namespace retirement, seeded to verify compatibility. */
-  seedHistoricalGrant(
-    holderId: string,
-    action: string,
-    scope: { namespace: string },
     effect?: "allow" | "deny"
   ): Promise<string>;
   /** A new agent starts hidden unless `availableIn` says where. */
@@ -433,10 +424,6 @@ export async function setupAccessInstance(
     code: "FORBIDDEN",
     details: { action, reason }
   });
-  const createNamespace = (prefix: string, lists: Record<string, unknown> = {}) =>
-    expectOk(admin.id, "namespaces.create", {
-      payload: { prefix, displayName: prefix, ...lists }
-    });
   const grant = async (
     holderId: string,
     action: string,
@@ -458,24 +445,6 @@ export async function setupAccessInstance(
     });
     return grantSchema.parse(response.json()).id;
   };
-  const seedHistoricalGrant: AccessInstance["seedHistoricalGrant"] = async (
-    holderId,
-    action,
-    scope,
-    effect = "allow"
-  ) =>
-    (
-      await stores.access.createGrant({
-        clientInstanceId,
-        holderKind: "user",
-        holderId,
-        action,
-        effect,
-        scopeKind: "namespace",
-        namespace: scope.namespace,
-        grantedBy: holderId === admin.id ? root.id : admin.id
-      })
-    ).id;
   const putAgent = (
     userId: string,
     name: string,
@@ -502,9 +471,7 @@ export async function setupAccessInstance(
     expectOk,
     expectRefused,
     forbidden,
-    createNamespace,
     grant,
-    seedHistoricalGrant,
     putAgent,
     assetId,
     sharedWorkspace: async (name) =>

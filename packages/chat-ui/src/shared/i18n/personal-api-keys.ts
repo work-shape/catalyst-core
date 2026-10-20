@@ -24,17 +24,22 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.nameHint": "Where you use the key, such as your laptop or a script.",
     "personalApiKeys.actions": "What the key may do",
     "personalApiKeys.actionsHint": "If you lose a right later, the key loses it too.",
-    "personalApiKeys.scopeLimited": "{right} in {prefix}",
+    "personalApiKeys.scopeLimited": "{right} in {workspace}",
+    "personalApiKeys.scopeLimitedAsset": "{right}: {asset} in {workspace}",
     "personalApiKeys.startsWith": "Starts with {prefix}",
     "personalApiKeys.useLevel": "Use",
     "personalApiKeys.useLevelHint":
       "Use the Connections, Data Stores, Knowledge Bases and Workflows you may use. Needed to publish a Workflow whose technical account uses them.",
-    "personalApiKeys.namespace": "Limit to a Namespace",
-    "personalApiKeys.namespaceHint":
-      "A Namespace prefix such as tax-. Empty: wherever you hold the chosen rights.",
-    "personalApiKeys.namespaceInvalid":
-      "A Namespace prefix is lowercase words joined by hyphens and ends in a hyphen, such as tax-.",
-    "personalApiKeys.namespacePlaceholder": "tax-",
+    "personalApiKeys.workspace": "Limit to a workspace",
+    "personalApiKeys.workspaceHint":
+      "The key then reaches only what this workspace owns. Everywhere: wherever you hold the chosen rights.",
+    "personalApiKeys.workspaceEverywhere": "Everywhere",
+    "personalApiKeys.workspacePersonal": "Personal",
+    "personalApiKeys.asset": "Limit to one asset",
+    "personalApiKeys.assetHint":
+      "The id of an agent, skill or other asset of the workspace, such as vat-helper. Empty: every asset of the workspace.",
+    "personalApiKeys.assetInvalid":
+      "An id starts with a letter or digit and uses only letters, digits, dots, hyphens and underscores.",
     "personalApiKeys.expiry": "Expires after",
     "personalApiKeys.expiryDays": "{days} days",
     "personalApiKeys.connectTitle": "Connect the CLI",
@@ -84,17 +89,22 @@ export const personalApiKeys = defineTranslations({
       "Wo du den Schlüssel verwendest, etwa auf dem Laptop oder in einem Skript",
     "personalApiKeys.actions": "Was der Schlüssel darf",
     "personalApiKeys.actionsHint": "Verlierst du später ein Recht, verliert es auch der Schlüssel.",
-    "personalApiKeys.scopeLimited": "{right} in {prefix}",
+    "personalApiKeys.scopeLimited": "{right} in {workspace}",
+    "personalApiKeys.scopeLimitedAsset": "{right}: {asset} in {workspace}",
     "personalApiKeys.startsWith": "Beginnt mit {prefix}",
     "personalApiKeys.useLevel": "Verwenden",
     "personalApiKeys.useLevelHint":
       "Verbindungen, Datenspeicher, Wissensbasen und Workflows verwenden, die du verwenden darfst. Nötig, um einen Workflow zu veröffentlichen, dessen technisches Konto sie verwendet.",
-    "personalApiKeys.namespace": "Auf einen Namespace begrenzen",
-    "personalApiKeys.namespaceHint":
-      "Ein Namespace-Präfix wie tax-. Leer: überall, wo du die gewählten Berechtigungen hast.",
-    "personalApiKeys.namespaceInvalid":
-      "Ein Namespace-Präfix besteht aus kleingeschriebenen Wörtern mit Bindestrichen und endet mit einem Bindestrich, etwa tax-.",
-    "personalApiKeys.namespacePlaceholder": "tax-",
+    "personalApiKeys.workspace": "Auf einen Arbeitsbereich begrenzen",
+    "personalApiKeys.workspaceHint":
+      "Der Schlüssel erreicht dann nur, was diesem Arbeitsbereich gehört. Überall: überall, wo du die gewählten Berechtigungen hast.",
+    "personalApiKeys.workspaceEverywhere": "Überall",
+    "personalApiKeys.workspacePersonal": "Persönlich",
+    "personalApiKeys.asset": "Auf ein Asset begrenzen",
+    "personalApiKeys.assetHint":
+      "Die ID eines Agenten, Skills oder anderen Assets des Arbeitsbereichs, etwa vat-helper. Leer: jedes Asset des Arbeitsbereichs.",
+    "personalApiKeys.assetInvalid":
+      "Eine ID beginnt mit einem Buchstaben oder einer Ziffer und enthält nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche.",
     "personalApiKeys.expiry": "Läuft ab nach",
     "personalApiKeys.expiryDays": "{days} Tagen",
     "personalApiKeys.connectTitle": "CLI verbinden",

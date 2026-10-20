@@ -8,15 +8,14 @@ import {
 } from "@work-shape/catalyst-core";
 import { agent, clientInstanceId, setupAccessInstance } from "./support/access-instance";
 
-// The second review of RIGHTS-1b: a right given over a Namespace, a workspace or the instance
-// (a role) asked the giver's right on that one place alone, so it reached past a deny of the
+// The second review of RIGHTS-1b: a right given over a workspace or the instance (a role)
+// asked the giver's right on that one place alone, so it reached past a deny of the
 // giver on something narrower inside it. The giver handed on what they are refused. Each test
 // fails without `denyInside` in `held-rights.ts`: the grant, the role and the account change
 // pass.
 
 async function setup(inWorkspace = false) {
   const t = await setupAccessInstance();
-  await t.createNamespace("kai-");
   const workspaceId = inWorkspace ? await t.sharedWorkspace("Wide") : undefined;
   for (const name of ["kai-secret", "kai-open"]) {
     expect(
@@ -108,10 +107,10 @@ describe("a right given over a workspace", () => {
   });
 });
 
-describe("a role or a key given by a giver denied in a Namespace", () => {
+describe("a role or a key given by a giver denied on an asset of the instance", () => {
   it("refuses the admin role and a principal's key, and passes a workspace the deny lies outside", async () => {
     const t = await setup();
-    await t.seedHistoricalGrant(t.admin.id, "agent.read", { namespace: "kai-" }, "deny");
+    await t.grant(t.admin.id, "agent.read", { assetId: t.secret }, "deny");
     const role = await t.call(t.admin.id, "users.update", {
       params: { userId: t.kai.id },
       payload: { roles: ["user", "admin"] }
@@ -128,7 +127,7 @@ describe("a role or a key given by a giver denied in a Namespace", () => {
     expect(principal.json()).toMatchObject({
       error: { details: { action: "config_assets.read", reason: "denied" } }
     });
-    // A Namespace lies in no workspace: the workspace is given.
+    // The instance's own asset lies in no workspace: the workspace is given.
     const workspaceId = await t.sharedWorkspace("Wide");
     await t.grant(t.lena.id, "agent.read", { workspaceId });
   });
@@ -180,10 +179,10 @@ describe("the rule over a workspace", () => {
     ).toEqual({ allowed: true });
     // A deny whose asset the call does not place counts as inside: the strict reading.
     expect(giving([deny], new Map())).toMatchObject({ allowed: false, reason: "denied" });
-    // A deny in a Namespace lies in no workspace.
-    expect(
-      giving([{ ...denyOn({ scopeKind: "namespace" }), namespace: "kai-" }], new Map())
-    ).toEqual({ allowed: true });
+    // A deny on an asset of the instance lies in no workspace.
+    expect(giving([deny], new Map([["asset_offers", { kind: "app", name: "offers" }]]))).toEqual({
+      allowed: true
+    });
   });
 });
 

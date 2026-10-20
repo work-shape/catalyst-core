@@ -19,7 +19,6 @@ async function setup() {
     roles: ["user"],
     permissions: ["users.manage"]
   });
-  await t.createNamespace("kai-");
   const workspaceId = await t.sharedWorkspace("No escalation");
   const rowFor = (holderId: string, action: string, effect: "allow" | "deny" = "allow") => ({
     payload: {
@@ -94,7 +93,9 @@ describe("check 41: giving a person a row", () => {
         await t.expectOk(t.root.id, "permissions.grant", t.rowFor(t.kai.id, "agent.read", "deny"))
       ).json()
     ).id;
-    const allow = await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const allow = grantSchema.parse(
+      (await t.expectOk(t.root.id, "permissions.grant", t.rowFor(t.kai.id, "agent.write"))).json()
+    ).id;
     await t.expectRefused(
       t.manager.id,
       "permissions.revoke",
@@ -174,7 +175,7 @@ describe("check 41: changing a person's account", () => {
         "'Admin' holds it. Only a holder of every right of an account changes the account"
       );
     }
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.expectOk(t.root.id, "permissions.grant", t.rowFor(t.kai.id, "agent.write"));
     // A disabled admin holds the role's rights again once enabled, so the rule still asks them.
     await t.expectOk(t.root.id, "users.update", {
       params: { userId: t.admin.id },
@@ -186,7 +187,7 @@ describe("check 41: changing a person's account", () => {
     });
     expect(disabled.statusCode).toBe(403);
 
-    // A row the person holds counts like a role: Kai holds `agent.write` in `kai-`.
+    // A row the person holds counts like a role: Kai holds `agent.write` in the workspace.
     const kai = await t.call(t.manager.id, "users.identities.upsert", changes(t.kai.id)[2][1]);
     expect(kai.json()).toMatchObject({
       error: { details: { action: "agent.write", reason: "no_grant" } }
@@ -226,9 +227,9 @@ describe("check 41: the lock of the account checked", () => {
         await tx`
           insert into permission_grants
             (id, client_instance_id, holder_kind, holder_id, action, effect, scope_kind,
-             namespace, granted_by, created_at)
+             scope_id, granted_by, created_at)
           values ('grant_race', ${clientInstanceId}, 'user', ${t.lena.id}, 'agent.write',
-             'allow', 'namespace', 'kai-', ${t.root.id}, now())`;
+             'allow', 'workspace', ${t.workspaceId}, ${t.root.id}, now())`;
       });
       const renaming = settled(
         t.call(t.manager.id, "users.update", {

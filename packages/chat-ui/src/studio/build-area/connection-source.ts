@@ -112,7 +112,7 @@ const DISCOVERY_POLL_MS = 2_000;
  */
 export interface ConnectionSource {
   /** The reader may test the Connection: the page offers the button. The instance decides the call. */
-  mayTest(connection: { namespace?: string }): boolean;
+  mayTest(connection: { allowed?: readonly string[] }): boolean;
   /**
    * A hook: the Connection's state, read when the page opens and again after a test. While the
    * page waits for a discovery it is read again every few seconds, until the discovery is in.
@@ -224,14 +224,11 @@ export function useConnectionSource(): ConnectionSource {
   return {
     give,
     useAvailability: (frame) => useAvailabilityChoice(frame, "connection"),
-    // The right is held on every Connection of the instance or in the Connection's Namespace.
-    mayTest: ({ namespace }) =>
+    // The right is held on every Connection of the instance, or on this one as the instance
+    // says with its record.
+    mayTest: ({ allowed }) =>
       (context.data?.actions.includes(CONNECTION_WRITE_ACTION) ?? false) ||
-      (namespace !== undefined &&
-        (context.data?.namespaces.some(
-          (held) => held.prefix === namespace && held.actions.includes(CONNECTION_WRITE_ACTION)
-        ) ??
-          false)),
+      (allowed?.includes("write") ?? false),
     useDetail(name, wait) {
       const query = useQuery({
         queryKey: detailKey(name),

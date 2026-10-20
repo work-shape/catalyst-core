@@ -148,7 +148,7 @@ function shippedTitles(filter: Partial<BuildListLeadFilter>, items = [shipped]):
       { children: null, locale: "en" },
       createElement(ShippedGuardrailsLead, {
         read: ready(items),
-        filter: { text: "", namespace: undefined, scope: undefined, ...filter },
+        filter: { text: "", scope: undefined, ...filter },
         children: (lead) => lead.rows?.map((row) => row.title).join("|") ?? "loading"
       })
     )
@@ -254,6 +254,5 @@ describe("which shipped guardrails the list shows", () => {
   it("shows them in the instance's scope alone", () => {
     expect(shippedTitles({ scope: { kind: "instance" } })).not.toBe("");
     expect(shippedTitles({ scope: { kind: "workspace", workspaceId: TEAM } })).toBe("");
-    expect(shippedTitles({ namespace: "tax-" })).toBe("");
   });
 });

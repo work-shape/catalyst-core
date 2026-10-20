@@ -3,6 +3,7 @@ import {
   CONNECT_CODE_POLL_INTERVAL_MS,
   CONNECT_CODE_TTL_MS,
   asApiCredentialId,
+  asCollaborationWorkspaceId,
   asUserId,
   auditActorFromIdentity,
   createConnectCodePair,
@@ -85,11 +86,11 @@ export class PersonalApiKeysWorkflow {
     context: ChangeContext,
     fields: PersonalApiKeyFields
   ): Promise<CreatedPersonalApiKey> {
-    const created = await this.whileRightsHeld(context, (held, access) =>
+    const created = await this.whileRightsHeld(context, async (held, access) =>
       held.options.stores.personalApiKeys.createPersonalApiKey({
         clientInstanceId: this.options.clientInstanceId,
         ownerUserId: asUserId(context.actor.id),
-        ...held.requireIssuable(access, fields)
+        ...(await held.requireIssuable(access, fields))
       })
     );
     await this.recordKeyChange(context, "api_access.personal_key_created", created.key);
@@ -170,7 +171,7 @@ export class PersonalApiKeysWorkflow {
     await this.getConnectCode(userCode);
     const userCodeHash = await this.userCodeHash(userCode);
     const { checked, code } = await this.whileRightsHeld(context, async (held, access) => {
-      const issuable = held.requireIssuable(access, fields);
+      const issuable = await held.requireIssuable(access, fields);
       return {
         checked: issuable,
         code: await held.options.stores.personalApiKeys.approveConnectCode({
@@ -270,22 +271,44 @@ export class PersonalApiKeysWorkflow {
     );
   }
 
-  private requireIssuable(access: ActorAccess, fields: PersonalApiKeyFields): PersonalApiKeyFields {
+  private async requireIssuable(
+    access: ActorAccess,
+    fields: PersonalApiKeyFields
+  ): Promise<PersonalApiKeyFields> {
     const scopes = requirePersonalApiKeyScopes(fields.scopes);
     requirePersonalApiKeyExpiry(fields.expiresAt);
+    const workspaceIds = new Set(scopes.flatMap((scope) => scope.workspaceId ?? []));
+    for (const workspaceId of workspaceIds) {
+      const workspace = await this.options.stores.workspaces.getWorkspace(
+        this.options.clientInstanceId,
+        asCollaborationWorkspaceId(workspaceId)
+      );
+      // A scope written with a name prefix before NS-RETIRE names no workspace either.
+      if (!workspace) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `The instance has no workspace '${workspaceId}'. A scope names a workspace by its id`,
+          { reason: "unknown_workspace", workspaceId }
+        );
+      }
+    }
     for (const scope of scopes) {
+      // Where the key may reach, as the caller holds it: anywhere for a scope without a
+      // workspace, in the workspace for one with it. A right on one asset counts, as one in a
+      // workspace does for a scope without one: the key is narrowed to the owner at each call.
       const held =
-        scope.namespace === undefined
+        scope.workspaceId === undefined
           ? access.authorizeTransfer(scope.action).allowed ||
-            access.holdsGrantAt(scope.action, ["namespace", "asset", "workspace"])
-          : access.authorizeTransfer(scope.action, { name: scope.namespace }).allowed;
+            access.holdsGrantAt(scope.action, ["asset", "workspace"])
+          : access.authorizeTransfer(scope.action, { workspaceId: scope.workspaceId }).allowed ||
+            access.holdsGrantAt(scope.action, ["asset"]);
       if (!held) {
         throw new AppError(
           "VALIDATION_FAILED",
-          `You hold no right '${scope.action}'${scope.namespace === undefined ? "" : ` in the Namespace '${scope.namespace}'`}, so a key cannot carry it`,
+          `You hold no right '${scope.action}'${scope.workspaceId === undefined ? "" : ` in the workspace '${scope.workspaceId}'`}, so a key cannot carry it`,
           {
             action: scope.action,
-            ...(scope.namespace === undefined ? {} : { namespace: scope.namespace })
+            ...(scope.workspaceId === undefined ? {} : { workspaceId: scope.workspaceId })
           }
         );
       }

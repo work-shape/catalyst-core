@@ -83,14 +83,19 @@ describe("the Workflows row the platform context names", () => {
     expect(await sectionsOf(t, t.kai.id)).toEqual(["workflows"]);
   });
 
-  it("names the empty row to whoever may write a Workflow, on the instance or in a Namespace", async () => {
+  it("names the empty row to whoever may write a Workflow, on the instance or on one Workflow", async () => {
     const t = await ready();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, WORKFLOW_ACTIONS.write, { namespace: "kai-" });
-
-    // Nothing is stored yet, so nothing is listed, and the builders still have their row.
+    // Nothing is stored yet, so nothing is listed, and the builder still has the row.
     expect(await listedTo(t, t.admin.id)).toEqual([]);
     expect(await sectionsOf(t, t.admin.id)).toEqual(["workflows"]);
+    expect(await sectionsOf(t, t.lena.id)).toEqual([]);
+
+    // The right to write the one Workflow, a draft that lists nothing, names the row as well.
+    await draft(t);
+    await t.grant(t.kai.id, WORKFLOW_ACTIONS.write, {
+      assetId: await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY)
+    });
+    expect(await listedTo(t, t.kai.id)).toEqual([]);
     expect(await sectionsOf(t, t.kai.id)).toEqual(["workflows"]);
     expect(await sectionsOf(t, t.lena.id)).toEqual([]);
   });

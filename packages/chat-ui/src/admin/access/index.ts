@@ -2,10 +2,8 @@ export { CheckTab } from "./check-tab";
 export { assetKindLabelKey } from "./grant-words";
 export { actionLabel } from "./right-words";
 export { GrantsTab } from "./grants-tab";
-export { NamespacesTab } from "./namespaces-tab";
 export {
   accessWriteFailure,
-  boundAssets,
   checkAsset,
   checkedAssetId,
   checkState,
@@ -17,9 +15,6 @@ export {
   grantsNameWorkspaces,
   grantVerbs,
   groupGrants,
-  namespaceLockedLists,
-  namespacePrefixProblem,
-  namespaceRequest,
   splitGrantableAction,
   withGrantKind
 } from "./access-model";

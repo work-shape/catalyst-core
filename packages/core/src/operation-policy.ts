@@ -12,7 +12,7 @@ export type PolicyDefaults = Record<OperationEffect, PolicyValue>;
 
 /**
  * An admin's value for one operation or for every operation under a name prefix
- * (`connections.*`). It may be narrowed to a workspace, an asset kind and a Namespace, and then
+ * (`connections.*`). It may be narrowed to a workspace and an asset kind, and then
  * applies only to a call one of whose targets carries the same.
  */
 export interface CentralPolicySetting {
@@ -20,7 +20,6 @@ export interface CentralPolicySetting {
   value: PolicyValue;
   workspaceId?: string;
   assetKind?: string;
-  namespace?: string;
 }
 
 /**
@@ -30,7 +29,6 @@ export interface CentralPolicySetting {
 export interface PolicyTarget {
   workspaceId?: string;
   assetKind?: string;
-  namespace?: string;
 }
 
 /** A person's own value for an operation. OP-6 supplies it; nothing reads it before. */
@@ -278,7 +276,6 @@ function matches(setting: CentralPolicySetting, operation: string, target: Polic
   return (
     named &&
     (setting.workspaceId === undefined || setting.workspaceId === target.workspaceId) &&
-    (setting.assetKind === undefined || setting.assetKind === target.assetKind) &&
-    (setting.namespace === undefined || setting.namespace === target.namespace)
+    (setting.assetKind === undefined || setting.assetKind === target.assetKind)
   );
 }

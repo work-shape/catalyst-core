@@ -10,7 +10,6 @@ import {
   AppError,
   asCollaborationWorkspaceId,
   asUserId,
-  findNamespaceOfAssetName,
   getSubjectUserId,
   isAppError,
   isAuthenticatedServicePrincipal,
@@ -22,7 +21,6 @@ import {
   type ConfigAssetRecord,
   type FileSet,
   type JsonObject,
-  type Namespace,
   type OperationAuthorization,
   type LocaleCode,
   type StorePage,
@@ -66,11 +64,7 @@ export interface AssetReadHost {
   target(address: AssetAddress): Promise<AssetTarget>;
   /** A kind of a module that is off does not exist here, whatever the store still holds. */
   kind(kind: string): WorkflowAssetKind;
-  policyTargets(address: {
-    kind: string;
-    name?: string;
-    workspaceId?: string;
-  }): Promise<PolicyTarget[]>;
+  policyTargets(address: { kind: string; name?: string; workspaceId?: string }): PolicyTarget[];
 }
 
 /**
@@ -159,8 +153,7 @@ export class AssetReadWorkflow {
       input.forUse !== true &&
       (call.access.authorize(kind.actions.read, resource).allowed ||
         readsAssetDraft(kind, call.access, resource));
-    const [namespaces, defaultName, records] = await Promise.all([
-      this.namespaces(scope),
+    const [defaultName, records] = await Promise.all([
       this.defaultName(kind, scope),
       this.options.configAssets.store.listConfigAssetPage({
         clientInstanceId: this.options.clientInstanceId,
@@ -222,11 +215,10 @@ export class AssetReadWorkflow {
       ).map((state) => [state.connectionAssetId, state.health])
     );
     return records.map((record) => {
-      const namespace = findNamespaceOfAssetName(namespaces, record.name);
       const resource = accessResource(record.kind, record.name, record.scope, record.id);
       const allowed = allowedOn(kind, call, resource);
       if (!reads(resource)) {
-        return { ...this.publishedSummary(kind, record, namespace?.prefix, locale), allowed };
+        return { ...this.publishedSummary(kind, record, locale), allowed };
       }
       const summary = summarizeAsset(kind, record.name, record.config, locale);
       // Health is a `connection.read` field; use holders see the published summary only.
@@ -241,7 +233,6 @@ export class AssetReadWorkflow {
         ...summary,
         ...(attributes === undefined ? {} : { attributes }),
         scope: record.scope,
-        ...(namespace ? { namespace: namespace.prefix } : {}),
         revision: record.revision,
         ...pointersOf(kind, record),
         ...(draftSummaries.has(record.id) ? { agentDraft: draftSummaries.get(record.id) } : {}),
@@ -290,13 +281,11 @@ export class AssetReadWorkflow {
     // Whoever may not read the draft is answered the published revision and nothing of it.
     const publishedOnly = read.publishedView;
     if (publishedOnly) address = { ...address, revision: "published" };
-    const [namespaces, defaultName, availability, content] = await Promise.all([
-      this.namespaces(target.scope),
+    const [defaultName, availability, content] = await Promise.all([
       this.defaultName(target.kind, target.scope),
       this.availability(call, target.kind, asset.name),
       this.revisionContent(target, asset, address)
     ]);
-    const namespace = findNamespaceOfAssetName(namespaces, asset.name);
     // Resolve only after authorization, from the revision the caller is allowed to read.
     const runsAs = await target.kind.readRunsAs?.(content.config);
     const draftSummary =
@@ -388,7 +377,6 @@ export class AssetReadWorkflow {
       kind: asset.kind,
       name: asset.name,
       scope: asset.scope,
-      ...(namespace ? { namespace: namespace.prefix } : {}),
       revision: publishedOnly ? (content.contentRevision ?? asset.revision) : asset.revision,
       ...(publishedOnly
         ? { publishedRevision: content.contentRevision }
@@ -568,12 +556,7 @@ export class AssetReadWorkflow {
    * One asset as a list shows it to a holder of the use right alone: the published revision
    * under its own number, and nothing of the draft.
    */
-  publishedSummary(
-    kind: WorkflowAssetKind,
-    record: ConfigAssetRecord,
-    namespace?: string,
-    locale?: LocaleCode
-  ) {
+  publishedSummary(kind: WorkflowAssetKind, record: ConfigAssetRecord, locale?: LocaleCode) {
     return {
       id: record.id,
       kind: record.kind,
@@ -584,7 +567,6 @@ export class AssetReadWorkflow {
         locale
       ),
       scope: record.scope,
-      ...(namespace ? { namespace } : {}),
       revision: record.publishedRevision ?? record.revision,
       publishedRevision: record.publishedRevision,
       updatedAt: record.updatedAt
@@ -706,15 +688,6 @@ export class AssetReadWorkflow {
       config: revision.config,
       ...(revision.fileSetId ? { fileSetId: revision.fileSetId } : {})
     };
-  }
-
-  /** A Namespace is a prefix among the instance's own assets: a workspace's have none. */
-  async namespaces(scope: AssetScope): Promise<Namespace[]> {
-    return scope.kind === "instance"
-      ? this.options.stores.access.listNamespaceRecords({
-          clientInstanceId: this.options.clientInstanceId
-        })
-      : [];
   }
 
   /**

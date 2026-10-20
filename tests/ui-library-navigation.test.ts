@@ -731,8 +731,8 @@ describe("a page with a head across its width", () => {
 
   it("links into the documentation from the instance's docs address, in a new tab", () => {
     const link = createElement(DocsLink, {
-      path: "/operate/how-rights-work/#namespaces",
-      accessibleName: "Learn more about Namespaces, opens in a new tab",
+      path: "/operate/how-rights-work/#building-and-using",
+      accessibleName: "Learn more about workspaces, opens in a new tab",
       children: "Learn more"
     });
     const at = (address: string | undefined) =>
@@ -740,7 +740,7 @@ describe("a page with a head across its width", () => {
 
     const markup = at("https://docs.workshape.ai/catalyst");
     expect(markup).toMatch(
-      /<a href="https:\/\/docs\.workshape\.ai\/catalyst\/operate\/how-rights-work\/#namespaces" target="_blank" rel="noopener noreferrer" aria-label="Learn more about Namespaces, opens in a new tab"/u
+      /<a href="https:\/\/docs\.workshape\.ai\/catalyst\/operate\/how-rights-work\/#building-and-using" target="_blank" rel="noopener noreferrer" aria-label="Learn more about workspaces, opens in a new tab"/u
     );
     // It takes the colour of the text it stands in, is underlined and ends with the mark.
     const classes = /<a [^>]*class="([^"]*)"/u.exec(markup)?.[1]?.split(" ") ?? [];
@@ -748,7 +748,7 @@ describe("a page with a head across its width", () => {
     expect(markup).toMatch(/>Learn more<svg[^>]*aria-hidden="true"/u);
     // The docs address keeps its own path, with or without a slash at its end.
     expect(at("https://docs.workshape.ai/catalyst/")).toContain(
-      'href="https://docs.workshape.ai/catalyst/operate/how-rights-work/#namespaces"'
+      'href="https://docs.workshape.ai/catalyst/operate/how-rights-work/#building-and-using"'
     );
     expect(docsAddress("https://docs.example.com", "operate/x/")).toBe(
       "https://docs.example.com/operate/x/"

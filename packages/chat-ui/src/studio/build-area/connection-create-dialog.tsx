@@ -38,7 +38,6 @@ import {
 import {
   ConnectionCreateForm,
   draftedFields,
-  NO_NAMESPACE,
   type CreateFieldErrors,
   type CreateFields
 } from "./connection-create-form";
@@ -113,8 +112,6 @@ const SIGNED_IN_READ_MS = 1_000;
 export function ConnectionCreateFlow({
   source,
   browser,
-  namespaces,
-  mayNameFreely,
   checkName,
   put,
   remove,
@@ -129,11 +126,10 @@ export function ConnectionCreateFlow({
   const [stage, setStage] = useState<Stage>({ step: drafted ? "form" : "pick" });
   const [fields, setFields] = useState<CreateFields>(() =>
     drafted
-      ? draftedFields(drafted, namespaces, mayNameFreely)
+      ? draftedFields(drafted)
       : {
           title: "",
           description: "",
-          prefix: mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE),
           form: emptyConnectionForm(),
           key: "",
           sendAs: "bearer"
@@ -160,17 +156,10 @@ export function ConnectionCreateFlow({
   /** When the tools were read before the sign-in: a later reading is the signed-in one. */
   const discoveredBefore = useRef<string | undefined>(undefined);
 
-  const choices = [
-    ...(mayNameFreely
-      ? [{ prefix: NO_NAMESPACE, displayName: t("connectionCreate.noNamespace") }]
-      : []),
-    ...namespaces
-  ];
-  const id = (fields.typedId ?? assetAddressFromName(fields.title, CONNECTION_ASSET_KIND)).trim();
-  const name = `${fields.prefix}${id}`;
+  const name = (fields.typedId ?? assetAddressFromName(fields.title, CONNECTION_ASSET_KIND)).trim();
   const title = fields.title.trim();
   const created = memory.current.revision !== undefined;
-  const mayDiscard = mayDelete(fields.prefix === NO_NAMESPACE ? undefined : fields.prefix);
+  const mayDiscard = mayDelete();
   const rest = fields.form.connectorType === "http_api";
 
   /** One write of the definition over the revision the dialog wrote last. */
@@ -204,9 +193,9 @@ export function ConnectionCreateFlow({
   };
 
   // Once the dialog wrote the Connection, its id is its own: nothing is checked any more.
-  const check = useAddressCheck(created ? undefined : checkName, id === "" ? "" : name);
+  const check = useAddressCheck(created ? undefined : checkName, name);
   const complete =
-    title !== "" && id !== "" && fields.form.url.trim() !== "" && !addressBlocksCreate(check);
+    title !== "" && name !== "" && fields.form.url.trim() !== "" && !addressBlocksCreate(check);
 
   const connect = async () => {
     const key = fields.key;
@@ -567,7 +556,6 @@ export function ConnectionCreateFlow({
           <ConnectionCreateForm
             fields={fields}
             check={check}
-            namespaces={choices}
             errors={errors}
             busy={busy}
             steps={steps}

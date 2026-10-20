@@ -1,4 +1,3 @@
-import { seedHistoricalGrant } from "./legacy-grant";
 import { type Locator, type Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
@@ -52,19 +51,20 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
   ).toBe(true);
 }
 
-test("an administrator registers a Namespace, grants, checks, denies, revokes and deletes", async ({
+test("an administrator grants, checks, denies and revokes rights", async ({
   page,
-  // The test stores an agent in its Namespace; the turn on the agents holds the one on the
-  // Namespaces and grants.
+  // The test stores an agent of the instance; the turn on the agents holds the one on the
+  // grants.
   instanceAgentsChange: _instanceAgentsChange
 }) => {
   test.setTimeout(90_000);
-  // A seeded user is listed once the user has signed in.
+  // A seeded user is listed once the user has signed in and made a first call.
   await signInViaApi(page, normalUser);
-  const holder: { id: string } = await (await page.request.get(`${apiBaseUrl}/api/v1/me`)).json();
+  expect((await page.request.get(`${apiBaseUrl}/api/v1/me`)).ok()).toBe(true);
   await signInViaApi(page, adminUser);
+  const workspaceName = "Access rights scope";
   const workspace = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
-    data: { name: "Access rights scope" }
+    data: { name: workspaceName }
   });
   expect(workspace.ok()).toBe(true);
   const rightsWorkspace: { id: string } = await workspace.json();
@@ -75,29 +75,10 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     .getByRole("button", { name: "Access", exact: true })
     .click();
   await expect(page).toHaveURL(new RegExp(`${accessPath}$`, "u"));
-  await expect(page.getByText("No Namespace yet.")).toBeVisible();
+  // The page opens on the rights.
+  await expect(page.getByText("No right given yet.")).toBeVisible();
 
-  // Register kai-.
-  await page.getByRole("button", { name: "New Namespace" }).click();
-  const namespaceDialog = page.getByRole("dialog", { name: "New Namespace" });
-  await namespaceDialog.getByLabel("Prefix").fill("Kai");
-  await expect(namespaceDialog.getByText("Use lowercase letters and digits")).toBeVisible();
-  await namespaceDialog.getByLabel("Prefix").fill("kai-");
-  await namespaceDialog.getByLabel("Display name").fill("Kai");
-  await namespaceDialog.getByRole("button", { name: "Create Namespace" }).click();
-  await expect(namespaceDialog).toBeHidden();
-  const namespaceRow = page.getByTestId("namespace-row").filter({ hasText: "kai-" });
-  await expect(namespaceRow).toBeVisible();
-
-  // A prefix that overlaps it is refused at the field, before anything is sent.
-  await page.getByRole("button", { name: "New Namespace" }).click();
-  await namespaceDialog.getByLabel("Prefix").fill("kai-x-");
-  await expect(
-    namespaceDialog.getByText("This prefix overlaps the registered Namespace kai-.")
-  ).toBeVisible();
-  await namespaceDialog.getByRole("button", { name: "Cancel" }).click();
-
-  // An agent in the Namespace, for the lists and the deny further down.
+  // An agent of the instance, for the lists and the deny further down.
   const created = await requestWithOrigin(page, "put", assetPath, {
     data: {
       expectedRevision: await assetBaseRevision(page, assetPath),
@@ -110,10 +91,10 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
       }
     }
   });
-  expect(created.ok()).toBe(true);
+  expect(created.ok(), await created.text()).toBe(true);
   const grantDialog = page.getByRole("dialog", { name: "New right" });
   const grantRows = page.getByTestId("grant-row");
-  const namespaceGrants = grantRows.filter({ hasText: "Namespace kai-" });
+  const workspaceGrants = grantRows.filter({ hasText: `Workspace ${workspaceName}` });
   try {
     await page.reload();
 
@@ -129,8 +110,8 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
       })
     ).toHaveAttribute("href", `${rightsDocs}#do-you-hold-the-right-here`);
 
-    // Grant E2E User reading kai-helper. An agent right is given in a shared workspace, which
-    // the dialog starts in (WS-OWN-1a), or on one agent; it offers no Namespace.
+    // Grant E2E User viewing kai-helper. An agent right is given in a shared workspace, which
+    // the dialog starts in (WS-OWN-1a), or on one agent.
     await tab(page, "Rights").click();
     await expect(page.getByText("No right given yet.")).toBeVisible();
     await page.getByRole("button", { name: "New right" }).click();
@@ -138,7 +119,6 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     const inWorkspace = grantDialog.getByRole("radio", { name: /^In a shared workspace/u });
     const onAsset = grantDialog.getByRole("radio", { name: /^On one asset/u });
     await expect(inWorkspace).toBeChecked();
-    await expect(grantDialog.getByRole("radio", { name: /Namespace/u })).toHaveCount(0);
     await onAsset.check();
     await grantDialog.getByLabel("View").check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
@@ -153,7 +133,7 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     // The same form with one more action adds the missing row and says what it left alone.
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
-    for (const verb of ["View", "Delete"]) {
+    for (const verb of ["View", "Edit"]) {
       await grantDialog.getByLabel(verb).check();
     }
     await onAsset.check();
@@ -164,25 +144,29 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await expect(grantRows).toHaveCount(1);
     await expect(assetGrants.locator('[data-effect="allow"]')).toHaveCount(2);
 
-    // Historical Namespace rows remain effective, listable and revocable; no new API call
-    // can write one. Seed the state an instance upgraded from an earlier release may hold.
-    for (const action of ["agent.read", "agent.write", "agent.delete"]) {
-      await seedHistoricalGrant(page, { holderId: holder.id, action, namespace: "kai-" });
+    // Rights in the shared workspace, which cover what it owns and not the instance's agents.
+    await page.getByRole("button", { name: "New right" }).click();
+    await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
+    for (const verb of ["View", "Edit", "Delete"]) {
+      await grantDialog.getByLabel(verb).check();
     }
-    await page.reload();
-    await tab(page, "Rights").click();
+    await pick(page, grantDialog.getByRole("button", { name: /^Workspace/u }), workspaceName);
+    await grantDialog.getByRole("button", { name: "Create right" }).click();
+    await expect(grantDialog).toBeHidden();
     await expect(grantRows).toHaveCount(2);
-    await expect(namespaceGrants).toContainText("E2E User");
-    await expect(namespaceGrants.locator('[data-effect="allow"]')).toHaveCount(3);
+    await expect(workspaceGrants).toContainText("E2E User");
+    await expect(workspaceGrants.locator('[data-effect="allow"]')).toHaveCount(3);
 
-    // The rows allow kai-helper and nothing allows other-helper. The result says that it
-    // answers for the right alone, and that a read through a grant opens no overview.
+    // The rights on kai-helper allow what they name, the workspace's do not reach the agent of
+    // the instance, and nothing allows other-helper. The result says that it answers for the
+    // right alone, and that a read through a grant opens no overview.
     await check(page, "kai-helper");
     await expect(checkRow(page, "write")).toContainText("Allowed");
-    await expect(checkRow(page, "write")).toContainText("Right in Namespace kai-");
+    await expect(checkRow(page, "write")).toContainText("Right on this asset");
+    await expect(checkRow(page, "delete")).toContainText("Refused");
+    await expect(checkRow(page, "delete")).toContainText("No right");
     await expect(page.getByTestId("check-right-only")).toContainText("This is the right alone.");
     await expect(page.getByText("Viewing is allowed through a given right")).toBeVisible();
-    await expect(page.getByTestId("check-namespace-limits")).toHaveCount(0);
     await check(page, "other-helper");
     await expect(checkRow(page, "write")).toContainText("Refused");
     await expect(checkRow(page, "write")).toContainText("No right");
@@ -192,41 +176,12 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await expect(page.getByText("An agent name is one word without spaces.")).toBeVisible();
     await expect(page.getByTestId("check-row")).toHaveCount(0);
 
-    // The Namespace cannot be deleted while grants name it. The item says why without a
-    // pointer: the reason is a line of the item.
-    await tab(page, "Namespaces").click();
-    await namespaceRow.getByRole("button", { name: "Actions for kai-" }).click();
-    const deleteItem = page.getByRole("menuitem", { name: "Delete" });
-    await expect(deleteItem).toBeDisabled();
-    await expect(deleteItem).toContainText("3 rights name this Namespace. Revoke them first.");
-
-    // An empty tool list over an agent that exists is saved only after a confirmation that
-    // names the Namespace and the agent count.
-    await page.getByRole("menuitem", { name: "Edit" }).click();
-    const editDialog = page.getByRole("dialog", { name: "Edit Namespace kai-" });
-    await editDialog.getByRole("switch", { name: "Limit tools" }).click();
-    await expect(editDialog.getByText("1 agent already has this prefix.")).toBeVisible();
-    await editDialog.getByRole("button", { name: "Save", exact: true }).click();
-    const lockConfirm = page.getByRole("dialog", { name: "Save kai- with an empty list?" });
-    await expect(lockConfirm).toContainText("1 agent already has this prefix.");
-    await expect(lockConfirm).toContainText("an instance administrator and the release sync");
-    await lockConfirm.getByRole("button", { name: "Save anyway" }).click();
-    await expect(editDialog).toBeHidden();
-    await expect(namespaceRow).toContainText("None allowed");
-
-    // The Check tab names that limit under a write it calls allowed.
-    await check(page, "kai-helper");
-    await expect(checkRow(page, "write")).toContainText("Allowed");
-    await expect(page.getByTestId("check-namespace-limits")).toContainText(
-      "This name lies in Namespace kai-"
-    );
-    await expect(page.getByTestId("check-namespace-limits")).toContainText("Tools: none allowed.");
-
-    // A deny on the one agent wins over the grant in its Namespace.
+    // A deny on the one agent refuses the action there. It is a row of its own: the person's
+    // allow of the same action on the same agent would be that row already.
     await tab(page, "Rights").click();
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
-    await grantDialog.getByLabel("Edit").check();
+    await grantDialog.getByLabel("Delete").check();
     await onAsset.check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("radio", { name: /^Deny/u }).check();
@@ -246,11 +201,12 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
     await expect(grantRows).toHaveCount(2);
-    await expect(grantRows.locator('[data-effect="deny"]')).toHaveText("Denied: Edit agents");
+    await expect(grantRows.locator('[data-effect="deny"]')).toHaveText("Denied: Delete agents");
 
     await check(page, "kai-helper");
-    await expect(checkRow(page, "write")).toContainText("Refused");
-    await expect(checkRow(page, "write")).toContainText("Deny on this asset");
+    await expect(checkRow(page, "delete")).toContainText("Refused");
+    await expect(checkRow(page, "delete")).toContainText("Deny on this asset");
+    await expect(checkRow(page, "write")).toContainText("Allowed");
     await expect(page.getByText("does not take away instance-wide rights")).toBeVisible();
 
     // At 390 wide the page keeps inside the window, on the result and on the grant list,
@@ -273,6 +229,21 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     }
     await page.setViewportSize(WIDE);
     await page.getByRole("button", { name: "Expand sidebar" }).click();
+
+    // The rights in the workspace are revoked one by one.
+    for (const action of ["View agents", "Edit agents", "Delete agents"]) {
+      // The menu of the last round has left the page before the row's menu is opened again: a
+      // click that lands while it is still leaving only finishes its closing.
+      await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
+      await workspaceGrants.getByRole("button", { name: /^Actions for the right of/u }).click();
+      await page.getByRole("menuitem", { name: `Revoke: ${action}` }).click();
+      const revokeDialog = page.getByRole("dialog", { name: "Revoke this right?" });
+      await revokeDialog.getByRole("button", { name: "Revoke" }).click();
+      // The dialog is gone, not only faded: it hands the focus back when it leaves.
+      await expect(revokeDialog).toHaveCount(0);
+      await expect(workspaceGrants.getByText(action, { exact: true })).toHaveCount(0);
+    }
+    await expect(grantRows).toHaveCount(1);
   } finally {
     await requestWithOrigin(
       page,
@@ -292,33 +263,11 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
   await expect(orphanedDeny).toContainText("kai-helper");
   await expect(orphanedDeny).toContainText("This deny stays until you remove it.");
   await orphanedDeny.getByRole("button", { name: /^Actions for the right of/u }).click();
-  await page.getByRole("menuitem", { name: "Remove deny: Edit agents" }).click();
+  await page.getByRole("menuitem", { name: "Remove deny: Delete agents" }).click();
   await page
     .getByRole("dialog", { name: "Remove this deny?" })
     .getByRole("button", { name: "Remove deny" })
     .click();
   await expect(orphanedDeny).toHaveCount(0);
-  for (const action of ["View agents", "Edit agents", "Delete agents"]) {
-    // The menu of the last round has left the page before the row's menu is opened again: a
-    // click that lands while it is still leaving only finishes its closing.
-    await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
-    await namespaceGrants.getByRole("button", { name: /^Actions for the right of/u }).click();
-    await page.getByRole("menuitem", { name: `Revoke: ${action}` }).click();
-    const revokeDialog = page.getByRole("dialog", { name: "Revoke this right?" });
-    await revokeDialog.getByRole("button", { name: "Revoke" }).click();
-    // The dialog is gone, not only faded: it hands the focus back when it leaves.
-    await expect(revokeDialog).toHaveCount(0);
-    await expect(namespaceGrants.getByText(action, { exact: true })).toHaveCount(0);
-  }
   await expect(page.getByText("No right given yet.")).toBeVisible();
-
-  // Nothing names the Namespace any more, so it can go.
-  await tab(page, "Namespaces").click();
-  await namespaceRow.getByRole("button", { name: "Actions for kai-" }).click();
-  await page.getByRole("menuitem", { name: "Delete" }).click();
-  await page
-    .getByRole("dialog", { name: "Delete Namespace kai-?" })
-    .getByRole("button", { name: "Delete" })
-    .click();
-  await expect(page.getByText("No Namespace yet.")).toBeVisible();
 });

@@ -69,7 +69,10 @@ describe("AP-4 verifier: migration 0079 SQL", () => {
       insert into api_credentials (id, client_instance_id, service_principal_id, name,
         key_prefix, secret_hash, scopes, created_at)
       values ('cred_a', ${instance}, 'sp_a', 'cred_a', 'p', 'h', null, now())`;
-    await migrateDatabase({ databaseUrl });
+    // Through 0079 alone: a later migration takes out a column its SQL names.
+    const through = migrationsUntil({ name: "legacy_permission_grants", including: true });
+    cleanups.push(() => through.remove());
+    await migrateDatabase({ databaseUrl, migrationsDirectory: through.directory });
     const grantsAfterFirst =
       await sql`select action, effect from permission_grants order by action`;
     await sql.unsafe(migrationSql.replaceAll("--> statement-breakpoint", ""));

@@ -2,7 +2,6 @@ import type { CollaborationWorkspaceAgents, SafeConfig } from "@work-shape/catal
 import type { CheckName } from "../../shared/api/asset-writes";
 import type { BuildAssetStart } from "../build-area/build-asset-kind";
 import { requestBuildStart } from "../build-area/build-create-request";
-import type { BuildNamespace } from "../../shared/build-rights";
 import { AGENTS_BUILD_PATH, buildRouteOfLocation } from "../../shared/build-route";
 import type { WorkspaceRoute } from "../../shared/routes";
 
@@ -11,10 +10,6 @@ export type OfferedAgent = SafeConfig["agents"][number];
 
 /** What the dialog that starts an agent on the Agents page offers the viewer. */
 export interface AgentCreation {
-  /** The Namespaces the viewer may name a new agent in. */
-  namespaces: readonly BuildNamespace[];
-  /** The viewer may name an agent outside every Namespace. */
-  mayNameFreely: boolean;
   /** The viewer may make a new agent available in every workspace. */
   mayChooseAll: boolean;
   /** Asks the instance whether a new agent could take the address, as it is typed. */

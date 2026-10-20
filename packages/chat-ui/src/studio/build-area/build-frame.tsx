@@ -71,10 +71,7 @@ const CLI_COMMANDS = ["catalyst config pull", "catalyst config diff", "catalyst 
 /** What the reader typed and chose, per kind, so the way back keeps both. */
 type ListView = BuildListFilter;
 
-const firstListView: ListView = { text: "", namespace: undefined };
-
-/** The value of the Namespace filter that narrows nothing. */
-const ALL_NAMESPACES = "";
+const firstListView: ListView = { text: "" };
 
 /**
  * The Build area: one list per kind and one page per asset, each with an address. The frame
@@ -348,8 +345,6 @@ export function BuildFrame({
             entry={entry}
             heading={t("build.copyToEdit")}
             initialTitle={t("build.copyTitle", { title: copying.title })}
-            namespaces={source.rights.creatableNamespaces(entry.kind)}
-            mayNameFreely={source.rights.instanceWrite}
             startsIn={startsIn}
             checkName={(name) => source.checkName(entry.kind, name)}
             onClose={() => setCopying(undefined)}
@@ -410,16 +405,13 @@ export function BuildFrame({
       />
       {asking && isEditableKind(entry) && place.kind.state.canCreate && entry.CreateDialog ? (
         <entry.CreateDialog
-          namespaces={source.rights.creatableNamespaces(entry.kind)}
-          mayNameFreely={source.rights.instanceWrite}
           checkName={(name) => source.checkName(entry.kind, name)}
           put={(input) => source.writes.put({ ...input, kind: entry.kind })}
           remove={(input) => source.writes.delete({ ...input, kind: entry.kind })}
-          mayDelete={(namespace) =>
+          mayDelete={() =>
             place.kind.state.canDelete &&
             source.rights.may("delete", {
               kind: entry.kind,
-              ...(namespace === undefined ? {} : { namespace }),
               ...(scope?.kind === "workspace" ? { workspaceId: scope.workspaceId } : {})
             })
           }
@@ -433,8 +425,6 @@ export function BuildFrame({
       ) : asking && isEditableKind(entry) && place.kind.state.canCreate ? (
         <BuildCreateDialog
           entry={entry}
-          namespaces={source.rights.creatableNamespaces(entry.kind)}
-          mayNameFreely={source.rights.instanceWrite}
           startsIn={startsIn}
           checkName={(name) => source.checkName(entry.kind, name)}
           onClose={() => setAsking(false)}
@@ -501,18 +491,14 @@ function BuildList({
   const [cliOpen, setCliOpen] = useState(false);
   const [now] = useState(() => new Date());
   const settledText = useSettledText(view.text);
-  const list = source.useList(entry.kind, { text: settledText, namespace: view.namespace });
+  const list = source.useList(entry.kind, { text: settledText });
   const scope = source.scopeOf?.(entry.kind);
   const scopes = scope && source.chooseScope ? buildScopes(source.rights) : [];
   const workspaceName = (id: string) =>
     buildWorkspaceName(source.rights, id, t("build.scopePersonal"));
   const scopeName = (of: BuildScope) =>
     of.kind === "instance" ? t("build.scopeInstance") : workspaceName(of.workspaceId);
-  // A Namespace is a prefix among the instance's own assets alone.
-  const namespaces = scope?.kind === "workspace" ? [] : source.rights.namespaces;
-  const namespaceName = (prefix: string | undefined) =>
-    namespaces.find((namespace) => namespace.prefix === prefix)?.displayName;
-  const filtered = settledText.trim() !== "" || view.namespace !== undefined;
+  const filtered = settledText.trim() !== "";
   // A kind that only lists has no asset to start and no CLI entry, and a page only to show one.
   const editable = isEditableKind(entry) ? entry : undefined;
   const opens = opensAssets(entry);
@@ -591,33 +577,6 @@ function BuildList({
                       />
                     </Picker>
                   ) : null}
-                  {namespaces.length > 1 ? (
-                    <Picker
-                      search
-                      label={t("build.namespaceFilter")}
-                      options={[
-                        { value: ALL_NAMESPACES, label: t("build.namespaceAll") },
-                        ...namespaces.map((namespace) => ({
-                          value: namespace.prefix,
-                          label: namespace.displayName,
-                          description: namespace.prefix
-                        }))
-                      ]}
-                      value={view.namespace ?? ALL_NAMESPACES}
-                      onValueChange={(prefix) =>
-                        onViewChange({
-                          ...view,
-                          namespace: prefix === ALL_NAMESPACES ? undefined : prefix
-                        })
-                      }
-                    >
-                      <PickerButton
-                        label={t("build.namespaceFilter")}
-                        value={namespaceName(view.namespace) ?? t("build.namespaceAll")}
-                        placeholder={t("build.namespaceAll")}
-                      />
-                    </Picker>
-                  ) : null}
                 </>
               }
             />
@@ -630,11 +589,9 @@ function BuildList({
               <BuildListEmpty kind={kind} newButton={newButton} startWithAgent={startWithAgent} />
             ) : rows.length === 0 && leadRows.length === 0 ? (
               <EmptyState layout="inline" icon={<SearchX aria-hidden="true" />}>
-                {settledText.trim() !== ""
-                  ? t("build.noMatch", { query: settledText.trim() })
-                  : view.namespace === undefined && scope
-                    ? t("build.noneInScope", { scope: scopeName(scope) })
-                    : t("build.noMatchInNamespace")}
+                {scope && !filtered
+                  ? t("build.noneInScope", { scope: scopeName(scope) })
+                  : t("build.noMatch", { query: settledText.trim() })}
               </EmptyState>
             ) : (
               <List aria-label={t(entry.label)}>
@@ -652,7 +609,6 @@ function BuildList({
                 ))}
                 {rows.map((asset) => {
                   const title = asset.title.trim() || asset.name;
-                  const namespace = namespaceName(asset.namespace) ?? asset.namespace;
                   const own = entry.row?.(asset);
                   const rowText = entry.rowText?.(asset)?.trim();
                   const RowLine = entry.RowLine;
@@ -678,7 +634,6 @@ function BuildList({
                           {asset.scope.kind === "workspace" ? (
                             <Chip size="sm">{workspaceName(asset.scope.workspaceId)}</Chip>
                           ) : null}
-                          {namespace ? <Chip size="sm">{namespace}</Chip> : null}
                           {entry.badges?.(asset, t)}
                         </>
                       }
@@ -744,9 +699,7 @@ function BuildList({
       />
       {loadError}
       {entry.ListLead ? (
-        <entry.ListLead filter={{ text: settledText, namespace: view.namespace, scope }}>
-          {listBody}
-        </entry.ListLead>
+        <entry.ListLead filter={{ text: settledText, scope }}>{listBody}</entry.ListLead>
       ) : (
         listBody(NO_LEAD)
       )}

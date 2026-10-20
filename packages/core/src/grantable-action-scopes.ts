@@ -1,17 +1,9 @@
-import type {
-  GrantScopeKind as StoredGrantScopeKind,
-  PlatformAction
-} from "@work-shape/catalyst-asset-schemas";
-
-/** The places a grant row is written at, as `PermissionGrant["scopeKind"]` names them. */
-type GrantScopeKind = Exclude<StoredGrantScopeKind, "namespace">;
+import type { GrantScopeKind, PlatformAction } from "@work-shape/catalyst-asset-schemas";
 
 /**
  * The actions a grant row can be written for, with the scope kinds it can be written at. A row
  * at instance scope is written for the actions no legacy key carries (RIGHTS-1c, D3): the
- * actions of a legacy key stay the key's, on the Users page, until AP-5b. No new row is
- * written in a Namespace. Existing Namespace rows keep their effect and can still be listed
- * and revoked until NS-RETIRE. `guardrail.publish` is one workspace's or the instance's;
+ * actions of a legacy key stay the key's, on the Users page, until AP-5b. `guardrail.publish` is one workspace's or the instance's;
  * no bundle carries it.
  */
 export const GRANTABLE_ACTION_SCOPES = {

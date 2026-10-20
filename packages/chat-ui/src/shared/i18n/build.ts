@@ -25,14 +25,10 @@ export const build = defineTranslations({
     "build.createAdvanced": "Advanced",
     "build.createAddress": "Address",
     "build.createAddressHint": "Made from the name. It cannot be changed later.",
-    "build.createAddressHintNamespace":
-      "The full address will be {id}. It cannot be changed later.",
     "build.addressTaken": "This address is taken. Choose another name or address.",
     "build.addressInvalid":
       "This address does not work. Use lowercase letters and digits in words joined by -, starting with a letter, at most {max} characters.",
-    "build.createNamespace": "Namespace",
     "build.createPurpose": "What should it do?",
-    "build.createNoNamespace": "No Namespace",
     "build.defaultModel": "Default model",
     "build.modelSetByModelManagers": `Only people who may ${rights.en["rights.actionAgentModelsManage"].toLowerCase()} can change these.`,
     "build.reasoningEffortHint":
@@ -71,14 +67,11 @@ export const build = defineTranslations({
       "An asset with the id {name} was deleted, and you may not read its history. Go back and choose another one.",
     "build.nameTaken": "The id {name} is taken. Go back and choose another one.",
     "build.openHistory": "Open history",
-    "build.namespaceAll": "All Namespaces",
     "build.scopeFilter": "Scope",
     "build.scopeInstance": "Instance",
     "build.scopePersonal": "Personal",
-    "build.namespaceFilter": "Namespace",
     "build.noAccess":
       "Studio is not available to you. It opens for people who hold a right on an agent or a skill.",
-    "build.noMatchInNamespace": "Nothing in this Namespace.",
     "build.noneInScope": "Nothing in {scope} yet.",
     "build.noSkillsChosen": "No skills chosen.",
     "build.platform": "Platform",
@@ -90,18 +83,12 @@ export const build = defineTranslations({
     "build.saveWaits": "Saving sends a request. It takes effect only once it is approved.",
     "build.saveWaitsFor": "Saving sends a request. It takes effect once {names} approves it.",
     "build.readOnlyInstance":
-      "Belongs to no Namespace. Only a person who may edit on the whole instance can change it.",
-    "build.readOnlyNamespace":
-      "Belongs to the Namespace {namespace}. Only a person who may edit in this Namespace can change it.",
+      "Belongs to the instance. Only a person who may edit on the whole instance can change it.",
     "build.readOnlyWorkspace":
       "Belongs to the workspace {workspace}. Only a person who may edit in this workspace can change it.",
     "build.readOnlyPlatform":
       "Ships with the platform and is updated with each release. To change it, copy it and edit the copy.",
     "build.restored": "Revision {number} restored.",
-    "build.refusedModel": "The model {model} is not allowed in Namespace {namespace}.",
-    "build.refusedModelRequired":
-      "An agent in Namespace {namespace} needs a default model the Namespace allows.",
-    "build.refusedTool": "The tool {tool} is not allowed in Namespace {namespace}.",
     "build.refusedModelInWorkspace":
       "The model {model} is not allowed in the workspace {workspace}. An instance admin sets its models on Instance > Workspaces.",
     "build.refusedModelRequiredInWorkspace":
@@ -186,15 +173,11 @@ export const build = defineTranslations({
     "build.createAdvanced": "Erweitert",
     "build.createAddress": "Adresse",
     "build.createAddressHint": "Aus dem Namen gebildet. Sie lässt sich später nicht ändern.",
-    "build.createAddressHintNamespace":
-      "Die vollständige Adresse lautet {id}. Sie lässt sich später nicht ändern.",
     "build.addressTaken":
       "Diese Adresse ist vergeben. Wähle einen anderen Namen oder eine andere Adresse.",
     "build.addressInvalid":
       "Diese Adresse geht so nicht. Nimm Kleinbuchstaben und Ziffern in Wörtern, die - verbindet, am Anfang einen Buchstaben, höchstens {max} Zeichen.",
-    "build.createNamespace": "Namespace",
     "build.createPurpose": "Was soll er tun?",
-    "build.createNoNamespace": "Kein Namespace",
     "build.defaultModel": "Standardmodell",
     "build.modelSetByModelManagers": `Ändern darf das nur, wer die ${rights.de["rights.actionAgentModelsManage"]} darf.`,
     "build.reasoningEffortHint":
@@ -235,14 +218,11 @@ export const build = defineTranslations({
       "Ein Asset mit der Kennung {name} wurde gelöscht, und du darfst seinen Verlauf nicht lesen. Geh zurück und wähle eine andere.",
     "build.nameTaken": "Die Kennung {name} ist vergeben. Geh zurück und wähle eine andere.",
     "build.openHistory": "Verlauf öffnen",
-    "build.namespaceAll": "Alle Namespaces",
     "build.scopeFilter": "Geltungsbereich",
     "build.scopeInstance": "Instanz",
     "build.scopePersonal": "Persönlich",
-    "build.namespaceFilter": "Namespace",
     "build.noAccess":
       "Studio steht dir nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
-    "build.noMatchInNamespace": "Nichts in diesem Namespace.",
     "build.noneInScope": "Noch nichts in {scope}.",
     "build.noSkillsChosen": "Keine Skills ausgewählt.",
     "build.platform": "Plattform",
@@ -255,18 +235,12 @@ export const build = defineTranslations({
     "build.saveWaitsFor":
       "Speichern schickt eine Anfrage. Wirksam wird sie erst nach Freigabe durch {names}.",
     "build.readOnlyInstance":
-      "Gehört zu keinem Namespace. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
-    "build.readOnlyNamespace":
-      "Gehört zum Namespace {namespace}. Ändern kann es nur, wer in diesem Namespace bearbeiten darf.",
+      "Gehört zur Instanz. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
     "build.readOnlyWorkspace":
       "Gehört zum Arbeitsbereich {workspace}. Ändern kann es nur, wer in diesem Arbeitsbereich bearbeiten darf.",
     "build.readOnlyPlatform":
       "Kommt mit der Plattform und wird mit jedem Release aktualisiert. Um es zu ändern, kopiere es und bearbeite die Kopie.",
     "build.restored": "Version {number} wiederhergestellt.",
-    "build.refusedModel": "Das Modell {model} ist im Namespace {namespace} nicht erlaubt.",
-    "build.refusedModelRequired":
-      "Ein Agent im Namespace {namespace} braucht ein Standardmodell, das der Namespace erlaubt.",
-    "build.refusedTool": "Das Werkzeug {tool} ist im Namespace {namespace} nicht erlaubt.",
     "build.refusedModelInWorkspace":
       "Das Modell {model} ist im Arbeitsbereich {workspace} nicht erlaubt. Seine Modelle legt ein Instanz-Admin unter Instanz > Arbeitsbereiche fest.",
     "build.refusedModelRequiredInWorkspace":

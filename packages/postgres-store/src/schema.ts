@@ -63,7 +63,7 @@ import { platformJobs } from "./schema/jobs";
 import { operationRuns } from "./schema/operationRuns";
 import { liveOnceRuns, liveOnceSwitches } from "./schema/liveOnceSwitches";
 import { scopeAssignments } from "./schema/dataScopes";
-import { permissionGrants, namespaces, roles } from "./schema/access";
+import { permissionGrants, roles } from "./schema/access";
 import { infrastructureCheckState } from "./schema/infrastructure";
 import { pages, fileSets, pageBuilds, appUserStorage } from "./schema/pages";
 import {
@@ -134,7 +134,6 @@ export const schema = {
   liveOnceRuns,
   permissionGrants,
   scopeAssignments,
-  namespaces,
   roles,
   infrastructureCheckState,
   pages,

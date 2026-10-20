@@ -513,7 +513,7 @@ const PAGE_GUARD_SOURCE = `(function (page) {
   refuse(ShadowRoot.prototype, "setHTMLUnsafe");
   refuse(ShadowRoot.prototype, "setHTML");
 
-  // By local name, so in every namespace: the address of a link in an SVG is one of XLink.
+  // By local name, whatever the prefix: the address of a link in an SVG is one of XLink.
   function isAddress(attribute) {
     var name = attributeName(attribute);
     return name === "href" || name === "xlink:href" || name === "ping";
@@ -591,7 +591,7 @@ const PAGE_GUARD_SOURCE = `(function (page) {
       }
     }
   });
-  // No attribute filter: a filter leaves out every attribute that has a namespace.
+  // No attribute filter: a filter leaves out every attribute that setAttributeNS sets.
   var watched = { subtree: true, childList: true, attributes: true };
   function watch(root) {
     observe(observer, root, watched);

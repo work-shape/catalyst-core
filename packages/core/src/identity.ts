@@ -76,9 +76,10 @@ export interface AuthenticatedUser {
   delegatedActor?: DelegatedActor;
   scopes?: AuthScope[];
   /**
-   * The scopes of the personal API key the call presents, `<action>` or `<action>:<prefix>`.
-   * The authorizer allows a right only where the user holds it and one of these covers it, so
-   * a key never does more than its owner may now. Absent for a signed-in person.
+   * The scopes of the personal API key the call presents: `<action>`, `<action>:<workspace>` or
+   * `<action>:<workspace>/<name>`. The authorizer allows a right only where the user holds it
+   * and one of these covers it, so a key never does more than its owner may now. Absent for a
+   * signed-in person.
    */
   keyScopes?: readonly string[];
 }

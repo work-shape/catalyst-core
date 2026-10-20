@@ -97,13 +97,8 @@ type AssetSyncItem =
 
 export interface AssetSyncInput {
   /**
-   * The prefix of the one Namespace the batch belongs to. A release names none and may name
-   * any asset of the instance.
-   */
-  namespace?: string;
-  /**
-   * The workspace that owns every asset the batch names. Left out, the batch names the
-   * instance's own assets. A batch that names one is no release (`accessOfSyncCredential`).
+   * The workspace that owns every asset the batch names. Left out, the batch is a release and
+   * names the instance's own assets. A batch that names one is no release (`accessOfSyncCredential`).
    */
   workspaceId?: string;
   items: AssetSyncItem[];

@@ -94,8 +94,6 @@ Each kind has a list. For **Agents** and **Skills** a row shows the name, the id
 
 The names in the list are in the instance's default language.
 
-On an instance that registered [Namespaces](/operate/how-rights-work/#namespaces-registered-earlier) before they were retired, a row also names the Namespace of its name, and a **Namespace** filter shows for a person with rights in more than one.
-
 ## Create
 
 Where no agent that builds is offered, **New agent** or **New skill** opens a dialog that asks for the name, and for an agent what it should do. Its address, the id, is made from the name under **Advanced** and follows the name until you change it. It is checked while you type: a taken address, or one the kind does not allow, is named at the field, the fold opens, and **Continue** waits until it is fixed. The address cannot be changed after the asset is saved.

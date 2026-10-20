@@ -152,7 +152,6 @@ export async function writeLegacyPermissionList(
         effect: row.effect,
         scopeKind: "instance" as const,
         scopeId: null,
-        namespace: null,
         grantedBy: input.grantedBy,
         createdAt
       }))

@@ -8,14 +8,14 @@ import {
   skill
 } from "./support/access-instance";
 
-// Grants and Namespaces at the HTTP boundary. Every refusal the rights model names is proven
+// Grants at the HTTP boundary. Every refusal the rights model names is proven
 // here beside the neighbouring call that is allowed. Who may write a grant, the tenant
 // boundary, audit and tool calls are in `chat-server-access-administration.test.ts`.
 
-describe("Namespace grants on agents and skills", () => {
-  it("lets a holder of agent.write in a Namespace write there and nowhere else", async () => {
+describe("narrow grants on agents and skills", () => {
+  it("lets a holder of agent.write on one agent write it and nothing else", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
+    expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
     // Before the grant the same call is refused: the grant is what allows it.
     await t.expectRefused(
       t.kai.id,
@@ -23,15 +23,15 @@ describe("Namespace grants on agents and skills", () => {
       { params: { kind: "agent", name: "kai-helper" }, payload: { config: agent("kai-helper") } },
       t.forbidden("agent.write", "no_grant")
     );
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.write", { assetId: await t.assetId("agent", "kai-helper") });
 
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
     expect(
       (await t.putAgent(t.kai.id, "kai-helper", { instructions: "Help more." })).statusCode
     ).toBe(200);
 
-    // Wrong Namespace: a new name, and an agent that exists.
-    for (const name of ["other-helper", "assistant", "kai", "kaiser-helper", "team-kai-helper"]) {
+    // Another agent: a new name, and an agent that exists. A name that starts the same way is
+    // no other agent's right.
+    for (const name of ["other-helper", "assistant", "kai-helper-two", "kai-"]) {
       await t.expectRefused(
         t.kai.id,
         "assets.put",
@@ -50,53 +50,62 @@ describe("Namespace grants on agents and skills", () => {
 
   it("applies a grant to its action and kind only", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
+    const workspaceId = await t.sharedWorkspace("Kai");
+    const inWorkspace = { workspaceId };
+    await t.grant(t.kai.id, "agent.write", { workspaceId });
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "agent", name: "kai-helper" },
+      payload: { config: agent("kai-helper"), expectedRevision: null, workspaceId }
+    });
 
     await t.expectRefused(
       t.kai.id,
       "assets.get",
-      { params: { kind: "agent", name: "kai-helper" } },
+      { params: { kind: "agent", name: "kai-helper" }, query: inWorkspace },
       t.forbidden("agent.read", "no_grant")
     );
     await t.expectRefused(
       t.kai.id,
       "assets.revisions.list",
-      { params: { kind: "agent", name: "kai-helper" } },
+      { params: { kind: "agent", name: "kai-helper" }, query: inWorkspace },
       t.forbidden("agent.read", "no_grant")
     );
     await t.expectRefused(
       t.kai.id,
       "assets.delete",
-      { params: { kind: "agent", name: "kai-helper" }, payload: {} },
+      { params: { kind: "agent", name: "kai-helper" }, payload: inWorkspace },
       t.forbidden("agent.delete", "no_grant")
     );
     await t.expectRefused(
       t.kai.id,
       "assets.put",
-      { params: { kind: "skill", name: "kai-notes" }, payload: { config: skill("kai-notes") } },
+      {
+        params: { kind: "skill", name: "kai-notes" },
+        payload: { config: skill("kai-notes"), expectedRevision: null, workspaceId }
+      },
       t.forbidden("skill.write", "no_grant")
     );
 
-    await t.seedHistoricalGrant(t.kai.id, "agent.read", { namespace: "kai-" });
-    await t.seedHistoricalGrant(t.kai.id, "agent.delete", { namespace: "kai-" });
-    await t.seedHistoricalGrant(t.kai.id, "skill.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.read", { workspaceId });
+    await t.grant(t.kai.id, "agent.delete", { workspaceId });
+    await t.grant(t.kai.id, "skill.write", { workspaceId });
     await t.expectOk(t.kai.id, "assets.get", {
-      params: { kind: "agent", name: "kai-helper" }
+      params: { kind: "agent", name: "kai-helper" },
+      query: inWorkspace
     });
     await t.expectOk(t.kai.id, "assets.revisions.list", {
-      params: { kind: "agent", name: "kai-helper" }
+      params: { kind: "agent", name: "kai-helper" },
+      query: inWorkspace
     });
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-notes" },
-      payload: { config: skill("kai-notes") }
+      payload: { config: skill("kai-notes"), expectedRevision: null, workspaceId }
     });
     await t.expectOk(t.kai.id, "assets.delete", {
       params: { kind: "agent", name: "kai-helper" },
-      payload: {}
+      payload: inWorkspace
     });
-    // The read grant is no read outside the Namespace.
+    // The read grant is no read outside the workspace.
     await t.expectRefused(
       t.kai.id,
       "assets.get",
@@ -105,11 +114,10 @@ describe("Namespace grants on agents and skills", () => {
     );
   });
 
-  it("lets a Namespace write grant revert inside the Namespace and not outside", async () => {
+  it("lets an asset write grant revert that asset and not another", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
+    expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
+    await t.grant(t.kai.id, "agent.write", { assetId: await t.assetId("agent", "kai-helper") });
     expect(
       (await t.putAgent(t.kai.id, "kai-helper", { instructions: "Changed." })).statusCode
     ).toBe(200);
@@ -125,7 +133,7 @@ describe("Namespace grants on agents and skills", () => {
       { params: { kind: "agent", name: "kai-helper" }, payload: { revision: 1 } },
       t.forbidden("agent.read", "no_grant")
     );
-    await t.seedHistoricalGrant(t.kai.id, "agent.read", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.read", { assetId: await t.assetId("agent", "kai-helper") });
     await t.expectOk(t.kai.id, "assets.revert", {
       params: { kind: "agent", name: "kai-helper" },
       payload: { revision: 1 }
@@ -164,11 +172,10 @@ describe("Namespace grants on agents and skills", () => {
 
   it("opens no overview and no naming of the default with a batch", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
+    const workspaceId = await t.sharedWorkspace("Kai");
     for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read"]) {
-      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
+      await t.grant(t.kai.id, action, { workspaceId });
     }
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
 
     await t.expectRefused(
       t.kai.id,
@@ -181,15 +188,15 @@ describe("Namespace grants on agents and skills", () => {
     await t.expectRefused(
       t.kai.id,
       "assets.sync",
-      { payload: { namespace: "kai-", items: [], defaultAgentName: "kai-helper" } },
+      { payload: { workspaceId, items: [], defaultAgentName: "assistant" } },
       t.forbidden("assets.release", "no_grant")
     );
     await t.expectOk(t.admin.id, "config_assets.get_overview");
   });
 
-  it("keeps the legacy keys of me.get unchanged by a Namespace grant", async () => {
+  it("keeps the legacy keys of me.get unchanged by narrow grants", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
+    const workspaceId = await t.sharedWorkspace("Kai");
     for (const action of [
       "agent.read",
       "agent.write",
@@ -198,7 +205,7 @@ describe("Namespace grants on agents and skills", () => {
       "skill.write",
       "skill.delete"
     ]) {
-      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
+      await t.grant(t.kai.id, action, { workspaceId });
     }
     const me = z
       .object({ permissions: z.array(z.string()) })
@@ -217,23 +224,17 @@ describe("Namespace grants on agents and skills", () => {
     ]);
   });
 
-  it("does not let a Namespace holder take or drop the default agent", async () => {
+  it("does not let a holder of rights on one agent drop the default agent", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-    await t.seedHistoricalGrant(t.kai.id, "agent.delete", { namespace: "kai-" });
-    // With no agent left, the next one written would become the default.
+    // With no agent left, the next one written becomes the default.
     await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "agent", name: "assistant" },
       payload: {}
     });
-    await t.expectRefused(
-      t.kai.id,
-      "assets.put",
-      { params: { kind: "agent", name: "kai-helper" }, payload: { config: agent("kai-helper") } },
-      t.forbidden("agent.write", "no_grant")
-    );
     expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
+    const helper = await t.assetId("agent", "kai-helper");
+    await t.grant(t.kai.id, "agent.write", { assetId: helper });
+    await t.grant(t.kai.id, "agent.delete", { assetId: helper });
     // The last agent takes the default with it.
     await t.expectRefused(
       t.kai.id,
@@ -253,13 +254,27 @@ describe("Namespace grants on agents and skills", () => {
   });
 });
 
+/** Writes an agent the workspace owns. */
+function putInWorkspace(
+  t: Awaited<ReturnType<typeof setup>>,
+  userId: string,
+  name: string,
+  workspaceId: string,
+  overrides: Record<string, unknown> = {}
+) {
+  return t.call(userId, "assets.put", {
+    params: { kind: "agent", name },
+    payload: { config: agent(name, overrides), workspaceId }
+  });
+}
+
 describe("deny rows and asset grants", () => {
-  it("lets a deny on one asset win over the Namespace allow", async () => {
+  it("lets a deny on one asset win over the workspace allow", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
-    expect((await t.putAgent(t.kai.id, "kai-second")).statusCode).toBe(200);
+    const workspaceId = await t.sharedWorkspace("Kai");
+    await t.grant(t.kai.id, "agent.write", { workspaceId });
+    expect((await putInWorkspace(t, t.kai.id, "kai-helper", workspaceId)).statusCode).toBe(200);
+    expect((await putInWorkspace(t, t.kai.id, "kai-second", workspaceId)).statusCode).toBe(200);
 
     const denyId = await t.grant(
       t.kai.id,
@@ -272,29 +287,40 @@ describe("deny rows and asset grants", () => {
       "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
-        payload: { config: agent("kai-helper", { instructions: "Denied." }) }
+        payload: {
+          config: agent("kai-helper", { instructions: "Denied." }),
+          workspaceId
+        }
       },
       t.forbidden("agent.write", "denied")
     );
-    // The neighbouring asset of the same Namespace stays writable.
+    // The neighbouring asset of the same workspace stays writable.
     expect(
-      (await t.putAgent(t.kai.id, "kai-second", { instructions: "Still mine." })).statusCode
+      (
+        await putInWorkspace(t, t.kai.id, "kai-second", workspaceId, {
+          instructions: "Still mine."
+        })
+      ).statusCode
     ).toBe(200);
 
     // Revoking the deny restores the allow.
     await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId: denyId } });
     expect(
-      (await t.putAgent(t.kai.id, "kai-helper", { instructions: "Allowed again." })).statusCode
+      (
+        await putInWorkspace(t, t.kai.id, "kai-helper", workspaceId, {
+          instructions: "Allowed again."
+        })
+      ).statusCode
     ).toBe(200);
   });
 
   it("refuses the delete of an asset whose write is denied, so the deny cannot be shed", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-    await t.seedHistoricalGrant(t.kai.id, "agent.delete", { namespace: "kai-" });
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
-    expect((await t.putAgent(t.kai.id, "kai-second")).statusCode).toBe(200);
+    const workspaceId = await t.sharedWorkspace("Kai");
+    await t.grant(t.kai.id, "agent.write", { workspaceId });
+    await t.grant(t.kai.id, "agent.delete", { workspaceId });
+    expect((await putInWorkspace(t, t.kai.id, "kai-helper", workspaceId)).statusCode).toBe(200);
+    expect((await putInWorkspace(t, t.kai.id, "kai-second", workspaceId)).statusCode).toBe(200);
     const denyId = await t.grant(
       t.kai.id,
       "agent.write",
@@ -305,7 +331,7 @@ describe("deny rows and asset grants", () => {
     await t.expectRefused(
       t.kai.id,
       "assets.delete",
-      { params: { kind: "agent", name: "kai-helper" }, payload: {} },
+      { params: { kind: "agent", name: "kai-helper" }, payload: { workspaceId } },
       t.forbidden("agent.write", "denied")
     );
     // The asset and the deny row are both still there.
@@ -317,39 +343,40 @@ describe("deny rows and asset grants", () => {
       "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
-        payload: { config: agent("kai-helper", { instructions: "Denied." }) }
+        payload: { config: agent("kai-helper", { instructions: "Denied." }), workspaceId }
       },
       t.forbidden("agent.write", "denied")
     );
     // The neighbour without a deny is deleted as before.
     await t.expectOk(t.kai.id, "assets.delete", {
       params: { kind: "agent", name: "kai-second" },
-      payload: {}
+      payload: { workspaceId }
     });
   });
 
-  it("lets a Namespace deny win over an asset allow, and over an administrator's role", async () => {
+  it("lets a workspace deny win over an asset allow, and over an administrator's role", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
+    const workspaceId = await t.sharedWorkspace("Kai");
+    expect((await putInWorkspace(t, t.admin.id, "kai-helper", workspaceId)).statusCode).toBe(200);
     const helper = await t.assetId("agent", "kai-helper");
     await t.grant(t.kai.id, "agent.write", { assetId: helper });
-    expect((await t.putAgent(t.kai.id, "kai-helper", { instructions: "One." })).statusCode).toBe(
-      200
-    );
+    expect(
+      (await putInWorkspace(t, t.kai.id, "kai-helper", workspaceId, { instructions: "One." }))
+        .statusCode
+    ).toBe(200);
 
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" }, "deny");
+    await t.grant(t.kai.id, "agent.write", { workspaceId }, "deny");
     await t.expectRefused(
       t.kai.id,
       "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
-        payload: { config: agent("kai-helper", { instructions: "Two." }) }
+        payload: { config: agent("kai-helper", { instructions: "Two." }), workspaceId }
       },
       t.forbidden("agent.write", "denied")
     );
 
-    await t.seedHistoricalGrant(t.lena.id, "agent.write", { namespace: "kai-" }, "deny");
+    await t.grant(t.lena.id, "agent.write", { workspaceId }, "deny");
     await t.stores.users.updateUser({
       clientInstanceId,
       userId: t.lena.id,
@@ -360,11 +387,11 @@ describe("deny rows and asset grants", () => {
       "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
-        payload: { config: agent("kai-helper", { instructions: "Three." }) }
+        payload: { config: agent("kai-helper", { instructions: "Three." }), workspaceId }
       },
       t.forbidden("agent.write", "denied")
     );
-    // The role still answers outside the denied Namespace.
+    // The role still answers outside the denied workspace.
     expect(
       (await t.putAgent(t.lena.id, "assistant", { instructions: "Mine by role." })).statusCode
     ).toBe(200);
@@ -420,9 +447,13 @@ describe("deny rows and asset grants", () => {
 
   it("stops answering a revoked grant on the next call", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    const grantId = await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
+    expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
+    const grantId = await t.grant(t.kai.id, "agent.write", {
+      assetId: await t.assetId("agent", "kai-helper")
+    });
+    expect((await t.putAgent(t.kai.id, "kai-helper", { instructions: "Before." })).statusCode).toBe(
+      200
+    );
 
     await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId } });
     await t.expectRefused(
@@ -444,9 +475,11 @@ describe("deny rows and asset grants", () => {
 
   it("holds a deactivated user's rows inert and answers them again on reactivation", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
+    expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
+    await t.grant(t.kai.id, "agent.write", { assetId: await t.assetId("agent", "kai-helper") });
+    expect((await t.putAgent(t.kai.id, "kai-helper", { instructions: "Mine." })).statusCode).toBe(
+      200
+    );
 
     await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "disabled" });
     await t.expectRefused(
@@ -479,11 +512,11 @@ describe("deny rows and asset grants", () => {
 
   it("refuses a deactivated administrator every operation that asks a right", async () => {
     const t = await setup();
-    await t.expectOk(t.admin.id, "namespaces.list");
+    await t.expectOk(t.admin.id, "permissions.list");
     await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, status: "disabled" });
     await t.expectRefused(
       t.admin.id,
-      "namespaces.list",
+      "permissions.list",
       {},
       t.forbidden("users.manage", "holder_inactive")
     );
@@ -496,172 +529,122 @@ describe("deny rows and asset grants", () => {
   });
 });
 
-describe("Namespace allowlists", () => {
-  it("refuses an agent with a tool in a Namespace whose tool list is empty", async () => {
-    const t = await setup();
-    await t.createNamespace("kai-", { allowedToolNames: [] });
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-
-    await t.expectRefused(
-      t.kai.id,
-      "assets.put",
-      {
-        params: { kind: "agent", name: "kai-helper" },
-        payload: { config: agent("kai-helper", { toolNames: ["known.tool"] }) }
-      },
-      {
-        status: 403,
-        code: "FORBIDDEN",
-        details: { reason: "tool_not_allowed", toolName: "known.tool", namespace: "kai-" }
-      }
-    );
-    // Without a tool the same write passes.
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
-  });
-
-  it("binds an instance administrator and the release sync as well", async () => {
-    const t = await setup();
-    await t.createNamespace("kai-", { allowedToolNames: ["known.tool"] });
-    const details = { reason: "tool_not_allowed", toolName: "second.tool", namespace: "kai-" };
-
-    await t.expectRefused(
-      t.root.id,
-      "assets.put",
-      {
-        params: { kind: "agent", name: "kai-helper" },
-        payload: { config: agent("kai-helper", { toolNames: ["known.tool", "second.tool"] }) }
-      },
-      { status: 403, code: "FORBIDDEN", details }
-    );
-    expect(
-      (await t.putAgent(t.root.id, "kai-helper", { toolNames: ["known.tool"] })).statusCode
-    ).toBe(200);
-    // Outside the Namespace the list does not apply.
-    expect(
-      (await t.putAgent(t.root.id, "other-helper", { toolNames: ["second.tool"] })).statusCode
-    ).toBe(200);
-
-    await t.stores.users.updateUser({
-      clientInstanceId,
-      userId: t.root.id,
-      permissions: ["config_assets.release"]
+// The build limits themselves, who sets them and the refusal of every writer, are in
+// `workspace-bundles.test.ts`. These are the cases beside them.
+describe("the build limits of a workspace", () => {
+  const limit = (
+    t: Awaited<ReturnType<typeof setup>>,
+    workspaceId: string,
+    lists: Record<string, unknown>
+  ) =>
+    t.expectOk(t.admin.id, "workspaces.limits.update", {
+      params: { collaborationWorkspaceId: workspaceId },
+      payload: lists
     });
-    // A release: a batch without a Namespace, of a holder of the release right.
-    const release = (toolNames: string[]) => ({
-      payload: {
-        items: [
-          {
-            type: "put",
-            kind: "agent",
-            config: agent("kai-helper", { toolNames }),
-            expectedRevision: 1
-          }
-        ]
-      }
-    });
-    const refused = await t.expectRefused(t.root.id, "assets.sync", release(["second.tool"]), {
-      status: 403,
-      code: "FORBIDDEN"
-    });
-    expect(JSON.stringify(refused.details)).toContain(
-      "Tool 'second.tool' is not allowed in Namespace 'kai-'"
-    );
-    await t.expectOk(t.root.id, "assets.sync", release(["known.tool"]));
-  });
 
   it("answers a synced agent that fails the selectable models and the list with the list's refusal", async () => {
     const t = await setup();
-    await t.createNamespace("kai-", { allowedToolNames: ["known.tool"] });
-    await t.stores.users.updateUser({
-      clientInstanceId,
-      userId: t.root.id,
-      permissions: ["config_assets.release"]
-    });
+    const workspaceId = await t.sharedWorkspace("Kai");
+    await limit(t, workspaceId, { allowedToolNames: ["known.tool"] });
     const config = agent("kai-both", {
       toolNames: ["second.tool"],
       userSelectableModelBindingIds: ["unbound.model"]
     });
 
-    // Neither refusal hides the other's: the one of the Namespace is the answer of the call.
+    // Neither refusal hides the other's: the one of the workspace is the answer of the call.
     await t.expectRefused(
       t.root.id,
       "assets.sync",
-      { payload: { items: [{ type: "put", kind: "agent", config }] } },
+      {
+        payload: {
+          workspaceId,
+          items: [{ type: "put", kind: "agent", config, expectedRevision: null }]
+        }
+      },
       {
         status: 403,
         code: "FORBIDDEN",
-        details: { reason: "tool_not_allowed", toolName: "second.tool", namespace: "kai-" }
+        details: {
+          reason: "tool_not_allowed",
+          toolName: "second.tool",
+          workspaceId,
+          workspace: "Kai"
+        }
       }
     );
   });
 
   it("checks only an agent a write creates or changes", async () => {
     const t = await setup();
+    const workspaceId = await t.sharedWorkspace("Kai");
     expect(
-      (await t.putAgent(t.admin.id, "kai-old", { toolNames: ["second.tool"] })).statusCode
+      (
+        await putInWorkspace(t, t.admin.id, "kai-old", workspaceId, {
+          toolNames: ["second.tool"]
+        })
+      ).statusCode
     ).toBe(200);
-    await t.createNamespace("kai-", { allowedToolNames: [] });
+    await limit(t, workspaceId, { allowedToolNames: [] });
     // The agent that was there before the list keeps its tool while another agent is written.
-    expect((await t.putAgent(t.admin.id, "kai-new")).statusCode).toBe(200);
+    expect((await putInWorkspace(t, t.admin.id, "kai-new", workspaceId)).statusCode).toBe(200);
     await t.expectRefused(
       t.admin.id,
       "assets.put",
       {
         params: { kind: "agent", name: "kai-old" },
         payload: {
-          config: agent("kai-old", { toolNames: ["second.tool"], instructions: "Changed." })
+          config: agent("kai-old", { toolNames: ["second.tool"], instructions: "Changed." }),
+          workspaceId
         }
       },
       {
         status: 403,
         code: "FORBIDDEN",
-        details: { reason: "tool_not_allowed", toolName: "second.tool", namespace: "kai-" }
+        details: {
+          reason: "tool_not_allowed",
+          toolName: "second.tool",
+          workspaceId,
+          workspace: "Kai"
+        }
       }
     );
   });
 
-  it("refuses a model binding outside the Namespace's list and never grants the model right", async () => {
+  it("lets a writer pick a listed model and never grants the rest of the model right", async () => {
     const t = await setup();
-    await t.createNamespace("kai-", { allowedModelBindingIds: ["plain"] });
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const workspaceId = await t.sharedWorkspace("Kai");
+    await limit(t, workspaceId, { allowedModelBindingIds: ["plain"] });
+    await t.grant(t.kai.id, "agent.write", { workspaceId });
     const bound = (modelBindingId: string) => {
       const { modelProviderId: _modelProviderId, ...rest } = agent("kai-helper");
       return { ...rest, modelBindingId };
     };
 
-    await t.expectRefused(
-      t.root.id,
-      "assets.put",
-      { params: { kind: "agent", name: "kai-helper" }, payload: { config: bound("other") } },
-      {
-        status: 403,
-        code: "FORBIDDEN",
-        details: { reason: "model_not_allowed", modelBindingId: "other", namespace: "kai-" }
-      }
-    );
-    await t.expectOk(t.root.id, "assets.put", {
+    await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "agent", name: "kai-helper" },
-      payload: { config: bound("plain") }
+      payload: { config: bound("plain"), workspaceId }
     });
-    // A list only restricts: changing a model field still needs agent_models.manage.
+    // A list only restricts: changing another model field still needs agent_models.manage.
     const refusal = await t.expectRefused(
       t.kai.id,
       "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
-        payload: { config: { ...bound("plain"), reasoningEffort: "low" } }
+        payload: { config: { ...bound("plain"), reasoningEffort: "low" }, workspaceId }
       },
       { status: 403, code: "FORBIDDEN" }
     );
     expect(refusal.message).toContain("agent_models.manage");
   });
 
-  it("refuses a list entry the instance does not have and lifts a list with null", async () => {
+  it("refuses a list entry the instance does not have", async () => {
     const t = await setup();
+    const workspaceId = await t.sharedWorkspace("Kai");
+    const params = { collaborationWorkspaceId: workspaceId };
     await t.expectRefused(
       t.admin.id,
-      "namespaces.create",
-      { payload: { prefix: "kai-", displayName: "Kai", allowedToolNames: ["missing.tool"] } },
+      "workspaces.limits.update",
+      { params, payload: { allowedToolNames: ["missing.tool"] } },
       {
         status: 422,
         code: "VALIDATION_FAILED",
@@ -670,37 +653,13 @@ describe("Namespace allowlists", () => {
     );
     await t.expectRefused(
       t.admin.id,
-      "namespaces.create",
-      { payload: { prefix: "kai-", displayName: "Kai", allowedModelBindingIds: ["missing"] } },
+      "workspaces.limits.update",
+      { params, payload: { allowedModelBindingIds: ["missing"] } },
       {
         status: 422,
         code: "VALIDATION_FAILED",
         details: { reason: "unknown_model_binding", modelBindingId: "missing" }
       }
     );
-    await t.createNamespace("kai-", { allowedToolNames: [] });
-    await t.expectRefused(
-      t.admin.id,
-      "assets.put",
-      {
-        params: { kind: "agent", name: "kai-helper" },
-        payload: { config: agent("kai-helper", { toolNames: ["known.tool"] }) }
-      },
-      { status: 403, code: "FORBIDDEN" }
-    );
-
-    const updated = await t.expectOk(t.admin.id, "namespaces.update", {
-      params: { prefix: "kai-" },
-      payload: { displayName: "Kai's agents", allowedToolNames: null }
-    });
-    expect(updated.json()).toMatchObject({
-      prefix: "kai-",
-      displayName: "Kai's agents",
-      allowedToolNames: null,
-      allowedModelBindingIds: null
-    });
-    expect(
-      (await t.putAgent(t.admin.id, "kai-helper", { toolNames: ["known.tool"] })).statusCode
-    ).toBe(200);
   });
 });

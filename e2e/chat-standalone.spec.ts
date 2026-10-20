@@ -3624,7 +3624,7 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   await expect(rail).toHaveCount(0);
 });
 
-// A grant in a Namespace opens Studio for this user: no spec hands one out while this runs.
+// A grant in a workspace opens Studio for this user: no spec hands one out while this runs.
 test("a plain user finds only their own pages in the Settings rail", async ({
   page,
   accessState: _accessState
@@ -3671,7 +3671,7 @@ test("a plain user finds only their own pages in the Settings rail", async ({
       page.getByRole("button", { name: "Open your profile", exact: true })
     ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toHaveCount(0);
-    await expect(page.getByRole("tab", { name: /^Namespaces/u })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: /^Rights/u })).toHaveCount(0);
     await expect(rail.getByRole("group", { name: "Instance" })).toHaveCount(0);
   }
 
@@ -4241,7 +4241,7 @@ test("under 768 px the rail is a drawer that the header opens and a choice close
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
 });
 
-// A grant in a Namespace opens Studio for this user: no spec hands one out while this runs.
+// A grant in a workspace opens Studio for this user: no spec hands one out while this runs.
 test("the command palette opens from the rail and the keyboard, searches titles on the server and opens a conversation", async ({
   page,
   accessState: _accessState

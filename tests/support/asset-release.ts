@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { ConfigAssetRecord, UserRecord } from "@work-shape/catalyst-core";
+import type {
+  CollaborationWorkspaceId,
+  ConfigAssetRecord,
+  UserRecord
+} from "@work-shape/catalyst-core";
 import {
   SCOPES_HEADER,
   SERVICE_HEADER,
@@ -17,8 +21,6 @@ import { applyAtCurrentRevisions } from "./asset-revisions";
 // What the tests of a release through `assets.sync` share: the service principal that holds
 // the release right, the items of a batch, and how a refused batch reads.
 
-/** The Namespace the assets of these tests lie in, which a batch of an ordinary caller names. */
-const NAMESPACE = "rel-";
 export const SERVICE = "sp_test";
 /** The limits of an instance that is edited by release only, but for the display name. */
 export const RELEASE_ONLY = {
@@ -63,6 +65,11 @@ export const deleteAgent = (name: string, expectedRevision = 1): Item => ({
 export interface ReleaseInstance extends AccessInstance {
   /** An administrator who also holds the release right. */
   releaser: UserRecord;
+  /**
+   * The Shared Workspace a batch of an ordinary caller names. It owns the agent `team-old` and
+   * the skill `team-guide`, as the instance owns `rel-old` and `rel-guide`.
+   */
+  team: CollaborationWorkspaceId;
   stored(kind: string, name: string): Promise<ConfigAssetRecord | undefined>;
   /** The version of the instance's assets. */
   version(): Promise<number>;
@@ -71,7 +78,8 @@ export interface ReleaseInstance extends AccessInstance {
 export async function setupRelease(options: AccessInstanceOptions = {}): Promise<ReleaseInstance> {
   const t = await setupAccessInstance(options);
   await storeTestServicePrincipal(SERVICE);
-  await t.createNamespace(NAMESPACE);
+  const team = await t.sharedWorkspace("Release team");
+  const inTeam = { kind: "workspace", workspaceId: team } as const;
   // An administrator who also holds the release right: bound outside a sync like anyone.
   const releaser = await t.stores.users.createUser({
     clientInstanceId,
@@ -83,14 +91,22 @@ export async function setupRelease(options: AccessInstanceOptions = {}): Promise
     clientInstanceId,
     mutations: [
       { type: "upsert", kind: "agent", name: "rel-old", config: agent("rel-old") },
-      { type: "upsert", kind: "skill", name: "rel-guide", config: skill("rel-guide") }
+      { type: "upsert", kind: "skill", name: "rel-guide", config: skill("rel-guide") },
+      { type: "upsert", kind: "agent", name: "team-old", config: agent("team-old"), scope: inTeam },
+      {
+        type: "upsert",
+        kind: "skill",
+        name: "team-guide",
+        config: skill("team-guide"),
+        scope: inTeam
+      }
     ]
   });
   const stored = (kind: string, name: string) =>
     t.stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
   const version = async () =>
     (await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).version;
-  return { ...t, releaser, stored, version };
+  return { ...t, releaser, team, stored, version };
 }
 
 /** A call of the service principal, with the scopes of its key where the test names them. */
@@ -116,8 +132,13 @@ export const syncAsService = (t: AccessInstance, items: Item[], scopes?: string)
 /** A batch with what it names beside its items, such as the default agent. */
 export const releaseAsService = (t: AccessInstance, payload: Item): Answer =>
   asService(t, "assets.sync", { payload });
-export const syncAs = (t: AccessInstance, userId: string, items: Item[], more: Item = {}): Answer =>
-  t.call(userId, "assets.sync", { payload: { namespace: NAMESPACE, items, ...more } });
+/** A batch of an ordinary caller: it names the workspace it belongs to, `team` unless `more` says. */
+export const syncAs = (
+  t: ReleaseInstance,
+  userId: string,
+  items: Item[],
+  more: Item = {}
+): Answer => t.call(userId, "assets.sync", { payload: { workspaceId: t.team, items, ...more } });
 
 export function refusedItems(response: { json(): unknown }) {
   const { error } = errorSchema.parse(response.json());

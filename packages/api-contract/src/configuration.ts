@@ -224,7 +224,7 @@ export const collaborationWorkspaceAgentsSchema = z.object({
   /**
    * The section rows of the interface's sidebar that are there for the caller in this
    * workspace. `agents`: at least two agents are available here, counted over every page, or
-   * the caller holds `agent.write` on the instance, in a Namespace or on one agent. With one
+   * the caller holds `agent.write` on the instance, in the workspace or on one agent. With one
    * agent there is nothing to choose: New chat starts a conversation with it. `apps`: the
    * Apps module is on, and `assets.list` lists the caller an App of this workspace or the
    * caller holds `app.write` in it or on one of its Apps. A member is never shown an empty row.

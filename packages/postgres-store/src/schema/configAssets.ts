@@ -40,8 +40,7 @@ export const configAssets = pgTable(
     clientInstanceId: text("client_instance_id").notNull(),
     kind: text("kind").$type<ConfigAssetRecord["kind"]>().notNull(),
     name: text("name").notNull(),
-    // The owner: the instance, or the workspace `scopeId` names. The Namespace is not a
-    // column, it is derived from the name against the registered prefixes.
+    // The owner: the instance, or the workspace `scopeId` names.
     scopeKind: text("scope_kind").$type<AssetScope["kind"]>().notNull().default("instance"),
     scopeId: text("scope_id"),
     status: text("status").$type<ConfigAssetRecord["status"]>().notNull(),
@@ -61,7 +60,7 @@ export const configAssets = pgTable(
       table.kind,
       table.name
     ),
-    // A name prefix, such as a Namespace's, is a range of this index under any collation.
+    // A name prefix is a range of this index under any collation.
     index("config_assets_client_kind_name_prefix_idx").on(
       table.clientInstanceId,
       table.kind,

@@ -1,24 +1,26 @@
 import {
   defineClientInstance,
+  type ClientInstanceApp,
   type ClientInstanceCapability,
   type ConnectorTypeDefinition
 } from "@work-shape/catalyst-client-assembly";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { z } from "zod";
 import { demoTools } from "../tools";
+import { heldSkillSaves } from "./policy";
 
 // The API the browser suite runs against: the demo, with one changing tool and the central
 // policy setting that sends its calls to another person for approval, and one whose calls the
-// person the run acts for confirms. A second setting holds
-// a skill saved into the Namespace `e2ehold-`, which one test registers and removes; it holds
-// nothing while that Namespace is not registered. No screen sets a central setting before
+// person the run acts for confirms. Further settings hold a skill saved into a Shared Workspace
+// named `E2E held skills`, which one test creates and deletes; they hold nothing while no
+// workspace has that name. No screen sets a central setting before
 // Instance > Policies exists (OP-2), so the suite's server names both.
 // It also names the one Connector type of the suite, which reaches nothing, and ships the four
 // general skills as a capability of a deployment does, without the commands they name.
 // `pnpm dev:demo` and the demo's own server do not load this file.
 
 const HELD_TOOL = "e2e.record_note";
-const HELD_NAMESPACE = "e2ehold-";
+const HELD_WORKSPACE = "E2E held skills";
 
 const recordNote = defineTool({
   name: HELD_TOOL,
@@ -141,15 +143,18 @@ const client = defineClientInstance({
   capabilities: [generalSkills]
 });
 
+// The settings read the instance's workspaces, which they find here once `listen` answers.
+const running: { app?: ClientInstanceApp } = {};
 const app = await client.listen({
   operations: {
-    centralPolicySettings: () => [
+    centralPolicySettings: async () => [
       { operation: HELD_TOOL, value: "approval" },
       { operation: CONFIRMED_TOOL, value: "confirm" },
-      { operation: "assets.put", assetKind: "skill", namespace: HELD_NAMESPACE, value: "approval" }
+      ...(await heldSkillSaves(running.app, HELD_WORKSPACE))
     ]
   }
 });
+running.app = app;
 
 // A second API of one spec shares the suite's database and is stopped when that spec ends. It
 // says so here and takes nothing from the queues: a job or an Agent Run of another spec that it

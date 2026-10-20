@@ -1,6 +1,5 @@
 import {
   ACTIONS,
-  NAMESPACE_PREFIX_PATTERN,
   type OperationScope,
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
@@ -24,7 +23,7 @@ export interface PersonalApiKeyRecord {
   ownerDisplayLabel?: string;
   name: string;
   keyPrefix: string;
-  /** `<action>` or `<action>:<namespace prefix>`, at least one. */
+  /** `<action>`, `<action>:<workspace id>` or `<action>:<workspace id>/<asset>`, one or more. */
   scopes: string[];
   createdAt: ISODateString;
   expiresAt: ISODateString;
@@ -149,7 +148,7 @@ export const PERSONAL_API_KEY_MAX_LIFETIME_DAYS = 365;
  * it reads a `CONFLICT` that names it and revokes one.
  */
 export const PERSONAL_API_KEYS_PER_USER_MAX = 50;
-/** The most scopes one key names: every key action, each at instance scope or in a Namespace. */
+/** The most scopes one key names: every key action, each everywhere or in a workspace. */
 export const PERSONAL_API_KEY_SCOPES_MAX = 64;
 
 /**
@@ -178,27 +177,48 @@ export const PERSONAL_API_KEY_ACTIONS: readonly PlatformAction[] = ACTIONS.filte
     PERSONAL_API_KEY_USE_ACTIONS.some((use) => use === action)
 );
 
-/** What a key's Namespace is compared with: the resource of a check, as the evaluator reads it. */
+/** What a key's workspace and asset are compared with: the resource of a check. */
 interface ScopedResource {
   name?: string;
   workspaceId?: string;
 }
 
-/** One scope of a personal key: an action, and the Namespace it is limited to where it is. */
+/**
+ * One scope of a personal key: an action, and the workspace it is limited to where it is,
+ * and within it one asset by name.
+ */
 export interface PersonalApiKeyScope {
   action: PlatformAction;
-  namespace?: string;
+  workspaceId?: string;
+  assetName?: string;
 }
 
-/** Reads `<action>` or `<action>:<prefix>`; nothing for any other text. */
+/** A workspace id as a scope names it: the id's own characters, nothing that ends a part. */
+const SCOPE_WORKSPACE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+/** An asset name as a scope names it: the characters any kind's names are made of. */
+const SCOPE_ASSET_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u;
+
+/**
+ * Reads `<action>`, `<action>:<workspace>` or `<action>:<workspace>/<asset>`; nothing for any
+ * other text. A scope written before NS-RETIRE with a name prefix (`agent.write:kai-`) reads
+ * as a workspace that no workspace is, so it covers nothing: it narrows a key and never
+ * widens it.
+ */
 export function parsePersonalApiKeyScope(scope: string): PersonalApiKeyScope | undefined {
   const separator = scope.indexOf(":");
   const action = separator === -1 ? scope : scope.slice(0, separator);
-  const namespace = separator === -1 ? undefined : scope.slice(separator + 1);
   const known = PERSONAL_API_KEY_ACTIONS.find((candidate) => candidate === action);
   if (known === undefined) return undefined;
-  if (namespace === undefined) return { action: known };
-  return NAMESPACE_PREFIX_PATTERN.test(namespace) ? { action: known, namespace } : undefined;
+  if (separator === -1) return { action: known };
+  const resource = scope.slice(separator + 1);
+  const slash = resource.indexOf("/");
+  const workspaceId = slash === -1 ? resource : resource.slice(0, slash);
+  const assetName = slash === -1 ? undefined : resource.slice(slash + 1);
+  if (!SCOPE_WORKSPACE_PATTERN.test(workspaceId)) return undefined;
+  if (assetName === undefined) return { action: known, workspaceId };
+  return SCOPE_ASSET_PATTERN.test(assetName)
+    ? { action: known, workspaceId, assetName }
+    : undefined;
 }
 
 /** The scopes of a new key, or `VALIDATION_FAILED` naming the first that is no scope. */
@@ -217,7 +237,7 @@ export function requirePersonalApiKeyScopes(scopes: readonly string[]): Personal
     if (!parsed) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `'${scope}' is no scope of a personal API key. A scope is an action such as 'agent.write', optionally with a Namespace: 'agent.write:kai-'`,
+        `'${scope}' is no scope of a personal API key. A scope is an action such as 'agent.write', optionally limited to a workspace by its id, 'agent.write:<workspace>', or to one asset in it, 'agent.write:<workspace>/<name>'`,
         { scope }
       );
     }
@@ -225,24 +245,23 @@ export function requirePersonalApiKeyScopes(scopes: readonly string[]): Personal
   });
 }
 
-/** Whether a key's scope covers one action on one resource, as a Namespace grant does. */
+/** Whether a key's scope covers one action on one resource, as a workspace or asset grant does. */
 function scopeCovers(
   scope: PersonalApiKeyScope,
   action: string,
   resource: ScopedResource | undefined
 ): boolean {
   if (scope.action !== action) return false;
-  if (scope.namespace === undefined) return true;
+  if (scope.workspaceId === undefined) return true;
   return (
-    resource?.name !== undefined &&
-    resource.workspaceId === undefined &&
-    resource.name.startsWith(scope.namespace)
+    resource?.workspaceId === scope.workspaceId &&
+    (scope.assetName === undefined || resource.name === scope.assetName)
   );
 }
 
 /**
  * Whether the key covers a check. A legacy key such as `config_assets.read` stands for several
- * actions on the whole instance, so each of them needs a scope without a Namespace.
+ * actions on the whole instance, so each of them needs a scope without a workspace.
  */
 export function personalApiKeyCovers(
   scopes: readonly string[],

@@ -126,24 +126,24 @@ describe("resolvePolicy: where the value comes from", () => {
     }
     expect(
       resolve({
-        centralSettings: [{ operation: "items.create", value: "deny", namespace: "sales" }],
-        targets: [{ namespace: "support" }]
+        centralSettings: [{ operation: "items.create", value: "deny", workspaceId: "cws_1" }],
+        targets: [{ workspaceId: "cws_2" }]
       })
     ).toMatchObject({ source: "instance_default" });
   });
 
   it("applies a narrowed central setting to a batch when one of its targets carries the same", () => {
     const targets = [
-      { assetKind: "agent", namespace: "sales" },
-      { assetKind: "skill", namespace: "sales" }
+      { assetKind: "agent", workspaceId: "cws_1" },
+      { assetKind: "skill", workspaceId: "cws_1" }
     ];
-    const narrowed = (setting: { assetKind?: string; namespace?: string }) =>
+    const narrowed = (setting: { assetKind?: string; workspaceId?: string }) =>
       resolve({
         centralSettings: [{ operation: "items.create", value: "deny", ...setting }],
         targets
       });
     expect(narrowed({ assetKind: "skill" })).toMatchObject({ value: "deny" });
-    expect(narrowed({ namespace: "sales" })).toMatchObject({ value: "deny" });
+    expect(narrowed({ workspaceId: "cws_1" })).toMatchObject({ value: "deny" });
     expect(narrowed({ assetKind: "widget" })).toMatchObject({ source: "instance_default" });
     // A setting that is not narrowed applies to a call that names no target at all.
     expect(
@@ -154,8 +154,8 @@ describe("resolvePolicy: where the value comes from", () => {
 
 describe("resolvePolicy: a call with several targets", () => {
   const skillAllowed = [{ operation: "items.create", value: "allow", assetKind: "skill" }] as const;
-  const skill = { assetKind: "skill", namespace: "sales" };
-  const agent = { assetKind: "agent", namespace: "sales" };
+  const skill = { assetKind: "skill", workspaceId: "cws_1" };
+  const agent = { assetKind: "agent", workspaceId: "cws_1" };
 
   it("never lets the setting of one target loosen another target", () => {
     for (const base of ["approval", "deny", "confirm"] as const) {
@@ -180,7 +180,7 @@ describe("resolvePolicy: a call with several targets", () => {
     const centralSettings = [
       ...skillAllowed,
       { operation: "items.create", value: "confirm", assetKind: "agent" },
-      { operation: "items.create", value: "approval", namespace: "support" }
+      { operation: "items.create", value: "approval", workspaceId: "cws_2" }
     ] as const;
     const instance = { instanceDefaults: { reading: "allow", changing: "deny" } } as const;
     expect(resolve({ ...instance, centralSettings, targets: [skill, agent] })).toMatchObject({
@@ -191,7 +191,7 @@ describe("resolvePolicy: a call with several targets", () => {
       resolve({
         ...instance,
         centralSettings,
-        targets: [skill, { assetKind: "skill", namespace: "support" }]
+        targets: [skill, { assetKind: "skill", workspaceId: "cws_2" }]
       })
     ).toMatchObject({ value: "approval", source: "central_setting" });
     // A declared default is the base of every target as the instance default is.

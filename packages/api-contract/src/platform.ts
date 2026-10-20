@@ -59,13 +59,6 @@ export const platformAssetKindSchema = z.object({
     .optional()
 });
 
-/** A Namespace the caller holds a right in, with the actions that right covers there. */
-export const platformContextNamespaceSchema = z.object({
-  prefix: z.string(),
-  displayName: z.string(),
-  actions: z.array(z.string())
-});
-
 /** A workspace and the actions the caller can use on what it owns. */
 export const platformContextWorkspaceSchema = z.object({
   id: z.string(),
@@ -96,7 +89,7 @@ export const platformContextSchema = z.object({
   kinds: z.array(platformAssetKindSchema),
   /**
    * The actions of the listed kinds the caller can use on the instance's own assets as a
-   * whole, whatever their names. A right in one Namespace or on one asset is not among them.
+   * whole, whatever their names. A right in one workspace or on one asset is not among them.
    */
   actions: z.array(z.string()),
   /**
@@ -113,7 +106,7 @@ export const platformContextSchema = z.object({
   instanceActions: z.array(z.string()),
   /**
    * The use level a personal key can carry, of the rights the caller holds somewhere: on the
-   * instance, in a workspace, a Namespace or on one asset. Only the rights of kinds the instance
+   * instance, in a workspace or on one asset. Only the rights of kinds the instance
    * runs are named. These are issuance choices for the key screen, not this credential's
    * rights (CLI-PUBLISH-USE).
    */
@@ -124,7 +117,6 @@ export const platformContextSchema = z.object({
    * these and the use level ticked. These are issuance choices, not this credential's rights.
    */
   authoringActions: z.array(z.string()),
-  namespaces: z.array(platformContextNamespaceSchema),
   /**
    * The workspaces whose own assets the caller can use an action of a listed kind on, each
    * with those actions: through a membership, a grant on the workspace or a right on the
@@ -134,8 +126,8 @@ export const platformContextSchema = z.object({
   /**
    * The section rows of the interface's sidebar that are there for the caller, of those that
    * belong to no workspace. `workflows`: the module is on, and the caller is listed at least
-   * one Workflow by `workflows.list` or holds `workflow.write` on the instance, in a Namespace
-   * or on one Workflow. A member is never shown an empty row; whoever may build one is.
+   * one Workflow by `workflows.list` or holds `workflow.write` on the instance or on one
+   * Workflow. A member is never shown an empty row; whoever may build one is.
    */
   visibleSections: z.array(z.enum(["workflows"]))
 });

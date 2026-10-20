@@ -166,7 +166,7 @@ export type LocalAsset = { key: string; name: string; contents: string } & Asset
 
 /**
  * The instance's config version and default agent. Only a reader of every agent and skill may
- * read them, so a working copy of one Namespace or of one workspace reads neither and knows
+ * read them, so a working copy of one workspace reads neither and knows
  * only its assets.
  */
 export async function readInstanceOverview(
@@ -176,20 +176,14 @@ export async function readInstanceOverview(
   return holdsWholeInstance(instance) ? api.getOverview() : {};
 }
 
-/** What a batch of the working copy names as its place: its Namespace or its workspace. */
-export function batchScope(instance: ManifestInstance): {
-  namespace?: string;
-  workspaceId?: string;
-} {
-  return {
-    ...(instance.namespace === undefined ? {} : { namespace: instance.namespace }),
-    ...(instance.workspace === undefined ? {} : { workspaceId: instance.workspace })
-  };
+/** What a batch of the working copy names as its place: its workspace, if it has one. */
+export function batchScope(instance: ManifestInstance): { workspaceId?: string } {
+  return instance.workspace === undefined ? {} : { workspaceId: instance.workspace };
 }
 
-/** A working copy of the instance's own assets as a whole: bound to no Namespace or workspace. */
+/** A working copy of the instance's own assets as a whole: bound to no workspace. */
 export function holdsWholeInstance(instance: ManifestInstance): boolean {
-  return instance.namespace === undefined && instance.workspace === undefined;
+  return instance.workspace === undefined;
 }
 
 /**

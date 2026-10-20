@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import {
   ACTIONS,
   PRINCIPAL_GRANTABLE_ACTIONS,
@@ -121,9 +122,10 @@ describe("a grant for a service principal on one Connection", () => {
     const effective = await s.t.expectOk(s.t.root.id, "permissions.effective", {
       query: { holderKind: "service_principal", holderId: s.principal.id }
     });
+    // The rows come in no order.
     expect(effective.json()).toEqual({
       holderActive: true,
-      items: [
+      items: expect.arrayContaining([
         { action: "agent.read", effect: "allow", scopeKind: "instance", source: "grant" },
         { action: "skill.read", effect: "allow", scopeKind: "instance", source: "grant" },
         {
@@ -133,8 +135,9 @@ describe("a grant for a service principal on one Connection", () => {
           scopeId: crm,
           source: "grant"
         }
-      ]
+      ])
     });
+    expect(z.object({ items: z.array(z.unknown()) }).parse(effective.json()).items).toHaveLength(3);
   });
 
   it("records the holder kind, the principal, the right and the asset when it is written and revoked", async () => {
@@ -581,15 +584,12 @@ describe("what a service principal's grant row may give", () => {
     const { t } = s;
     const crm = await t.seed("crm", forWorkflows);
     const workspaceId = await t.sharedWorkspace("Team");
-    await t.createNamespace("crm-");
     const assistant = await t.assetId("agent", "assistant");
     const scopes: Record<string, unknown>[] = [
       // The ticket's case: a whole workspace.
       { scopeKind: "workspace", scopeId: workspaceId },
-      { scopeKind: "namespace", scopeId: undefined, namespace: "crm-" },
       { scopeKind: "instance", scopeId: undefined },
       { scopeKind: "asset", scopeId: undefined },
-      { scopeKind: "asset", namespace: "crm-" },
       { scopeKind: "asset", scopeId: "asset-missing" },
       // An asset of another kind is no Connection.
       { scopeKind: "asset", scopeId: assistant }

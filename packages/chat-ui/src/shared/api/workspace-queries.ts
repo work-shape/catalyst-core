@@ -417,7 +417,7 @@ export function useWorkspaceAuditActivitiesQuery(
   }
 ) {
   return useQuery({
-    // `auditEvents` is the historical cache namespace; it now holds the
+    // `auditEvents` is the historical cache key; it now holds the
     // projected activity timeline served from /api/v1/instance/audit-activities.
     queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope),
     queryFn: async () => (await input.client.audit_activities.list()).items,
@@ -481,7 +481,7 @@ const PLATFORM_CONTEXT_STALE_MS = 5 * 60_000;
 
 /**
  * Where the caller is and what it may do there: the instance, its release, the asset kinds
- * and the caller's Namespaces. One read serves the rail, the account menu and Build.
+ * and the caller's workspaces. One read serves the rail, the account menu and Build.
  */
 export function usePlatformContextQuery(
   input: WorkspaceQueryInput & {

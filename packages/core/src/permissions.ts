@@ -7,9 +7,6 @@ import {
   GRANT_EFFECTS,
   GRANT_HOLDER_KINDS,
   GRANT_SCOPE_KINDS,
-  NAMESPACE_PREFIX_MAX_LENGTH,
-  NAMESPACE_PREFIX_MIN_LENGTH,
-  NAMESPACE_PREFIX_PATTERN,
   PRINCIPAL_HOLDER_KINDS,
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
@@ -100,7 +97,6 @@ export interface PermissionGrant {
   effect: (typeof GRANT_EFFECTS)[number];
   scopeKind: (typeof GRANT_SCOPE_KINDS)[number];
   scopeId?: string;
-  namespace?: string;
   grantedBy: UserId;
   createdAt: ISODateString;
 }
@@ -210,7 +206,7 @@ export interface ActorAccess {
   require(action: string, resource?: AccessResource): void;
   /**
    * A grant row allows the active holder the action at one of these scope kinds, on whichever
-   * asset, workspace or Namespace. It tells that something of the kind may be open to the
+   * asset or workspace. It tells that something of the kind may be open to the
    * holder and decides no call: a covering deny is not read.
    */
   holdsGrantAt(action: string, scopeKinds: readonly PermissionGrant["scopeKind"][]): boolean;
@@ -230,8 +226,6 @@ export interface Authorizer {
 
 /** The free-text reference `x` of a tool is checked as the action `ref:x`. */
 export const PERMISSION_REF_ACTION_PREFIX = "ref:";
-
-export { NAMESPACE_PREFIX_MAX_LENGTH, NAMESPACE_PREFIX_MIN_LENGTH, NAMESPACE_PREFIX_PATTERN };
 
 export { GRANTABLE_ACTION_SCOPES };
 
@@ -294,7 +288,6 @@ export interface AccessEntry {
   effect: (typeof GRANT_EFFECTS)[number];
   scopeKind: PermissionGrant["scopeKind"];
   scopeId?: string;
-  namespace?: string;
   source: AccessSource;
   /** The role the entry is held through, for the source `role`. */
   roleId?: string;
@@ -421,7 +414,6 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
       effect: grant.effect,
       scopeKind: grant.scopeKind,
       ...(grant.scopeId === undefined ? {} : { scopeId: grant.scopeId }),
-      ...(grant.namespace === undefined ? {} : { namespace: grant.namespace }),
       ...(grant.holderKind === "role"
         ? { source: "role" as const, roleId: grant.holderId }
         : { source: "grant" as const })
@@ -489,16 +481,6 @@ function entryCovers(entry: AccessEntry, resource: AccessResource | undefined): 
   switch (entry.scopeKind) {
     case "instance":
       return true;
-    case "namespace":
-      // A Namespace is a prefix among the instance's own assets. An asset a workspace owns is
-      // reached through a right on that workspace, on the asset or on the instance.
-      return (
-        entry.namespace !== undefined &&
-        entry.namespace.length > 0 &&
-        resource?.name !== undefined &&
-        resource.workspaceId === undefined &&
-        resource.name.startsWith(entry.namespace)
-      );
     case "asset":
       return entry.scopeId !== undefined && resource?.assetId === entry.scopeId;
     case "workspace":

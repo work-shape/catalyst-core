@@ -15,11 +15,7 @@ import {
 import type { CheckName } from "../../shared/api/asset-writes";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildAssetKind, BuildAssetStart } from "./build-asset-kind";
-import type { BuildNamespace } from "../../shared/build-rights";
 import { addressBlocksCreate, useAddressCheck } from "./name-check";
-
-/** The choice of no Namespace: the id is taken as typed. */
-const NO_NAMESPACE = "";
 
 /** Where a new asset of a kind that starts in its workspace is made, and who may widen that. */
 export interface BuildCreateStart {
@@ -30,11 +26,9 @@ export interface BuildCreateStart {
 }
 
 /**
- * Starts a new asset: its name, and under "Advanced" its address with the Namespace it is
- * named in. The address follows the name until the reader changes it, and is checked as it
- * changes; Continue stops at a refused address. Only the Namespaces
- * the reader may write in are offered, and the choice of none only to somebody who may write
- * anywhere. A kind that starts in its workspace says where the asset will be available, and
+ * Starts a new asset: its name, and under "Advanced" its address. The address follows the name
+ * until the reader changes it, and is checked as it changes; Continue stops at a refused
+ * address. A kind that starts in its workspace says where the asset will be available, and
  * lets whoever may change that choose every workspace instead. A kind that names what its
  * asset does asks that too.
  */
@@ -42,8 +36,6 @@ export function BuildCreateDialog({
   entry,
   heading,
   initialTitle = "",
-  namespaces,
-  mayNameFreely,
   startsIn,
   checkName,
   onClose,
@@ -54,8 +46,6 @@ export function BuildCreateDialog({
   heading?: string;
   /** The name the dialog starts with, such as the name of the asset a copy is made of. */
   initialTitle?: string;
-  namespaces: readonly BuildNamespace[];
-  mayNameFreely: boolean;
   /** Present for a kind that starts in its workspace. */
   startsIn: BuildCreateStart | undefined;
   /** Asks the instance about the whole address. Without it nothing is checked before the save. */
@@ -67,19 +57,11 @@ export function BuildCreateDialog({
   const { t } = useTranslation();
   const [value, setValue] = useState<NameAndAddress>({ name: initialTitle });
   const [purpose, setPurpose] = useState("");
-  const [prefix, setPrefix] = useState(
-    mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE)
-  );
   const [everywhere, setEverywhere] = useState(false);
   const title = value.name.trim();
   const derive = (named: string) => assetAddressFromName(named, entry.kind);
   const id = addressOf(value, derive).trim();
-  const name = id === "" ? "" : `${prefix}${id}`;
-  const check = useAddressCheck(checkName, name);
-  const choices = [
-    ...(mayNameFreely ? [{ prefix: NO_NAMESPACE, displayName: t("build.createNoNamespace") }] : []),
-    ...namespaces
-  ];
+  const check = useAddressCheck(checkName, id);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -88,7 +70,7 @@ export function BuildCreateDialog({
         ? ("all" as const)
         : startsIn?.workspace && { workspaceId: startsIn.workspace.id };
       onStart({
-        name,
+        name: id,
         title,
         ...(purpose.trim() ? { description: purpose.trim() } : {}),
         ...(availableIn ? { availableIn } : {}),
@@ -129,27 +111,8 @@ export function BuildCreateDialog({
           check={check}
           nameLabel={t(entry.titleLabel)}
           addressLabel={t("build.createAddress")}
-          addressHint={
-            prefix === NO_NAMESPACE
-              ? t("build.createAddressHint")
-              : t("build.createAddressHintNamespace", { id: name })
-          }
+          addressHint={t("build.createAddressHint")}
           advancedLabel={t("build.createAdvanced")}
-          advanced={
-            choices.length > 1 ? (
-              <Field label={t("build.createNamespace")}>
-                <Select value={prefix} onChange={(event) => setPrefix(event.target.value)}>
-                  {choices.map((choice) => (
-                    <option key={choice.prefix} value={choice.prefix}>
-                      {choice.prefix === NO_NAMESPACE
-                        ? choice.displayName
-                        : `${choice.displayName} (${choice.prefix})`}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            ) : undefined
-          }
         >
           {entry.purposeLabel ? (
             <Field label={t(entry.purposeLabel)} optional>

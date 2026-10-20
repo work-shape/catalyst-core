@@ -10,22 +10,12 @@ import {
   skill,
   type AccessInstance
 } from "./support/access-instance";
-import { setupNamespaceHolder as setupNamespace } from "./support/asset-operations";
+import { setupWorkspaceHolder as setup } from "./support/asset-operations";
 import { withTestSql } from "./support/test-sql";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // What an asset call may reach when a workspace owns assets beside the instance, and what a
 // definition is checked for before it is written.
-
-async function createWorkspace(t: AccessInstance, name: string): Promise<CollaborationWorkspaceId> {
-  const workspace = await t.stores.workspaces.createWorkspace({
-    clientInstanceId,
-    kind: "shared",
-    name,
-    creatorUserId: t.admin.id
-  });
-  return workspace.id;
-}
 
 /** A skill a workspace owns, put there through the store. */
 async function seedWorkspaceSkill(
@@ -42,13 +32,15 @@ async function seedWorkspaceSkill(
 
 describe("the scope of an asset call", () => {
   it("never reads, lists or writes an asset of another scope without the right on that scope", async () => {
-    const t = await setupNamespace();
-    const workspaceId = await createWorkspace(t, "Team");
-    const otherWorkspaceId = await createWorkspace(t, "Other team");
-    // The names lie in Kai's Namespace: only the owner tells them from Kai's own assets.
+    const t = await setup();
+    const workspaceId = await t.sharedWorkspace("Team");
+    const otherWorkspaceId = await t.sharedWorkspace("Other team");
+    // Two workspaces Kai holds nothing in own a skill each; so do Kai's workspace and the
+    // instance.
     await seedWorkspaceSkill(t, workspaceId, "kai-team-notes");
     await seedWorkspaceSkill(t, otherWorkspaceId, "kai-other-notes");
-    await t.put(t.kai.id, "skill", "kai-guide");
+    await t.put(t.kai.id, "skill", "kai-guide", t.kaiTeam);
+    await t.put(t.admin.id, "skill", "guide");
     // Lena holds the read right on the one workspace, and nothing on the instance.
     await t.stores.access.createGrant({
       clientInstanceId,
@@ -70,13 +62,14 @@ describe("the scope of an asset call", () => {
     const noRead = t.forbidden("skill.read", "no_grant");
 
     // Lists: each scope is its own list.
-    expect(await t.names(t.admin.id, "assets.list", skills)).toEqual(["kai-guide"]);
+    expect(await t.names(t.admin.id, "assets.list", skills)).toEqual(["guide"]);
     expect(await t.names(t.admin.id, "assets.list", inWorkspace(workspaceId))).toEqual([
       "kai-team-notes"
     ]);
-    expect(await t.names(t.kai.id, "assets.list", skills)).toEqual(["kai-guide"]);
-    // A Namespace is a prefix among the instance's own assets: it opens no workspace's.
+    expect(await t.names(t.kai.id, "assets.list", inWorkspace(t.kaiTeam))).toEqual(["kai-guide"]);
+    // Kai's rights in his own workspace open neither another workspace nor the instance.
     expect(await t.names(t.kai.id, "assets.list", inWorkspace(workspaceId))).toEqual([]);
+    expect(await t.names(t.kai.id, "assets.list", skills)).toEqual([]);
     expect(await t.names(t.lena.id, "assets.list", inWorkspace(workspaceId))).toEqual([
       "kai-team-notes"
     ]);
@@ -87,7 +80,7 @@ describe("the scope of an asset call", () => {
     await t.expectOk(t.admin.id, "assets.get", address("kai-team-notes", workspaceId));
     await t.expectOk(t.lena.id, "assets.get", address("kai-team-notes", workspaceId));
     await t.expectRefused(t.admin.id, "assets.get", address("kai-team-notes"), notFound);
-    await t.expectRefused(t.kai.id, "assets.get", address("kai-team-notes"), notFound);
+    await t.expectRefused(t.kai.id, "assets.get", address("kai-team-notes", t.kaiTeam), notFound);
     await t.expectRefused(t.kai.id, "assets.get", address("kai-team-notes", workspaceId), noRead);
     await t.expectRefused(t.lena.id, "assets.get", address("kai-team-notes"), noRead);
     await t.expectRefused(
@@ -103,10 +96,15 @@ describe("the scope of an asset call", () => {
       address("kai-team-notes", otherWorkspaceId),
       notFound
     );
-    await t.expectRefused(t.kai.id, "assets.revisions.list", address("kai-team-notes"), notFound);
+    await t.expectRefused(
+      t.kai.id,
+      "assets.revisions.list",
+      address("kai-team-notes", t.kaiTeam),
+      notFound
+    );
     await t.expectOk(t.lena.id, "assets.revisions.list", address("kai-team-notes", workspaceId));
 
-    // Writes: Kai's write right in the Namespace does not reach the workspace's skill.
+    // Writes: Kai's write right in his own workspace does not reach another workspace's skill.
     const overwrite = (userId: string, id?: string) =>
       t.call(userId, "assets.put", {
         params: { kind: "skill", name: "kai-team-notes" },
@@ -118,7 +116,7 @@ describe("the scope of an asset call", () => {
       });
     // Kai does not read the workspace's skill and is told the name alone, as for any write
     // against another revision. The administrator reads it and is told where the name is.
-    const untold = await overwrite(t.kai.id);
+    const untold = await overwrite(t.kai.id, t.kaiTeam);
     expect(untold.statusCode).toBe(412);
     expect(errorSchema.parse(untold.json()).error.details).toEqual({
       reason: "revision_conflict",
@@ -135,19 +133,20 @@ describe("the scope of an asset call", () => {
     // Named with its workspace, the administrator writes it: a workspace owns skills (WS-OWN-1a).
     expect((await overwrite(t.admin.id, workspaceId)).statusCode).toBe(200);
     // Kai holds no delete right on skills; the administrator finds no such asset of the instance.
-    for (const [userId, status] of [
-      [t.kai.id, 403],
-      [t.admin.id, 404]
+    for (const [userId, owner, status] of [
+      [t.kai.id, { workspaceId: t.kaiTeam }, 403],
+      [t.admin.id, {}, 404]
     ] as const) {
       const deleted = await t.call(userId, "assets.delete", {
         params: { kind: "skill", name: "kai-team-notes" },
-        payload: { expectedRevision: 1 }
+        payload: { expectedRevision: 1, ...owner }
       });
       expect(deleted.statusCode).toBe(status);
     }
+    // A batch of another workspace does not reach it either.
     const batch = await t.call(t.admin.id, "assets.sync", {
       payload: {
-        namespace: "kai-",
+        workspaceId: t.kaiTeam,
         items: [{ type: "delete", kind: "skill", name: "kai-team-notes", expectedRevision: 2 }]
       }
     });
@@ -161,8 +160,8 @@ describe("the scope of an asset call", () => {
   });
 
   it("removes what a workspace owns with the workspace, and refuses a delete that would orphan it", async () => {
-    const t = await setupNamespace();
-    const workspaceId = await createWorkspace(t, "Team");
+    const t = await setup();
+    const workspaceId = await t.sharedWorkspace("Team");
     await seedWorkspaceSkill(t, workspaceId, "team-notes");
     await t.put(t.admin.id, "skill", "kai-guide");
     const owned = await t.stored("skill", "team-notes");
@@ -197,7 +196,7 @@ describe("the scope of an asset call", () => {
 
 describe("assets.validate", () => {
   it("says what a put would be refused for and writes nothing", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
     const validate = async (userId: string, config: Record<string, unknown>) =>
       z
         .object({ valid: z.boolean(), issues: z.array(z.object({ message: z.string() }).loose()) })
@@ -205,7 +204,7 @@ describe("assets.validate", () => {
           (
             await t.expectOk(userId, "assets.validate", {
               params: { kind: "agent" },
-              payload: { config }
+              payload: { config, workspaceId: t.kaiTeam }
             })
           ).json()
         );
@@ -229,7 +228,10 @@ describe("assets.validate", () => {
     await t.expectRefused(
       t.lena.id,
       "assets.validate",
-      { params: { kind: "agent" }, payload: { config: agent("kai-intake") } },
+      {
+        params: { kind: "agent" },
+        payload: { config: agent("kai-intake"), workspaceId: t.kaiTeam }
+      },
       t.forbidden("agent.read", "no_grant")
     );
   });
@@ -237,10 +239,14 @@ describe("assets.validate", () => {
 
 describe("assets.check_name", () => {
   it("says before a create whether the name breaks the kind's rule or is taken, and writes nothing", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
+    const inKai = { workspaceId: t.kaiTeam };
     const check = async (userId: string, kind: "agent" | "skill", name: string) =>
       (
-        await t.expectOk(userId, "assets.check_name", { params: { kind }, payload: { name } })
+        await t.expectOk(userId, "assets.check_name", {
+          params: { kind },
+          payload: { name, ...inKai }
+        })
       ).json();
 
     expect(await check(t.kai.id, "skill", "kai-guide")).toEqual({ available: true });
@@ -251,7 +257,7 @@ describe("assets.check_name", () => {
       reason: "name_invalid",
       message: SKILL_NAME_RULE
     });
-    const put = await t.put(t.kai.id, "agent", "kai-helper");
+    const put = await t.put(t.kai.id, "agent", "kai-helper", t.kaiTeam);
     expect(await check(t.kai.id, "agent", "kai-helper")).toEqual({
       available: false,
       reason: "name_taken",
@@ -261,49 +267,56 @@ describe("assets.check_name", () => {
     const { revision } = z.object({ revision: z.number() }).parse(put.json());
     await t.expectOk(t.kai.id, "assets.delete", {
       params: { kind: "agent", name: "kai-helper" },
-      payload: { expectedRevision: revision }
+      payload: { expectedRevision: revision, ...inKai }
     });
     expect(await check(t.kai.id, "agent", "kai-helper")).toMatchObject({
       available: false,
       reason: "name_taken"
     });
 
-    // The right is the one a create asks, in the Namespace the name falls in.
-    await t.expectRefused(
-      t.kai.id,
-      "assets.check_name",
-      { params: { kind: "agent" }, payload: { name: "lena-helper" } },
-      t.forbidden("agent.write", "no_grant")
-    );
+    // The right is the one a create asks, in the owner the call names.
+    for (const owner of [{ workspaceId: t.lenaTeam }, {}]) {
+      await t.expectRefused(
+        t.kai.id,
+        "assets.check_name",
+        { params: { kind: "agent" }, payload: { name: "lena-helper", ...owner } },
+        t.forbidden("agent.write", "no_grant")
+      );
+    }
     // The put still refuses what the check refused.
     await t.expectRefused(
       t.kai.id,
       "assets.put",
       {
         params: { kind: "skill", name: "kai-two words" },
-        payload: { config: skill("kai-two words"), expectedRevision: null }
+        payload: { config: skill("kai-two words"), expectedRevision: null, ...inKai }
       },
       { status: 422, code: "VALIDATION_FAILED" }
     );
   });
 
   it("tells a write-only caller exactly the create refusal for unreadable active and deleted names", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
+    const inLena = { workspaceId: t.lenaTeam };
     const check = (name: string) =>
-      t.call(t.lena.id, "assets.check_name", { params: { kind: "agent" }, payload: { name } });
-    for (const name of ["kai-private", "kai-free"]) {
+      t.call(t.lena.id, "assets.check_name", {
+        params: { kind: "agent" },
+        payload: { name, ...inLena }
+      });
+    for (const name of ["lena-private", "lena-free"]) {
       await t.expectRefused(
         t.lena.id,
         "assets.check_name",
-        { params: { kind: "agent" }, payload: { name } },
+        { params: { kind: "agent" }, payload: { name, ...inLena } },
         t.forbidden("agent.write", "no_grant")
       );
     }
-    await t.seedHistoricalGrant(t.lena.id, "agent.write", { namespace: "kai-" });
-    const workspaceId = await createWorkspace(t, "Confidential workspace");
-    for (const owner of [undefined, workspaceId]) {
-      const name = owner === undefined ? "kai-private" : "kai-private-elsewhere";
-      const scope = owner === undefined ? {} : { workspaceId: owner };
+    // Lena writes the agents of her workspace and reads none.
+    await t.grant(t.lena.id, "agent.write", inLena);
+    const workspaceId = await t.sharedWorkspace("Confidential workspace");
+    for (const owner of [t.lenaTeam, workspaceId]) {
+      const name = owner === t.lenaTeam ? "lena-private" : "lena-private-elsewhere";
+      const scope = { workspaceId: owner };
       const params = { kind: "agent", name };
       await t.expectOk(t.admin.id, "assets.put", {
         params,
@@ -316,14 +329,14 @@ describe("assets.check_name", () => {
       await t.expectRefused(
         t.lena.id,
         "assets.get",
-        { params },
+        { params, query: inLena },
         t.forbidden("agent.read", "no_grant")
       );
       const create = () =>
         t.expectRefused(
           t.lena.id,
           "assets.put",
-          { params, payload: { config: agent(name), expectedRevision: null } },
+          { params, payload: { config: agent(name), expectedRevision: null, ...inLena } },
           { status: 412, code: "REVISION_CONFLICT" }
         );
       const activeCreate = await create();
@@ -342,15 +355,15 @@ describe("assets.check_name", () => {
       expect(await create()).toEqual(activeCreate);
       expect((await check(name)).json()).toEqual(activeCheck.json());
     }
-    expect((await check("kai-free")).json()).toEqual({ available: true });
+    expect((await check("lena-free")).json()).toEqual({ available: true });
     await t.expectOk(t.lena.id, "assets.put", {
-      params: { kind: "agent", name: "kai-free" },
-      payload: { config: agent("kai-free"), expectedRevision: null }
+      params: { kind: "agent", name: "lena-free" },
+      payload: { config: agent("lena-free"), expectedRevision: null, ...inLena }
     });
   });
 
   it("uses creation's name validation and reason, including dot names and unstorable text", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
     for (const name of [".", "..", "", "bad\ud800name"]) {
       const validation = z
         .object({ valid: z.literal(false), issues: z.array(z.object({ message: z.string() })) })
@@ -442,7 +455,7 @@ describe("assets.check_name", () => {
 
 describe("the validation of a set of assets", () => {
   it("names the issues of a release in the order and words of the bundle check", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
     // Everything a batch can carry at once: schema and name issues of both kinds, a default
     // that is no agent, and every reference an agent can miss.
     const bundle = {

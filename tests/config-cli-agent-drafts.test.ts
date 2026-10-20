@@ -36,23 +36,31 @@ afterEach(async () => {
 });
 
 /**
- * A person's working copy holds the instance's own agents of one Namespace, `kai-`: only a
- * release key pushes the instance's assets as a whole, from an unbound root. A workspace's
- * working copy starts unbound too, and its first pull binds it.
+ * A person's working copy holds what one workspace owns, bound to it by its id: only a release
+ * key pushes the instance's own assets, from an unbound root. A workspace's working copy can
+ * start unbound too, and its first pull binds it.
  */
-const manifest = (root: "prefixed" | "unbound") =>
-  `instances:\n  local:\n    url: https://catalyst.test\n${root === "prefixed" ? "    namespace: kai-\n" : ""}defaultInstance: local\nagents:\n  - agents/*.agent.yaml\nskills:\n  - skills/*/SKILL.md\n`;
+const manifest = (workspaceId?: string) =>
+  `instances:\n  local:\n    url: https://catalyst.test\n${workspaceId === undefined ? "" : `    workspace: ${workspaceId}\n`}defaultInstance: local\nagents:\n  - agents/*.agent.yaml\nskills:\n  - skills/*/SKILL.md\n`;
 const AGENT = "kai-helper";
 const AGENT_KEY = `agent:${AGENT}`;
 
-async function workingCopy(root: "prefixed" | "unbound" = "prefixed"): Promise<string> {
+/** A working copy bound to the workspace, or an unbound one without it. */
+async function workingCopy(workspaceId?: string): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "catalyst-agent-drafts-"));
   directories.push(directory);
-  await writeFile(join(directory, "catalyst.yaml"), manifest(root), "utf8");
+  await writeFile(join(directory, "catalyst.yaml"), manifest(workspaceId), "utf8");
   return directory;
 }
 
-async function setup(guardrails: Record<string, unknown> = {}) {
+/**
+ * The agent `kai-helper`, live at revision 1 with no draft: owned by the Shared Workspace
+ * `team`, or by the instance.
+ */
+async function setup(
+  guardrails: Record<string, unknown> = {},
+  owner: "workspace" | "instance" = "workspace"
+) {
   const t = await setupAccessInstance({
     modules: { assetManagement: { enabled: true } },
     server: (stores) => ({
@@ -64,11 +72,14 @@ async function setup(guardrails: Record<string, unknown> = {}) {
     })
   });
   instances.push(t);
-  // An instance agent of the Namespace `kai-`, live at revision 1 with no draft.
-  await t.createNamespace("kai-");
+  const team = await t.sharedWorkspace("Kai's team");
   await t.expectOk(t.admin.id, "assets.put", {
     params: { kind: "agent", name: AGENT },
-    payload: { config: agent(AGENT, { instructions: "Help." }), expectedRevision: null }
+    payload: {
+      config: agent(AGENT, { instructions: "Help." }),
+      expectedRevision: null,
+      ...(owner === "workspace" ? { workspaceId: team } : {})
+    }
   });
   const live = async () => {
     const asset = await t.stores.configAssets.getConfigAsset({
@@ -83,7 +94,7 @@ async function setup(guardrails: Record<string, unknown> = {}) {
     t.stores.agentProposals.get({ clientInstanceId, agentId: (await live()).id });
   const version = async () =>
     (await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).version;
-  return { t, live, draft, version };
+  return { t, team, live, draft, version };
 }
 
 /**
@@ -173,10 +184,10 @@ async function agentBaseline(directory: string) {
 
 describe("catalyst config and agent drafts (Platform Access 66)", () => {
   it("pushes a changed agent as its draft, pulls and diffs against live, and names the draft", async () => {
-    const { t, live, draft, version } = await setup();
+    const { t, team, live, draft, version } = await setup();
     const before = await live();
     const stateVersion = await version();
-    const mine = await workingCopy();
+    const mine = await workingCopy(team);
     const cli = cliAs(t.instance, { user: t.admin.id }, mine);
     await cli.ok(["config", "pull"]);
     expect(await agentBaseline(mine)).toMatchObject({ revision: 1, draftRevision: null });
@@ -213,7 +224,7 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     expect((await cli.run(["config", "push"])).out).toContain("No local changes to push.");
 
     // Another working copy pulls the live revision and lists the draft with its author.
-    const other = await workingCopy();
+    const other = await workingCopy(team);
     const pulled = await cliAs(t.instance, { user: t.admin.id }, other).run(["config", "pull"]);
     expect(pulled.code, pulled.err).toBe(0);
     expect(pulled.out).toMatch(
@@ -235,8 +246,8 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
   // The verifier of AD-1: the CLI recorded the draft revision as the agent's base, so the push
   // after a push was made against a live revision the agent never had.
   it("pushes again on the live base with the draft revision it was given", async () => {
-    const { t, live, draft } = await setup();
-    const mine = await workingCopy();
+    const { t, team, live, draft } = await setup();
+    const mine = await workingCopy(team);
     const cli = cliAs(t.instance, { user: t.admin.id }, mine);
     await cli.ok(["config", "pull"]);
     await editInstructions(mine, "First.");
@@ -263,8 +274,8 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
   });
 
   it("refuses a push over a draft somebody changed since the last pull, and names them", async () => {
-    const { t, live, draft } = await setup();
-    const mine = await workingCopy();
+    const { t, team, live, draft } = await setup();
+    const mine = await workingCopy(team);
     const cli = cliAs(t.instance, { user: t.admin.id }, mine);
     await cli.ok(["config", "pull"]);
     // Root saves a draft on the agent page after the pull.
@@ -273,7 +284,8 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
       payload: {
         config: { ...(await live()).config, instructions: "Root's draft." },
         expectedRevision: 1,
-        expectedDraftRevision: null
+        expectedDraftRevision: null,
+        workspaceId: team
       }
     });
 
@@ -332,17 +344,17 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     });
   });
 
-  it("publishes an instance agent with an admin's personal key and no terminal", async () => {
-    const { t, live, draft, version } = await setup();
+  it("publishes a workspace's agent it pushed with an admin's personal key, once answered", async () => {
+    const { t, team, live, draft, version } = await setup();
     const stateVersion = await version();
-    const mine = await workingCopy();
+    const mine = await workingCopy(team);
     const cli = cliAs(t.instance, { user: t.admin.id }, mine);
     await cli.ok(["config", "pull"]);
     await editInstructions(mine, "Published from the CLI.");
 
-    const published = await cli.run(["config", "push", "--publish"]);
+    const published = await cli.run(["config", "push", "--publish"], ["yes"]);
     expect(published.code, published.err).toBe(0);
-    expect(published.asked).toEqual([]);
+    expect(published.asked).toHaveLength(1);
     expect(published.out).toContain("agent:kai-helper: draft revision 1;");
     expect(published.out).toContain(
       "Published draft revision 1 of agent 'kai-helper' as live revision 2 in place of revision 1."
@@ -357,6 +369,23 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     expect(baseline).toMatchObject({ revision: 2, draftRevision: null });
     expect(baseline).not.toHaveProperty("draftPushed");
     expect((await cli.run(["config", "diff"])).out).toContain("No differences.");
+  });
+
+  it("publishes an instance agent with an admin's personal key and no terminal", async () => {
+    const { t, live, draft } = await setup({}, "instance");
+    const mine = await workingCopy();
+    const cli = cliAs(t.instance, { user: t.admin.id }, mine);
+    await cli.ok(["config", "pull"]);
+    await editInstructions(mine, "Pushed by a person.");
+
+    // A person's push of the instance's own assets is no release: it is refused whole.
+    const pushed = await cli.run(["config", "push", "--publish"]);
+    expect(pushed.code).toBe(1);
+    expect(pushed.err).toContain(
+      "A batch names the workspace it belongs to. Only a release writes the instance's own assets"
+    );
+    expect(await live()).toMatchObject({ revision: 1 });
+    expect(await draft()).toBeUndefined();
 
     // The one-asset commands: put writes the draft, show names it, publish makes it live.
     const file = join(mine, "kai-helper.yaml");
@@ -367,27 +396,32 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
         "instructions: Put as a draft."
       )
     );
-    const put = await cli.run(["agent", "put", AGENT, "--from", file, "--if-revision", "2"]);
+    const put = await cli.run(["agent", "put", AGENT, "--from", file, "--if-revision", "1"]);
     expect(put.out).toContain(
-      "Wrote agent 'kai-helper' as draft revision 2; live revision 2 is unchanged until it is published with 'catalyst agent publish kai-helper --revision 2'."
+      "Wrote agent 'kai-helper' as draft revision 1; live revision 1 is unchanged until it is published with 'catalyst agent publish kai-helper --revision 1'."
     );
     expect((await cli.run(["agent", "show", AGENT])).out).toMatch(
-      /pending draft: draft revision 2 by Admin at \S+, not live/u
+      /pending draft: draft revision 1 by Admin at \S+, not live/u
     );
     const over = await cli.run([
-      ...["agent", "put", AGENT, "--from", file, "--if-revision", "2"],
-      ...["--if-draft-revision", "2"]
+      ...["agent", "put", AGENT, "--from", file, "--if-revision", "1"],
+      ...["--if-draft-revision", "1"]
     ]);
-    expect(over.out, over.err).toContain("Wrote agent 'kai-helper' as draft revision 3;");
-    const named = await cli.run(["agent", "publish", AGENT, "--revision", "3"]);
+    expect(over.out, over.err).toContain("Wrote agent 'kai-helper' as draft revision 2;");
+    const named = await cli.run(["agent", "publish", AGENT, "--revision", "2"]);
     expect(named.code, named.err).toBe(0);
+    expect(named.asked).toEqual([]);
     expect(named.out).toContain(
-      "Published draft revision 3 of agent 'kai-helper' as live revision 3 in place of revision 2."
+      "Published draft revision 2 of agent 'kai-helper' as live revision 2 in place of revision 1."
     );
+    expect(await live()).toMatchObject({
+      revision: 2,
+      config: { instructions: "Put as a draft." }
+    });
   });
 
   it("prints the waiting Operation Run and exits non-zero where a guardrail asks for an approval", async () => {
-    const { t, live, draft } = await setup({
+    const { t, team, live, draft } = await setup({
       "review-agent-publish": {
         displayName: "Review agent publishes",
         on: "agent.before_publish",
@@ -395,12 +429,12 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
         outcome: "require_approval"
       }
     });
-    const mine = await workingCopy();
+    const mine = await workingCopy(team);
     const cli = cliAs(t.instance, { user: t.admin.id }, mine);
     await cli.ok(["config", "pull"]);
     await editInstructions(mine, "Needs review.");
 
-    const held = await cli.run(["config", "push", "--publish"]);
+    const held = await cli.run(["config", "push", "--publish"], ["yes"]);
     expect(held.code, held.err).toBe(3);
     expect(held.out).toContain("agent:kai-helper: draft revision 1;");
     expect(held.err).toMatch(
@@ -411,8 +445,8 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
   });
 
   it("writes drafts with a service principal's key and publishes nothing, saying why", async () => {
-    const { t, live, draft } = await setup();
-    const mine = await workingCopy("unbound");
+    const { t, live, draft } = await setup({}, "instance");
+    const mine = await workingCopy();
     const release = cliAs(
       t.instance,
       { service: "sp_release", scopes: "config_assets:read config_assets:release" },
@@ -470,8 +504,8 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
   });
 
   it("refuses an agent push with a state file from before agent drafts until one pull", async () => {
-    const { t, draft } = await setup();
-    const mine = await workingCopy();
+    const { t, team, draft } = await setup();
+    const mine = await workingCopy(team);
     const cli = cliAs(t.instance, { user: t.admin.id }, mine);
     await cli.ok(["config", "pull"]);
     // The state an earlier CLI wrote: revisions and hashes, no draft revision.
@@ -501,7 +535,7 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
   it("asks before it publishes a workspace's agent, and publishes nothing without a terminal", async () => {
     const { t } = await setup();
     const team = await t.sharedWorkspace("Team");
-    const mine = await workingCopy("unbound");
+    const mine = await workingCopy();
     const cli = cliAs(t.instance, { user: t.admin.id }, mine);
     await cli.ok(["config", "pull", "--workspace", team]);
     await mkdir(join(mine, "agents"), { recursive: true });

@@ -45,8 +45,7 @@ function rowOf(action: string, index: number): PermissionGrantRow {
     holderId: member.id,
     action,
     effect: "allow",
-    scopeKind: "namespace",
-    namespace: "kai-",
+    scopeKind: "instance",
     grantedBy: "admin-1",
     createdAt: AT
   };
@@ -181,7 +180,6 @@ describe("rights on a Workflow", () => {
     const onWorkflow = (action: string, index: number): PermissionGrantRow => ({
       ...rowOf(action, index),
       scopeKind: "asset",
-      namespace: undefined,
       scopeId: "asset-wf",
       scopeAsset: { kind: "workflow", name: "agent-inventory", active: true }
     });

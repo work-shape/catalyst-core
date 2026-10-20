@@ -475,7 +475,7 @@ describe("validation of an agent that lists data tools", () => {
     }
   });
 
-  it("saves such an agent, and a Namespace allowlist still refuses a name it does not hold", async () => {
+  it("saves such an agent, and a workspace's allowlist still refuses a name it does not hold", async () => {
     const t = await setupConnectionInstance({ dataTools: createFakeConnection().toolSource });
     await t.seed("fake", {
       origin: "runtime",
@@ -499,23 +499,32 @@ describe("validation of an agent that lists data tools", () => {
       { status: 422, code: "VALIDATION_FAILED" }
     );
 
-    await t.createNamespace("kai-", { allowedToolNames: ["known.tool"] });
-    expect(
-      (await t.putAgent(t.admin.id, "kai-helper", { toolNames: ["known.tool"] })).statusCode
-    ).toBe(200);
+    const workspaceId = await t.sharedWorkspace("Kai");
+    await t.expectOk(t.admin.id, "workspaces.limits.update", {
+      params: { collaborationWorkspaceId: workspaceId },
+      payload: { allowedToolNames: ["known.tool"] }
+    });
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "agent", name: "kai-helper" },
+      payload: {
+        config: { ...agent("kai-helper", ["known.tool"]), modelProviderId: "local" },
+        workspaceId
+      }
+    });
     await t.expectRefused(
       t.admin.id,
       "assets.put",
       {
         params: { kind: "agent", name: "kai-other" },
         payload: {
-          config: { ...agent("kai-other", [ECHO]), modelProviderId: "local" }
+          config: { ...agent("kai-other", [ECHO]), modelProviderId: "local" },
+          workspaceId
         }
       },
       {
         status: 403,
         code: "FORBIDDEN",
-        details: { reason: "tool_not_allowed", toolName: ECHO, namespace: "kai-" }
+        details: { reason: "tool_not_allowed", toolName: ECHO, workspaceId, workspace: "Kai" }
       }
     );
   });

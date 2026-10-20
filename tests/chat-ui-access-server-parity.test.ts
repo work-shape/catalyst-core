@@ -77,14 +77,14 @@ async function expectVerdictsHold(t: AccessInstance, holderId: string, name: str
 }
 
 describe("the Check tab against real asset calls", () => {
-  it("agrees for a grant in a Namespace", async () => {
+  it("agrees for every right on one asset, and for none on another", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    for (const action of ["agent.read", "agent.write", "agent.delete"]) {
-      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
-    }
     expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
     expect((await t.putAgent(t.admin.id, "other-helper")).statusCode).toBe(200);
+    const assetId = await t.assetId("agent", "kai-helper");
+    for (const action of ["agent.read", "agent.write", "agent.delete"]) {
+      await t.grant(t.kai.id, action, { assetId });
+    }
 
     const inside = await expectVerdictsHold(t, t.kai.id, "kai-helper");
     expect(inside.said.map((verdict) => verdict.allowed)).toEqual([true, true, true]);
@@ -112,17 +112,12 @@ describe("the Check tab against real asset calls", () => {
 
   it("agrees for a deny on one asset, which also refuses the delete", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    for (const action of ["agent.read", "agent.write", "agent.delete"]) {
-      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
-    }
     expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
-    await t.grant(
-      t.kai.id,
-      "agent.write",
-      { assetId: await t.assetId("agent", "kai-helper") },
-      "deny"
-    );
+    const assetId = await t.assetId("agent", "kai-helper");
+    for (const action of ["agent.read", "agent.delete"]) {
+      await t.grant(t.kai.id, action, { assetId });
+    }
+    await t.grant(t.kai.id, "agent.write", { assetId }, "deny");
 
     const { said, compared } = await expectVerdictsHold(t, t.kai.id, "kai-helper");
     expect(said.map((verdict) => [verdict.allowed, verdict.reason])).toEqual([
@@ -135,8 +130,6 @@ describe("the Check tab against real asset calls", () => {
 
   it("agrees for a deny that outlived its asset", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     expect((await t.putAgent(t.admin.id, "kai-old")).statusCode).toBe(200);
     await t.grant(
       t.kai.id,
@@ -149,7 +142,7 @@ describe("the Check tab against real asset calls", () => {
       payload: {}
     });
 
-    // The Namespace row would let Kai create the name again; the deny on the name refuses it.
+    // The deny stays with the name and refuses Kai creating it again.
     const { said, compared } = await expectVerdictsHold(t, t.kai.id, "kai-old");
     expect(said.find((verdict) => verdict.verb === "write")).toMatchObject({
       allowed: false,
@@ -162,7 +155,6 @@ describe("the Check tab against real asset calls", () => {
 describe("the page's reading of a refused grant", () => {
   it("reads the refusal for a user being deleted as that, and shows no other sentence", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
     await t.stores.users.markUserDeletionRequested({
       clientInstanceId,
       userId: asUserId(t.kai.id)
@@ -187,7 +179,6 @@ describe("the page's reading of a refused grant", () => {
 
   it("tells a row that exists already from every other conflict", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
     await t.grant(t.kai.id, "agent.write", { assetId: await t.assetId("agent", "assistant") });
     const response = await t.call(t.admin.id, "permissions.grant", {
       payload: {

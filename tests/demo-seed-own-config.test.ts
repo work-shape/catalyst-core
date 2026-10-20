@@ -48,17 +48,16 @@ describe("the demo seed on the demo's own config", () => {
       "service principals": 1,
       "API keys": 1,
       "the instance's own agents and skills": 2,
-      namespaces: 4,
       agents: 8,
       skills: 7,
       "grant rows": 34,
       "builder assets": 2,
       "approval requests": 2,
       "connection grant rows": 9,
-      workspaces: 1,
+      workspaces: 2,
       "workspace members": 4,
-      "workspace bundles": 2,
-      "workspace assets": 2,
+      "workspace bundles": 3,
+      "workspace assets": 3,
       apps: 3,
       workflows: 1
     });
@@ -123,11 +122,8 @@ describe("the demo seed on the demo's own config", () => {
     );
   });
 
-  it("lists both models the seed names for the tax Namespace", () => {
-    expect(
-      seeded().before.namespaces.find((namespace) => namespace.prefix === "tax-")
-        ?.allowedModelBindingIds
-    ).toEqual(["primary", "gpt56Luna"]);
+  it("lists both models the seed names for the HR workspace", () => {
+    expect(seeded().before.hrWorkspace?.allowedModelBindingIds).toEqual(["primary", "gpt56Luna"]);
   });
 
   it("mails the invited person once, who can sign in after setting a password and has not yet", async () => {

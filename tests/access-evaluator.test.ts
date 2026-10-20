@@ -84,15 +84,14 @@ const sharedResource: AccessResource = {
   assetId: "asset-1",
   workspaceId: "workspace-1"
 };
-/** The same asset as the instance owns it: what a Namespace row covers. */
+/** The same asset as the instance owns it: no workspace row covers it. */
 const instanceResource: AccessResource = { kind: "agent", name: "kai-helper", assetId: "asset-1" };
 const scopes = {
   instance: { scopeKind: "instance" },
-  namespace: { scopeKind: "namespace", namespace: "kai-" },
   asset: { scopeKind: "asset", scopeId: "asset-1" },
   workspace: { scopeKind: "workspace", scopeId: "workspace-1" }
 } as const satisfies Record<PermissionGrant["scopeKind"], Partial<PermissionGrant>>;
-const scopeKinds = ["instance", "namespace", "asset", "workspace"] as const;
+const scopeKinds = ["instance", "asset", "workspace"] as const;
 
 describe("access evaluator: what a row covers", () => {
   it("lets an instance row cover every resource and no resource at all", () => {
@@ -103,25 +102,16 @@ describe("access evaluator: what a row covers", () => {
     );
   });
 
-  it("lets a Namespace row cover a name that starts with the prefix and refuses every other name", () => {
-    const grants = [grant(scopes.namespace)];
-    expect(decide({ grants, resource: { name: "kai-helper" } })).toEqual(allowedByGrant);
-    expect(decide({ grants, resource: { name: "kai-" } })).toEqual(allowedByGrant);
-
-    expect(decide({ grants, resource: { name: "other-helper" } })).toEqual(noGrant);
-    expect(decide({ grants, resource: { name: "kai" } })).toEqual(noGrant);
-    expect(decide({ grants, resource: { name: "kaiser-helper" } })).toEqual(noGrant);
-    expect(decide({ grants, resource: { name: "team-kai-helper" } })).toEqual(noGrant);
-    expect(decide({ grants, resource: { name: "Kai-helper" } })).toEqual(noGrant);
-    expect(decide({ grants, resource: { assetId: "asset-1" } })).toEqual(noGrant);
+  // NS-RETIRE: a row of a scope kind the evaluator does not know, such as one read from a
+  // store that still had the retired kind, covers nothing, a name included.
+  it("never lets a row of an unknown scope kind cover anything", () => {
+    const row = grant();
+    // A kind the types no longer name, as a stored row may still carry it.
+    Reflect.set(row, "scopeKind", "prefix");
+    const grants = [row];
+    expect(decide({ grants, resource: sharedResource })).toEqual(noGrant);
+    expect(decide({ grants, resource: { name: "kai-helper" } })).toEqual(noGrant);
     expect(decide({ grants })).toEqual(noGrant);
-  });
-
-  it("never lets a Namespace row without a prefix cover anything", () => {
-    for (const namespace of [undefined, ""]) {
-      const grants = [grant({ scopeKind: "namespace", namespace })];
-      expect(decide({ grants, resource: { name: "kai-helper" } })).toEqual(noGrant);
-    }
   });
 
   it("lets an asset row cover that asset and refuses another asset", () => {
@@ -196,25 +186,7 @@ describe("access evaluator: deny wins", () => {
       it(`lets a ${denyScope} deny win over a ${allowScope} allow where both cover the resource`, () => {
         const allow = grant(scopes[allowScope]);
         const deny = grant({ ...scopes[denyScope], effect: "deny" });
-
-        // A Namespace covers the instance's own assets only, so a pair with a Namespace row meets
-        // on an asset no workspace owns. A workspace row covers no such asset, and the two
-        // never meet.
-        const pair = [allowScope, denyScope];
-        const resource = pair.includes("namespace") ? instanceResource : sharedResource;
-        if (pair.includes("namespace") && pair.includes("workspace")) {
-          const namespaceRow = allowScope === "namespace" ? allow : deny;
-          const workspaceRow = allowScope === "workspace" ? allow : deny;
-          for (const [row, covered, missed] of [
-            [namespaceRow, instanceResource, sharedResource],
-            [workspaceRow, sharedResource, instanceResource]
-          ] as const) {
-            const covers = row === allow ? allowedByGrant : denied;
-            expect(decide({ grants: [row], resource: covered })).toEqual(covers);
-            expect(decide({ grants: [row], resource: missed })).toEqual(noGrant);
-          }
-          return;
-        }
+        const resource = sharedResource;
         expect(decide({ grants: [allow], resource })).toEqual(allowedByGrant);
         expect(decide({ grants: [allow, deny], resource })).toEqual(denied);
         expect(decide({ grants: [deny, allow], resource })).toEqual(denied);
@@ -224,15 +196,21 @@ describe("access evaluator: deny wins", () => {
 
   it("leaves the allow standing where the deny does not cover the resource", () => {
     const grants = [
-      grant(scopes.namespace),
+      grant(scopes.workspace),
       grant({ scopeKind: "asset", scopeId: "asset-1", effect: "deny" })
     ];
-    expect(decide({ grants, resource: { name: "kai-helper", assetId: "asset-1" } })).toEqual(
-      denied
-    );
-    expect(decide({ grants, resource: { name: "kai-other", assetId: "asset-2" } })).toEqual(
-      allowedByGrant
-    );
+    expect(
+      decide({
+        grants,
+        resource: { name: "kai-helper", assetId: "asset-1", workspaceId: "workspace-1" }
+      })
+    ).toEqual(denied);
+    expect(
+      decide({
+        grants,
+        resource: { name: "kai-other", assetId: "asset-2", workspaceId: "workspace-1" }
+      })
+    ).toEqual(allowedByGrant);
   });
 
   it("leaves another action standing beside a deny", () => {
@@ -260,7 +238,7 @@ describe("access evaluator: deny wins", () => {
       expect(
         decide({
           holder: admin,
-          grants: [...revocation, grant({ action, ...scopes.namespace })],
+          grants: [...revocation, grant({ action, ...scopes.workspace })],
           action,
           resource: sharedResource
         })
@@ -284,7 +262,7 @@ describe("access evaluator: the classes of action", () => {
     ).toEqual(allowedByGrant);
 
     const narrow = ["agent.write", "agent.delete", "skill.write", "skill.delete"].map((action) =>
-      grant({ action, ...scopes.namespace })
+      grant({ action, ...scopes.workspace })
     );
     expect(decide({ grants: narrow, action: "config_assets.write" })).toEqual(noGrant);
   });
@@ -393,10 +371,10 @@ describe("actor access", () => {
   it("throws the action and the reason, and nothing else, when a right is missing", () => {
     const access = createActorAccess(
       holder(),
-      persisted([grant(scopes.namespace), grant({ action: "skill.write", effect: "deny" })])
+      persisted([grant(scopes.workspace), grant({ action: "skill.write", effect: "deny" })])
     );
 
-    expect(() => access.require("agent.write", { name: "kai-helper" })).not.toThrow();
+    expect(() => access.require("agent.write", { workspaceId: "workspace-1" })).not.toThrow();
     for (const [action, reason] of [
       ["agent.write", "no_grant"],
       ["skill.write", "denied"],
@@ -404,7 +382,7 @@ describe("actor access", () => {
     ] as const) {
       let thrown: unknown;
       try {
-        access.require(action, { name: "other-helper" });
+        access.require(action, { workspaceId: "workspace-2" });
       } catch (error) {
         thrown = error;
       }

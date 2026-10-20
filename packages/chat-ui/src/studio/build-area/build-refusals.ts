@@ -76,7 +76,6 @@ interface RefusalDetails {
   reason?: string;
   toolName?: string;
   modelBindingId?: string;
-  namespace?: string;
   /** The workspace whose build limits a refusal names, by its name. */
   workspace?: string;
   /** The file of a folder a refusal names. */
@@ -199,7 +198,6 @@ export function readRefusalDetails(error: unknown): RefusalDetails {
     reason: text(details, "reason"),
     toolName: text(details, "toolName"),
     modelBindingId: text(details, "modelBindingId"),
-    namespace: text(details, "namespace"),
     workspace: text(details, "workspace"),
     path: text(details, "path"),
     folder: text(details, "folder"),
@@ -257,7 +255,7 @@ const FIELD_OF_CONFIG_KEY = new Map<string, BuildRefusalField>([
 ]);
 
 /**
- * Reads a refused change. A refusal from a Namespace's lists names its field and is told in
+ * Reads a refused change. A refusal from a workspace's build limits names its field and is told in
  * the reader's language; an issue of the definition goes to the field its path names; every
  * other sentence is shown as the instance said it, which includes the one sentence about an
  * asset the reader may not read.
@@ -303,36 +301,32 @@ export function readBuildRefusal(
   if (details.reason === "data_store_in_use") {
     return refused({ message: t("build.refusedDataStoreInUse") });
   }
-  // A build limit is a Namespace's or the workspace's that owns the agent.
+  // A build limit is the one of the workspace that owns the agent, which the refusal names.
   const { workspace } = details;
-  const namespace = details.namespace ?? "";
-  if (details.reason === "tool_not_allowed" && details.toolName !== undefined) {
-    const tool = details.toolName;
+  if (
+    details.reason === "tool_not_allowed" &&
+    details.toolName !== undefined &&
+    workspace !== undefined
+  ) {
     return refused({
       field: "tools",
-      message:
-        workspace === undefined
-          ? t("build.refusedTool", { tool, namespace })
-          : t("build.refusedToolInWorkspace", { tool, workspace })
+      message: t("build.refusedToolInWorkspace", { tool: details.toolName, workspace })
     });
   }
-  if (details.reason === "model_not_allowed" && details.modelBindingId !== undefined) {
-    const model = details.modelBindingId;
+  if (
+    details.reason === "model_not_allowed" &&
+    details.modelBindingId !== undefined &&
+    workspace !== undefined
+  ) {
     return refused({
       field: "model",
-      message:
-        workspace === undefined
-          ? t("build.refusedModel", { model, namespace })
-          : t("build.refusedModelInWorkspace", { model, workspace })
+      message: t("build.refusedModelInWorkspace", { model: details.modelBindingId, workspace })
     });
   }
-  if (details.reason === "model_binding_required") {
+  if (details.reason === "model_binding_required" && workspace !== undefined) {
     return refused({
       field: "model",
-      message:
-        workspace === undefined
-          ? t("build.refusedModelRequired", { namespace })
-          : t("build.refusedModelRequiredInWorkspace", { workspace })
+      message: t("build.refusedModelRequiredInWorkspace", { workspace })
     });
   }
   const folder = folderRefusal(details, t, locale);

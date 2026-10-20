@@ -776,9 +776,6 @@ export const EVENTS = {
     }
   },
   "message.failed": { ...LEGACY_AUDIT, name: "message.failed", subject: "message" },
-  "namespace.created": { ...LEGACY_AUDIT, name: "namespace.created", subject: "namespace" },
-  "namespace.deleted": { ...LEGACY_AUDIT, name: "namespace.deleted", subject: "namespace" },
-  "namespace.updated": { ...LEGACY_AUDIT, name: "namespace.updated", subject: "namespace" },
   // A notice left for people of the instance (NOTIFY-a): counts only, never what it said.
   "notice.mail_delivery": {
     name: "notice.mail_delivery",

@@ -78,9 +78,7 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
     holderId: "scope-user",
     effect: "allow",
     values: ["101"]
-  },
-  "namespaces.create": { prefix: "team-", displayName: "Team" },
-  "namespaces.update": { displayName: "Team" }
+  }
 };
 const acceptedQueries: Partial<Record<ApiOperationName, Record<string, string>>> = {
   "connections.person_context": { subjectKind: "user", subjectId: "missing" },

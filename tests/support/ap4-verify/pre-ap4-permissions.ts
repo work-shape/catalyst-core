@@ -1,5 +1,6 @@
 import { ACTIONS, type PlatformAction } from "@work-shape/catalyst-asset-schemas";
 // Frozen copy of packages/core/src/permissions.ts at 6c1ab255 (the commit before AP-4), for the AP-4 verifier.
+// Without the prefix scope that NS-RETIRE retired: the verifier seeds no row of it.
 import {
   operationDenialError,
   type AuthenticatedServicePrincipal,
@@ -66,9 +67,8 @@ interface PermissionGrant {
   holderId: string;
   action: string;
   effect: "allow" | "deny";
-  scopeKind: "instance" | "workspace" | "namespace" | "asset";
+  scopeKind: "instance" | "workspace" | "asset";
   scopeId?: string;
-  namespace?: string;
   grantedBy: UserId;
   createdAt: ISODateString;
 }
@@ -109,7 +109,7 @@ export interface ActorAccess {
   require(action: string, resource?: AccessResource): void;
   /**
    * A grant row allows the active holder the action at one of these scope kinds, on whichever
-   * asset, workspace or Namespace. It tells that something of the kind may be open to the
+   * asset or workspace. It tells that something of the kind may be open to the
    * holder and decides no call: a covering deny is not read.
    */
   holdsGrantAt(action: string, scopeKinds: readonly PermissionGrant["scopeKind"][]): boolean;
@@ -142,7 +142,6 @@ interface AccessEntry {
   effect: "allow" | "deny";
   scopeKind: PermissionGrant["scopeKind"];
   scopeId?: string;
-  namespace?: string;
   source: AccessSource;
 }
 
@@ -213,7 +212,6 @@ function listAccessEntries(holder: AccessHolder, persisted: PersistedAccess): Ac
       effect: grant.effect,
       scopeKind: grant.scopeKind,
       ...(grant.scopeId === undefined ? {} : { scopeId: grant.scopeId }),
-      ...(grant.namespace === undefined ? {} : { namespace: grant.namespace }),
       source: "grant"
     });
   }
@@ -224,16 +222,6 @@ function entryCovers(entry: AccessEntry, resource: AccessResource | undefined): 
   switch (entry.scopeKind) {
     case "instance":
       return true;
-    case "namespace":
-      // A Namespace is a prefix among the instance's own assets. An asset a workspace owns is
-      // reached through a right on that workspace, on the asset or on the instance.
-      return (
-        entry.namespace !== undefined &&
-        entry.namespace.length > 0 &&
-        resource?.name !== undefined &&
-        resource.workspaceId === undefined &&
-        resource.name.startsWith(entry.namespace)
-      );
     case "asset":
       return entry.scopeId !== undefined && resource?.assetId === entry.scopeId;
     case "workspace":

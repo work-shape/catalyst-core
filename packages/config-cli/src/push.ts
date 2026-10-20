@@ -111,7 +111,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   const deleteAssets = options.prune
     ? [...listing.values()].filter((asset) => !localKeys.has(asset.key))
     : [];
-  // A working copy of one Namespace or one workspace never names the instance's default agent.
+  // A working copy of one workspace never names the instance's default agent.
   const changesDefault =
     holdsWholeInstance(instance) &&
     selectors.length === 0 &&

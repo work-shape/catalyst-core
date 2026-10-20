@@ -111,11 +111,6 @@ export const ACTIONS = [
 
 export type PlatformAction = (typeof ACTIONS)[number];
 
-/** A Namespace prefix: lowercase words joined by single hyphens, ending in one hyphen. */
-export const NAMESPACE_PREFIX_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*-$/u;
-export const NAMESPACE_PREFIX_MIN_LENGTH = 2;
-export const NAMESPACE_PREFIX_MAX_LENGTH = 32;
-
 export type AppErrorCode = (typeof APP_ERROR_CODES)[number];
 
 /** The HTTP status every error code answers with. */
@@ -177,7 +172,7 @@ export type ProviderCheckErrorClass = (typeof PROVIDER_CHECK_ERROR_CLASSES)[numb
 
 /**
  * The immutable machine name. It is part of every operation name of the Connection
- * (`connection.<name>.<operation>`), so it holds no dot. A Namespace prefix fits in front.
+ * (`connection.<name>.<operation>`), so it holds no dot.
  */
 export const CONNECTION_NAME_PATTERN = /^[a-z][a-z0-9]*([_-][a-z0-9]+)*$/u;
 export const CONNECTION_NAME_MAX_LENGTH = 64;
@@ -210,7 +205,7 @@ export type ConnectionHealth = (typeof CONNECTION_HEALTH_STATES)[number];
 export const GRANT_HOLDER_KINDS = ["user", "service_principal", "role", "group"] as const;
 export type GrantHolderKind = (typeof GRANT_HOLDER_KINDS)[number];
 
-export const GRANT_SCOPE_KINDS = ["instance", "workspace", "namespace", "asset"] as const;
+export const GRANT_SCOPE_KINDS = ["instance", "workspace", "asset"] as const;
 export type GrantScopeKind = (typeof GRANT_SCOPE_KINDS)[number];
 
 /** Where a role's grant lies: the whole instance, one workspace or one asset. */

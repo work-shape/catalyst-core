@@ -386,8 +386,6 @@ async function renderDraftDialog(opened: ConnectionDraft) {
       { children: null, locale: "en" },
       createElement(ConnectionCreateFlow, {
         source,
-        namespaces: [],
-        mayNameFreely: true,
         checkName: async () => ({ available: true as const }),
         put: async (input) => {
           writes.push(input);

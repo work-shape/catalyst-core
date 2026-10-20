@@ -488,11 +488,17 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   expect(refused.status()).toBe(403);
 });
 
-const HELD_NAMESPACE = "e2ehold-";
-const HELD_SKILL = `${HELD_NAMESPACE}parental-leave`;
+/** The suite's server holds a skill saved into a Shared Workspace of this name. */
+const HELD_WORKSPACE = "E2E held skills";
+/**
+ * A name is the instance's once, whichever workspace holds it: each run takes its own, so a
+ * skill a stopped run left in its workspace is no write this run makes against.
+ */
+const HELD_SKILL = `e2e-held-parental-leave-${Date.now()}`;
 const HELD_TITLE = "Parental leave: frequent questions";
-const heldSkillUrl = `${apiBaseUrl}/api/v1/assets/skill/${HELD_SKILL}`;
-const namespacesUrl = `${apiBaseUrl}/api/v1/instance/access/namespaces`;
+/** The skill's address. A read names the workspace in its query, a write in its body. */
+const heldSkillBaseUrl = `${apiBaseUrl}/api/v1/assets/skill/${HELD_SKILL}`;
+const workspacesUrl = `${apiBaseUrl}/api/v1/workspaces`;
 const KEPT_PARAGRAPH = "Ask the HR team for the form.";
 const OLD_PARAGRAPH = "Tell your team lead seven weeks before the leave starts.";
 const NEW_PARAGRAPH = "Tell your team lead and the HR team eight weeks before the leave starts.";
@@ -513,8 +519,8 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
   browser,
   baseURL,
   pageErrors,
-  // The test registers a Namespace and writes a grant: it takes the turn of the specs that
-  // do so or that assert there is none, so none of them sees its rows.
+  // The test writes a grant: it takes the turn of the specs that write grants or that assert
+  // there is none, so none of them sees its rows.
   accessState: _accessState
 }) => {
   let writerId: string | undefined;
@@ -523,7 +529,14 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
   test.setTimeout(shotsDir ? 240_000 : 90_000);
   await page.setViewportSize({ width: 1280, height: 900 });
   await signIn(page, reviewer);
-  const answerOf = (data: object) => requestWithOrigin(page, "put", heldSkillUrl, { data });
+  const created = await requestWithOrigin(page, "post", workspacesUrl, {
+    data: { name: HELD_WORKSPACE }
+  });
+  expect(created.ok()).toBe(true);
+  const workspaceId = idOf(await created.json());
+  const heldSkillUrl = `${heldSkillBaseUrl}?workspaceId=${workspaceId}`;
+  const answerOf = (data: object) =>
+    requestWithOrigin(page, "put", heldSkillBaseUrl, { data: { ...data, workspaceId } });
   const openRow = async (heading: string) => {
     await page.goto("/inbox");
     await page.getByRole("tab", { name: /^To decide/u }).click();
@@ -532,7 +545,8 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     await expect(row).toHaveCount(1);
     await expect(row).toContainText(heading);
     await expect(row).toContainText("E2E Superadmin");
-    await expect(row).not.toContainText(HELD_NAMESPACE);
+    // The heading names the skill by its title, not by its name.
+    await expect(row).not.toContainText(HELD_SKILL);
     await shoot(
       page,
       `inbox-row-${heading.startsWith("New") ? "new-skill" : "skill-change"}`,
@@ -545,17 +559,14 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
   const call = page.getByTestId("operation-call");
   const headline = call.getByTestId("operation-call-headline");
 
-  const registered = await requestWithOrigin(page, "post", namespacesUrl, {
-    data: { prefix: HELD_NAMESPACE, displayName: "E2E held skills" }
-  });
-  expect(registered.ok()).toBe(true);
   try {
-    // The instance holds a skill saved into this Namespace, the superadmin's own too.
+    // The instance holds a skill saved into this workspace, the superadmin's own too. The
+    // name is this run's, so the skill is new.
     expect(
       (
         await answerOf({
           config: heldSkill(OLD_PARAGRAPH),
-          expectedRevision: await assetBaseRevision(page, heldSkillUrl)
+          expectedRevision: null
         })
       ).status()
     ).toBe(202);
@@ -638,7 +649,7 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
       email: `e2e-held-writer-${stamp}@example.test`,
       password: `e2e-held-writer-${stamp}`
     };
-    const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/users`, {
+    const user = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/users`, {
       data: {
         displayLabel: "E2E Held Writer",
         email: writer.email,
@@ -646,8 +657,8 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
         passwordSignIn: { password: writer.password }
       }
     });
-    expect(created.ok()).toBe(true);
-    writerId = idOf(await created.json());
+    expect(user.ok()).toBe(true);
+    writerId = idOf(await user.json());
     const granted = await requestWithOrigin(page, "post", grantsUrl, {
       data: {
         holderKind: "user",
@@ -667,10 +678,11 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     const writerPage = await writerContext.newPage();
     await signIn(writerPage, writer);
     expect((await writerPage.request.get(heldSkillUrl)).status()).toBe(403);
-    const asked = await requestWithOrigin(writerPage, "put", heldSkillUrl, {
+    const asked = await requestWithOrigin(writerPage, "put", heldSkillBaseUrl, {
       data: {
         config: heldSkill(NEW_PARAGRAPH),
-        expectedRevision: await assetRevision(page, heldSkillUrl)
+        expectedRevision: await assetRevision(page, heldSkillUrl),
+        workspaceId
       }
     });
     expect(asked.status()).toBe(202);
@@ -710,13 +722,10 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     if (writerId) {
       await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/instance/users/${writerId}`);
     }
-    const found = await page.request.get(heldSkillUrl);
-    if (found.ok()) {
-      await requestWithOrigin(page, "post", `${heldSkillUrl}/delete`, {
-        data: { expectedRevision: await assetRevision(page, heldSkillUrl) }
-      });
-    }
-    await requestWithOrigin(page, "delete", `${namespacesUrl}/${HELD_NAMESPACE}`);
+    // The skill goes with the workspace that owns it.
+    await requestWithOrigin(page, "delete", `${workspacesUrl}/${workspaceId}`, {
+      data: { confirmName: HELD_WORKSPACE }
+    });
   }
 });
 

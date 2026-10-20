@@ -2,7 +2,7 @@ import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ChatServerOptions } from "@work-shape/catalyst-server";
 import { asUserId, type PlatformStores } from "@work-shape/catalyst-core";
-import { clientInstanceId, setupAccessInstance } from "./support/access-instance";
+import { agent, clientInstanceId, setupAccessInstance } from "./support/access-instance";
 import { settled } from "./support/postgres-concurrency-harness";
 import { fileTestDatabaseUrl } from "./support/test-database";
 
@@ -160,7 +160,6 @@ async function setup() {
     email: "tim@example.test",
     roles: ["user"]
   });
-  await t.createNamespace("kai-");
   return { ...t, manager, tim, signIns };
 }
 
@@ -194,8 +193,18 @@ describe("the account checked is the account written", () => {
   // Fails without the check under the locks: Lena is renamed.
   it("refuses a change of a user given a right after the call was admitted", async () => {
     const t = await setup();
+    const workspaceId = await t.sharedWorkspace("Kai");
     beforeNextLocks(t.stores, async () => {
-      await t.seedHistoricalGrant(t.lena.id, "agent.write", { namespace: "kai-" });
+      await t.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: t.lena.id,
+        action: "agent.write",
+        effect: "allow",
+        scopeKind: "workspace",
+        scopeId: workspaceId,
+        grantedBy: asUserId(t.admin.id)
+      });
     });
     const renamed = await t.call(t.manager.id, "users.update", {
       params: { userId: t.lena.id },
@@ -264,6 +273,7 @@ describe("a deny of the giver", () => {
   it("committed after the call was admitted refuses the grant", async () => {
     const t = await setup();
     await t.putAgent(t.admin.id, "kai-helper");
+    const assetId = await t.assetId("agent", "kai-helper");
     beforeNextLocks(t.stores, async () => {
       await t.stores.access.createGrant({
         clientInstanceId,
@@ -271,8 +281,8 @@ describe("a deny of the giver", () => {
         holderId: t.admin.id,
         action: "agent.read",
         effect: "deny",
-        scopeKind: "namespace",
-        namespace: "kai-",
+        scopeKind: "asset",
+        scopeId: assetId,
         grantedBy: asUserId(t.root.id)
       });
     });
@@ -286,7 +296,7 @@ describe("a deny of the giver", () => {
           action: "agent.read",
           effect: "allow",
           scopeKind: "asset",
-          scopeId: await t.assetId("agent", "kai-helper")
+          scopeId: assetId
         }
       },
       t.forbidden("agent.read", "denied")
@@ -296,18 +306,18 @@ describe("a deny of the giver", () => {
 });
 
 describe("a change of an account and another write of rights", () => {
-  /** Lena may write one agent in `kai-`, and a deny of the Namespace takes it away. */
+  /** Lena may write one agent of a workspace, and a deny on the workspace takes it away. */
   async function lenaDenied() {
     const t = await setup();
-    expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
+    const workspaceId = await t.sharedWorkspace("Kai");
+    const put = await t.call(t.admin.id, "assets.put", {
+      params: { kind: "agent", name: "kai-helper" },
+      payload: { config: agent("kai-helper"), workspaceId }
+    });
+    expect(put.statusCode).toBe(200);
     const assetId = await t.assetId("agent", "kai-helper");
     await t.grant(t.lena.id, "agent.write", { assetId });
-    const deny = await t.seedHistoricalGrant(
-      t.lena.id,
-      "agent.write",
-      { namespace: "kai-" },
-      "deny"
-    );
+    const deny = await t.grant(t.lena.id, "agent.write", { workspaceId }, "deny");
     return { ...t, deny };
   }
 

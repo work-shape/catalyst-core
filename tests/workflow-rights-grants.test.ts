@@ -111,7 +111,7 @@ describe("a right on a Workflow given through grant administration", () => {
     ] as const) {
       expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(["asset", "instance"]);
     }
-    // RIGHTS-1c: deleting is new and has no Namespace; the run data is one Workflow's (D4).
+    // RIGHTS-1c: deleting is given as reading is; the run data is one Workflow's (D4).
     expect(GRANTABLE_ACTION_SCOPES[WORKFLOW_ACTIONS.delete]).toEqual(["asset", "instance"]);
     expect(GRANTABLE_ACTION_SCOPES[WORKFLOW_ACTIONS.readRunData]).toEqual(["asset"]);
   });
@@ -242,7 +242,7 @@ describe("a right on a Workflow given through grant administration", () => {
     expect(await rowsOf(t, t.kai.id)).toHaveLength(2);
   });
 
-  it("writes a row in a Namespace, on one Workflow or for the instance, and none for a workspace or a place the action has none", async () => {
+  it("writes a row on one Workflow or for the instance, and none for a workspace or a place the action has none", async () => {
     const t = await ready();
     const notify = await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY);
     const workspaceId = await t.sharedWorkspace("Team");
@@ -267,10 +267,10 @@ describe("a right on a Workflow given through grant administration", () => {
         "invalid_scope"
       );
     }
-    // The rights 1c opens have no Namespace, and the run data is given on one Workflow only.
-    await t.createNamespace("notify-");
+    // The rights 1c opens have no workspace either, and the run data is given on one Workflow
+    // only.
     for (const action of [WORKFLOW_ACTIONS.delete, WORKFLOW_ACTIONS.readRunData]) {
-      await refusedFor(action, { scopeKind: "namespace", namespace: "notify-" }, "invalid_scope");
+      await refusedFor(action, { scopeKind: "workspace", scopeId: workspaceId }, "invalid_scope");
     }
     await refusedFor(WORKFLOW_ACTIONS.readRunData, { scopeKind: "instance" }, "invalid_scope");
     expect(await rowsOf(t, t.kai.id)).toEqual([]);
@@ -285,15 +285,27 @@ describe("a right on a Workflow given through grant administration", () => {
     expect(await rowsOf(t, t.kai.id)).toEqual([[WORKFLOW_ACTIONS.delete, "asset"]]);
     await revoke(t, grantSchema.parse(deleting.json()).id);
 
-    // A Namespace covers the Workflows whose names start with its prefix, also later ones.
-    await t.seedHistoricalGrant(t.kai.id, WORKFLOW_ACTIONS.use, { namespace: "notify-" });
-    expect(await listed(t, t.kai.id)).toEqual([[NOTIFY, ["workflow.use"]]]);
+    // A row for the instance covers every Workflow, and opens nothing beside its action.
+    await t.expectOk(t.admin.id, "permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: WORKFLOW_ACTIONS.use,
+        scopeKind: "instance"
+      }
+    });
+    expect(await rowsOf(t, t.kai.id)).toEqual([[WORKFLOW_ACTIONS.use, "instance"]]);
+    expect((await listed(t, t.kai.id)).sort()).toEqual([
+      [ARCHIVE, ["workflow.use"]],
+      [NOTIFY, ["workflow.use"]]
+    ]);
     await t.expectOk(t.kai.id, "workflows.start", startOf(NOTIFY));
+    await t.expectOk(t.kai.id, "workflows.start", startOf(ARCHIVE));
     await t.expectRefused(
       t.kai.id,
-      "workflows.start",
-      startOf(ARCHIVE),
-      t.forbidden("workflow.use", "no_grant")
+      "workflows.list_runs",
+      { params: { workflow: ARCHIVE } },
+      t.forbidden("workflow.read", "no_grant")
     );
   });
 
@@ -613,14 +625,14 @@ describe("a right on a Workflow given through grant administration", () => {
       );
       expect(error.details, action).toMatchObject({ reason: "action_not_grantable_to_principal" });
     }
-    await t.createNamespace("notify-");
-    const inNamespace = await t.expectRefused(
+    const workspaceId = await t.sharedWorkspace("Team");
+    const inWorkspace = await t.expectRefused(
       t.root.id,
       "permissions.grant",
-      toPrincipal(WORKFLOW_ACTIONS.use, { scopeKind: "namespace", namespace: "notify-" }),
+      toPrincipal(WORKFLOW_ACTIONS.use, { scopeKind: "workspace", scopeId: workspaceId }),
       { status: 422, code: "VALIDATION_FAILED" }
     );
-    expect(inNamespace.details).toMatchObject({ reason: "invalid_scope" });
+    expect(inWorkspace.details).toMatchObject({ reason: "invalid_scope" });
     // Who does not administer principals gives one nothing; an administrator who is no
     // superadmin gives it a right she holds herself (RIGHTS-1a).
     await t.expectRefused(

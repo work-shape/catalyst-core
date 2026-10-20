@@ -25,103 +25,15 @@ import { createTestToolRunner } from "./support/tool-runner";
 
 afterEach(() => vi.useRealTimers());
 
-// Administration of grants and Namespaces at the HTTP boundary: who may write what, the tenant
+// Administration of grants at the HTTP boundary: who may write what, the tenant
 // and holder boundaries of the store, audit, and the reference check of a tool call. The
 // grants themselves are in `chat-server-access.test.ts`.
 
-describe("Namespace administration", () => {
-  it("refuses a prefix that overlaps a registered one, in either direction", async () => {
-    const t = await setup();
-    await t.createNamespace("kai-");
-    for (const prefix of ["kai-x-", "kai-"]) {
-      await t.expectRefused(
-        t.admin.id,
-        "namespaces.create",
-        { payload: { prefix, displayName: prefix } },
-        { status: 409, code: "CONFLICT", details: { reason: "namespace_overlap", prefix: "kai-" } }
-      );
-    }
-    await t.createNamespace("team-x-");
-    await t.expectRefused(
-      t.admin.id,
-      "namespaces.create",
-      { payload: { prefix: "team-", displayName: "Team" } },
-      { status: 409, code: "CONFLICT", details: { reason: "namespace_overlap", prefix: "team-x-" } }
-    );
-    // A prefix that shares letters but not a whole word does not overlap.
-    await t.createNamespace("kaiser-");
-    await t.createNamespace("team-y-");
-  });
-
-  it("refuses a prefix that is not lowercase words ending in one hyphen", async () => {
-    const t = await setup();
-    for (const prefix of [
-      "kai",
-      "Kai-",
-      "-kai-",
-      "kai--",
-      "k",
-      "9kai-",
-      "kai_x-",
-      "",
-      "a".repeat(32) + "-"
-    ]) {
-      await t.expectRefused(
-        t.admin.id,
-        "namespaces.create",
-        { payload: { prefix, displayName: "Bad" } },
-        { status: 422, code: "VALIDATION_FAILED" }
-      );
-    }
-    await t.createNamespace("a-");
-    await t.createNamespace(`${"b".repeat(31)}-`);
-  });
-
-  it("refuses to delete a Namespace a grant row names, and deletes it after the revoke", async () => {
-    const t = await setup();
-    await t.createNamespace("kai-");
-    const grantId = await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
-    await t.expectOk(t.admin.id, "assets.put", {
-      params: { kind: "skill", name: "kai-notes" },
-      payload: { config: skill("kai-notes") }
-    });
-
-    const listed = z
-      .object({ items: z.array(z.object({ prefix: z.string() }).loose()) })
-      .parse((await t.expectOk(t.admin.id, "namespaces.list")).json());
-    expect(listed.items).toEqual([
-      expect.objectContaining({ prefix: "kai-", grantCount: 1, assetCount: 2 })
-    ]);
-
-    await t.expectRefused(
-      t.admin.id,
-      "namespaces.delete",
-      { params: { prefix: "kai-" } },
-      { status: 409, code: "CONFLICT", details: { reason: "namespace_in_use", grantCount: 1 } }
-    );
-    await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId } });
-    await t.expectOk(t.admin.id, "namespaces.delete", { params: { prefix: "kai-" } });
-    await t.expectRefused(
-      t.admin.id,
-      "namespaces.delete",
-      { params: { prefix: "kai-" } },
-      { status: 404, code: "NOT_FOUND" }
-    );
-    await t.expectRefused(
-      t.admin.id,
-      "namespaces.update",
-      { params: { prefix: "kai-" }, payload: { displayName: "Gone" } },
-      { status: 404, code: "NOT_FOUND" }
-    );
-  });
-});
-
 describe("who may write a grant, and what a grant may say", () => {
-  it("refuses a user without users.manage administration of other people and Namespaces", async () => {
+  it("refuses a user without users.manage administration of other people", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    const grantId = await t.seedHistoricalGrant(t.lena.id, "agent.read", { namespace: "kai-" });
+    const workspaceId = await t.sharedWorkspace("Kai");
+    const grantId = await t.grant(t.lena.id, "agent.read", { workspaceId });
     const calls: Array<[TestOperationName, TestCallInput]> = [
       [
         "permissions.grant",
@@ -130,31 +42,26 @@ describe("who may write a grant, and what a grant may say", () => {
             holderKind: "user",
             holderId: t.kai.id,
             action: "agent.write",
-            scopeKind: "namespace",
-            namespace: "kai-"
+            scopeKind: "workspace",
+            scopeId: workspaceId
           }
         }
       ],
       ["permissions.revoke", { params: { grantId } }],
       ["permissions.list", {}],
       ["permissions.effective", { query: { holderKind: "user", holderId: t.lena.id } }],
-      ["namespaces.create", { payload: { prefix: "mine-", displayName: "Mine" } }],
-      ["namespaces.update", { params: { prefix: "kai-" }, payload: { displayName: "Mine" } }],
-      ["namespaces.list", {}],
-      ["namespaces.delete", { params: { prefix: "kai-" } }]
+      ["workspaces.limits.list", {}]
     ];
-    expect(calls).toHaveLength(8);
     for (const [operation, input] of calls) {
       await t.expectRefused(t.kai.id, operation, input, t.forbidden("users.manage", "no_grant"));
     }
     // Nothing was written, and the administrator may do each of them.
     expect(await t.stores.access.listGrants({ clientInstanceId })).toHaveLength(1);
-    expect(await t.stores.access.listNamespaces({ clientInstanceId })).toHaveLength(1);
     await t.expectOk(t.admin.id, "permissions.list");
     await t.expectOk(t.admin.id, "permissions.effective", {
       query: { holderKind: "user", holderId: t.kai.id }
     });
-    await t.expectOk(t.admin.id, "namespaces.list");
+    await t.expectOk(t.admin.id, "workspaces.limits.list");
   });
 
   it("refuses an administrator whose users.manage was revoked in the legacy column", async () => {
@@ -164,13 +71,18 @@ describe("who may write a grant, and what a grant may say", () => {
       userId: t.admin.id,
       permissions: ["!users.manage"]
     });
-    await t.expectRefused(t.admin.id, "namespaces.list", {}, t.forbidden("users.manage", "denied"));
-    await t.expectOk(t.root.id, "namespaces.list");
+    await t.expectRefused(
+      t.admin.id,
+      "permissions.list",
+      {},
+      t.forbidden("users.manage", "denied")
+    );
+    await t.expectOk(t.root.id, "permissions.list");
   });
 
   it("refuses a service principal: the operations are a person's", async () => {
     const t = await setup();
-    for (const operation of ["permissions.list", "namespaces.list"] as const) {
+    for (const operation of ["permissions.list", "workspaces.limits.list"] as const) {
       const response = await t.instance.call(operation, {
         headers: { [SERVICE_HEADER]: "sp_test" }
       });
@@ -188,7 +100,6 @@ describe("who may write a grant, and what a grant may say", () => {
 
   it("writes a row for a user, six actions, a workspace or an asset, and nothing else", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
     expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
     const helper = await t.assetId("agent", "kai-helper");
     const workspaceId = await t.sharedWorkspace("Grant scope");
@@ -207,28 +118,17 @@ describe("who may write a grant, and what a grant may say", () => {
         "invalid_scope"
       ],
       [{ ...base, holderKind: "group" }, 422, "VALIDATION_FAILED", "invalid_scope"],
+      [{ ...base, scopeKind: "instance" }, 422, "VALIDATION_FAILED", "invalid_scope"],
       [
-        { ...base, scopeKind: "instance", namespace: undefined },
-        422,
-        "VALIDATION_FAILED",
-        "invalid_scope"
-      ],
-      [
-        { ...base, scopeKind: "workspace", namespace: undefined, scopeId: "workspace-1" },
+        { ...base, scopeKind: "workspace", scopeId: "workspace-1" },
         422,
         "VALIDATION_FAILED",
         "invalid_scope"
       ],
       [{ ...base, scopeId: undefined }, 422, "VALIDATION_FAILED", "invalid_scope"],
-      [{ ...base, namespace: "kai-" }, 422, "VALIDATION_FAILED", "invalid_scope"],
+      [{ ...base, scopeKind: "asset" }, 422, "VALIDATION_FAILED", "invalid_scope"],
       [
-        { ...base, scopeKind: "asset", namespace: undefined },
-        422,
-        "VALIDATION_FAILED",
-        "invalid_scope"
-      ],
-      [
-        { ...base, scopeKind: "asset", namespace: undefined, scopeId: "asset-missing" },
+        { ...base, scopeKind: "asset", scopeId: "asset-missing" },
         422,
         "VALIDATION_FAILED",
         "invalid_scope"
@@ -239,15 +139,12 @@ describe("who may write a grant, and what a grant may say", () => {
           ...base,
           action: "skill.write",
           scopeKind: "asset",
-          namespace: undefined,
           scopeId: helper
         },
         422,
         "VALIDATION_FAILED",
         "invalid_scope"
       ],
-      [{ ...base, namespace: "lena-" }, 422, "VALIDATION_FAILED", "invalid_scope"],
-      [{ ...base, namespace: "kai" }, 422, "VALIDATION_FAILED", "invalid_scope"],
       [{ ...base, action: "users.manage" }, 422, "VALIDATION_FAILED", "action_not_grantable"],
       [{ ...base, action: "assets.release" }, 422, "VALIDATION_FAILED", "action_not_grantable"],
       [{ ...base, action: "skill.approve" }, 422, "VALIDATION_FAILED", "action_not_grantable"],
@@ -265,6 +162,13 @@ describe("who may write a grant, and what a grant may say", () => {
       );
       expect(error.details, JSON.stringify(payload)).toMatchObject({ reason });
     }
+    // A scope kind outside instance, workspace and asset is no scope kind of the request.
+    await t.expectRefused(
+      t.root.id,
+      "permissions.grant",
+      { payload: { ...base, scopeKind: "prefix", scopeId: undefined } },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
     expect(await t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
 
     for (const action of [
@@ -289,7 +193,6 @@ describe("who may write a grant, and what a grant may say", () => {
 
   it("writes no row for a holder of another client instance", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
     const foreigner = await t.stores.users.createUser({
       clientInstanceId: otherClientInstanceId,
       displayLabel: "Foreign",
@@ -319,16 +222,16 @@ describe("who may write a grant, and what a grant may say", () => {
 
   it("hides the rows a superadmin holds from an administrator's list", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    const kaiGrant = await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const workspaceId = await t.sharedWorkspace("Kai");
+    const kaiGrant = await t.grant(t.kai.id, "agent.write", { workspaceId });
     const rootGrant = await t.stores.access.createGrant({
       clientInstanceId,
       holderKind: "user",
       holderId: t.root.id,
       action: "agent.read",
       effect: "allow",
-      scopeKind: "namespace",
-      namespace: "kai-",
+      scopeKind: "workspace",
+      scopeId: workspaceId,
       grantedBy: t.root.id
     });
     const page = z.object({ items: z.array(z.object({ id: z.string() })) });
@@ -345,9 +248,9 @@ describe("who may write a grant, and what a grant may say", () => {
 
   it("lists rows by holder and shows the sources of a holder's rights", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    const allowId = await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-    await t.seedHistoricalGrant(t.lena.id, "skill.read", { namespace: "kai-" }, "deny");
+    const workspaceId = await t.sharedWorkspace("Kai");
+    const allowId = await t.grant(t.kai.id, "agent.write", { workspaceId });
+    await t.grant(t.lena.id, "skill.read", { workspaceId }, "deny");
 
     const page = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
     const all = page.parse((await t.expectOk(t.admin.id, "permissions.list")).json());
@@ -366,8 +269,8 @@ describe("who may write a grant, and what a grant may say", () => {
         holderId: t.kai.id,
         action: "agent.write",
         effect: "allow",
-        scopeKind: "namespace",
-        namespace: "kai-",
+        scopeKind: "workspace",
+        scopeId: workspaceId,
         grantedBy: t.admin.id,
         createdAt: expect.any(String)
       }
@@ -384,8 +287,8 @@ describe("who may write a grant, and what a grant may say", () => {
         {
           action: "agent.write",
           effect: "allow",
-          scopeKind: "namespace",
-          namespace: "kai-",
+          scopeKind: "workspace",
+          scopeId: workspaceId,
           source: "grant"
         }
       ]
@@ -410,7 +313,6 @@ describe("who may write a grant, and what a grant may say", () => {
 describe("what a grant row says about the asset it names", () => {
   it("names the asset of an asset row, and says when a deny outlived it", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
     await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "skill", name: "kai-secret" },
       payload: { config: skill("kai-secret") }
@@ -435,7 +337,7 @@ describe("what a grant row says about the asset it names", () => {
       name: "kai-secret",
       active: true
     });
-    await t.seedHistoricalGrant(t.kai.id, "skill.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "skill.write", { workspaceId: await t.sharedWorkspace("Kai") });
 
     await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "skill", name: "kai-secret" },
@@ -445,7 +347,7 @@ describe("what a grant row says about the asset it names", () => {
     const listed = z
       .object({ items: z.array(scopeAsset) })
       .parse((await t.expectOk(t.admin.id, "permissions.list")).json());
-    // The deny is still listed and says which name it refuses; the Namespace row names no asset.
+    // The deny is still listed and says which name it refuses; the workspace row names no asset.
     expect(listed.items.map((row) => row.scopeAsset)).toEqual(
       expect.arrayContaining([{ kind: "skill", name: "kai-secret", active: false }, undefined])
     );
@@ -454,26 +356,22 @@ describe("what a grant row says about the asset it names", () => {
 });
 
 describe("tenant and holder boundaries of the access store", () => {
-  it("loads no row and no Namespace of another client instance", async () => {
+  it("loads no row of another client instance", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const workspaceId = await t.sharedWorkspace("Kai");
+    await t.grant(t.kai.id, "agent.write", { workspaceId });
 
     const own = await t.stores.access.loadPersistedAccess({
       clientInstanceId,
       holder: { kind: "user", id: t.kai.id }
     });
     expect(own.grants).toHaveLength(1);
-    expect(await t.stores.access.listNamespaces({ clientInstanceId })).toHaveLength(1);
 
     const foreign = await t.stores.access.loadPersistedAccess({
       clientInstanceId: otherClientInstanceId,
       holder: { kind: "user", id: t.kai.id }
     });
     expect(foreign.grants).toEqual([]);
-    expect(
-      await t.stores.access.listNamespaces({ clientInstanceId: otherClientInstanceId })
-    ).toEqual([]);
 
     const actor = (instanceId: typeof clientInstanceId): AuthenticatedUser => ({
       id: t.kai.id,
@@ -487,12 +385,14 @@ describe("tenant and holder boundaries of the access store", () => {
     const authorizer = createAuthorizer(t.stores.access);
     expect(
       (await authorizer.forActor(actor(clientInstanceId))).authorize("agent.write", {
-        name: "kai-helper"
+        name: "kai-helper",
+        workspaceId
       })
     ).toEqual({ allowed: true, source: "grant" });
     expect(
       (await authorizer.forActor(actor(otherClientInstanceId))).authorize("agent.write", {
-        name: "kai-helper"
+        name: "kai-helper",
+        workspaceId
       })
     ).toEqual({ allowed: false, reason: "no_grant" });
 
@@ -513,30 +413,20 @@ describe("tenant and holder boundaries of the access store", () => {
         holderId: t.kai.id,
         action: "agent.write",
         effect: "allow",
-        scopeKind: "namespace",
-        namespace: "kai-",
+        scopeKind: "workspace",
+        scopeId: workspaceId,
         grantedBy: asUserId(t.admin.id)
       })
     ).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
-      details: { reason: "unknown_namespace" }
+      details: { reason: "invalid_scope" }
     });
-    // The same prefix is free in the other instance.
-    await expect(
-      t.stores.access.createNamespace({
-        clientInstanceId: otherClientInstanceId,
-        prefix: "kai-",
-        displayName: "Theirs",
-        createdBy: asUserId(t.admin.id)
-      })
-    ).resolves.toMatchObject({ prefix: "kai-" });
     expect(await t.stores.access.listGrants({ clientInstanceId })).toHaveLength(1);
   });
 
   it("loads only the holder's own rows, by kind and id", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.write", { workspaceId: await t.sharedWorkspace("Kai") });
 
     const lena = await t.stores.access.loadPersistedAccess({
       clientInstanceId,
@@ -594,10 +484,10 @@ describe("tenant and holder boundaries of the access store", () => {
 describe("deleting a holder", () => {
   it("deletes the user's grant rows with the user and leaves every other holder's", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
-    await t.seedHistoricalGrant(t.kai.id, "skill.read", { namespace: "kai-" }, "deny");
-    const lenaGrant = await t.seedHistoricalGrant(t.lena.id, "agent.read", { namespace: "kai-" });
+    const workspaceId = await t.sharedWorkspace("Kai");
+    await t.grant(t.kai.id, "agent.write", { workspaceId });
+    await t.grant(t.kai.id, "skill.read", { workspaceId }, "deny");
+    const lenaGrant = await t.grant(t.lena.id, "agent.read", { workspaceId });
 
     await t.expectOk(t.root.id, "users.delete", { params: { userId: t.kai.id } });
 
@@ -609,15 +499,11 @@ describe("deleting a holder", () => {
       holder: { kind: "user", id: t.kai.id }
     });
     expect(persisted.grants).toEqual([]);
-    // The Namespace is held by Lena's row alone, and is free after its revoke.
-    await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId: lenaGrant } });
-    await t.expectOk(t.admin.id, "namespaces.delete", { params: { prefix: "kai-" } });
   });
 
   it("keeps the rows when the deletion is refused", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.write", { workspaceId: await t.sharedWorkspace("Kai") });
     await t.expectRefused(
       t.lena.id,
       "users.delete",
@@ -628,30 +514,29 @@ describe("deleting a holder", () => {
   });
 });
 
-describe("audit of grants and Namespaces", () => {
+describe("audit of grants and build limits", () => {
   it("records each write with holder id, action and scope, and no name or list", async () => {
     const t = await setup();
     vi.useFakeTimers({ toFake: ["Date"], now: new Date() });
-    await t.createNamespace("kai-", { allowedToolNames: ["known.tool"] });
     const workspaceId = await t.sharedWorkspace("Audit scope");
     const grantId = await t.grant(t.kai.id, "agent.write", { workspaceId });
-    await t.expectOk(t.admin.id, "namespaces.update", {
-      params: { prefix: "kai-" },
-      payload: { displayName: "Kai Private Name", allowedModelBindingIds: ["plain"] }
+    await t.expectOk(t.admin.id, "workspaces.limits.update", {
+      params: { collaborationWorkspaceId: workspaceId },
+      payload: { allowedToolNames: ["known.tool"], allowedModelBindingIds: ["plain"] }
     });
     await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId } });
-    await t.expectOk(t.admin.id, "namespaces.delete", { params: { prefix: "kai-" } });
     // A refused write records no governance event of these types.
     await t.expectRefused(
       t.kai.id,
-      "namespaces.create",
-      { payload: { prefix: "mine-", displayName: "Mine" } },
+      "workspaces.limits.update",
+      { params: { collaborationWorkspaceId: workspaceId }, payload: { allowedToolNames: null } },
       t.forbidden("users.manage", "no_grant")
     );
 
     const events = (await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 }))
       .filter(
-        (event) => event.type.startsWith("permission.") || event.type.startsWith("namespace.")
+        (event) =>
+          event.type.startsWith("permission.") || event.type === "collaboration_workspace.updated"
       )
       .sort((left, right) => left.type.localeCompare(right.type));
     const grantMetadata = {
@@ -673,39 +558,31 @@ describe("audit of grants and Namespaces", () => {
     ).toEqual(
       [
         {
-          type: "namespace.created",
-          status: "success",
-          subject: "kai-",
-          metadata: { prefix: "kai-", restrictsTools: true, restrictsModels: false }
-        },
-        {
           type: "permission.granted",
           status: "success",
           subject: grantId,
           metadata: grantMetadata
         },
         {
-          type: "namespace.updated",
+          type: "collaboration_workspace.updated",
           status: "success",
-          subject: "kai-",
-          metadata: { prefix: "kai-", restrictsTools: true, restrictsModels: true }
+          subject: workspaceId,
+          metadata: {
+            changedFields: ["allowedToolNames", "allowedModelBindingIds"],
+            restrictsTools: true,
+            restrictsModels: true
+          }
         },
         {
           type: "permission.revoked",
           status: "success",
           subject: grantId,
           metadata: grantMetadata
-        },
-        {
-          type: "namespace.deleted",
-          status: "success",
-          subject: "kai-",
-          metadata: { prefix: "kai-", restrictsTools: true, restrictsModels: true }
         }
       ].sort((left, right) => left.type.localeCompare(right.type))
     );
     const written = JSON.stringify(events);
-    for (const payload of ["Kai Private Name", "known.tool", "plain", '"Kai"', '"Lena"']) {
+    for (const payload of ["known.tool", "plain", '"Kai"', '"Lena"']) {
       expect(written).not.toContain(payload);
     }
     for (const event of events) {

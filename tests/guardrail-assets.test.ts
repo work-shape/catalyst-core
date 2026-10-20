@@ -380,16 +380,17 @@ describe("a workspace guardrail", () => {
     expect(refusalOf(unpublish).details).toMatchObject({ action: "guardrail.publish" });
   });
 
-  it("is granted for a workspace only, never in a Namespace", async () => {
+  it("is granted for a workspace or the instance, never on one guardrail", async () => {
     const t = await instance();
+    expect((await t.put(t.admin.id, "kai-rule", guardrail("kai-rule"))).statusCode).toBe(200);
     const response = await t.call(t.admin.id, "permissions.grant", {
       payload: {
         holderKind: "user",
         holderId: t.kai.id,
         action: "guardrail.publish",
         effect: "allow",
-        scopeKind: "namespace",
-        namespace: "kai-"
+        scopeKind: "asset",
+        scopeId: await t.assetId("guardrail", "kai-rule")
       }
     });
     expect(refusalOf(response).details?.reason).toBe("invalid_scope");

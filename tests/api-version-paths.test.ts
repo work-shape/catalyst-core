@@ -199,10 +199,6 @@ describe("the operation catalog", () => {
         "me.model_preference.set  PUT /api/v1/me/model-preference",
         "me.password.change  POST /api/v1/me/password",
         "me.update  PATCH /api/v1/me",
-        "namespaces.create  POST /api/v1/instance/access/namespaces",
-        "namespaces.delete  DELETE /api/v1/instance/access/namespaces/:prefix",
-        "namespaces.list  GET /api/v1/instance/access/namespaces",
-        "namespaces.update  PATCH /api/v1/instance/access/namespaces/:prefix",
         "openapi.get  GET /api/v1/openapi.json",
         "operations.decide  POST /api/v1/operations/runs/:runId/decision",
         "operations.get_run  GET /api/v1/operations/runs/:runId",
@@ -476,8 +472,8 @@ describe("a running instance", () => {
     }
     // Each operation moved. Two were dropped: the alias, and the title generation, which is
     // the job conversation.generate_title now. The reference of the instance was the one
-    // addition of that release: it never had an unversioned path. The Operation Runs, grants
-    // and Namespaces came after it, then the background jobs, then a person's own Approval
+    // addition of that release: it never had an unversioned path. The Operation Runs and
+    // grants came after it, then the background jobs, then a person's own Approval
     // Requests, then the list of modules, then the infrastructure and its check. The five
     // asset addresses moved once more, to `/api/v1/assets`, and the list, the check and the
     // sync of assets came with them. Then the Pages of a conversation, and the check of a sync.
@@ -497,10 +493,6 @@ describe("a running instance", () => {
       "permissions.revoke",
       "permissions.list",
       "permissions.effective",
-      "namespaces.create",
-      "namespaces.update",
-      "namespaces.list",
-      "namespaces.delete",
       "instance.jobs.summary",
       "instance.jobs.list",
       "instance.jobs.retry",

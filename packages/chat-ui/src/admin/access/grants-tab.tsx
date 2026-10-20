@@ -107,8 +107,6 @@ function scopeLabel(grant: PermissionGrantRow, t: Translate, names: ScopeNames):
   switch (grant.scopeKind) {
     case "instance":
       return t("access.scopeWholeInstance");
-    case "namespace":
-      return t("access.scopeNamespace", { prefix: grant.namespace ?? "" });
     case "workspace": {
       const name = grant.scopeId === undefined ? undefined : names.workspace(grant.scopeId);
       return name === undefined

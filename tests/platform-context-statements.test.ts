@@ -27,11 +27,10 @@ vi.mock("postgres", async (importOriginal) => {
 describe("platform.context.get statements", () => {
   // Fails without the change: the read grants on single assets were read with a second load of
   // the holder's status and grant rows, two statements more on every signed-in person's request.
-  it("reads the caller's grant rows once, with grants on single assets or with none", async () => {
+  it("reads the caller's grant rows once, with grants on single assets and in a workspace or with none", async () => {
     const t = await setupConnectionInstance();
     const a = await t.seed("alpha");
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.read", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.read", { workspaceId: await t.sharedWorkspace("Team") });
     await t.grant(t.kai.id, "connection.read", { assetId: a });
     await t.grant(t.kai.id, "connection.use", { assetId: a });
 
@@ -55,18 +54,18 @@ describe("platform.context.get statements", () => {
     expect(without.grantReads).toBe(1);
 
     const withGrants = await statementsOf(t.kai.id);
-    expect(withGrants.context.assetActions).toEqual(["connection.read"]);
+    expect(withGrants.context.assetActions).toEqual(["agent.read", "connection.read"]);
     expect(withGrants.grantReads).toBe(1);
     expect(withGrants.count).toBe(without.count);
-    // Authentication, authorization's one load of the holder and the grant rows, the
-    // Namespace records, and the Shared Workspaces and the caller's own, whose rights the
-    // context names (WS-OWN-1a).
+    // Authentication, authorization's one load of the holder and the grant rows, and the
+    // Shared Workspaces and the caller's own, whose rights the context names (WS-OWN-1a).
     expect(withGrants.count).toBe(CONTEXT_STATEMENTS);
   });
 });
 
 /**
- * What `platform.context.get` sent before it named `assetActions`: the test sign-in reads the
- * person's record in one statement, as the evaluator reads the rights from the rows (AP-4).
+ * What `platform.context.get` sent before it named `assetActions`, less the read of the
+ * retired name-prefix records: the test sign-in reads the person's record in one statement,
+ * as the evaluator reads the rights from the rows (AP-4).
  */
-const CONTEXT_STATEMENTS = 6;
+const CONTEXT_STATEMENTS = 5;

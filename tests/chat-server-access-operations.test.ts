@@ -9,7 +9,7 @@ import {
 } from "./support/access-instance";
 import type { TestCallInput, TestOperationName } from "./support/operations";
 
-// The five changing operations of grants and Namespaces as operations of the registry: the run
+// The three changing operations of grants and build limits as operations of the registry: the run
 // each call leaves, the repeated call, the rule for a superadmin's rows asked before the
 // policy, and the policy itself. What each call writes and refuses is in
 // `chat-server-access-administration.test.ts`.
@@ -65,17 +65,11 @@ async function traced(
   return { response, runs, audit };
 }
 
-describe("the Operation Run of a grant or Namespace write", () => {
+describe("the Operation Run of a grant or build limits write", () => {
   // Fails without the registration: a plain route leaves no run and sets no header.
   it("leaves one run per call with its actor, and audit rows that name what the call touched", async () => {
     const { t } = await setup();
-    const created = await traced(
-      t,
-      t.admin.id,
-      "namespaces.create",
-      { payload: { prefix: "kai-", displayName: "Kai" } },
-      "corr_ns_create"
-    );
+    const workspaceId = await t.sharedWorkspace("Kai");
     const granted = await traced(
       t,
       t.admin.id,
@@ -84,12 +78,15 @@ describe("the Operation Run of a grant or Namespace write", () => {
       "corr_grant"
     );
     const grantId = grantSchema.parse(granted.response.json()).id;
-    const updated = await traced(
+    const limited = await traced(
       t,
       t.admin.id,
-      "namespaces.update",
-      { params: { prefix: "kai-" }, payload: { displayName: "Kai's" } },
-      "corr_ns_update"
+      "workspaces.limits.update",
+      {
+        params: { collaborationWorkspaceId: workspaceId },
+        payload: { allowedToolNames: ["known.tool"] }
+      },
+      "corr_limits_update"
     );
     const revoked = await traced(
       t,
@@ -98,29 +95,15 @@ describe("the Operation Run of a grant or Namespace write", () => {
       { params: { grantId } },
       "corr_revoke"
     );
-    const deleted = await traced(
-      t,
-      t.admin.id,
-      "namespaces.delete",
-      { params: { prefix: "kai-" } },
-      "corr_ns_delete"
-    );
 
     const calls = [
-      {
-        ...created,
-        operation: "namespaces.create",
-        actor: t.admin.id,
-        kind: "namespace",
-        id: "kai-"
-      },
       { ...granted, operation: "permissions.grant", actor: t.admin.id, kind: "user", id: t.kai.id },
       {
-        ...updated,
-        operation: "namespaces.update",
+        ...limited,
+        operation: "workspaces.limits.update",
         actor: t.admin.id,
-        kind: "namespace",
-        id: "kai-"
+        kind: "collaboration_workspace",
+        id: workspaceId
       },
       {
         ...revoked,
@@ -128,13 +111,6 @@ describe("the Operation Run of a grant or Namespace write", () => {
         actor: t.root.id,
         kind: "permission_grant",
         id: grantId
-      },
-      {
-        ...deleted,
-        operation: "namespaces.delete",
-        actor: t.admin.id,
-        kind: "namespace",
-        id: "kai-"
       }
     ];
     for (const call of calls) {
@@ -178,7 +154,6 @@ describe("the Operation Run of a grant or Namespace write", () => {
   // Fails without the registration: the second call answered 409 `duplicate_grant`.
   it("answers a repeated grant with the same key from the first call and writes one row", async () => {
     const { t } = await setup();
-    await t.createNamespace("kai-");
     const input = {
       payload: await grantPayload(t, t.kai.id),
       headers: { "idempotency-key": "grant-kai-once" }
@@ -190,7 +165,7 @@ describe("the Operation Run of a grant or Namespace write", () => {
     expect(second.headers["operation-run-id"]).toBe(first.headers["operation-run-id"]);
     expect(second.json()).toEqual(first.json());
     expect(await t.stores.access.listGrants({ clientInstanceId })).toHaveLength(1);
-    expect(await t.stores.operationRuns.list({ clientInstanceId })).toHaveLength(2);
+    expect(await t.stores.operationRuns.list({ clientInstanceId })).toHaveLength(1);
 
     // The key is the caller's own: another administrator's same key is another call.
     await t.expectRefused(t.root.id, "permissions.grant", input, {
@@ -213,7 +188,6 @@ describe("a field the query string names", () => {
   // body's, and the grant went to somebody the body did not name.
   it("does not replace the field of the body: the grant is the body's", async () => {
     const { t } = await setup();
-    await t.createNamespace("kai-");
     const response = await t.expectOk(t.admin.id, "permissions.grant", {
       payload: await grantPayload(t, t.kai.id),
       undeclaredQuery: { holderId: t.lena.id, action: "agent.delete", stray: "1" }
@@ -232,7 +206,6 @@ describe("a field the query string names", () => {
 describe("a superadmin's rows", () => {
   it("does not let a non-superadmin write or revoke a row of a superadmin", async () => {
     const { t } = await setup();
-    await t.createNamespace("kai-");
     // Another superadmin: nobody writes a row of their own (RIGHTS-1b).
     const root = await t.stores.users.createUser({
       clientInstanceId,
@@ -279,7 +252,6 @@ describe("a superadmin's rows", () => {
   // from the handler as a failed run.
   it("are refused to an administrator before the policy is asked, as a denied run", async () => {
     const { t, asked } = await setup();
-    await t.createNamespace("kai-");
     // Another superadmin: nobody writes a row of their own (RIGHTS-1b).
     const root = await t.stores.users.createUser({
       clientInstanceId,
@@ -343,8 +315,9 @@ describe("a superadmin's rows", () => {
   // no right in `requires`, so nothing else would refuse this caller.
   it("and everyone's are refused to a caller without users.manage before any holder is read", async () => {
     const { t, asked } = await setup();
-    await t.createNamespace("kai-");
-    const grantId = await t.seedHistoricalGrant(t.lena.id, "agent.read", { namespace: "kai-" });
+    const grantId = await t.grant(t.lena.id, "agent.read", {
+      workspaceId: await t.sharedWorkspace("Kai")
+    });
     const policyAsked = asked.policy;
     for (const [operation, input] of [
       // A holder who is a superadmin answers as any other holder does.
@@ -360,14 +333,14 @@ describe("a superadmin's rows", () => {
   });
 });
 
-describe("the policy of a grant or Namespace write", () => {
+describe("the policy of a grant or build limits write", () => {
   // Fails without the registration: a plain route asks no policy and wrote the row.
   it("refuses a write the instance denies and writes nothing", async () => {
     const { t } = await setup([
       { operation: "permissions.grant", value: "deny" },
-      { operation: "namespaces.delete", value: "deny" }
+      { operation: "workspaces.limits.update", value: "deny" }
     ]);
-    await t.createNamespace("kai-");
+    const workspaceId = await t.sharedWorkspace("Kai");
     await t.expectRefused(
       t.admin.id,
       "permissions.grant",
@@ -376,18 +349,22 @@ describe("the policy of a grant or Namespace write", () => {
     );
     await t.expectRefused(
       t.root.id,
-      "namespaces.delete",
-      { params: { prefix: "kai-" } },
+      "workspaces.limits.update",
+      {
+        params: { collaborationWorkspaceId: workspaceId },
+        payload: { allowedToolNames: ["known.tool"] }
+      },
       { status: 403, code: "POLICY_DENIED" }
     );
     expect(await t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
-    expect(await t.stores.access.listNamespaces({ clientInstanceId })).toHaveLength(1);
+    expect(
+      (await t.stores.workspaces.getWorkspace(clientInstanceId, workspaceId))?.allowedToolNames
+    ).toBeUndefined();
   });
 
   // Fails without the registration: the grant was written at once.
   it("holds a grant for another person's approval with 202 and writes nothing meanwhile", async () => {
     const { t } = await setup([{ operation: "permissions.grant", value: "approval" }]);
-    await t.createNamespace("kai-");
     const held = await t.call(t.admin.id, "permissions.grant", {
       payload: await grantPayload(t, t.kai.id)
     });

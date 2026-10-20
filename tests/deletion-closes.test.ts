@@ -310,12 +310,6 @@ describe("a subject in deletion stays closed and loses only what is its own", ()
         },
         actor.id
       );
-    const registered = await t.api.call(
-      "namespaces.create",
-      { payload: { prefix: "lea-", displayName: "Lea" } },
-      leaving.id
-    );
-    expect(registered.statusCode).toBe(200);
     expect((await grant(leaving, member.id, "agent.write")).statusCode).toBe(200);
     expect((await grant(superadmin, leaving.id, "agent.read")).statusCode).toBe(200);
     expect((await grant(superadmin, leaving.id, "agent.delete", "deny")).statusCode).toBe(200);
@@ -337,8 +331,8 @@ describe("a subject in deletion stays closed and loses only what is its own", ()
         holderId: closed.id,
         action: "agent.read",
         effect: "allow",
-        scopeKind: "namespace",
-        namespace: "lea-",
+        scopeKind: "workspace",
+        scopeId: grantScope.id,
         grantedBy: asUserId(superadmin.id)
       })
     ).rejects.toMatchObject({ code: "CONFLICT", message: "User account is being deleted" });
@@ -355,9 +349,5 @@ describe("a subject in deletion stays closed and loses only what is its own", ()
     await expect(rows()).resolves.toEqual([
       { holder: member.id, effect: "allow", grantedBy: leaving.id }
     ]);
-    const namespaces = await db.sql<Array<{ createdBy: string }>>`
-      select created_by as "createdBy" from namespaces
-      where client_instance_id = ${t.scope.clientInstanceId}`;
-    expect(namespaces).toEqual([{ createdBy: leaving.id }]);
   });
 });

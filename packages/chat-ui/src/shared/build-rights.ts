@@ -57,12 +57,6 @@ export function assetRightsOn(
   return allowed === undefined ? rights : assetRightsBy((verb) => allowed.includes(verb));
 }
 
-/** A Namespace the reader holds a right in, as the picker and the filter name it. */
-export interface BuildNamespace {
-  prefix: string;
-  displayName: string;
-}
-
 /**
  * A workspace whose own assets the reader holds a right on, as the scope names it: a Shared
  * Workspace, or the reader's own Personal Workspace.
@@ -78,8 +72,8 @@ interface BuildWorkspace {
 
 /**
  * What the reader may do in Build, as far as the browser can know it: the rights on the whole
- * instance from the session and the platform context, and the rights per Namespace and per
- * workspace from the platform context. A grant
+ * instance from the session and the platform context, and the rights per workspace from the
+ * platform context. A grant
  * on one single asset tells that the kind has a list and nothing about the asset, so such an
  * asset opens read-only here. The instance
  * decides every call itself; this only chooses what the page offers.
@@ -91,8 +85,6 @@ export interface BuildRights {
   reads(kind: string): boolean;
   /** The reader may write every asset of the instance, and its default and availability. */
   instanceWrite: boolean;
-  /** The Namespaces the reader holds any right in, by prefix. */
-  namespaces: readonly BuildNamespace[];
   /** The reader holds a right on some of the instance's own assets. */
   readsInstance: boolean;
   /** The Shared Workspaces whose own assets the reader holds a right on. */
@@ -102,17 +94,12 @@ export interface BuildRights {
    * workspace: through a membership, a grant there or a right on the whole instance.
    */
   holdsInWorkspace(kind: string, verb: AssetVerb, workspaceId: string): boolean;
-  may(
-    verb: Exclude<AssetVerb, "read">,
-    asset: { kind: string; namespace?: string; workspaceId?: string }
-  ): boolean;
+  may(verb: Exclude<AssetVerb, "read">, asset: { kind: string; workspaceId?: string }): boolean;
   /**
    * The reader may start a new asset of the kind: in the workspace named, or without one
-   * somewhere among the instance's own assets.
+   * among the instance's own assets.
    */
   mayCreate(kind: string, workspaceId?: string): boolean;
-  /** The Namespaces a new asset of the kind may be named in, by prefix. */
-  creatableNamespaces(kind: string): readonly BuildNamespace[];
 }
 
 export function resolveBuildRights(
@@ -121,7 +108,6 @@ export function resolveBuildRights(
 ): BuildRights {
   const instanceRead = Boolean(user?.permissions.includes(INSTANCE_READ_PERMISSION));
   const instanceWrite = Boolean(user?.permissions.includes(INSTANCE_WRITE_PERMISSION));
-  const held = context?.namespaces ?? [];
   // What the instance says the reader holds on all of a kind's assets. A kind is read by its
   // own actions: the session's keys name agents and skills and no kind that came later.
   const onInstance = context?.actions ?? [];
@@ -135,16 +121,6 @@ export function resolveBuildRights(
     const named = verb === "publish" ? action(kind, verb) : undefined;
     return named === undefined ? instanceWrite : onInstance.includes(named);
   };
-  const holds = (kind: string, verb: AssetVerb, prefix: string | undefined): boolean => {
-    const name = action(kind, verb);
-    return (
-      name !== undefined &&
-      prefix !== undefined &&
-      held.some((namespace) => namespace.prefix === prefix && namespace.actions.includes(name))
-    );
-  };
-  const creatableNamespaces = (kind: string) =>
-    held.filter((namespace) => holds(kind, "write", namespace.prefix)).map(toBuildNamespace);
   // Studio is open to a reader with a right on the instance's or a Shared Workspace's assets.
   // To that reader it also offers the Personal Workspace, where what the reader's agent made in
   // a personal conversation stands (manager, 2026-10-14); it opens Studio to nobody alone.
@@ -164,11 +140,7 @@ export function resolveBuildRights(
     );
   };
   const readsInstance =
-    instanceRead ||
-    instanceWrite ||
-    onInstance.length > 0 ||
-    onSingleAssets.length > 0 ||
-    held.length > 0;
+    instanceRead || instanceWrite || onInstance.length > 0 || onSingleAssets.length > 0;
 
   const readsAny = readsInstance || inWorkspaces.length > 0;
   return {
@@ -179,10 +151,8 @@ export function resolveBuildRights(
         return name !== undefined && onInstance.includes(name);
       }) ||
       onSingleAssets.includes(action(kind, "read") ?? "") ||
-      held.some((namespace) => verbs.some((verb) => holds(kind, verb, namespace.prefix))) ||
       inWorkspaces.some((workspace) => verbs.some((verb) => holdsIn(kind, verb, workspace.id))),
     instanceWrite,
-    namespaces: held.map(toBuildNamespace),
     readsInstance,
     holdsInWorkspace: holdsIn,
     workspaces: [
@@ -196,20 +166,10 @@ export function resolveBuildRights(
     // `agent.publish`, the instance publishes for its holders alone.
     may: (verb, asset) =>
       onWholeInstance(verb, asset.kind) ||
-      (asset.workspaceId === undefined
-        ? holds(asset.kind, verb, asset.namespace)
-        : holdsIn(asset.kind, verb, asset.workspaceId)),
+      (asset.workspaceId !== undefined && holdsIn(asset.kind, verb, asset.workspaceId)),
     mayCreate: (kind, workspaceId) =>
-      instanceWrite ||
-      (workspaceId === undefined
-        ? creatableNamespaces(kind).length > 0
-        : holdsIn(kind, "write", workspaceId)),
-    creatableNamespaces
+      instanceWrite || (workspaceId !== undefined && holdsIn(kind, "write", workspaceId))
   };
-}
-
-function toBuildNamespace(namespace: BuildNamespace): BuildNamespace {
-  return { prefix: namespace.prefix, displayName: namespace.displayName };
 }
 
 /**

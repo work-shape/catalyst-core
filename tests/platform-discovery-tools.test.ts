@@ -38,8 +38,7 @@ const contextSchema = z.object({
   modules: z.array(z.string()),
   kinds: z.array(z.object({ kind: z.string(), plural: z.string(), hasDraft: z.boolean() })),
   actions: z.array(z.string()),
-  assetActions: z.array(z.string()),
-  namespaces: z.array(z.unknown())
+  assetActions: z.array(z.string())
 });
 const foundSchema = z.object({
   assets: z.array(

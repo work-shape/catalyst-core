@@ -23,68 +23,27 @@ export const access = defineTranslations({
     "access.description":
       "Give a person rights on agents, skills and other assets, and check what a person may do.",
     "access.tabs": "Parts of Access",
-    "access.tabNamespaces": "Namespaces",
     "access.tabGrants": "Rights",
     "access.tabCheck": "Check",
     "access.notAvailable": "Not available",
     "access.actions": "Actions",
 
-    "access.namespacesLoadFailed": "The Namespaces could not be loaded.",
-    "access.namespacesEmpty": "No Namespace yet.",
-    "access.newNamespace": "New Namespace",
-    "access.editNamespace": "Edit",
-    "access.deleteNamespace": "Delete",
-    "access.namespacePrefix": "Prefix",
-    "access.namespaceDisplayName": "Display name",
-    "access.namespaceAssets": "Assets",
-    "access.namespaceGrants": "Rights",
     "access.listTools": "Tools",
     "access.listModels": "Models",
     "access.listNoLimit": "No limit",
     "access.listListed": "{count} listed",
     "access.listNoneAllowed": "None allowed",
-    "access.namespaceMenu": "Actions for {prefix}",
-    "access.namespaceInUseOne": "{count} right names this Namespace. Revoke it first.",
-    "access.namespaceInUseOther": "{count} rights name this Namespace. Revoke them first.",
-    "access.namespaceDeleteTitle": "Delete Namespace {prefix}?",
-    "access.namespaceDeleteDescription":
-      "The prefix becomes free again. Agents and skills with this prefix stay as they are and are no longer limited by its tool and model lists.",
-    "access.namespaceDeleteFailed": "The Namespace could not be deleted.",
-    "access.namespaceCreateTitle": "New Namespace",
-    "access.namespaceEditTitle": "Edit Namespace {prefix}",
-    "access.namespaceDialogDescription":
-      "Agents and skills whose names start with the prefix belong to the Namespace.",
-    "access.namespacePrefixHint":
-      "Lowercase words joined by hyphens, ending in a hyphen, such as kai-. It cannot be changed later.",
-    "access.namespacePrefixFixed": "A prefix cannot be changed.",
-    "access.namespacePrefixLength": "A prefix has between {min} and {max} characters.",
-    "access.namespacePrefixPattern":
-      "Use lowercase letters and digits, joined by single hyphens, and end with a hyphen.",
-    "access.namespacePrefixOverlap":
-      "This prefix overlaps the registered Namespace {prefix}. A name can belong to one Namespace only.",
-    "access.namespaceDisplayNameRequired": "Enter a display name.",
     "access.limitTools": "Limit tools",
-    "access.limitToolsHint": "Off: agents in this Namespace may use every tool of the instance.",
     "access.limitModels": "Limit models",
     "access.limitModelsHint":
       "Off: only a person with the right to manage models can set the model of an agent here.",
     "access.chooseTools": "Choose tools",
     "access.chooseModels": "Choose models",
     "access.chosenCount": "{count} of {total} chosen",
-    "access.toolsEmptyHint":
-      "No tool is chosen. Nobody can create or change an agent that names a tool in this Namespace, an instance administrator and the release sync included.",
-    "access.modelsEmptyHint":
-      "No model is chosen. Nobody can create or change an agent that names a model in this Namespace. An agent without a model can be saved only by a person with the right to manage models.",
-    "access.modelsListedHint":
-      "Every agent created or changed in this Namespace names one of these models, whoever saves it. A person with write rights here may pick one of them without the right to manage models. Only a person with that right may save an agent without a model.",
     "access.referencesLoadFailed":
       "The tools, models and assets of the instance could not be loaded.",
-    "access.namespaceLockTitle": "An empty list binds everyone who saves an agent here",
-    "access.namespaceSaveFailed": "The Namespace could not be saved.",
     "access.listEntryGone":
       "A chosen tool or model no longer exists on this instance. Open the list and choose again.",
-    "access.createNamespace": "Create Namespace",
-    "access.saveNamespace": "Save",
 
     "access.grantsLoadFailed": "The rights could not be loaded.",
     "access.grantsEmpty":
@@ -97,7 +56,6 @@ export const access = defineTranslations({
     "access.grantedByLine": "Granted by {name}, {date}",
     "access.effectAllow": "Allow",
     "access.effectDeny": "Deny",
-    "access.scopeNamespace": "Namespace {prefix}",
     "access.scopeAgent": "Agent {name}",
     "access.scopeSkill": "Skill {name}",
     "access.scopeAssetGone": "Asset no longer exists",
@@ -270,30 +228,14 @@ export const access = defineTranslations({
     "access.decidedByRole": "The person's instance role allows this everywhere.",
     "access.decidedByLegacy": "An individual right set on the Users page allows this everywhere.",
     "access.decidedByLegacyDeny": "An individual right was revoked on the Users page.",
-    "access.decidedByGrantNamespace": "Right in Namespace {prefix}",
     "access.decidedByGrantAsset": "Right on this asset",
-    "access.decidedByDenyNamespace": "Deny in Namespace {prefix}",
     "access.decidedByDenyAsset": "Deny on this asset",
     "access.decidedByDenyThrough":
       "{deny} ({action}). Whoever may not view or edit an asset cannot delete it.",
     "access.decidedByNothing": "No role, individual right or given right covers this.",
 
-    "access.namespacesIntro":
-      "A Namespace is a name prefix such as kai-. Agents and skills whose names start with it belong to it, and a person can get rights inside it.",
     "access.referencesForbidden":
       "Your account may not view agents and skills, so the tools, models and assets of the instance are not shown here.",
-    "access.lockUnknown":
-      "The agents with this prefix could not be counted. If there are any, this applies to them.",
-    "access.lockAgentsOne": "{count} agent already has this prefix.",
-    "access.lockAgentsOther": "{count} agents already have this prefix.",
-    "access.lockAssetsOne": "{count} agent or skill already has this prefix.",
-    "access.lockAssetsOther": "{count} agents and skills already have this prefix.",
-    "access.lockTools":
-      "Empty tool list: nobody can create or change an agent that names a tool here any more, an instance administrator and the release sync included.",
-    "access.lockModels":
-      "Empty model list: nobody can create or change an agent that names a model here any more. Only a person with the instance right to manage models can still save an agent here, and only without a model.",
-    "access.namespaceLockConfirmTitle": "Save {prefix} with an empty list?",
-    "access.namespaceLockConfirm": "Save anyway",
     "access.deniedAction": "Denied: {action}",
     "access.scopeAssetHidden": "An asset you cannot see",
     "access.scopeWorkspaceHidden": "A workspace you cannot see",
@@ -314,15 +256,9 @@ export const access = defineTranslations({
     "access.checkAssetsForbidden":
       "Your account may not view agents and skills, so rows on single assets cannot be matched to this name. No result is shown.",
     "access.checkRightOnlyAgent":
-      "This is the right alone. A save can still be refused: by a tool or model list of the Namespace, for a changed model setting without the right to manage models, when the first or last agent changes the default agent, or when agent configuration in the interface is switched off.",
+      "This is the right alone. A save can still be refused: by a tool or model list of the workspace that owns the agent, for a changed model setting without the right to manage models, when the first or last agent changes the default agent, or when agent configuration in the interface is switched off.",
     "access.checkRightOnlySkill":
       "This is the right alone. A save is still refused when agent configuration in the interface is switched off.",
-    "access.checkNamespace": "This name lies in Namespace {prefix}, whose lists bind every writer.",
-    "access.checkToolsNone": "Tools: none allowed.",
-    "access.checkToolsListed": "Tools: only {list}.",
-    "access.checkModelsNone":
-      "Models: none allowed. Only a person with the right to manage models can save the agent, and only without a model.",
-    "access.checkModelsListed": "Models: the agent names one of {list}.",
     "access.checkReadThroughGrant":
       "Viewing is allowed through a given right: the person can open this asset. The overview of all agents and skills and the export need the right to view them on the whole instance.",
     "access.checkDenyNote":
@@ -349,69 +285,27 @@ export const access = defineTranslations({
     "access.description":
       "Gib einer Person Rechte an Agenten, Skills und anderen Assets und prüfe, was eine Person darf.",
     "access.tabs": "Abschnitte der Zugriffsseite",
-    "access.tabNamespaces": "Namespaces",
     "access.tabGrants": "Rechte",
     "access.tabCheck": "Prüfen",
     "access.notAvailable": "Nicht verfügbar",
     "access.actions": "Aktionen",
 
-    "access.namespacesLoadFailed": "Die Namespaces konnten nicht geladen werden.",
-    "access.namespacesEmpty": "Noch kein Namespace.",
-    "access.newNamespace": "Neuer Namespace",
-    "access.editNamespace": "Bearbeiten",
-    "access.deleteNamespace": "Löschen",
-    "access.namespacePrefix": "Präfix",
-    "access.namespaceDisplayName": "Anzeigename",
-    "access.namespaceAssets": "Assets",
-    "access.namespaceGrants": "Rechte",
     "access.listTools": "Werkzeuge",
     "access.listModels": "Modelle",
     "access.listNoLimit": "Unbegrenzt",
     "access.listListed": "{count} gelistet",
     "access.listNoneAllowed": "Keines erlaubt",
-    "access.namespaceMenu": "Aktionen für {prefix}",
-    "access.namespaceInUseOne": "{count} Recht nennt diesen Namespace. Entziehe es zuerst.",
-    "access.namespaceInUseOther": "{count} Rechte nennen diesen Namespace. Entziehe sie zuerst.",
-    "access.namespaceDeleteTitle": "Namespace {prefix} löschen?",
-    "access.namespaceDeleteDescription":
-      "Das Präfix wird wieder frei. Agenten und Skills mit diesem Präfix bleiben unverändert und sind nicht mehr durch seine Werkzeug- und Modelllisten begrenzt.",
-    "access.namespaceDeleteFailed": "Der Namespace konnte nicht gelöscht werden.",
-    "access.namespaceCreateTitle": "Neuer Namespace",
-    "access.namespaceEditTitle": "Namespace {prefix} bearbeiten",
-    "access.namespaceDialogDescription":
-      "Agenten und Skills, deren Name mit dem Präfix beginnt, gehören zum Namespace.",
-    "access.namespacePrefixHint":
-      "Kleingeschriebene Wörter, mit Bindestrichen verbunden, am Ende ein Bindestrich, zum Beispiel kai-. Es lässt sich später nicht ändern.",
-    "access.namespacePrefixFixed": "Ein Präfix lässt sich nicht ändern.",
-    "access.namespacePrefixLength": "Ein Präfix hat zwischen {min} und {max} Zeichen.",
-    "access.namespacePrefixPattern":
-      "Verwende Kleinbuchstaben und Ziffern, mit einzelnen Bindestrichen verbunden, und ende mit einem Bindestrich.",
-    "access.namespacePrefixOverlap":
-      "Dieses Präfix überschneidet sich mit dem registrierten Namespace {prefix}. Ein Name kann nur zu einem Namespace gehören.",
-    "access.namespaceDisplayNameRequired": "Gib einen Anzeigenamen ein.",
     "access.limitTools": "Werkzeuge begrenzen",
-    "access.limitToolsHint":
-      "Aus: Agenten in diesem Namespace dürfen jedes Werkzeug der Instanz verwenden.",
     "access.limitModels": "Modelle begrenzen",
     "access.limitModelsHint":
       "Aus: Das Modell eines Agenten kann hier nur festlegen, wer das Recht hat, Modelle zu verwalten.",
     "access.chooseTools": "Werkzeuge wählen",
     "access.chooseModels": "Modelle wählen",
     "access.chosenCount": "{count} von {total} gewählt",
-    "access.toolsEmptyHint":
-      "Kein Werkzeug gewählt. Niemand kann in diesem Namespace einen Agenten anlegen oder ändern, der ein Werkzeug nennt, auch ein Instanzadministrator und der Release-Abgleich nicht.",
-    "access.modelsEmptyHint":
-      "Kein Modell gewählt. Niemand kann in diesem Namespace einen Agenten anlegen oder ändern, der ein Modell nennt. Einen Agenten ohne Modell kann nur speichern, wer das Recht hat, Modelle zu verwalten.",
-    "access.modelsListedHint":
-      "Jeder Agent, der in diesem Namespace angelegt oder geändert wird, nennt eines dieser Modelle, egal wer speichert. Eine Person mit Schreibrecht hier darf eines davon wählen, ohne das Recht, Modelle zu verwalten. Einen Agenten ohne Modell darf nur speichern, wer dieses Recht hat.",
     "access.referencesLoadFailed":
       "Die Werkzeuge, Modelle und Assets der Instanz konnten nicht geladen werden.",
-    "access.namespaceLockTitle": "Eine leere Liste gilt für alle, die hier einen Agenten speichern",
-    "access.namespaceSaveFailed": "Der Namespace konnte nicht gespeichert werden.",
     "access.listEntryGone":
       "Ein gewähltes Werkzeug oder Modell gibt es auf dieser Instanz nicht mehr. Öffne die Liste und wähle neu.",
-    "access.createNamespace": "Namespace anlegen",
-    "access.saveNamespace": "Speichern",
 
     "access.grantsLoadFailed": "Die Rechte konnten nicht geladen werden.",
     "access.grantsEmpty":
@@ -424,7 +318,6 @@ export const access = defineTranslations({
     "access.grantedByLine": "Vergeben von {name}, {date}",
     "access.effectAllow": "Erlauben",
     "access.effectDeny": "Verweigern",
-    "access.scopeNamespace": "Namespace {prefix}",
     "access.scopeAgent": "Agent {name}",
     "access.scopeSkill": "Skill {name}",
     "access.scopeAssetGone": "Asset existiert nicht mehr",
@@ -598,31 +491,15 @@ export const access = defineTranslations({
     "access.decidedByRole": "Die Instanzrolle der Person erlaubt das überall.",
     "access.decidedByLegacy": "Ein einzelnes Recht von der Seite Benutzer erlaubt das überall.",
     "access.decidedByLegacyDeny": "Ein einzelnes Recht wurde auf der Seite Benutzer entzogen.",
-    "access.decidedByGrantNamespace": "Recht im Namespace {prefix}",
     "access.decidedByGrantAsset": "Recht an diesem Asset",
-    "access.decidedByDenyNamespace": "Verweigerung im Namespace {prefix}",
     "access.decidedByDenyAsset": "Verweigerung an diesem Asset",
     "access.decidedByDenyThrough":
       "{deny} ({action}). Wer ein Asset nicht ansehen oder bearbeiten darf, kann es nicht löschen.",
     "access.decidedByNothing":
       "Keine Rolle, kein einzelnes Recht und kein vergebenes Recht deckt das ab.",
 
-    "access.namespacesIntro":
-      "Ein Namespace ist ein Namenspräfix wie kai-. Agenten und Skills, deren Name damit beginnt, gehören dazu, und eine Person kann darin Rechte bekommen.",
     "access.referencesForbidden":
       "Dein Konto darf Agenten und Skills nicht ansehen. Deshalb werden die Werkzeuge, Modelle und Assets der Instanz hier nicht angezeigt.",
-    "access.lockUnknown":
-      "Die Agenten mit diesem Präfix konnten nicht gezählt werden. Falls es welche gibt, gilt das für sie.",
-    "access.lockAgentsOne": "{count} Agent hat dieses Präfix bereits.",
-    "access.lockAgentsOther": "{count} Agenten haben dieses Präfix bereits.",
-    "access.lockAssetsOne": "{count} Agent oder Skill hat dieses Präfix bereits.",
-    "access.lockAssetsOther": "{count} Agenten und Skills haben dieses Präfix bereits.",
-    "access.lockTools":
-      "Leere Werkzeugliste: Niemand kann hier mehr einen Agenten anlegen oder ändern, der ein Werkzeug nennt, auch ein Instanzadministrator und der Release-Abgleich nicht.",
-    "access.lockModels":
-      "Leere Modellliste: Niemand kann hier mehr einen Agenten anlegen oder ändern, der ein Modell nennt. Einen Agenten kann hier nur noch speichern, wer das instanzweite Recht hat, Modelle zu verwalten, und nur ohne Modell.",
-    "access.namespaceLockConfirmTitle": "{prefix} mit leerer Liste speichern?",
-    "access.namespaceLockConfirm": "Trotzdem speichern",
     "access.deniedAction": "Verweigert: {action}",
     "access.scopeAssetHidden": "Ein Asset, das du nicht sehen kannst",
     "access.scopeWorkspaceHidden": "Ein Arbeitsbereich, den du nicht sehen kannst",
@@ -645,16 +522,9 @@ export const access = defineTranslations({
     "access.checkAssetsForbidden":
       "Dein Konto darf Agenten und Skills nicht ansehen. Zeilen an einzelnen Assets lassen sich diesem Namen deshalb nicht zuordnen. Es wird kein Ergebnis angezeigt.",
     "access.checkRightOnlyAgent":
-      "Das ist nur das Recht. Ein Speichern kann trotzdem abgelehnt werden: durch eine Werkzeug- oder Modellliste des Namespace, bei einer geänderten Modelleinstellung ohne das Recht, Modelle zu verwalten, wenn der erste oder letzte Agent den Standardagenten ändert, oder wenn die Agentenkonfiguration in der Oberfläche abgeschaltet ist.",
+      "Das ist nur das Recht. Ein Speichern kann trotzdem abgelehnt werden: durch eine Werkzeug- oder Modellliste des Arbeitsbereichs, dem der Agent gehört, bei einer geänderten Modelleinstellung ohne das Recht, Modelle zu verwalten, wenn der erste oder letzte Agent den Standardagenten ändert, oder wenn die Agentenkonfiguration in der Oberfläche abgeschaltet ist.",
     "access.checkRightOnlySkill":
       "Das ist nur das Recht. Ein Speichern wird trotzdem abgelehnt, wenn die Agentenkonfiguration in der Oberfläche abgeschaltet ist.",
-    "access.checkNamespace":
-      "Dieser Name liegt im Namespace {prefix}. Dessen Listen gelten für alle, die schreiben.",
-    "access.checkToolsNone": "Werkzeuge: keines erlaubt.",
-    "access.checkToolsListed": "Werkzeuge: nur {list}.",
-    "access.checkModelsNone":
-      "Modelle: keines erlaubt. Den Agenten kann nur speichern, wer das Recht hat, Modelle zu verwalten, und nur ohne Modell.",
-    "access.checkModelsListed": "Modelle: Der Agent nennt eines von {list}.",
     "access.checkReadThroughGrant":
       "Ansehen ist über ein vergebenes Recht erlaubt: Die Person kann dieses Asset öffnen. Die Übersicht aller Agenten und Skills und der Export brauchen das Recht, sie auf der ganzen Instanz anzusehen.",
     "access.checkDenyNote":

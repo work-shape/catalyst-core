@@ -32,13 +32,22 @@ import {
 const stateTone = { active: "success", revoked: "neutral", expired: "neutral" } as const;
 
 /**
- * What a scope of a key allows, as the rights screens name its action, with the prefix of the
- * assets it is limited to: "Agenten bearbeiten in kai-".
+ * What a scope of a key allows, as the rights screens name its action, with the workspace and
+ * the asset it is limited to: "Agenten bearbeiten in Steuern". A workspace the reader is not
+ * shown is named by its id.
  */
-function scopeLabel(scope: string, t: TranslationContextValue["t"]): string {
-  const { action, prefix } = personalKeyScopeParts(scope);
+function scopeLabel(
+  scope: string,
+  t: TranslationContextValue["t"],
+  workspaceName: (id: string) => string | undefined
+): string {
+  const { action, workspaceId, assetName } = personalKeyScopeParts(scope);
   const right = actionLabel(action, t);
-  return prefix ? t("personalApiKeys.scopeLimited", { right, prefix }) : right;
+  if (workspaceId === undefined) return right;
+  const workspace = workspaceName(workspaceId) ?? workspaceId;
+  return assetName === undefined
+    ? t("personalApiKeys.scopeLimited", { right, workspace })
+    : t("personalApiKeys.scopeLimitedAsset", { right, asset: assetName, workspace });
 }
 
 /** Why a key could not be read, issued or revoked. A refusal needs somebody with more rights. */
@@ -69,7 +78,8 @@ export function PersonalApiKeysTable({
   showOwner = false,
   revoking,
   onRevoke,
-  revokeProblem
+  revokeProblem,
+  workspaceName = () => undefined
 }: {
   keys: readonly PersonalApiKey[];
   loading: boolean;
@@ -79,6 +89,8 @@ export function PersonalApiKeysTable({
   onRevoke?(key: PersonalApiKey): Promise<unknown>;
   /** What the dialog says about a thrown failure; by default its message. */
   revokeProblem?(error: unknown): KeyProblem;
+  /** The name of a workspace a scope is limited to, where the reader is shown it. */
+  workspaceName?(id: string): string | undefined;
 }) {
   const { t, locale } = useTranslation();
   const [toRevoke, setToRevoke] = useState<PersonalApiKey>();
@@ -138,7 +150,7 @@ export function PersonalApiKeysTable({
                 <TableCell>
                   {/* Muted on the span: a folded cell moves only its children under the name. */}
                   <span className="text-muted-foreground">
-                    {key.scopes.map((scope) => scopeLabel(scope, t)).join(", ")}
+                    {key.scopes.map((scope) => scopeLabel(scope, t, workspaceName)).join(", ")}
                   </span>
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">

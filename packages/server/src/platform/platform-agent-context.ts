@@ -108,8 +108,8 @@ export async function readAgentPlatformContext(
     modules: options.modules.modules.filter((module) => module.enabled).map(({ name }) => name),
     kinds: await Promise.all(
       kinds.map(async (kind) => {
-        // What a create in this conversation meets: the owner it lands in, a name in no
-        // Namespace, as the orientation asks a new asset to be named.
+        // What a create in this conversation meets: the owner it lands in, before the new
+        // asset has a name.
         const createApproval = conversation
           ? await reads.saveApprovalAt(call, {
               kind: kind.kind,
@@ -127,11 +127,7 @@ export async function readAgentPlatformContext(
     ),
     actions: ofExisting(read.actions),
     assetActions: ofExisting(read.assetActions),
-    workspaces,
-    namespaces: read.namespaces.flatMap((namespace) => {
-      const actions = ofExisting(namespace.actions);
-      return actions.length > 0 ? [{ ...namespace, actions }] : [];
-    })
+    workspaces
   };
 }
 

@@ -6,7 +6,7 @@ import {
 } from "@work-shape/catalyst-config-schema";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
-import { setupNamespaceHolder } from "./support/asset-operations";
+import { setupWorkspaceHolder } from "./support/asset-operations";
 import { clientInstanceId as accessInstanceId, skill } from "./support/access-instance";
 import { appFiles, setupAppInstance } from "./support/app-instance";
 import {
@@ -263,9 +263,9 @@ describe("guardrails in release config", () => {
 describe("a guardrail at a call of the asset operations", () => {
   // Fails without the change: `asset.before_write` was run by nothing, and the push wrote the
   // skill with the IBAN.
-  it("refuses a Namespace holder's skill push with an IBAN, names the guardrail, the skill and the reason, and writes nothing", async () => {
+  it("refuses a workspace holder's skill push with an IBAN, names the guardrail, the skill and the reason, and writes nothing", async () => {
     let complete: ReturnType<typeof vi.fn> | undefined;
-    const t = await setupNamespaceHolder({
+    const t = await setupWorkspaceHolder({
       server: (stores) => {
         const guarded = guardedEvents(stores, { no_iban: noIban() });
         complete = guarded.complete;
@@ -274,7 +274,7 @@ describe("a guardrail at a call of the asset operations", () => {
     });
     const pushed = await t.call(t.kai.id, "assets.sync", {
       payload: {
-        namespace: "kai-",
+        workspaceId: t.kaiTeam,
         items: [
           {
             type: "put",
@@ -303,7 +303,7 @@ describe("a guardrail at a call of the asset operations", () => {
     // The same push without the IBAN is written.
     const clean = await t.call(t.kai.id, "assets.sync", {
       payload: {
-        namespace: "kai-",
+        workspaceId: t.kaiTeam,
         items: [
           {
             type: "put",
@@ -319,7 +319,7 @@ describe("a guardrail at a call of the asset operations", () => {
 
   // Fails without the change: of two answers, the call took the first, an allow.
   it("blocks a push that a release-floor allow and a block both answer", async () => {
-    const t = await setupNamespaceHolder({
+    const t = await setupWorkspaceHolder({
       server: (stores) => ({
         operations: {
           events: guardedEvents(stores, {

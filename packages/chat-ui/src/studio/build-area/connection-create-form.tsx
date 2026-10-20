@@ -12,8 +12,6 @@ import {
   type AddressCheck
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
-import type { BuildNamespace } from "../../shared/build-rights";
-import type { BuildCreateDialogProps } from "./build-asset-kind";
 import type { ConnectStep, ConnectStepState } from "./connection-connect";
 import type { ConnectionDraft } from "./connection-draft";
 import {
@@ -30,9 +28,6 @@ import { RefusalDetail } from "./refusal-notice";
 // "Technical details". The id follows the name until it is typed and is checked as it
 // changes. The auth scheme follows the key field: empty sends none.
 
-/** The choice of no Namespace: the id is taken as typed. */
-export const NO_NAMESPACE = "";
-
 /** What the dialog asks for beside the definition's settings. */
 export interface CreateFields {
   title: string;
@@ -40,7 +35,6 @@ export interface CreateFields {
   description: string;
   /** The id as typed. Until it is, the id follows the name. */
   typedId?: string;
-  prefix: string;
   form: ConnectionFormState;
   /** The key, in this browser only until the dialog closes. */
   key: string;
@@ -58,7 +52,6 @@ export type CreateFieldErrors = Partial<
 export function ConnectionCreateForm({
   fields,
   check,
-  namespaces,
   errors,
   busy,
   steps,
@@ -69,8 +62,6 @@ export function ConnectionCreateForm({
   fields: CreateFields;
   /** What the instance said of the id, as it is typed. A refused write's reason goes first. */
   check: AddressCheck;
-  /** The Namespaces offered; the choice of none among them where the reader may name freely. */
-  namespaces: readonly BuildNamespace[];
   errors: CreateFieldErrors;
   /** Verbinden runs: the fields wait. */
   busy: boolean;
@@ -117,23 +108,6 @@ export function ConnectionCreateForm({
         disabled={busy}
         advanced={
           <>
-            {namespaces.length > 1 ? (
-              <Field label={t("connectionCreate.namespace")}>
-                <Select
-                  value={fields.prefix}
-                  disabled={busy}
-                  onChange={(event) => onChange({ ...fields, prefix: event.target.value })}
-                >
-                  {namespaces.map((namespace) => (
-                    <option key={namespace.prefix} value={namespace.prefix}>
-                      {namespace.prefix === NO_NAMESPACE
-                        ? namespace.displayName
-                        : `${namespace.displayName} (${namespace.prefix})`}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            ) : null}
             <Field label={t("connectionCreate.sendAs")}>
               <Select
                 value={fields.sendAs}
@@ -270,28 +244,13 @@ export function ConnectionCreateForm({
   );
 }
 
-/**
- * The fields of a new REST API filled with the agent's draft: its name, address and the names
- * of its fixed headers, whose values the person types, as the key. The draft's id keeps the
- * Namespace it starts with where the reader may create in that one.
- */
-export function draftedFields(
-  draft: ConnectionDraft,
-  namespaces: BuildCreateDialogProps["namespaces"],
-  mayNameFreely: boolean
-): CreateFields {
+/** The fields of a new REST API filled with the agent's draft. */
+export function draftedFields(draft: ConnectionDraft): CreateFields {
   const { name, title, baseUrl, headerNames, testPath } = draft.connection;
-  const namespace = namespaces
-    .filter((entry) => entry.prefix !== NO_NAMESPACE && name.startsWith(entry.prefix))
-    .sort((left, right) => right.prefix.length - left.prefix.length)[0];
-  const prefix =
-    namespace?.prefix ?? (mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE));
-  const id = namespace ? name.slice(namespace.prefix.length) : name;
   return {
     title,
     description: "",
-    ...(id === assetAddressFromName(title, CONNECTION_ASSET_KIND) ? {} : { typedId: id }),
-    prefix,
+    ...(name === assetAddressFromName(title, CONNECTION_ASSET_KIND) ? {} : { typedId: name }),
     form: {
       ...emptyConnectionForm(),
       connectorType: "http_api",

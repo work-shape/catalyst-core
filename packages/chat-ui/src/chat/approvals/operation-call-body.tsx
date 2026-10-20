@@ -125,7 +125,7 @@ const ASSET_KIND_PHRASE: Record<string, TranslationKey> = {
   connection: "operations.callAssetKindConnection"
 };
 
-/** The sentence that says who wants what. It names no Namespace: its prefix is an id. */
+/** The sentence that says who wants what. */
 function assetSentenceKey(asset: OperationCallAsset): TranslationKey {
   if (asset.isNew === undefined) return "operations.callAssetSave";
   return asset.isNew ? "operations.callAssetCreate" : "operations.callAssetChange";

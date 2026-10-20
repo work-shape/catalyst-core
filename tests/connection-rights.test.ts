@@ -201,67 +201,6 @@ describe("a right on a Connection", () => {
     );
   });
 
-  it("in a Namespace covers the Connections of that prefix and no other", async () => {
-    // Fails without the Namespace scope: the two grants are refused with `invalid_scope`.
-    const t = await setupConnectionInstance();
-    await t.createNamespace("kai-");
-    const inside = await t.seed("kai-crm");
-    const outside = await t.seed("crm");
-    await t.seedHistoricalGrant(t.kai.id, "connection.read", { namespace: "kai-" });
-    await t.seedHistoricalGrant(t.lena.id, "connection.use", { namespace: "kai-" });
-    const kai = await accessOf(t, t.kai);
-    const lena = await accessOf(t, t.lena);
-
-    expect(kai.authorize("connection.read", resourceOf("kai-crm", inside))).toEqual({
-      allowed: true,
-      source: "grant"
-    });
-    expect(kai.authorize("connection.use", resourceOf("kai-crm", inside)).allowed).toBe(false);
-    expect(lena.authorize("connection.use", resourceOf("kai-crm", inside))).toEqual({
-      allowed: true,
-      source: "grant"
-    });
-    for (const access of [kai, lena]) {
-      for (const action of CONNECTION_RIGHTS) {
-        expect(access.authorize(action, resourceOf("crm", outside)), action).toEqual({
-          allowed: false,
-          reason: "no_grant"
-        });
-      }
-      // The Namespace opens nothing that writes, deletes or approves.
-      for (const action of ["connection.write", "connection.delete", "connection.approve"]) {
-        expect(access.authorize(action, resourceOf("kai-crm", inside)).allowed, action).toBe(false);
-      }
-    }
-
-    // The asset operations and the platform context decide with the same evaluator.
-    const read = (name: string) => ({ params: { kind: "connection", name } });
-    await t.expectOk(t.kai.id, "assets.get", read("kai-crm"));
-    await t.expectRefused(
-      t.kai.id,
-      "assets.get",
-      read("crm"),
-      t.forbidden("connection.read", "no_grant")
-    );
-    const listed = await t.expectOk(t.kai.id, "assets.list", { params: { kind: "connection" } });
-    expect(assetPageSchema.parse(listed.json()).items.map((item) => item.name)).toEqual([
-      "kai-crm"
-    ]);
-    // The context names the Namespace with the action, which is what Build reads to show
-    // the kind's list.
-    const context = (await t.expectOk(t.kai.id, "platform.context.get")).json<{
-      namespaces: Array<{ prefix: string; actions: string[] }>;
-    }>();
-    expect(context.namespaces).toEqual([
-      { prefix: "kai-", displayName: "kai-", actions: ["connection.read"] }
-    ]);
-    // A deny on one Connection of the Namespace wins over the Namespace's allow.
-    await t.grant(t.kai.id, "connection.read", { assetId: inside }, "deny");
-    expect(
-      (await accessOf(t, t.kai)).authorize("connection.read", resourceOf("kai-crm", inside)).allowed
-    ).toBe(false);
-  });
-
   it("on the whole instance is named by the platform context, a right on one Connection is not", async () => {
     const t = await setupConnectionInstance();
     const a = await t.seed("alpha");
@@ -404,7 +343,6 @@ describe("a grant of a Connection right", () => {
   it("is written on one Connection and refused for every other action and place", async () => {
     const t = await setupConnectionInstance();
     const a = await t.seed("alpha");
-    await t.createNamespace("kai-");
     const agentId = await t.assetId("agent", "assistant");
     const grant = (action: string, scope: Record<string, unknown>) => ({
       payload: { holderKind: "user", holderId: t.kai.id, action, ...scope }
@@ -429,19 +367,10 @@ describe("a grant of a Connection right", () => {
     for (const action of ["connection.write", "connection.delete", "connection.approve"]) {
       await refusedFor(action, onAlpha, "action_not_grantable");
     }
-    // No instance row with a place named, and no row in a Namespace that does not exist.
-    // Writing stays with the role in a Namespace as on one Connection.
+    // No instance row with a place named. Writing stays with the role on the whole instance as
+    // on one Connection.
     await refusedFor("connection.use", { scopeKind: "instance", scopeId: a }, "invalid_scope");
-    await refusedFor(
-      "connection.use",
-      { scopeKind: "namespace", namespace: "nobody-" },
-      "invalid_scope"
-    );
-    await refusedFor(
-      "connection.write",
-      { scopeKind: "namespace", namespace: "kai-" },
-      "action_not_grantable"
-    );
+    await refusedFor("connection.write", { scopeKind: "instance" }, "action_not_grantable");
     // The asset has to be a Connection, and a Connection is no scope of an agent right.
     await refusedFor("connection.use", { scopeKind: "asset", scopeId: agentId }, "invalid_scope");
     await refusedFor("agent.read", onAlpha, "invalid_scope");

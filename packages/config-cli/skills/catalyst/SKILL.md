@@ -9,7 +9,7 @@ description: Work with a Workshape Catalyst instance through the catalyst comman
 
 ## Start here
 
-1. `catalyst context --json`: the instance, its release, your rights, your Namespaces and the kinds of assets it has.
+1. `catalyst context --json`: the instance, its release, your rights, your workspaces and the kinds of assets it has.
 2. `catalyst kinds --json`: each kind with its command word, lifecycle and rights; `catalyst --help`: the commands and options of the CLI that is installed.
 3. `catalyst docs`: the index of this release's product docs; `catalyst docs <page>`: one page.
 
@@ -105,7 +105,7 @@ A change that exits 3 prints its Operation Run id. Follow it with `catalyst oper
 
 ## What the key may do
 
-The key acts as the person and never does more than they may at the moment of each call. Its scopes narrow it further, such as `agent.write` everywhere or `agent.write:tax-` in one Namespace. A right an administrator takes away is gone on the next call. The person sees and revokes the key on the instance at `/settings/you/api-keys`.
+The key acts as the person and never does more than they may at the moment of each call. Its scopes narrow it further, such as `agent.write` everywhere, `agent.write:<workspace id>` in one workspace or `agent.write:<workspace id>/<name>` on one of its agents. A right an administrator takes away is gone on the next call. The person sees and revokes the key on the instance at `/settings/you/api-keys`.
 
 ## Rules
 

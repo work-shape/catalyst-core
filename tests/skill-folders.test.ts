@@ -59,6 +59,23 @@ const writtenSchema = z.object({
   fileSetId: z.string().optional(),
   files: z.array(z.object({ path: z.string(), sha256: z.string(), bytes: z.number() })).optional()
 });
+/** A read with its files, as `get` answers it, of a skill a workspace owns. */
+const readSchema = z.object({
+  config: z.record(z.string(), z.unknown()),
+  revision: z.number(),
+  files: z
+    .array(
+      z.object({
+        path: z.string(),
+        contentType: z.string(),
+        sha256: z.string(),
+        bytes: z.number(),
+        text: z.string().optional(),
+        base64: z.string().optional()
+      })
+    )
+    .optional()
+});
 
 describe("a skill as a folder of files", () => {
   const { start } = useSkillWorlds();
@@ -460,12 +477,17 @@ Thirty days a year.
   it("keeps the files and the frontmatter of a skill through an approved proposal of an agent and through a sync of its config", async () => {
     const world = await start(true, true);
     const { stores } = world.api;
+    // The skill is a workspace's: a batch names the workspace whose assets it writes.
+    const created = await world.api.call("workspaces.create", { payload: { name: "Forms" } });
+    expect(created.statusCode, created.body).toBe(200);
+    const workspaceId = z.object({ id: z.string() }).parse(created.json()).id;
     const manifest = SKILL_MD.replace("title: Form filler\n", "title: Form filler\nlicense: MIT\n");
     expect(
       (
         await put(world, {
           files: [{ path: "SKILL.md", text: manifest }, ...folder.slice(1)],
-          expectedRevision: null
+          expectedRevision: null,
+          workspaceId
         })
       ).statusCode
     ).toBe(200);
@@ -486,9 +508,17 @@ Thirty days a year.
         { type: "setDefaultAgent", agentName: "assistant" }
       ]
     });
-    const before = await get(world);
+    const read = async () => {
+      const response = await world.api.call("assets.get", {
+        params: SKILL,
+        query: { files: "true", workspaceId }
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      return readSchema.parse(response.json());
+    };
+    const before = await read();
     const kept = async () => {
-      const now = await get(world);
+      const now = await read();
       expect(now.config.files).toEqual(before.config.files);
       expect(now.config.frontmatter).toEqual({ license: "MIT" });
       const pdf = required(required(now.files).find(({ path }) => path === "assets/form.pdf"));
@@ -554,18 +584,11 @@ Thirty days a year.
       "Always run"
     );
 
-    // 2. A sync of the config, as a release and today's CLI send it: the text and no file.
-    expect(
-      (
-        await world.api.call("namespaces.create", {
-          payload: { prefix: "form-", displayName: "Forms" }
-        })
-      ).statusCode
-    ).toBe(200);
+    // 2. A sync of the workspace's config, as today's CLI sends it: the text and no file.
     const { files: _index, frontmatter: _kept, ...text } = approved.config;
     const synced = await world.api.call("assets.sync", {
       payload: {
-        namespace: "form-",
+        workspaceId,
         items: [
           {
             type: "put",

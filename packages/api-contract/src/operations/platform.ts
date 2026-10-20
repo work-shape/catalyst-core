@@ -9,7 +9,7 @@ export const platformOperations = {
     id: "platform.context.get",
     method: "GET",
     path: "/api/v1/context",
-    summary: "Read the instance, its release, the asset kinds and the caller's Namespaces",
+    summary: "Read the instance, its release, the asset kinds and the caller's workspaces",
     tag: "Platform",
     auth: "principal",
     scope: null,
@@ -36,7 +36,7 @@ export const platformOperations = {
   }),
   // A plain operation. It was kept plain when every registered read wrote an Operation Run and
   // its audit rows; an allowed read writes neither any more. Its caller holds at least
-  // one action of a registered asset kind, on the instance or in a Namespace, that the
+  // one action of a registered asset kind, anywhere, that the
   // credential's scopes let it use. The handler decides that, so `requires` names nothing.
   "platform.references.get": defineOperation({
     id: "platform.references.get",

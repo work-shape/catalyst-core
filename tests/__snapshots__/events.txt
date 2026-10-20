@@ -99,9 +99,6 @@
 {"name":"message.completed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"message.created","legacy":true,"audited":true,"phases":["after"]}
 {"name":"message.failed","legacy":true,"audited":true,"phases":["after"]}
-{"name":"namespace.created","legacy":true,"audited":true,"phases":["after"]}
-{"name":"namespace.deleted","legacy":true,"audited":true,"phases":["after"]}
-{"name":"namespace.updated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"notice.mail_delivery","legacy":false,"audited":true,"phases":["after"]}
 {"name":"notice.sent","legacy":false,"audited":true,"phases":["after"]}
 {"name":"operation.authorization_checked","legacy":false,"audited":true,"phases":["after"]}

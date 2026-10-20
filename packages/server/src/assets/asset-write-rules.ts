@@ -17,7 +17,6 @@ import {
   ASSET_SYNC_CHANGE_TYPES,
   AppError,
   asCollaborationWorkspaceId,
-  findNamespaceOfAssetName,
   hasAuthScope,
   isAppError,
   isJsonObject,
@@ -36,7 +35,6 @@ import {
   type ConfigAssetRecord,
   type InitialAgentAvailability,
   type JsonObject,
-  type Namespace,
   type OperationAuthorization,
   type RuntimeCallContext
 } from "@work-shape/catalyst-core";
@@ -126,8 +124,8 @@ const RELEASE_ACTION = "assets.release";
  *    pushed agent carries. (`missingUpsertRightOf`, `assertUpsertWithinLimits`)
  * 4. The default agent. The holder names the instance default with the batch, which no
  *    other caller of the operation may. (`requireReleaseSync`)
- * 5. The Namespace. A release names none and reaches any asset of the instance; every other
- *    batch names the one Namespace or the one workspace it stays in. (`requireBatchScope`)
+ * 5. The owner. A release names none and reaches any asset of the instance; every other
+ *    batch names the one workspace that owns what it writes. (`requireBatchScope`)
  *
  * A batch that names a workspace is never a release, whatever key it came with: what a
  * workspace owns is written by the rights on that workspace. (`accessOfSyncCredential`)
@@ -149,7 +147,7 @@ const RELEASE_ACTION = "assets.release";
  *     (`impliesDefaultChange`)
  *
  * Everything else binds the release holder as it binds everyone: the validation of the
- * definitions and of the set, the lists of a Namespace, the expected revisions, the policy and
+ * definitions and of the set, the lists of a workspace, the expected revisions, the policy and
  * the guardrails. On `put`, `delete` and `revert` the same holder is bound like any caller.
  * Every other caller is bound on every surface, whatever else that caller holds.
  */
@@ -165,7 +163,7 @@ const RELEASE_SCOPE = "config_assets:release";
  * The access a sync or its check is decided with. A release takes both: the release right on
  * the principal and the release scope on the credential of this call. With a credential that
  * carries no release scope the principal holds no release right here, so the batch is an
- * ordinary writer's: it names its Namespace and is bound by everything `isReleaseSync` lists.
+ * ordinary writer's: it names its workspace and is bound by everything `isReleaseSync` lists.
  * A batch that names a workspace is an ordinary writer's with any credential.
  */
 export function accessOfSyncCredential(
@@ -205,26 +203,14 @@ export function requireReleaseSync(access: ActorAccess, surface: AssetWriteSurfa
 }
 
 /**
- * Refuses a batch that names neither a Namespace nor a workspace, unless it is a release, and
- * one that names both.
+ * A batch names its owner: the workspace that owns every asset it writes. Only a release names
+ * none, and writes the instance's own assets.
  */
-export function requireBatchScope(
-  access: ActorAccess,
-  batch: { namespace?: string; workspaceId?: string }
-): void {
-  if (batch.namespace !== undefined && batch.workspaceId !== undefined) {
-    throw new AppError("VALIDATION_FAILED", "A batch names a Namespace or a workspace, not both", {
-      reason: "invalid_scope"
-    });
-  }
-  if (
-    batch.namespace === undefined &&
-    batch.workspaceId === undefined &&
-    !isReleaseSync(access, "sync")
-  ) {
+export function requireBatchScope(access: ActorAccess, batch: { workspaceId?: string }): void {
+  if (batch.workspaceId === undefined && !isReleaseSync(access, "sync")) {
     throw new AppError(
       "VALIDATION_FAILED",
-      "A batch names the Namespace or the workspace it belongs to"
+      "A batch names the workspace it belongs to. Only a release writes the instance's own assets"
     );
   }
 }
@@ -438,7 +424,7 @@ export function assertUpsertPolicyAndMissingRight(
 }
 
 // The first asset of a kind with an instance default becomes it and the last one takes it
-// away. Either changes the default, which no Namespace or asset grant opens.
+// away. Either changes the default, which no workspace or asset grant opens.
 export function requireInstanceDefaultChange(
   access: ActorAccess,
   kind: WorkflowAssetKind,
@@ -565,21 +551,15 @@ export async function findChangedAgentRefusals(
   // A write has one owner: the workspace whose build limits bind the agents it owns.
   const lists = await loadAgentLists(options, toolTargets.scope.workspaceId);
   for (const { agent } of changed) {
-    const namespace = findNamespaceOfAssetName(lists.namespaces, agent.name);
     const error =
-      (namespace && buildLimitRefusal(access, namespaceLimits(namespace), agent)) ??
-      (lists.workspace && buildLimitRefusal(access, workspaceLimits(lists.workspace), agent));
+      lists.workspace && buildLimitRefusal(access, workspaceLimits(lists.workspace), agent);
     if (error) refusals.push({ agentName: agent.name, error });
   }
   return { lists, modelIssues, refusals, warnings };
 }
 
-/**
- * The lists that bind the agents of one owner: the Namespaces', until NS-RETIRE, and the build
- * limits of the workspace that owns them.
- */
+/** The lists that bind the agents of one owner: the build limits of the workspace that owns them. */
 export interface AgentLists {
-  namespaces: readonly Namespace[];
   workspace?: CollaborationWorkspace;
 }
 
@@ -587,44 +567,32 @@ export async function loadAgentLists(
   options: Pick<AssetWorkflowOptions, "stores" | "clientInstanceId">,
   workspaceId: string | undefined
 ): Promise<AgentLists> {
-  const { clientInstanceId } = options;
-  // The Namespaces without their counts: a write reads the prefixes and the lists only.
-  const [namespaces, workspace] = await Promise.all([
-    options.stores.access.listNamespaceRecords({ clientInstanceId }),
+  const workspace =
     workspaceId === undefined
       ? undefined
-      : options.stores.workspaces.getWorkspace(
-          clientInstanceId,
+      : await options.stores.workspaces.getWorkspace(
+          options.clientInstanceId,
           asCollaborationWorkspaceId(workspaceId)
-        )
-  ]);
-  return { namespaces, ...(workspace ? { workspace } : {}) };
+        );
+  return workspace ? { workspace } : {};
 }
 
 /**
  * Whether a list names the model bindings the agent may use: the operator's choice of models
  * for it, so its writer picks among them without the right to manage models.
  */
-export function listsModelBindings(lists: AgentLists, agentName: string): boolean {
-  return (
-    findNamespaceOfAssetName(lists.namespaces, agentName)?.allowedModelBindingIds !== undefined ||
-    lists.workspace?.allowedModelBindingIds !== undefined
-  );
+export function listsModelBindings(lists: AgentLists): boolean {
+  return lists.workspace?.allowedModelBindingIds !== undefined;
 }
 
 /** Lists that bind an agent, with the place a refusal names. */
-interface BuildLimits extends Pick<Namespace, "allowedToolNames" | "allowedModelBindingIds"> {
-  /** "Namespace 'kai-'" or "workspace 'Kai Spezis'". */
+interface BuildLimits extends Pick<
+  CollaborationWorkspace,
+  "allowedToolNames" | "allowedModelBindingIds"
+> {
+  /** "workspace 'Kai Spezis'". */
   place: string;
-  details: { namespace: string } | { workspaceId: string; workspace: string };
-}
-
-function namespaceLimits(namespace: Namespace): BuildLimits {
-  return {
-    ...namespace,
-    place: `Namespace '${namespace.prefix}'`,
-    details: { namespace: namespace.prefix }
-  };
+  details: { workspaceId: string; workspace: string };
 }
 
 function workspaceLimits(workspace: CollaborationWorkspace): BuildLimits {

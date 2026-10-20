@@ -197,9 +197,8 @@ describe("the owner of an agent or a skill", () => {
     });
   });
 
-  it("is the bound workspace for a batch, whose agents start hidden, and never a Namespace beside it", async () => {
+  it("is the bound workspace for a batch, whose agents start hidden, and a batch names it", async () => {
     const { t, team } = await setup();
-    await t.createNamespace("kai-");
     const sync = (payload: Record<string, unknown>) => t.call(t.kai.id, "assets.sync", { payload });
     const items = [
       { type: "put", kind: "skill", config: skill("team-notes"), expectedRevision: null },
@@ -211,10 +210,11 @@ describe("the owner of an agent or a skill", () => {
       }
     ];
 
-    const both = await sync({ namespace: "kai-", workspaceId: team, items });
-    expect(both.statusCode).toBe(422);
-    expect(errorSchema.parse(both.json()).error.message).toBe(
-      "A batch names a Namespace or a workspace, not both"
+    // Only a release writes the instance's own assets.
+    const unbound = await sync({ items });
+    expect(unbound.statusCode).toBe(422);
+    expect(errorSchema.parse(unbound.json()).error.message).toBe(
+      "A batch names the workspace it belongs to. Only a release writes the instance's own assets"
     );
 
     const applied = await sync({ workspaceId: team, items });

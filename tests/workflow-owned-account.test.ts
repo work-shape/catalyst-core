@@ -1,4 +1,3 @@
-import { prepareSyncPrefix, syncAssetsAtPrefix } from "./support/asset-operations";
 import { z } from "zod";
 import { workflowRunPrincipal } from "@work-shape/catalyst-workflows";
 import { afterEach, describe, expect, it } from "vitest";
@@ -380,29 +379,24 @@ describe("the Workflow's own account (LIVE-1)", () => {
     expect(await grants(t, principal.id)).toEqual([]);
   });
 
-  it.each(["workflows.unpublish", "assets.delete", "assets.sync"] as const)(
+  // `assets.sync` reaches no Workflow: a release carries agents and skills, and every other
+  // batch names the workspace that owns what it writes, which a Workflow never is.
+  it.each(["workflows.unpublish", "assets.delete"] as const)(
     "%s removes the principal and all its grants",
     async (operation) => {
       const t = await ready();
-      if (operation === "assets.sync") await prepareSyncPrefix(t, "own-");
       await t.allow({ kind: "user", id: t.kai.id }, "connection.use");
       await save(t);
       expect((await publish(t)).statusCode).toBe(200);
       const principal = await owned(t);
       if (!principal) throw new Error("missing owned account");
-      if (operation === "assets.sync") {
-        const response = await syncAssetsAtPrefix(t, t.root.id, "own-", [
-          { type: "delete", ...address, expectedRevision: 1 }
-        ]);
-        expect(response.statusCode, response.body).toBe(200);
-      } else
-        await t.expectOk(
-          t.root.id,
-          operation,
-          operation === "assets.delete"
-            ? { params: address, payload: { expectedRevision: 1 } }
-            : { params: { workflow: address.name } }
-        );
+      await t.expectOk(
+        t.root.id,
+        operation,
+        operation === "assets.delete"
+          ? { params: address, payload: { expectedRevision: 1 } }
+          : { params: { workflow: address.name } }
+      );
       expect(await owned(t)).toBeUndefined();
       expect(await grants(t, principal.id)).toEqual([]);
       expect(

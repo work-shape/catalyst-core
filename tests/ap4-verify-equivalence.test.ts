@@ -198,22 +198,23 @@ async function seed(sql: Sql, seedNumber: number): Promise<Seeded> {
       // No release before AP-4 wrote a row at instance scope: the Access page refused it
       // (`invalid_scope`). A user's row there is still compared; a service principal's is not,
       // because once migration 0079 merged it with a key of the list nothing tells the two
-      // apart, and a credential's scopes cap the list's keys but did not cap such a row.
+      // apart, and a credential's scopes cap the list's keys but did not cap such a row. A row
+      // of a name prefix is not seeded: NS-RETIRE narrows it on purpose, and its own migration
+      // test compares it.
       const scopeKind = pick(
         holder.kind === "user"
-          ? (["instance", "namespace", "asset", "workspace"] as const)
-          : (["namespace", "asset", "workspace"] as const)
+          ? (["instance", "asset", "workspace"] as const)
+          : (["asset", "workspace"] as const)
       );
       const scopeId = scopeKind === "asset" ? "asset_1" : scopeKind === "workspace" ? "ws_1" : null;
-      const namespace = scopeKind === "namespace" ? "sales-" : null;
-      const key = `${holder.instance}|${holder.kind}|${holder.id}|${action}|${scopeKind}|${scopeId}|${namespace}`;
+      const key = `${holder.instance}|${holder.kind}|${holder.id}|${action}|${scopeKind}|${scopeId}`;
       if (seen.has(key)) continue;
       seen.add(key);
       await sql`
         insert into permission_grants (id, client_instance_id, holder_kind, holder_id, action,
-          scope_kind, scope_id, namespace, effect, granted_by, created_at)
+          scope_kind, scope_id, effect, granted_by, created_at)
         values (${`g_${seen.size}`}, ${holder.instance}, ${holder.kind}, ${holder.id}, ${action},
-          ${scopeKind}, ${scopeId}, ${namespace}, ${random() < 0.5 ? "allow" : "deny"}, 'usr_x', now())`;
+          ${scopeKind}, ${scopeId}, ${random() < 0.5 ? "allow" : "deny"}, 'usr_x', now())`;
     }
   }
   return seeded;
@@ -230,9 +231,9 @@ async function snapshotGrants(sql: Sql): Promise<PermissionGrant[]> {
       effect: PermissionGrant["effect"];
       scope_kind: PermissionGrant["scopeKind"];
       scope_id: string | null;
-      namespace: string | null;
     }[]
-  >`select * from permission_grants`;
+  >`select id, client_instance_id, holder_kind, holder_id, action, effect, scope_kind, scope_id
+    from permission_grants`;
   return rows.map((row) => ({
     id: row.id,
     clientInstanceId: asClientInstanceId(row.client_instance_id),
@@ -242,7 +243,6 @@ async function snapshotGrants(sql: Sql): Promise<PermissionGrant[]> {
     effect: row.effect,
     scopeKind: row.scope_kind,
     ...(row.scope_id === null ? {} : { scopeId: row.scope_id }),
-    ...(row.namespace === null ? {} : { namespace: row.namespace }),
     grantedBy: asUserId("usr_x"),
     createdAt: new Date().toISOString()
   }));

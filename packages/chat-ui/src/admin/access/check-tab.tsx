@@ -3,7 +3,6 @@ import type {
   AdministeredUser,
   ConfigAssetSummary,
   EffectivePermissions,
-  NamespaceWithUsage,
   PermissionGrantRow
 } from "@work-shape/catalyst-api-client";
 import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
@@ -33,13 +32,11 @@ import {
   type TranslationContextValue,
   type TranslationKey
 } from "../../shared/i18n";
-import { modelDisplayLabel } from "../../shared/model-label";
 import {
   assetNameValid,
   checkAsset,
   checkedAssetId,
   checkState,
-  namespaceOfName,
   type CheckableAsset,
   type CheckedAction,
   type CheckedKind,
@@ -77,15 +74,9 @@ function decidedBy(action: CheckedAction, t: Translate): string {
   if (entry.source !== "grant") {
     return t(entry.effect === "deny" ? "access.decidedByLegacyDeny" : "access.decidedByLegacy");
   }
-  const row =
-    entry.scopeKind === "namespace"
-      ? t(
-          entry.effect === "deny"
-            ? "access.decidedByDenyNamespace"
-            : "access.decidedByGrantNamespace",
-          { prefix: entry.namespace ?? "" }
-        )
-      : t(entry.effect === "deny" ? "access.decidedByDenyAsset" : "access.decidedByGrantAsset");
+  const row = t(
+    entry.effect === "deny" ? "access.decidedByDenyAsset" : "access.decidedByGrantAsset"
+  );
   return action.deniedThrough === undefined
     ? row
     : t("access.decidedByDenyThrough", {
@@ -125,10 +116,6 @@ export interface CheckTabProps {
   /** Why the agents and skills are absent for good; without them no result is shown. */
   assetsFailure: LoadFailure | undefined;
   onRetryAssets(): void;
-  /** The Namespaces, for the lists that bind a save. Absent while they load or failed. */
-  namespaces: readonly NamespaceWithUsage[] | undefined;
-  /** The models of the instance, for the names of the ones a Namespace lists. */
-  modelBindings: readonly { id: string; model: string; label?: string }[] | undefined;
   holderId: string | undefined;
   onHolderChange(holderId: string): void;
   /** What the chosen user is allowed and denied. Absent while it loads. */
@@ -175,8 +162,6 @@ export function CheckTab({
   assets,
   assetsFailure,
   onRetryAssets,
-  namespaces,
-  modelBindings,
   holderId,
   onHolderChange,
   effective,
@@ -338,8 +323,6 @@ export function CheckTab({
           kind={kind}
           assetName={assetName}
           effective={effective}
-          namespace={namespaceOfName(assetName, namespaces ?? [])}
-          modelBindings={modelBindings}
           actions={checkAsset(
             effective,
             { kind, name: assetName },
@@ -352,65 +335,22 @@ export function CheckTab({
   );
 }
 
-/**
- * What the lists of a Namespace say about an agent in it, one sentence per list. Nothing for a
- * skill and for a Namespace without lists: lists bind agents only.
- */
-function namespaceLimits(
-  kind: string,
-  namespace: NamespaceWithUsage | undefined,
-  modelBindings: readonly { id: string; model: string; label?: string }[] | undefined,
-  t: Translate
-): string[] {
-  const tools = namespace?.allowedToolNames;
-  const models = namespace?.allowedModelBindingIds;
-  if (kind !== "agent" || !namespace || (!tools && !models)) {
-    return [];
-  }
-  const modelName = (id: string) => {
-    const binding = modelBindings?.find((candidate) => candidate.id === id);
-    return binding ? modelDisplayLabel(binding) : id;
-  };
-  return [
-    t("access.checkNamespace", { prefix: namespace.prefix }),
-    ...(tools
-      ? [
-          tools.length === 0
-            ? t("access.checkToolsNone")
-            : t("access.checkToolsListed", { list: tools.join(", ") })
-        ]
-      : []),
-    ...(models
-      ? [
-          models.length === 0
-            ? t("access.checkModelsNone")
-            : t("access.checkModelsListed", { list: models.map(modelName).join(", ") })
-        ]
-      : [])
-  ];
-}
-
 function CheckResult({
   holderName,
   kind,
   assetName,
   effective,
-  namespace,
-  modelBindings,
   actions
 }: {
   holderName: string;
   kind: string;
   assetName: string;
   effective: EffectivePermissions;
-  namespace: NamespaceWithUsage | undefined;
-  modelBindings: readonly { id: string; model: string; label?: string }[] | undefined;
   actions: readonly CheckedAction[];
 }) {
   const { t } = useTranslation();
   const allowed = (verb: CheckedAction["verb"]) =>
     actions.find((action) => action.verb === verb && action.allowed);
-  const limits = allowed("write") ? namespaceLimits(kind, namespace, modelBindings, t) : [];
   return (
     <Section
       layout="stacked"
@@ -450,11 +390,6 @@ function CheckResult({
           <p data-testid="check-right-only" className="text-body text-muted-foreground">
             {t(kind === "agent" ? "access.checkRightOnlyAgent" : "access.checkRightOnlySkill")}
           </p>
-        ) : null}
-        {limits.length > 0 ? (
-          <Banner tone="warning" data-testid="check-namespace-limits">
-            {limits.join(" ")}
-          </Banner>
         ) : null}
         {allowed("read")?.reason === "grant" && (kind === "agent" || kind === "skill") ? (
           <Banner layout="line">{t("access.checkReadThroughGrant")}</Banner>

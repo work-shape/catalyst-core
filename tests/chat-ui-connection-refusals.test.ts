@@ -33,8 +33,6 @@ import { CONDITION_WAIT_MS } from "./support/assertions";
 // only an operator, who changes release config, gets the server's sentence under Details.
 
 const createDefaults = {
-  namespaces: [],
-  mayNameFreely: true,
   checkName: async () => ({ available: true as const }),
   remove: async () => undefined,
   mayDelete: () => true

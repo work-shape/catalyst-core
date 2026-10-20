@@ -32,15 +32,10 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
       usableActions(options, caller).length === 0 &&
       readActionsOnSingleAssets(options, caller).length === 0
     ) {
-      const namespaces = await options.stores.access.listNamespaceRecords({
-        clientInstanceId: options.clientInstanceId
-      });
-      if (!namespaces.some(({ prefix }) => usableActions(options, caller, prefix).length > 0)) {
-        throw new AppError(
-          "FORBIDDEN",
-          "Reading the references needs a right on an asset kind, on the instance, in a workspace or on one asset"
-        );
-      }
+      throw new AppError(
+        "FORBIDDEN",
+        "Reading the references needs a right on an asset kind, on the instance, in a workspace or on one asset"
+      );
     }
     return configAssetReferences(options);
   });

@@ -443,9 +443,6 @@ function LoadedAssetPage({
   const shipped = shippedTitle !== undefined;
   const owner = stored.scope.kind === "workspace" ? stored.scope.workspaceId : undefined;
   const canWrite = !shipped && mayOnAsset(source.rights, "write", stored);
-  const namespace = source.rights.namespaces.find(
-    (candidate) => candidate.prefix === stored.namespace
-  );
   const workspaceName =
     owner === undefined
       ? undefined
@@ -454,9 +451,7 @@ function LoadedAssetPage({
     ? t("build.readOnlyPlatform")
     : workspaceName !== undefined
       ? t("build.readOnlyWorkspace", { workspace: workspaceName })
-      : stored.namespace === undefined
-        ? t("build.readOnlyInstance")
-        : t("build.readOnlyNamespace", { namespace: namespace?.displayName ?? stored.namespace });
+      : t("build.readOnlyInstance");
   const canDelete = !shipped && state.canDelete && mayOnAsset(source.rights, "delete", stored);
   // A kind with drafts answers its two pointers. The saved draft is ahead of what is
   // published, or nothing is published yet.
@@ -852,7 +847,6 @@ function mayOnAsset(rights: BuildRights, verb: AssetChange, asset: BuildAsset): 
   if (asset.allowed !== undefined) return asset.allowed.includes(verb);
   return rights.may(verb, {
     kind: asset.kind,
-    namespace: asset.namespace,
     workspaceId: asset.scope.kind === "workspace" ? asset.scope.workspaceId : undefined
   });
 }

@@ -111,8 +111,8 @@ describe("the giver's grant choices", () => {
           {
             action: "app.write",
             effect: "deny",
-            scopeKind: "namespace",
-            namespace: "old-",
+            scopeKind: "workspace",
+            scopeId: "w-b",
             source: "grant"
           }
         ]),
@@ -120,30 +120,6 @@ describe("the giver's grant choices", () => {
         workspaces
       ).places("app", ["write"])
     ).toEqual([]);
-  });
-  it("keeps historical Namespace rights effective only on matching instance assets", () => {
-    const instanceAssets = {
-      app: {
-        failed: false,
-        items: [
-          { id: "a", name: "old-app", resource: { kind: "app", name: "old-app", assetId: "a" } }
-        ]
-      }
-    };
-    const options = grantOptions(
-      entries([
-        {
-          action: "app.write",
-          effect: "allow",
-          scopeKind: "namespace",
-          namespace: "old-",
-          source: "grant"
-        }
-      ]),
-      instanceAssets,
-      workspaces
-    );
-    expect(options.places("app", ["write"])).toEqual(["asset"]);
   });
 });
 

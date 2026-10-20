@@ -10,12 +10,11 @@ import {
 } from "../../access/access-model";
 import type { GrantChoices } from "../../access/grants-tab";
 import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from "@work-shape/catalyst-ui";
-import { CheckTab, GrantsTab, NamespacesTab } from "../../access";
+import { CheckTab, GrantsTab } from "../../access";
 import {
   listGrantChoiceAssets,
   useAccessMutations,
   useEffectivePermissionsQuery,
-  useNamespacesQuery,
   usePermissionGrantsQuery
 } from "../../access/access-queries";
 import { useQueries, useQuery } from "@tanstack/react-query";
@@ -31,8 +30,8 @@ import { useTranslation } from "../../../shared/i18n";
 import { useSettingsPage } from "../../../shared/settings-page-context";
 
 /**
- * Instance > Access: the Namespaces of the instance, the grant rows on the assets of every kind
- * a right can be given on, and what one person may do with one asset. Each tab gets its data from here and shows it.
+ * Instance > Access: the grant rows on the assets of every kind a right can be given on, and
+ * what one person may do with one asset. Each tab gets its data from here and shows it.
  */
 export function AccessPage() {
   const { t, locale } = useTranslation();
@@ -40,10 +39,9 @@ export function AccessPage() {
   const api = { apiBaseUrl, authScope, client };
   const [checkedHolderId, setCheckedHolderId] = useState<string | undefined>();
   const [checkedKind, setCheckedKind] = useState("agent");
-  const namespacesQuery = useNamespacesQuery(api);
   const grantsQuery = usePermissionGrantsQuery(api);
   const usersQuery = useWorkspaceUsersQuery({ ...api, enabled: true });
-  // Tools, models and assets come with the agent configuration, which has its own right. A
+  // Assets come with the agent configuration, which has its own right. A
   // reader without it still sees and revokes rows; the pickers say what could not be loaded.
   const overviewQuery = useConfigAssetsOverviewQuery({ ...api, enabled: true });
   const giverQuery = useEffectivePermissionsQuery({ ...api, holderId: user.id });
@@ -156,35 +154,14 @@ export function AccessPage() {
           </>
         }
       />
-      <Tabs defaultValue="namespaces">
+      <Tabs defaultValue="grants">
         <TabsList label={t("access.tabs")}>
-          <TabsTrigger value="namespaces" count={namespacesQuery.data?.length}>
-            {t("access.tabNamespaces")}
-          </TabsTrigger>
           <TabsTrigger value="grants" count={grantsQuery.data?.length}>
             {t("access.tabGrants")}
           </TabsTrigger>
           <TabsTrigger value="data-scopes">{t("access.scopeTab")}</TabsTrigger>
           <TabsTrigger value="check">{t("access.tabCheck")}</TabsTrigger>
         </TabsList>
-        <TabsContent value="namespaces" className="pt-5">
-          <NamespacesTab
-            namespaces={namespacesQuery.data}
-            loadFailed={Boolean(namespacesQuery.error)}
-            onRetry={retry(namespacesQuery)}
-            references={
-              overview && {
-                toolNames: overview.references.enabledToolNames,
-                modelBindings: overview.references.modelBindings,
-                assets: overview.assets
-              }
-            }
-            referencesFailure={overviewFailure}
-            onCreate={(request) => mutations.createNamespace.mutateAsync(request)}
-            onUpdate={(prefix, body) => mutations.updateNamespace.mutateAsync({ prefix, body })}
-            onDelete={(prefix) => mutations.deleteNamespace.mutateAsync(prefix)}
-          />
-        </TabsContent>
         <TabsContent value="grants" className="pt-5">
           <GrantsTab
             giver={giverQuery.error === null ? giverQuery.data : undefined}
@@ -238,8 +215,6 @@ export function AccessPage() {
             assets={overview?.assets}
             assetsFailure={overviewFailure}
             onRetryAssets={retry(overviewQuery)}
-            namespaces={namespacesQuery.data}
-            modelBindings={overview?.references.modelBindings}
             holderId={checkedHolderId}
             onHolderChange={setCheckedHolderId}
             effective={effectiveQuery.data}

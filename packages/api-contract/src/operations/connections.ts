@@ -244,7 +244,7 @@ export const connectionNameParamsSchema = z.object({ name: connectionNameSchema 
 
 // Each is an operation of the registry. None names its right in `requires`: the right is the
 // Connection's own (`connection.read`, `connection.write`) and is decided on the Connection
-// the call names, where a grant in a Namespace or on the asset can answer it.
+// the call names, where a grant on the instance or on the asset can answer it.
 export const connectionOperations = {
   "connections.person_context": defineRegisteredOperation({
     id: "connections.person_context",

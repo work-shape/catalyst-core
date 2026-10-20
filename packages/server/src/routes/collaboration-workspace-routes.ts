@@ -47,8 +47,7 @@ type SectionCaller = { user: AuthenticatedUser; access: ActorAccess };
  * Whether the Agents row of the sidebar is there for the caller in one workspace: it offers a
  * choice, two agents or more, or the caller may write an agent and so make the next one. With
  * one agent New chat starts it, and a page of one card adds nothing. The right is the one the
- * agent kind registers, held on the instance, on what this workspace owns, in a Namespace or on
- * one agent, with a credential whose scope reaches the write.
+ * agent kind registers, held on the instance, on what this workspace owns or on one agent, with a credential whose scope reaches the write.
  */
 function agentsRowShown(
   available: number,
@@ -61,7 +60,7 @@ function agentsRowShown(
   return (
     hasAuthScope(user, WRITE_SCOPE) &&
     (access.authorize(AGENT_WRITE, { kind: AGENT_KIND, workspaceId }).allowed ||
-      access.holdsGrantAt(AGENT_WRITE, ["namespace", "asset"]))
+      access.holdsGrantAt(AGENT_WRITE, ["asset"]))
   );
 }
 

@@ -215,11 +215,104 @@ async function legacyListsRestored(sql: Queries): Promise<boolean> {
 }
 
 /**
+ * The statements of `0079_legacy_permission_grants`, written for the schema every later
+ * migration leaves. The migration's own insert names the uniqueness and the column of grant rows
+ * that NS-RETIRE dropped (0127), so it runs only at its own place. This one finds the row a
+ * holder already has for an action without them: it keeps who wrote it, and a legacy revocation
+ * still makes it a deny. Each statement can run again.
+ */
+const LEGACY_LIST_MOVE = [
+  `WITH "listed" AS (
+  SELECT
+    "held"."client_instance_id",
+    "held"."holder_kind",
+    "held"."holder_id",
+    "legacy_keys"."action",
+    CASE WHEN "held"."permissions" @> jsonb_build_array('!' || "legacy_keys"."key") THEN 'deny' ELSE 'allow' END AS "effect"
+  FROM (
+    SELECT 'user' AS "holder_kind", "id" AS "holder_id", "client_instance_id", "permissions"
+    FROM "product_users"
+    WHERE "deletion_requested_at" IS NULL AND jsonb_typeof("permissions") = 'array'
+    UNION ALL
+    SELECT 'service_principal', "id", "client_instance_id", "permissions"
+    FROM "service_principals"
+    WHERE jsonb_typeof("permissions") = 'array'
+  ) AS "held"
+  JOIN (
+    VALUES
+      ('agent_skills.approve', 'skill.approve'),
+      ('agent_skills.approve', 'operations.approve'),
+      ('config_assets.read', 'agent.read'),
+      ('config_assets.read', 'skill.read'),
+      ('config_assets.write', 'agent.write'),
+      ('config_assets.write', 'agent.delete'),
+      ('config_assets.write', 'skill.write'),
+      ('config_assets.write', 'skill.delete'),
+      ('config_assets.release', 'assets.release'),
+      ('usage.view', 'usage.view'),
+      ('users.manage', 'users.manage'),
+      ('api_access.manage', 'api_access.manage'),
+      ('agent_models.manage', 'agent_models.manage'),
+      ('audit.view', 'audit.view')
+  ) AS "legacy_keys" ("key", "action")
+    ON "held"."permissions" @> jsonb_build_array("legacy_keys"."key")
+    OR "held"."permissions" @> jsonb_build_array('!' || "legacy_keys"."key")
+),
+"denied" AS (
+  UPDATE "permission_grants" AS "grant"
+  SET "effect" = 'deny'
+  FROM "listed"
+  WHERE "listed"."effect" = 'deny' AND "grant"."effect" <> 'deny'
+    AND "grant"."client_instance_id" = "listed"."client_instance_id"
+    AND "grant"."holder_kind" = "listed"."holder_kind"
+    AND "grant"."holder_id" = "listed"."holder_id"
+    AND "grant"."action" = "listed"."action"
+    AND "grant"."scope_kind" = 'instance'
+)
+INSERT INTO "permission_grants" (
+  "id", "client_instance_id", "holder_kind", "holder_id", "action", "scope_kind", "scope_id",
+  "effect", "granted_by", "created_at"
+)
+SELECT
+  'grant_' || gen_random_uuid()::text, "listed"."client_instance_id", "listed"."holder_kind",
+  "listed"."holder_id", "listed"."action", 'instance', NULL, "listed"."effect",
+  'legacy_permission_list', now()
+FROM "listed"
+WHERE NOT EXISTS (
+  SELECT 1 FROM "permission_grants" AS "grant"
+  WHERE "grant"."client_instance_id" = "listed"."client_instance_id"
+    AND "grant"."holder_kind" = "listed"."holder_kind"
+    AND "grant"."holder_id" = "listed"."holder_id"
+    AND "grant"."action" = "listed"."action"
+    AND "grant"."scope_kind" = 'instance'
+)`,
+  // The comment the migration put on the column says `*` was taken out of the lists already.
+  `UPDATE "api_credentials"
+SET "scopes" = coalesce(
+  (
+    SELECT jsonb_agg("entry"."value" ORDER BY "entry"."position")
+    FROM jsonb_array_elements("api_credentials"."scopes") WITH ORDINALITY AS "entry" ("value", "position")
+    WHERE "entry"."value" <> '"*"'::jsonb
+  ),
+  '[]'::jsonb
+)
+WHERE jsonb_typeof("scopes") = 'array' AND "scopes" @> '["*"]'::jsonb
+  AND col_description(
+    '"api_credentials"'::regclass,
+    (SELECT "attnum" FROM pg_attribute WHERE "attrelid" = '"api_credentials"'::regclass AND "attname" = 'scopes')
+  ) IS DISTINCT FROM 'The scopes the credential carries of its principal''s; ["*"] carries every one (AP-4).'`,
+  `UPDATE "api_credentials"
+SET "scopes" = '["*"]'::jsonb
+WHERE "scopes" IS NULL OR "scopes" = 'null'::jsonb`,
+  `COMMENT ON COLUMN "api_credentials"."scopes" IS 'The scopes the credential carries of its principal''s; ["*"] carries every one (AP-4).'`
+];
+
+/**
  * The data step of the migration step, after the migrations: when the legacy lists were
  * written back into their columns for a release before AP-4, the statements of the migration
- * that moves them into rows run again over the lists that release kept, and the mark of the
- * restore is removed, in one transaction. Every statement of that migration can run again.
- * Returns the migration's name when it ran.
+ * that moves them into rows run again over the lists that release kept (`LEGACY_LIST_MOVE`),
+ * and the mark of the restore is removed, in one transaction. Returns the migration's name
+ * when it ran.
  */
 async function moveRestoredLegacyLists(
   session: Queries,
@@ -228,7 +321,7 @@ async function moveRestoredLegacyLists(
   const legacy = migrations.find(isLegacyListMigration);
   if (legacy === undefined || !(await legacyListsRestored(session))) return undefined;
   await inTransaction(session, async () => {
-    for (const chunk of legacy.chunks) await session.unsafe(chunk.text);
+    for (const statement of LEGACY_LIST_MOVE) await session.unsafe(statement);
     await session.unsafe(`delete from "${restoresTable}"`);
   });
   return legacy.name;

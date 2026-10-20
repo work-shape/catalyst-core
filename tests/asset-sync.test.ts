@@ -1,16 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { agent, clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import {
-  agent,
-  clientInstanceId,
-  errorSchema,
-  skill,
-  type AccessInstance
-} from "./support/access-instance";
-import {
-  setupNamespaceHolder as setupNamespace,
-  syncAssetsAtPrefix,
-  type NamespaceHolderInstance
+  setupWorkspaceHolder as setup,
+  type WorkspaceHolderInstance
 } from "./support/asset-operations";
 
 // One batch writes several assets, each against the revision its caller read, all of them or
@@ -24,8 +17,9 @@ type Item =
 const putSkill = (name: string, expectedRevision: number | null | undefined, content?: string) =>
   ({ type: "put", kind: "skill", config: skill(name, content), expectedRevision }) satisfies Item;
 
-const sync = (t: AccessInstance, userId: string, items: Item[], headers = {}) =>
-  syncAssetsAtPrefix(t, userId, "kai-", items, headers);
+/** A batch of Kai's workspace. */
+const sync = (t: WorkspaceHolderInstance, userId: string, items: Item[], headers = {}) =>
+  t.call(userId, "assets.sync", { payload: { workspaceId: t.kaiTeam, items }, headers });
 
 const refusalOf = (response: Awaited<ReturnType<typeof sync>>) =>
   errorSchema.parse(response.json()).error;
@@ -39,11 +33,11 @@ const appliedSchema = z.object({
 });
 
 describe("the revision each item of a batch is made against", () => {
-  let t: NamespaceHolderInstance;
+  let t: WorkspaceHolderInstance;
   beforeAll(async () => {
-    t = await setupNamespace({ furtherToolNames: ["read_skill"] });
-    // Lena writes skills of the Namespace and may not read them.
-    await t.seedHistoricalGrant(t.lena.id, "skill.write", { namespace: "kai-" });
+    t = await setup({ furtherToolNames: ["read_skill"] });
+    // Lena writes skills of Kai's workspace and may not read them.
+    await t.grant(t.lena.id, "skill.write", { workspaceId: t.kaiTeam });
   });
 
   const revisionsOf = async (kind: string, name: string) =>
@@ -194,7 +188,11 @@ describe("the revision each item of a batch is made against", () => {
     const create = (content: string) =>
       t.call(t.kai.id, "assets.put", {
         params: { kind: "skill", name: "kai-race" },
-        payload: { config: skill("kai-race", content), expectedRevision: null }
+        payload: {
+          config: skill("kai-race", content),
+          expectedRevision: null,
+          workspaceId: t.kaiTeam
+        }
       });
 
     const answers = await Promise.all([create("One."), create("Two.")]);

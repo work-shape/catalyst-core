@@ -635,7 +635,7 @@ describe("refused save", () => {
     ok: false,
     conflict: false,
     refusals: [
-      { field: "tools", message: "The tool documents.read is not allowed in Namespace tax-." },
+      { field: "tools", message: "The tool documents.read is not allowed in the workspace Tax." },
       { message: "The change would break an asset the caller may not read" }
     ]
   };
@@ -668,7 +668,7 @@ describe("refused save", () => {
     const tools = section(markup, "tools");
 
     expect(tools).toContain('data-field-refusal=""');
-    expect(tools).toContain("The tool documents.read is not allowed in Namespace tax-.");
+    expect(tools).toContain("The tool documents.read is not allowed in the workspace Tax.");
     expect(markup.match(/The tool documents\.read is not allowed/gu)).toHaveLength(1);
     expect(markup.match(/data-field-refusal/gu)).toHaveLength(1);
     expect(section(markup, "details")).not.toContain("data-field-refusal");

@@ -228,13 +228,17 @@ const allowedPageErrors: readonly AllowedPageError[] = [
   {
     name: "refused-asset-in-build",
     reason:
-      "Chromium's own log line: the test saves an agent with a tool its Namespace does not " +
-      "allow and one that changed meanwhile, and opens an agent outside the Namespace. It " +
-      "asserts what the page shows for the 403 and the 412.",
-    matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(412).source}`, "u"),
-    path: /^\/api\/v1\/assets\/agent\/(?:kai-helper|research_assistant)$/u,
+      "Chromium's own log lines: the test saves an agent with a tool its workspace does not " +
+      "allow and one that changed meanwhile, and opens an agent of the instance, which no " +
+      "workspace offered to the holder has. It asserts what the page shows for the 403, the " +
+      "412 and the 404.",
+    matches: new RegExp(
+      `${requestAnswered(403).source}|${requestAnswered(412).source}|${requestAnswered(404).source}`,
+      "u"
+    ),
+    path: /^\/api\/v1\/assets\/agent\/(?:team-helper|research_assistant)$/u,
     tests: [
-      "a Namespace holder builds an agent in the Namespace, is refused, meets a conflict and restores"
+      "a workspace holder builds an agent in the workspace, is refused, meets a conflict and restores"
     ]
   },
   {
@@ -286,7 +290,7 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "test asserts.",
     matches: requestAnswered(409),
     path: /^\/api\/v1\/instance\/access\/grants$/u,
-    tests: ["an administrator registers a Namespace, grants, checks, denies, revokes and deletes"]
+    tests: ["an administrator grants, checks, denies and revokes rights"]
   },
   {
     name: "planted-policy-refusal",

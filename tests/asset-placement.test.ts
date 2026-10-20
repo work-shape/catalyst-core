@@ -20,14 +20,19 @@ import { getTestJobs, getTestOperationCalls } from "./support/test-instance";
 // `assets.set_availability`. That the next run reads a changed availability is held in
 // tests/chat-server-agent-runs.test.ts.
 describe("the default and the availability of an asset", () => {
-  it("refuses a Namespace builder without the right on the whole instance, and a deny on the asset", async () => {
+  it("refuses a builder in a workspace without the right on the whole instance, and a deny on the asset", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
+    const team = await t.sharedWorkspace("Team");
     for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read"]) {
-      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
+      await t.grant(t.kai.id, action, { workspaceId: team });
     }
-    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
-    // The write right on the one asset is no more the instance's than the one in the Namespace.
+    const own = await t.call(t.kai.id, "assets.put", {
+      params: { kind: "agent", name: "kai-own" },
+      payload: { config: agent("kai-own"), workspaceId: team }
+    });
+    expect(own.statusCode, own.body).toBe(200);
+    expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
+    // The write right on the one asset is no more the instance's than the one in the workspace.
     await t.grant(t.kai.id, "agent.write", { assetId: await t.assetId("agent", "kai-helper") });
     const state = () => t.stores.configAssets.getConfigAssetState({ clientInstanceId });
     const availability = async () =>
@@ -39,9 +44,9 @@ describe("the default and the availability of an asset", () => {
       payload: { mode: "selected" }
     };
 
-    // Both are refused for the right on the whole instance, on the builder's own agent, and
+    // Both are refused for the right on the whole instance, on the builder's own agent too, and
     // change nothing. Each fails without the check of the operation: the descriptor names no
-    // right, so a registration without one would let the Namespace's write right through.
+    // right, so a registration without one would let the asset's write right through.
     await t.expectRefused(
       t.kai.id,
       "assets.set_default",
@@ -60,8 +65,14 @@ describe("the default and the availability of an asset", () => {
       setAvailability,
       t.forbidden("agent.write", "no_grant")
     );
+    await t.expectRefused(
+      t.kai.id,
+      "assets.set_availability",
+      { params: { kind: "agent", name: "kai-own" }, payload: { mode: "all" } },
+      t.forbidden("agent.write", "no_grant")
+    );
     expect({ state: await state(), availability: await availability() }).toEqual(before);
-    // The builder's agent started hidden. The default is offered everywhere, so it is made so.
+    // The agent started hidden. The default is offered everywhere, so it is made so.
     await t.expectOk(t.admin.id, "assets.set_availability", {
       ...setAvailability,
       payload: { mode: "all" }
@@ -329,21 +340,25 @@ describe("the default and the availability of an asset", () => {
   // Fails without the change: every new agent started available in every workspace.
   it("starts a new agent in the shared workspace it is made in, and hidden where it is made in none", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    for (const action of ["agent.read", "agent.write"]) {
-      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
-    }
     const team = await t.sharedWorkspace("Team");
     const other = await t.sharedWorkspace("Other");
+    // Kai builds in Team; the administrator, a member of both as their creator, builds the
+    // instance's own agents.
+    for (const action of ["agent.read", "agent.write"]) {
+      await t.grant(t.kai.id, action, { workspaceId: team });
+    }
     for (const workspace of [team, other]) await join(t, t.kai, workspace);
-    const create = (userId: string, name: string, availableIn?: unknown) =>
+    const create = (userId: string, name: string, more: Record<string, unknown> = {}) =>
       t.call(userId, "assets.put", {
         params: { kind: "agent", name },
-        payload: { config: agent(name), ...(availableIn ? { availableIn } : {}) }
+        payload: { config: agent(name), ...more }
       });
 
     // Made in Team, the agent is listed in Team and in no other workspace.
-    const made = await create(t.kai.id, "kai-team", { workspaceId: team });
+    const made = await create(t.kai.id, "kai-team", {
+      workspaceId: team,
+      availableIn: { workspaceId: team }
+    });
     expect(made.statusCode, made.body).toBe(200);
     expect(made.json()).toMatchObject({ warnings: [] });
     expect(await offeredIn(t, "kai-team", team)).toBe(true);
@@ -353,6 +368,11 @@ describe("the default and the availability of an asset", () => {
       personalWorkspaces: false,
       collaborationWorkspaceIds: [team]
     });
+    // Team's agent starts in Team without naming it.
+    const owned = await create(t.kai.id, "kai-owned", { workspaceId: team });
+    expect(owned.statusCode, owned.body).toBe(200);
+    expect(await offeredIn(t, "kai-owned", team)).toBe(true);
+    expect(await offeredIn(t, "kai-owned", other)).toBe(false);
 
     // A call made in a workspace without naming it, as an agent's call in a conversation is.
     const calls = await getTestOperationCalls(t.instance);
@@ -362,11 +382,11 @@ describe("the default and the availability of an asset", () => {
         effect: "changing",
         input: {
           kind: "agent",
-          name: "kai-chat",
-          config: agent("kai-chat"),
+          name: "team-chat",
+          config: agent("team-chat"),
           expectedRevision: null
         },
-        actor: identityOf(t.kai),
+        actor: identityOf(t.admin),
         origin: { kind: "user" },
         workspaceId: team,
         correlationId: "corr_made_in_team"
@@ -374,50 +394,69 @@ describe("the default and the availability of an asset", () => {
       calls.deps
     );
     expect(inTeam.result).toMatchObject({ status: "done" });
-    expect(await offeredIn(t, "kai-chat", team)).toBe(true);
-    expect(await offeredIn(t, "kai-chat", other)).toBe(false);
+    expect(await offeredIn(t, "team-chat", team)).toBe(true);
+    expect(await offeredIn(t, "team-chat", other)).toBe(false);
 
     // Made in no workspace, it is hidden everywhere and the answer says so.
-    const nowhere = await create(t.kai.id, "kai-nowhere");
+    const nowhere = await create(t.admin.id, "nowhere");
     expect(nowhere.statusCode, nowhere.body).toBe(200);
     expect(nowhere.json()).toMatchObject({
       warnings: [
         {
           code: "agent_hidden",
-          message: "Agent 'kai-nowhere' is hidden until an instance admin makes it available"
+          message: "Agent 'nowhere' is hidden until an instance admin makes it available"
         }
       ]
     });
-    expect(await availabilityOf(t, "kai-nowhere")).toEqual({
+    expect(await availabilityOf(t, "nowhere")).toEqual({
       mode: "selected",
       personalWorkspaces: false,
       collaborationWorkspaceIds: []
     });
 
-    // Every workspace is the instance admin's choice, and a workspace the caller is not in
-    // is no place to start.
+    // Every workspace, and a workspace other than the one that owns the agent, is the instance
+    // admin's choice, and a workspace the caller is not in is no place to start.
     await t.expectRefused(
       t.kai.id,
       "assets.put",
       {
         params: { kind: "agent", name: "kai-wide" },
-        payload: { config: agent("kai-wide"), availableIn: "all" }
+        payload: { config: agent("kai-wide"), workspaceId: team, availableIn: "all" }
       },
       t.forbidden("agent.write", "no_grant")
     );
-    const closed = await t.sharedWorkspace("Closed");
     await t.expectRefused(
       t.kai.id,
       "assets.put",
       {
-        params: { kind: "agent", name: "kai-closed" },
-        payload: { config: agent("kai-closed"), availableIn: { workspaceId: closed } }
+        params: { kind: "agent", name: "kai-other" },
+        payload: {
+          config: agent("kai-other"),
+          workspaceId: team,
+          availableIn: { workspaceId: other }
+        }
       },
-      { status: 422, code: "VALIDATION_FAILED" }
+      t.forbidden("agent.write", "no_grant")
     );
-    expect(await availabilityOf(t, "kai-wide")).toBeUndefined();
-    expect(await availabilityOf(t, "kai-closed")).toBeUndefined();
-    const wide = await create(t.admin.id, "kai-wide", "all");
+    const { id: closed } = await t.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Closed",
+      creatorUserId: t.root.id
+    });
+    await t.expectRefused(
+      t.admin.id,
+      "assets.put",
+      {
+        params: { kind: "agent", name: "closed" },
+        payload: { config: agent("closed"), availableIn: { workspaceId: closed } }
+      },
+      { status: 422, code: "VALIDATION_FAILED", details: { reason: "workspace_not_found" } }
+    );
+    for (const name of ["kai-wide", "kai-other", "closed"]) {
+      expect(await availabilityOf(t, name)).toBeUndefined();
+    }
+    const wide = await create(t.admin.id, "kai-wide", { availableIn: "all" });
     expect(wide.statusCode, wide.body).toBe(200);
     expect(await availabilityOf(t, "kai-wide")).toMatchObject({ mode: "all" });
 
@@ -427,9 +466,9 @@ describe("the default and the availability of an asset", () => {
       "assets.put",
       {
         params: { kind: "agent", name: "kai-team" },
-        payload: { config: agent("kai-team"), availableIn: "all" }
+        payload: { config: agent("kai-team"), workspaceId: team, availableIn: "all" }
       },
-      { status: 422, code: "VALIDATION_FAILED" }
+      { status: 422, code: "VALIDATION_FAILED", details: { reason: "available_in_not_taken" } }
     );
   });
 });

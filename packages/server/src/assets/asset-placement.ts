@@ -31,7 +31,7 @@ import type { AssetWorkflowOptions } from "../types";
 /**
  * Where an asset stands on the instance beside its content: whether it is the default of its
  * kind, and the workspaces it is offered in. Both belong to the instance as a whole, so the
- * right is the kind's write right on the whole instance. A grant in a Namespace or on one
+ * right is the kind's write right on the whole instance. A grant in a workspace or on one
  * asset does not answer it, and a deny on the named asset still refuses.
  */
 

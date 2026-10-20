@@ -365,8 +365,8 @@ interface OperationDefinitionBase<Input, Output> {
   outputJsonSchema?: JsonObject;
   resource(input: Input): OperationResource | undefined;
   /**
-   * What the policy is asked about, where the resource does not say it all: the Namespace of
-   * an asset, or every asset of a batch. It is asked after the caller's right. Without it the
+   * What the policy is asked about, where the resource does not say it all: the owner of an
+   * asset, or every asset of a batch. It is asked after the caller's right. Without it the
    * policy is asked about the resource.
    */
   policyTargets?(input: Input): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;

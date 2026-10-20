@@ -1,43 +1,51 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { hasConnection, type SeedApi, type SeedAppFile } from "./api";
-import { apps, personOf, workspace, type PersonKey } from "./company";
+import { apps, personOf, type PersonKey, type SeedSharedWorkspace } from "./company";
 import type { SeedStep } from "./step";
 
-// The company's Shared Workspace and the Apps seeded into it.
+// The seeded Shared Workspaces and the Apps seeded into the company's.
 
 /** The module and the asset kind Apps come with. */
 const APPS_MODULE = "apps";
 const APP_KIND = "app";
 
-/** The Shared Workspace of the company, with its members. Made by the person who owns it. */
-export async function seedWorkspace(
+/**
+ * Shared Workspaces with their members, each made by the person who owns it and found again by
+ * its name. Answers their ids in the order given.
+ */
+export async function seedWorkspaces(
   as: (key: PersonKey) => Promise<SeedApi>,
+  workspaces: readonly SeedSharedWorkspace[],
   steps: SeedStep[]
-): Promise<string> {
-  const owner = await as(workspace.createdBy);
-  const found = (await owner.listWorkspaces()).find(
-    (candidate) => candidate.name === workspace.name
-  );
-  const { id } =
-    found ??
-    (await owner.createWorkspace({ name: workspace.name, description: workspace.description }));
-  steps.push({ name: "workspaces", created: found ? 0 : 1, existing: found ? 1 : 0 });
-
-  const members = await owner.listWorkspaceMemberEmails(id);
+): Promise<string[]> {
+  const ids: string[] = [];
+  let created = 0;
   let added = 0;
-  for (const key of workspace.members) {
-    const { email } = personOf(key);
-    if (members.includes(email)) continue;
-    await owner.addWorkspaceMember(id, email);
-    added += 1;
+  let members = 0;
+  for (const workspace of workspaces) {
+    const owner = await as(workspace.createdBy);
+    const found = (await owner.listWorkspaces()).find(
+      (candidate) => candidate.name === workspace.name
+    );
+    const { id } =
+      found ??
+      (await owner.createWorkspace({ name: workspace.name, description: workspace.description }));
+    if (!found) created += 1;
+    ids.push(id);
+
+    const present = await owner.listWorkspaceMemberEmails(id);
+    for (const key of workspace.members) {
+      members += 1;
+      const { email } = personOf(key);
+      if (present.includes(email)) continue;
+      await owner.addWorkspaceMember(id, email);
+      added += 1;
+    }
   }
-  steps.push({
-    name: "workspace members",
-    created: added,
-    existing: workspace.members.length - added
-  });
-  return id;
+  steps.push({ name: "workspaces", created, existing: workspaces.length - created });
+  steps.push({ name: "workspace members", created: added, existing: members - added });
+  return ids;
 }
 
 /** Every file below a folder, as a write of an App carries it. */

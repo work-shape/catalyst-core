@@ -12,7 +12,6 @@ import {
   assetNameIssue,
   createAssetKindRegistry,
   defineAssetKind,
-  findNamespaceOfAssetName,
   type AssetValidationContext,
   type RegisteredAssetKind
 } from "@work-shape/catalyst-core";
@@ -246,13 +245,6 @@ describe("asset kind registry", () => {
         attributes: { origin: "instance", summary: "Knows how to research a question." }
       }
     );
-  });
-
-  it("derives the Namespace of an asset from its name", () => {
-    const namespaces = [{ prefix: "kai-" }, { prefix: "team-b-" }];
-    expect(findNamespaceOfAssetName(namespaces, "kai-tax")).toEqual({ prefix: "kai-" });
-    expect(findNamespaceOfAssetName(namespaces, "team-b-intake")).toEqual({ prefix: "team-b-" });
-    expect(findNamespaceOfAssetName(namespaces, "assistant")).toBeUndefined();
   });
 });
 

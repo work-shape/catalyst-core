@@ -439,14 +439,3 @@ export function createAssetKindRegistry<Kind extends RegisteredAssetKind>(
     }
   };
 }
-
-/**
- * The Namespace an asset name belongs to. It is derived from the name and stored nowhere:
- * registered prefixes cannot overlap, so at most one matches.
- */
-export function findNamespaceOfAssetName<Entry extends { prefix: string }>(
-  namespaces: readonly Entry[],
-  name: string
-): Entry | undefined {
-  return namespaces.find((namespace) => name.startsWith(namespace.prefix));
-}

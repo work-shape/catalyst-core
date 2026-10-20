@@ -78,9 +78,9 @@ export const test = base.extend<{
   releaseConnections: void;
 }>({
   /**
-   * Asked for by a test that registers a Namespace or writes a grant, or that asserts there is
-   * none. The specs run side by side against one instance, and such a test would see the
-   * other's rows: with this fixture one runs after the other.
+   * Asked for by a test that writes a grant, or that asserts there is none. The specs run side
+   * by side against one instance, and such a test would see the other's rows: with this
+   * fixture one runs after the other.
    */
   accessState: [
     async ({ baseURL }, use) => {
@@ -134,7 +134,7 @@ export const test = base.extend<{
   /**
    * Asked for by a test that stores or deletes an agent of the instance. It runs when no test
    * with `instanceAgents` runs and no other test changes agents. It takes its turn on the
-   * Namespaces and grants first, so two such tests never wait for each other.
+   * grants first, so two such tests never wait for each other.
    */
   instanceAgentsChange: [
     async ({ baseURL, accessState: _accessState }, use) => {

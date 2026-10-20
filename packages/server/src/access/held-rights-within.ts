@@ -18,8 +18,8 @@ interface DenyPlacementOptions {
 }
 
 /**
- * The assets of the call's denies on one asset that a right over a Namespace, a workspace or
- * the instance among these could reach, by id, deleted ones included: a deny outlives its
+ * The assets of the call's denies on one asset that a right over a workspace or the instance
+ * among these could reach, by id, deleted ones included: a deny outlives its
  * asset. Reads nothing where no such right is asked or the call holds no such deny.
  */
 async function deniedAssetsOf(
@@ -47,7 +47,7 @@ async function deniedAssetsOf(
 
 /**
  * The rule of no escalation (`authorizeHeldRights`) with the call's denies placed: a right over
- * a Namespace, a workspace or the instance is refused where a deny of the call lies inside it.
+ * a workspace or the instance is refused where a deny of the call lies inside it.
  */
 export async function authorizeHeldRightsWithin(
   options: DenyPlacementOptions,

@@ -22,10 +22,10 @@ import {
 import { createAssetWrites } from "./support/chat-ui";
 import {
   instanceActions,
-  legalNamespace,
+  legalWorkspace,
   platformContext,
-  taxNamespace,
-  type Namespaces
+  taxWorkspace,
+  type Workspaces
 } from "./chat-ui-build-fixtures";
 
 // ACCEPT-FIX-1 F2: every create dialog makes the address by the one rule the strictest kind
@@ -151,10 +151,10 @@ function refusedName(reason: "name_invalid" | "name_taken") {
 }
 
 describe("Studio rights", () => {
-  const rights = (permissions: string[], namespaces: Namespaces = []) =>
-    resolveBuildRights({ permissions }, platformContext(namespaces, instanceActions(permissions)));
-  const taxAgent = { kind: "agent", namespace: "tax-" };
-  const taxSkill = { kind: "skill", namespace: "tax-" };
+  const rights = (permissions: string[], workspaces: Workspaces = []) =>
+    resolveBuildRights({ permissions }, platformContext(workspaces, instanceActions(permissions)));
+  const taxAgent = { kind: "agent", workspaceId: "ws-tax" };
+  const taxSkill = { kind: "skill", workspaceId: "ws-tax" };
 
   it("lets an instance reader read every kind and write nothing", () => {
     const reader = rights(["config_assets.read"]);
@@ -166,7 +166,6 @@ describe("Studio rights", () => {
     expect(reader.may("write", taxAgent)).toBe(false);
     expect(reader.may("delete", { kind: "agent" })).toBe(false);
     expect(reader.mayCreate("agent")).toBe(false);
-    expect(reader.creatableNamespaces("agent")).toEqual([]);
   });
 
   it("lets an instance writer write, delete and create everywhere", () => {
@@ -178,8 +177,7 @@ describe("Studio rights", () => {
     expect(writer.may("write", { kind: "agent" })).toBe(true);
     expect(writer.may("delete", taxSkill)).toBe(true);
     expect(writer.mayCreate("skill")).toBe(true);
-    // No Namespace is held: the dialog offers the choice of none.
-    expect(writer.creatableNamespaces("skill")).toEqual([]);
+    expect(writer.mayCreate("skill", "ws-tax")).toBe(true);
   });
 
   it("lets only a holder of agent.publish publish an agent, as the instance does (AD-4)", () => {
@@ -197,31 +195,32 @@ describe("Studio rights", () => {
     expect(writer.may("publish", { kind: "skill" })).toBe(true);
   });
 
-  it("lets a Namespace reader read the kinds its actions name and write nothing", () => {
-    const reader = rights([], [legalNamespace]);
+  it("lets a workspace reader read the kinds its actions name and write nothing", () => {
+    const reader = rights([], [legalWorkspace]);
 
     expect(reader.readsAny).toBe(true);
     expect(reader.reads("agent")).toBe(true);
     expect(reader.reads("skill")).toBe(true);
     expect(reader.instanceWrite).toBe(false);
-    expect(reader.may("write", { kind: "agent", namespace: "legal-" })).toBe(false);
-    expect(reader.mayCreate("agent")).toBe(false);
-    expect(reader.namespaces).toEqual([{ prefix: "legal-", displayName: "Legal" }]);
-    expect(rights([], [{ ...legalNamespace, actions: ["skill.read"] }]).reads("agent")).toBe(false);
+    expect(reader.readsInstance).toBe(false);
+    expect(reader.may("write", { kind: "agent", workspaceId: "ws-legal" })).toBe(false);
+    expect(reader.mayCreate("agent", "ws-legal")).toBe(false);
+    expect(reader.workspaces).toEqual([{ id: "ws-legal", name: "Legal", member: true }]);
+    expect(rights([], [{ ...legalWorkspace, actions: ["skill.read"] }]).reads("agent")).toBe(false);
   });
 
-  it("lets a Namespace writer write inside the Namespace, per kind and per verb", () => {
-    const writer = rights([], [taxNamespace, legalNamespace]);
+  it("lets a workspace writer write what the workspace owns, per kind and per verb", () => {
+    const writer = rights([], [taxWorkspace, legalWorkspace]);
 
     expect(writer.may("write", taxAgent)).toBe(true);
     expect(writer.may("delete", taxAgent)).toBe(true);
     expect(writer.may("write", taxSkill)).toBe(false);
-    expect(writer.may("write", { kind: "agent", namespace: "legal-" })).toBe(false);
-    // An asset outside every Namespace belongs to the instance.
+    expect(writer.may("write", { kind: "agent", workspaceId: "ws-legal" })).toBe(false);
+    // An asset the instance owns is no workspace's.
     expect(writer.may("write", { kind: "agent" })).toBe(false);
-    expect(writer.may("write", { kind: "connection", namespace: "tax-" })).toBe(false);
+    expect(writer.may("write", { kind: "connection", workspaceId: "ws-tax" })).toBe(false);
     expect(
-      rights([], [{ ...taxNamespace, actions: ["agent.write"] }]).may("delete", taxAgent)
+      rights([], [{ ...taxWorkspace, actions: ["agent.write"] }]).may("delete", taxAgent)
     ).toBe(false);
   });
 
@@ -229,28 +228,24 @@ describe("Studio rights", () => {
     const on = { allowAgentCreation: true };
 
     expect(mayCreateAgents(rights(["config_assets.write"]), on)).toBe(true);
-    expect(mayCreateAgents(rights([], [taxNamespace]), on)).toBe(true);
     // The right alone is not enough: the instance has its own switch.
     expect(mayCreateAgents(rights(["config_assets.write"]), { allowAgentCreation: false })).toBe(
       false
     );
     expect(mayCreateAgents(rights(["config_assets.write"]), undefined)).toBe(false);
-    // Nor is the switch: a reader, and a writer of another kind's Namespace, start nothing.
+    // Nor is the switch: a reader, and a reader in a workspace, start nothing.
     expect(mayCreateAgents(rights(["config_assets.read"]), on)).toBe(false);
-    expect(mayCreateAgents(rights([], [legalNamespace]), on)).toBe(false);
+    expect(mayCreateAgents(rights([], [legalWorkspace]), on)).toBe(false);
   });
 
-  it("names the Namespaces a new asset of a kind may be named in", () => {
-    const writer = rights([], [taxNamespace, legalNamespace]);
+  it("lets a new asset be started in a workspace whose kind the reader writes there", () => {
+    const writer = rights([], [taxWorkspace, legalWorkspace]);
 
-    expect(writer.mayCreate("agent")).toBe(true);
-    expect(writer.creatableNamespaces("agent")).toEqual([{ prefix: "tax-", displayName: "Tax" }]);
-    expect(writer.mayCreate("skill")).toBe(false);
-    expect(writer.creatableNamespaces("skill")).toEqual([]);
-    // An instance writer who also holds a Namespace is offered it beside the choice of none.
-    expect(rights(["config_assets.write"], [taxNamespace]).creatableNamespaces("agent")).toEqual([
-      { prefix: "tax-", displayName: "Tax" }
-    ]);
+    expect(writer.mayCreate("agent", "ws-tax")).toBe(true);
+    expect(writer.mayCreate("skill", "ws-tax")).toBe(false);
+    expect(writer.mayCreate("agent", "ws-legal")).toBe(false);
+    // Among the instance's own assets it takes the right on all of them.
+    expect(writer.mayCreate("agent")).toBe(false);
   });
 
   it("lets the holder of a read grant on one asset see the kind, and write nothing", () => {
@@ -262,10 +257,9 @@ describe("Studio rights", () => {
     expect(holder.instanceWrite).toBe(false);
     expect(holder.may("write", { kind: "skill" })).toBe(false);
     expect(holder.mayCreate("skill")).toBe(false);
-    expect(holder.namespaces).toEqual([]);
   });
 
-  it("gives nobody anything: no permission, no Namespace, or no answer of the instance", () => {
+  it("gives nobody anything: no permission, no workspace right, or no answer of the instance", () => {
     for (const nobody of [
       rights([]),
       rights(["users.manage"]),
@@ -277,7 +271,7 @@ describe("Studio rights", () => {
       expect(nobody.instanceWrite).toBe(false);
       expect(nobody.may("write", taxAgent)).toBe(false);
       expect(nobody.mayCreate("agent")).toBe(false);
-      expect(nobody.namespaces).toEqual([]);
+      expect(nobody.workspaces).toEqual([]);
     }
     // The session alone opens Studio for an instance reader before the instance answered.
     expect(resolveBuildRights({ permissions: ["config_assets.read"] }, undefined).readsAny).toBe(
@@ -491,12 +485,13 @@ describe("Studio refusals", () => {
     });
   });
 
-  it("puts a tool the Namespace does not allow at the tools", () => {
+  it("puts a tool the workspace does not allow at the tools", () => {
     const outcome = readBuildRefusal(
       refusal("FORBIDDEN", "Forbidden", {
         reason: "tool_not_allowed",
         toolName: "documents.read",
-        namespace: "tax-"
+        workspaceId: "ws-tax",
+        workspace: "Tax"
       }),
       t
     );
@@ -505,46 +500,16 @@ describe("Studio refusals", () => {
       ok: false,
       conflict: false,
       refusals: [
-        { field: "tools", message: "The tool documents.read is not allowed in Namespace tax-." }
+        {
+          field: "tools",
+          message:
+            "The tool documents.read is not allowed in the workspace Tax. An instance admin sets its tools on Instance > Workspaces."
+        }
       ]
     });
     expect(refusalsOf(outcome, "tools")).toHaveLength(1);
     expect(refusalsOf(outcome, "model")).toEqual([]);
     expect(refusalsOf(outcome, undefined)).toEqual([]);
-  });
-
-  it("puts a model the Namespace does not allow, and a missing one, at the model", () => {
-    expect(
-      readBuildRefusal(
-        refusal("FORBIDDEN", "Forbidden", {
-          reason: "model_not_allowed",
-          modelBindingId: "reasoning",
-          namespace: "tax-"
-        }),
-        t
-      )
-    ).toEqual({
-      ok: false,
-      conflict: false,
-      refusals: [
-        { field: "model", message: "The model reasoning is not allowed in Namespace tax-." }
-      ]
-    });
-    expect(
-      readBuildRefusal(
-        refusal("FORBIDDEN", "Forbidden", { reason: "model_binding_required", namespace: "tax-" }),
-        t
-      )
-    ).toEqual({
-      ok: false,
-      conflict: false,
-      refusals: [
-        {
-          field: "model",
-          message: "An agent in Namespace tax- needs a default model the Namespace allows."
-        }
-      ]
-    });
   });
 
   it("names the workspace whose build limits refuse a tool, a model or a missing one", () => {
@@ -580,18 +545,19 @@ describe("Studio refusals", () => {
     ]);
   });
 
-  it("tells a refusal from a Namespace's lists in the reader's language", () => {
+  it("tells a refusal from a workspace's build limits in the reader's language", () => {
     const outcome = readBuildRefusal(
       refusal("FORBIDDEN", "Forbidden", {
         reason: "tool_not_allowed",
         toolName: "documents.read",
-        namespace: "tax-"
+        workspaceId: "ws-tax",
+        workspace: "Steuern"
       }),
       createTranslationContext("de").t
     );
 
     expect(refusalsOf(outcome, "tools")).toEqual([
-      "Das Werkzeug documents.read ist im Namespace tax- nicht erlaubt."
+      "Das Werkzeug documents.read ist im Arbeitsbereich Steuern nicht erlaubt. Seine Werkzeuge legt ein Instanz-Admin unter Instanz > Arbeitsbereiche fest."
     ]);
   });
 

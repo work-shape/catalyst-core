@@ -156,7 +156,7 @@ describe("area route table", () => {
     expect(workspaceRouteFromPath("/admin/config")).toEqual({ kind: "build" });
   });
 
-  it("reads the id of a Studio asset as written, with its Namespace prefix and dots", () => {
+  it("reads the id of a Studio asset as written, with its hyphens, underscores and dots", () => {
     expect(workspaceRouteFromPath("/build/agents/tax-steuer_agent.v2")).toEqual({
       kind: "build-asset",
       assetKind: "agents",

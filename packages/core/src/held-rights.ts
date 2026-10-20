@@ -27,8 +27,8 @@ export interface RightRecipient {
 
 /**
  * The assets the caller's asset-scope denies name, by id: where a deny on one asset lies, so
- * a right given over a Namespace or a workspace is refused where it reaches one. A deny whose
- * asset is not here counts as lying inside every Namespace and workspace: the strict reading.
+ * a right given over a workspace is refused where it reaches one. A deny whose asset is not
+ * here counts as lying inside every workspace: the strict reading.
  */
 export type DeniedAssets = ReadonlyMap<
   string,
@@ -52,7 +52,7 @@ export type RightsTransfer =
  * or a legacy key; and changing a person's account, which asks every right the person holds.
  * Taking a right away asks nothing of it.
  *
- * A right over more than one asset, a Namespace, a workspace or the whole instance (a role, a
+ * A right over more than one asset, a workspace or the whole instance (a role, a
  * legacy key), is held only where no deny of the call lies inside it: the caller would hand on
  * what they are refused. It is refused, not narrowed, and `deniedAssets` places the denies on
  * one asset (`DeniedAssets`).
@@ -121,7 +121,7 @@ function firstUnheldRight(
   return undefined;
 }
 
-/** A right over more than one asset: no asset named, so a Namespace, a workspace or all. */
+/** A right over more than one asset: no asset named, so a workspace or all. */
 export function isBroadRight(right: HeldRight): boolean {
   return right.resource?.assetId === undefined && right.resource?.kind === undefined;
 }
@@ -139,22 +139,12 @@ function denyInside(
     if (deny.scopeKind === "asset") {
       const asset = deny.scopeId === undefined ? undefined : deniedAssets.get(deny.scopeId);
       if (asset === undefined) return true;
-      if (resource.workspaceId !== undefined) return asset.workspaceId === resource.workspaceId;
-      return (
-        resource.name !== undefined &&
-        asset.workspaceId === undefined &&
-        asset.name.startsWith(resource.name)
-      );
+      return resource.workspaceId === undefined || asset.workspaceId === resource.workspaceId;
     }
-    if (deny.scopeKind === "workspace") {
-      return resource.workspaceId !== undefined && deny.scopeId === resource.workspaceId;
-    }
-    // A Namespace lies inside another when its prefix starts with the other's.
+    // A broad right that names no workspace counts as reaching every deny: the strict reading.
     return (
-      resource.workspaceId === undefined &&
-      resource.name !== undefined &&
-      deny.namespace !== undefined &&
-      deny.namespace.startsWith(resource.name)
+      deny.scopeKind === "workspace" &&
+      (resource.workspaceId === undefined || deny.scopeId === resource.workspaceId)
     );
   });
 }
@@ -177,8 +167,6 @@ function denyResource(deny: AccessEntry, deniedAssets: DeniedAssets): AccessReso
     }
     case "workspace":
       return { workspaceId: deny.scopeId ?? "" };
-    case "namespace":
-      return { name: deny.namespace ?? "" };
     default:
       return undefined;
   }
@@ -196,15 +184,14 @@ function transferClause(transfer: RightsTransfer): string {
 
 /**
  * Where the right is held, as far as the caller may know: the asset by kind and name where the
- * caller may read it, and only that there is one where not; a workspace by its id and a
- * Namespace by its prefix, which the caller named or the grant list shows them. Every kind's
+ * caller may read it, and only that there is one where not; a workspace by its id, which the
+ * caller named or the grant list shows them. Every kind's
  * read right is `<kind>.read`; a kind without one in the vocabulary is read by nobody here.
  */
 function resourcePhrase(access: HeldRightsAccess, resource: AccessResource | undefined): string {
   if (resource === undefined) return " on the whole instance";
   if (resource.kind === undefined && resource.assetId === undefined) {
     if (resource.workspaceId !== undefined) return ` in the workspace '${resource.workspaceId}'`;
-    if (resource.name !== undefined) return ` in the Namespace '${resource.name}'`;
   }
   const readAction = resource.kind === undefined ? undefined : `${resource.kind}.read`;
   const readable =

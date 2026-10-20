@@ -4,17 +4,14 @@ import {
   SKILL_CHANGE_TYPES,
   asCollaborationWorkspaceId,
   assetScopesEqual,
-  findNamespaceOfAssetName,
   isAppError,
-  type AccessAdministrationStore,
   type ApprovalPreviewViewer,
   type AssetKindRegistry,
   type AssetScope,
   type ClientInstanceId,
   type ConfigAssetStore,
   type JsonValue,
-  type ModuleSnapshot,
-  type Namespace
+  type ModuleSnapshot
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { accessResource } from "../assets/asset-access";
@@ -38,7 +35,6 @@ interface HeldAssetPreviewOptions {
   clientInstanceId: ClientInstanceId;
   store: Pick<ConfigAssetStore, "getConfigAsset" | "getConfigAssetRevision">;
   kinds: AssetKindRegistry;
-  namespaces: Pick<AccessAdministrationStore, "listNamespaceRecords">;
   modules: ModuleSnapshot;
 }
 
@@ -48,8 +44,6 @@ interface HeldAssetPreview {
   name: string;
   title: string;
   workspaceId?: string;
-  /** The registered prefix the name starts with, for an asset of the instance's own. */
-  namespace?: string;
   /**
    * Approving creates the asset. Present only when the viewer may read the target, or for
    * a list row whose existence claim comes from the submitted call.
@@ -84,10 +78,9 @@ export type HeldAssetPreviewer = (
  * read, a kind nothing registered or a kind of a module that is off: the call is then shown
  * as any other.
  *
- * What it reads. For a row of a list: the Namespace records of the instance, once for the
- * whole list, and no asset. Whether the call creates is then read from the call itself, which
- * names the revision it replaces. For one opened request: the Namespace records and the one
- * asset the call names and, for a stale skill change, the revision the requester read.
+ * What it reads. For a row of a list: no asset. Whether the call creates is then read from
+ * the call itself, which names the revision it replaces. For one opened request: the one asset
+ * the call names and, for a stale skill change, the revision the requester read.
  *
  * What it shows of the stored asset. Whether it exists, its text, title, description and
  * resource names only to a reader the kind's read right allows on that asset, asked of the same
@@ -97,14 +90,6 @@ export type HeldAssetPreviewer = (
  */
 export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): HeldAssetPreviewer {
   const { clientInstanceId } = options;
-  const namespacesOfList = new WeakMap<ApprovalPreviewViewer, Promise<Namespace[]>>();
-  const namespaces = (viewer: ApprovalPreviewViewer | undefined): Promise<Namespace[]> => {
-    const read = () => options.namespaces.listNamespaceRecords({ clientInstanceId });
-    if (!viewer) return read();
-    const known = namespacesOfList.get(viewer) ?? read();
-    namespacesOfList.set(viewer, known);
-    return known;
-  };
 
   return async (input, viewer, frozen) => {
     const parsed = inputSchema.safeParse(input);
@@ -117,17 +102,11 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
       workspaceId === undefined
         ? INSTANCE_ASSET_SCOPE
         : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(workspaceId) };
-    // A Namespace is a prefix among the instance's own assets: a workspace's have none.
-    const namespace =
-      scope.kind === "instance"
-        ? findNamespaceOfAssetName(await namespaces(viewer), name)?.prefix
-        : undefined;
     const named = {
       kind: kind.kind,
       name,
       title: frozen?.title ?? titleOf(kind, config) ?? name,
-      ...(workspaceId ? { workspaceId } : {}),
-      ...(namespace ? { namespace } : {})
+      ...(workspaceId ? { workspaceId } : {})
     };
     if (!viewer || viewer.inList) {
       return {

@@ -7,7 +7,7 @@ import { useTranslation, type TranslationKey } from "./i18n";
  */
 const DOCS_PAGES = {
   rightsInShort: "/operate/how-rights-work/#the-short-version",
-  namespaceOrWorkspace: "/operate/how-rights-work/#building-and-using",
+  buildingAndUsing: "/operate/how-rights-work/#building-and-using",
   rightDecision: "/operate/how-rights-work/#do-you-hold-the-right-here"
 } as const;
 
@@ -27,9 +27,9 @@ const DOCS_REFERENCES = {
     accessibleName: "docs.howRightsWorkName"
   },
   rightPlace: {
-    page: "namespaceOrWorkspace",
-    label: "docs.namespaceOrWorkspace",
-    accessibleName: "docs.namespaceOrWorkspaceName"
+    page: "buildingAndUsing",
+    label: "docs.buildingAndUsing",
+    accessibleName: "docs.buildingAndUsingName"
   },
   rightDenied: {
     page: "rightDecision",

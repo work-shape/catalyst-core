@@ -32,7 +32,7 @@ import { defineRegisteredOperation, json, page } from "./define-operation";
 
 // Every operation here is one of the registry: a call is an Operation Run. None names its
 // right in `requires`, because the right is the kind's own (`<kind>.read`, `<kind>.write`,
-// `<kind>.delete`) and is decided on the asset the call names: a grant in a Namespace, on a
+// `<kind>.delete`) and is decided on the asset the call names: a grant on the instance, on a
 // workspace or on the asset itself can answer it. The registration brings that check.
 export const assetOperations = {
   "assets.list": defineRegisteredOperation({
@@ -54,7 +54,7 @@ export const assetOperations = {
     id: "assets.sync",
     method: "POST",
     path: "/api/v1/assets/sync",
-    summary: "Apply puts and deletes in one Namespace or workspace, all of them or none",
+    summary: "Apply puts and deletes among the assets of one owner, all of them or none",
     tag: "Assets",
     auth: "principal",
     scope: "config_assets:write",
@@ -81,7 +81,7 @@ export const assetOperations = {
     rateClass: "read"
   }),
   // Valid for a kind that keeps an instance default. The right is the kind's write right on
-  // the whole instance: a grant in a Namespace or on one asset does not answer it.
+  // the whole instance: a grant in a workspace or on one asset does not answer it.
   "assets.set_default": defineRegisteredOperation({
     id: "assets.set_default",
     method: "POST",

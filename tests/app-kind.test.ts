@@ -252,7 +252,10 @@ describe("the rights of an App", () => {
 describe("a kind with a draft and a published revision on an instance", () => {
   let t: AppInstance;
   beforeAll(async () => {
-    t = await setupAppInstance({ furtherKinds: [createNoticeKind()] });
+    // A notice may be a workspace's too: a batch names the workspace whose assets it writes.
+    t = await setupAppInstance({
+      furtherKinds: [{ ...createNoticeKind(), owners: ["instance", "workspace"] }]
+    });
   });
   afterAll(async () => {
     await t.close();
@@ -446,25 +449,24 @@ describe("a kind with a draft and a published revision on an instance", () => {
   });
 
   const syncAs = (userId: string, items: unknown[]) =>
-    t.call(userId, "assets.sync", { payload: { namespace: "kai-", items } });
+    t.call(userId, "assets.sync", { payload: { workspaceId: t.workspaceId, items } });
   const batchNotice = (text: string, expectedRevision: number | null) => ({
     type: "put",
     kind: "notice",
-    config: { name: "kai-banner", text },
+    config: { name: "team-banner", text },
     expectedRevision
   });
   const storedBanner = async () =>
-    t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "notice", name: "kai-banner" });
+    t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "notice", name: "team-banner" });
 
   // The draft moved in a batch before the change too. What fails without it is the last line:
   // a stale item was a 409 then.
   it("moves the draft in a batch and leaves the published revision and the version of the set", async () => {
-    await t.createNamespace("kai-");
     const created = await syncAs(t.admin.id, [batchNotice("one", null)]);
     expect(created.statusCode, created.body).toBe(200);
     await t.expectOk(t.admin.id, "assets.publish", {
-      params: { kind: "notice", name: "kai-banner" },
-      payload: { revision: 1 }
+      params: { kind: "notice", name: "team-banner" },
+      payload: { revision: 1, workspaceId: t.workspaceId }
     });
     const published = (await storedBanner())?.publishedRevisionId;
     const { version } = await t.stores.configAssets.getConfigAssetState({ clientInstanceId });

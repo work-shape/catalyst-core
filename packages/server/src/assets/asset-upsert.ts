@@ -146,7 +146,7 @@ export async function upsertAsset(
       name,
       current,
       next,
-      modelBindingsListed: listsModelBindings(lists, name)
+      modelBindingsListed: listsModelBindings(lists)
     });
   await kind.assertScopedWrite?.({
     clientInstanceId: options.clientInstanceId,

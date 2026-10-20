@@ -88,7 +88,6 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
             clientInstanceId,
             store: options.stores.configAssets,
             kinds: options.configAssets.kinds,
-            namespaces: options.stores.access,
             modules: options.modules
           })
         }

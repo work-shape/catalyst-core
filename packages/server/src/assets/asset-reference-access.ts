@@ -45,8 +45,7 @@ interface ReferableAssets {
 
 /**
  * What a caller's definition is resolved against: exactly the assets the choosers offer.
- * Every other asset is left out, one beside the written asset in its Namespace included, so a
- * reference to it reads as a reference to nothing. The instance's default stays in, because
+ * Every other asset is left out, so a reference to it reads as a reference to nothing. The instance's default stays in, because
  * the rule that an instance with agents has one is about the set and not about the change.
  */
 export function loadReferableAssets(

@@ -1,5 +1,5 @@
-import { useId, useState } from "react";
-import { Checkbox, Field, Input, Select } from "@work-shape/catalyst-ui";
+import { useState } from "react";
+import { Checkbox, Field, Input, Picker, PickerButton, Select } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { actionLabel } from "../access/right-words";
 import {
@@ -9,16 +9,27 @@ import {
   type PersonalKeyDraft
 } from "./personal-api-keys-model";
 
+/** From this many workspaces on, the workspace picker shows its search field. */
+const WORKSPACE_SEARCH_FROM_COUNT = 8;
+
+/** A workspace a key can be limited to: one whose own assets the person holds a right on. */
+export interface PersonalKeyWorkspace {
+  id: string;
+  /** Absent for the person's Personal Workspace, which is named "Personal". */
+  name?: string;
+}
+
 /**
  * The name, the scopes and the end of a personal key: the same fields for a new key and for a
- * CLI's connect code. The scopes are actions, all limited to one Namespace where one is given,
- * each named as the rights screens name it.
+ * CLI's connect code. The scopes are actions, each named as the rights screens name it, all
+ * limited to what one workspace owns where one is chosen, and within it to one asset where its
+ * id is given.
  */
 export function PersonalKeyFields({
   draft,
   actions,
   useActions,
-  namespaces,
+  workspaces,
   onChange
 }: {
   draft: PersonalKeyDraft;
@@ -26,15 +37,17 @@ export function PersonalKeyFields({
   actions: readonly string[];
   /** The use level offered, in order: the use rights the person holds. */
   useActions: readonly string[];
-  /** The Namespace prefixes the person holds a right in, offered while typing. */
-  namespaces: readonly string[];
+  /** The workspaces the key can be limited to. */
+  workspaces: readonly PersonalKeyWorkspace[];
   onChange(draft: PersonalKeyDraft): void;
 }) {
   const { t } = useTranslation();
-  const namespaceListId = useId();
-  // A wrong Namespace is said once the person left the field, not at every keystroke.
-  const [namespaceTouched, setNamespaceTouched] = useState(false);
+  // A wrong id is said once the person left the field, not at every keystroke.
+  const [assetTouched, setAssetTouched] = useState(false);
   const problem = personalKeyDraftProblem(draft);
+  const workspaceLabel = (workspace: PersonalKeyWorkspace) =>
+    workspace.name ?? t("personalApiKeys.workspacePersonal");
+  const chosenWorkspace = workspaces.find((workspace) => workspace.id === draft.workspaceId);
   const offered = [...actions, ...useActions];
   const toggle = (action: string) => (checked: boolean) =>
     onChange({
@@ -77,29 +90,48 @@ export function PersonalKeyFields({
           {boxes(useActions)}
         </fieldset>
       ) : null}
-      <Field
-        label={t("personalApiKeys.namespace")}
-        optional
-        hint={t("personalApiKeys.namespaceHint")}
-        error={
-          namespaceTouched && problem === "namespace"
-            ? t("personalApiKeys.namespaceInvalid")
-            : undefined
-        }
-      >
-        <Input
-          value={draft.namespace}
-          list={namespaceListId}
-          placeholder={t("personalApiKeys.namespacePlaceholder")}
-          onBlur={() => setNamespaceTouched(true)}
-          onChange={(event) => onChange({ ...draft, namespace: event.target.value })}
-        />
+      <Field label={t("personalApiKeys.workspace")} hint={t("personalApiKeys.workspaceHint")}>
+        <Picker
+          search={workspaces.length >= WORKSPACE_SEARCH_FROM_COUNT}
+          options={[
+            { value: "", label: t("personalApiKeys.workspaceEverywhere") },
+            ...workspaces.map((workspace) => ({
+              value: workspace.id,
+              label: workspaceLabel(workspace)
+            }))
+          ]}
+          value={draft.workspaceId}
+          onValueChange={(workspaceId) =>
+            onChange({ ...draft, workspaceId, ...(workspaceId ? {} : { assetName: "" }) })
+          }
+        >
+          <PickerButton
+            label={t("personalApiKeys.workspace")}
+            value={chosenWorkspace ? workspaceLabel(chosenWorkspace) : undefined}
+            placeholder={t("personalApiKeys.workspaceEverywhere")}
+          />
+        </Picker>
       </Field>
-      <datalist id={namespaceListId}>
-        {namespaces.map((prefix) => (
-          <option key={prefix} value={prefix} />
-        ))}
-      </datalist>
+      {draft.workspaceId ? (
+        <Field
+          label={t("personalApiKeys.asset")}
+          optional
+          hint={t("personalApiKeys.assetHint")}
+          error={
+            assetTouched && problem === "assetName" ? t("personalApiKeys.assetInvalid") : undefined
+          }
+        >
+          <Input
+            className="font-mono"
+            value={draft.assetName}
+            maxLength={200}
+            autoComplete="off"
+            spellCheck={false}
+            onBlur={() => setAssetTouched(true)}
+            onChange={(event) => onChange({ ...draft, assetName: event.target.value })}
+          />
+        </Field>
+      ) : null}
       <Field label={t("personalApiKeys.expiry")}>
         <Select
           value={String(draft.expiryDays)}

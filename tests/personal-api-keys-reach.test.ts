@@ -10,7 +10,7 @@ import { errorSchema } from "./support/access-instance";
 import { testOperations, type TestOperationName } from "./support/operations";
 import {
   agentConfig,
-  grantKaiNamespace,
+  grantKaiWorkspace,
   inDays,
   setupPersonalKeyInstance as setup
 } from "./support/personal-api-keys";
@@ -85,14 +85,14 @@ describe("what a personal key reaches", () => {
 
   it("does not confirm a connect code, even with the owner signed in elsewhere", async () => {
     const t = await setup();
-    await grantKaiNamespace(t);
-    const headers = await t.tokenFor((await t.issue(["agent.read:kai-"])).secret);
+    await grantKaiWorkspace(t);
+    const headers = await t.tokenFor((await t.issue([`agent.read:${t.kaiTeam}`])).secret);
     const started = z
       .object({ userCode: z.string(), deviceCode: z.string() })
       .parse((await t.instance.call("connect_codes.start", { payload: {} })).json());
     const confirm = await t.call(t.kai.id, "me.connect_codes.confirm", {
       params: { userCode: started.userCode },
-      payload: { name: "x", scopes: ["agent.read:kai-"], expiresAt: inDays(1) },
+      payload: { name: "x", scopes: [`agent.read:${t.kaiTeam}`], expiresAt: inDays(1) },
       headers
     });
     expect(confirm.statusCode).toBe(403);
@@ -102,30 +102,52 @@ describe("what a personal key reaches", () => {
     expect(redeem.json()).toEqual({ status: "pending" });
   });
 
-  it("reads only its Namespace where the owner holds more than one", async () => {
+  it("reads only its workspace where the owner holds rights in more than one", async () => {
     const t = await setup();
-    await grantKaiNamespace(t);
-    await t.createNamespace("lena-");
+    await grantKaiWorkspace(t);
+    const lenaTeam = await t.sharedWorkspace("Lena Spezis");
     for (const action of ["agent.read", "agent.write"]) {
-      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "lena-" });
+      await t.grant(t.kai.id, action, { workspaceId: lenaTeam });
     }
-    await t.putAgent(t.kai.id, "kai-helper");
-    await t.putAgent(t.kai.id, "lena-helper");
+    const putIn = (workspaceId: string, name: string, headers: Record<string, string> = {}) =>
+      t.call(t.kai.id, "assets.put", {
+        params: { kind: "agent", name },
+        payload: { config: agentConfig(name), workspaceId },
+        headers
+      });
+    expect((await putIn(t.kaiTeam, "kai-helper")).statusCode).toBe(200);
+    expect((await putIn(lenaTeam, "lena-helper")).statusCode).toBe(200);
     const headers = await t.tokenFor(
-      (await t.issue(["agent.read:kai-", "agent.write:kai-"])).secret
+      (await t.issue([`agent.read:${t.kaiTeam}`, `agent.write:${t.kaiTeam}`])).secret
     );
+    const listIn = (workspaceId: string, signedIn: Record<string, string> = headers) =>
+      t.call(t.kai.id, "assets.list", {
+        params: { kind: "agent" },
+        query: { workspaceId },
+        headers: signedIn
+      });
 
-    const listed = await t.call(t.kai.id, "assets.list", { params: { kind: "agent" }, headers });
+    const listed = await listIn(t.kaiTeam);
     expect(namesSchema.parse(listed.json()).items.map((item) => item.name)).toEqual(["kai-helper"]);
+    expect(namesSchema.parse((await listIn(lenaTeam)).json()).items).toEqual([]);
     for (const [operation, input] of [
-      ["assets.get", { params: { kind: "agent", name: "lena-helper" } }],
-      ["assets.revisions.list", { params: { kind: "agent", name: "lena-helper" } }],
-      ["assets.delete", { params: { kind: "agent", name: "lena-helper" } }],
+      [
+        "assets.get",
+        { params: { kind: "agent", name: "lena-helper" }, query: { workspaceId: lenaTeam } }
+      ],
+      [
+        "assets.revisions.list",
+        { params: { kind: "agent", name: "lena-helper" }, query: { workspaceId: lenaTeam } }
+      ],
+      [
+        "assets.delete",
+        { params: { kind: "agent", name: "lena-helper" }, payload: { workspaceId: lenaTeam } }
+      ],
       [
         "assets.put",
         {
           params: { kind: "agent", name: "lena-helper" },
-          payload: { config: agentConfig("lena-helper") }
+          payload: { config: agentConfig("lena-helper"), workspaceId: lenaTeam }
         }
       ],
       ["config_assets.get_overview", {}]
@@ -134,10 +156,14 @@ describe("what a personal key reaches", () => {
       expect([403, 404], `${operation}: ${response.body}`).toContain(response.statusCode);
     }
     // The owner, signed in themself, still reaches both.
-    const own = await t.expectOk(t.kai.id, "assets.list", { params: { kind: "agent" } });
-    expect(namesSchema.parse(own.json()).items.map((item) => item.name)).toEqual(
-      expect.arrayContaining(["kai-helper", "lena-helper"])
-    );
+    for (const [workspaceId, name] of [
+      [t.kaiTeam, "kai-helper"],
+      [lenaTeam, "lena-helper"]
+    ] as const) {
+      const own = await listIn(workspaceId, {});
+      expect(own.statusCode).toBe(200);
+      expect(namesSchema.parse(own.json()).items.map((item) => item.name)).toEqual([name]);
+    }
   });
 
   // A user whose delegated actor is a key is not resolved again by its sign-in; only the key's

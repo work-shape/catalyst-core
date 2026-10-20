@@ -714,7 +714,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       );
       if (!conversation) return undefined;
       // A create asks what a setting asks of the asset it names, where it would be, as
-      // `assets.put` of the API asks it: its name places it in a Namespace. A save the call
+      // `assets.put` of the API asks it: in the workspace that would own it. A save the call
       // itself refuses asks nothing here.
       const target = await putTarget(conversation, input);
       return target ? putFloor(target, input.expectedRevision !== undefined) : undefined;

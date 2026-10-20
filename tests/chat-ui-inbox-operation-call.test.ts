@@ -305,7 +305,6 @@ describe("inbox item of an operation call", () => {
     name: "hr-parental-leave-faq",
     title: "Elternzeit: häufige Fragen",
     description: "Nutzen bei Fragen zur Elternzeit.",
-    namespace: "hr-",
     isNew: true,
     content: {
       skillName: "hr-parental-leave-faq",
@@ -325,7 +324,6 @@ describe("inbox item of an operation call", () => {
     name: "hr-leave-policy",
     title: "Urlaubsrichtlinie",
     description: "Nutzen bei Fragen zu Urlaub.",
-    namespace: "hr-",
     isNew: false,
     previous: { title: "Urlaub" },
     removedResources: ["old/table.md"],
@@ -352,12 +350,11 @@ describe("inbox item of an operation call", () => {
   it("says who wants to create which skill where, why it waits, and shows the skill's text", () => {
     const markup = put(newSkill);
 
-    // ACCEPT-FIX-9 C13: no Namespace prefix in what a person reads; it is an id.
+    // ACCEPT-FIX-9 C13: the skill is named by its title, not by its id.
     expect(markup).toMatch(
       /data-testid="operation-call-headline"[^>]*>Elif Aydin wants to create the skill “Elternzeit: häufige Fragen”\.</u
     );
-    expect(markup).not.toContain("hr-<");
-    expect(markup).not.toContain("Namespace");
+    expect(markup).not.toContain("hr-parental-leave-faq<");
     expect(markup).toContain(
       "If you approve, the skill is saved. If you decline, nothing changes."
     );
@@ -751,7 +748,7 @@ describe("inbox item of an operation call", () => {
     );
   });
 
-  it("names the surface and the row by the skill, with who asked and no Namespace prefix", () => {
+  it("names the surface and the row by the skill's title, with who asked and not its id", () => {
     expect(surface({ ...putPreview, asset: newSkill }, "en")).toMatchObject({
       title: "New skill",
       subtitle: "Elternzeit: häufige Fragen"
@@ -784,7 +781,6 @@ describe("inbox item of an operation call", () => {
       kind: "agent",
       name: "hr-absence-desk",
       title: "Abwesenheiten",
-      namespace: "hr-",
       isNew: false
     };
     const markup = put(asset, "en", agentPreview);

@@ -45,11 +45,11 @@ const kinds = [
 ];
 
 describe("platform.context.get", () => {
-  it("answers a user with one Namespace grant that Namespace with the action, and both kinds", async () => {
+  it("answers a user with one workspace grant that workspace with the action, and both kinds", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.createNamespace("lena-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const team = await t.sharedWorkspace("Kai's team");
+    await t.sharedWorkspace("Lena's team");
+    await t.grant(t.kai.id, "agent.write", { workspaceId: team });
 
     const context = platformContextSchema.parse(
       (await t.expectOk(t.kai.id, "platform.context.get")).json()
@@ -69,10 +69,10 @@ describe("platform.context.get", () => {
       ...(PUBLISHED_CLI_VERSION === undefined ? {} : { cliVersion: PUBLISHED_CLI_VERSION })
     });
     expect(context.kinds).toEqual(kinds);
-    expect(context.namespaces).toEqual([
-      { prefix: "kai-", displayName: "kai-", actions: ["agent.write"] }
+    expect(context.workspaces).toEqual([
+      { id: team, name: "Kai's team", kind: "shared", member: false, actions: ["agent.write"] }
     ]);
-    // A right in one Namespace is no right on the instance's assets as a whole.
+    // A right in one workspace is no right on the instance's assets as a whole.
     expect(context.actions).toEqual([]);
     // No field for modules: the module slice adds it.
     expect(Object.keys(context).sort()).toEqual([
@@ -82,7 +82,6 @@ describe("platform.context.get", () => {
       "instance",
       "instanceActions",
       "kinds",
-      "namespaces",
       "release",
       "useActions",
       "visibleSections",
@@ -92,16 +91,16 @@ describe("platform.context.get", () => {
     expect(context.visibleSections).toEqual([]);
   });
 
-  it("lists no Namespace for a user who holds nothing, and an administrator's actions less a deny", async () => {
+  it("lists no workspace for a user who holds nothing, and an administrator's actions less a deny", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.admin.id, "agent.delete", { namespace: "kai-" }, "deny");
+    const team = await t.sharedWorkspace("Kai's team");
+    await t.grant(t.admin.id, "agent.delete", { workspaceId: team }, "deny");
 
     const lena = platformContextSchema.parse(
       (await t.expectOk(t.lena.id, "platform.context.get")).json()
     );
     expect(lena.kinds).toEqual(kinds);
-    expect(lena.namespaces).toEqual([]);
+    expect(lena.workspaces).toEqual([]);
     expect(lena.actions).toEqual([]);
     expect(lena.assetActions).toEqual([]);
     expect(lena.instanceActions).toEqual([]);
@@ -111,19 +110,13 @@ describe("platform.context.get", () => {
     const admin = platformContextSchema.parse(
       (await t.expectOk(t.admin.id, "platform.context.get")).json()
     );
-    expect(admin.namespaces).toEqual([
-      {
-        prefix: "kai-",
-        displayName: "kai-",
-        actions: [
-          "agent.read",
-          "agent.write",
-          "agent.publish",
-          "skill.read",
-          "skill.write",
-          "skill.delete"
-        ]
-      }
+    expect(admin.workspaces.find((workspace) => workspace.id === team)?.actions).toEqual([
+      "agent.read",
+      "agent.write",
+      "agent.publish",
+      "skill.read",
+      "skill.write",
+      "skill.delete"
     ]);
     // The role administers service principals (RIGHTS-1a).
     expect(admin.instanceActions).toEqual(["service_principals.manage"]);
@@ -138,7 +131,7 @@ describe("platform.context.get", () => {
       "skill.write"
     ]);
     // On the instance's assets as a whole the role holds every action: the deny names one
-    // Namespace.
+    // workspace.
     expect(admin.actions).toEqual([
       "agent.read",
       "agent.write",
@@ -218,42 +211,40 @@ describe("platform.context.get", () => {
 
   it("names only the actions the credential's scopes let its holder use", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.createNamespace("lena-");
+    const team = await t.sharedWorkspace("Kai's team");
+    await t.sharedWorkspace("Lena's team");
     for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read"]) {
-      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
+      await t.grant(t.kai.id, action, { workspaceId: team });
     }
-    const namespacesWith = async (scopes: string) =>
-      platformContextSchema.parse(
-        (
-          await t.expectOk(t.kai.id, "platform.context.get", {
-            headers: { [SCOPES_HEADER]: scopes }
-          })
-        ).json()
-      ).namespaces;
+    const actionsWith = async (scopes: string) =>
+      platformContextSchema
+        .parse(
+          (
+            await t.expectOk(t.kai.id, "platform.context.get", {
+              headers: { [SCOPES_HEADER]: scopes }
+            })
+          ).json()
+        )
+        .workspaces.map((workspace) => ({ id: workspace.id, actions: workspace.actions }));
 
-    expect(await namespacesWith("config_assets:read config_assets:write")).toEqual([
-      {
-        prefix: "kai-",
-        displayName: "kai-",
-        actions: ["agent.read", "agent.write", "agent.delete", "skill.read"]
-      }
+    expect(await actionsWith("config_assets:read config_assets:write")).toEqual([
+      { id: team, actions: ["agent.read", "agent.write", "agent.delete", "skill.read"] }
     ]);
     // A credential that only reads names no write and no delete, whatever its holder is granted.
-    expect(await namespacesWith("config_assets:read")).toEqual([
-      { prefix: "kai-", displayName: "kai-", actions: ["agent.read", "skill.read"] }
+    expect(await actionsWith("config_assets:read")).toEqual([
+      { id: team, actions: ["agent.read", "skill.read"] }
     ]);
-    expect(await namespacesWith("config_assets:write")).toEqual([
-      { prefix: "kai-", displayName: "kai-", actions: ["agent.write", "agent.delete"] }
+    expect(await actionsWith("config_assets:write")).toEqual([
+      { id: team, actions: ["agent.write", "agent.delete"] }
     ]);
-    // One that carries neither can use nothing here, so no Namespace is listed.
-    expect(await namespacesWith("chat")).toEqual([]);
+    // One that carries neither can use nothing here, so no workspace is listed.
+    expect(await actionsWith("chat")).toEqual([]);
   });
 
   it("answers a service principal with what its grants and its credential open", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.createNamespace("lena-");
+    const kaiTeam = await t.sharedWorkspace("Kai's team");
+    const lenaTeam = await t.sharedWorkspace("Lena's team");
     const asService = async (scopes?: string) => {
       const response = await t.instance.call("platform.context.get", {
         headers: { [SERVICE_HEADER]: "sp_test", ...(scopes ? { [SCOPES_HEADER]: scopes } : {}) }
@@ -261,16 +252,16 @@ describe("platform.context.get", () => {
       expect(response.statusCode, response.body).toBe(200);
       return platformContextSchema.parse(response.json());
     };
+    /** The actions named per workspace, by the workspace's id. */
+    const byWorkspace = (context: { workspaces: { id: string; actions: string[] }[] }) =>
+      Object.fromEntries(context.workspaces.map(({ id, actions }) => [id, actions]));
 
     const before = await asService();
     expect(before.instance.id).toBe(clientInstanceId);
     expect(before.kinds).toEqual(kinds);
-    // Its key reads every asset of the instance, so both Namespaces are listed for reading.
+    // Its key reads every asset of the instance, so both workspaces are listed for reading.
     const reads = ["agent.read", "skill.read"];
-    expect(before.namespaces).toEqual([
-      { prefix: "kai-", displayName: "kai-", actions: reads },
-      { prefix: "lena-", displayName: "lena-", actions: reads }
-    ]);
+    expect(byWorkspace(before)).toEqual({ [kaiTeam]: reads, [lenaTeam]: reads });
 
     await storeTestServicePrincipal("sp_test");
     await t.stores.access.createGrant({
@@ -279,23 +270,24 @@ describe("platform.context.get", () => {
       holderId: "sp_test",
       action: "skill.write",
       effect: "allow",
-      scopeKind: "namespace",
-      namespace: "kai-",
+      scopeKind: "workspace",
+      scopeId: kaiTeam,
       grantedBy: t.admin.id
     });
-    expect((await asService()).namespaces).toEqual([
-      { prefix: "kai-", displayName: "kai-", actions: ["agent.read", "skill.read", "skill.write"] },
-      { prefix: "lena-", displayName: "lena-", actions: reads }
-    ]);
-    expect((await asService("config_assets:write")).namespaces).toEqual([
-      { prefix: "kai-", displayName: "kai-", actions: ["skill.write"] }
-    ]);
-    expect((await asService("chat")).namespaces).toEqual([]);
+    expect(byWorkspace(await asService())).toEqual({
+      [kaiTeam]: ["agent.read", "skill.read", "skill.write"],
+      [lenaTeam]: reads
+    });
+    expect(byWorkspace(await asService("config_assets:write"))).toEqual({
+      [kaiTeam]: ["skill.write"]
+    });
+    expect((await asService("chat")).workspaces).toEqual([]);
   });
 });
 
 // `platform.references.get` is what an editor offers for a definition. It is for whoever can
-// use an action of a registered kind somewhere, which is who the context lists a Namespace for.
+// use an action of a registered kind on the instance's assets, or read one in a workspace or on
+// one asset.
 describe("platform.references.get", () => {
   const references = {
     modelProviderIds: ["local"],
@@ -314,10 +306,9 @@ describe("platform.references.get", () => {
   };
   const refused = { status: 403, code: "FORBIDDEN" };
 
-  it("answers the holder of one right in one Namespace, and the administrator, the same as the overview", async () => {
+  it("answers the holder of one right in one workspace, and the administrator, the same as the overview", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.read", { workspaceId: await t.sharedWorkspace("Kai's team") });
 
     const read = async (userId: string) =>
       configAssetReferencesSchema.parse(
@@ -325,7 +316,7 @@ describe("platform.references.get", () => {
       );
     expect(await read(t.kai.id)).toEqual(references);
     expect(await read(t.admin.id)).toEqual(references);
-    // The overview stays closed to the Namespace holder, and tells the administrator the same.
+    // The overview stays closed to the workspace's holder, and tells the administrator the same.
     await t.expectRefused(t.kai.id, "config_assets.get_overview", {}, refused);
     const overview = (await t.expectOk(t.admin.id, "config_assets.get_overview")).json();
     expect(overview).toMatchObject({ references });
@@ -333,8 +324,7 @@ describe("platform.references.get", () => {
 
   it("refuses a user who holds no right on any kind anywhere", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.write", { workspaceId: await t.sharedWorkspace("Kai's team") });
 
     const error = await t.expectRefused(t.lena.id, "platform.references.get", {}, refused);
     // The refusal tells nothing of the instance.
@@ -430,8 +420,7 @@ describe("platform.references.get", () => {
 
   it("refuses a credential whose scopes open no action its holder is granted", async () => {
     const t = await setup();
-    await t.createNamespace("kai-");
-    await t.seedHistoricalGrant(t.kai.id, "agent.read", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.read", { workspaceId: await t.sharedWorkspace("Kai's team") });
     const withScopes = (userId: string, scopes: string) =>
       t.call(userId, "platform.references.get", { headers: { [SCOPES_HEADER]: scopes } });
 

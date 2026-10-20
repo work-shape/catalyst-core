@@ -215,7 +215,7 @@ const MODEL_SETTINGS_RIGHT = "agent_models.manage";
 /**
  * The model settings a save changes that the right governs. They are governed by a
  * permission, not by the editable-field policy. The one exception is the binding of an agent
- * a list of bindings binds, a Namespace's or its workspace's: the list is the operator's choice
+ * a list of bindings binds, its workspace's: the list is the operator's choice
  * of models for it, so its writer picks among them.
  */
 function changedModelSettings(

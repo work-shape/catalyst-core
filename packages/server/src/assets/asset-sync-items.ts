@@ -180,7 +180,7 @@ async function requireFurtherRights(
       name: entry.name,
       current,
       next: preparedUpsert(access, "sync", entry.kind, { current, next: entry.item.config }),
-      modelBindingsListed: listsModelBindings(lists, entry.name)
+      modelBindingsListed: listsModelBindings(lists)
     });
     if (action !== undefined) {
       entry.refusal = { code: "FORBIDDEN", message: `Missing the right '${action}'`, action };
@@ -280,9 +280,6 @@ function planItems(options: AssetWorkflowOptions, input: AssetSyncInput): Planne
       return refuse(
         `Config ${kind.kind} '${name}' is larger than ${ASSET_SYNC_ITEM_MAX_BYTES} bytes, the most one item of a batch holds`
       );
-    }
-    if (input.namespace !== undefined && !name.startsWith(input.namespace)) {
-      return refuse(`Config ${kind.kind} '${name}' is outside Namespace '${input.namespace}'`);
     }
     const key = assetKey(kind.kind, name);
     if (seen.has(key)) {

@@ -221,7 +221,7 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls, AppSaveCalls
    * What an administrator's setting on the operation a save projects asks for the subject of a
    * conversation, or nothing where no setting matches it. A save is never looser than it. In a
    * conversation about no asset yet it is what a setting asks for the asset the first save
-   * names, where it would be: its kind, its name and so its Namespace, and its owner.
+   * names, where it would be: its kind and its owner.
    */
   putPolicyFloor(
     conversationId: ConversationId,

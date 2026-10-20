@@ -15,7 +15,7 @@ import type { TestStore } from "./test-instance";
 
 // The instance behind the personal API key tests: the access test instance, signed in by an
 // access token where a request carries one, with the module `personalApiKeys` and the
-// Namespace `kai-`.
+// Shared Workspace `Kai Spezis`.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const createdSchema = z.object({
@@ -25,6 +25,8 @@ const createdSchema = z.object({
 const tokenSchema = z.object({ accessToken: z.string() });
 
 export interface PersonalKeyInstance extends AccessInstance {
+  /** The id of the Shared Workspace `Kai Spezis`, which the administrator created. */
+  kaiTeam: string;
   /** Kai, or whoever is named, issues a key in Settings. Returns the key and its secret. */
   issue(scopes: string[], userId?: string): Promise<z.infer<typeof createdSchema>>;
   /** What the CLI does with a key: exchange it for an access token, as a request header. */
@@ -79,9 +81,10 @@ export async function setupPersonalKeyInstance(
     modules: { personalApiKeys: { enabled: options.module ?? true } },
     server: (stores) => personalKeyServer(stores, options.module !== false)
   });
-  await t.createNamespace("kai-");
+  const kaiTeam = await t.sharedWorkspace("Kai Spezis");
   return {
     ...t,
+    kaiTeam,
     issue: (scopes, userId) => issuePersonalKey(t, scopes, userId),
     tokenFor: (secret) => personalKeyToken(t, secret)
   };
@@ -95,11 +98,11 @@ function bearer(token: string) {
   return { authorization: `Bearer ${token}` };
 }
 
-/** Kai holds reading and writing agents and reading skills in the Namespace `kai-` only. */
-export async function grantKaiNamespace(t: AccessInstance) {
+/** Kai holds reading and writing agents and reading skills in the workspace `Kai Spezis` only. */
+export async function grantKaiWorkspace(t: PersonalKeyInstance) {
   const grants: Record<string, string> = {};
   for (const action of ["agent.read", "agent.write", "skill.read"]) {
-    grants[action] = await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
+    grants[action] = await t.grant(t.kai.id, action, { workspaceId: t.kaiTeam });
   }
   return grants;
 }

@@ -2,6 +2,8 @@
 // firm with a tax, an HR and a sales team. Every name here is made up. The agents and skills of
 // the company live as a config working copy under `clients/demo/seed`.
 
+import { HELD_SKILLS_WORKSPACE } from "../policy";
+
 export type PersonKey =
   "mara" | "jonas" | "tobias" | "elif" | "sven" | "lena" | "noah" | "kai" | "fabian";
 
@@ -69,42 +71,19 @@ export function personOf(key: PersonKey): SeedPerson {
 /** The reference every tool of the demo asks for. */
 export const PERSON_PERMISSION_REFS = ["demo-tools"];
 
-interface SeedNamespace {
-  prefix: string;
-  displayName: string;
-  /** Left out, the Namespace does not limit tools. */
-  allowedToolNames?: string[];
-  /**
-   * Left out, the Namespace does not limit models. Of the listed models the seed keeps the
-   * ones the instance has.
-   */
-  allowedModelBindingIds?: string[];
-  registeredBy: PersonKey;
+/** A Shared Workspace the seed finds by its name, made by the person who owns it. */
+export interface SeedSharedWorkspace {
+  name: string;
+  description: string;
+  createdBy: PersonKey;
+  members: PersonKey[];
 }
-
-export const namespaces: SeedNamespace[] = [
-  {
-    prefix: "tax-",
-    displayName: "Steuern",
-    allowedToolNames: ["read_skill", "show_view", "demo.workflow_summary"],
-    allowedModelBindingIds: ["primary", "gpt56Luna"],
-    registeredBy: "mara"
-  },
-  { prefix: "hr-", displayName: "Personalwesen / HR", registeredBy: "mara" },
-  { prefix: "sales-", displayName: "Vertrieb / Sales", registeredBy: "jonas" },
-  { prefix: "kai-", displayName: "Kai", registeredBy: "mara" }
-];
 
 /**
  * The Shared Workspace of the company. Everything a workspace owns is seeded into it; the Apps
  * are the first of that.
  */
-export const workspace: {
-  name: string;
-  description: string;
-  createdBy: PersonKey;
-  members: PersonKey[];
-} = {
+export const workspace: SeedSharedWorkspace = {
   name: "Nordlicht Beratung",
   description: "The whole firm: what every team uses.",
   createdBy: "mara",
@@ -120,6 +99,26 @@ export const workspaceBundles: {
   bundles: ("builder" | "publisher")[];
   grantedBy: PersonKey;
 } = { holder: "fabian", bundles: ["builder", "publisher"], grantedBy: "mara" };
+
+/**
+ * The Shared Workspace of the HR team, and the one whose skills the demo holds for an
+ * approval (`demoOperations`). Its agents may use three tools and two models. Elif builds
+ * in it with the Builder bundle, without being a member.
+ */
+export const hrWorkspace: SeedSharedWorkspace & {
+  bundles: { holder: PersonKey; bundles: "builder"[]; grantedBy: PersonKey };
+  allowedToolNames: string[];
+  /** Of the listed models the seed keeps the ones the instance has. */
+  allowedModelBindingIds: string[];
+} = {
+  name: HELD_SKILLS_WORKSPACE,
+  description: "The HR team: leave, sickness and parental leave.",
+  createdBy: "mara",
+  members: [],
+  bundles: { holder: "elif", bundles: ["builder"], grantedBy: "mara" },
+  allowedToolNames: ["read_skill", "show_view", "demo.workflow_summary"],
+  allowedModelBindingIds: ["primary", "gpt56Luna"]
+};
 
 /**
  * What the company's workspace owns of its own: one skill and one agent that names it, saved
@@ -365,13 +364,13 @@ export const firstDraft: {
 };
 
 /**
- * A call that waits for an approval. The demo holds every skill saved into the HR Namespace
- * (`demoOperations`). An admin requests the new skill because asset grants do not allow
- * creating another asset. Elif requests the change of the existing skill below.
+ * A call that waits for an approval. The demo holds every new or changed skill saved into the
+ * HR workspace (`demoOperations`). Mara Lindqvist, who owns the workspace, asks for the new
+ * skill. Elif Aydin asks for the change of the workspace's skill below.
  *
- * Why Elif Aydin wants it: the HR team answers the same three questions about parental leave
- * every month, and the absence desk agent has nothing to answer them from. A request carries
- * no comment of the person who made it, so this stands here and not in the Inbox.
+ * Why the HR team wants it: it answers the same three questions about parental leave every
+ * month, and the absence desk agent has nothing to answer them from. A request carries no
+ * comment of the person who made it, so this stands here and not in the Inbox.
  */
 export const heldSkill: {
   requestedBy: PersonKey;
@@ -389,19 +388,27 @@ export const heldSkill: {
 };
 
 /**
- * A second call that waits: one paragraph of a skill the seed pushed is replaced, so the Inbox
- * shows a change as before and after. The seed asks for it only while the request above
- * waits, which is how it knows that the instance holds such a call and does not write it.
+ * A second call that waits: one paragraph of a skill the HR workspace owns is replaced, so the
+ * Inbox shows a change as before and after. The seed writes the skill first with a sync
+ * batch, which the demo does not hold, and asks for the change only while the request above
+ * waits: that is how it knows that the instance holds such a call and does not write it.
  */
 export const heldSkillChange: {
   requestedBy: PersonKey;
-  skillName: string;
-  /** A whole paragraph of the skill under `seed/`, and what replaces it. */
+  /** The skill as the seed writes it. Its last paragraph is `before`. */
+  skill: { name: string; title: string; description: string; content: string };
+  /** A whole paragraph of the skill, and what replaces it. */
   before: string;
   after: string;
 } = {
   requestedBy: "elif",
-  skillName: "hr-leave-policy",
+  skill: {
+    name: "sick-note",
+    title: "Krankmeldung",
+    description: "Nutzen, wenn jemand fragt, wann und bei wem er sich krankmelden muss.",
+    content:
+      "# Krankmeldung\n\n- Wer krank ist, sagt der Teamleitung am ersten Tag vor Arbeitsbeginn Bescheid.\n- Ab dem dritten Krankheitstag ist eine ärztliche Bescheinigung nötig. Die elektronische Bescheinigung ruft das HR-Team bei der Krankenkasse ab.\n- Wer im Urlaub krank wird, bekommt die Tage mit Bescheinigung zurück.\n\nNiemand muss eine Diagnose nennen.\n"
+  },
   before: "Niemand muss eine Diagnose nennen.",
   after:
     "Eine Diagnose muss niemand nennen. Die Krankmeldung geht an die Teamleitung und an das HR-Team, nicht an das ganze Team."

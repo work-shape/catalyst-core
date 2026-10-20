@@ -15,7 +15,7 @@ const stricterOf = (left: PolicyValue | undefined, right: PolicyValue): PolicyVa
 export function createPlatformAssetPolicy(
   options: AssetWorkflowOptions,
   workflow: {
-    policyTargets(address: AssetAddress): Promise<PolicyTarget[]>;
+    policyTargets(address: AssetAddress): PolicyTarget[];
   }
 ) {
   /**
@@ -30,7 +30,7 @@ export function createPlatformAssetPolicy(
     const policy = options.operationCalls?.deps.policy;
     if (!policy) return undefined;
     const centralSettings = await policy.centralSettings();
-    const targets = await workflow.policyTargets(address);
+    const targets = workflow.policyTargets(address);
     let floor: PolicyValue | undefined;
     for (const name of operations) {
       const asked = resolvePolicy({

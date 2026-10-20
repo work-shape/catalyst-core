@@ -7,14 +7,13 @@ import {
   type ApprovalRequestView,
   type Asset,
   type ConfigAssetsOverview,
-  type CreateNamespaceRequest,
   type CreatePermissionGrantRequest,
   type EffectivePermissions,
   type InstanceModule,
-  type NamespaceWithUsage,
   type PermissionGrantRow,
   type ServicePrincipalDetail,
-  type UpdateNamespaceRequest
+  type UpdateWorkspaceBuildLimitsRequest,
+  type WorkspaceBuildLimits
 } from "@work-shape/catalyst-api-client";
 
 /** What the seed sets on a person. A password only where the person signs in with one. */
@@ -44,9 +43,6 @@ export interface SeedApi {
    */
   invitationWasSent(userId: string): Promise<boolean>;
   listModules(): Promise<InstanceModule[]>;
-  listNamespaces(): Promise<NamespaceWithUsage[]>;
-  createNamespace(input: CreateNamespaceRequest): Promise<void>;
-  updateNamespace(prefix: string, input: UpdateNamespaceRequest): Promise<void>;
   listGrants(): Promise<PermissionGrantRow[]>;
   grant(input: CreatePermissionGrantRequest): Promise<void>;
   effectivePermissions(userId: string): Promise<EffectivePermissions>;
@@ -84,6 +80,17 @@ export interface SeedApi {
     expectedRevision?: number,
     workspaceId?: string
   ): Promise<"done" | "pending_approval">;
+  /**
+   * Writes skills a workspace owns in one batch, as a push of a CLI root bound to that
+   * workspace does. Each is created, or replaced at the revision given.
+   */
+  syncWorkspaceSkills(
+    workspaceId: string,
+    skills: {
+      config: Record<string, unknown> & { name: string };
+      expectedRevision: number | null;
+    }[]
+  ): Promise<"done" | "pending_approval">;
   /** Makes one revision of an asset with a draft the one its users are served. */
   getAgentDraft(name: string): Promise<{ revision: number } | undefined>;
   publishAsset(kind: string, name: string, revision: number): Promise<void>;
@@ -92,6 +99,12 @@ export interface SeedApi {
   /** The workspaces the caller is a member of. */
   listWorkspaces(): Promise<SeedWorkspace[]>;
   createWorkspace(input: { name: string; description: string }): Promise<SeedWorkspace>;
+  /** The tools and models the agents of each Shared Workspace may use. */
+  listWorkspaceLimits(): Promise<WorkspaceBuildLimits[]>;
+  updateWorkspaceLimits(
+    workspaceId: string,
+    input: UpdateWorkspaceBuildLimitsRequest
+  ): Promise<void>;
   /** The addresses of the members of a workspace, in lowercase. */
   listWorkspaceMemberEmails(workspaceId: string): Promise<string[]>;
   addWorkspaceMember(workspaceId: string, email: string): Promise<void>;
@@ -172,13 +185,6 @@ export function createSeedApi(client: ApiClient): SeedApi {
       return false;
     },
     listModules: async () => (await client.instance.modules.list()).items,
-    listNamespaces: () => listAll((paging) => client.namespaces.list({ query: paging })),
-    async createNamespace(input) {
-      completedOutput(await client.namespaces.create({ body: input }));
-    },
-    async updateNamespace(prefix, input) {
-      completedOutput(await client.namespaces.update({ params: { prefix }, body: input }));
-    },
     listGrants: () => listAll((paging) => client.permissions.list({ query: paging })),
     async grant(input) {
       completedOutput(await client.permissions.grant({ body: input }));
@@ -217,6 +223,20 @@ export function createSeedApi(client: ApiClient): SeedApi {
           }
         })
       ).status,
+    syncWorkspaceSkills: async (workspaceId, skills) =>
+      (
+        await client.assets.sync({
+          body: {
+            workspaceId,
+            items: skills.map(({ config, expectedRevision }) => ({
+              type: "put" as const,
+              kind: "skill",
+              config,
+              expectedRevision
+            }))
+          }
+        })
+      ).status,
     async getAgentDraft(name) {
       try {
         return (await client.agents.draft.get({ params: { name } })).draft ?? undefined;
@@ -241,6 +261,16 @@ export function createSeedApi(client: ApiClient): SeedApi {
     listWorkspaces: () => listAll((paging) => client.workspaces.list({ query: paging })),
     createWorkspace: async (input) =>
       completedOutput(await client.workspaces.create({ body: input })),
+    listWorkspaceLimits: () =>
+      listAll((paging) => client.workspaces.limits.list({ query: paging })),
+    async updateWorkspaceLimits(workspaceId, input) {
+      completedOutput(
+        await client.workspaces.limits.update({
+          params: { collaborationWorkspaceId: workspaceId },
+          body: input
+        })
+      );
+    },
     listWorkspaceMemberEmails: async (workspaceId) =>
       (
         await listAll((paging) =>

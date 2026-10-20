@@ -30,7 +30,7 @@ export const RELEASE_KEY = "config_assets.release";
 /**
  * Every right a service principal acts with, as whoever gives or lends them must hold them:
  * each legacy key it holds as the key, each other instance-wide allow as its action, and each
- * allow in a Namespace, a workspace or on one asset on that resource, with the asset's kind,
+ * allow in a workspace or on one asset on that resource, with the asset's kind,
  * name and owner. A deny is left out: holding one lends nothing.
  */
 export async function principalRights(

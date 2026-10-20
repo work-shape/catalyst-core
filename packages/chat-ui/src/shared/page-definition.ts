@@ -13,8 +13,8 @@ export type SettingsGroupId = "you" | "workspace" | "instance";
 
 /**
  * Who looks at Settings: the user with the permission list the server put on it, the
- * workspaces with the role the user acts in, the Namespaces the user holds a right in and the
- * modules the instance runs. A visibility function reads nothing else.
+ * workspaces with the role the user acts in and the modules the instance runs. A visibility
+ * function reads nothing else.
  */
 export interface SettingsViewer {
   user: ApiUser | undefined;

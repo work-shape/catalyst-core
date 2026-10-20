@@ -72,7 +72,7 @@ export interface InboxItemKind {
     t: Translate,
     agentLabel: string | undefined
   ): string | undefined;
-  /** What the row says after who asked, such as the Namespace of what is asked. */
+  /** What the row says after who asked, such as the operation that is asked for. */
   rowDetail?(item: ApprovalRequestView, t: Translate): string | undefined;
   /**
    * The middle of the item. It reads `item.preview`, and from the item itself only what the
@@ -234,7 +234,7 @@ const operationCall: InboxItemKind = {
   rowDetail(item) {
     const call = parseOperationCallPreview(item.preview);
     if (isInboxConfirmation(item)) return call?.review?.title ?? call?.operation;
-    // An asset is named by its title in the heading; its Namespace prefix is an id.
+    // An asset is named by its title in the heading.
     return call?.asset ? undefined : call?.operation;
   },
   Body: ({ item }) => createElement(OperationCallBody, { request: item }),

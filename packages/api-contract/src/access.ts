@@ -3,9 +3,6 @@ import {
   GRANT_EFFECTS,
   GRANT_HOLDER_KINDS,
   GRANT_SCOPE_KINDS,
-  NAMESPACE_PREFIX_MAX_LENGTH,
-  NAMESPACE_PREFIX_MIN_LENGTH,
-  NAMESPACE_PREFIX_PATTERN,
   PRINCIPAL_HOLDER_KINDS,
   ROLE_GRANT_SCOPE_KINDS,
   ROLE_PENDING_CHANGES,
@@ -37,8 +34,6 @@ export const permissionGrantSchema = z.object({
   scopeKind: grantScopeKindSchema,
   /** The asset id for asset scope, the workspace id for workspace scope. */
   scopeId: z.string().optional(),
-  /** The registered prefix, for Namespace scope. */
-  namespace: z.string().optional(),
   /**
    * The asset behind `scopeId`, for asset scope. A deny stays when its asset is deleted and
    * applies again when the name is created again; `active` is false in between. `name` is
@@ -55,7 +50,7 @@ export const permissionGrantSchema = z.object({
 /**
  * The row shape takes every holder and scope kind. Which of them can be written is the
  * server's answer: `details.reason` is `invalid_scope`, `action_not_grantable`,
- * `unknown_action`, `unknown_holder`, `unknown_namespace` or `duplicate_grant`. A service
+ * `unknown_action`, `unknown_holder` or `duplicate_grant`. A service
  * principal is allowed a use right on one named asset and nothing else:
  * `action_not_grantable_to_principal`, `effect_not_grantable_to_principal` and
  * `invalid_scope`; a caller who may not write a row for the holder is refused with
@@ -67,7 +62,6 @@ export const createPermissionGrantRequestSchema = z.object({
   action: storedText,
   scopeKind: grantScopeKindSchema,
   scopeId: storedText.optional(),
-  namespace: storedText.optional(),
   effect: grantEffectSchema.default("allow")
 });
 
@@ -99,7 +93,6 @@ export const effectivePermissionsSchema = z.object({
       effect: grantEffectSchema,
       scopeKind: grantScopeKindSchema,
       scopeId: z.string().optional(),
-      namespace: z.string().optional(),
       /**
        * `membership`: held by being a member of the workspace the entry names, such as opening
        * the published Apps of that workspace. A legacy permission list is grant rows since AP-4
@@ -190,14 +183,8 @@ export const decideRolePendingActionRequestSchema = z.object({
   decision: z.enum(ROLE_PENDING_DECISIONS)
 });
 
-export const namespacePrefixSchema = z
-  .string()
-  .min(NAMESPACE_PREFIX_MIN_LENGTH)
-  .max(NAMESPACE_PREFIX_MAX_LENGTH)
-  .regex(NAMESPACE_PREFIX_PATTERN);
-
 /**
- * Keeps one Namespace or workspace record small. An instance registers tens of tools and model
+ * Keeps one workspace record small. An instance registers tens of tools and model
  * bindings; a longer list is refused as a validation error that names this limit.
  */
 export const BUILD_LIMIT_LIST_MAX_ENTRIES = 500;
@@ -209,37 +196,6 @@ const buildLimitListSchema = z
     message: `A list of tools or model bindings holds at most ${BUILD_LIMIT_LIST_MAX_ENTRIES} entries`
   })
   .nullable();
-
-export const namespaceSchema = z.object({
-  prefix: z.string(),
-  displayName: z.string(),
-  allowedToolNames: buildLimitListSchema,
-  allowedModelBindingIds: buildLimitListSchema,
-  /** Left out when the user who registered it is hidden from the caller. */
-  createdBy: z.string().optional(),
-  createdAt: timestampSchema
-});
-
-export const namespaceUsageSchema = namespaceSchema.extend({
-  /** Grant rows that name the prefix. While there is one, the Namespace cannot be deleted. */
-  grantCount: z.number().int().nonnegative(),
-  /** Active agents and skills whose names start with the prefix. */
-  assetCount: z.number().int().nonnegative()
-});
-
-export const createNamespaceRequestSchema = z.object({
-  prefix: namespacePrefixSchema,
-  displayName: z.string().trim().min(1).max(120),
-  allowedToolNames: buildLimitListSchema.optional(),
-  allowedModelBindingIds: buildLimitListSchema.optional()
-});
-
-/** The prefix is fixed. A list left out is kept as it is. */
-export const updateNamespaceRequestSchema = z.object({
-  displayName: z.string().trim().min(1).max(120).optional(),
-  allowedToolNames: buildLimitListSchema.optional(),
-  allowedModelBindingIds: buildLimitListSchema.optional()
-});
 
 /**
  * A Shared Workspace with its build limits: the tools and model bindings the agents it owns may
@@ -263,9 +219,6 @@ export type Role = z.infer<typeof roleSchema>;
 export type RoleGrantInput = z.input<typeof roleGrantSchema>;
 export type CreatePermissionGrantRequest = z.input<typeof createPermissionGrantRequestSchema>;
 export type EffectivePermissions = z.infer<typeof effectivePermissionsSchema>;
-export type NamespaceWithUsage = z.infer<typeof namespaceUsageSchema>;
-export type CreateNamespaceRequest = z.input<typeof createNamespaceRequestSchema>;
-export type UpdateNamespaceRequest = z.input<typeof updateNamespaceRequestSchema>;
 export type WorkspaceBuildLimits = z.infer<typeof workspaceBuildLimitsSchema>;
 export type UpdateWorkspaceBuildLimitsRequest = z.input<
   typeof updateWorkspaceBuildLimitsRequestSchema

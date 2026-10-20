@@ -112,7 +112,7 @@ export interface ConfigAssetRecord {
   clientInstanceId: ClientInstanceId;
   kind: ConfigAssetKind;
   name: string;
-  /** The owner. The Namespace is not part of the record: it is derived from the name. */
+  /** The owner. */
   scope: AssetScope;
   status: "active" | "deleted";
   activeRevisionId: string;
@@ -420,7 +420,7 @@ export interface ConfigAssetStore {
     afterName?: string;
     /** At most this many active definitions; omitted by full-snapshot readers. */
     limit?: number;
-    /** Only assets whose name starts with this text, such as a Namespace prefix. */
+    /** Only assets whose name starts with this text. */
     namePrefix?: string;
     /**
      * Skills without their `resources`, left out by the store before they are read: what the
@@ -437,7 +437,7 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     kind: ConfigAssetKind;
     scope: AssetScope;
-    /** Only assets whose name starts with this text, such as a Namespace prefix. */
+    /** Only assets whose name starts with this text. */
     namePrefix?: string;
     /**
      * Only assets whose name or title contains `contains`, whatever the case. The title is the

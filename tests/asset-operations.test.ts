@@ -1,22 +1,16 @@
-import { publishAgentDraft } from "./support/agent-draft-publication";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-  agent,
-  clientInstanceId,
-  errorSchema,
-  skill,
-  type AccessInstance
-} from "./support/access-instance";
+import { agent, clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import {
   assetPageSchema as pageSchema,
-  setupNamespaceHolder as setupNamespace,
-  type AssetCall as Call
+  setupWorkspaceHolder as setup,
+  type AssetCall as Call,
+  type WorkspaceHolderInstance
 } from "./support/asset-operations";
 import { withTestSql } from "./support/test-sql";
 
 // The asset operations, each called as an administrator, as a holder of rights in one
-// Namespace and as a user who holds nothing. Every call is an Operation Run. What a call may
+// Shared Workspace and as a user who holds nothing. Every call is an Operation Run. What a call may
 // reach across scopes, and what a definition is checked for, is in asset-operation-scopes.
 
 const writeSchema = z.object({
@@ -46,55 +40,75 @@ const syncRefusalSchema = z.object({
 });
 
 describe("assets.list", () => {
-  it("shows a Namespace holder the assets of that Namespace and nobody anything without a right", async () => {
-    const t = await setupNamespace();
-    await t.put(t.admin.id, "agent", "kai-intake");
-    await t.put(t.admin.id, "agent", "kai-tax");
-    await t.put(t.admin.id, "agent", "lena-notes");
-    await t.put(t.admin.id, "skill", "kai-guide");
-    const agents = { params: { kind: "agent" } };
+  it("shows a holder of rights in a workspace the assets it owns and nobody anything without a right", async () => {
+    const t = await setup();
+    await t.put(t.admin.id, "agent", "kai-intake", t.kaiTeam);
+    await t.put(t.admin.id, "agent", "kai-tax", t.kaiTeam);
+    await t.put(t.admin.id, "agent", "lena-notes", t.lenaTeam);
+    await t.put(t.admin.id, "skill", "kai-guide", t.kaiTeam);
+    const agents = (workspaceId?: string) => ({
+      params: { kind: "agent" },
+      ...(workspaceId === undefined ? {} : { query: { workspaceId } })
+    });
 
-    expect(await t.names(t.admin.id, "assets.list", agents)).toEqual([
-      "assistant",
+    // Each owner is its own list.
+    expect(await t.names(t.admin.id, "assets.list", agents())).toEqual(["assistant"]);
+    expect(await t.names(t.admin.id, "assets.list", agents(t.kaiTeam))).toEqual([
       "kai-intake",
-      "kai-tax",
-      "lena-notes"
+      "kai-tax"
     ]);
-    expect(await t.names(t.kai.id, "assets.list", agents)).toEqual(["kai-intake", "kai-tax"]);
-    expect(await t.names(t.lena.id, "assets.list", agents)).toEqual([]);
-    // A kind is one list: the skill of the Namespace is in the other one.
-    expect(await t.names(t.kai.id, "assets.list", { params: { kind: "skill" } })).toEqual([
-      "kai-guide"
+    expect(await t.names(t.admin.id, "assets.list", agents(t.lenaTeam))).toEqual(["lena-notes"]);
+    expect(await t.names(t.kai.id, "assets.list", agents(t.kaiTeam))).toEqual([
+      "kai-intake",
+      "kai-tax"
     ]);
+    expect(await t.names(t.kai.id, "assets.list", agents())).toEqual([]);
+    expect(await t.names(t.kai.id, "assets.list", agents(t.lenaTeam))).toEqual([]);
+    expect(await t.names(t.lena.id, "assets.list", agents(t.kaiTeam))).toEqual([]);
+    // A kind is one list: the skill of the workspace is in the other one.
+    expect(
+      await t.names(t.kai.id, "assets.list", {
+        params: { kind: "skill" },
+        query: { workspaceId: t.kaiTeam }
+      })
+    ).toEqual(["kai-guide"]);
 
-    const listed = pageSchema.parse((await t.expectOk(t.kai.id, "assets.list", agents)).json());
-    expect(listed.items[0]).toMatchObject({
+    const listed = pageSchema.parse(
+      (await t.expectOk(t.kai.id, "assets.list", agents(t.kaiTeam))).json()
+    );
+    expect(listed.items[0]).toEqual({
+      id: expect.any(String),
       kind: "agent",
       name: "kai-intake",
       title: "kai-intake",
-      scope: { kind: "instance" },
-      namespace: "kai-",
+      scope: { kind: "workspace", workspaceId: t.kaiTeam },
       revision: 1
     });
     // A summary carries no content.
     expect(Object.keys(listed.items[0] ?? {})).not.toContain("config");
     // What the list shows is what `assets.get` answers, and nothing else.
-    await t.expectOk(t.kai.id, "assets.get", { params: { kind: "agent", name: "kai-tax" } });
+    await t.expectOk(t.kai.id, "assets.get", {
+      params: { kind: "agent", name: "kai-tax" },
+      query: { workspaceId: t.kaiTeam }
+    });
     await t.expectRefused(
       t.kai.id,
       "assets.get",
-      { params: { kind: "agent", name: "lena-notes" } },
+      { params: { kind: "agent", name: "lena-notes" }, query: { workspaceId: t.lenaTeam } },
       t.forbidden("agent.read", "no_grant")
     );
   });
 
   it("filters by name prefix and by text, and pages by name", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
     for (const name of ["kai-intake", "kai-tax", "kai-Taxes-2", "lena-tax"]) {
-      await t.put(t.admin.id, "agent", name);
+      await t.put(t.admin.id, "agent", name, t.kaiTeam);
     }
     const list = (query: Record<string, string | number>) =>
-      t.names(t.admin.id, "assets.list", { params: { kind: "agent" }, query });
+      t.names(t.admin.id, "assets.list", {
+        params: { kind: "agent" },
+        query: { workspaceId: t.kaiTeam, ...query }
+      });
 
     expect(await list({ prefix: "kai-" })).toEqual(["kai-Taxes-2", "kai-intake", "kai-tax"]);
     expect(await list({ text: "TAX" })).toEqual(["kai-Taxes-2", "kai-tax", "lena-tax"]);
@@ -106,7 +120,7 @@ describe("assets.list", () => {
       (
         await t.expectOk(t.kai.id, "assets.list", {
           params: { kind: "agent" },
-          query: { limit: 2 }
+          query: { workspaceId: t.kaiTeam, limit: 2 }
         })
       ).json()
     );
@@ -115,9 +129,9 @@ describe("assets.list", () => {
     expect(
       await t.names(t.kai.id, "assets.list", {
         params: { kind: "agent" },
-        query: { limit: 2, cursor: first.nextCursor }
+        query: { workspaceId: t.kaiTeam, limit: 2, cursor: first.nextCursor }
       })
-    ).toEqual(["kai-tax"]);
+    ).toEqual(["kai-tax", "lena-tax"]);
     await t.expectRefused(
       t.admin.id,
       "assets.list",
@@ -127,7 +141,7 @@ describe("assets.list", () => {
   });
 
   it("finds a title by text that holds a quote or a backslash, which its JSON escapes", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
     await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "agent", name: "kai-quoted" },
       payload: { config: agent("kai-quoted", { displayName: 'The "Q4" share at C:\\ledger' }) }
@@ -140,8 +154,9 @@ describe("assets.list", () => {
   });
 
   it("reads ten thousand assets through the name index, for a caller who may read few of them", async () => {
-    const t = await setupNamespace();
-    // 10,000 agents of this instance, each with its active revision; 100 of them in `kai-`.
+    const t = await setup();
+    // 10,000 agents of this instance, each with its active revision; Kai may read every
+    // hundredth of them, through a grant on that one agent.
     const plan = await withTestSql(async (sql) => {
       await sql`
         insert into config_assets
@@ -151,6 +166,13 @@ describe("assets.list", () => {
                else 'bulk-' || lpad(n::text, 5, '0') end,
           'active', 'bulkrev_' || n, now(), now()
         from generate_series(1, 10000) as n`;
+      await sql`
+        insert into permission_grants
+          (id, client_instance_id, holder_kind, holder_id, action, scope_kind, scope_id, effect,
+           granted_by)
+        select 'bulkgrant_' || n, ${clientInstanceId}, 'user', ${t.kai.id}, 'agent.read', 'asset',
+          'bulk_' || n, 'allow', ${t.admin.id}
+        from generate_series(100, 10000, 100) as n`;
       await sql`
         insert into config_asset_revisions
           (id, client_instance_id, asset_id, revision, operation, config, global_version, created_at)
@@ -214,9 +236,12 @@ describe("the instance default and the availability of an asset", () => {
   });
 
   it("marks the default agent in the read and in the list, and no other asset", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
     await t.put(t.admin.id, "agent", "kai-intake");
     await t.put(t.admin.id, "skill", "kai-guide");
+    // Kai reads the two through a grant on each.
+    await t.grant(t.kai.id, "agent.read", { assetId: await t.assetId("agent", "kai-intake") });
+    await t.grant(t.kai.id, "skill.read", { assetId: await t.assetId("skill", "kai-guide") });
     await t.stores.configAssets.setAgentAvailability({
       clientInstanceId,
       agentName: "kai-intake",
@@ -230,7 +255,7 @@ describe("the instance default and the availability of an asset", () => {
       isDefault: true,
       availability: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] }
     });
-    // Another agent is no default and carries its own availability, for its Namespace holder too.
+    // Another agent is no default and carries its own availability, for a reader of it too.
     expect(await read(t.kai.id, "agent", "kai-intake")).toEqual({
       name: "kai-intake",
       availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
@@ -249,9 +274,10 @@ describe("the instance default and the availability of an asset", () => {
   });
 
   it("leaves the availability out for an agent that has no stored record", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
     await t.put(t.admin.id, "agent", "kai-intake");
     const assetId = await t.assetId("agent", "kai-intake");
+    await t.grant(t.kai.id, "agent.read", { assetId });
     await withTestSql(async (sql) => {
       await sql`delete from config_asset_availability where asset_id = ${assetId}`;
     });
@@ -269,14 +295,15 @@ describe("assets.put, assets.delete and assets.revert", () => {
   // Fails without the change: a put without a revision created, a conflict answered 409
   // without who and when, and `null` brought a deleted asset back.
   it("names the revision it was made against: null creates, a missing one is refused, a stale one is told the current", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
     const put = (userId: string, instructions: string, expectedRevision?: number | null) =>
       t.call(userId, "assets.put", {
         params: { kind: "agent", name: "kai-intake" },
         payload: {
           config: agent("kai-intake", { instructions }),
           // An explicit `undefined` keeps the helper from filling in the current revision.
-          expectedRevision
+          expectedRevision,
+          workspaceId: t.kaiTeam
         }
       });
 
@@ -307,7 +334,7 @@ describe("assets.put, assets.delete and assets.revert", () => {
     });
     const replaced = await put(t.kai.id, "Second.", 1);
     expect(writeSchema.parse(replaced.json())).toEqual({ version: 2, revision: 1, warnings: [] });
-    await publishAgentDraft(t, "kai-intake");
+    await t.publishDraft("kai-intake", t.kaiTeam);
 
     // Stale: made against revision 1 while the asset is at 2. And a create of a taken name.
     for (const stale of [await put(t.admin.id, "Stale.", 1), await put(t.kai.id, "Again.", null)]) {
@@ -331,7 +358,7 @@ describe("assets.put, assets.delete and assets.revert", () => {
     // A replace of an asset that does not exist is told so.
     const missing = await t.call(t.kai.id, "assets.put", {
       params: { kind: "agent", name: "kai-none" },
-      payload: { config: agent("kai-none"), expectedRevision: 4 }
+      payload: { config: agent("kai-none"), expectedRevision: 4, workspaceId: t.kaiTeam }
     });
     expect(errorSchema.parse(missing.json()).error).toMatchObject({
       code: "REVISION_CONFLICT",
@@ -343,34 +370,49 @@ describe("assets.put, assets.delete and assets.revert", () => {
     });
     expect(await t.stored("agent", "kai-none")).toBeUndefined();
 
-    // Outside the Namespace, and for the user who holds nothing, the right is missing.
-    await t.expectRefused(
-      t.kai.id,
-      "assets.put",
-      { params: { kind: "agent", name: "lena-intake" }, payload: { config: agent("lena-intake") } },
-      t.forbidden("agent.write", "no_grant")
-    );
+    // In another workspace, on the instance, and for the user who holds nothing, the right is
+    // missing.
+    for (const workspaceId of [t.lenaTeam, undefined]) {
+      await t.expectRefused(
+        t.kai.id,
+        "assets.put",
+        {
+          params: { kind: "agent", name: "lena-intake" },
+          payload: { config: agent("lena-intake"), ...(workspaceId ? { workspaceId } : {}) }
+        },
+        t.forbidden("agent.write", "no_grant")
+      );
+    }
     await t.expectRefused(
       t.lena.id,
       "assets.put",
-      { params: { kind: "agent", name: "kai-intake" }, payload: { config: agent("kai-intake") } },
+      {
+        params: { kind: "agent", name: "kai-intake" },
+        payload: { config: agent("kai-intake"), workspaceId: t.kaiTeam }
+      },
       t.forbidden("agent.write", "no_grant")
     );
   });
 
   it("deletes and reverts at the revision read, keeps the history and writes the audit rows", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
+    const inKai = { workspaceId: t.kaiTeam };
     const address = { params: { kind: "agent", name: "kai-intake" } };
-    await t.put(t.kai.id, "agent", "kai-intake");
+    const read = { ...address, query: inKai };
+    await t.put(t.kai.id, "agent", "kai-intake", t.kaiTeam);
     await t.expectOk(t.kai.id, "assets.put", {
       ...address,
-      payload: { config: agent("kai-intake", { instructions: "Changed." }), expectedRevision: 1 }
+      payload: {
+        config: agent("kai-intake", { instructions: "Changed." }),
+        expectedRevision: 1,
+        ...inKai
+      }
     });
 
-    await publishAgentDraft(t, "kai-intake");
+    await t.publishDraft("kai-intake", t.kaiTeam);
     const staleRevert = await t.call(t.kai.id, "assets.revert", {
       ...address,
-      payload: { revision: 1, expectedRevision: 1 }
+      payload: { revision: 1, expectedRevision: 1, ...inKai }
     });
     expect(errorSchema.parse(staleRevert.json()).error).toMatchObject({
       code: "REVISION_CONFLICT",
@@ -378,10 +420,10 @@ describe("assets.put, assets.delete and assets.revert", () => {
     });
     const reverted = await t.expectOk(t.kai.id, "assets.revert", {
       ...address,
-      payload: { revision: 1, expectedRevision: 2 }
+      payload: { revision: 1, expectedRevision: 2, ...inKai }
     });
     expect(writeSchema.parse(reverted.json())).toMatchObject({ revision: 2, warnings: [] });
-    await publishAgentDraft(t, "kai-intake");
+    await t.publishDraft("kai-intake", t.kaiTeam);
     expect(await t.stored("agent", "kai-intake")).toMatchObject({
       revision: 3,
       config: { instructions: "Help." }
@@ -389,7 +431,7 @@ describe("assets.put, assets.delete and assets.revert", () => {
 
     const staleDelete = await t.call(t.kai.id, "assets.delete", {
       ...address,
-      payload: { expectedRevision: 2 }
+      payload: { expectedRevision: 2, ...inKai }
     });
     expect(errorSchema.parse(staleDelete.json()).error).toMatchObject({
       code: "REVISION_CONFLICT",
@@ -398,22 +440,26 @@ describe("assets.put, assets.delete and assets.revert", () => {
     for (const operation of ["assets.delete", "assets.revert"] as const) {
       const blind = await t.call(t.kai.id, operation, {
         ...address,
-        payload: { revision: 1, expectedRevision: undefined }
+        payload: { revision: 1, expectedRevision: undefined, ...inKai }
       });
       expect(blind.statusCode, operation).toBe(428);
     }
     const deleted = await t.expectOk(t.kai.id, "assets.delete", {
       ...address,
-      payload: { expectedRevision: 3 }
+      payload: { expectedRevision: 3, ...inKai }
     });
     expect(writeSchema.parse(deleted.json())).toMatchObject({ revision: 4, warnings: [] });
-    await t.expectRefused(t.kai.id, "assets.get", address, { status: 404, code: "NOT_FOUND" });
+    await t.expectRefused(t.kai.id, "assets.get", read, { status: 404, code: "NOT_FOUND" });
 
     // The deleted asset keeps its revision. Creating the name again names it.
     const revival = (expectedRevision: number | null) =>
       t.call(t.kai.id, "assets.put", {
         ...address,
-        payload: { config: agent("kai-intake", { instructions: "Again." }), expectedRevision }
+        payload: {
+          config: agent("kai-intake", { instructions: "Again." }),
+          expectedRevision,
+          ...inKai
+        }
       });
     const unreviewed = await revival(null);
     expect(unreviewed.statusCode).toBe(412);
@@ -422,11 +468,14 @@ describe("assets.put, assets.delete and assets.revert", () => {
     });
     expect(await t.stored("agent", "kai-intake")).toMatchObject({ status: "deleted", revision: 4 });
     expect((await revival(4)).statusCode).toBe(200);
-    await t.expectOk(t.kai.id, "assets.delete", { ...address, payload: { expectedRevision: 5 } });
+    await t.expectOk(t.kai.id, "assets.delete", {
+      ...address,
+      payload: { expectedRevision: 5, ...inKai }
+    });
 
     const history = z
       .object({ items: z.array(z.object({ revision: z.number(), operation: z.string() })) })
-      .parse((await t.expectOk(t.kai.id, "assets.revisions.list", address)).json());
+      .parse((await t.expectOk(t.kai.id, "assets.revisions.list", read)).json());
     expect(history.items.map((item) => [item.revision, item.operation])).toEqual([
       [6, "delete"],
       [5, "create"],
@@ -435,7 +484,7 @@ describe("assets.put, assets.delete and assets.revert", () => {
       [2, "update"],
       [1, "create"]
     ]);
-    await t.expectRefused(t.lena.id, "assets.revisions.list", address, {
+    await t.expectRefused(t.lena.id, "assets.revisions.list", read, {
       ...t.forbidden("agent.read", "no_grant")
     });
 
@@ -459,8 +508,16 @@ describe("assets.put, assets.delete and assets.revert", () => {
 });
 
 describe("assets.sync", () => {
-  const sync = (t: AccessInstance, userId: string, items: unknown[], namespace = "kai-") =>
-    t.call(userId, "assets.sync", { payload: { namespace, items } });
+  const sync = (
+    t: WorkspaceHolderInstance,
+    userId: string,
+    items: unknown[],
+    // `null`: the batch names no workspace.
+    workspaceId: string | null = t.kaiTeam
+  ) =>
+    t.call(userId, "assets.sync", {
+      payload: { items, ...(workspaceId === null ? {} : { workspaceId }) }
+    });
   const putItem = (kind: "agent" | "skill", name: string, expectedRevision?: number) => ({
     type: "put",
     kind,
@@ -469,8 +526,8 @@ describe("assets.sync", () => {
   });
 
   it("applies every item of a batch and reports each", async () => {
-    const t = await setupNamespace();
-    await t.put(t.kai.id, "agent", "kai-old");
+    const t = await setup();
+    await t.put(t.kai.id, "agent", "kai-old", t.kaiTeam);
 
     const applied = await sync(t, t.kai.id, [
       putItem("skill", "kai-guide"),
@@ -493,7 +550,7 @@ describe("assets.sync", () => {
         { ...item("put", "agent", "kai-intake"), revision: 1 },
         { ...item("delete", "agent", "kai-old"), revision: 2 }
       ],
-      // A push is made in no workspace: its new agent starts hidden.
+      // A batch is no release: its new agent starts hidden.
       hiddenAgentNames: ["kai-intake"],
       warnings: []
     });
@@ -503,10 +560,10 @@ describe("assets.sync", () => {
   });
 
   it("applies nothing when one item is refused, and names the item", async () => {
-    const t = await setupNamespace();
-    await t.put(t.admin.id, "skill", "kai-guide");
+    const t = await setup();
+    await t.put(t.admin.id, "skill", "kai-guide", t.kaiTeam);
 
-    // Kai may write skills in the Namespace and may not delete them.
+    // Kai may write the workspace's skills and may not delete them.
     const refused = await sync(t, t.kai.id, [
       putItem("agent", "kai-intake"),
       { type: "delete", kind: "skill", name: "kai-guide", expectedRevision: 1 }
@@ -567,36 +624,40 @@ describe("assets.sync", () => {
     expect(await t.stored("agent", "kai-intake")).toBeUndefined();
   });
 
-  it("reaches no asset outside the named prefix, whoever calls", async () => {
-    const t = await setupNamespace();
-    await t.put(t.admin.id, "agent", "lena-notes");
+  it("reaches no asset outside the named workspace, whoever calls", async () => {
+    const t = await setup();
+    await t.put(t.admin.id, "agent", "lena-notes", t.lenaTeam);
 
-    // The administrator may write and delete everywhere, and the batch is still one Namespace's.
+    // The administrator may write and delete everywhere, and the batch is still one workspace's.
     const outside = await sync(t, t.admin.id, [
       putItem("agent", "kai-intake"),
-      putItem("agent", "lena-intake"),
-      { type: "delete", kind: "agent", name: "lena-notes", expectedRevision: 1 },
+      putItem("agent", "lena-notes", 1),
       { type: "delete", kind: "agent", name: "assistant", expectedRevision: 1 }
     ]);
     expect(outside.statusCode).toBe(422);
     const items = syncRefusalSchema.parse(errorSchema.parse(outside.json()).error.details).items;
     expect(items.map((item) => [item.name, item.status])).toEqual([
       ["kai-intake", "not_applied"],
-      ["lena-intake", "refused"],
       ["lena-notes", "refused"],
       ["assistant", "refused"]
     ]);
-    expect(items[1]?.error?.message).toBe("Config agent 'lena-intake' is outside Namespace 'kai-'");
+    expect(items[1]?.error?.message).toBe("Config agent 'lena-notes' belongs to another scope");
     expect(await t.stored("agent", "kai-intake")).toBeUndefined();
-    expect(await t.stored("agent", "lena-intake")).toBeUndefined();
-    expect(await t.stored("agent", "lena-notes")).toMatchObject({ status: "active" });
+    expect(await t.stored("agent", "lena-notes")).toMatchObject({ status: "active", revision: 1 });
     expect(await t.stored("agent", "assistant")).toMatchObject({ status: "active" });
 
-    // A prefix nobody registered is no Namespace, and one item twice is no batch.
-    const unregistered = await sync(t, t.admin.id, [putItem("agent", "team-intake")], "team-");
-    expect(errorSchema.parse(unregistered.json()).error).toMatchObject({
+    // A batch that names no workspace is a release's, a workspace id nobody made is no owner,
+    // and one item twice is no batch.
+    const unnamed = await sync(t, t.admin.id, [putItem("agent", "kai-intake")], null);
+    expect(errorSchema.parse(unnamed.json()).error).toMatchObject({
       code: "VALIDATION_FAILED",
-      message: "Namespace 'team-' is not registered"
+      message:
+        "A batch names the workspace it belongs to. Only a release writes the instance's own assets"
+    });
+    const unknown = await sync(t, t.admin.id, [putItem("agent", "team-intake")], "cws_none");
+    expect(errorSchema.parse(unknown.json()).error).toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: { reason: "workspace_not_found" }
     });
     const twice = await sync(t, t.admin.id, [
       putItem("agent", "kai-intake"),
@@ -610,7 +671,7 @@ describe("assets.sync", () => {
 
 describe("the Operation Run of an asset call", () => {
   it("leaves one run per changing call and per failed read, and none for an allowed read", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
     const runs = () => t.stores.operationRuns.list({ clientInstanceId });
     const runOf = async (...call: Call) => {
       const before = (await runs()).length;
@@ -628,8 +689,10 @@ describe("the Operation Run of an asset call", () => {
         ...(run.error ? { error: run.error.code } : {})
       };
     };
+    const inKai = { workspaceId: t.kaiTeam };
     const address = { params: { kind: "agent", name: "kai-intake" } };
-    const put = { ...address, payload: { config: agent("kai-intake") } };
+    const read = { ...address, query: inKai };
+    const put = { ...address, payload: { config: agent("kai-intake"), ...inKai } };
     const done = (operation: string, actor: string, effect: string) => ({
       operation,
       actor,
@@ -644,13 +707,13 @@ describe("the Operation Run of an asset call", () => {
     // without the change, when each left one `done` run and three audit rows.
     const audited = async () => (await t.stores.audit.listAuditEvents({ clientInstanceId })).length;
     const reads: Call[] = [
-      [t.kai.id, "assets.get", address],
+      [t.kai.id, "assets.get", read],
       [t.admin.id, "assets.list", { params: { kind: "agent" } }],
-      [t.kai.id, "assets.revisions.list", address],
+      [t.kai.id, "assets.revisions.list", read],
       [
         t.kai.id,
         "assets.validate",
-        { params: { kind: "agent" }, payload: { config: agent("kai-intake") } }
+        { params: { kind: "agent" }, payload: { config: agent("kai-intake"), ...inKai } }
       ],
       [t.lena.id, "platform.context.get"]
     ];
@@ -663,7 +726,10 @@ describe("the Operation Run of an asset call", () => {
     }
     // A read that fails is a run.
     expect(
-      await runOf(t.kai.id, "assets.get", { params: { kind: "agent", name: "kai-missing" } })
+      await runOf(t.kai.id, "assets.get", {
+        params: { kind: "agent", name: "kai-missing" },
+        query: inKai
+      })
     ).toEqual({
       operation: "assets.get",
       actor: t.kai.id,
@@ -681,7 +747,7 @@ describe("the Operation Run of an asset call", () => {
     expect(
       await runOf(t.kai.id, "assets.put", {
         ...address,
-        payload: { config: agent("kai-intake"), expectedRevision: 9 }
+        payload: { config: agent("kai-intake"), expectedRevision: 9, ...inKai }
       })
     ).toEqual({
       operation: "assets.put",
@@ -693,7 +759,7 @@ describe("the Operation Run of an asset call", () => {
     expect(
       await runOf(t.kai.id, "assets.sync", {
         payload: {
-          namespace: "kai-",
+          ...inKai,
           items: [{ type: "delete", kind: "agent", name: "lena-x", expectedRevision: 1 }]
         }
       })
@@ -701,18 +767,21 @@ describe("the Operation Run of an asset call", () => {
     expect(
       await runOf(t.kai.id, "assets.revert", {
         ...address,
-        payload: { revision: 1, expectedRevision: 1 }
+        payload: { revision: 1, expectedRevision: 1, ...inKai }
       })
     ).toEqual(done("assets.revert", t.kai.id, "changing"));
     expect(
-      await runOf(t.kai.id, "assets.delete", { ...address, payload: { expectedRevision: 1 } })
+      await runOf(t.kai.id, "assets.delete", {
+        ...address,
+        payload: { expectedRevision: 1, ...inKai }
+      })
     ).toEqual(done("assets.delete", t.kai.id, "changing"));
   });
 });
 
 describe("a name with a NUL byte", () => {
   it("is refused readably by every operation that takes a name, and never reaches the store", async () => {
-    const t = await setupNamespace();
+    const t = await setup();
     const name = "kai-\u0000intake";
     const address = { params: { kind: "agent", name } };
     const calls: Call[] = [
@@ -739,7 +808,7 @@ describe("a name with a NUL byte", () => {
         "assets.sync",
         {
           payload: {
-            namespace: "kai-",
+            workspaceId: t.kaiTeam,
             items: [{ type: "put", kind: "agent", config: agent(name) }]
           }
         }
@@ -749,21 +818,23 @@ describe("a name with a NUL byte", () => {
         "assets.sync",
         {
           payload: {
-            namespace: "kai-",
+            workspaceId: t.kaiTeam,
             items: [{ type: "delete", kind: "agent", name, expectedRevision: 1 }]
           }
         }
       ],
+      // The workspace a batch names is the caller's text as well.
       [
         t.admin.id,
         "assets.sync",
         {
           payload: {
-            namespace: "kai-\u0000",
+            workspaceId: `${t.kaiTeam}\u0000`,
             items: [{ type: "put", kind: "agent", config: agent("kai-intake") }]
           }
         }
-      ]
+      ],
+      [t.admin.id, "assets.list", { params: { kind: "agent" }, query: { workspaceId: "\u0000" } }]
     ];
     for (const [userId, operation, input] of calls) {
       // The harness reads no revision for the call: the name would not reach its store either.

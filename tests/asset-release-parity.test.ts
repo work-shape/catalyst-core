@@ -133,10 +133,10 @@ describe("a definition in a release", () => {
     expect(await t.stored("agent", "rel-old")).toMatchObject({ revision: 1 });
 
     // The superadmin's save through the same operation is adjusted, as it always was.
-    const saved = await syncAs(t, t.root.id, [putAgent("rel-old", fast, 1)]);
+    const saved = await syncAs(t, t.root.id, [putAgent("team-old", fast, 1)]);
     expect(saved.statusCode, saved.body).toBe(200);
-    await publishAgentDraft({ ...t, admin: t.root }, "rel-old");
-    const config = (await t.stored("agent", "rel-old"))?.config;
+    await publishAgentDraft({ ...t, admin: t.root }, "team-old", t.team);
+    const config = (await t.stored("agent", "team-old"))?.config;
     expect(config).toMatchObject({ modelBindingId: "plain" });
     expect(config).not.toHaveProperty("fastMode");
   });
@@ -266,7 +266,15 @@ describe("a delete in a release", () => {
     const t = await setup();
     await applyAtCurrentRevisions(t.stores.configAssets, {
       clientInstanceId,
-      mutations: [{ type: "delete", kind: "agent", name: "rel-old" }]
+      mutations: [
+        { type: "delete", kind: "agent", name: "rel-old" },
+        {
+          type: "delete",
+          kind: "agent",
+          name: "team-old",
+          scope: { kind: "workspace", workspaceId: t.team }
+        }
+      ]
     });
     const release = [
       deleteAgent("rel-never-there"),
@@ -274,12 +282,17 @@ describe("a delete in a release", () => {
       putSkill("rel-guide", "Pushed.", 1)
     ];
 
-    const asAdmin = await syncAs(t, t.admin.id, release);
+    // The same batch of an ordinary caller, in the workspace it writes in.
+    const asAdmin = await syncAs(t, t.admin.id, [
+      deleteAgent("team-never-there"),
+      deleteAgent("team-old", 2),
+      putSkill("team-guide", "Pushed.", 1)
+    ]);
     expect(asAdmin.statusCode).toBe(404);
     expect(refusedItems(asAdmin).items.map((item) => [item.name, item.status])).toEqual([
-      ["rel-never-there", "refused"],
-      ["rel-old", "refused"],
-      ["rel-guide", "not_applied"]
+      ["team-never-there", "refused"],
+      ["team-old", "refused"],
+      ["team-guide", "not_applied"]
     ]);
 
     const pushed = await syncAsService(t, release);

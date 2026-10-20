@@ -427,17 +427,17 @@ describe("a Connection through the asset operations", () => {
     });
     expect(await stored(t, "made-here")).toBeNull();
 
-    // A batch of a Namespace holder carries no Connection, and a release carries agents and
-    // skills only.
-    await t.createNamespace("kai-");
+    // A batch of a workspace carries no Connection, which no workspace owns, and a release
+    // carries agents and skills only.
+    const team = await t.sharedWorkspace("Kai's team");
     const batch = await t.call(t.admin.id, "assets.sync", {
       payload: {
-        namespace: "kai-",
+        workspaceId: team,
         items: [{ type: "put", kind: "connection", config: connection("kai-outside") }]
       }
     });
     expect(batch.statusCode).toBeGreaterThanOrEqual(400);
-    expect(JSON.stringify(batch.json())).toContain("connection_batch_unavailable");
+    expect(JSON.stringify(batch.json())).toContain("A connection cannot be owned by a workspace");
     const release = await t.instance.call("assets.sync", {
       headers: { "x-test-service": "release" },
       payload: { items: [{ type: "put", kind: "connection", config: connection("released") }] }
@@ -761,7 +761,7 @@ describe("the module connections", () => {
         off.call("assets.delete", { ...address, payload: { expectedRevision: 1 } }),
         off.call("assets.sync", {
           payload: {
-            namespace: "kai-",
+            workspaceId: "ws_kai",
             items: [{ type: "put", kind: "connection", config: connection("kai-outside") }]
           }
         }),

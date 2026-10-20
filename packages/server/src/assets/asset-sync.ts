@@ -4,7 +4,6 @@ import {
   AppError,
   asCollaborationWorkspaceId,
   auditActorFromIdentity,
-  findNamespaceOfAssetName,
   isAppError,
   type ActorAccess,
   type AuthenticatedIdentity,
@@ -14,11 +13,7 @@ import {
 import type { AgentToolWarning } from "../agent-tool-validation";
 import { clearLiveOnceSwitches } from "./asset-after-write";
 import { z } from "zod";
-import {
-  configValuesEqual,
-  readDefinitionName,
-  type AssetWriteFollowUp
-} from "../asset-kinds/shared";
+import { configValuesEqual, type AssetWriteFollowUp } from "../asset-kinds/shared";
 import {
   definitionsByName,
   findAssetSetIssues,
@@ -91,8 +86,8 @@ const conflictsSchema = z.object({
 });
 
 /**
- * Applies puts and deletes, all of them or none: in one Namespace where the batch names one,
- * anywhere among the instance's own assets where it names none. Every item is checked as the
+ * Applies puts and deletes, all of them or none: among what one workspace owns where the batch
+ * names one, anywhere among the instance's own assets for a release, which names none. Every item is checked as the
  * single operation would check it: the right on its asset, the revision it was made against,
  * the definition and the instance's rules. An asset the batch does not name is neither read
  * for its revision nor written, so a change of it never refuses the batch.
@@ -101,8 +96,7 @@ const conflictsSchema = z.object({
  * the published revision stays, and so does the version of the set the runtime reads. A kind
  * whose revisions hold files, such as the App, is refused as an item: its files are built per
  * write, which no batch is. The first kind of check that refuses any item stops
- * the batch, and the error names every item with what it was refused for. An item outside a
- * named prefix is refused before anything is read. What a holder of the release right is
+ * the batch, and the error names every item with what it was refused for. What a holder of the release right is
  * exempt from in this call is listed at `isReleaseSync`.
  */
 export async function syncAssets(
@@ -164,15 +158,6 @@ async function checkBatch(
     }
   };
 
-  const namespaces = await options.stores.access.listNamespaceRecords({
-    clientInstanceId: options.clientInstanceId
-  });
-  if (
-    input.namespace !== undefined &&
-    !namespaces.some((namespace) => namespace.prefix === input.namespace)
-  ) {
-    throw new AppError("VALIDATION_FAILED", `Namespace '${input.namespace}' is not registered`);
-  }
   await requireOwnerWorkspace(options, input.workspaceId);
   const releaseSync = isReleaseSync(call.access, "sync");
   if (purpose === "apply") {
@@ -266,7 +251,7 @@ async function checkBatch(
     );
   }
   // The first asset of a kind with an instance default becomes it and the last one takes it
-  // away. Either changes the default, which no Namespace or asset grant opens. A release is
+  // away. Either changes the default, which no workspace or asset grant opens. A release is
   // taken at its word instead: the default it names, or the stored one.
   const impliedDefault =
     input.defaultAgentName === undefined && impliesDefaultChange(call.access)
@@ -349,7 +334,7 @@ async function checkBatch(
         name: entry.name,
         current: storedByName(entry.kind.kind).get(entry.name),
         next: acceptedByName(entry.kind.kind).get(entry.name),
-        modelBindingsListed: listsModelBindings(changed.lists, entry.name)
+        modelBindingsListed: listsModelBindings(changed.lists)
       })
     );
   }
@@ -616,29 +601,15 @@ export async function authorizeAssetSync(
 }
 
 /**
- * What the policy is asked about: each kind the batch names with the Namespace of the names it
- * carries and the workspace the batch names, so a setting narrowed to a kind, a Namespace or
- * a workspace applies to the batch.
+ * What the policy is asked about: each kind the batch names with the workspace the batch
+ * names, so a setting narrowed to a kind or a workspace applies to the batch.
  */
-export async function assetSyncPolicyTargets(
-  options: AssetWorkflowOptions,
-  input: AssetSyncInput
-): Promise<PolicyTarget[]> {
-  const namespaces = await options.stores.access.listNamespaceRecords({
-    clientInstanceId: options.clientInstanceId
-  });
+export function assetSyncPolicyTargets(input: AssetSyncInput): PolicyTarget[] {
   const targets = new Map<string, PolicyTarget>();
   for (const item of input.items) {
-    const name = item.type === "put" ? readDefinitionName(item.config) : item.name;
-    // A Namespace is a prefix among the instance's own assets only.
-    const namespace =
-      name === undefined || input.workspaceId !== undefined
-        ? undefined
-        : findNamespaceOfAssetName(namespaces, name)?.prefix;
-    targets.set(JSON.stringify([item.kind, namespace]), {
+    targets.set(item.kind, {
       assetKind: item.kind,
-      ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
-      ...(namespace === undefined ? {} : { namespace })
+      ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId })
     });
   }
   return [...targets.values()];

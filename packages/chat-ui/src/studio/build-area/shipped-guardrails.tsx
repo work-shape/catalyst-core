@@ -50,9 +50,7 @@ export function ShippedGuardrailsLead({
     });
   }
   const text = filter.text.trim().toLocaleLowerCase(locale);
-  const inScope =
-    (filter.scope === undefined || filter.scope.kind === "instance") &&
-    filter.namespace === undefined;
+  const inScope = filter.scope === undefined || filter.scope.kind === "instance";
   const rows = read.items.flatMap((guardrail): BuildListLeadRow[] => {
     const words = SHIPPED_WORDS[guardrail.name];
     const title = words ? t(words.title) : guardrail.displayName;

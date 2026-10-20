@@ -5,12 +5,10 @@ import {
   type AdministeredUser,
   type ConfigAssetSummary,
   type EffectivePermissions,
-  type NamespaceWithUsage,
   type PermissionGrantRow
 } from "@work-shape/catalyst-api-client";
 import {
   accessWriteFailure,
-  boundAssets,
   checkAsset,
   checkedAssetId,
   checkState,
@@ -23,10 +21,6 @@ import {
   grantVerbs,
   groupGrants,
   listGrantChoiceAssets,
-  namespaceLockedLists,
-  namespacePrefixProblem,
-  namespaceRequest,
-  NamespacesTab,
   withGrantKind
 } from "@work-shape/catalyst-chat-ui/access";
 import { DocsAddressProvider } from "@work-shape/catalyst-ui";
@@ -61,24 +55,14 @@ function agent(id: string, name: string): ConfigAssetSummary {
   return { id, kind: "agent", name, revision: 1, updatedAt: AT };
 }
 
-const kai: NamespaceWithUsage = {
-  prefix: "kai-",
-  displayName: "Kai",
-  allowedToolNames: null,
-  allowedModelBindingIds: [],
-  createdAt: AT,
-  grantCount: 2,
-  assetCount: 1
-};
-
-const namespaceGrant: PermissionGrantRow = {
+const workspaceGrant: PermissionGrantRow = {
   id: "grant-1",
   holderKind: "user",
   holderId: "user-1",
   action: "agent.write",
   effect: "allow",
-  scopeKind: "namespace",
-  namespace: "kai-",
+  scopeKind: "workspace",
+  scopeId: "ws-kai",
   grantedBy: "admin-1",
   createdAt: AT
 };
@@ -94,20 +78,6 @@ const orphanedDeny: PermissionGrantRow = {
   scopeAsset: { kind: "agent", name: "kai-old", active: false },
   createdAt: AT
 };
-
-function namespacesTab(props: Partial<ComponentProps<typeof NamespacesTab>>) {
-  return createElement(NamespacesTab, {
-    namespaces: undefined,
-    loadFailed: false,
-    onRetry: nothing,
-    references: undefined,
-    referencesFailure: undefined,
-    onCreate: never,
-    onUpdate: never,
-    onDelete: never,
-    ...props
-  });
-}
 
 function grantsTab(props: Partial<ComponentProps<typeof GrantsTab>>) {
   return createElement(GrantsTab, {
@@ -134,8 +104,6 @@ function checkTab(props: Partial<ComponentProps<typeof CheckTab>>) {
     assets: [],
     assetsFailure: undefined,
     onRetryAssets: nothing,
-    namespaces: [kai],
-    modelBindings: [],
     holderId: undefined,
     onHolderChange: nothing,
     effective: undefined,
@@ -147,42 +115,6 @@ function checkTab(props: Partial<ComponentProps<typeof CheckTab>>) {
     ...props
   });
 }
-
-describe("Namespaces tab", () => {
-  it("says that no Namespace is registered and offers to register one", () => {
-    const markup = render(namespacesTab({ namespaces: [] }));
-    expect(markup).toContain("No Namespace yet.");
-    expect(markup).toContain("New Namespace");
-    expect(markup).not.toContain('data-testid="namespace-row"');
-  });
-
-  it("says that the Namespaces could not be loaded and offers another try", () => {
-    const markup = render(namespacesTab({ loadFailed: true }));
-    expect(markup).toContain("The Namespaces could not be loaded.");
-    expect(markup).toContain("Try again");
-  });
-
-  it("says in German that the Namespaces could not be loaded", () => {
-    expect(render(namespacesTab({ loadFailed: true }), "de")).toContain(
-      "Die Namespaces konnten nicht geladen werden."
-    );
-  });
-
-  it("tells an unrestricted list from a list that allows nothing", () => {
-    const markup = render(namespacesTab({ namespaces: [kai] }));
-    expect(markup).toContain("No limit");
-    expect(markup).toContain("None allowed");
-  });
-
-  it("says what a Namespace is above the list, not only when the list is empty", () => {
-    expect(render(namespacesTab({ namespaces: [kai] }))).toContain(
-      "A Namespace is a name prefix such as kai-."
-    );
-    expect(render(namespacesTab({ namespaces: [kai] }), "de")).toContain(
-      "Ein Namespace ist ein Namenspräfix wie kai-."
-    );
-  });
-});
 
 describe("Grants tab", () => {
   it("says that nothing is granted and offers to grant", () => {
@@ -198,7 +130,7 @@ describe("Grants tab", () => {
   });
 
   it("shows a deny whose asset was deleted under the asset's name", () => {
-    const markup = render(grantsTab({ grants: [namespaceGrant, orphanedDeny] }));
+    const markup = render(grantsTab({ grants: [workspaceGrant, orphanedDeny] }));
     expect(markup).toContain("kai-old");
     expect(markup).toContain("Asset no longer exists");
   });
@@ -210,8 +142,8 @@ describe("Grants tab", () => {
   });
 
   it("shows one row per person and place, with the actions as chips", () => {
-    const second = { ...namespaceGrant, id: "grant-3", action: "agent.read" };
-    const markup = render(grantsTab({ grants: [namespaceGrant, second, orphanedDeny] }));
+    const second = { ...workspaceGrant, id: "grant-3", action: "agent.read" };
+    const markup = render(grantsTab({ grants: [workspaceGrant, second, orphanedDeny] }));
     expect(markup.split('data-testid="grant-row"')).toHaveLength(3);
     // The verbs come in the page's order, whatever order the rows were written in.
     expect(markup.indexOf("View agents")).toBeLessThan(markup.indexOf("Edit agents"));
@@ -222,8 +154,8 @@ describe("Grants tab", () => {
   });
 
   it("groups by person and place and by nothing else", () => {
-    const other = { ...namespaceGrant, id: "grant-4", holderId: "user-2" };
-    const groups = groupGrants([namespaceGrant, orphanedDeny, other], (id) => id);
+    const other = { ...workspaceGrant, id: "grant-4", holderId: "user-2" };
+    const groups = groupGrants([workspaceGrant, orphanedDeny, other], (id) => id);
     expect(groups.map((group) => [group.holderId, group.grants.map((grant) => grant.id)])).toEqual([
       ["user-1", ["grant-2"]],
       ["user-1", ["grant-1"]],
@@ -324,24 +256,16 @@ describe("when a check gives a result", () => {
 });
 
 describe("what a check decides", () => {
+  /** Allowed to change and delete one agent, `asset-1`. */
   const effective: EffectivePermissions = {
     holderActive: true,
-    items: [
-      {
-        action: "agent.write",
-        effect: "allow",
-        scopeKind: "namespace",
-        namespace: "kai-",
-        source: "grant"
-      },
-      {
-        action: "agent.delete",
-        effect: "allow",
-        scopeKind: "namespace",
-        namespace: "kai-",
-        source: "grant"
-      }
-    ]
+    items: ["agent.write", "agent.delete"].map((action) => ({
+      action,
+      effect: "allow" as const,
+      scopeKind: "asset" as const,
+      scopeId: "asset-1",
+      source: "grant" as const
+    }))
   };
 
   function decisions(holder: EffectivePermissions, name: string, assetId?: string) {
@@ -352,13 +276,13 @@ describe("what a check decides", () => {
     ]);
   }
 
-  it("allows what a Namespace row covers and refuses the rest for want of a grant", () => {
-    expect(decisions(effective, "kai-helper")).toEqual([
+  it("allows what a row on the asset covers and refuses the rest for want of a grant", () => {
+    expect(decisions(effective, "kai-helper", "asset-1")).toEqual([
       ["read", false, "no_grant"],
       ["write", true, "grant"],
       ["delete", true, "grant"]
     ]);
-    expect(decisions(effective, "other-helper")).toEqual([
+    expect(decisions(effective, "other-helper", "asset-2")).toEqual([
       ["read", false, "no_grant"],
       ["write", false, "no_grant"],
       ["delete", false, "no_grant"]
@@ -366,10 +290,16 @@ describe("what a check decides", () => {
   });
 
   it("lets a deny on the asset win, and refuse the delete with it", () => {
+    // Allowed to change and delete every agent, as a role allows it, and denied changing one.
     const denied: EffectivePermissions = {
       holderActive: true,
       items: [
-        ...effective.items,
+        ...["agent.write", "agent.delete"].map((action) => ({
+          action,
+          effect: "allow" as const,
+          scopeKind: "instance" as const,
+          source: "role" as const
+        })),
         {
           action: "agent.write",
           effect: "deny",
@@ -386,8 +316,8 @@ describe("what a check decides", () => {
       ["delete", false, "deny"]
     ]);
     expect(actions[2]?.deniedThrough).toBe("write");
-    // The deny names one asset: its neighbour under the prefix stays allowed.
-    expect(decisions(denied, "kai-other", "asset-2")[1]).toEqual(["write", true, "grant"]);
+    // The deny names one asset: its neighbour stays allowed.
+    expect(decisions(denied, "kai-other", "asset-2")[1]).toEqual(["write", true, "role"]);
   });
 
   it("answers every action the registry names for the kind, using a Connection among them", () => {
@@ -537,60 +467,6 @@ describe("what a check decides", () => {
 });
 
 describe("what the dialogs send", () => {
-  it("refuses a prefix that overlaps a registered one, in either direction", () => {
-    expect(namespacePrefixProblem("kai-x-", ["kai-"])).toEqual({ kind: "overlap", prefix: "kai-" });
-    expect(namespacePrefixProblem("kai-", ["kai-team-"])).toEqual({
-      kind: "overlap",
-      prefix: "kai-team-"
-    });
-    expect(namespacePrefixProblem("team-", ["kai-"])).toBeUndefined();
-    expect(namespacePrefixProblem("Kai_", [])).toEqual({ kind: "pattern" });
-    expect(namespacePrefixProblem("k", [])).toEqual({ kind: "length" });
-  });
-
-  it("sends null for a list that is switched off and the empty list for one that allows nothing", () => {
-    const form = {
-      prefix: "kai-",
-      displayName: " Kai ",
-      limitTools: false,
-      toolNames: ["read_skill"],
-      limitModels: true,
-      modelBindingIds: []
-    };
-    expect(namespaceRequest(form)).toEqual({
-      prefix: "kai-",
-      displayName: "Kai",
-      allowedToolNames: null,
-      allowedModelBindingIds: []
-    });
-    expect(namespaceLockedLists(form, { unit: "agents", count: 0 })).toEqual([]);
-    expect(namespaceLockedLists(form, { unit: "agents", count: 2 })).toEqual(["models"]);
-  });
-
-  it("warns from the Namespace's own count when the agents could not be read", () => {
-    const form = {
-      prefix: "kai-",
-      displayName: "Kai",
-      limitTools: true,
-      toolNames: [],
-      limitModels: false,
-      modelBindingIds: []
-    };
-    // Read: the agents under the prefix are counted, skills are not.
-    expect(boundAssets("kai-", [agent("a", "kai-helper"), agent("b", "other")], kai)).toEqual({
-      unit: "agents",
-      count: 1
-    });
-    // Not read (loading, failed, or no right to read): the row's count of assets stands in.
-    const fallback = boundAssets("kai-", undefined, kai);
-    expect(fallback).toEqual({ unit: "assets", count: 1 });
-    expect(namespaceLockedLists(form, fallback)).toEqual(["tools"]);
-    // A new prefix has no row to count from, so the page cannot rule agents out.
-    expect(namespaceLockedLists(form, boundAssets("kai-", undefined, undefined))).toEqual([
-      "tools"
-    ]);
-  });
-
   it("writes one row per chosen action", () => {
     const form = {
       holderId: "user-1",
@@ -608,7 +484,7 @@ describe("what the dialogs send", () => {
     expect(grantRequests({ ...form, verbs: [] })).toBeUndefined();
   });
 
-  it("offers a new right in a workspace or on one asset, and never in a Namespace or a workspace that owns no such asset", () => {
+  it("offers a new right in a workspace or on one asset, and never in a workspace that owns no such asset", () => {
     expect(grantVerbs("connection")).toEqual(["read", "use"]);
     // A Connection is the instance's own, so a workspace would cover nothing. No legacy key
     // carries its rights, so the whole instance is a place too (RIGHTS-1c, D3).
@@ -696,20 +572,18 @@ describe("what the dialogs send", () => {
 
   it("names a Connection row and a workspace row in words", () => {
     const onConnection: PermissionGrantRow = {
-      ...namespaceGrant,
+      ...workspaceGrant,
       id: "grant-c1",
       action: "connection.use",
       scopeKind: "asset",
-      namespace: undefined,
       scopeId: "asset-crm",
       scopeAsset: { kind: "connection", name: "crm", active: true }
     };
     const inWorkspace: PermissionGrantRow = {
-      ...namespaceGrant,
+      ...workspaceGrant,
       id: "grant-c2",
       action: "connection.read",
       scopeKind: "workspace",
-      namespace: undefined,
       scopeId: "ws-1"
     };
     const named = render(
@@ -732,10 +606,9 @@ describe("what the dialogs send", () => {
     expect(grantsNameWorkspaces([], [onConnection, inWorkspace])).toBe(true);
     // An instance-wide row is named in words, never by its scope kind.
     const onInstance: PermissionGrantRow = {
-      ...namespaceGrant,
+      ...workspaceGrant,
       id: "grant-c3",
-      scopeKind: "instance",
-      namespace: undefined
+      scopeKind: "instance"
     };
     expect(render(grantsTab({ grants: [onInstance] }))).toContain("Whole instance");
     expect(render(grantsTab({ grants: [onInstance] }), "de")).toContain("Ganze Instanz");
@@ -747,9 +620,6 @@ describe("what the dialogs send", () => {
     expect(accessWriteFailure(refusal(409, "CONFLICT"))).toBe("userBeingDeleted");
     expect(accessWriteFailure(refusal(409, "CONFLICT", { reason: "duplicate_grant" }))).toBe(
       "duplicateGrant"
-    );
-    expect(accessWriteFailure(refusal(409, "CONFLICT", { reason: "namespace_in_use" }))).toBe(
-      "namespaceInUse"
     );
     expect(accessWriteFailure(new Error("offline"))).toBe("other");
   });

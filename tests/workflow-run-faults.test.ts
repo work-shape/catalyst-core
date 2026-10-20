@@ -5,6 +5,7 @@ import {
   connectionCallError,
   createPlatformId,
   workflowStepIdempotencyKey,
+  WORKFLOW_ASSET_KIND,
   type WorkflowManifest
 } from "@work-shape/catalyst-core";
 import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
@@ -644,18 +645,37 @@ describe("the read of a run the caller is denied", () => {
 
   // Fails without the decision on no Workflow: a deny on one Workflow answered its runs with
   // `denied` and every other id with `no_grant` or `NOT_FOUND`, which told which ids are runs.
-  it("answers the same under a deny in a Namespace or on the one Workflow, to a member and to an administrator", async () => {
-    const t = await ready();
+  it("answers the same under a deny on the one Workflow, to a member and to an administrator", async () => {
+    const t = await ready({ definitions: "assets" });
+    const address = { kind: WORKFLOW_ASSET_KIND, name: "notify-clients" };
+    const written = await t.expectOk(t.admin.id, "assets.put", {
+      params: address,
+      payload: { config: { name: address.name, manifest: notifyClients() }, expectedRevision: null }
+    });
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: address,
+      payload: { revision: z.object({ revision: z.number() }).parse(written.json()).revision }
+    });
     const started = await start(t);
     const ops = await t.stores.users.createUser({
       clientInstanceId,
       displayLabel: "Ops",
       roles: ["user", "admin"]
     });
-    await t.createNamespace("notify-");
+    const workflowId = await t.assetId(WORKFLOW_ASSET_KIND, address.name);
     for (const action of ["workflow.read", "workflow.write"]) {
-      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "notify-" }, "deny");
-      await t.seedHistoricalGrant(ops.id, action, { namespace: "notify-" }, "deny");
+      for (const holderId of [t.kai.id, ops.id]) {
+        await t.stores.access.createGrant({
+          clientInstanceId,
+          holderKind: "user",
+          holderId,
+          action,
+          effect: "deny",
+          scopeKind: "asset",
+          scopeId: workflowId,
+          grantedBy: t.root.id
+        });
+      }
     }
     for (const operation of RUN_CALLS) {
       // A member holds nothing on any Workflow: both are refused for the missing right.

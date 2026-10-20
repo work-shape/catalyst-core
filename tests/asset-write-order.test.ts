@@ -1,4 +1,3 @@
-import { publishAgentDraft } from "./support/agent-draft-publication";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { WorkflowAssetKind } from "@work-shape/catalyst-server";
@@ -17,8 +16,8 @@ import {
   type AccessInstance
 } from "./support/access-instance";
 import {
-  setupNamespaceHolder as setupNamespace,
-  type NamespaceHolderInstance
+  setupWorkspaceHolder as setup,
+  type WorkspaceHolderInstance
 } from "./support/asset-operations";
 
 // What a write of an asset is refused for first, what a refusal tells a caller who may write
@@ -74,13 +73,14 @@ const memo = (name: string, text = "Text.", locked?: true) => ({
   ...(locked ? { locked } : {})
 });
 
-let t: NamespaceHolderInstance;
+let t: WorkspaceHolderInstance;
+/** Another workspace, in which neither Kai nor Lena holds anything. */
 let workspaceId: string;
 const audit = { failOn: undefined as number | undefined, updates: 0 };
 
 // One instance for the file: the tests of a file share its database.
 beforeAll(async () => {
-  t = await setupNamespace({
+  t = await setup({
     furtherKinds: [createMemoKind()],
     furtherToolNames: ["read_skill"],
     server: (stores) => {
@@ -102,9 +102,28 @@ beforeAll(async () => {
   workspaceId = await t.sharedWorkspace("Team");
 });
 
+/** Kai's workspace, as a call names it and as the store holds it. */
+const inKai = () => ({ workspaceId: t.kaiTeam });
+const kaiScope = () => ({ kind: "workspace" as const, workspaceId: t.kaiTeam });
+
+/** Publishes the agent's draft in Kai's workspace as the superadmin, who may set its model. */
+async function publishAsRoot(name: string) {
+  const { draft } = z
+    .object({ draft: z.object({ revision: z.number() }).nullable() })
+    .parse(
+      (await t.expectOk(t.root.id, "agents.draft.get", { params: { name }, query: inKai() })).json()
+    );
+  if (draft) {
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: { kind: "agent", name },
+      payload: { revision: draft.revision, ...inKai() }
+    });
+  }
+}
+
 describe("the order a write of an asset is refused in", () => {
   beforeAll(async () => {
-    await t.put(t.kai.id, "agent", "kai-agent");
+    await t.put(t.kai.id, "agent", "kai-agent", t.kaiTeam);
   });
 
   const withEffort = { config: agent("kai-agent", { reasoningEffort: "low" }) };
@@ -117,7 +136,7 @@ describe("the order a write of an asset is refused in", () => {
       const refused = refusal(
         await t.call(t.kai.id, "assets.put", {
           params: { kind: "agent", name: "kai-agent" },
-          payload: { ...withEffort, expectedRevision }
+          payload: { ...withEffort, expectedRevision, ...inKai() }
         })
       );
       expect(refused).toMatchObject({ status: 403, code: "FORBIDDEN", details: modelRight });
@@ -127,7 +146,7 @@ describe("the order a write of an asset is refused in", () => {
     const put = (expectedRevision: number | undefined) =>
       t.call(t.root.id, "assets.put", {
         params: { kind: "agent", name: "kai-agent" },
-        payload: { ...withEffort, expectedRevision }
+        payload: { ...withEffort, expectedRevision, ...inKai() }
       });
     expect(refusal(await put(undefined))).toMatchObject({
       status: 428,
@@ -139,20 +158,20 @@ describe("the order a write of an asset is refused in", () => {
   // Fails without the change: a revert was asked for the right its restored content needs
   // only after the revision, so it answered 428 or 412 with the revision first.
   it("answers a revert the right its restored content needs before the revision", async () => {
-    await t.put(t.kai.id, "agent", "kai-reverted");
+    await t.put(t.kai.id, "agent", "kai-reverted", t.kaiTeam);
     const write = (config: Record<string, unknown>, expectedRevision: number) =>
       t.expectOk(t.root.id, "assets.put", {
         params: { kind: "agent", name: "kai-reverted" },
-        payload: { config, expectedRevision }
+        payload: { config, expectedRevision, ...inKai() }
       });
     await write(agent("kai-reverted", { reasoningEffort: "low" }), 1);
-    await publishAgentDraft({ ...t, admin: t.root }, "kai-reverted");
+    await publishAsRoot("kai-reverted");
     await write(agent("kai-reverted"), 2);
-    await publishAgentDraft({ ...t, admin: t.root }, "kai-reverted");
+    await publishAsRoot("kai-reverted");
     const revert = (userId: string, expectedRevision: number | undefined) =>
       t.call(userId, "assets.revert", {
         params: { kind: "agent", name: "kai-reverted" },
-        payload: { revision: 2, expectedRevision }
+        payload: { revision: 2, expectedRevision, ...inKai() }
       });
     for (const expectedRevision of [undefined, 99]) {
       const refused = refusal(await revert(t.kai.id, expectedRevision));
@@ -168,7 +187,7 @@ describe("the order a write of an asset is refused in", () => {
     const refused = refusal(
       await t.call(t.kai.id, "assets.sync", {
         payload: {
-          namespace: "kai-",
+          ...inKai(),
           items: [{ type: "put", kind: "agent", ...withEffort, expectedRevision: undefined }]
         }
       })
@@ -183,17 +202,20 @@ describe("the order a write of an asset is refused in", () => {
 
 describe("what a write tells a caller who may not read the asset", () => {
   beforeAll(async () => {
-    // Lena writes and deletes in the Namespace and reads nothing of it.
-    await t.seedHistoricalGrant(t.lena.id, "skill.write", { namespace: "kai-" });
-    await t.seedHistoricalGrant(t.lena.id, "skill.delete", { namespace: "kai-" });
-    const put = (name: string, config: Record<string, unknown>, workspace?: string) =>
+    // Lena writes and deletes in Kai's workspace and reads nothing of it.
+    await t.grant(t.lena.id, "skill.write", inKai());
+    await t.grant(t.lena.id, "skill.delete", inKai());
+    const put = (name: string, config: Record<string, unknown>, workspace: string = t.kaiTeam) =>
       t.expectOk(t.admin.id, "assets.put", {
         params: { kind: "memo", name },
-        payload: { config, ...(workspace ? { workspaceId: workspace } : {}) }
+        payload: { config, workspaceId: workspace }
       });
     await put("kai-active", memo("kai-active"));
     await put("kai-gone", memo("kai-gone"));
-    await t.expectOk(t.admin.id, "assets.delete", { params: { kind: "memo", name: "kai-gone" } });
+    await t.expectOk(t.admin.id, "assets.delete", {
+      params: { kind: "memo", name: "kai-gone" },
+      payload: inKai()
+    });
     await put("kai-locked", memo("kai-locked", "Text.", true));
     await put("kai-team", memo("kai-team"), workspaceId);
   });
@@ -204,15 +226,15 @@ describe("what a write tells a caller who may not read the asset", () => {
   const del = (userId: string, name: string, expectedRevision: number) =>
     t.call(userId, "assets.delete", {
       params: { kind: "memo", name },
-      payload: { expectedRevision }
+      payload: { expectedRevision, ...inKai() }
     });
   const put = (userId: string, name: string, expectedRevision: number | null | undefined) =>
     t.call(userId, "assets.put", {
       params: { kind: "memo", name },
-      payload: { config: memo(name, "Written."), expectedRevision }
+      payload: { config: memo(name, "Written."), expectedRevision, ...inKai() }
     });
   const sync = (userId: string, items: unknown[]) =>
-    t.call(userId, "assets.sync", { payload: { namespace: "kai-", items } });
+    t.call(userId, "assets.sync", { payload: { ...inKai(), items } });
   const nameOnly = (name: string) => ({
     status: 412,
     code: "REVISION_CONFLICT",
@@ -252,7 +274,7 @@ describe("what a write tells a caller who may not read the asset", () => {
       const single = await put(t.lena.id, "kai-team", expectedRevision);
       expect(refusal(single).details).toEqual(nameOnly("kai-team").details);
       expect(refusal(single)).toMatchObject(nameOnly("kai-team"));
-      // Kai reads the Namespace's own memos and nothing of the workspace.
+      // Kai reads the memos of his own workspace and nothing of the other.
       const kai = await put(t.kai.id, "kai-team", expectedRevision);
       expect(refusal(kai).details).toEqual(nameOnly("kai-team").details);
     }
@@ -351,24 +373,30 @@ describe("what a committed write answers", () => {
     expectedRevision
   });
   const sync = (userId: string, items: unknown[]) =>
-    t.call(userId, "assets.sync", { payload: { namespace: "kai-", items } });
+    t.call(userId, "assets.sync", { payload: { ...inKai(), items } });
 
   // Fails without the change: the put read the asset again after its commit and answered the
   // revision of whoever wrote next, so its caller's next save went over that write unseen.
   it("answers a put the revision it wrote, not the one a later write gave the asset", async () => {
-    await t.put(t.kai.id, "skill", "kai-mine");
+    await t.put(t.kai.id, "skill", "kai-mine", t.kaiTeam);
     race("after", () =>
       t.stores.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         baseRevisions: { "skill:kai-mine": 2 },
         mutations: [
-          { type: "upsert", kind: "skill", name: "kai-mine", config: skill("kai-mine", "Theirs.") }
+          {
+            type: "upsert",
+            kind: "skill",
+            name: "kai-mine",
+            config: skill("kai-mine", "Theirs."),
+            scope: kaiScope()
+          }
         ]
       })
     );
     const mine = await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-mine" },
-      payload: { config: skill("kai-mine", "Mine."), expectedRevision: 1 }
+      payload: { config: skill("kai-mine", "Mine."), expectedRevision: 1, ...inKai() }
     });
     expect(mine.json()).toMatchObject({ revision: 2 });
     expect(await t.stored("skill", "kai-mine")).toMatchObject({ revision: 3 });
@@ -376,7 +404,7 @@ describe("what a committed write answers", () => {
     // The next save from that answer is refused: the other write is not gone over.
     const next = await t.call(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-mine" },
-      payload: { config: skill("kai-mine", "Mine again."), expectedRevision: 2 }
+      payload: { config: skill("kai-mine", "Mine again."), expectedRevision: 2, ...inKai() }
     });
     expect(next.statusCode).toBe(412);
     expect(await t.stored("skill", "kai-mine")).toMatchObject({
@@ -389,21 +417,22 @@ describe("what a committed write answers", () => {
   // an agent a skill and one that deleted the skill each passed, and the agent was left with a
   // skill that is gone.
   it("refuses a write that another write made invalid between its check and its lock", async () => {
-    await t.put(t.kai.id, "skill", "kai-shared");
-    await t.put(t.kai.id, "agent", "kai-reader");
+    await t.put(t.kai.id, "skill", "kai-shared", t.kaiTeam);
+    await t.put(t.kai.id, "agent", "kai-reader", t.kaiTeam);
     const assign = (userId: string) =>
       t.call(userId, "assets.put", {
         params: { kind: "agent", name: "kai-reader" },
         payload: {
           config: agent("kai-reader", { skillNames: ["kai-shared"], toolNames: ["read_skill"] }),
-          expectedRevision: 1
+          expectedRevision: 1,
+          ...inKai()
         }
       });
     const deleteSkill = () =>
       t.stores.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         baseRevisions: { "skill:kai-shared": 1 },
-        mutations: [{ type: "delete", kind: "skill", name: "kai-shared" }]
+        mutations: [{ type: "delete", kind: "skill", name: "kai-shared", scope: kaiScope() }]
       });
 
     race("before", deleteSkill);
@@ -416,8 +445,8 @@ describe("what a committed write answers", () => {
     expect(await t.stored("skill", "kai-shared")).toMatchObject({ status: "deleted" });
 
     // The other way round in a batch: the delete is refused once the agent names the skill.
-    await t.put(t.kai.id, "skill", "kai-kept");
-    await t.put(t.kai.id, "agent", "kai-keeper");
+    await t.put(t.kai.id, "skill", "kai-kept", t.kaiTeam);
+    await t.put(t.kai.id, "agent", "kai-keeper", t.kaiTeam);
     race("before", () =>
       t.stores.configAssets.applyConfigAssetMutations({
         clientInstanceId,
@@ -427,7 +456,8 @@ describe("what a committed write answers", () => {
             type: "upsert",
             kind: "agent",
             name: "kai-keeper",
-            config: agent("kai-keeper", { skillNames: ["kai-kept"], toolNames: ["read_skill"] })
+            config: agent("kai-keeper", { skillNames: ["kai-kept"], toolNames: ["read_skill"] }),
+            scope: kaiScope()
           }
         ]
       })
@@ -479,7 +509,7 @@ describe("what a committed write answers", () => {
   // Fails without the change: a revision number was all an item named, so an item read of
   // another asset of the same name at the same number was written.
   it("refuses an item whose asset is another one than its caller read, and writes nothing", async () => {
-    await t.put(t.kai.id, "skill", "kai-replaced");
+    await t.put(t.kai.id, "skill", "kai-replaced", t.kaiTeam);
     const id = await t.assetId("skill", "kai-replaced");
     const item = (expectedAssetId: string) => ({
       ...putSkill("kai-replaced", 1, "Changed."),

@@ -1,11 +1,8 @@
 import {
   ApiError,
   type AdministeredUser,
-  type ConfigAssetSummary,
-  type CreateNamespaceRequest,
   type CreatePermissionGrantRequest,
   type EffectivePermissions,
-  type NamespaceWithUsage,
   type PermissionGrantRow,
   type PlatformContext
 } from "@work-shape/catalyst-api-client";
@@ -14,11 +11,9 @@ import {
   CONFIG_ASSET_KINDS,
   explainAccessEntries,
   GRANT_EFFECTS,
+  GRANT_SCOPE_KINDS as SCOPE_KINDS,
   GRANTABLE_ACTION_SCOPES,
   GRANTABLE_ACTIONS,
-  NAMESPACE_PREFIX_MAX_LENGTH,
-  NAMESPACE_PREFIX_MIN_LENGTH,
-  NAMESPACE_PREFIX_PATTERN,
   type GrantableAction,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
@@ -112,14 +107,16 @@ export function isConfigAssetGrantKind(
 
 /**
  * Where a new right applies, in the order the dialog offers the places: what a workspace owns
- * first, then one asset, then the whole instance. A Namespace is not among them: it is
- * retired, and its rows are only listed and revoked until it goes.
+ * first, then one asset, then the whole instance.
  */
-export const GRANT_SCOPE_KINDS = [
-  "workspace",
-  "asset",
-  "instance"
-] as const satisfies readonly PermissionGrant["scopeKind"][];
+const GRANT_SCOPE_RANK: Record<PermissionGrant["scopeKind"], number> = {
+  workspace: 0,
+  asset: 1,
+  instance: 2
+};
+export const GRANT_SCOPE_KINDS = [...SCOPE_KINDS].sort(
+  (left, right) => GRANT_SCOPE_RANK[left] - GRANT_SCOPE_RANK[right]
+);
 export type GrantScopeKind = (typeof GRANT_SCOPE_KINDS)[number];
 
 /** The rights of one kind, in the order the page lists them. */
@@ -199,113 +196,6 @@ export function furtherGrantKinds(registered: readonly string[] | undefined): Gr
   return GRANT_KINDS.filter(
     (kind) => !isConfigAssetGrantKind(kind) && (registered?.includes(kind) ?? false)
   );
-}
-
-/** Why a prefix cannot be registered, as far as the page can tell before it asks the server. */
-export type NamespacePrefixProblem =
-  { kind: "length" } | { kind: "pattern" } | { kind: "overlap"; prefix: string };
-
-/**
- * Checks a prefix as it is typed: its length, its shape, and that neither it nor a registered
- * prefix starts with the other. The server checks the same and has the last word.
- */
-export function namespacePrefixProblem(
-  prefix: string,
-  registered: readonly string[]
-): NamespacePrefixProblem | undefined {
-  if (prefix.length < NAMESPACE_PREFIX_MIN_LENGTH || prefix.length > NAMESPACE_PREFIX_MAX_LENGTH) {
-    return { kind: "length" };
-  }
-  if (!NAMESPACE_PREFIX_PATTERN.test(prefix)) {
-    return { kind: "pattern" };
-  }
-  const overlapping = registered.find(
-    (candidate) => candidate.startsWith(prefix) || prefix.startsWith(candidate)
-  );
-  return overlapping === undefined ? undefined : { kind: "overlap", prefix: overlapping };
-}
-
-/** What the Namespace dialog holds while it is edited. */
-export interface NamespaceForm {
-  prefix: string;
-  displayName: string;
-  /** Off means the Namespace does not restrict tools; on with none chosen allows none. */
-  limitTools: boolean;
-  toolNames: string[];
-  limitModels: boolean;
-  modelBindingIds: string[];
-}
-
-export function namespaceFormFrom(namespace: NamespaceWithUsage | undefined): NamespaceForm {
-  return {
-    prefix: namespace?.prefix ?? "",
-    displayName: namespace?.displayName ?? "",
-    limitTools: Array.isArray(namespace?.allowedToolNames),
-    toolNames: namespace?.allowedToolNames ?? [],
-    limitModels: Array.isArray(namespace?.allowedModelBindingIds),
-    modelBindingIds: namespace?.allowedModelBindingIds ?? []
-  };
-}
-
-/** The request of the form: a switch that is off sends `null`, which lifts the restriction. */
-export function namespaceRequest(form: NamespaceForm): CreateNamespaceRequest {
-  return {
-    prefix: form.prefix,
-    displayName: form.displayName.trim(),
-    allowedToolNames: form.limitTools ? form.toolNames : null,
-    allowedModelBindingIds: form.limitModels ? form.modelBindingIds : null
-  };
-}
-
-/**
- * How many assets a Namespace's lists would bind: the agents under the prefix when the page
- * could read them, else the agents and skills the Namespace's own row counts, else unknown.
- */
-export type BoundAssets =
-  { unit: "agents"; count: number } | { unit: "assets"; count: number } | { unit: "unknown" };
-
-export function boundAssets(
-  prefix: string,
-  assets: readonly ConfigAssetSummary[] | undefined,
-  namespace: NamespaceWithUsage | undefined
-): BoundAssets {
-  if (assets !== undefined) {
-    return {
-      unit: "agents",
-      count:
-        prefix === ""
-          ? 0
-          : assets.filter((asset) => asset.kind === "agent" && asset.name.startsWith(prefix)).length
-    };
-  }
-  return namespace ? { unit: "assets", count: namespace.assetCount } : { unit: "unknown" };
-}
-
-/**
- * The lists that are switched on and empty while assets may already live under the prefix.
- * The server holds every save of an agent there against the lists, whoever saves: an empty
- * tool list refuses every agent that names a tool, an empty model list every agent that names
- * a model binding, and an agent without a binding needs the right to manage models.
- */
-export function namespaceLockedLists(
-  form: NamespaceForm,
-  bound: BoundAssets
-): ("tools" | "models")[] {
-  if (bound.unit !== "unknown" && bound.count === 0) {
-    return [];
-  }
-  return [
-    ...(form.limitTools && form.toolNames.length === 0 ? (["tools"] as const) : []),
-    ...(form.limitModels && form.modelBindingIds.length === 0 ? (["models"] as const) : [])
-  ];
-}
-
-/** The Namespace a name lies in: Namespaces never overlap, so there is at most one. */
-export function namespaceOfName(
-  name: string,
-  namespaces: readonly NamespaceWithUsage[]
-): NamespaceWithUsage | undefined {
-  return namespaces.find((namespace) => name.startsWith(namespace.prefix));
 }
 
 /**
@@ -442,12 +332,7 @@ export function groupGrants(
 ): GrantGroup[] {
   const groups = new Map<string, GrantGroup>();
   for (const grant of grants) {
-    const key = [
-      grant.holderKind,
-      grant.holderId,
-      grant.scopeKind,
-      grant.namespace ?? grant.scopeId ?? ""
-    ].join(":");
+    const key = [grant.holderKind, grant.holderId, grant.scopeKind, grant.scopeId ?? ""].join(":");
     const group = groups.get(key);
     if (group) {
       group.grants.push(grant);
@@ -456,7 +341,7 @@ export function groupGrants(
     }
   }
   const place = ({ scope }: GrantGroup) =>
-    `${scope.scopeKind} ${scope.namespace ?? scope.scopeAsset?.name ?? scope.scopeId ?? ""}`;
+    `${scope.scopeKind} ${scope.scopeAsset?.name ?? scope.scopeId ?? ""}`;
   const position = (grant: PermissionGrantRow) => grantRightPosition(grant.action);
   return [...groups.values()]
     .map((group) => ({
@@ -497,7 +382,7 @@ export function refusalReason(error: unknown): string | undefined {
   return refusalDetail(error, "reason");
 }
 
-/** How a grant or Namespace write failed, as far as the page has its own sentence for it. */
+/** How a grant or build limit write failed, as far as the page has its own sentence for it. */
 export type AccessWriteFailure =
   | "duplicateGrant"
   | "userBeingDeleted"
@@ -507,8 +392,6 @@ export type AccessWriteFailure =
   | "moduleOff"
   | "missingManageRight"
   | "holderIsSuperadmin"
-  | "namespaceOverlap"
-  | "namespaceInUse"
   | "unknownListEntry"
   | "notFound"
   | "other";
@@ -527,10 +410,6 @@ export function accessWriteFailure(error: unknown): AccessWriteFailure {
       return "rightNotOffered";
     case "module_off":
       return "moduleOff";
-    case "namespace_overlap":
-      return "namespaceOverlap";
-    case "namespace_in_use":
-      return "namespaceInUse";
     case "unknown_tool":
     case "unknown_model_binding":
       return "unknownListEntry";
@@ -564,11 +443,6 @@ export function loadFailure(error: unknown): LoadFailure | undefined {
     return undefined;
   }
   return error instanceof ApiError && error.status === 403 ? "forbidden" : "failed";
-}
-
-/** The registered prefix a refused prefix overlaps, as the server names it. */
-export function overlappedPrefix(error: unknown): string | undefined {
-  return refusalReason(error) === "namespace_overlap" ? refusalDetail(error, "prefix") : undefined;
 }
 
 type EffectiveEntry = EffectivePermissions["items"][number];

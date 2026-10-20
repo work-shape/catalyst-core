@@ -77,8 +77,6 @@ export interface PlatformContextRead {
     current?: true;
     actions: string[];
   }[];
-  /** The Namespaces the person holds a right in, with those rights. */
-  namespaces: { prefix: string; displayName: string; actions: string[] }[];
 }
 
 /** One asset a search found: what it is called and what it is for, never what it holds. */
@@ -172,9 +170,6 @@ const contextOutputSchema = z.object({
       current: z.literal(true).optional(),
       actions: z.array(z.string())
     })
-  ),
-  namespaces: z.array(
-    z.object({ prefix: z.string(), displayName: z.string(), actions: z.array(z.string()) })
   )
 });
 
@@ -221,7 +216,7 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
       effect: context.effect,
       description: [
         "Read what this instance can do and what the user may do on it: the modules that are on, the kinds of asset that exist (agent, skill, workflow, app, data_store, knowledge_base, connection, as far as they are on), and the user's rights.",
-        "'actions' are rights on instance-owned assets of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'workspaces' names visible workspaces and the rights on their assets; current: true marks this conversation's workspace. Before refusing a create or change, check the actions of the workspace that owns it. A workspace skill.write allows creating a skill there even when actions has no skill.write; rights on another workspace do not apply here. A kind with createApproval, such as skill, is created here only once one of createApproval.approverNames approves this user's request; without it a create asks the user to confirm the exact call. 'namespaces' are rights on the assets whose names start with a prefix.",
+        "'actions' are rights on instance-owned assets of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'workspaces' names visible workspaces and the rights on their assets; current: true marks this conversation's workspace. Before refusing a create or change, check the actions of the workspace that owns it. A workspace skill.write allows creating a skill there even when actions has no skill.write; rights on another workspace do not apply here. A kind with createApproval, such as skill, is created here only once one of createApproval.approverNames approves this user's request; without it a create asks the user to confirm the exact call.",
         "Call it before you say whether something can be built here or whether the user may change it. availableHere lists the published agents and Apps offered in this conversation's workspace. Use their titles, never internal names. An asset found through platform.assets.list may be editable but unavailable to use here; never offer it as an available agent or App.",
         "Leave runAs out of a new Workflow; publishing creates its own account. Use a name from workflowPrincipals only when the person asks for an existing shared account; never guess one or use integration or release accounts. Schedules use instance.timeZone; if timeZoneDefaulted, say that UTC is the instance default. Store the intended IANA timeZone on each schedule trigger; never shift the wall clock into UTC yourself. caller identifies the person you act for: use caller.id to notify 'me', without asking them for an id. Give person to resolve a recipient by name or email within this user's directory rights. An empty result means no known match; ask for a clearer name, never an internal id. If several match, ask which person by name/email."
       ].join(" "),
