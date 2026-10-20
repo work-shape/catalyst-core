@@ -1,4 +1,5 @@
-import type { JsonObject } from "./json";
+import { LEGACY_AUDIT, type PlatformEventDefinition } from "./definition";
+import type { JsonObject } from "../json";
 
 const WORKFLOW_DATASET_AUDIT = {
   subject: "workflow_run",
@@ -21,7 +22,7 @@ const WORKFLOW_DATASET_AUDIT = {
   } satisfies JsonObject
 };
 
-export const WORKFLOW_DATASET_EVENTS = {
+const WORKFLOW_DATASET_EVENTS = {
   "workflow_run.dataset_downloaded": {
     ...WORKFLOW_DATASET_AUDIT,
     name: "workflow_run.dataset_downloaded"
@@ -51,3 +52,24 @@ export const WORKFLOW_DATASET_EVENTS = {
     subject: "workflow_run"
   }
 };
+
+export const workflowRunEvents = {
+  ...WORKFLOW_DATASET_EVENTS,
+  "workflow_run.cancelled": {
+    ...LEGACY_AUDIT,
+    name: "workflow_run.cancelled",
+    subject: "workflow_run"
+  },
+  "workflow_run.ended": { ...LEGACY_AUDIT, name: "workflow_run.ended", subject: "workflow_run" },
+  "workflow_run.started": {
+    ...LEGACY_AUDIT,
+    name: "workflow_run.started",
+    subject: "workflow_run"
+  },
+  // A due time of a schedule that started no run. The subject is the Workflow.
+  "workflow_run.tick_skipped": {
+    ...LEGACY_AUDIT,
+    name: "workflow_run.tick_skipped",
+    subject: "workflow"
+  }
+} as const satisfies Record<string, PlatformEventDefinition>;

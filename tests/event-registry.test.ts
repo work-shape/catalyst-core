@@ -6,6 +6,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   EVENTS,
   GUARDRAIL_EVENTS,
+  joinEvents,
   type AuditEventName,
   type GuardrailEvent,
   type PlatformEventDefinition,
@@ -404,6 +405,24 @@ describe("event registry", () => {
       required: expect.arrayContaining(["store", "table", "operationRunId"]),
       properties: { operationRunId: { type: "string" } }
     });
+  });
+
+  it("joins the events of every domain and refuses a name two domains declare", () => {
+    const sent: PlatformEventDefinition = {
+      name: "x.sent",
+      subject: "x",
+      legacy: false,
+      audited: true,
+      phases: ["after"]
+    };
+    const read = { ...sent, name: "x.read" };
+    expect(Object.keys(joinEvents({ "x.sent": sent }, { "x.read": read }))).toEqual([
+      "x.sent",
+      "x.read"
+    ]);
+    expect(() => joinEvents({ "x.sent": sent }, { "x.sent": sent })).toThrow(
+      "The event 'x.sent' is declared twice"
+    );
   });
 
   it("retains every current audit name unchanged as legacy and audited", async () => {
