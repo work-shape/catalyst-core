@@ -1,4 +1,4 @@
-import type { ClientInstanceId } from "./ids";
+import type { ClientInstanceId, UserId } from "./ids";
 import type { ScopeAssignmentInput } from "./data-scope";
 import type { StorePage } from "./paging";
 import type { AccessStore, GrantScopeAsset, PermissionGrant } from "./permissions";
