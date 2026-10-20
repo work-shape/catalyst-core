@@ -939,6 +939,20 @@
       "when": 1792510597022,
       "tag": "0133_drop_grant_namespace",
       "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1792527803406,
+      "tag": "0134_agent_try_per_person",
+      "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1792527804311,
+      "tag": "0135_agent_try_person_index",
+      "breakpoints": true
     }
   ]
 }

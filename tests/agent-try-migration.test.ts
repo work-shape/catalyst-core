@@ -26,7 +26,7 @@ describe("Try rekey migration (AD-2)", () => {
         ('new','instance','build2','agent','2026-10-18',NULL),
         ('other','instance','build3','agent','2026-10-17',NULL),
         ('second_agent','instance','build1','agent2','2026-10-17',NULL)`);
-      for (const name of ["0131_agent_try_per_person", "0132_agent_try_person_index"]) {
+      for (const name of ["0134_agent_try_per_person", "0135_agent_try_person_index"]) {
         const source = await readFile(`packages/postgres-store/migrations/${name}.sql`, "utf8");
         for (const statement of source.split("--> statement-breakpoint"))
           if (statement.trim()) await sql.unsafe(statement);
