@@ -314,10 +314,10 @@ const registeredPath = (call, method) => {
   return value?.type === "Literal" && typeof value.value === "string" ? value.value : undefined;
 };
 
-/** @type {import("eslint").ESLint.Plugin} */
 /** Barrels that hold one re-export per statement in sorted order (`catalyst/sorted-barrel`). */
 const SORTED_BARRELS = ["packages/core/src/index.ts"];
 
+/** @type {import("eslint").ESLint.Plugin} */
 const plugin = {
   rules: {
     // ESLint's no-restricted-globals and no-restricted-properties would cover these three,
