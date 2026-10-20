@@ -49,7 +49,7 @@
     "release:guard": "node scripts/release/guard.mjs",
     "release:publish": "node scripts/release/publish.mjs",
     "test:release": "node --test scripts/release/release.test.mjs",
-    "test:release:mirror": "node --test scripts/release/mirror-proof.test.mjs",
+    "test:release:mirror": "node --test scripts/release/mirror-proof.mjs",
     "test:agent-stories": "node scripts/run-agent-stories.mjs"
   },
   "devDependencies": {

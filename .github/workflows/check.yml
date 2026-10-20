@@ -236,7 +236,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup-check
       - name: Release tooling regressions
-        run: node --test scripts/release/registry.test.mjs scripts/release/notes.test.mjs scripts/release/dependency-ranges.test.mjs scripts/release/react-peers.test.mjs scripts/release/runtime-pins.test.mjs scripts/release/composer-probe.test.mjs scripts/release/fresh-resolution.test.mjs
+        run: node --test 'scripts/release/*.test.mjs'
       - name: Packages are fit to publish
         run: pnpm release:check --skip-build
   # Builds the API and UI images of the demo client in the layout of a deployment's build
@@ -366,53 +366,15 @@ jobs:
             test-results/browser-durations.json
             .tmp/e2e/shard-${{ matrix.shard }}.txt
           retention-days: 3
-      - name: Keep data scope assignment screenshots
-        if: ${{ !cancelled() && hashFiles('test-results/**/data-scope-*.png') != '' }}
+      # A spec that keeps screenshots for review writes them as `evidence-<name>.png` in its
+      # output folder; this one step uploads all of them.
+      - name: Keep screenshot evidence
+        if: ${{ !cancelled() && hashFiles('test-results/**/evidence-*.png') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         continue-on-error: true
         with:
-          name: data-scope-assignments-${{ matrix.shard }}
-          path: test-results/**/data-scope-*.png
-          retention-days: 3
-      - name: Keep Connection person-context evidence
-        if: ${{ !cancelled() && hashFiles('test-results/**/person-context-*.png') != '' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        continue-on-error: true
-        with:
-          name: connection-person-context-${{ matrix.shard }}
-          path: test-results/**/person-context-*.png
-          retention-days: 3
-      - name: Keep field extraction screenshots
-        if: ${{ !cancelled() && hashFiles('test-results/**/knowledge-fields-pending-*.png') != '' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        continue-on-error: true
-        with:
-          name: knowledge-fields-pending-${{ matrix.shard }}
-          path: test-results/**/knowledge-fields-pending-*.png
-          retention-days: 3
-      - name: Keep App font specimens
-        if: ${{ !cancelled() && hashFiles('test-results/**/font-specimens-*-light.png') != '' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        continue-on-error: true
-        with:
-          name: app-font-specimens-${{ matrix.shard }}
-          path: test-results/**/font-specimens-*-light.png
-          retention-days: 3
-      - name: Keep publish-question evidence
-        if: ${{ !cancelled() && hashFiles('test-results/**/pubq-1-*.png') != '' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        continue-on-error: true
-        with:
-          name: publish-question-${{ matrix.shard }}
-          path: test-results/**/pubq-1-*.png
-          retention-days: 3
-      - name: Keep continue-as-new screenshots
-        if: ${{ !cancelled() && hashFiles('test-results/**/ew-can-runs-*.png') != '' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        continue-on-error: true
-        with:
-          name: ew-can-screenshots-${{ matrix.shard }}
-          path: test-results/**/ew-can-runs-*.png
+          name: evidence-${{ matrix.shard }}
+          path: test-results/**/evidence-*.png
           retention-days: 3
       - name: Keep traces and the server log of a failed run
         if: failure()

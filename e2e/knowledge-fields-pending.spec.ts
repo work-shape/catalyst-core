@@ -251,7 +251,7 @@ test.describe("a document whose fields wait for the budget", () => {
 
             await section.scrollIntoViewIfNeeded();
             const label = `${locale}-${theme}-${width}`;
-            const path = test.info().outputPath(`knowledge-fields-pending-${label}.png`);
+            const path = test.info().outputPath(`evidence-knowledge-fields-pending-${label}.png`);
             await page.screenshot({ path, animations: "disabled" });
             await test.info().attach(`knowledge-fields-pending-${label}`, {
               path,

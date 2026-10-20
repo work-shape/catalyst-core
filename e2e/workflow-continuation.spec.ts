@@ -232,7 +232,7 @@ test("a run that continued as new is one Lauf that unfolds to its parts (check 1
   await expect(lauf).toBeVisible();
 
   // Pictures of the unfolded Lauf, as the design review reads them: always in the test's
-  // output folder, which CI uploads as `test-results/**/ew-can-runs-*.png`, and also in
+  // output folder, which CI uploads as `test-results/**/evidence-*.png`, and also in
   // `E2E_SHOTS_DIR` where it is set.
   const shotsDir = process.env.E2E_SHOTS_DIR;
   if (shotsDir) await mkdir(shotsDir, { recursive: true });
@@ -263,7 +263,7 @@ test("a run that continued as new is one Lauf that unfolds to its parts (check 1
           visible: document.documentElement.clientWidth
         }));
         expect(size.content).toBeLessThanOrEqual(size.visible);
-        const name = `ew-can-runs-${theme}-${locale}-${width}.png`;
+        const name = `evidence-ew-can-runs-${theme}-${locale}-${width}.png`;
         const shot = await page.screenshot({
           path: testInfo.outputPath(name),
           animations: "disabled"

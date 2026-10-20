@@ -20,7 +20,7 @@ import { expect, test, type PageErrorWatch } from "./test";
 // where the Inbox item also keeps the call's technical details: one fold, not two.
 //
 // Every run keeps a picture of each question in English and German, light and dark, 1280 and
-// 390 pixels wide, as `pubq-1-*.png` in its output folder: the hosted run uploads them.
+// 390 pixels wide, as `evidence-pubq-1-*.png` in its output folder: the hosted run uploads them.
 
 const admin = {
   email: "e2e-publish-narrative@example.test",
@@ -408,7 +408,9 @@ export async function publishQuestionsLeadWithTheSentence(
             await page.setViewportSize(width === 390 ? PHONE : DESKTOP);
             await expect(where.getByTestId("publish-narrative-summary")).toBeInViewport();
             await page.screenshot({
-              path: testInfo.outputPath(`pubq-1-${surface}-${locale}-${theme}-${width}.png`),
+              path: testInfo.outputPath(
+                `evidence-pubq-1-${surface}-${locale}-${theme}-${width}.png`
+              ),
               animations: "disabled"
             });
             pictures += 1;
@@ -424,7 +426,7 @@ export async function publishQuestionsLeadWithTheSentence(
             }
             await page.screenshot({
               path: testInfo.outputPath(
-                `pubq-1-${surface}-details-${locale}-${theme}-${width}.png`
+                `evidence-pubq-1-${surface}-details-${locale}-${theme}-${width}.png`
               ),
               animations: "disabled"
             });
@@ -458,7 +460,7 @@ export async function publishQuestionsLeadWithTheSentence(
         await expect(folded).toBeVisible();
         if (round === 0) {
           await page.screenshot({
-            path: testInfo.outputPath(`pubq-1-${surface}-details-en-light-1280.png`),
+            path: testInfo.outputPath(`evidence-pubq-1-${surface}-details-en-light-1280.png`),
             animations: "disabled"
           });
         }

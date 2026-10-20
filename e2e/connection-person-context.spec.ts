@@ -211,7 +211,7 @@ test("person context mappings are chosen by name, saved, refused when stale and 
     };
     const shoot = async (label: string, target: Locator = section) => {
       await target.scrollIntoViewIfNeeded();
-      const path = test.info().outputPath(`person-context-${label}.png`);
+      const path = test.info().outputPath(`evidence-person-context-${label}.png`);
       await page.screenshot({ path, animations: "disabled" });
       await test.info().attach(`person-context-${label}`, { path, contentType: "image/png" });
     };

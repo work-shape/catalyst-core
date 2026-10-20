@@ -56,13 +56,19 @@ export async function syncSourcePaths(root, write = false) {
   if (!existsSync(file)) return true;
   const config = JSON.parse(readFileSync(file, "utf8"));
   const previous = config.compilerOptions.paths ?? {};
-  const paths = Object.fromEntries([
-    ...Object.entries(previous).filter(([name]) => !name.startsWith("@work-shape/")),
-    ...Object.entries(sourceAliases(root, true)).map(([name, target]) => [
-      name,
-      [relative(root, target).replaceAll("\\", "/")]
-    ])
-  ]);
+  // Sorted by name, not in Vite's longest-first order: TypeScript prefers the longest match
+  // itself, and a new package then lands beside its neighbours by name, not by key length.
+  const paths = Object.fromEntries(
+    [
+      ...Object.entries(previous).filter(([name]) => !name.startsWith("@work-shape/")),
+      ...Object.entries(sourceAliases(root, true)).map(([name, target]) => [
+        name,
+        [relative(root, target).replaceAll("\\", "/")]
+      ])
+    ].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+  );
+  // The check ignores the order, so a repository written in the old order still passes; any
+  // write puts it in this one.
   const sorted = (/** @type {Record<string, unknown>} */ value) =>
     JSON.stringify(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)));
   const matches = sorted(previous) === sorted(paths);

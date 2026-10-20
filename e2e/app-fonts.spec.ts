@@ -153,7 +153,7 @@ test(TITLE, async ({ page }, testInfo) => {
       // Keep the two requested light-mode specimens in the hosted test artifact.
       await frame
         .locator("body")
-        .screenshot({ path: testInfo.outputPath(`font-specimens-${screen}-light.png`) });
+        .screenshot({ path: testInfo.outputPath(`evidence-font-specimens-${screen}-light.png`) });
     }
     expect(browserRequests.length).toBeGreaterThan(0); // Both CSS paths tried the outside face.
     expect(outsideRequests).toEqual([]);
