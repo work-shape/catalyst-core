@@ -205,6 +205,8 @@ test("de: an MCP server that asks for a sign-in is signed in from the dialog, an
     await expect(tools).toHaveCount(6, { timeout: DISCOVERY_TIMEOUT_MS });
     await expect(dialog.locator("[data-connection-connected]")).toBeVisible();
     await dialog.locator("[data-connection-approve]").click();
+    // Approved for agents, the dialog offers the give to an agent (CS-5d); Done leaves it.
+    await dialog.locator("[data-connection-approved-done]").click();
 
     // The page names the shared sign-in: connected, the permission, nobody else to sign in.
     await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
