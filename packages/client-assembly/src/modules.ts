@@ -1,7 +1,6 @@
 import {
   AppError,
   createModuleRegistry,
-  defineModule,
   moduleConfigKey,
   type ModuleRegistry,
   type ModuleSnapshot
@@ -10,15 +9,8 @@ import {
   resolveModuleSwitches,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
-import {
-  CONNECTION_DRAFT_TOOL_NAME,
-  CONNECTION_OFFER_TOOL_NAME,
-  APP_PUBLISH_TOOL_NAME,
-  PLATFORM_ASSET_TOOLS
-} from "@work-shape/catalyst-tool-execution";
 import type { ClientInstanceCapability } from "./capabilities";
 import { assembleDataStores, dataStoresModule } from "./data-stores";
-import { feedbackModule } from "./feedback";
 import { assembleKnowledge, knowledgeModule } from "./knowledge";
 import type {
   AssembledModules,
@@ -26,134 +18,18 @@ import type {
   ModuleAssemblyParts,
   StartedModules
 } from "./module-assembly";
+import { appsModule } from "./platform-modules/apps";
+import { assetManagementModule } from "./platform-modules/asset-management";
+import { connectionsModule } from "./platform-modules/connections";
+import { feedbackModule } from "./platform-modules/feedback";
+import { personalApiKeysModule } from "./platform-modules/personal-api-keys";
+import { resourcesModule } from "./platform-modules/resources";
+import { userInvitationsModule } from "./platform-modules/user-invitations";
 import { assembleWorkflows, workflowsModule } from "./workflows";
 
-/** The Resources panel of a conversation and the list it reads. */
-const resourcesModule = defineModule({
-  name: "resources",
-  operations: ["conversations.resources.list"],
-  ui: ["conversation.resources"]
-});
-
 /**
- * Changing agents and skills in the interface. Running an agent and a config push are core:
- * `assets.sync` carries a push too, so its workflow asks the switch and lets the release holder
- * pass where the module is off. A person may also publish a release-written agent draft
- * there; assets.publish checks that provenance itself. Other interactive writes stay bound.
+ * The modules whose code ships with the platform, one file each. A capability declares its own.
  */
-const assetManagementModule = defineModule({
-  name: "assetManagement",
-  operations: [
-    "assets.put",
-    "assets.delete",
-    "assets.revert",
-    "assets.discard_draft",
-    "assets.run_live_once",
-    "assets.set_default",
-    "assets.set_availability",
-    "agents.draft.discard",
-    "agents.try.open",
-    "guardrails.unpublish"
-  ],
-  selfCheckedOperations: ["assets.sync", "assets.publish"],
-  // The agent's save of a draft is a change of an asset like `assets.put`, which it projects.
-  tools: [PLATFORM_ASSET_TOOLS.put.name],
-  ui: ["settings.build"]
-});
-
-/** Inviting a user by an emailed link to set a password. */
-const userInvitationsModule = defineModule({
-  name: "userInvitations",
-  operations: ["users.invitation.send"],
-  ui: ["settings.users.invitation"]
-});
-
-/**
- * Apps and their previews: the file sets a conversation keeps, their history, the route that
- * serves them, the tools that open a folder and save it as an App, and the job that builds it. The build runs in the sandbox, so the
- * workspace command worker serves it.
- */
-const appsModule = defineModule({
-  name: "apps",
-  operations: [
-    "pages.list",
-    "pages.get",
-    "pages.files.get",
-    "pages.files.list",
-    "pages.preview",
-    "app_content.files.get",
-    "app_kit.files.get",
-    "apps.create_from_page",
-    "apps.actions.list",
-    "apps.update_from_page",
-    "apps.get_from_page",
-    "apps.preview",
-    "apps.sessions.context",
-    "apps.sessions.call_action",
-    "apps.sessions.write_storage",
-    "apps.sessions.get_workflow_run"
-  ],
-  kinds: ["app"],
-  tools: ["workspace.open", "app.save", APP_PUBLISH_TOOL_NAME],
-  jobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"],
-  commandWorkerJobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"]
-});
-
-/**
- * Connections: the asset kind that holds the access to an outside system, and its list in
- * Build. Off, the kind does not exist on the instance: no call reads, lists or writes one and
- * no right on one is handed out, and no discovery runs. What the store holds stays and is
- * inactive.
- */
-const connectionsModule = defineModule({
-  name: "connections",
-  operations: [
-    "connections.get",
-    "connections.test",
-    "connections.set_secret",
-    "connections.discover",
-    "connections.oauth_start",
-    "connections.oauth_complete",
-    "connections.disconnect",
-    "connections.person_context",
-    "connections.set_person_context",
-    "connections.list_tools"
-  ],
-  kinds: ["connection"],
-  // The agent's draft of a REST API's tools checks them against the instance's Connector types;
-  // its offer of a Connection's tools to an agent is a card the person confirms.
-  tools: [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME],
-  jobKinds: [
-    "connection.discover",
-    "connection_setup_sessions.sweep",
-    "connection_bindings.keep_alive"
-  ],
-  ui: ["build.connections"]
-});
-
-/**
- * Personal API keys: a person issues keys that act as themself, narrowed to their scopes, in
- * Settings or by confirming the CLI's connect code; whoever holds `api_access.manage` sees and
- * revokes every person's keys. Off, no personal key authenticates (`createClientInstanceAuth`)
- * and the keys stay stored, revocable when the module is on again.
- */
-const personalApiKeysModule = defineModule({
-  name: "personalApiKeys",
-  operations: [
-    "me.api_keys.list",
-    "me.api_keys.create",
-    "me.api_keys.revoke",
-    "me.connect_codes.get",
-    "me.connect_codes.confirm",
-    "connect_codes.start",
-    "connect_codes.redeem",
-    "personal_api_keys.list",
-    "personal_api_keys.revoke"
-  ],
-  ui: ["settings.you.api-keys", "settings.you.connect", "settings.api-access.personal-keys"]
-});
-
-/** The modules whose code ships with the platform. A capability declares its own. */
 export const platformModules = [
   resourcesModule,
   assetManagementModule,
