@@ -104,7 +104,7 @@ export async function checkPrincipalGrant(
       "You may not read this resource, so you cannot give a right on it",
       {
         reason: "not_visible",
-        action: `${asset.kind}.read`
+        action: seeAssetAction(asset.kind)
       }
     );
   }
@@ -128,10 +128,15 @@ export function maySeeAsset(
   access: Pick<ActorAccess, "authorize">,
   resource: AccessResource
 ): boolean {
+  const action = seeAssetAction(resource.kind);
   if (resource.kind === MAIL_SENDER_RESOURCE_KIND)
-    return access.authorize(MAIL_SENDER_USE_ACTION, resource).allowed;
-  const read = `${resource.kind ?? ""}.read`;
-  return isPlatformAction(read) && access.authorize(read, resource).allowed;
+    return access.authorize(action, resource).allowed;
+  return isPlatformAction(action) && access.authorize(action, resource).allowed;
+}
+
+/** The right `maySeeAsset` asks, which a `not_visible` refusal names: never `mail_sender.read`. */
+export function seeAssetAction(kind: string | undefined): string {
+  return kind === MAIL_SENDER_RESOURCE_KIND ? MAIL_SENDER_USE_ACTION : `${kind ?? ""}.read`;
 }
 
 /**

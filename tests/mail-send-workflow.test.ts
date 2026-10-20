@@ -363,6 +363,47 @@ describe("mail.send from a Workflow (MAIL-1)", () => {
     expect((await publish()).statusCode).toBe(200);
   });
 
+  it("gives a Workflow's own account mail_sender.use on system only from a publisher who holds it", async () => {
+    const t = await ready({ mail: { recipientDomains: ["kanzlei.de"] } });
+    for (const action of ["workflow.read", "workflow.write", "workflow.publish", "workflow.use"])
+      await t.allow({ kind: "user", id: t.kai.id }, action);
+    // No `runAs`: the publish creates the Workflow's own account and gives it what its steps need.
+    const manifest = {
+      ...mailFlow("own-mail", basic({ value: "a@kanzlei.de" })),
+      runAs: undefined
+    };
+    const params = { kind: "workflow", name: manifest.id };
+    const written = await t.expectOk(t.kai.id, "assets.put", {
+      params,
+      payload: { config: { name: manifest.id, manifest }, expectedRevision: null }
+    });
+    const { revision } = z.object({ revision: z.number() }).parse(written.json());
+    const publish = () => t.call(t.kai.id, "assets.publish", { params, payload: { revision } });
+    const owned = async () =>
+      t.stores.apiAccess.findServicePrincipalByOwner({
+        clientInstanceId,
+        owner: { kind: "workflow", assetId: await t.assetId("workflow", manifest.id) }
+      });
+    const refused = await publish();
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ error: { details: { action: "mail_sender.use" } } });
+    expect(await owned()).toBeUndefined();
+    await t.grant(t.kai.id, "mail_sender.use", { assetId: "system" });
+    expect((await publish()).statusCode).toBe(200);
+    const account = required(await owned());
+    const rows = await t.stores.access.listGrants({
+      clientInstanceId,
+      holderKind: "service_principal",
+      holderId: account.id
+    });
+    expect(rows.map(({ action, scopeKind, scopeId }) => ({ action, scopeKind, scopeId }))).toEqual([
+      { action: "mail_sender.use", scopeKind: "asset", scopeId: "system" }
+    ]);
+    const { run: ended } = await run(t, manifest.id);
+    expect(ended.status).toBe("done");
+    expect(t.capturedMail()).toHaveLength(1);
+  });
+
   it("keeps addresses, subject and body out of audit events and Operation Runs", async () => {
     const t = await ready({ mail: { recipientDomains: ["kanzlei.de"] } });
     await grantSystem(t);

@@ -16,7 +16,7 @@ import {
   type WorkflowManifest,
   type WorkflowNeededRight
 } from "@work-shape/catalyst-core";
-import { kindOfAction, maySeeAsset } from "@work-shape/catalyst-server";
+import { kindOfAction, maySeeAsset, seeAssetAction } from "@work-shape/catalyst-server";
 
 /** The modules of the instance, asked whether the kind of a right is switched off. */
 export type WorkflowOwnRightsModules = Pick<ModuleSnapshot, "offModuleOf">;
@@ -61,7 +61,7 @@ export function checkWorkflowOwnRights(
         "You may not read this resource, so you cannot give a right on it",
         {
           reason: "not_visible",
-          action: `${right.asset.kind}.read`
+          action: seeAssetAction(right.asset.kind)
         }
       );
   }

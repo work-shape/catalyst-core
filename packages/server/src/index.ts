@@ -347,7 +347,7 @@ export type {
 export { requestConnectionDiscovery } from "./connections/connection-jobs";
 export type { WorkflowListEntry, WorkflowRunsPort } from "./workflows/workflow-runs-port";
 export { createWorkflowRoutes } from "./routes/workflow-routes";
-export { kindOfAction, maySeeAsset } from "./access/principal-grant";
+export { kindOfAction, maySeeAsset, seeAssetAction } from "./access/principal-grant";
 export type {
   AddresseeNames,
   AgentToolReference,
