@@ -285,12 +285,15 @@ const allowedPageErrors: readonly AllowedPageError[] = [
   {
     name: "grant-already-there",
     reason:
-      "Chromium's own log line: the test asks for two grants of which one exists, the " +
-      "instance answers 409 for that one, and the page says that it left it alone, which the " +
+      "Chromium's own log line: the test raises a level, whose lower rows exist, the " +
+      "instance answers 409 for those, and the page says that it left them alone, which the " +
       "test asserts.",
     matches: requestAnswered(409),
     path: /^\/api\/v1\/instance\/access\/grants$/u,
-    tests: ["an administrator grants, checks, denies and revokes rights"]
+    tests: [
+      "an administrator grants by level, checks, denies and revokes rights",
+      "an admin gives a member reading and using on one Workflow and removes both"
+    ]
   },
   {
     name: "planted-policy-refusal",

@@ -147,14 +147,15 @@ describe("rights on a Workflow", () => {
     expect(grantScopeKinds("workflow")).toEqual(["asset"]);
   });
 
-  it("writes one row per ticked right on the chosen Workflow", () => {
+  it("writes one row per right of the chosen level on the chosen Workflow", () => {
+    // Use brings View with it; View alone does not bring Use.
     // A workspace is no place of a Workflow: the first place it has is taken.
     const form = withGrantKind(
       {
         ...emptyGrantForm,
         holderId: member.id,
         kind: "connection",
-        verbs: ["use", "read"],
+        level: "use",
         scopeKind: "workspace",
         workspaceId: "ws-1"
       },
@@ -185,16 +186,12 @@ describe("rights on a Workflow", () => {
     });
     const rows = ["workflow.publish", "workflow.use", "workflow.read"].map(onWorkflow);
     const markup = rights({ grants: rows });
-    expect(markup).toContain("Workflow agent-inventory");
-    const order = ["View workflows", "Use workflows", "Publish workflows"].map((label) =>
-      markup.indexOf(`${label}</`)
-    );
-    expect(order.every((position) => position >= 0)).toBe(true);
-    expect(order).toEqual([...order].sort((left, right) => left - right));
+    expect(markup).toContain("may view, use, and publish the Workflow agent-inventory");
 
     const german = rights({ grants: rows }, "de");
-    expect(german).toContain("Workflows verwenden");
-    expect(german).toContain("Workflows veröffentlichen");
+    expect(german).toContain(
+      "darf den Workflow agent-inventory ansehen, verwenden und veröffentlichen"
+    );
   });
 });
 

@@ -15,7 +15,11 @@ import {
 
 const shared = sharedWorkspace({ name: "Nordlicht Beratung" });
 
-function settingsRail(active: typeof shared, locale: LocaleCode = "en"): string {
+function settingsRail(
+  active: typeof shared,
+  locale: LocaleCode = "en",
+  workspaces: (typeof shared)[] = [shared]
+): string {
   const context = {
     ...settingsPageContext(createApiClient({ baseUrl: "https://chat.example.com" })),
     workspace: shared,
@@ -37,7 +41,7 @@ function settingsRail(active: typeof shared, locale: LocaleCode = "en"): string 
           pages: [page("profile", "you"), page("general", "workspace")],
           page: undefined,
           noAccess: false,
-          workspaces: [shared],
+          workspaces,
           selectWorkspace: () => undefined,
           openPage: () => undefined,
           context
@@ -60,5 +64,29 @@ describe("The scope of the Workspace settings", () => {
     const inShared = settingsRail(shared);
     expect(inShared).toContain("Nordlicht Beratung");
     expect(inShared).not.toContain("data-workspace-scope-shared");
+  });
+
+  // Felix, 2026-10-19: one workspace showed a plain name, and its caption read like a stray tag.
+  it("shows one workspace as the outlined row of the picker, without its chevron or a control", () => {
+    const single = settingsRail(shared);
+    const row = /<div data-workspace-scope-single=""[^>]*>/u.exec(single)?.[0] ?? "";
+    // The picker's outline, and no pointer: it is no control.
+    const classes = /class="([^"]*)"/u.exec(row)?.[1]?.split(" ") ?? [];
+    expect(classes).toContain("border-input");
+    expect(classes).toContain("pointer-events-none");
+    expect(single).not.toContain("lucide-chevrons-up-down");
+    expect(single).not.toContain('aria-label="Workspace for these pages: Nordlicht Beratung"');
+  });
+
+  it("shows several workspaces as the picker, with its chevron", () => {
+    const several = settingsRail(shared, "en", [
+      shared,
+      sharedWorkspace({ id: "cw_kai", name: "Kai Spezis" })
+    ]);
+    expect(several).not.toContain("data-workspace-scope-single");
+    expect(several).toContain("lucide-chevrons-up-down");
+    expect(several).toMatch(
+      /<button[^>]*aria-label="Workspace for these pages: Nordlicht Beratung"/u
+    );
   });
 });

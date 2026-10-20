@@ -17,6 +17,7 @@ export {
   type FrameCallAnswer,
   type FrameCalls
 } from "./frame-calls";
+export { useFrameCallTexts } from "./frame-call-texts";
 export {
   PAGE_ADDRESS_LIFETIME_MS,
   PAGE_ADDRESS_RENEWAL_MARGIN_MS,

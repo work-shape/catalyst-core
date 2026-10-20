@@ -69,7 +69,7 @@ Only operations that are ready and allowed for agents appear here.
 An agent acts with the rights of the person it works for. So the person who chats needs the right to use the Connection too. Administrators have it. For anyone else:
 
 1. Open **Settings > Instance > Access** ("Einstellungen › Instanz › Zugriff").
-2. Click **New right** ("Neues Recht") and choose **Use connections**: "Let agents this person builds or runs call the outside system through it." Pick the person and the Connection.
+2. Click **New right** ("Neues Recht"), choose **Connections** and the level **Use** ("Verwenden"): "Let agents this person builds or runs call the outside system through it." Pick the person and the Connection.
 
 **Read connections** lets someone see the Connection and its status in Studio, never its key.
 

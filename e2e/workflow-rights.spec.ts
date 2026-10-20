@@ -159,36 +159,44 @@ test("an admin gives a member reading and using on one Workflow and removes both
   try {
     // The dialog says each right of a Workflow in a sentence, and what publishing still needs.
     await openDialogFor(page, id);
-    // Reading, writing, using, publishing, deleting and reading run data (RIGHTS-1c).
-    await expect(dialog.getByRole("checkbox")).toHaveCount(6);
+    // Reading, using, writing, publishing and deleting as levels, and reading run data on its
+    // own (RIGHTS-1c, RIGHTS-DIALOG-1).
+    await expect(
+      dialog.getByRole("radiogroup", { name: "Level", exact: true }).getByRole("radio")
+    ).toHaveCount(5);
+    await expect(dialog.getByRole("checkbox")).toHaveCount(1);
     await expect(dialog.getByText("See the Workflow, its steps and its runs.")).toBeVisible();
     await expect(dialog.getByText(USE_SENTENCE)).toBeVisible();
     await expect(dialog.getByText(PUBLISH_NOTE, { exact: false })).toBeVisible();
     // A deny of publishing holds as any deny does, so the note is for an allow only.
-    await dialog.getByRole("radio", { name: /^Deny/u }).click();
+    await dialog.getByRole("button", { name: "Refuse instead" }).click();
+    const refuse = dialog.getByRole("checkbox", { name: /^Refuse this level/u });
+    await refuse.check();
     await expect(dialog.getByText(PUBLISH_NOTE, { exact: false })).toHaveCount(0);
-    await dialog.getByRole("radio", { name: /^Allow/u }).click();
+    await refuse.uncheck();
     // A Workflow belongs to no workspace, so one Workflow is its one place and no place is
     // asked for.
     await expect(dialog.getByRole("radiogroup", { name: "Where" })).toBeVisible();
     await dialog.getByRole("radio", { name: /^On one Workflow/u }).check();
 
-    // Reading: the member is shown the Workflow and may not start it.
-    await dialog.getByRole("checkbox", { name: "View", exact: true }).check();
+    // Viewing, the lowest level: the member sees the Workflow and its runs but cannot start it,
+    // because a run acts with the Workflow's own rights.
+    await dialog.getByRole("radio", { name: "View", exact: true }).check();
     await dialog.getByRole("button", { name: "Create right" }).click();
     await expect(dialog).toBeHidden();
     await expect(row).toContainText(member.label);
-    await expect(row).toContainText("View workflows");
+    await expect(row).toContainText("may view the Workflow Rights walk");
     await expect.poll(() => memberActions(memberPage, id)).toEqual(["workflow.read"]);
     expect(await start(memberPage, id)).toBeGreaterThanOrEqual(400);
 
-    // Using added: the same row carries both, and the start is accepted.
+    // The level Use brings View with it: the row says both, and the member may start it.
     await openDialogFor(page, id);
-    await dialog.getByRole("checkbox", { name: /^Use/u }).check();
+    await dialog.getByRole("radio", { name: "Use", exact: true }).check();
     await dialog.getByRole("button", { name: "Create right" }).click();
     await expect(dialog).toBeHidden();
+    await expect(page.getByText("1 added. 1 already there and left as they are.")).toBeVisible();
     await expect(row).toHaveCount(1);
-    await expect(row).toContainText("Use workflows");
+    await expect(row).toContainText("may view and use the Workflow Rights walk");
     await expect
       .poll(() => memberActions(memberPage, id))
       .toEqual(["workflow.read", "workflow.use"]);
@@ -208,12 +216,11 @@ test("an admin gives a member reading and using on one Workflow and removes both
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
     await page.reload();
     await page.getByRole("tab", { name: /^Rechte/u }).click();
-    await expect(row).toContainText("Workflows ansehen");
-    await expect(row).toContainText("Workflows verwenden");
+    await expect(row).toContainText("darf den Workflow Rights walk ansehen und verwenden");
     await page.getByRole("button", { name: "Neues Recht" }).click();
     const german = page.getByRole("dialog", { name: "Neues Recht" });
     await german.getByRole("radio", { name: "Workflows" }).click();
-    await expect(german.getByRole("checkbox", { name: /^Veröffentlichen/u })).toBeVisible();
+    await expect(german.getByRole("radio", { name: "Veröffentlichen", exact: true })).toBeVisible();
     await expect(
       german.getByText("Er läuft dann mit den eigenen Rechten des Workflows", { exact: false })
     ).toBeVisible();
@@ -223,7 +230,10 @@ test("an admin gives a member reading and using on one Workflow and removes both
     await page.getByRole("tab", { name: /^Rights/u }).click();
 
     // Both removed from the row's menu: the Workflow is gone for the member.
-    for (const right of ["Use workflows", "View workflows"]) {
+    for (const [right, left] of [
+      ["View workflows", "may use the Workflow Rights walk"],
+      ["Use workflows", undefined]
+    ] as const) {
       await row.getByRole("button", { name: `Actions for the right of ${member.label}` }).click();
       await page.getByRole("menuitem", { name: `Revoke: ${right}` }).click();
       const confirm = page.getByRole("dialog", { name: "Revoke this right?" });
@@ -231,7 +241,9 @@ test("an admin gives a member reading and using on one Workflow and removes both
       await confirm.getByRole("button", { name: "Revoke" }).click();
       await expect(confirm).toBeHidden();
       await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
-      await expect(row.getByText(right)).toHaveCount(0);
+      if (left !== undefined) {
+        await expect(row).toContainText(left);
+      }
     }
     await expect(row).toHaveCount(0);
     await expect.poll(() => memberActions(memberPage, id)).toBeUndefined();

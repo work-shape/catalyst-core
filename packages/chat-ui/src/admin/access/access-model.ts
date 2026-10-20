@@ -209,15 +209,73 @@ const AGENT_NAME_PATTERN = /^\S+$/u;
  * Whether the server could hold an asset of this name: a check gives no verdict otherwise.
  * A kind without a rule of its own here is held to one word.
  */
-export function assetNameValid(kind: string, name: string): boolean {
+function assetNameValid(kind: string, name: string): boolean {
   return (kind === "skill" ? SKILL_NAME_PATTERN : AGENT_NAME_PATTERN).test(name);
+}
+
+/**
+ * The verbs a right is given as a level, from using to removing: each level includes the ones
+ * below it. Using comes first: a person who queries a Knowledge Base need not see how it is
+ * made. The other verbs of a kind, such as adding rows to a Data Store, are given one by one.
+ */
+const LEVEL_VERBS = [
+  "use",
+  "read",
+  "write",
+  "publish",
+  "delete"
+] as const satisfies readonly GrantVerb[];
+
+/**
+ * The kinds whose use acts with the asset's own rights: a started Workflow runs as its account
+ * and a Connection calls the outside system with its credentials. Viewing one comes first, so a
+ * person can be given View without Use (access-and-permissions.md, Levels per kind).
+ */
+const VIEW_BEFORE_USE_KINDS: readonly GrantKind[] = ["workflow", "connection"];
+
+function isLevelVerb(verb: GrantVerb): boolean {
+  return LEVEL_VERBS.some((level) => level === verb);
+}
+
+/** The levels a right on the kind can be given at, the lowest first. */
+export function grantLevels(kind: GrantKind): GrantVerb[] {
+  const verbs = grantVerbs(kind);
+  const order: readonly GrantVerb[] = VIEW_BEFORE_USE_KINDS.includes(kind)
+    ? ["read", "use", "write", "publish", "delete"]
+    : LEVEL_VERBS;
+  return order.filter((level) => verbs.includes(level));
+}
+
+/** The verbs of the kind that are no level: each is given on its own. */
+export function grantExtras(kind: GrantKind): GrantVerb[] {
+  return grantVerbs(kind).filter((verb) => !isLevelVerb(verb));
+}
+
+/**
+ * The verbs a level stands for. An allow gives the level and every one below it; a deny refuses
+ * the level and every one above it, because whoever may not view an asset may not edit it.
+ */
+export function levelVerbs(
+  kind: GrantKind,
+  level: GrantVerb | undefined,
+  effect: GrantForm["effect"]
+): GrantVerb[] {
+  const levels = grantLevels(kind);
+  const index = level === undefined ? -1 : levels.indexOf(level);
+  if (index < 0) {
+    return [];
+  }
+  return effect === "allow" ? levels.slice(0, index + 1) : levels.slice(index);
 }
 
 /** What the grant dialog holds while it is edited. */
 export interface GrantForm {
   holderId: string | undefined;
   kind: GrantKind;
-  verbs: GrantVerb[];
+  /** The chosen level of the kind; absent until one is chosen. */
+  level: GrantVerb | undefined;
+  /** The chosen verbs that are no level. */
+  extras: GrantVerb[];
   /** Absent for a kind no right can be written for at any place. */
   scopeKind: GrantScopeKind | undefined;
   assetId: string | undefined;
@@ -226,11 +284,17 @@ export interface GrantForm {
   effect: (typeof GRANT_EFFECTS)[number];
 }
 
+/** Every verb the form gives or refuses: its level's and the further ones ticked. */
+export function grantFormVerbs(form: GrantForm): GrantVerb[] {
+  return [...levelVerbs(form.kind, form.level, form.effect), ...form.extras];
+}
+
 /** A new right on agents, at the first place an agent right can be written. */
 export const emptyGrantForm: GrantForm = {
   holderId: undefined,
   kind: "agent",
-  verbs: [],
+  level: undefined,
+  extras: [],
   scopeKind: grantScopeKinds("agent")[0],
   assetId: undefined,
   workspaceId: undefined,
@@ -239,15 +303,17 @@ export const emptyGrantForm: GrantForm = {
 
 /**
  * The form after another kind was chosen. An asset belongs to its kind, so none is kept; a
- * verb the new kind has no grant for is dropped, and the place is the kind's first, so a kind
- * a workspace can own starts in the workspace.
+ * level or a verb the new kind has no grant for is dropped, and the place is the kind's first,
+ * so a kind a workspace can own starts in the workspace.
  */
 export function withGrantKind(form: GrantForm, kind: GrantKind): GrantForm {
   const verbs = grantVerbs(kind);
   return {
     ...form,
     kind,
-    verbs: form.verbs.filter((verb) => verbs.includes(verb)),
+    level:
+      form.level !== undefined && grantLevels(kind).includes(form.level) ? form.level : undefined,
+    extras: form.extras.filter((verb) => verbs.includes(verb)),
     scopeKind: grantScopeKinds(kind)[0],
     assetId: undefined
   };
@@ -273,16 +339,14 @@ function grantScope(
 
 /** One request per chosen action, in the page's order; nothing while the form is incomplete. */
 export function grantRequests(form: GrantForm): CreatePermissionGrantRequest[] | undefined {
-  if (
-    form.scopeKind === undefined ||
-    !grantScopeKinds(form.kind, form.verbs).includes(form.scopeKind)
-  ) {
+  const verbs = grantFormVerbs(form);
+  if (form.scopeKind === undefined || !grantScopeKinds(form.kind, verbs).includes(form.scopeKind)) {
     return undefined;
   }
   const scope = grantScope(form);
   const holderId = form.holderId;
   const actions = grantRights(form.kind)
-    .filter((right) => form.verbs.includes(right.verb))
+    .filter((right) => verbs.includes(right.verb))
     .map((right) => right.action);
   if (holderId === undefined || scope === undefined || actions.length === 0) {
     return undefined;
@@ -353,6 +417,13 @@ export function groupGrants(
         holderName(left.holderId).localeCompare(holderName(right.holderId)) ||
         place(left).localeCompare(place(right))
     );
+}
+
+/** How many rows the Rights tab shows: one per holder and place. Nothing while loading. */
+export function grantRowCount(
+  grants: readonly PermissionGrantRow[] | undefined
+): number | undefined {
+  return grants && groupGrants(grants, () => "").length;
 }
 
 /** The users a grant can be written for: nobody whose account is being deleted. */

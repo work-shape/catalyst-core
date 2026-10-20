@@ -12,7 +12,6 @@ import {
   Button,
   EmptyState,
   Field,
-  Input,
   Picker,
   PickerButton,
   Section,
@@ -32,8 +31,9 @@ import {
   type TranslationContextValue,
   type TranslationKey
 } from "../../shared/i18n";
+import { ACCESS_LEVEL_OPTIONS } from "../control-plane/user-administration-model";
+import { refusalAskingInstanceAdmin } from "../settings/ask-instance-admin";
 import {
-  assetNameValid,
   checkAsset,
   checkedAssetId,
   checkState,
@@ -59,8 +59,16 @@ const reasonLabelKeys: Record<CheckedAction["reason"], TranslationKey> = {
   holder_inactive: "access.reasonHolderInactive"
 };
 
+/** The person's role as the Users page names it: the highest of the built-in roles held. */
+function roleName(holder: AdministeredUser | undefined, t: Translate): string | undefined {
+  const option = ACCESS_LEVEL_OPTIONS.findLast((candidate) =>
+    holder?.roles.includes(candidate.value)
+  );
+  return option && t(option.label);
+}
+
 /** The entry that decided, as one sentence. */
-function decidedBy(action: CheckedAction, t: Translate): string {
+function decidedBy(action: CheckedAction, t: Translate, role: string | undefined): string {
   const { entry } = action;
   if (action.reason === "holder_inactive") {
     return t("access.reasonHolderInactive");
@@ -69,7 +77,7 @@ function decidedBy(action: CheckedAction, t: Translate): string {
     return t("access.decidedByNothing");
   }
   if (entry.source === "role") {
-    return t("access.decidedByRole");
+    return role === undefined ? t("access.decidedByAnyRole") : t("access.decidedByRole", { role });
   }
   if (entry.source !== "grant") {
     return t(entry.effect === "deny" ? "access.decidedByLegacyDeny" : "access.decidedByLegacy");
@@ -130,6 +138,10 @@ export interface CheckTabProps {
   holderGrants: readonly PermissionGrantRow[] | undefined;
   grantsFailed: boolean;
   onRetryGrants(): void;
+  /** An active instance admin, whom a refusal names as the one who can help. */
+  instanceAdminName?: string;
+  /** The title an asset is listed by in the reader's language, where the page knows it. */
+  titleOf?(assetId: string): string | undefined;
 }
 
 /** The kinds every instance has, offered until the instance has named its own. */
@@ -169,7 +181,9 @@ export function CheckTab({
   onRetry,
   holderGrants,
   grantsFailed,
-  onRetryGrants
+  onRetryGrants,
+  instanceAdminName,
+  titleOf
 }: CheckTabProps) {
   const { t } = useTranslation();
   const kinds = reportedKinds ?? BUILT_IN_KINDS;
@@ -186,8 +200,11 @@ export function CheckTab({
     : otherAssets?.items;
   const kindAssets = (loadedAssets ?? []).filter((asset) => asset.kind === kind);
   const kindAssetsFailure = fromOverview ? assetsFailure : otherAssets?.failure;
+  const picked = kindAssets.find((asset) => asset.name === assetName);
+  // An asset is picked by the title the rows name it by, where the page knows it.
+  const labelOf = (asset: CheckableAsset) =>
+    (asset.id === undefined ? undefined : titleOf?.(asset.id)) ?? asset.name;
   const retryKindAssets = fromOverview ? onRetryAssets : (otherAssets?.retry ?? onRetryAssets);
-  const nameValid = assetNameValid(kind, assetName);
   const state = checkState({
     holderId,
     kind: checkedKind?.kind,
@@ -263,39 +280,31 @@ export function CheckTab({
         <Field
           label={t("access.checkName")}
           className="sm:col-span-2"
-          error={
-            assetName === "" || nameValid
-              ? undefined
-              : t(
-                  kind === "skill"
-                    ? "access.checkNameInvalidSkill"
-                    : kind === "agent"
-                      ? "access.checkNameInvalidAgent"
-                      : "access.checkNameInvalid"
-                )
+          hint={
+            loadedAssets !== undefined && kindAssets.length === 0 ? t("access.noAssets") : undefined
           }
         >
-          <div className="flex flex-wrap gap-2">
-            <Input
-              className="min-w-48 flex-1 font-mono"
-              value={name}
-              placeholder={t("access.checkNamePlaceholder")}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(event) => setName(event.currentTarget.value)}
+          <Picker
+            search={kindAssets.length >= PICKER_SEARCH_FROM_COUNT}
+            // The title first, with the name the asset goes by under it where they differ.
+            options={kindAssets.map((asset) => {
+              const label = labelOf(asset);
+              return {
+                value: asset.name,
+                label,
+                ...(label === asset.name ? {} : { description: asset.name })
+              };
+            })}
+            value={kindAssets.some((asset) => asset.name === assetName) ? assetName : undefined}
+            onValueChange={setName}
+          >
+            <PickerButton
+              label={t("access.checkName")}
+              placeholder={t("access.chooseAsset")}
+              value={picked === undefined ? undefined : labelOf(picked)}
+              disabled={kindAssets.length === 0}
             />
-            {kindAssets.length > 0 ? (
-              <Picker
-                align="end"
-                search={kindAssets.length >= PICKER_SEARCH_FROM_COUNT}
-                options={kindAssets.map((asset) => ({ value: asset.name, label: asset.name }))}
-                value={kindAssets.some((asset) => asset.name === assetName) ? assetName : undefined}
-                onValueChange={setName}
-              >
-                <Button variant="outline">{t("access.checkPickAsset")}</Button>
-              </Picker>
-            ) : null}
-          </div>
+          </Picker>
         </Field>
       </div>
       {/* A result needs the person's rights, the grant rows and the assets: a missing part is
@@ -309,7 +318,9 @@ export function CheckTab({
       ) : state === "grantsFailed" ? (
         retryBanner(t("access.checkGrantsFailed"), onRetryGrants)
       ) : state === "assetsForbidden" ? (
-        <Banner tone="warning">{t("access.checkAssetsForbidden")}</Banner>
+        <Banner tone="warning">
+          {refusalAskingInstanceAdmin(t("access.checkAssetsForbidden"), t, instanceAdminName)}
+        </Banner>
       ) : state === "assetsFailed" ? (
         retryBanner(t("access.checkAssetsFailed"), retryKindAssets)
       ) : effective === undefined ||
@@ -320,8 +331,9 @@ export function CheckTab({
       ) : (
         <CheckResult
           holderName={holder?.displayLabel ?? t("access.unknownUser")}
+          role={roleName(holder, t)}
           kind={kind}
-          assetName={assetName}
+          assetName={picked === undefined ? assetName : labelOf(picked)}
           effective={effective}
           actions={checkAsset(
             effective,
@@ -337,12 +349,15 @@ export function CheckTab({
 
 function CheckResult({
   holderName,
+  role,
   kind,
   assetName,
   effective,
   actions
 }: {
   holderName: string;
+  /** The name of the person's role, where it is a built-in one. */
+  role: string | undefined;
   kind: string;
   assetName: string;
   effective: EffectivePermissions;
@@ -380,7 +395,9 @@ function CheckResult({
                     <Badge appearance="outline">{t(reasonLabelKeys[action.reason])}</Badge>
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground">{decidedBy(action, t)}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {decidedBy(action, t, role)}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

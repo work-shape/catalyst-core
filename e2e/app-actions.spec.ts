@@ -387,10 +387,23 @@ test("a tile of a published App reads rows through a named action with the viewe
 
     // The member may use the App and not the Connection. The platform says so in the member's
     // language and names no Connection, since the member may not read it. Trying again cannot
-    // help, so the tile offers no button for it.
+    // help, so the tile offers no button for it. It names whom to ask, never a page the member
+    // cannot open; which admin signed in last depends on the other specs.
+    const ASK = {
+      en: String.raw` Ask an instance admin(, for example [^.]+)?\.$`,
+      de: String.raw` Frag jemanden, der die Instanz verwaltet(, zum Beispiel [^.]+)?\.$`
+    };
+    const asking = (sentence: string, locale: "en" | "de") =>
+      new RegExp(`^${sentence.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}${ASK[locale]}`, "u");
     const UNNAMED = {
-      en: "You may not use a connection this app needs, so this cannot load. Trying again will not help. An administrator can give you the right under Settings > Instance > Access.",
-      de: "Du darfst eine Verbindung nicht nutzen, die diese App braucht, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht. Ein Administrator kann dir das Recht unter Einstellungen > Instanz > Zugriff geben."
+      en: asking(
+        "You may not use a connection this app needs, so this cannot load. Trying again will not help.",
+        "en"
+      ),
+      de: asking(
+        "Du darfst eine Verbindung nicht nutzen, die diese App braucht, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht.",
+        "de"
+      )
     };
     const refusal = appIn(memberPage).getByTestId("refusal");
     const refused = async () => {
@@ -427,11 +440,17 @@ test("a tile of a published App reads rows through a named action with the viewe
     await memberPage.reload();
     await refused();
     await expect(refusal).toHaveText(
-      "You may not use the connection Stock system, so this cannot load. Trying again will not help. An administrator can give you the right under Settings > Instance > Access."
+      asking(
+        "You may not use the connection Stock system, so this cannot load. Trying again will not help.",
+        "en"
+      )
     );
     await show(memberPage, ["light", "de", 1440], refused);
     await expect(refusal).toHaveText(
-      "Du darfst die Verbindung Stock system nicht nutzen, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht. Ein Administrator kann dir das Recht unter Einstellungen > Instanz > Zugriff geben."
+      asking(
+        "Du darfst die Verbindung Stock system nicht nutzen, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht.",
+        "de"
+      )
     );
     await show(memberPage, ["light", "en", 1440], refused);
     await shoot(memberPage, "app-action-tile-refused", refused);

@@ -75,7 +75,7 @@ You write a guardrail as a file and save it with [the CLI](/configure/cli/): `ca
 3. **Publish it.** `catalyst guardrail publish <name> --revision <n>` shows the dry run first. If the guardrail would have stopped actions, it asks you to confirm with the number it counted (`--confirm <n>`). Tip: publish it with the outcome "warn" first and watch its hits for a while.
 4. **Stop it** with `catalyst guardrail unpublish <name>`. The draft stays.
 
-Publishing is a right of its own. Administrators hold it for the instance. To let someone set the rules of one shared workspace, an administrator opens **Settings > Instance > Access** ("Einstellungen › Instanz › Zugriff"), clicks **New right** ("Neues Recht") and chooses **Publish guardrails** for that workspace: "Make a guardrail of this workspace enforce, or stop it. A guardrail stops other people's work in the workspace."
+Publishing is a right of its own. Administrators hold it for the instance. To let someone set the rules of one shared workspace, an administrator opens **Settings > Instance > Access** ("Einstellungen › Instanz › Zugriff"), clicks **New right** ("Neues Recht") and chooses **Guardrails** with the level **Publish** for that workspace: "Make a guardrail of this workspace enforce, or stop it. A guardrail stops other people's work in the workspace."
 
 ## More detail
 

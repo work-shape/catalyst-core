@@ -97,7 +97,14 @@ export function actionLabel(action: string, t: Translate): string {
   const dot = action.indexOf(".");
   const kind = action.slice(0, dot);
   const verb = action.slice(dot + 1);
-  return dot > 0 && isRightKind(kind) && isVerb(verb)
-    ? sentenceStart(t(verbOnKindKeys[kind], { verb: t(verbKeys[verb]) }))
-    : t("rights.actionUnknown");
+  const label = isVerb(verb) ? verbOnKind(kind, t(verbKeys[verb]), t) : undefined;
+  return dot > 0 && label !== undefined ? sentenceStart(label) : t("rights.actionUnknown");
+}
+
+/**
+ * Any verbs on a kind, in the reader's word order: "view and edit agents", "Agenten ansehen und
+ * bearbeiten". Nothing for a kind no right names.
+ */
+export function verbOnKind(kind: string, verbs: string, t: Translate): string | undefined {
+  return isRightKind(kind) ? t(verbOnKindKeys[kind], { verb: verbs }) : undefined;
 }

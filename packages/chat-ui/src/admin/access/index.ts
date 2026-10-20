@@ -10,13 +10,17 @@ export {
   emptyGrantForm,
   furtherGrantKinds,
   GRANT_KINDS,
+  grantExtras,
+  grantLevels,
   grantRequests,
+  grantRowCount,
   grantScopeKinds,
   grantsNameWorkspaces,
   grantVerbs,
   groupGrants,
   splitGrantableAction,
-  withGrantKind
+  withGrantKind,
+  type GrantForm
 } from "./access-model";
 export { PrincipalRights, type PrincipalRightsProps } from "./principal-rights";
 export {

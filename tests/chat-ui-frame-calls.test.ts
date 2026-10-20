@@ -4,8 +4,12 @@ import {
   APP_BRIDGE_VERSION,
   type AppBridgeContext
 } from "@work-shape/catalyst-api-contract";
+import { createElement } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@work-shape/catalyst-api-client";
+import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
+import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import {
   callResultMessage,
   contextMessage,
@@ -14,6 +18,7 @@ import {
   frameCallFailure,
   workflowRunResultMessage,
   frameSessionProof,
+  useFrameCallTexts,
   type ArrivedMessage,
   type FrameCallAnswer,
   type FrameCalls
@@ -492,6 +497,36 @@ describe("the calls of a frame", () => {
       message: "The system answered an error",
       runId: "oprun_2"
     });
+  });
+
+  it("word a missing right on a Connection with whom to ask, never a page the person cannot open", () => {
+    const API = "https://chat.example.com";
+    const sentence = (instanceAdminName: string | undefined, locale: "en" | "de" = "en") => {
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(["me", API], { instanceAdminName });
+      function Probe() {
+        return useFrameCallTexts().connectionUseDenied("Warehouse", "app");
+      }
+      return renderToStaticMarkup(
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(
+            WorkspaceApiClientProvider,
+            { apiBaseUrl: API, children: null },
+            createElement(TranslationProvider, { locale, children: createElement(Probe) })
+          )
+        )
+      );
+    };
+    expect(sentence("Mara")).toBe(
+      "You may not use the connection Warehouse, so this cannot load. Trying again will not help. Ask an instance admin, for example Mara."
+    );
+    expect(sentence(undefined)).toContain("Ask an instance admin.");
+    expect(sentence("Mara", "de")).toContain("zum Beispiel Mara.");
+    for (const text of [sentence("Mara"), sentence("Mara", "de")]) {
+      expect(text).not.toMatch(/Settings|Einstellungen/u);
+    }
   });
 
   it("tell a Page nothing of what is no answer of the instance", () => {

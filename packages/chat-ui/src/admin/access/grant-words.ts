@@ -32,6 +32,8 @@ export function assetKindLabelKey(kind: string): TranslationKey | undefined {
 interface KindWords {
   /** "Workflow {name}": one asset as the place of a row. */
   scopeAsset: TranslationKey;
+  /** "the Workflow {name}": one asset as what a row's sentence allows or refuses. */
+  object: TranslationKey;
   /** The choice of one asset as the place, and what it means. */
   onAsset: TranslationKey;
   onAssetDescription: TranslationKey;
@@ -55,14 +57,17 @@ const configAssetWords = {
 export const kindWords: Record<GrantKind, KindWords> = {
   agent: {
     ...configAssetWords,
-    scopeAsset: "access.scopeAgent"
+    scopeAsset: "access.scopeAgent",
+    object: "access.objectAgent"
   },
   skill: {
     ...configAssetWords,
-    scopeAsset: "access.scopeSkill"
+    scopeAsset: "access.scopeSkill",
+    object: "access.objectSkill"
   },
   connection: {
     scopeAsset: "access.scopeConnection",
+    object: "access.objectConnection",
     onAsset: "access.scopeOnConnection",
     onAssetDescription: "access.scopeOnConnectionDescription",
     assetField: "access.grantConnection",
@@ -72,6 +77,7 @@ export const kindWords: Record<GrantKind, KindWords> = {
   },
   app: {
     scopeAsset: "access.scopeApp",
+    object: "access.objectApp",
     onAsset: "access.scopeOnApp",
     onAssetDescription: "access.scopeOnAppDescription",
     assetField: "access.grantApp",
@@ -81,6 +87,7 @@ export const kindWords: Record<GrantKind, KindWords> = {
   },
   data_store: {
     scopeAsset: "access.scopeDataStore",
+    object: "access.objectDataStore",
     onAsset: "access.scopeOnDataStore",
     onAssetDescription: "access.scopeOnDataStoreDescription",
     assetField: "access.grantDataStore",
@@ -90,6 +97,7 @@ export const kindWords: Record<GrantKind, KindWords> = {
   },
   workflow: {
     scopeAsset: "access.scopeWorkflow",
+    object: "access.objectWorkflow",
     onAsset: "access.scopeOnWorkflow",
     onAssetDescription: "access.scopeOnWorkflowDescription",
     assetField: "access.grantWorkflow",
@@ -99,6 +107,7 @@ export const kindWords: Record<GrantKind, KindWords> = {
   },
   knowledge_base: {
     scopeAsset: "access.scopeKnowledgeBase",
+    object: "access.objectKnowledgeBase",
     onAsset: "access.scopeOnKnowledgeBase",
     onAssetDescription: "access.scopeOnKnowledgeBaseDescription",
     assetField: "access.grantKnowledgeBase",
@@ -110,6 +119,7 @@ export const kindWords: Record<GrantKind, KindWords> = {
   // the dialog offers.
   guardrail: {
     scopeAsset: "access.scopeGuardrail",
+    object: "access.objectGuardrail",
     onAsset: "access.scopeOnGuardrail",
     onAssetDescription: "access.scopeOnGuardrailDescription",
     assetField: "access.grantGuardrail",
@@ -121,6 +131,7 @@ export const kindWords: Record<GrantKind, KindWords> = {
   // asset kind the dialog lists; a row given through the API is shown and revoked here.
   mail_sender: {
     scopeAsset: "access.scopeMailSender",
+    object: "access.objectMailSender",
     onAsset: "access.scopeOnMailSender",
     onAssetDescription: "access.scopeOnMailSenderDescription",
     assetField: "access.grantMailSender",
@@ -132,7 +143,8 @@ export const kindWords: Record<GrantKind, KindWords> = {
   // the dialog offers.
   workspace: {
     ...configAssetWords,
-    scopeAsset: "access.scopeWorkspace"
+    scopeAsset: "access.scopeWorkspace",
+    object: "access.objectWorkspace"
   }
 };
 

@@ -253,10 +253,13 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       await page.getByRole("option", { name: /E2E Connections/u }).click();
       await expect(page.getByRole("listbox")).toHaveCount(0);
       await dialog.getByRole("radio", { name: "Connections", exact: true }).check();
-      // A Connection is read or used through a grant; writing and deleting stay with the role.
-      await expect(dialog.getByLabel("View", { exact: true })).toBeVisible();
-      await expect(dialog.getByLabel("Edit", { exact: true })).toHaveCount(0);
-      await expect(dialog.getByLabel("Delete", { exact: true })).toHaveCount(0);
+      // A Connection is read or used through a grant, each a level; writing and deleting stay
+      // with the role. Using calls the outside system with its credentials, so View comes first
+      // and never brings Use.
+      const levels = dialog.getByRole("radiogroup", { name: "Level", exact: true });
+      await expect(levels.getByRole("radio")).toHaveCount(2);
+      await expect(levels.getByRole("radio").nth(0)).toHaveAccessibleName("View");
+      await expect(levels.getByRole("radio").nth(1)).toHaveAccessibleName("Use");
       // A new Connection right is on one Connection or on the whole instance (RIGHTS-1c, D3):
       // no workspace owns a Connection.
       const where = dialog.getByRole("radiogroup", { name: "Where" });
@@ -264,7 +267,7 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       await expect(where.getByRole("radio", { name: /^Whole instance/u })).toBeVisible();
       await expect(dialog.getByRole("radio", { name: /shared workspace/u })).toHaveCount(0);
       await where.getByRole("radio", { name: /^On one connection/u }).check();
-      // Each action says what it allows.
+      // Each level says what it allows, and which levels it brings with it.
       await expect(
         dialog.getByText("See the connection and its status in Studio. Never its credentials.", {
           exact: true
@@ -272,11 +275,11 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       ).toBeVisible();
       await expect(
         dialog.getByText(
-          "Let agents this person builds or runs call the outside system through it.",
+          "Let agents this person builds or runs call the outside system through it. Includes view.",
           { exact: true }
         )
       ).toBeVisible();
-      await dialog.getByLabel("Use", { exact: true }).check();
+      await levels.getByRole("radio", { name: "Use", exact: true }).check();
       // The Connection is chosen by its name, with its id under it.
       await dialog.getByRole("button", { name: /^Connection/u }).click();
       const option = page.getByRole("option", { name: /^Client records/u });
@@ -298,9 +301,10 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
 
       // The row names the Connection by its title, never by its id.
       const grantRow = page.getByTestId("grant-row").filter({ hasText: "E2E Connections" });
-      await expect(grantRow).toContainText("Connection Client records");
+      await expect(grantRow.locator('[data-effect="allow"]')).toHaveText(
+        "may view and use the connection Client records"
+      );
       await expect(grantRow).not.toContainText(connection.name);
-      await expect(grantRow.locator('[data-effect="allow"]')).toHaveText("Use connections");
     });
 
     await test.step("the Check tab answers for the Connection, with using it as an action of its own", async () => {
@@ -315,31 +319,29 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
         await expect(page.getByRole("listbox")).toHaveCount(0);
         // The kinds are the instance's registry: a Connection is among them with its module on.
         await check.getByRole("combobox", { name: /^(Kind|Art)$/u }).selectOption("connection");
-        await check
-          .getByRole("button", { name: /^(Pick an existing asset|Vorhandenes Asset wählen)$/u })
-          .click();
-        await page.getByRole("option", { name: connection.name, exact: true }).click();
+        // The Connection is picked by the title the rows name it by.
+        await check.getByRole("button", { name: /^Asset: /u }).click();
+        await page.getByRole("option", { name: /^Client records/u }).click();
         await expect(page.getByRole("listbox")).toHaveCount(0);
         await expect(rowOf("use")).toBeVisible();
       };
       await ask();
-      // The member holds the right to use this one Connection, and nothing else on it.
+      // The member holds the rights to view and use this one Connection, and nothing else on it.
       await expect(rowOf("use")).toContainText("Use");
       await expect(rowOf("use")).toContainText("Allowed");
       await expect(rowOf("use")).toContainText("Given right");
       await expect(rowOf("use")).toContainText("Right on this asset");
-      for (const verb of ["read", "write", "delete"]) {
+      await expect(rowOf("read")).toContainText("Allowed");
+      for (const verb of ["write", "delete"]) {
         await expect(rowOf(verb)).toContainText("Refused");
         await expect(rowOf(verb)).toContainText("No right");
       }
       await expect(page.getByTestId("check-row")).toHaveCount(4);
-      // The same name asked as an agent has no action to use, and no right at all.
+      // An asset belongs to its kind: another kind asks for an asset of its own again.
       const check = page.getByRole("tabpanel", { name: "Check" });
       await check.getByRole("combobox", { name: "Kind" }).selectOption("agent");
-      await check.getByRole("textbox").fill(connection.name);
-      await expect(page.getByTestId("check-row")).toHaveCount(3);
-      await expect(rowOf("use")).toHaveCount(0);
-      await expect(rowOf("read")).toContainText("No right");
+      await expect(page.getByTestId("check-row")).toHaveCount(0);
+      await expect(check.getByRole("button", { name: "Asset: Choose an asset" })).toBeVisible();
 
       if (shotsDir) {
         await mkdir(shotsDir, { recursive: true });
@@ -362,6 +364,19 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
     });
 
     await test.step("a grant to use the Connection gives its holder no Studio entry", async () => {
+      // The level Use brought View with it; its row is taken back, so the member holds Use alone.
+      const listed = await page.request.get(
+        `${apiBaseUrl}/api/v1/instance/access/grants?holderKind=user&holderId=${memberId}&action=connection.read`
+      );
+      expect(listed.ok()).toBe(true);
+      const readRows: { items: { id: string }[] } = await listed.json();
+      expect(readRows.items).toHaveLength(1);
+      const revoked = await requestWithOrigin(
+        page,
+        "delete",
+        `${apiBaseUrl}/api/v1/instance/access/grants/${readRows.items[0]?.id ?? ""}`
+      );
+      expect(revoked.ok()).toBe(true);
       const signedIn = await requestWithOrigin(
         memberPage,
         "post",
@@ -466,8 +481,8 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
         await page.getByRole("tab", { name: /^Rights/u }).click();
         const row = page
           .getByTestId("grant-row")
-          .filter({ hasText: `Workspace ${workspace.name}` });
-        await expect(row).toContainText(`Workspace ${workspace.name}`);
+          .filter({ hasText: `connections in ${workspace.name}` });
+        await expect(row).toContainText(`may use connections in ${workspace.name}`);
         await expect(row).not.toContainText(workspace.id);
         await row.getByRole("button", { name: /^Actions for the right of/u }).click();
         await page.getByRole("menuitem", { name: /^Revoke: Use connections/u }).click();

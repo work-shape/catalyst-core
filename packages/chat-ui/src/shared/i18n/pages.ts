@@ -4,11 +4,11 @@ import { defineTranslations } from "./translation-area";
 export const pages = defineTranslations({
   en: {
     "pages.connectionUseDenied":
-      "You may not use the connection {name}, so this cannot load. Trying again will not help. An administrator can give you the right under Settings > Instance > Access.",
+      "You may not use the connection {name}, so this cannot load. Trying again will not help.",
     "pages.connectionUseDeniedUnnamed":
-      "You may not use a connection this app needs, so this cannot load. Trying again will not help. An administrator can give you the right under Settings > Instance > Access.",
+      "You may not use a connection this app needs, so this cannot load. Trying again will not help.",
     "pages.connectionUseDeniedUnnamedPage":
-      "You may not use a connection this preview needs, so this cannot load. Trying again will not help. An administrator can give you the right under Settings > Instance > Access.",
+      "You may not use a connection this preview needs, so this cannot load. Trying again will not help.",
     "pages.buildErrors": "{count} build errors",
     "pages.callWaits": "This action is waiting for an approval.",
     "pages.callWaitsOpen": "Open in Inbox",
@@ -46,11 +46,11 @@ export const pages = defineTranslations({
   },
   de: {
     "pages.connectionUseDenied":
-      "Du darfst die Verbindung {name} nicht nutzen, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht. Ein Administrator kann dir das Recht unter Einstellungen > Instanz > Zugriff geben.",
+      "Du darfst die Verbindung {name} nicht nutzen, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht.",
     "pages.connectionUseDeniedUnnamed":
-      "Du darfst eine Verbindung nicht nutzen, die diese App braucht, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht. Ein Administrator kann dir das Recht unter Einstellungen > Instanz > Zugriff geben.",
+      "Du darfst eine Verbindung nicht nutzen, die diese App braucht, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht.",
     "pages.connectionUseDeniedUnnamedPage":
-      "Du darfst eine Verbindung nicht nutzen, die diese Vorschau braucht, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht. Ein Administrator kann dir das Recht unter Einstellungen > Instanz > Zugriff geben.",
+      "Du darfst eine Verbindung nicht nutzen, die diese Vorschau braucht, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht.",
     "pages.buildErrors": "{count} Build-Fehler",
     "pages.callWaits": "Diese Aktion wartet auf eine Freigabe.",
     "pages.callWaitsOpen": "Im Eingang öffnen",

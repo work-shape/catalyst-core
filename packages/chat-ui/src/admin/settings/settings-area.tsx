@@ -165,13 +165,22 @@ function WorkspaceScope({
     </span>
   ) : null;
   if (workspaces.length < 2) {
+    // The same outlined row as the picker of several, without its chevron and not a control:
+    // one workspace and several look alike.
     return (
       <div className="grid min-w-0 gap-0.5">
         {caption}
-        <div className="flex min-w-0 items-center gap-2 text-label">
-          {mark(workspace)}
-          <span className="truncate">{workspace.name}</span>
-        </div>
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="pointer-events-none w-full min-w-0 justify-start"
+        >
+          <div data-workspace-scope-single="">
+            {mark(workspace)}
+            <span className="min-w-0 flex-1 truncate text-left">{workspace.name}</span>
+          </div>
+        </Button>
       </div>
     );
   }

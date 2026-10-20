@@ -33,14 +33,17 @@ async function pick(page: Page, trigger: Locator, option: string | RegExp): Prom
   await expect(page.getByRole("listbox")).toHaveCount(0);
 }
 
-/** Asks the Check tab what E2E User may do with one agent name. */
+/** Asks the Check tab what E2E User may do with one agent, picked by the title it is listed by. */
 async function check(page: Page, assetName: string): Promise<void> {
   await tab(page, "Check").click();
   const person = page.getByRole("button", { name: /^Person: / });
   if ((await person.getAttribute("aria-label")) !== "Person: E2E User") {
     await pick(page, person, /E2E User/u);
   }
-  await page.getByLabel("Asset name").fill(assetName);
+  const asset = page.getByRole("button", { name: /^Asset: / });
+  if ((await asset.getAttribute("aria-label")) !== `Asset: ${assetName}`) {
+    await pick(page, asset, assetName);
+  }
 }
 
 async function expectNoSidewaysScroll(page: Page): Promise<void> {
@@ -51,7 +54,7 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
   ).toBe(true);
 }
 
-test("an administrator grants, checks, denies and revokes rights", async ({
+test("an administrator grants by level, checks, denies and revokes rights", async ({
   page,
   // The test stores an agent of the instance; the turn on the agents holds the one on the
   // grants.
@@ -75,7 +78,8 @@ test("an administrator grants, checks, denies and revokes rights", async ({
     .getByRole("button", { name: "Access", exact: true })
     .click();
   await expect(page).toHaveURL(new RegExp(`${accessPath}$`, "u"));
-  // The page opens on the rights.
+  // The page opens on Rights, its first tab.
+  await expect(tab(page, "Rights")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("No right given yet.")).toBeVisible();
 
   // An agent of the instance, for the lists and the deny further down.
@@ -94,7 +98,7 @@ test("an administrator grants, checks, denies and revokes rights", async ({
   expect(created.ok(), await created.text()).toBe(true);
   const grantDialog = page.getByRole("dialog", { name: "New right" });
   const grantRows = page.getByTestId("grant-row");
-  const workspaceGrants = grantRows.filter({ hasText: `Workspace ${workspaceName}` });
+  const workspaceGrants = grantRows.filter({ hasText: `in ${workspaceName}` });
   try {
     await page.reload();
 
@@ -111,7 +115,8 @@ test("an administrator grants, checks, denies and revokes rights", async ({
     ).toHaveAttribute("href", `${rightsDocs}#do-you-hold-the-right-here`);
 
     // Grant E2E User viewing kai-helper. An agent right is given in a shared workspace, which
-    // the dialog starts in (WS-OWN-1a), or on one agent.
+    // the dialog starts in (WS-OWN-1a), or on one agent. The right is one level of the kind,
+    // not a box per action.
     await tab(page, "Rights").click();
     await expect(page.getByText("No right given yet.")).toBeVisible();
     await page.getByRole("button", { name: "New right" }).click();
@@ -119,74 +124,96 @@ test("an administrator grants, checks, denies and revokes rights", async ({
     const inWorkspace = grantDialog.getByRole("radio", { name: /^In a shared workspace/u });
     const onAsset = grantDialog.getByRole("radio", { name: /^On one asset/u });
     await expect(inWorkspace).toBeChecked();
+    await expect(grantDialog.getByRole("checkbox")).toHaveCount(0);
+    const level = (name: string) => grantDialog.getByRole("radio", { name, exact: true });
+    for (const name of ["View", "Edit", "Publish", "Delete"]) {
+      await expect(level(name)).toBeVisible();
+    }
+    await expect(level("Edit")).toHaveAccessibleDescription("Includes view.");
     await onAsset.check();
-    await grantDialog.getByLabel("View").check();
+    await level("View").check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
-    const assetGrants = grantRows.filter({ hasText: "Agent Kai Helper" });
+    const assetGrants = grantRows.filter({ hasText: "the agent Kai Helper" });
     await expect(grantRows).toHaveCount(1);
     await expect(assetGrants).toContainText("E2E User");
-    await expect(assetGrants).toContainText("View agents");
+    await expect(assetGrants).toContainText("may view the agent Kai Helper");
     await expect(assetGrants).toContainText("E2E Admin");
 
-    // The same form with one more action adds the missing row and says what it left alone.
+    // A higher level adds the rows below it that are missing and says what it left alone.
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
-    for (const verb of ["View", "Edit"]) {
-      await grantDialog.getByLabel(verb).check();
-    }
+    await level("Edit").check();
     await onAsset.check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
     await expect(page.getByText("1 added. 1 already there and left as they are.")).toBeVisible();
     await expect(grantRows).toHaveCount(1);
-    await expect(assetGrants.locator('[data-effect="allow"]')).toHaveCount(2);
+    await expect(assetGrants).toContainText("may view and edit the agent Kai Helper");
 
     // Rights in the shared workspace, which cover what it owns and not the instance's agents.
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
-    for (const verb of ["View", "Edit", "Delete"]) {
-      await grantDialog.getByLabel(verb).check();
-    }
+    await level("Delete").check();
     await pick(page, grantDialog.getByRole("button", { name: /^Workspace/u }), workspaceName);
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
     await expect(grantRows).toHaveCount(2);
     await expect(workspaceGrants).toContainText("E2E User");
-    await expect(workspaceGrants.locator('[data-effect="allow"]')).toHaveCount(3);
+    await expect(workspaceGrants).toContainText(
+      `may view, edit, publish, and delete agents in ${workspaceName}`
+    );
 
     // The rights on kai-helper allow what they name, the workspace's do not reach the agent of
-    // the instance, and nothing allows other-helper. The result says that it answers for the
-    // right alone, and that a read through a grant opens no overview.
-    await check(page, "kai-helper");
+    // the instance, and nothing allows another agent. The person and the asset are picked by
+    // name; nothing is typed. The result says that it answers for the right alone, and that a
+    // read through a grant opens no overview.
+    await tab(page, "Check").click();
+    await expect(page.getByRole("tabpanel", { name: "Check" }).getByRole("textbox")).toHaveCount(0);
+    await check(page, "Kai Helper");
     await expect(checkRow(page, "write")).toContainText("Allowed");
     await expect(checkRow(page, "write")).toContainText("Right on this asset");
     await expect(checkRow(page, "delete")).toContainText("Refused");
     await expect(checkRow(page, "delete")).toContainText("No right");
     await expect(page.getByTestId("check-right-only")).toContainText("This is the right alone.");
     await expect(page.getByText("Viewing is allowed through a given right")).toBeVisible();
-    await check(page, "other-helper");
+    await check(page, "Research Assistant");
     await expect(checkRow(page, "write")).toContainText("Refused");
     await expect(checkRow(page, "write")).toContainText("No right");
     await expect(page.getByTestId("check-right-only")).toHaveCount(0);
-    // A name no agent can have gets no result.
-    await check(page, "kai helper");
-    await expect(page.getByText("An agent name is one word without spaces.")).toBeVisible();
-    await expect(page.getByTestId("check-row")).toHaveCount(0);
+    // What a role decides names the role, as the Users page names it.
+    await pick(page, page.getByRole("button", { name: /^Person: / }), /E2E Admin/u);
+    await expect(checkRow(page, "write")).toContainText(
+      "The person's role, Admin, allows this everywhere."
+    );
 
-    // A deny on the one agent refuses the action there. It is a row of its own: the person's
-    // allow of the same action on the same agent would be that row already.
+    // A row's menu revokes one action of its sentence.
     await tab(page, "Rights").click();
+    await assetGrants.getByRole("button", { name: /^Actions for the right of/u }).click();
+    await page.getByRole("menuitem", { name: "Revoke: Edit agents" }).click();
+    const revokeEdit = page.getByRole("dialog", { name: "Revoke this right?" });
+    await revokeEdit.getByRole("button", { name: "Revoke" }).click();
+    await expect(revokeEdit).toHaveCount(0);
+    await expect(assetGrants).toContainText("may view the agent Kai Helper");
+    await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
+
+    // A deny on the one agent refuses the action there. It joins the row of the person's rights
+    // on that agent, as a sentence of its own.
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
-    await grantDialog.getByLabel("Delete").check();
+    await level("Delete").check();
     await onAsset.check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
-    await grantDialog.getByRole("radio", { name: /^Deny/u }).check();
+    // A deny is the exception: it waits behind its own control.
+    const refuse = grantDialog.getByRole("checkbox", { name: /^Refuse this level/u });
+    await expect(refuse).toHaveCount(0);
+    await grantDialog.getByRole("button", { name: "Refuse instead" }).click();
+    await refuse.check();
+    await expect(level("Edit")).toHaveAccessibleDescription("Also refuses publish and delete.");
     await expect(
-      grantDialog.getByText("Refuses the ticked actions here, even for an administrator.")
+      grantDialog.getByText("Refuses the chosen level and every one above it here")
     ).toBeVisible();
     // The dialog leads into the documentation at the place it asks for and after the deny.
     const rightsPage = "https://docs.workshape.ai/catalyst/operate/how-rights-work/";
@@ -201,12 +228,14 @@ test("an administrator grants, checks, denies and revokes rights", async ({
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
     await expect(grantRows).toHaveCount(2);
-    await expect(grantRows.locator('[data-effect="deny"]')).toHaveText("Denied: Delete agents");
+    await expect(grantRows.locator('[data-effect="deny"]')).toHaveText(
+      "Deniedmay not delete the agent Kai Helper"
+    );
 
-    await check(page, "kai-helper");
+    await check(page, "Kai Helper");
     await expect(checkRow(page, "delete")).toContainText("Refused");
     await expect(checkRow(page, "delete")).toContainText("Deny on this asset");
-    await expect(checkRow(page, "write")).toContainText("Allowed");
+    await expect(checkRow(page, "read")).toContainText("Allowed");
     await expect(page.getByText("does not take away instance-wide rights")).toBeVisible();
 
     // At 390 wide the page keeps inside the window, on the result and on the grant list,
@@ -230,8 +259,14 @@ test("an administrator grants, checks, denies and revokes rights", async ({
     await page.setViewportSize(WIDE);
     await page.getByRole("button", { name: "Expand sidebar" }).click();
 
-    // The rights in the workspace are revoked one by one.
-    for (const action of ["View agents", "Edit agents", "Delete agents"]) {
+    // The rights in the workspace are revoked one by one; each takes one verb out of the row's
+    // sentence, and the last one the row.
+    for (const [action, left] of [
+      ["View agents", `may edit, publish, and delete agents in ${workspaceName}`],
+      ["Edit agents", `may publish and delete agents in ${workspaceName}`],
+      ["Publish agents", `may delete agents in ${workspaceName}`],
+      ["Delete agents", undefined]
+    ] as const) {
       // The menu of the last round has left the page before the row's menu is opened again: a
       // click that lands while it is still leaving only finishes its closing.
       await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
@@ -241,7 +276,11 @@ test("an administrator grants, checks, denies and revokes rights", async ({
       await revokeDialog.getByRole("button", { name: "Revoke" }).click();
       // The dialog is gone, not only faded: it hands the focus back when it leaves.
       await expect(revokeDialog).toHaveCount(0);
-      await expect(workspaceGrants.getByText(action, { exact: true })).toHaveCount(0);
+      if (left === undefined) {
+        await expect(workspaceGrants).toHaveCount(0);
+      } else {
+        await expect(workspaceGrants).toContainText(left);
+      }
     }
     await expect(grantRows).toHaveCount(1);
   } finally {
@@ -260,7 +299,7 @@ test("an administrator grants, checks, denies and revokes rights", async ({
   await page.reload();
   await tab(page, "Rights").click();
   const orphanedDeny = grantRows.filter({ hasText: "Asset no longer exists" });
-  await expect(orphanedDeny).toContainText("kai-helper");
+  await expect(orphanedDeny).toContainText("may not delete the agent kai-helper");
   await expect(orphanedDeny).toContainText("This deny stays until you remove it.");
   await orphanedDeny.getByRole("button", { name: /^Actions for the right of/u }).click();
   await page.getByRole("menuitem", { name: "Remove deny: Delete agents" }).click();

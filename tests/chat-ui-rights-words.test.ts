@@ -164,8 +164,17 @@ describe("the words of a right", () => {
 
 describe("a rights screen with a right of every kind", () => {
   it("lists each grant row by its words and its asset's name", () => {
+    // One person per right, so each row's sentence says that right alone.
     const rows = [
-      ...ACTIONS.map((action, index) => grant(`g${index}`, action)),
+      ...ACTIONS.map((action, index) =>
+        grant(`g${index}`, action, {
+          holderId: `user-${index}`,
+          scopeKind: "instance",
+          scopeId: undefined,
+          scopeAsset: undefined
+        })
+      ),
+      grant("g-crm", "connection.use"),
       grant("g-hidden", "agent.read", {
         scopeAsset: { kind: "agent", active: true },
         scopeId: "asset_secret_id"
@@ -195,8 +204,8 @@ describe("a rights screen with a right of every kind", () => {
       expect(markup, locale).not.toContain("ws_secret_id");
       expect(markup, locale).toContain("CRM system");
       for (const action of ACTIONS) {
-        expect(markup, `${locale}: ${action}`).toContain(
-          actionLabel(action, createTranslationContext(locale).t)
+        expect(markup.toLocaleLowerCase(), `${locale}: ${action}`).toContain(
+          actionLabel(action, createTranslationContext(locale).t).toLocaleLowerCase()
         );
       }
     }

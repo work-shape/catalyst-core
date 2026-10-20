@@ -52,7 +52,6 @@ export const access = defineTranslations({
     "access.grantHolder": "Person",
     "access.grantAction": "Action",
     "access.grantScope": "Where",
-    "access.grantEffect": "Effect",
     "access.grantedByLine": "Granted by {name}, {date}",
     "access.effectAllow": "Allow",
     "access.effectDeny": "Deny",
@@ -179,7 +178,6 @@ export const access = defineTranslations({
       "{name} is no longer denied this: {action}, {scope}. Other grants and the person's role then decide.",
     "access.revokeFailed": "The right could not be revoked.",
     "access.grantDialogTitle": "New right",
-    "access.grantDialogDescription": "Gives one person rights on one kind of asset, in one place.",
     "access.choosePerson": "Choose a person",
     "access.usersLoadFailed": "The users could not be loaded.",
     "access.grantKind": "Kind",
@@ -189,11 +187,7 @@ export const access = defineTranslations({
     "access.scopeOnAssetDescription": "One existing agent or skill.",
     "access.chooseAsset": "Choose an asset",
     "access.grantAsset": "Asset",
-    "access.effectAllowDescription": "The person may do the ticked actions there.",
-    "access.effectDenyDescription":
-      "Refuses the ticked actions here, even for an administrator. Exporting an asset and setting the default agent are not affected.",
     "access.submitGrant": "Create right",
-    "access.grantIncomplete": "Choose a person, at least one action and where it applies.",
     "access.grantFailed": "The right could not be written.",
     "access.grantUserBeingDeleted": "User account is being deleted",
     "access.grantUnknownHolder": "This user no longer exists.",
@@ -201,15 +195,8 @@ export const access = defineTranslations({
       "This asset no longer exists, or the action cannot be given at this place. Reload the page and choose again.",
     "access.grantPartlyWritten": "{written} of {total} rows were written before this.",
 
-    "access.checkDescription":
-      "Choose a person, a kind and a name. The name does not have to exist yet.",
     "access.checkPerson": "Person",
     "access.checkKind": "Kind",
-    "access.checkName": "Asset name",
-    "access.checkNamePlaceholder": "tax-helper",
-    "access.checkPickAsset": "Pick an existing asset",
-    "access.checkEmpty":
-      "Choose a person and enter an asset name to see what the person may do with it.",
     "access.checkLoadFailed": "The rights of this person could not be loaded.",
     "access.checkHolderHidden": "This user was not found.",
     "access.checkHolderInactive":
@@ -225,7 +212,6 @@ export const access = defineTranslations({
     "access.reasonDeny": "Deny",
     "access.reasonNoGrant": "No right",
     "access.reasonHolderInactive": "Account not active",
-    "access.decidedByRole": "The person's instance role allows this everywhere.",
     "access.decidedByLegacy": "An individual right set on the Users page allows this everywhere.",
     "access.decidedByLegacyDeny": "An individual right was revoked on the Users page.",
     "access.decidedByGrantAsset": "Right on this asset",
@@ -245,10 +231,6 @@ export const access = defineTranslations({
     "access.revokeDeny": "Remove deny",
     "access.grantNothingAdded": "Nothing was added. The person already has every row you chose.",
     "access.grantPartlyAdded": "{added} added. {existing} already there and left as they are.",
-    "access.checkNameInvalid": "A name is one word without spaces.",
-    "access.checkNameInvalidAgent": "An agent name is one word without spaces.",
-    "access.checkNameInvalidSkill":
-      "A skill name starts with a letter and uses only letters, digits, dots, hyphens and underscores.",
     "access.checkGrantsFailed":
       "The grants could not be loaded, so denies on single assets cannot be taken into account. No result is shown.",
     "access.checkAssetsFailed":
@@ -262,7 +244,44 @@ export const access = defineTranslations({
     "access.checkReadThroughGrant":
       "Viewing is allowed through a given right: the person can open this asset. The overview of all agents and skills and the export need the right to view them on the whole instance.",
     "access.checkDenyNote":
-      "A deny on an asset does not take away instance-wide rights: with them a person can still export the asset or set an agent as the default."
+      "A deny on an asset does not take away instance-wide rights: with them a person can still export the asset or set an agent as the default.",
+    "access.grantRight": "Right",
+    "access.rowInPlace": "may {actions} {place}",
+    "access.rowOnAsset": "may {verbs} {object}",
+    "access.rowNot": "not {verbs}",
+    "access.rowDenied": "Denied",
+    "access.rowAlso": "Also: {action}",
+    "access.rowOwnAt": "{action} ({scope})",
+    "access.placeIn": "in {name}",
+    "access.placeWorkspaceHidden": "in a workspace you cannot see",
+    "access.placeInstance": "on the whole instance",
+    "access.objectHidden": "an asset you cannot see",
+    "access.objectAgent": "the agent {name}",
+    "access.objectSkill": "the skill {name}",
+    "access.objectConnection": "the connection {name}",
+    "access.objectApp": "the App {name}",
+    "access.objectWorkflow": "the Workflow {name}",
+    "access.objectDataStore": "the Data Store {name}",
+    "access.objectKnowledgeBase": "the Knowledge Base {name}",
+    "access.objectGuardrail": "the guardrail {name}",
+    "access.objectMailSender": "the sender {name}",
+    "access.objectWorkspace": "the workspace {name}",
+    "access.grantLevel": "Level",
+    "access.levelIncludes": "Includes {verbs}.",
+    "access.levelRefusesAbove": "Also refuses {verbs}.",
+    "access.grantExtras": "Further rights",
+    "access.denyToggle": "Refuse instead",
+    "access.denyChoice": "Refuse this level and every one above it",
+    "access.grantIncomplete": "Choose a person, a level and where it applies.",
+    "access.grantDialogDescription":
+      "Gives one person a level of rights on one kind of asset, in one place.",
+    "access.effectDenyDescription":
+      "Refuses the chosen level and every one above it here, even for an administrator. Exporting an asset and setting the default agent are not affected.",
+    "access.checkDescription": "Choose a person, a kind and an asset.",
+    "access.checkName": "Asset",
+    "access.checkEmpty": "Choose a person and an asset to see what the person may do with it.",
+    "access.decidedByRole": "The person's role, {role}, allows this everywhere.",
+    "access.decidedByAnyRole": "The person's role allows this everywhere."
   },
   de: {
     "access.scopeTab": "Datenzugriff",
@@ -314,7 +333,6 @@ export const access = defineTranslations({
     "access.grantHolder": "Person",
     "access.grantAction": "Aktion",
     "access.grantScope": "Wo",
-    "access.grantEffect": "Wirkung",
     "access.grantedByLine": "Vergeben von {name}, {date}",
     "access.effectAllow": "Erlauben",
     "access.effectDeny": "Verweigern",
@@ -441,8 +459,6 @@ export const access = defineTranslations({
       "{name} wird das nicht mehr verweigert: {action}, {scope}. Danach entscheiden die anderen Rechte und die Rolle der Person.",
     "access.revokeFailed": "Das Recht konnte nicht entzogen werden.",
     "access.grantDialogTitle": "Neues Recht",
-    "access.grantDialogDescription":
-      "Gibt einer Person Rechte an einer Art von Asset, an einem Ort.",
     "access.choosePerson": "Person wählen",
     "access.usersLoadFailed": "Die Benutzer konnten nicht geladen werden.",
     "access.grantKind": "Art",
@@ -452,11 +468,7 @@ export const access = defineTranslations({
     "access.scopeOnAssetDescription": "Ein vorhandener Agent oder Skill.",
     "access.chooseAsset": "Asset wählen",
     "access.grantAsset": "Asset",
-    "access.effectAllowDescription": "Die Person darf die angehakten Aktionen dort ausführen.",
-    "access.effectDenyDescription":
-      "Verweigert die angehakten Aktionen hier, auch für Administratoren. Exportieren und das Festlegen des Standard-Agenten bleiben möglich.",
     "access.submitGrant": "Recht anlegen",
-    "access.grantIncomplete": "Wähle eine Person, mindestens eine Aktion und wo sie gilt.",
     "access.grantFailed": "Das Recht konnte nicht geschrieben werden.",
     "access.grantUserBeingDeleted": "Das Benutzerkonto wird gerade gelöscht",
     "access.grantUnknownHolder": "Diesen Benutzer gibt es nicht mehr.",
@@ -464,15 +476,8 @@ export const access = defineTranslations({
       "Dieses Asset gibt es nicht mehr, oder die Aktion lässt sich an diesem Ort nicht vergeben. Lade die Seite neu und wähle erneut.",
     "access.grantPartlyWritten": "Davor wurden {written} von {total} Zeilen geschrieben.",
 
-    "access.checkDescription":
-      "Wähle eine Person, eine Art und einen Namen. Den Namen muss es noch nicht geben.",
     "access.checkPerson": "Person",
     "access.checkKind": "Art",
-    "access.checkName": "Asset-Name",
-    "access.checkNamePlaceholder": "tax-helper",
-    "access.checkPickAsset": "Vorhandenes Asset wählen",
-    "access.checkEmpty":
-      "Wähle eine Person und gib einen Asset-Namen ein, um zu sehen, was die Person damit darf.",
     "access.checkLoadFailed": "Die Rechte dieser Person konnten nicht geladen werden.",
     "access.checkHolderHidden": "Dieser Benutzer wurde nicht gefunden.",
     "access.checkHolderInactive":
@@ -488,7 +493,6 @@ export const access = defineTranslations({
     "access.reasonDeny": "Verweigerung",
     "access.reasonNoGrant": "Kein Recht",
     "access.reasonHolderInactive": "Konto nicht aktiv",
-    "access.decidedByRole": "Die Instanzrolle der Person erlaubt das überall.",
     "access.decidedByLegacy": "Ein einzelnes Recht von der Seite Benutzer erlaubt das überall.",
     "access.decidedByLegacyDeny": "Ein einzelnes Recht wurde auf der Seite Benutzer entzogen.",
     "access.decidedByGrantAsset": "Recht an diesem Asset",
@@ -511,10 +515,6 @@ export const access = defineTranslations({
       "Es wurde nichts hinzugefügt. Die Person hat alle gewählten Zeilen bereits.",
     "access.grantPartlyAdded":
       "{added} hinzugefügt. {existing} gab es schon, sie bleiben unverändert.",
-    "access.checkNameInvalid": "Ein Name ist ein Wort ohne Leerzeichen.",
-    "access.checkNameInvalidAgent": "Ein Agentenname ist ein Wort ohne Leerzeichen.",
-    "access.checkNameInvalidSkill":
-      "Der Name eines Skills beginnt mit einem Buchstaben und besteht nur aus Buchstaben, Ziffern, Punkten, Bindestrichen und Unterstrichen.",
     "access.checkGrantsFailed":
       "Die Rechte konnten nicht geladen werden. Verweigerungen an einzelnen Assets lassen sich deshalb nicht berücksichtigen. Es wird kein Ergebnis angezeigt.",
     "access.checkAssetsFailed":
@@ -528,6 +528,43 @@ export const access = defineTranslations({
     "access.checkReadThroughGrant":
       "Ansehen ist über ein vergebenes Recht erlaubt: Die Person kann dieses Asset öffnen. Die Übersicht aller Agenten und Skills und der Export brauchen das Recht, sie auf der ganzen Instanz anzusehen.",
     "access.checkDenyNote":
-      "Eine Verweigerung an einem Asset nimmt keine instanzweiten Rechte: Damit kann eine Person das Asset weiterhin exportieren oder einen Agenten als Standard festlegen."
+      "Eine Verweigerung an einem Asset nimmt keine instanzweiten Rechte: Damit kann eine Person das Asset weiterhin exportieren oder einen Agenten als Standard festlegen.",
+    "access.grantRight": "Recht",
+    "access.rowInPlace": "darf {place} {actions}",
+    "access.rowOnAsset": "darf {object} {verbs}",
+    "access.rowNot": "nicht {verbs}",
+    "access.rowDenied": "Verweigert",
+    "access.rowAlso": "Außerdem: {action}",
+    "access.rowOwnAt": "{action} ({scope})",
+    "access.placeIn": "in {name}",
+    "access.placeWorkspaceHidden": "in einem Arbeitsbereich, den du nicht sehen kannst,",
+    "access.placeInstance": "auf der ganzen Instanz",
+    "access.objectHidden": "ein Asset, das du nicht sehen kannst,",
+    "access.objectAgent": "den Agenten {name}",
+    "access.objectSkill": "den Skill {name}",
+    "access.objectConnection": "die Verbindung {name}",
+    "access.objectApp": "die App {name}",
+    "access.objectWorkflow": "den Workflow {name}",
+    "access.objectDataStore": "den Datenspeicher {name}",
+    "access.objectKnowledgeBase": "die Wissensbasis {name}",
+    "access.objectGuardrail": "die Leitplanke {name}",
+    "access.objectMailSender": "den Absender {name}",
+    "access.objectWorkspace": "den Arbeitsbereich {name}",
+    "access.grantLevel": "Stufe",
+    "access.levelIncludes": "Schließt {verbs} ein.",
+    "access.levelRefusesAbove": "Verweigert auch {verbs}.",
+    "access.grantExtras": "Weitere Rechte",
+    "access.denyToggle": "Stattdessen verweigern",
+    "access.denyChoice": "Diese Stufe und alle darüber verweigern",
+    "access.grantIncomplete": "Wähle eine Person, eine Stufe und wo sie gilt.",
+    "access.grantDialogDescription":
+      "Gibt einer Person eine Stufe von Rechten an einer Art von Asset, an einem Ort.",
+    "access.effectDenyDescription":
+      "Verweigert hier die gewählte Stufe und alle darüber, auch für Administratoren. Exportieren und das Festlegen des Standard-Agenten bleiben möglich.",
+    "access.checkDescription": "Wähle eine Person, eine Art und ein Asset.",
+    "access.checkName": "Asset",
+    "access.checkEmpty": "Wähle eine Person und ein Asset, um zu sehen, was die Person damit darf.",
+    "access.decidedByRole": "Die Rolle der Person, {role}, erlaubt das überall.",
+    "access.decidedByAnyRole": "Die Rolle der Person erlaubt das überall."
   }
 });

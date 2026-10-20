@@ -139,10 +139,13 @@ test("the new-right dialog offers only the giver's workspace verbs and places", 
     await manager.getByRole("button", { name: "New right", exact: true }).click();
     const dialog = manager.getByRole("dialog", { name: "New right" });
     await dialog.getByRole("radio", { name: "Apps", exact: true }).check();
-    await expect(dialog.getByRole("checkbox", { name: "View", exact: true })).toBeVisible();
-    await expect(dialog.getByRole("checkbox", { name: "Edit", exact: true })).toBeVisible();
-    await expect(dialog.getByRole("checkbox", { name: "Publish", exact: true })).toHaveCount(0);
-    await expect(dialog.getByRole("checkbox", { name: "Delete", exact: true })).toHaveCount(0);
+    // A level is offered only where the giver holds every right it brings.
+    const levels = dialog
+      .getByRole("radiogroup", { name: "Level", exact: true })
+      .getByRole("radio");
+    await expect(levels).toHaveCount(2);
+    await expect(levels.nth(0)).toHaveAccessibleName("View");
+    await expect(levels.nth(1)).toHaveAccessibleName("Edit");
     await expect(dialog.getByRole("radio", { name: /^Whole instance/u })).toHaveCount(0);
     await expect(dialog.getByRole("radio", { name: /Namespace/u })).toHaveCount(0);
     await dialog.getByRole("button", { name: /^Workspace:/u }).click();
@@ -152,11 +155,13 @@ test("the new-right dialog offers only the giver's workspace verbs and places", 
     await manager.getByRole("option").click();
     await dialog.getByRole("button", { name: /^Person:/u }).click();
     await manager.getByRole("option", { name: recipient.displayLabel, exact: true }).click();
-    await dialog.getByRole("checkbox", { name: "Edit", exact: true }).check();
+    await dialog.getByRole("radio", { name: "Edit", exact: true }).check();
+    // Edit brings View with it: the dialog writes both, View first.
     const written = manager.waitForResponse(
       (response) =>
         response.url() === `${api}/api/v1/instance/access/grants` &&
-        response.request().method() === "POST"
+        response.request().method() === "POST" &&
+        response.request().postDataJSON().action === "app.write"
     );
     await dialog.getByRole("button", { name: "Create right", exact: true }).click();
     const granted = await written;
@@ -201,15 +206,18 @@ test("an asset-only giver is offered no broader scope or unheld verbs", async ({
     await manager.getByRole("button", { name: "New right", exact: true }).click();
     const dialog = manager.getByRole("dialog", { name: "New right" });
     await dialog.getByRole("radio", { name: "Apps", exact: true }).check();
-    await expect(dialog.getByRole("checkbox")).toHaveCount(1);
-    await expect(dialog.getByRole("checkbox", { name: "View", exact: true })).toBeVisible();
+    const levels = dialog
+      .getByRole("radiogroup", { name: "Level", exact: true })
+      .getByRole("radio");
+    await expect(levels).toHaveCount(1);
+    await expect(levels).toHaveAccessibleName("View");
     await expect(dialog.getByRole("radiogroup", { name: "Where", exact: true })).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: /^App:/u })).toBeEnabled();
     await dialog.getByRole("button", { name: /^App:/u }).click();
     await manager.getByRole("option").click();
     await dialog.getByRole("button", { name: /^Person:/u }).click();
     await manager.getByRole("option", { name: recipient.displayLabel, exact: true }).click();
-    await dialog.getByRole("checkbox", { name: "View", exact: true }).check();
+    await dialog.getByRole("radio", { name: "View", exact: true }).check();
     const written = manager.waitForResponse(
       (response) =>
         response.url() === `${api}/api/v1/instance/access/grants` &&

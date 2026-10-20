@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import {
   furtherGrantKinds,
+  grantRowCount,
   grantsNameWorkspaces,
   loadFailure,
   type GrantKind
@@ -156,7 +157,7 @@ export function AccessPage() {
       />
       <Tabs defaultValue="grants">
         <TabsList label={t("access.tabs")}>
-          <TabsTrigger value="grants" count={grantsQuery.data?.length}>
+          <TabsTrigger value="grants" count={grantRowCount(grantsQuery.data)}>
             {t("access.tabGrants")}
           </TabsTrigger>
           <TabsTrigger value="data-scopes">{t("access.scopeTab")}</TabsTrigger>
@@ -186,6 +187,7 @@ export function AccessPage() {
                   }
                 : undefined
             }
+            instanceAdminName={user.instanceAdminName}
             onGrant={(requests) => mutations.grant.mutateAsync(requests)}
             onRevoke={(grantId) => mutations.revoke.mutateAsync(grantId)}
           />
@@ -231,6 +233,12 @@ export function AccessPage() {
             )}
             grantsFailed={Boolean(grantsQuery.error)}
             onRetryGrants={retry(grantsQuery)}
+            instanceAdminName={user.instanceAdminName}
+            titleOf={(assetId) =>
+              Object.values(kindAssets)
+                .flatMap((choices) => choices?.items ?? [])
+                .find((asset) => asset.id === assetId)?.name
+            }
           />
         </TabsContent>
       </Tabs>
