@@ -71,7 +71,9 @@ describe("a loop whose items fail", () => {
     const failed = await stepRunsOf(t, run.id, { containerStepRunId: loop?.id, status: "failed" });
     expect(failed.map((stepRun) => stepRun.iteration?.label)).toEqual(failing);
     expect(failed.map((stepRun) => stepRun.iteration?.index)).toEqual([100, 500, 999]);
-  }, 300_000);
+    // One item a worker pass: 1,004 passes of about 75 ms, 80 s when it runs alone. In the
+    // full suite on a loaded machine they ran past 300 s.
+  }, 1_200_000);
 
   it("skips the rest of a failed item, and counts each step of the loop on its own", async () => {
     const definitions = publishedDefinitions();

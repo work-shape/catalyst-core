@@ -39,6 +39,10 @@ function definition(after?: number) {
   };
 }
 
+// A test that runs a chain of histories to its end takes up to 7 s when the file runs alone.
+// In the full suite on a loaded machine such tests ran past the default 30 s.
+const chainRun = { timeout: 120_000 };
+
 it("reads continueAsNew as a product-owned loop contract and refuses malformed positions", () => {
   const parsed = parseWorkflowManifest(definition());
   expect(parsed).toMatchObject({ ok: true });
@@ -114,6 +118,7 @@ it.each(
   )
 )(
   "reserves the final tail at nested=$nested concurrency=$concurrency budget=$budget",
+  chainRun,
   async ({ nested, concurrency, budget }) => {
     const manifest = definition();
     manifest.steps = manifest.steps.map((step) =>
@@ -194,6 +199,7 @@ it.each(
 // produce three pairs and two tail writes; the full history needs 22 slots, floor 8.
 it.each(Array.from({ length: 16 }, (_, offset) => 8 + offset))(
   "publishes a serial ancestor and scans its inner continuation at budget %s",
+  chainRun,
   async (budget) => {
     const manifest = definition();
     const write = (id: string): WorkflowStep => ({
@@ -256,7 +262,7 @@ it.each(Array.from({ length: 16 }, (_, offset) => 8 + offset))(
   }
 );
 
-it("reserves the inner tail, the rest of the outer item and the outer tail", async () => {
+it("reserves the inner tail, the rest of the outer item and the outer tail", chainRun, async () => {
   const manifest = definition();
   const write = (id: string): WorkflowStep => ({
     id,
@@ -402,7 +408,7 @@ it("refuses a continuation tail larger than limits.stepRuns at publish", async (
   );
 });
 
-describe("continue-as-new", () => {
+describe("continue-as-new", chainRun, () => {
   it("carries labels, input, datasets and onFailure onto a newly published revision without repeating an item", async () => {
     const { t, definitions } = await ready();
     const firstRevision = (await start(t)).definitionRevisionId;

@@ -317,7 +317,9 @@ describe("Workflow child runs", () => {
       childRunId: failedChild?.id
     });
     expect(failedSteps[0]?.linkedRunId).toBeUndefined();
-  }, 300_000);
+    // About 770 worker passes of up to four children, 100 s when it runs alone. In the full
+    // suite on a loaded machine they ran past 300 s.
+  }, 1_200_000);
 });
 
 async function assets() {
