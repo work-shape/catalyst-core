@@ -59,7 +59,7 @@ export const platformDocsSkill: ShippedSkill = {
   resources: generated.pages.map((page) => ({
     path: referencePath(page.path),
     mediaType: "text/markdown",
-    content: `# ${page.title}\n\n${page.description}\n\n${page.body}\n`
+    content: `# ${page.title}\n\n${page.description}\n\n${page.body.join("\n")}\n`
   })),
   icon: "guide"
 };

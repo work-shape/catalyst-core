@@ -26,8 +26,11 @@ interface PlatformDocsPage {
   path: string;
   title: string;
   description: string;
-  /** The page's text without its front matter. */
-  body: string;
+  /**
+   * The page's text without its front matter, one entry per line, so that two changes to
+   * different paragraphs of one page change different lines of the generated file.
+   */
+  body: string[];
 }
 
 async function markdownFiles(directory: string): Promise<string[]> {
@@ -63,7 +66,7 @@ function pageOf(file: string, text: string): PlatformDocsPage {
     path: relative(DOCS_ROOT, file).split(sep).join("/").replace(/\.md$/u, ""),
     title: frontMatterValue(match[1], "title", file),
     description: frontMatterValue(match[1], "description", file),
-    body: text.slice(match[0].length).trim()
+    body: text.slice(match[0].length).trim().split("\n")
   };
 }
 
