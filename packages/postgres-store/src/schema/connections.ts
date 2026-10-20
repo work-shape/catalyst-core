@@ -196,14 +196,19 @@ export const connectionSourceCalls = pgTable(
   {
     leaseId: text("lease_id").primaryKey(),
     clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
-    connectionAssetId: text("connection_asset_id").notNull()
+    connectionAssetId: text("connection_asset_id")
+      .notNull()
       .references(() => configAssets.id, { onDelete: "cascade" }),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     activeUntil: timestamp("active_until", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull()
   },
   (table) => [
-    index("connection_source_calls_connection_idx").on(table.clientInstanceId, table.connectionAssetId, table.startedAt),
+    index("connection_source_calls_connection_idx").on(
+      table.clientInstanceId,
+      table.connectionAssetId,
+      table.startedAt
+    ),
     index("connection_source_calls_expiry_idx").on(table.expiresAt)
   ]
 );

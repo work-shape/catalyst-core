@@ -305,6 +305,7 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
     description: z.string().max(2000).optional(),
     service: z.string().regex(CONNECTION_SERVICE_PATTERN).optional(),
     connectorType: z.string().regex(CONNECTOR_TYPE_PATTERN),
+    limits: operationLimitsSchema.optional(),
     ownerPrincipalId: z.string().min(1),
     settings: settingsSchema.default({}),
     authScheme: z.string().min(1).max(64),
@@ -404,6 +405,7 @@ const releaseConnectionOperationSchema = z
 export const releaseConnectionConfigSchema = z
   .object({
     connectorType: z.string().regex(CONNECTOR_TYPE_PATTERN),
+    limits: operationLimitsSchema.optional(),
     displayName: z.string().trim().min(1).max(120).optional(),
     description: z.string().max(2000).optional(),
     service: z.string().regex(CONNECTION_SERVICE_PATTERN).optional(),

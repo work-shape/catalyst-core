@@ -92,6 +92,9 @@ export type DocumentSourceChanges =
   | { kind: "not_offered" };
 
 export interface DocumentSourceFetchInput {
+  /** Current source boundary, checked again against live parents before downloading.
+   * Required by outside sources; optional for legacy in-process fixture adapters. */
+  boundary?: DocumentSourceBoundary;
   itemId: string;
   /** The version the listing named. A source that holds another answers `not_found`. */
   version: string;

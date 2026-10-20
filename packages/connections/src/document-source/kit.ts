@@ -150,7 +150,7 @@ export async function verifyDocumentSource(
     let bytes = 0;
     try {
       for await (const chunk of source.fetch(
-        { itemId: item.id, version: item.version, maxBytes },
+        { itemId: item.id, version: item.version, maxBytes, boundary },
         as
       )) {
         bytes += chunk.byteLength;

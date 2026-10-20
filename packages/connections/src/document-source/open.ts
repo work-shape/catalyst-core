@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   DocumentSourceError,
   type ConnectorContext,
@@ -37,12 +38,44 @@ export function createDocumentSourceOpener(
       current.revision !== stored.revision
     )
       throw new DocumentSourceError("unauthorized", "The document source changed while opening it");
-    const source = stored.type.documentSource;
     const connectionAssetId = stored.assetId;
+    const source = stored.type.documentSource;
+    const sourceLimits = {
+      ...stored.config.limits,
+      concurrency: Math.min(
+        stored.config.limits?.concurrency ?? limits.maxParallelCalls,
+        limits.maxParallelCalls
+      )
+    };
+    async function acquire() {
+      const leaseId = randomUUID();
+      const admission = await deps.stores.transaction((stores) =>
+        stores.connections.admitSourceCall({
+          clientInstanceId: deps.clientInstanceId,
+          connectionAssetId,
+          leaseId,
+          leaseMs: limits.callTimeoutMs,
+          limits: sourceLimits
+        })
+      );
+      if (!admission.admitted)
+        throw new DocumentSourceError("rate_limited", "The Connection source limit is full", {
+          retryAfterMs: admission.retryAfterMs
+        });
+      return async () => {
+        await deps.stores.connections.releaseSourceCall({
+          clientInstanceId: deps.clientInstanceId,
+          connectionAssetId,
+          leaseId
+        });
+      };
+    }
     async function request<T>(call: () => Promise<T>): Promise<T> {
-      const { release } = await slots.acquire(connectionAssetId, limits, signal);
+      const { release: releaseLocal } = await slots.acquire(connectionAssetId, limits, signal);
+      let release: (() => Promise<void>) | undefined;
       let abort: (() => void) | undefined;
       try {
+        release = await acquire();
         const aborted = new Promise<never>((_resolve, reject) => {
           abort = () => reject(new DocumentSourceError("unavailable", "The source call timed out"));
           signal.addEventListener("abort", abort, { once: true });
@@ -51,15 +84,17 @@ export function createDocumentSourceOpener(
         return await Promise.race([call(), aborted]);
       } finally {
         if (abort) signal.removeEventListener("abort", abort);
-        release();
+        releaseLocal();
+        await release?.();
       }
     }
     const capability: DocumentSourceCapability = {
       list: (input, ctx) => request(() => source.list(input, ctx)),
       changes: (input, ctx) => request(() => source.changes(input, ctx)),
       async *fetch(input, ctx) {
-        const { release } = await slots.acquire(connectionAssetId, limits, signal);
-        const iterator = source.fetch(input, ctx)[Symbol.asyncIterator]();
+        const { release: releaseLocal } = await slots.acquire(connectionAssetId, limits, signal);
+        let release: (() => Promise<void>) | undefined;
+        let iterator: AsyncIterator<Uint8Array> | undefined;
         let abort: (() => void) | undefined;
         const aborted = new Promise<never>((_resolve, reject) => {
           abort = () =>
@@ -67,6 +102,8 @@ export function createDocumentSourceOpener(
           signal.addEventListener("abort", abort, { once: true });
         });
         try {
+          release = await acquire();
+          iterator = source.fetch(input, ctx)[Symbol.asyncIterator]();
           for (;;) {
             signal.throwIfAborted();
             const next = await Promise.race([iterator.next(), aborted]);
@@ -74,11 +111,15 @@ export function createDocumentSourceOpener(
             yield next.value;
           }
         } finally {
-          if (abort) signal.removeEventListener("abort", abort);
-          // An adapter that ignores abort must not hold the caller's slot while closing.
-          const closing = iterator.return?.();
-          if (closing) await Promise.race([closing, aborted]).catch(() => undefined);
-          release();
+          try {
+            // Keep the deadline listener until closing ends: an adapter may ignore abort.
+            const closing = iterator?.return?.();
+            if (closing) await Promise.race([closing, aborted]).catch(() => undefined);
+          } finally {
+            if (abort) signal.removeEventListener("abort", abort);
+            releaseLocal();
+            await release?.();
+          }
         }
       }
     };

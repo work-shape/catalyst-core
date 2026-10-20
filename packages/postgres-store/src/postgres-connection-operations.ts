@@ -4,6 +4,7 @@ import type {
   ConnectionsStore,
   StoredSecretRecord
 } from "@work-shape/catalyst-core";
+import { createPostgresSourceCallOperations } from "./postgres-source-call-operations";
 import { createPostgresConnectionBindingOperations } from "./postgres-connection-binding-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { connectionState, secrets } from "./schema";
@@ -43,6 +44,7 @@ function mapState(row: StateRow): ConnectionStateRecord {
 export function createPostgresConnectionsStore(db: PostgresConnection): ConnectionsStore {
   return {
     ...createPostgresConnectionBindingOperations(db),
+    ...createPostgresSourceCallOperations(db),
     async lockReleaseSeed({ clientInstanceId }) {
       // Held until the transaction ends. Outside of one it would be released at once, which
       // the caller's use inside `transaction` rules out.

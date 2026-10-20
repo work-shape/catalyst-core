@@ -120,6 +120,7 @@ function toJsonObject(config: ConnectionConfig): JsonObject {
     connectorType: config.connectorType,
     ownerPrincipalId: config.ownerPrincipalId,
     settings: config.settings,
+    ...(config.limits ? { limits: { ...config.limits } } : {}),
     authScheme: config.authScheme,
     credentialMode: config.credentialMode,
     operations: config.operations.map((operation) => ({
@@ -180,6 +181,7 @@ function definitionOf(
     connectorType: entry.connectorType,
     ownerPrincipalId: RELEASE_OWNER_PRINCIPAL_ID,
     settings: entry.settings,
+    ...(entry.limits ? { limits: entry.limits } : {}),
     authScheme: entry.authScheme,
     credentialMode: "shared",
     ...(secretHandle === undefined ? {} : { secretHandle }),

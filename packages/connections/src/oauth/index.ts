@@ -9,3 +9,4 @@ export { registeredClientOf, type RegisteredOAuthClient } from "./client-registr
 export * from "./sign-in-ending";
 export * from "./refresh";
 export * from "./reconnect-notice";
+export * from "./client-credentials";

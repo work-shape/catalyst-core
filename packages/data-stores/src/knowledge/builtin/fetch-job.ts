@@ -138,6 +138,7 @@ async function fetchItem(
   payload: KnowledgeFetchJobPayload,
   item: SourceItem,
   connection: string,
+  folderIds: readonly string[],
   signal: AbortSignal
 ) {
   const format = sourceFormat(item);
@@ -161,7 +162,12 @@ async function fetchItem(
       async ({ capability, context }) => {
         async function* bytes() {
           for await (const chunk of capability.fetch(
-            { itemId: item.item_id, version: item.version, maxBytes: KNOWLEDGE_FILE_MAX_BYTES },
+            {
+              itemId: item.item_id,
+              version: item.version,
+              maxBytes: KNOWLEDGE_FILE_MAX_BYTES,
+              boundary: { folderIds }
+            },
             context
           )) {
             context.signal.throwIfAborted();
@@ -322,6 +328,7 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
               payload,
               item,
               found.source.connection,
+              found.source.folders,
               signal
             );
           } catch (error) {

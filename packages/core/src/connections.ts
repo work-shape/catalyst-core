@@ -208,6 +208,8 @@ export interface ConnectionConfig {
   credentialMode: "shared";
   secretHandle?: ConnectionSecretHandle;
   operations: ConnectionOperationConfig[];
+  /** Shared limits of list, changes and fetch across every sync of this instance. */
+  limits?: OperationLimits;
   enabled: boolean;
   origin: ConnectionOrigin;
 }
@@ -476,6 +478,21 @@ export interface StoredSecretRecord {
  * returns a value.
  */
 export interface ConnectionsStore extends ConnectionBindingsStore {
+  /** Atomically admits a source call across all processes. Called inside a transaction;
+   * the admission lock is held until commit. Expired leases recover after worker death. */
+  admitSourceCall(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+    leaseId: string;
+    leaseMs: number;
+    limits: OperationLimits;
+  }): Promise<{ admitted: true } | { admitted: false; retryAfterMs: number }>;
+  /** Releases concurrency; the start still counts toward the configured rate window. */
+  releaseSourceCall(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+    leaseId: string;
+  }): Promise<void>;
   /**
    * Takes the lock of the release seed for this instance and holds it until the surrounding
    * transaction ends. A second process that seeds waits here and then reads what the first

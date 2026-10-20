@@ -15,3 +15,4 @@ export * from "./operation-source";
 export * from "./release-seed";
 export * from "./schema-check";
 export * from "./secret-store";
+export { retryAfterSeconds } from "./retry-after";
