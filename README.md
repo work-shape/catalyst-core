@@ -92,6 +92,13 @@ build workspace, where only the client and what it depends on is installed, and 
 needs Docker and is its own job in the hosted check. Run it after changing a package manifest, a
 `tsconfig.json` or `docker/vivd-client.Dockerfile`.
 
+A scale test proves a property at a customer's volume, such as a loop over 1,000 items or 600 child
+runs, and takes minutes. It is a file `tests/**/*.scale.test.ts`, which `pnpm test`, `pnpm check`,
+`pnpm check:local` and the lander's gate leave out. The nightly hosted check, a dispatched one and a
+release push run them with `CATALYST_SCALE_TESTS=1`; so does
+`CATALYST_SCALE_TESTS=1 pnpm exec vitest run tests/workflow-run-blocks.scale.test.ts` locally. Without
+the variable, Vitest finds no test in a scale file even when it is named.
+
 `pnpm test:e2e` uses a deterministic fixture config so it does not require an OpenAI key.
 It runs the standalone chat Playwright suite through `scripts/run-chat-e2e.mjs`, which builds
 the required packages, starts an isolated Postgres/API/Vite stack, runs Playwright, and tears the

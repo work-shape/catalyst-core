@@ -7,6 +7,8 @@ import { publishedDefinitions, type WorkflowFixture } from "./support/workflow-i
 import { clientInstanceId } from "./support/access-instance";
 import { withTestSql } from "./support/test-sql";
 
+// The scale test of child-run budgets. It runs only with CATALYST_SCALE_TESTS=1 (vitest.config.ts).
+
 let open: WorkflowFixture | undefined;
 afterEach(async () => {
   await open?.instance.close();

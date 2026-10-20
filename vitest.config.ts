@@ -2,7 +2,7 @@ import { sourceAliases } from "@work-shape/catalyst-quality-config/source-aliase
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import DurationSequencer from "./scripts/vitest-duration-sequencer";
 import {
   connectionsForWorkers,
@@ -56,6 +56,13 @@ export default defineConfig({
     sequence: { hooks: "stack", sequencer: DurationSequencer },
     hookTimeout: 60000, // check-limit
     testTimeout: 30000, // check-limit
-    include: ["tests/**/*.test.ts"]
+    include: ["tests/**/*.test.ts"],
+    // A scale test proves a property at the volume a customer reaches and takes minutes. It runs
+    // in the nightly hosted check and before a release, which set CATALYST_SCALE_TESTS=1, and not
+    // in the lander's gate or a PR's checks.
+    exclude:
+      process.env.CATALYST_SCALE_TESTS === "1"
+        ? configDefaults.exclude
+        : [...configDefaults.exclude, "tests/**/*.scale.test.ts"]
   }
 });
