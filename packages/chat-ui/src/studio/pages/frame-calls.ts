@@ -21,7 +21,7 @@ export interface FrameAddress {
 }
 
 /** What names the frame to the instance, read from its address. */
-export interface FrameSessionProof {
+interface FrameSessionProof {
   pageSessionId: string;
   fileSetId: string;
   token: string;

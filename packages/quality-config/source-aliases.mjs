@@ -31,6 +31,13 @@ export function sourceAliases(root, types = false) {
                 conditions.import);
           if (typeof target !== "string" || target.startsWith("./dist/")) continue;
           const name = `${manifest.name}${subpath === "." ? "" : subpath.slice(1)}`;
+          if (subpath.includes("*")) {
+            // A pattern such as `"./*": { "development": "./src/seams/*.ts" }`: one alias for
+            // each file it matches, as Node resolves it.
+            for (const [match, file] of patternFiles(resolve(directory, entry.name), target))
+              aliases[name.replace("*", match)] = file;
+            continue;
+          }
           aliases[name] = resolve(directory, entry.name, target);
         }
       }
@@ -42,6 +49,23 @@ export function sourceAliases(root, types = false) {
       ([left], [right]) => right.length - left.length || left.localeCompare(right)
     )
   );
+}
+
+/**
+ * The files an export pattern's target matches in one folder, with what its `*` stands for.
+ * @param {string} packageDir
+ * @param {string} target such as `./src/seams/*.ts`
+ * @returns {[string, string][]}
+ */
+function patternFiles(packageDir, target) {
+  const star = target.indexOf("*");
+  const folder = resolve(packageDir, target.slice(0, target.lastIndexOf("/", star) + 1));
+  const prefix = target.slice(target.lastIndexOf("/", star) + 1, star);
+  const suffix = target.slice(star + 1);
+  if (suffix.includes("/") || !existsSync(folder)) return [];
+  return readdirSync(folder)
+    .filter((file) => file.startsWith(prefix) && file.endsWith(suffix))
+    .map((file) => [file.slice(prefix.length, file.length - suffix.length), resolve(folder, file)]);
 }
 
 /**

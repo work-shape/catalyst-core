@@ -96,9 +96,30 @@ it("generates TypeScript paths, detects stale entries and preserves the test-sup
 
 it("keeps the repository cache in sync with its package exports", async () => {
   expect(await syncSourcePaths(process.cwd())).toBe(true);
-  expect(sourceAliases(process.cwd())["@work-shape/catalyst-chat-ui/tool-call"]).toBe(
-    fileURLToPath(chatUiSources.toolCall)
+  const seam = sourceAliases(process.cwd())["@work-shape/catalyst-chat-ui/tool-call"];
+  expect(seam).toBe(resolve("packages/chat-ui/src/seams/tool-call.ts"));
+  expect(readFileSync(seam ?? "", "utf8")).toContain(
+    `"../${fileURLToPath(chatUiSources.toolCall)
+      .split("/src/")[1]
+      ?.replace(/\.tsx$/u, "")}"`
   );
+});
+
+it("gives an export pattern one alias per file it matches", () => {
+  const root = fixture({
+    "packages/example/package.json": {
+      name: "@work-shape/catalyst-example",
+      exports: { ".": "./src/index.ts", "./*": { development: "./src/seams/*.ts" } }
+    },
+    "packages/example/src/seams/one.ts": "",
+    "packages/example/src/seams/two.ts": "",
+    "packages/example/src/seams/notes.md": ""
+  });
+  expect(sourceAliases(root)).toEqual({
+    "@work-shape/catalyst-example": join(root, "packages/example/src/index.ts"),
+    "@work-shape/catalyst-example/one": join(root, "packages/example/src/seams/one.ts"),
+    "@work-shape/catalyst-example/two": join(root, "packages/example/src/seams/two.ts")
+  });
 });
 
 it("omits development-only subpaths without changing the published export surface", () => {

@@ -37,7 +37,7 @@ export interface PageAddress {
 }
 
 /** An address with the moment, on this device's clock, until which it serves. */
-export interface HeldPageAddress<Address extends PageAddress> {
+interface HeldPageAddress<Address extends PageAddress> {
   address: Address;
   servesUntil: number;
 }

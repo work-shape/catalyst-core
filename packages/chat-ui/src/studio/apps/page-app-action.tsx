@@ -5,8 +5,7 @@ import { SaveAsAppAction } from "./save-as-app-dialog";
 import { UpdateAppAction, UpdateAppDialog } from "./update-app-dialog";
 
 /** What the header of a Page offers about Apps. */
-export type PageAppChoice =
-  { kind: "none" } | { kind: "save" } | { kind: "update"; app: AppFromPage };
+type PageAppChoice = { kind: "none" } | { kind: "save" } | { kind: "update"; app: AppFromPage };
 
 /**
  * Which of the two the header of a Page offers. A Page whose App the reader may write offers

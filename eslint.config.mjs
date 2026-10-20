@@ -2,13 +2,13 @@ import config from "@work-shape/catalyst-quality-config";
 
 // Only the test seam may depend on chat-ui's folder layout.
 const privateChatUi = String.raw`(?:^|/)packages/chat-ui/src(?:/|$)|^@work-shape/catalyst-chat-ui/src(?:/|$)`;
-const message = "Use a public chat-ui subpath or tests/support/chat-ui.ts.";
+const message = "Use a public chat-ui subpath or tests/support/chat-ui/.";
 
 export default [
   ...config,
   {
     files: ["tests/**/*.{ts,tsx,mts,cts,js,mjs,cjs}"],
-    ignores: ["tests/support/chat-ui.ts"],
+    ignores: ["tests/support/chat-ui/**"],
     rules: {
       "no-restricted-imports": ["error", { patterns: [{ regex: privateChatUi, message }] }],
       // no-restricted-imports covers static imports and re-exports; cover runtime/type loads too.
@@ -27,7 +27,7 @@ export default [
   },
   {
     // The sole private chat-ui test seam is allowed to cross this package boundary.
-    files: ["tests/support/chat-ui.ts"],
+    files: ["tests/support/chat-ui/**"],
     rules: { "import-x/no-relative-packages": "off" }
   },
   { rules: { "catalyst/retired-terms": "error" } },

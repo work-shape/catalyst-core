@@ -22,7 +22,7 @@ export interface RailApp {
 }
 
 /** When this person last opened each App in this browser, by the App's id, in milliseconds. */
-export type AppOpens = Readonly<Record<string, number>>;
+type AppOpens = Readonly<Record<string, number>>;
 
 /**
  * The Apps the rail may list, in its order: the published ones among `rows`, the one this

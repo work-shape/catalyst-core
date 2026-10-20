@@ -39,7 +39,7 @@ import { buildErrorCountLabel, buildErrorPlace } from "./page-save";
 import { PreviewPane, type PreviewState } from "./preview-pane";
 
 /** The two views of a Page: what it looks like, and the files it is made of. */
-export type PageView = "preview" | "files";
+type PageView = "preview" | "files";
 
 /**
  * How often the surface asks whether its Page is still there for the viewer. The address of a

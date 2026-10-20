@@ -17,9 +17,9 @@ const fixtures = [
   ['import { createTranslationContext } from "@work-shape/catalyst-chat-ui";', undefined],
   ['import { AccessPage } from "@work-shape/catalyst-chat-ui/access";', undefined],
   [
-    'export { ConversationPalette } from "../../packages/chat-ui/src/chat/workspace/conversation-palette";',
+    'export { ConversationPalette } from "../../../packages/chat-ui/src/chat/workspace/conversation-palette";',
     undefined,
-    "tests/support/chat-ui.ts"
+    "tests/support/chat-ui/chat-workspace.ts"
   ],
   [`import "${path}";`, "no-restricted-imports"]
 ] as const;
@@ -41,7 +41,7 @@ import { ESLint } from "./packages/quality-config/node_modules/eslint/lib/api.js
 const directory = mkdtempSync("tests/support/.chat-ui-imports-");
 try {
   const project = join(directory, "tsconfig.json");
-  writeFileSync(project, JSON.stringify({ extends: "../../../tsconfig.lint.json", include: ["*.ts", "../chat-ui.ts"] }));
+  writeFileSync(project, JSON.stringify({ extends: "../../../tsconfig.lint.json", include: ["*.ts", "../chat-ui/*.ts"] }));
   const fixtures = JSON.parse(readFileSync(0, "utf8")).map(([source, rule, file], index) => {
     const path = file ?? join(directory, index + ".ts");
     if (!file) writeFileSync(path, source);
@@ -79,7 +79,7 @@ describe("chat-ui test import boundary", () => {
       } else {
         expect(result).not.toContain('"ruleId":"no-restricted-imports"');
         expect(result).not.toContain('"ruleId":"no-restricted-syntax"');
-        if (file === "tests/support/chat-ui.ts") {
+        if (file === "tests/support/chat-ui/chat-workspace.ts") {
           expect(result).not.toContain('"ruleId":"import-x/no-relative-packages"');
         }
       }
