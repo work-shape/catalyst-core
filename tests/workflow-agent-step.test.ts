@@ -53,6 +53,8 @@ type Mode =
   | "approval"
   | "test_confirm";
 interface FixtureOptions {
+  /** Exercises EW-TEXT through the input of a Child Agent Run. */
+  composedInput?: boolean;
   /** The Workflow's account may use the connection; a test of the bound withholds it. */
   principalUses?: boolean;
   /** The Workflow runs as its own account: its definition names no `runAs`. */
@@ -250,7 +252,7 @@ async function fixture(
     id: "agent-check",
     name: "Monthly check",
     runAs: "workflow-runner",
-    inputs: { type: "object" },
+    inputs: { type: "object", properties: { text: { type: "string" } } },
     outputs: outputSchema,
     tools: [toolName],
     steps: [
@@ -260,9 +262,14 @@ async function fixture(
         name: "Analyse",
         type: "agent",
         instructions: "Return the validated synthetic answer.",
-        inputSchema: { type: "object" },
+        inputSchema: {
+          type: "object",
+          properties: { body: { type: "string", format: "markdown" } }
+        },
         outputSchema,
-        input: {}
+        input: options.composedInput
+          ? { body: { text: ["Name: ", { ref: { step: "start", path: "input.text" } }] } }
+          : {}
       },
       {
         id: "result",
@@ -301,15 +308,16 @@ async function fixture(
       grantedBy: asUserId(owner.json<{ id: string }>().id)
     });
   }
+  const runInput = options.composedInput ? { text: "[private](https://example.test)" } : {};
   const started = draft
     ? await app.call(
         "workflows.test",
-        { params: { workflow: manifest.id }, payload: { input: {} } },
+        { params: { workflow: manifest.id }, payload: { input: runInput } },
         tester
       )
     : await app.call("workflows.start", {
         params: { workflow: manifest.id },
-        payload: { input: {} }
+        payload: { input: runInput }
       });
   expect(started.statusCode, started.body).toBe(200);
   const runId = started.json<{ id: string }>().id;
@@ -449,6 +457,14 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
       });
       expect(response.statusCode, response.body).toBe(404);
     }
+  });
+
+  it("joins and escapes referenced Markdown before starting its Child Agent Run", async () => {
+    const f = await fixture("valid", false, "user-1", { composedInput: true });
+    const step = await f.ended("done");
+    expect(JSON.parse(required(step.inputPreview).text)).toEqual({
+      body: "Name: \\[private\\]\\(https\\:\\/\\/example\\.test\\)"
+    });
   });
 
   it("answers a reader without run data with status, duration and usage only", async () => {
