@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { join } from "node:path";
 import postgres from "postgres";
 import ts from "typescript";
 import {
@@ -12,6 +12,7 @@ import {
   packageDirectory,
   qualityScopes
 } from "./affected-selection.mjs";
+import { testImportGraph } from "./affected-graph.mjs";
 import {
   connectionsForWorkers,
   defaultTestWorkers,
@@ -90,35 +91,13 @@ const scopes = qualityScopes(packages, selected);
 const config = ts.readConfigFile("tsconfig.tests.json", ts.sys.readFile);
 if (config.error) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
-const dependencies = new Map();
-const visit = (file) => {
-  if (file.endsWith("/") || dependencies.has(file) || !existsSync(file)) return;
-  const source = readFileSync(file, "utf8");
-  const imports = ts.preProcessFile(source, true, true).importedFiles;
-  const edges = imports.flatMap(({ fileName }) => {
-    const found = ts.resolveModuleName(
-      fileName,
-      resolve(file),
-      parsed.options,
-      ts.sys
-    ).resolvedModule;
-    if (!found) return [];
-    const path = relative(root, found.resolvedFileName).replaceAll("\\", "/");
-    return path.startsWith("../") || path.includes("node_modules/") ? [] : [path];
-  });
-  // Some contract tests read scripts/assets with fs or spawn a CLI instead of importing it.
-  // Only test sources add these edges; product text and generated docs are not imports.
-  if (file.startsWith("tests/")) {
-    for (const match of source.matchAll(/\b(?:packages|clients)\/[A-Za-z0-9._-]+/gu))
-      if (packages.some((pkg) => pkg.dir === match[0])) edges.push(`${match[0]}/`);
-    // A baseline edit still affects contracts that read it, without widening package checks.
-    if (source.includes("quality-baseline.json")) edges.push("quality-baseline.json");
-  }
-  dependencies.set(file, edges);
-  for (const edge of edges) visit(edge);
-};
 const tests = files.filter((file) => /^tests\/.*\.test\.ts$/u.test(file));
-for (const file of tests) visit(file);
+const dependencies = testImportGraph({
+  root,
+  tests,
+  packageDirs: packages.map((pkg) => pkg.dir),
+  options: parsed.options
+});
 const globalChange = changed.some((file) => isGlobalChange(file, packages));
 const testsToRun = globalChange ? tests : affectedTests(tests, dependencies, scopes, changed);
 console.log(

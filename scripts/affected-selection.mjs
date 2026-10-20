@@ -1,4 +1,5 @@
 import { dirname } from "node:path";
+import { BARREL_NODE } from "./affected-graph.mjs";
 
 /** Shared tooling and its out-of-package inputs affect every quality scope. */
 export function isGlobalChange(file, packages) {
@@ -38,14 +39,15 @@ export function affectedPackages(graph, packages, changed) {
  * test only through a whole-package edge (`packages/<x>/`, a test that reads a package with fs
  * or runs its CLI). A changed file no test imports, such as SQL, a template or a worker started
  * by its path, stands for its own package: every test that reaches a file of that package.
+ * A barrel's own node (`<file>#barrel`, see affected-graph.mjs) stands for the barrel's file.
  */
 export function affectedTests(tests, dependencies, scopes, changed) {
   const changedSet = new Set(changed);
   const wholePackages = changed
-    .filter((file) => !dependencies.has(file))
+    .filter((file) => !dependencies.has(file) && !dependencies.has(`${file}${BARREL_NODE}`))
     .flatMap((file) => scopes.filter((scope) => file.startsWith(`${scope}/`)));
   const selects = (file) =>
-    changedSet.has(file) ||
+    changedSet.has(file.endsWith(BARREL_NODE) ? file.slice(0, -BARREL_NODE.length) : file) ||
     (file.endsWith("/") && scopes.some((scope) => file === `${scope}/`)) ||
     wholePackages.some((scope) => file.startsWith(`${scope}/`));
   const reaches = (file, seen) => {

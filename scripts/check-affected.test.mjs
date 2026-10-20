@@ -11,6 +11,8 @@ import {
   isGlobalChange,
   qualityScopes
 } from "./affected-selection.mjs";
+import ts from "typescript";
+import { BARREL_NODE, testImportGraph } from "./affected-graph.mjs";
 
 const packages = [
   { name: "a", dir: "packages/a" },
@@ -91,6 +93,58 @@ test("tests are selected by the file graph, not by widened packages", () => {
     "tests/d.test.ts",
     "tests/f.test.ts"
   ]);
+});
+
+test("the graph follows named imports through barrels to the defining files", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "catalyst-affected-graph-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const write = (file, content) => {
+    mkdirSync(dirname(join(root, file)), { recursive: true });
+    writeFileSync(join(root, file), content);
+  };
+  write("packages/b/src/index.ts", 'export * from "./inner";\nexport { y } from "./y";\n');
+  write("packages/b/src/inner.ts", 'export * from "./x";\nexport * from "./unused";\n');
+  write("packages/b/src/x.ts", 'import { y } from "./y";\nexport const x = y;\n');
+  write("packages/b/src/y.ts", "export const y = 1;\nexport type Y = number;\n");
+  write("packages/b/src/unused.ts", "export const unused = 1;\n");
+  write("packages/b/src/types.ts", "export interface T { a: number }\n");
+  write("packages/b/src/lazy.ts", "export const lazy = 1;\n");
+  write("packages/b/src/mixed.ts", 'import { y } from "./y";\nexport const m = y;\n');
+  write(
+    "tests/a.test.ts",
+    [
+      'import { x } from "../packages/b/src/index";',
+      'import type { T } from "../packages/b/src/types";',
+      'import { type Y } from "../packages/b/src/y";',
+      'import { m } from "../packages/b/src/mixed";',
+      'void import("../packages/b/src/lazy");',
+      "void x, m;"
+    ].join("\n")
+  );
+  const graph = testImportGraph({
+    root,
+    tests: ["tests/a.test.ts"],
+    // The fixture imports by relative path; no whole-package text edges here.
+    packageDirs: [],
+    options: { module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler }
+  });
+  assert.deepEqual(graph.get("tests/a.test.ts")?.toSorted(), [
+    `packages/b/src/index.ts${BARREL_NODE}`,
+    `packages/b/src/inner.ts${BARREL_NODE}`,
+    "packages/b/src/lazy.ts",
+    "packages/b/src/mixed.ts",
+    "packages/b/src/x.ts"
+  ]);
+  assert.deepEqual(graph.get("packages/b/src/x.ts"), ["packages/b/src/y.ts"]);
+  // Known to the graph, so not taken for files outside it, but no edge reaches them.
+  assert.ok(graph.has("packages/b/src/unused.ts") && graph.has("packages/b/src/types.ts"));
+  const tests = ["tests/a.test.ts"];
+  const scopes = ["packages/b"];
+  // The barrel's own text and the defining file's import select the test; an unused sibling does not.
+  for (const file of ["packages/b/src/index.ts", "packages/b/src/inner.ts", "packages/b/src/y.ts"])
+    assert.deepEqual(affectedTests(tests, graph, scopes, [file]), tests, file);
+  for (const file of ["packages/b/src/unused.ts", "packages/b/src/types.ts"])
+    assert.deepEqual(affectedTests(tests, graph, scopes, [file]), [], file);
 });
 
 test("shared lint inputs select all packages, including unrelated ones", () => {
