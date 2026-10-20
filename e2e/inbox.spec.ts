@@ -11,7 +11,7 @@ import {
 import { publishQuestionsLeadWithTheSentence } from "./publish-narrative-fixtures";
 import { shareAsksForWhom } from "./share-1-fixtures";
 import { allowOnInstance, approveMemberPublish } from "./publish-approval-fixtures";
-import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Response } from "@playwright/test";
 import { z } from "zod";
 import { expect, test } from "./test";
