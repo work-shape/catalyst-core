@@ -39,8 +39,8 @@ describe("a conversation that is gone", () => {
   });
 
   it.each([
-    ["en", "This conversation no longer exists.", "New chat"],
-    ["de", "Diese Unterhaltung gibt es nicht mehr.", "Neuer Chat"]
+    ["en", "There is no conversation at this address.", "New chat"],
+    ["de", "Unter dieser Adresse gibt es keine Unterhaltung.", "Neuer Chat"]
   ] as const)(
     "says so in %s, as the page's one title, with a new chat as the step",
     (locale, sentence, action) => {

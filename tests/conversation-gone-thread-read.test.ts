@@ -4,7 +4,7 @@ import { createTestConfig, seedConversationMessage } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
 
 // A conversation's address that leads nowhere: deleted, expired, in a workspace the reader does
-// not reach, or never made. The interface shows "This conversation no longer exists" for a
+// not reach, or never made. The interface shows "There is no conversation at this address" for a
 // refused thread read, so every one of them must be refused, and refused alike: an answer that
 // told them apart would say that a closed conversation exists.
 

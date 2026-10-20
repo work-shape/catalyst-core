@@ -23,7 +23,7 @@ const other = {
   email: "e2e-conversation-gone-other@example.test",
   password: "e2e-conversation-gone-other-password"
 };
-const gone = "This conversation no longer exists.";
+const gone = "There is no conversation at this address.";
 
 const conversationSchema = z.object({ id: z.string(), collaborationWorkspaceId: z.string() });
 
@@ -132,7 +132,7 @@ test("a conversation that is gone says so, however it went, and leads to a new c
   await page.goto(cases.deleted);
   await shootEverywhere(page, "conversation-gone", async () => {
     await expect(goneState(page).getByRole("heading", { level: 1 })).toHaveText(
-      /^(This conversation no longer exists\.|Diese Unterhaltung gibt es nicht mehr\.)$/u
+      /^(There is no conversation at this address\.|Unter dieser Adresse gibt es keine Unterhaltung\.)$/u
     );
     await expect(goneState(page).getByRole("button")).toBeInViewport({ ratio: 1 });
   });
