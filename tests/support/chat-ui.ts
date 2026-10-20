@@ -191,6 +191,10 @@ export {
   staleThreadReread
 } from "../../packages/chat-ui/src/chat/conversation/conversation-controller-state";
 export {
+  ConversationGone,
+  isConversationGone
+} from "../../packages/chat-ui/src/chat/conversation/conversation-gone";
+export {
   draftAttachmentPolling,
   uploadErrorMessage,
   uploadFileWithRetry,

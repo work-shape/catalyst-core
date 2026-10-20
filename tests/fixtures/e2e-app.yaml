@@ -183,6 +183,24 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The two people of the conversation-gone spec: the reader opens addresses of conversations
+      # that are gone, one of them the other's. No other spec uses them.
+      - email: e2e-conversation-gone@example.test
+        displayLabel: E2E Zz Conversation Gone
+        passwordEnvName: E2E_CONVERSATION_GONE_PASSWORD
+        developmentPassword: e2e-conversation-gone-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
+      - email: e2e-conversation-gone-other@example.test
+        displayLabel: E2E Zz Conversation Gone Other
+        passwordEnvName: E2E_CONVERSATION_GONE_OTHER_PASSWORD
+        developmentPassword: e2e-conversation-gone-other-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
       # The three people of the Apps spec. No other spec uses them: the admin builds and
       # publishes, the member uses what is published, and the builder is the one the spec shows
       # the draft without the publish right. No grant gives a right on Apps yet, so the builder

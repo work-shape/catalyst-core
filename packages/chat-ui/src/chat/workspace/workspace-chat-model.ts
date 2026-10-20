@@ -80,6 +80,7 @@ import {
   WORKSPACE_AUTH_SCOPE,
   workspaceScopedConfigFor
 } from "./workspace-chat-state";
+import { isConversationGone } from "../conversation/conversation-gone";
 import type { WorkspaceChatModel, WorkspaceChatModelInput } from "./workspace-chat-types";
 import { createWorkspaceConversationActions } from "./workspace-conversation-actions";
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
@@ -939,6 +940,10 @@ export function useWorkspaceChatModel({
       selectedConversationRetainedUntil: selectedThread?.conversation.retainedUntil,
       selectedConversationSubject: selectedThread?.conversation.subject,
       selectedConversationTitle: selectedThread?.conversation.title,
+      // On its own route a conversation that is gone says so; the dock opens empty instead.
+      conversationGone:
+        !docked && selectedConversationId !== undefined && isConversationGone(threadQuery.error),
+      startNewConversation,
       docked,
       dockKind: docked ? dockKindOfRoute(route) : undefined,
       agentOpens,

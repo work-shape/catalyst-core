@@ -233,6 +233,13 @@ export interface SelectedChatModel {
   selectedConversationSubject: { kind: string; name: string } | undefined;
   /** The open conversation's title, once its thread has loaded. */
   selectedConversationTitle: string | undefined;
+  /**
+   * The chat route names a conversation the instance refused to read: deleted, expired, in a
+   * workspace the person does not reach, or never made. The dock never reports one.
+   */
+  conversationGone: boolean;
+  /** Opens a new conversation of the active workspace, as the rail's New chat does. */
+  startNewConversation(): void;
   /** The conversation stands in the dock of a page, not on its chat route. */
   docked: boolean;
   /**

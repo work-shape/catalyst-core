@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { apiErrorStatus } from "../../shared/workspace-utils";
+import { isConversationGone } from "../conversation/conversation-gone";
 import { addressDockConversation, dockMotion, type WorkspaceAddress } from "./dock-state";
 import {
   isChatWorkspaceRoute,
@@ -183,9 +183,8 @@ export function useUnreadableDockConversation({
   /** Moves the draft of the unreadable conversation to the new conversation. */
   keepDraft: (conversationId: string) => void;
 }) {
-  const status = apiErrorStatus(error);
   const unreadableId =
-    docked && dock.open && (status === 403 || status === 404) ? dock.conversationId : undefined;
+    docked && dock.open && isConversationGone(error) ? dock.conversationId : undefined;
   const { show } = dock;
   useEffect(() => {
     if (unreadableId !== undefined) {

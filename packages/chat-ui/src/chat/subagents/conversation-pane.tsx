@@ -1,4 +1,5 @@
 import { AssistantRuntimePanel } from "../assistant/assistant-runtime-panel";
+import { ConversationGone } from "../conversation/conversation-gone";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
 import { useWorkspaceRouteState } from "../workspace/workspace-ui-state";
 import { SubagentThreadView } from "./subagent-thread-view";
@@ -9,8 +10,12 @@ import { SubagentThreadView } from "./subagent-thread-view";
  */
 export function ConversationPane({ chat }: { chat: SelectedChatModel }) {
   const { route } = useWorkspaceRouteState();
-  return route.kind === "subagent-thread" ? (
-    <SubagentThreadView key={route.threadId} route={route} />
+  if (route.kind === "subagent-thread") {
+    return <SubagentThreadView key={route.threadId} route={route} />;
+  }
+  // A conversation that is gone shows no empty thread and no composer, only that it is gone.
+  return chat.conversationGone ? (
+    <ConversationGone key={chat.selectedConversationId} onNewChat={chat.startNewConversation} />
   ) : (
     <AssistantRuntimePanel chat={chat} />
   );
