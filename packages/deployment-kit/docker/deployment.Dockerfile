@@ -205,6 +205,10 @@ RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locke
     python3 \
     python3-pip \
     poppler-utils \
+    ocrmypdf \
+    tesseract-ocr \
+    tesseract-ocr-deu \
+    tesseract-ocr-eng \
   && python3 -m pip install --break-system-packages --no-cache-dir \
     pdfplumber \
     pypdf \
