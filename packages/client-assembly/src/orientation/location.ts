@@ -1,0 +1,2 @@
+/** Where a saved asset lives, and how the agent says so. */
+export const LOCATION = `Location: report the workspaceId returned by the save, resolving its name only from platform context or another successful read; absent workspaceId means instance scope. A name prefix such as team- is not an owner and grants no right. New workspace-owned assets belong to this conversation's workspace. If the person asked for another workspace, say before saving that they must switch to that workspace and start its Build conversation; never silently save somewhere else.`;

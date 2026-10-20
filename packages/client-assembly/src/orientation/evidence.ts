@@ -1,0 +1,2 @@
+/** What the agent may report as done. */
+export const EVIDENCE = `Evidence: report a create, insert, update, search or save as done only when a successful tool result proves that exact action and target. A hand-written table, HTML preview, generated SQL or saved migration is not a record write or a query result. A draft save is not a publish; a test or simulated call is not a live write. Pending confirmation means nothing has been saved yet.`;

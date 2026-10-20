@@ -89,7 +89,7 @@ const payloadSchema = z
     u: z.string().min(1),
     s: z.string().min(1),
     e: z.number().int().positive(),
-    m: z.enum(["draft", "published"]).optional()
+    m: z.enum(APP_MODES).optional()
   })
   .strict();
 
