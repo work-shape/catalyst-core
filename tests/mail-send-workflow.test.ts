@@ -16,7 +16,8 @@ import {
   testRun
 } from "./support/mail-workflows";
 import { withTestSql } from "./support/test-sql";
-import { workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
+import { runSchema, workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
+import { stepRunsOf } from "./support/workflow-runs";
 
 // MAIL-1: `mail.send` called by a published Workflow's `operation` step, end to end on the
 // capture transport. Events checks 129, 130, 132, 133, 134 and 140.
@@ -350,7 +351,30 @@ describe("mail.send's provider failures (MAIL-1, check 140)", () => {
     const t = await ready({ mail: { recipientDomains: ["kanzlei.de"], transport } });
     await grantSystem(t);
     await save(t, mailFlow("failing", basic({ value: "a@kanzlei.de" })));
-    return { t, transport, ...(await run(t, "failing")) };
+    const started = runSchema.parse(
+      (
+        await t.expectOk(t.root.id, "workflows.start", {
+          params: { workflow: "failing" },
+          payload: { input: {} }
+        })
+      ).json()
+    );
+    // A step made again waits for its job's backoff, which the passes of `finish` can
+    // outrun on a fast machine; here a waiting step is due at once.
+    const worker = t.worker();
+    for (let pass = 0; pass < 20; pass++) {
+      await withTestSql(
+        (sql) => sql`update platform_jobs set run_after = now()
+          where client_instance_id = ${clientInstanceId}
+            and kind = 'workflow_run.execute_step' and status = 'queued'`
+      );
+      const ended = await t.finish(started.id, worker, 5).catch(() => undefined);
+      if (ended) {
+        const step = required((await stepRunsOf(t, started.id)).find((s) => s.stepId === "mail"));
+        return { t, transport, run: ended, step };
+      }
+    }
+    throw new Error("The run did not end");
   }
 
   it("fails the step with mail_rejected and the provider's code in one attempt", async () => {
