@@ -119,7 +119,8 @@ describe("the vocabulary of Connection rights", () => {
         bundle || /^(?:agent|skill|app|data_store|guardrail)\./u.test(action)
       );
       expect(scopes.includes("instance"), action).toBe(
-        !bundle && !/^(?:agent|skill)\./u.test(action) &&
+        !bundle &&
+          !/^(?:agent|skill)\./u.test(action) &&
           action !== "workflow.read_run_data" &&
           action !== "mail_sender.use"
       );
