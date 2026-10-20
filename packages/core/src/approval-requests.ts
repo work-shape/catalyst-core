@@ -14,6 +14,7 @@ import type { JobsStore } from "./jobs";
 import type { OperationRunStore } from "./operation-runs";
 import type { ConfigAssetStore } from "./config-assets";
 import type { LocaleCode } from "./localization";
+import type { FeedbackStore } from "./feedback";
 
 export * from "./approval-request";
 
@@ -27,6 +28,8 @@ export interface ApprovalTransactionStores {
   operationRuns: OperationRunStore;
   /** What a kind reads of the asset a request is about, such as whether it moved. */
   configAssets: Pick<ConfigAssetStore, "getConfigAsset">;
+  /** The comment a `feedback_review` item marks handled, in the same transaction. */
+  feedback?: Pick<FeedbackStore, "getFeedback" | "markFeedbackHandled">;
 }
 
 /**
@@ -60,6 +63,8 @@ export interface ApprovalRequestContext {
   viewer?: ApprovalPreviewViewer;
   /** Given to `preview` alone: when an ended request was decided, where someone decided it. */
   decidedAt?: string;
+  /** Given to `apply` alone: the decision being made, with the decider's comment. */
+  decision?: ApprovalRequestDecision;
 }
 
 /** What a kind says about a request that can no longer apply. */
@@ -83,6 +88,12 @@ export interface ApprovalRequestPendingLimits {
 
 export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject> {
   kind: string;
+  /**
+   * True for a kind its requester never reads as a request of theirs: it is not among their
+   * own requests, and they cannot open or withdraw it by its id. The author of feedback sees
+   * its state under the message, never the reviewer's note.
+   */
+  hiddenFromRequester?: boolean;
   /** The right of who decides a request of this kind and sees it among the requests to decide. */
   requiredPermission: Permission | PlatformAction;
   /**

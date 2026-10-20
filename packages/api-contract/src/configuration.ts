@@ -101,7 +101,9 @@ export const safeConfigSchema = z.object({
     /** Absent in the answer of an API from before the setting; the interface reads that as false. */
     extendOnActivity: z.boolean().optional(),
     auditDays: z.number(),
-    allowUserDelete: z.boolean()
+    allowUserDelete: z.boolean(),
+    /** Absent in the answer of an API from before feedback. */
+    feedbackDays: z.number().optional()
   }),
   usage: z.object({
     safeguards: z.object({
@@ -116,6 +118,8 @@ export const safeConfigSchema = z.object({
   replies: z.object({ allowedLinkHosts: z.array(z.string()) }).default({ allowedLinkHosts: [] }),
   /** Every module of the product with its state on this instance. */
   modules: z.record(z.string(), z.object({ enabled: z.boolean() })).default({}),
+  /** Written feedback on agent messages: whether the comment may carry its exchange. */
+  feedback: z.object({ exchangeSnapshot: z.boolean() }).optional(),
   /** Derived from `modules` for one transition release. */
   features: z.object({
     attachments: z.object({

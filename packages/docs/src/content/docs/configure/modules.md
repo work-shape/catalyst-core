@@ -31,6 +31,7 @@ modules:
 | `dataStores`      | Data Stores: the asset kind `data_store`, one Postgres database per store, and the operations on its rows.                                               | A key under `secretStore.keys` and a platform database role with `CREATEDB` and `CREATEROLE`. See [Data Stores](/configure/release-config/#data-stores).       |
 | `knowledge`       | Reserved for Knowledge Bases. It is registered and adds nothing.                                                                                         | Nothing.                                                                                                                                                       |
 | `personalApiKeys` | Keys a person issues that act as them, and `catalyst login`. See [the CLI](/configure/cli/).                                                             | Nothing. Off, no personal key signs in; stored keys stay.                                                                                                      |
+| `feedback` | Written feedback under an agent's answers, and its review in the Inbox. See [Feedback](#feedback). | Nothing. A reviewer holds `feedback.review`. |
 
 The document processing capability is part of the paid capabilities and not in the open repository. The other modules ship with the open platform.
 
@@ -43,6 +44,16 @@ A Connection comes from release config: [`connections`](/configure/release-confi
 A Connection never holds a credential. Its definition holds `secretHandle`, an opaque reference into the Secret Store, and the handle opens nothing by itself. A secret reaches a Connection in exactly one place, the field `secret` of its release config entry, and only as the name of a secret, never as a value. The settings are typed by the connector type: a key the type does not declare is refused, and the type never declares one for a credential. A header or query value that authenticates is produced from the stored secret when a call is made and is no setting.
 
 As a second net, a definition that carries a credential anywhere else is refused: an address with a user name or a password, a header named like a credential, a setting named like a credential whatever stands under it (a text, a number, a list or an object; only a switch such as `requiresToken: true` is kept), an `Authorization` value. That check reads names and shapes and is not the boundary. `displayName` and `description` are free text and are stored and shown as written, so write no credential into them.
+
+### Feedback
+
+With the module on, every finished answer of an agent carries **Feedback** beside copy (German: **Feedback**). It opens a field for a written comment, with no rating, and a box that sends the person's question and this one answer along so the reviewer can read them. The box is ticked when the field opens. `feedback.exchangeSnapshot: false` in release config removes the box, and no comment then carries the exchange. A person leaves one comment per answer. Under the answer they read whether it was sent or handled, and they change or withdraw it until a reviewer marks it handled. They get no notification.
+
+A comment reaches the Inbox of every holder of `feedback.review` for the agent, as an item that names the agent and its revision, the author, the date, the comment and the exchange where it was sent along. Instance administrators hold the right for the instance. Given for a workspace in **Settings > Instance > Access**, it covers the agents that workspace owns, and nothing else: in the Inbox, the API and the CLI. The Inbox filters its items by agent. A reviewer marks an item handled, with an optional note the author does not read, and opens the agent in Studio from it. Nothing of the comment opens the conversation: a reviewer who is not a member of its workspace cannot read it.
+
+The operations are `feedback.send`, `feedback.update`, `feedback.withdraw` and `feedback.list_own` for the author, and `feedback.list`, `feedback.get`, `feedback.mark_handled` and `feedback.annotate` for a reviewer. `feedback.annotate` stores a summary and a category beside the comment, which the Inbox labels as machine-written. The audit events `feedback.received` and `feedback.handled` carry ids only, never the comment, the exchange or the note.
+
+A comment is kept for `retention.feedbackDays` (365 days by default) after it was sent, also after its conversation is deleted, and then removed with its Inbox item. Deleting a person's account removes the comments they wrote.
 
 A module that a later release adds is off until its entry says otherwise.
 

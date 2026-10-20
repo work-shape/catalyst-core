@@ -159,6 +159,14 @@ describe("the operation catalog", () => {
         "data_stores.used_by  GET /api/v1/data-stores/:store/used-by",
         "data_stores.value  GET /api/v1/data-stores/:store/value",
         "docs.get  GET /api/v1/docs",
+        "feedback.annotate  POST /api/v1/feedback/:feedbackId/annotation",
+        "feedback.get  GET /api/v1/feedback/:feedbackId",
+        "feedback.list  GET /api/v1/feedback",
+        "feedback.list_own  GET /api/v1/conversations/:conversationId/feedback",
+        "feedback.mark_handled  POST /api/v1/feedback/:feedbackId/handled",
+        "feedback.send  POST /api/v1/conversations/:conversationId/feedback",
+        "feedback.update  POST /api/v1/conversations/:conversationId/feedback/:feedbackId",
+        "feedback.withdraw  POST /api/v1/conversations/:conversationId/feedback/:feedbackId/withdraw",
         "guardrails.dry_run  POST /api/v1/guardrails/:name/dry-run",
         "guardrails.list_hits  GET /api/v1/guardrails/:name/hits",
         "guardrails.list_shipped  GET /api/v1/guardrails/shipped",
@@ -336,6 +344,7 @@ describe("the operation catalog", () => {
       "data-stores",
       "dev",
       "docs",
+      "feedback",
       "guardrails",
       "instance",
       "knowledge-bases",
@@ -607,7 +616,9 @@ describe("a running instance", () => {
       "roles.delete",
       "roles.reset",
       "roles.pending.decide",
-      ...names.filter((name) => name.startsWith("scheduled_starts."))
+      ...names.filter((name) => name.startsWith("scheduled_starts.")),
+      // Then feedback on an agent's answers.
+      ...names.filter((name) => name.startsWith("feedback."))
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

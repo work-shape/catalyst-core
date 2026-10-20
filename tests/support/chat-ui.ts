@@ -289,6 +289,10 @@ export {
   orderInboxItems
 } from "../../packages/chat-ui/src/chat/inbox";
 export { inboxListQueryKey } from "../../packages/chat-ui/src/chat/inbox/inbox-api";
+export {
+  filterInboxItems,
+  inboxFilterOptions
+} from "../../packages/chat-ui/src/chat/inbox/inbox-model";
 export { inboxPlaces } from "../../packages/chat-ui/src/chat/inbox/inbox-places";
 export { FrameApprovalWait } from "../../packages/chat-ui/src/studio/pages/frame-approval-wait";
 export { WorkspaceDraftsProvider } from "../../packages/chat-ui/src/chat/workspace/workspace-drafts";

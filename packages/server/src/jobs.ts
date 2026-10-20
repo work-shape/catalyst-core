@@ -1,5 +1,6 @@
 import { createScheduledPromptHandler } from "./conversations/scheduled-start-job";
 import { createNoticeMailJobs } from "./notices/notice-mail";
+import { createFeedbackJobs } from "./feedback/feedback-jobs";
 import {
   asCollaborationWorkspaceId,
   asConversationId,
@@ -329,6 +330,10 @@ export function createChatServerJobs(
   const noticeMail = createNoticeMailJobs(options, now);
   handlers.push(...noticeMail.handlers);
   schedules.push(...noticeMail.schedules);
+
+  const feedbackJobs = createFeedbackJobs(options, now);
+  handlers.push(...feedbackJobs.handlers);
+  schedules.push(...feedbackJobs.schedules);
 
   const connectionJobs = createConnectionDiscoveryJobs(options);
   handlers.push(...connectionJobs.handlers);

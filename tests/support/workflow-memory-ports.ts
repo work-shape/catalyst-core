@@ -207,6 +207,9 @@ export const unusedPlatformStores: PlatformStores = {
   get guardrails() {
     return unsupported();
   },
+  get feedback() {
+    return unsupported();
+  },
   transaction: unsupported,
   readSnapshot: unsupported,
   get close() {

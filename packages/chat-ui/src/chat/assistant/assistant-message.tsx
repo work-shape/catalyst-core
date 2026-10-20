@@ -39,15 +39,24 @@ import {
   rememberRecentlyActiveAssistantRunId
 } from "./recently-active-runs";
 import { isWorkspacePromotedSurfacesData } from "../tools/tool-surfaces";
+import {
+  MessageFeedbackAction,
+  MessageFeedbackPanel,
+  useMessageFeedback,
+  type MessageFeedbackSetup
+} from "../feedback/message-feedback";
 
 const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();
 
 export function ThreadMessage({
   conversationRunning,
-  activeRunId
+  activeRunId,
+  feedback
 }: {
   conversationRunning?: boolean;
   activeRunId?: string;
+  /** Where the module `feedback` is on: the action under each finished answer. */
+  feedback?: MessageFeedbackSetup;
 }) {
   const role = useAuiState((state) => state.message.role);
 
@@ -59,7 +68,13 @@ export function ThreadMessage({
     return <ApprovalDecisionMessage />;
   }
 
-  return <AssistantMessage activeRunId={activeRunId} conversationRunning={conversationRunning} />;
+  return (
+    <AssistantMessage
+      activeRunId={activeRunId}
+      conversationRunning={conversationRunning}
+      feedback={feedback}
+    />
+  );
 }
 
 /**
@@ -89,10 +104,12 @@ function ApprovalDecisionMessage() {
 
 function AssistantMessage({
   activeRunId,
-  conversationRunning
+  conversationRunning,
+  feedback
 }: {
   activeRunId?: string;
   conversationRunning?: boolean;
+  feedback?: MessageFeedbackSetup;
 }) {
   const { t } = useTranslation();
   const messageId = useAuiState((state) => state.message.id);
@@ -131,6 +148,8 @@ function AssistantMessage({
       (state.message.status?.type === "running" || activeRunMessage)
   );
   const finalTextIndex = findFinalAssistantTextPartIndex(messageParts);
+  // Only a finished run's answer takes feedback: it names the run the comment is about.
+  const messageFeedback = useMessageFeedback(feedback, messageRunning ? undefined : completedRunId);
   const toolUIs = useAuiState((state) => state.tools.toolUIs);
   const completedWorkIndices = useMemo(
     () => createCompletedAssistantWorkIndices(messageParts, finalTextIndex),
@@ -238,8 +257,10 @@ function AssistantMessage({
               <CopiedState />
             </IconButton>
           </ActionBarPrimitive.Copy>
+          {messageFeedback ? <MessageFeedbackAction state={messageFeedback} /> : null}
         </div>
       ) : null}
+      {messageFeedback ? <MessageFeedbackPanel state={messageFeedback} /> : null}
     </MessagePrimitive.Root>
   );
 }

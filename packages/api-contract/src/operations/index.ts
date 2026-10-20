@@ -13,6 +13,7 @@ import { dataStoreOperations } from "./data-stores";
 import { conversationFileOperations } from "./conversation-files";
 import { conversationOperations } from "./conversations";
 import { credentialOperations } from "./credentials";
+import { feedbackOperations } from "./feedback";
 import { governanceOperations } from "./governance";
 import { guardrailOperations } from "./guardrails";
 import { instanceOperations } from "./instance";
@@ -56,6 +57,7 @@ export const apiOperations = {
   ...userOperations,
   ...apiAccessOperations,
   ...personalApiKeyOperations,
+  ...feedbackOperations,
   ...accessOperations,
   ...credentialOperations,
   ...platformOperations,

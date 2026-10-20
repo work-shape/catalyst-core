@@ -34,6 +34,7 @@ export * from "./schema/workflowRuns";
 export * from "./schema/dataStores";
 export * from "./schema/guardrails";
 export * from "./schema/knowledgeBases";
+export * from "./schema/feedback";
 import { productUsers, userIdentities } from "./schema/users";
 import { servicePrincipals, apiCredentials, apiConnectCodes } from "./schema/apiAccess";
 import { conversations, messages, modelProviderContinuations } from "./schema/conversations";
@@ -76,6 +77,7 @@ import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 import { dataStores } from "./schema/dataStores";
 import { guardrailHits } from "./schema/guardrails";
 import { knowledgeBaseStates } from "./schema/knowledgeBases";
+import { feedback } from "./schema/feedback";
 
 import { conversationFollowUps } from "./schema/followUps";
 import { scheduledStarts, scheduledStartRuns } from "./schema/scheduledStarts";
@@ -148,6 +150,7 @@ export const schema = {
   workflowStepRuns,
   dataStores,
   knowledgeBaseStates,
-  guardrailHits
+  guardrailHits,
+  feedback
 };
 export * from "./schema/workflowDatasets";

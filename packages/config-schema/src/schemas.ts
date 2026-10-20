@@ -353,6 +353,16 @@ export const modulesConfigSchema = z
   .record(z.string().min(1), z.object({ enabled: z.boolean() }).strict())
   .default({});
 
+/**
+ * Written feedback on agent messages, of the module `feedback`. `exchangeSnapshot: false`
+ * removes the box "Include my question and this answer": no comment then holds a copy of chat
+ * content outside its conversation.
+ */
+export const feedbackConfigSchema = z
+  .object({ exchangeSnapshot: z.boolean().default(true) })
+  .strict()
+  .prefault({});
+
 const perMinuteSchema = z.number().int().positive();
 
 /**
@@ -471,7 +481,14 @@ export const clientInstanceConfigSchema = z.object({
        * once a day. The run and its step runs stay, with status, times and error codes.
        */
       workflowStepDataDays: z.number().int().positive().max(3650).default(30),
-      allowUserDelete: z.boolean().default(true)
+      allowUserDelete: z.boolean().default(true),
+      /**
+       * For how many days a comment of the module `feedback` is kept, from when it was sent,
+       * with its copy of the question and answer. It does not follow `conversationDays`: a
+       * comment is worth reading after its conversation is gone. The job `feedback.prune`
+       * deletes older ones once a day.
+       */
+      feedbackDays: z.number().int().positive().max(3650).default(365)
     })
     .default({
       conversationDays: 30,
@@ -479,7 +496,8 @@ export const clientInstanceConfigSchema = z.object({
       extendOnActivity: true,
       auditDays: 365,
       workflowStepDataDays: 30,
-      allowUserDelete: true
+      allowUserDelete: true,
+      feedbackDays: 365
     }),
   infrastructure: infrastructureConfigSchema,
   /** Where the instance is reached: its public origin. */
@@ -498,6 +516,8 @@ export const clientInstanceConfigSchema = z.object({
   workflows: workflowsConfigSchema,
   administration: administrationConfigSchema,
   modules: modulesConfigSchema,
+  /** Read with the module `feedback` on. */
+  feedback: feedbackConfigSchema,
   rateLimits: rateLimitsConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z

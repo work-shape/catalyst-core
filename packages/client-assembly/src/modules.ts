@@ -18,6 +18,7 @@ import {
 } from "@work-shape/catalyst-tool-execution";
 import type { ClientInstanceCapability } from "./capabilities";
 import { assembleDataStores, dataStoresModule } from "./data-stores";
+import { feedbackModule } from "./feedback";
 import { assembleKnowledge, knowledgeModule } from "./knowledge";
 import type {
   AssembledModules,
@@ -162,7 +163,8 @@ export const platformModules = [
   workflowsModule,
   dataStoresModule,
   knowledgeModule,
-  personalApiKeysModule
+  personalApiKeysModule,
+  feedbackModule
 ];
 
 /**

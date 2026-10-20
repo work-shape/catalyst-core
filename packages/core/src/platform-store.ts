@@ -39,6 +39,7 @@ import type { ModelUsageEventStore } from "./usage";
 import type { UserStore } from "./user";
 import type { ApiAccessStore } from "./api-access";
 import type { PersonalApiKeyStore } from "./personal-api-keys";
+import type { FeedbackStore } from "./feedback";
 import type { StructuredDataStore } from "./structured-data";
 import type { WorkflowRunDatasetsStore } from "./workflows";
 import type { WorkflowRunsStore } from "./workflow-runs";
@@ -107,6 +108,8 @@ export interface PlatformStores {
   dataStores: DataStoreRecordsStore;
   knowledgeBases: KnowledgeBaseStateStore;
   guardrails: GuardrailStore;
+  /** Written comments on agent messages (LU-4). */
+  feedback: FeedbackStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   /**

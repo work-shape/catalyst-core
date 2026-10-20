@@ -20,6 +20,7 @@ export const kindLabelKeys = {
   data_store: "access.kindDataStore",
   guardrail: "access.kindGuardrail",
   mail_sender: "access.kindMailSender",
+  feedback: "access.kindFeedback",
   workspace: "access.kindWorkspace"
 } as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
 
@@ -139,6 +140,13 @@ export const kindWords: Record<GrantKind, KindWords> = {
     noAssets: "access.noMailSenders",
     assetsLoadFailed: "access.mailSendersLoadFailed"
   },
+  // `feedback.review` is granted on a workspace or the instance: the asset words name no
+  // choice the dialog offers.
+  feedback: {
+    ...configAssetWords,
+    scopeAsset: "access.scopeAgent",
+    object: "access.objectAgent"
+  },
   // Builder and Publisher are granted in one workspace only: the asset words name no choice
   // the dialog offers.
   workspace: {
@@ -173,6 +181,7 @@ export const rightSentenceKeys: Partial<Record<GrantableAction, TranslationKey>>
   "knowledge_base.delete": "access.actionDeleteKnowledgeBaseDescription",
   "data_store.execute": "access.actionExecuteDataStoreDescription",
   "guardrail.publish": "access.actionPublishGuardrailDescription",
+  "feedback.review": "access.actionReviewFeedbackDescription",
   builder: "access.actionBuilderDescription",
   publisher: "access.actionPublisherDescription"
 };

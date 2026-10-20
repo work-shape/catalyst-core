@@ -1,3 +1,4 @@
+import { createPostgresFeedbackStore } from "./postgres-feedback-operations";
 import { createPostgresWorkflowNoticesStore } from "./postgres-workflow-notices";
 import { createPostgresNoticeMailStore } from "./postgres-notice-mail";
 import {
@@ -176,6 +177,7 @@ function bindStores(
     dataStores: createPostgresDataStoreRecordsStore(db),
     knowledgeBases: createPostgresKnowledgeBaseStateStore(db),
     guardrails: createPostgresGuardrailsStore(db),
+    feedback: createPostgresFeedbackStore(db),
     transaction: (fn) => transact((_tx, stores) => fn(stores)),
     // Under read committed every statement reads its own moment; repeatable read gives the
     // whole transaction the moment of its first read. Only the outermost transaction sets it.

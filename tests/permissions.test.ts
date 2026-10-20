@@ -64,6 +64,7 @@ describe("permissions", () => {
       "guardrail.publish",
       "guardrail.delete",
       "operations.approve",
+      "feedback.review",
       "users.manage",
       "usage.view",
       "audit.view",
@@ -82,6 +83,7 @@ describe("permissions", () => {
         action
       ) ||
       action === "service_principals.manage" ||
+      action === "feedback.review" ||
       action === "agent.publish" ||
       action === "builder" ||
       action === "publisher";
@@ -179,6 +181,7 @@ describe("permissions", () => {
       "guardrail.publish",
       "guardrail.delete",
       "operations.approve",
+      "feedback.review",
       "users.manage",
       "usage.view",
       "audit.view",

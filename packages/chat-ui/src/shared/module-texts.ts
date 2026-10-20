@@ -18,6 +18,7 @@ export const moduleTexts: Partial<
     name: "modules.personalApiKeys",
     description: "modules.personalApiKeysDescription"
   },
+  feedback: { name: "modules.feedback", description: "modules.feedbackDescription" },
   apps: { name: "modules.apps", description: "modules.appsDescription" },
   connections: { name: "modules.connections", description: "modules.connectionsDescription" },
   workflows: { name: "modules.workflows", description: "modules.workflowsDescription" },

@@ -170,6 +170,7 @@ const OWN_ACTION_WORDS: Record<OwnWordAction, Words> = {
     de: "E-Mails als Absender der Instanz senden"
   },
   "operations.approve": { en: "approve operation calls", de: "Aufrufe von Operationen freigeben" },
+  "feedback.review": { en: "review feedback on agents", de: "Feedback zu Agenten prüfen" },
   "users.manage": { en: "manage users", de: "Benutzer verwalten" },
   "usage.view": { en: "view usage", de: "Nutzung ansehen" },
   "audit.view": { en: "view the audit log", de: "Auditprotokoll ansehen" },

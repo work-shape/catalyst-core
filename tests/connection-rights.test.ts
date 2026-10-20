@@ -116,7 +116,10 @@ describe("the vocabulary of Connection rights", () => {
       // Builder and Publisher are held in one workspace (WS-BUILD-1).
       const bundle = action === "builder" || action === "publisher";
       expect(scopes.includes("workspace"), action).toBe(
-        bundle || /^(?:agent|skill|app|data_store|guardrail)\./u.test(action)
+        bundle ||
+          /^(?:agent|skill|app|data_store|guardrail)\./u.test(action) ||
+          // Feedback on the agents a workspace owns is reviewed there (LU-4).
+          action === "feedback.review"
       );
       expect(scopes.includes("instance"), action).toBe(
         !bundle &&

@@ -1,0 +1,7 @@
+---
+section: Added
+---
+
+- Feedback on agent answers, in the module `feedback`, which is off unless release config turns it on (`modules.feedback.enabled: true`). A finished answer carries **Feedback** beside copy: a written comment, with a box, ticked when the field opens, that sends the question and this one answer along for the reviewer. `feedback.exchangeSnapshot: false` removes the box. The author reads under the answer whether the comment was sent or handled, and changes or withdraws it until it is handled.
+- The right `feedback.review`, for the instance or a workspace, which instance administrators hold for the instance. Its holders get each comment on the agents it covers as an Inbox item of kind `feedback_review`, with the agent and its revision, the author, the date and the exchange where it was sent along. They mark it handled with an optional note, open the agent in Studio, and filter the Inbox by agent. The operations `feedback.send`, `feedback.update`, `feedback.withdraw`, `feedback.list_own`, `feedback.list`, `feedback.get`, `feedback.mark_handled` and `feedback.annotate` reach the same through the API, the CLI and MCP.
+- The audit events `feedback.received`, `feedback.handled` and `feedback.pruned`, which carry ids and counts, never the comment. A comment is kept for `retention.feedbackDays` (365 by default) and then removed with its Inbox item by the daily job `feedback.prune`; deleting an account removes the comments it wrote.

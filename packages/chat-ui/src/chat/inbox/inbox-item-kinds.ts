@@ -1,6 +1,7 @@
 import {
   Bell,
   BookOpen,
+  MessageSquareText,
   FileText,
   LayoutGrid,
   UserCheck,
@@ -30,6 +31,7 @@ import { parseSkillChangePreview } from "../approvals/skill-change-preview";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import type { InboxItemActions } from "./inbox-item-actions";
 import { NoticeBody, NoticeFoot, parseNoticePreview } from "./notice-item";
+import { FeedbackBody, feedbackAgentLabel, parseFeedbackPreview } from "./feedback-item";
 
 export type Translate = TranslationContextValue["t"];
 
@@ -84,6 +86,10 @@ export interface InboxItemKind {
    * the kind or by the item. Default: all three.
    */
   decisions?: InboxDecisionEntries | ((item: ApprovalRequestView) => InboxDecisionEntries);
+  /** The agent an item is about, by its name, for the filter by agent. */
+  agentOf?(item: ApprovalRequestView): { name: string; label: string } | undefined;
+  /** An item that is handled rather than approved, such as a notice: its state reads open or done. */
+  handled?: boolean;
   /** Replaces the foot for a kind whose answers are not these three. */
   Foot?: ComponentType<{ item: ApprovalRequestView; actions: InboxItemActions }>;
   /**
@@ -280,7 +286,40 @@ const notice: InboxItemKind = {
   subject: (item) => parseNoticePreview(item.preview)?.title,
   Body: NoticeBody,
   decisions: [{ decision: "approve", label: "inbox.noticeMarkHandled" }],
+  handled: true,
   Foot: NoticeFoot
+};
+
+/**
+ * A comment on an agent's answer, for those who review the agent (LU-4). Its one answer is
+ * "mark handled", with an optional note in the comment field.
+ */
+const feedbackReview: InboxItemKind = {
+  kind: "feedback_review",
+  label: "inbox.kindFeedbackReview",
+  icon: MessageSquareText,
+  heading(item, t) {
+    const feedback = parseFeedbackPreview(item.preview);
+    return feedback
+      ? t("feedback.reviewHeading", { agent: feedbackAgentLabel(feedback) })
+      : undefined;
+  },
+  subject(item) {
+    const feedback = parseFeedbackPreview(item.preview);
+    return feedback ? feedbackAgentLabel(feedback) : undefined;
+  },
+  // The author asked; the heading names the agent.
+  asked: (item, t) => t("feedback.from", { author: item.requestedBy.displayLabel }),
+  rowDetail: (item) => parseFeedbackPreview(item.preview)?.text,
+  agentOf(item) {
+    const feedback = parseFeedbackPreview(item.preview);
+    return feedback
+      ? { name: feedback.agent.name, label: feedbackAgentLabel(feedback) }
+      : undefined;
+  },
+  Body: FeedbackBody,
+  decisions: [{ decision: "approve", label: "feedback.markHandled" }],
+  handled: true
 };
 
 /**
@@ -292,7 +331,8 @@ export const inboxItemKinds: readonly InboxItemKind[] = [
   operationCall,
   publishKind("app_publish", "inbox.kindAppPublish", LayoutGrid),
   publishKind("workflow_publish", "inbox.kindWorkflowPublish", Workflow),
-  notice
+  notice,
+  feedbackReview
 ];
 
 const InboxItemKindsContext = createContext<readonly InboxItemKind[]>(inboxItemKinds);

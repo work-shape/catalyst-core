@@ -132,7 +132,7 @@ export function InboxItemView({
             status={item.status}
             applyResult={item.applyResult}
             confirmation={isInboxConfirmation(item)}
-            notice={item.kind === "notice"}
+            notice={kind?.handled === true}
           />
           {state.onRefresh ? <ApprovalRefreshButton onRefresh={state.onRefresh} /> : null}
         </div>

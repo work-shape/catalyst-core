@@ -186,6 +186,9 @@ function tierForType(type: string): AuditActivityTier {
   if (type.startsWith("message.") || type.startsWith("conversation.")) {
     return "workflow";
   }
+  if (type.startsWith("feedback.")) {
+    return "workflow";
+  }
   if (
     type.startsWith("agent_run") ||
     type.startsWith("agent_runtime") ||

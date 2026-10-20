@@ -129,6 +129,9 @@ export const access = defineTranslations({
     "access.kindDataStore": "Data stores",
     "access.kindGuardrail": "Guardrails",
     "access.kindMailSender": "E-mail senders",
+    "access.kindFeedback": "Feedback",
+    "access.actionReviewFeedbackDescription":
+      "Read what people write about the agents' answers and mark it handled.",
     "access.kindWorkspace": "Building in a workspace",
     "access.workspacesDescription":
       "What the agents of each shared workspace may use. A list that is off adds no limit; it binds everyone who saves an agent of the workspace, instance admins included. A Builder in the workspace picks a model from its list.",
@@ -410,6 +413,9 @@ export const access = defineTranslations({
     "access.kindDataStore": "Datenspeicher",
     "access.kindGuardrail": "Leitplanken",
     "access.kindMailSender": "E-Mail-Absender",
+    "access.kindFeedback": "Feedback",
+    "access.actionReviewFeedbackDescription":
+      "Lesen, was Personen zu den Antworten der Agenten schreiben, und es als erledigt markieren.",
     "access.kindWorkspace": "Bauen in einem Arbeitsbereich",
     "access.workspacesDescription":
       "Was die Agenten jedes geteilten Arbeitsbereichs verwenden dürfen. Eine ausgeschaltete Liste begrenzt nichts; eine Liste bindet alle, die einen Agenten des Arbeitsbereichs speichern, auch Instanz-Admins. Ein Builder des Arbeitsbereichs wählt ein Modell aus seiner Liste.",

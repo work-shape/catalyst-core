@@ -140,6 +140,9 @@ export const administration = defineTranslations({
     "modules.personalApiKeys": "Personal API keys",
     "modules.personalApiKeysDescription":
       "Keys a person issues for the CLI and scripts, acting as them within the key's scopes.",
+    "modules.feedback": "Feedback",
+    "modules.feedbackDescription":
+      "A written comment under an agent's answer, for the people who build the agent.",
     "modules.apps": "Apps",
     "modules.appsDescription":
       "Apps, what an agent shows in the preview, and the sandboxed frame that shows them.",
@@ -333,6 +336,9 @@ export const administration = defineTranslations({
     "modules.personalApiKeys": "Persönliche API-Schlüssel",
     "modules.personalApiKeysDescription":
       "Schlüssel, die eine Person für die CLI und Skripte ausstellt und die in ihren Berechtigungen als sie handeln.",
+    "modules.feedback": "Feedback",
+    "modules.feedbackDescription":
+      "Ein geschriebener Kommentar unter der Antwort eines Agenten, für die Personen, die den Agenten bauen.",
     "modules.apps": "Apps",
     "modules.appsDescription":
       "Apps, was ein Agent in der Vorschau zeigt, und der abgeschirmte Rahmen, der sie anzeigt.",

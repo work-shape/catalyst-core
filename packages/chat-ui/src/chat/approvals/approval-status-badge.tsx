@@ -27,7 +27,7 @@ export function ApprovalStatusBadge({
   size?: BadgeProps["size"];
   /** The request is a person's own confirmation in their Inbox: it is allowed or denied. */
   confirmation?: boolean;
-  /** A notice is handled without approving an action. */
+  /** A notice, or another item that is handled without approving an action. */
   notice?: boolean;
 }) {
   const { t } = useTranslation();
@@ -35,7 +35,9 @@ export function ApprovalStatusBadge({
   const presentation =
     notice && status === "approved"
       ? { tone: "neutral" as const, labelKey: "inbox.noticeDone" as const }
-      : approvalStatusPresentation(status, execution, confirmation);
+      : notice && status === "pending"
+        ? { tone: "pending" as const, labelKey: "inbox.open" as const }
+        : approvalStatusPresentation(status, execution, confirmation);
   return (
     <Badge
       {...BADGE_LOOK[presentation.tone]}

@@ -46,6 +46,7 @@ const ownActionKeys: Record<Exclude<PlatformAction, VerbAction>, TranslationKey>
   "data_store.records": "rights.actionDataStoreRecords",
   "mail_sender.use": "rights.actionMailSenderUse",
   "operations.approve": "rights.actionOperationsApprove",
+  "feedback.review": "rights.actionFeedbackReview",
   "users.manage": "rights.actionUsersManage",
   "usage.view": "rights.actionUsageView",
   "audit.view": "rights.actionAuditView",

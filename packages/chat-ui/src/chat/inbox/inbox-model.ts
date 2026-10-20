@@ -157,25 +157,36 @@ export function inboxListOutdatesItem(
 export interface InboxFilter {
   kind?: string;
   workspaceId?: string;
+  /** The agent an item is about, by its name: feedback on it, for one. */
+  agentName?: string;
 }
+
+/** The agent an item is about, where its kind names one. */
+export type InboxAgentOf = (
+  item: ApprovalRequestView
+) => { name: string; label: string } | undefined;
 
 export const NO_INBOX_FILTER: InboxFilter = {};
 
 /** Whether the filter narrows anything. */
 export function inboxFilterActive(filter: InboxFilter): boolean {
-  return filter.kind !== undefined || filter.workspaceId !== undefined;
+  return (
+    filter.kind !== undefined || filter.workspaceId !== undefined || filter.agentName !== undefined
+  );
 }
 
 /** The items of a list the filter keeps. `workspaceOf` names the workspace an item comes from. */
 export function filterInboxItems(
   items: readonly ApprovalRequestView[],
   filter: InboxFilter,
-  workspaceOf: (item: ApprovalRequestView) => string | undefined
+  workspaceOf: (item: ApprovalRequestView) => string | undefined,
+  agentOf: InboxAgentOf = () => undefined
 ): ApprovalRequestView[] {
   return items.filter(
     (item) =>
       (filter.kind === undefined || item.kind === filter.kind) &&
-      (filter.workspaceId === undefined || workspaceOf(item) === filter.workspaceId)
+      (filter.workspaceId === undefined || workspaceOf(item) === filter.workspaceId) &&
+      (filter.agentName === undefined || agentOf(item)?.name === filter.agentName)
   );
 }
 
@@ -186,13 +197,21 @@ export function filterInboxItems(
 export function inboxFilterOptions(
   items: readonly ApprovalRequestView[],
   filter: InboxFilter,
-  workspaceOf: (item: ApprovalRequestView) => string | undefined
-): { kinds: string[]; workspaceIds: string[] } {
+  workspaceOf: (item: ApprovalRequestView) => string | undefined,
+  agentOf: InboxAgentOf = () => undefined
+): { kinds: string[]; workspaceIds: string[]; agents: { name: string; label: string }[] } {
   const distinct = (values: readonly (string | undefined)[]) => [
     ...new Set(values.filter((value): value is string => value !== undefined))
   ];
+  const agents = new Map<string, string>();
+  if (filter.agentName !== undefined) agents.set(filter.agentName, filter.agentName);
+  for (const item of items) {
+    const agent = agentOf(item);
+    if (agent) agents.set(agent.name, agent.label);
+  }
   return {
     kinds: distinct([filter.kind, ...items.map((item) => item.kind)]),
-    workspaceIds: distinct([filter.workspaceId, ...items.map(workspaceOf)])
+    workspaceIds: distinct([filter.workspaceId, ...items.map(workspaceOf)]),
+    agents: [...agents].map(([name, label]) => ({ name, label }))
   };
 }

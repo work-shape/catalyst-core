@@ -32,6 +32,7 @@ export * from "./connections";
 export * from "./connection-bindings";
 export * from "./approval-requests";
 export * from "./notices";
+export * from "./feedback";
 export * from "./web-source";
 export * from "./structured-data";
 export * from "./structured-result";

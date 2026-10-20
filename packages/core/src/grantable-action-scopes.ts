@@ -56,6 +56,8 @@ export const GRANTABLE_ACTION_SCOPES = {
   "workflow.delete": ["asset", "instance"],
   "workflow.read_run_data": ["asset"],
   "guardrail.publish": ["workspace", "instance"],
+  // Reviewing feedback on the agents one workspace owns, or on every agent (LU-4).
+  "feedback.review": ["workspace", "instance"],
   // Sending as one sender of the instance (MAIL-1): granted on that one sender, `system`, and
   // never on all of them, so a later sender is not reached by a grant given for `system`. A
   // grant names a sender the instance registers, so none is written while outbound mail is off.

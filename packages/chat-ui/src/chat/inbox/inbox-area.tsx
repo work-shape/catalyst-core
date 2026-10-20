@@ -226,15 +226,16 @@ export function InboxAreaView({
     const workspaceId = inboxItemWorkspaceId(entry);
     return workspaceId !== undefined && workspace?.(workspaceId) ? workspaceId : undefined;
   };
+  const agentOf = (entry: ApprovalRequestView) => kindOf(entry.kind)?.agentOf?.(entry);
   const filtered = inboxFilterActive(filter);
   const shown: InboxListState =
     state.status === "ready"
-      ? { status: "ready", items: filterInboxItems(state.items, filter, workspaceIdOf) }
+      ? { status: "ready", items: filterInboxItems(state.items, filter, workspaceIdOf, agentOf) }
       : state;
   const filters =
     state.status === "ready" ? (
       <InboxFilters
-        options={inboxFilterOptions(state.items, filter, workspaceIdOf)}
+        options={inboxFilterOptions(state.items, filter, workspaceIdOf, agentOf)}
         filter={filter}
         workspace={workspace}
         onChange={onFilterChange}
@@ -344,7 +345,11 @@ function InboxFilters({
   workspace,
   onChange
 }: {
-  options: { kinds: readonly string[]; workspaceIds: readonly string[] };
+  options: {
+    kinds: readonly string[];
+    workspaceIds: readonly string[];
+    agents: readonly { name: string; label: string }[];
+  };
   filter: InboxFilter;
   workspace?(workspaceId: string): InboxWorkspace | undefined;
   onChange(filter: InboxFilter): void;
@@ -354,7 +359,9 @@ function InboxFilters({
   const offersKinds = options.kinds.length > 1 || filter.kind !== undefined;
   // One workspace is still a choice: it narrows away the items of the instance.
   const offersWorkspaces = options.workspaceIds.length > 0;
-  if (!offersKinds && !offersWorkspaces) {
+  // Feedback is read agent by agent: the control shows wherever an item names an agent.
+  const offersAgents = options.agents.length > 0;
+  if (!offersKinds && !offersWorkspaces && !offersAgents) {
     return null;
   }
   return (
@@ -390,6 +397,23 @@ function InboxFilters({
               {options.workspaceIds.map((workspaceId) => (
                 <option key={workspaceId} value={workspaceId}>
                   {workspace?.(workspaceId)?.name}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+          {offersAgents ? (
+            <Select
+              className="w-full font-medium sm:w-52"
+              aria-label={t("inbox.filterAgent")}
+              value={filter.agentName ?? ""}
+              onChange={(event) =>
+                onChange({ ...filter, agentName: event.target.value || undefined })
+              }
+            >
+              <option value="">{t("inbox.allAgents")}</option>
+              {options.agents.map((agent) => (
+                <option key={agent.name} value={agent.name}>
+                  {agent.label}
                 </option>
               ))}
             </Select>

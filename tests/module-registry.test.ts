@@ -350,7 +350,8 @@ describe("the snapshot in a running instance", () => {
       // A Workflow loads its findings into a Data Store, which an App reads.
       dataStores: { enabled: true },
       knowledge: { enabled: false },
-      personalApiKeys: { enabled: true }
+      personalApiKeys: { enabled: true },
+      feedback: { enabled: false }
     });
     expect(safe.features).toEqual({
       attachments: { enabled: false, accept: "" },
@@ -402,7 +403,8 @@ describe("the snapshot in a running instance", () => {
         workflows: { enabled: false },
         dataStores: { enabled: false },
         knowledge: { enabled: false },
-        personalApiKeys: { enabled: false }
+        personalApiKeys: { enabled: false },
+        feedback: { enabled: false }
       });
       expect(answer.features.resources).toEqual({ enabled: false });
     } finally {

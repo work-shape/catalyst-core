@@ -212,7 +212,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     this.assertClientInstance(user);
     const requests = await this.options.store.listApprovalRequests({
       clientInstanceId: this.options.clientInstanceId,
-      kinds: this.registeredKinds(),
+      kinds: this.requesterKinds(),
       requestedById: user.id,
       reader: this.reader(user),
       ...filter
@@ -250,7 +250,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       }),
       this.options.store.countOwnApprovalRequests({
         clientInstanceId: this.options.clientInstanceId,
-        kinds: this.registeredKinds(),
+        kinds: this.requesterKinds(),
         requestedById: user.id
       })
     ]);
@@ -338,7 +338,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
             ...this.endedPayload(pending)
           };
         }
-        const applyResult = await handler.apply(payload, user, handlerContext);
+        const applyResult = await handler.apply(payload, user, { ...handlerContext, decision });
         return { status: "approved", decision, applyResult };
       }
     });
@@ -356,6 +356,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const request = await this.visibleRequest(user, access, requestId);
     if (request.requestedBy.id !== user.id) {
       throw new AppError("FORBIDDEN", "Only the requester can withdraw an approval request");
+    }
+    if (this.options.handlers.get(request.kind)?.hiddenFromRequester) {
+      throw new AppError("CONFLICT", "This request is not withdrawn as a request");
     }
     if (request.addresseeUserId !== undefined) {
       throw new AppError("CONFLICT", "A confirmation in your Inbox is answered with Allow or Deny");
@@ -532,7 +535,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       // an instance admin and a holder of the kind's right included (OP-4b).
       (request.addresseeUserId !== undefined
         ? request.addresseeUserId !== user.id
-        : request.requestedBy.id !== user.id &&
+        : (request.requestedBy.id !== user.id || handler?.hiddenFromRequester === true) &&
           (!handler ||
             !access.authorize(handler.requiredPermission, resourceOfRequest(handler, request))
               .allowed))
@@ -628,6 +631,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
         request.status === "pending" &&
         request.addresseeUserId === undefined &&
         request.requestedBy.id === user.id &&
+        !handler.hiddenFromRequester &&
         (hasAuthScope(user, APPROVAL_WITHDRAW_AUTH_SCOPE) ||
           (user.keyScopes !== undefined &&
             hasAuthScope(user, apiOperations["approval_requests.withdraw"].personalKeyScope)))
@@ -668,6 +672,13 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   /** Every kind with a handler. A request of a kind without one cannot be shown or counted. */
   private registeredKinds(): string[] {
     return [...this.options.handlers.keys()];
+  }
+
+  /** The kinds a requester reads among their own requests. */
+  private requesterKinds(): string[] {
+    return [...this.options.handlers.values()]
+      .filter((handler) => !handler.hiddenFromRequester)
+      .map((handler) => handler.kind);
   }
 
   private handler(kind: string): ApprovalRequestHandler {

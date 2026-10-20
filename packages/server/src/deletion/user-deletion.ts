@@ -13,6 +13,7 @@ import {
   type ConversationDataDeletionTotals
 } from "./conversation-cleanup";
 import type { ChatServerOptions } from "../types";
+import { removeFeedbackOfAuthor } from "../feedback/feedback-jobs";
 
 export interface UserDeletionTotals extends ConversationDataDeletionTotals {
   conversationCount: number;
@@ -167,6 +168,9 @@ export async function cleanupProductUserData(input: {
       }
     });
   }
+
+  // The comments the person left on answers go with them, with their Inbox items (LU-4).
+  await removeFeedbackOfAuthor(options, input.userId);
 
   // The store refuses this while a cleanup is pending. The next pass goes on from here.
   if (personalWorkspace) {

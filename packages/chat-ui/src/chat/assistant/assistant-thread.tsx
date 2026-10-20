@@ -28,6 +28,7 @@ import type { SendBlock } from "./send-block";
 import { useMoveWithPanels } from "../surface/panel-move";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 import { ToolSubjectsProvider } from "./tool-subjects";
+import { messageFeedbackSetup } from "../feedback/message-feedback";
 import { startGreeting, startStarters, type ConversationStart } from "../dock/subject-starters";
 
 /** How long the composer takes to settle at the bottom after the first message. */
@@ -252,6 +253,7 @@ export function AssistantThread({
                           <ThreadMessage
                             conversationRunning={conversationRunning}
                             activeRunId={activeRunId}
+                            feedback={messageFeedbackSetup(config, conversationId)}
                           />
                         </>
                       )}

@@ -100,6 +100,7 @@ usage:
 | `retention.extendOnActivity`    | `true`  | `true` counts `conversationDays` from the last message a user sent. `false` counts from the creation of the Conversation: a fixed maximum age. |
 | `retention.auditDays`           | `365`   | How long audit events are kept.                                                                                                                |
 | `retention.allowUserDelete`     | `true`  | Lets users delete their own Conversations.                                                                                                     |
+| `retention.feedbackDays` | `365` | How long a comment of the module [`feedback`](/configure/modules/#feedback) is kept, in days, whatever became of its Conversation. |
 
 With `extendOnActivity: true`, every message a user sends moves the deletion date to `conversationDays` after that message, and never to an earlier date. Opening, reading, renaming or moving a Conversation, the generated title and background jobs do not move it. A Conversation someone keeps writing in is therefore never deleted for age. Set `extendOnActivity: false` when the instance has promised a maximum age: the date set at creation then stands, whatever is written later.
 

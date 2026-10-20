@@ -19,6 +19,7 @@ import {
 import { createOperationApprovalFiler } from "../approvals/operation-approval-filer";
 import { publishApprovalKinds } from "../approvals/publish-approval";
 import { createNoticeHandler } from "../notices/notice-kind";
+import { createFeedbackReviewHandler } from "../feedback/feedback-review-kind";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
 import { resolveOperationResource } from "./operation-resource";
 import { createAuditingEventEmitter } from "./event-emitter";
@@ -128,7 +129,17 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     createOperationCallApprovalHandler({ ...handlerOptions, subjectKinds: held }),
     ...held.map((kind) => createOperationCallApprovalHandler(handlerOptions, kind)),
     // A notice the platform files for one person, such as a Workflow's (NOTIFY-a).
-    createNoticeHandler()
+    createNoticeHandler(),
+    // A comment on an agent's answer, for the agent's reviewers (LU-4).
+    ...(options.modules.isEnabled("feedback")
+      ? [
+          createFeedbackReviewHandler({
+            clientInstanceId,
+            stores: options.stores,
+            auditRecorder: options.auditRecorder
+          })
+        ]
+      : [])
   ];
   const approvalRequestHandlers = new Map([
     ...(options.approvalRequests?.handlers ?? []),
