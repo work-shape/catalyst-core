@@ -5,11 +5,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { APP_BRIDGE_MARK, APP_BRIDGE_VERSION } from "@work-shape/catalyst-api-client";
+import { APP_BRIDGE_MARK, APP_BRIDGE_VERSION, type ApiUser } from "@work-shape/catalyst-api-client";
 import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
 import { PageHostProvider } from "@work-shape/catalyst-chat-ui/pages";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
-import { inboxListQueryKey, LivePagePreview, WorkspaceApiClientProvider } from "./support/chat-ui";
+import {
+  inboxListQueryKey,
+  LivePagePreview,
+  WorkspaceApiClientProvider,
+  workspaceQueryKeys
+} from "./support/chat-ui";
 
 const API = "https://api.example.test";
 let host: HTMLDivElement;
@@ -53,6 +58,19 @@ it("the mounted preview turns a held action into an overlay, blocks its iframe, 
     defaultOptions: { queries: { staleTime: Infinity, retry: false } }
   });
   queries.setQueryData(inboxListQueryKey(API, "standalone", "mine"), []);
+  // The shell has the signed-in person cached; a refusal's wording reads the instance admin
+  // from it, so the only call the page makes is its action.
+  const anna: ApiUser = {
+    id: "anna",
+    externalUserId: "external_anna",
+    displayLabel: "Anna",
+    roles: [],
+    permissionRefs: [],
+    permissions: [],
+    clientInstanceId: "client_1",
+    authSource: "test"
+  };
+  queries.setQueryData(workspaceQueryKeys.me(API), anna);
   await act(async () =>
     root.render(
       createElement(
