@@ -324,6 +324,7 @@ async function fixture(
         stepId: string;
         status: string;
         error?: { code: string; message: string; operation?: string };
+        inputPreview?: { text: string };
         outputPreview?: { text: string };
         agent?: { runId: string; usage: { totalTokens: number } };
       }>;
@@ -420,6 +421,7 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
   it("executes a published agent step and validates the output, attributing usage to its Workflow", async () => {
     const f = await fixture();
     const step = await f.ended("done");
+    expect(JSON.parse(required(step.inputPreview).text)).toEqual({});
     expect(JSON.parse(required(step.outputPreview).text)).toEqual({ answer: "validated" });
     expect(step.agent?.usage.totalTokens).toBe(10);
     const child = required(
@@ -478,12 +480,14 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
         status: string;
         finishedAt?: string;
         agent?: { usage: { totalTokens: number } };
+        inputPreview?: unknown;
         outputPreview?: unknown;
       }>;
     }>().items;
     const step = required(items.find((step) => step.stepId === "analyse"));
     expect(step).toMatchObject({ status: "done", agent: { usage: { totalTokens: 10 } } });
     expect(step.finishedAt).toBeDefined();
+    expect(step.inputPreview).toBeUndefined();
     expect(step.outputPreview).toBeUndefined();
     expect(response.body).not.toContain("validated");
     const agentStep = required((await f.steps()).find((entry) => entry.stepId === "analyse"));

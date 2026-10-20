@@ -1,3 +1,4 @@
+import { recordStepInput, stepTextSchemas } from "./step-input";
 import { agentStepOutcome } from "./agent-step";
 import { valuePosition } from "./json";
 import { checkpointFrame } from "./continuation-checkpoint";
@@ -20,7 +21,6 @@ import {
   workflowDatasetReferenceSchema,
   workflowStepIdempotencyKey,
   workflowStartOperationName,
-  workflowValuePreview,
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type AuthenticatedUser,
@@ -70,14 +70,7 @@ import {
   type WorkflowOperationCalls
 } from "./operation-step";
 import { operationWaitMs, operationWaitOutcome, stillRunningError } from "./operation-wait";
-import {
-  resolveInput,
-  resolveReference,
-  resolveRunKey,
-  type ReferenceScope,
-  type TextSchemas
-} from "./references";
-import { workflowStepSchemas } from "./dataset-contracts";
+import { resolveInput, resolveReference, resolveRunKey, type ReferenceScope } from "./references";
 import { workflowRunActor } from "./run-identity";
 import { WorkflowStepFailure } from "./step-failure";
 import { testRunCall } from "./test-run";
@@ -157,19 +150,6 @@ export function createStepExecutor(options: StepExecutorOptions) {
   const { clientInstanceId, stores, operationCalls, definitions, now } = options;
   const limits = options.limits.defaults ?? WORKFLOW_RUN_LIMITS;
 
-  /**
-   * Keeps the cut preview of a step's resolved input for its run page. An input holding a
-   * dataset row keeps none: the row would outlive its dataset in the step run.
-   */
-  async function recordInput(scope: ReferenceScope, input: JsonValue): Promise<void> {
-    if (scope.readDatasetRow) return;
-    await stores.workflowRuns.recordStepRunInput({
-      clientInstanceId,
-      id: scope.stepRun.id,
-      preview: workflowValuePreview(input)
-    });
-  }
-
   /** Fails a step whose value does not fit a schema its definition declares. */
   function fitsSchema(schema: JsonObject, value: JsonValue, code: string, what: string): void {
     const compiled = compileJsonSchema(schema);
@@ -183,25 +163,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
     );
   }
 
-  /**
-   * The schemas a text of the attempt's step joins with (EW-TEXT): its input schema and the
-   * schemas of what its references name. Read only when its mapping holds a text, or a
-   * reference to text that may hold a link (`referenced-markdown.ts`).
-   */
-  function textSchemasOf(attempt: StepAttempt): () => Promise<TextSchemas> {
-    return async () => {
-      const schemas = await workflowStepSchemas(
-        attempt.definition,
-        definitions,
-        operationCalls.registry
-      );
-      const step = attempt.stepRun.stepId;
-      return {
-        input: schemas.input(step),
-        reference: (reference) => schemas.reference(step, reference)
-      };
-    };
-  }
+  const textSchemasOf = stepTextSchemas(definitions, operationCalls.registry);
 
   /**
    * What a code step does before its script runs: its input from the steps before it, checked
@@ -222,7 +184,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
     };
     const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
     withinStepData(input, "The input of the step");
-    await recordInput(scope, input);
+    await recordStepInput(stores.workflowRuns, scope, input);
     fitsSchema(
       workflowValueSchema(step.inputSchema, definition.types),
       input,
@@ -419,7 +381,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           if (step.key !== undefined) {
             input[WORKFLOW_START_KEY_INPUT] = await resolveRunKey(scope, step.key);
           }
-          await recordInput(scope, input);
+          await recordStepInput(stores.workflowRuns, scope, input);
           const caller = await callerOf(run, stepRun, attempt.definition);
           const { operationRunId, call } = await callStepOperation({
             calls: operationCalls,
@@ -451,7 +413,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "operation": {
           const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(input, "The input of the step");
-          await recordInput(scope, input);
+          await recordStepInput(stores.workflowRuns, scope, input);
           if (options.datasets)
             for (const ref of datasetReferences(input))
               await options.datasets.reader({ id: ref.$dataset, runId: run.id, reference: ref });
@@ -559,7 +521,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "notify": {
           const mapped = await resolveInput(scope, { title: step.title, text: step.text });
           withinStepData(mapped, "The notice");
-          await recordInput(scope, mapped);
+          await recordStepInput(stores.workflowRuns, scope, mapped);
           if (typeof mapped.title !== "string" || typeof mapped.text !== "string") {
             throw new WorkflowStepFailure(
               "notice_invalid",
@@ -667,8 +629,9 @@ export function createStepExecutor(options: StepExecutorOptions) {
             if (ended.kind === "done") withinStepData(ended.output, "The agent output");
             return ended;
           }
-          const input = await resolveInput(scope, step.input);
+          const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(input, "The input of the agent step");
+          await recordStepInput(stores.workflowRuns, scope, input);
           if (holdsDatasetReference(input))
             throw new WorkflowStepFailure(
               "not_supported_yet",
@@ -705,7 +668,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "output": {
           const output = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(output, "The result of the run");
-          await recordInput(scope, output);
+          await recordStepInput(stores.workflowRuns, scope, output);
           const schema = compileJsonSchema(
             workflowValueSchema(attempt.definition.outputs, attempt.definition.types)
           );
