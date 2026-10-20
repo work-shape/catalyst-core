@@ -97,7 +97,7 @@ describe("The tools of a REST API approved on its page", () => {
 });
 
 describe("A REST API made in the list page's dialog", () => {
-  it("saves the pasted tools with the first click on approve, then opens the Connection", async () => {
+  it("saves the pasted tools with the first click on approve, offers them to an agent, then opens the Connection", async () => {
     const asset = connectionAsset("exampledata", {
       origin: "runtime",
       connectorType: "http_api",
@@ -168,6 +168,15 @@ describe("A REST API made in the list page's dialog", () => {
       document.querySelector<HTMLButtonElement>("[data-connection-approve]")?.click()
     );
     await vi.waitFor(() => expect(puts).toHaveLength(2), { timeout: 1000 });
+    // Approved for agents, the done state offers the give to an agent (CS-5d); Done opens it.
+    await vi.waitFor(
+      () => expect(document.querySelector("[data-connection-approved]")?.textContent).toMatch(/2/u),
+      { timeout: 1000 }
+    );
+    expect(document.querySelector("[data-connection-give]")).not.toBeNull();
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>("[data-connection-approved-done]")?.click()
+    );
     expect(opened.at(-1)).toEqual({ kindPath: "connections", name: "exampledata" });
   });
 });
