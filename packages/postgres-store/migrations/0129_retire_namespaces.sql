@@ -80,7 +80,7 @@ SELECT
 	NULL,
 	"id",
 	'namespace_retired',
-	'migration:0127_retire_namespaces',
+	'migration:0129_retire_namespaces',
 	now(),
 	jsonb_build_object(
 		'grantId', "id",
@@ -109,7 +109,7 @@ SELECT
 	NULL,
 	"id",
 	'namespace_retired',
-	'migration:0127_retire_namespaces',
+	'migration:0129_retire_namespaces',
 	now(),
 	jsonb_build_object(
 		'grantId', "id",
@@ -139,7 +139,7 @@ SELECT
 	NULL,
 	"prefix",
 	'namespace_retired',
-	'migration:0127_retire_namespaces',
+	'migration:0129_retire_namespaces',
 	now(),
 	jsonb_build_object(
 		'prefix', "prefix",
@@ -192,7 +192,7 @@ SELECT
 	NULL,
 	"id",
 	'namespace_retired',
-	'migration:0127_retire_namespaces',
+	'migration:0129_retire_namespaces',
 	now(),
 	jsonb_build_object(
 		'keyId', "id",
@@ -214,5 +214,5 @@ DROP TABLE "namespaces" CASCADE;--> statement-breakpoint
 ALTER TABLE "permission_grants" DROP CONSTRAINT "permission_grants_namespace_check";--> statement-breakpoint
 -- contract-after: v0.6.3
 ALTER TABLE "permission_grants" DROP CONSTRAINT "permission_grants_scope_kind_check";--> statement-breakpoint
--- Validated by 0129, once the column is gone.
+-- Validated by 0131, once the column is gone.
 ALTER TABLE "permission_grants" ADD CONSTRAINT "permission_grants_scope_kind_check" CHECK ("permission_grants"."scope_kind" in ('instance', 'workspace', 'asset')) NOT VALID;

@@ -217,7 +217,7 @@ async function legacyListsRestored(sql: Queries): Promise<boolean> {
 /**
  * The statements of `0079_legacy_permission_grants`, written for the schema every later
  * migration leaves. The migration's own insert names the uniqueness and the column of grant rows
- * that NS-RETIRE dropped (0127), so it runs only at its own place. This one finds the row a
+ * that NS-RETIRE dropped (0129), so it runs only at its own place. This one finds the row a
  * holder already has for an action without them: it keeps who wrote it, and a legacy revocation
  * still makes it a deny. Each statement can run again.
  */
