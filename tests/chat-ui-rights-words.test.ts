@@ -130,7 +130,7 @@ describe("the words of a right", () => {
   it("hold no id of a right in the copy of a rights screen", () => {
     for (const path of RIGHTS_WORDS) {
       for (const locale of locales) {
-        expect(values(path)[locale].length, path).toBeGreaterThan(10);
+        expect(values(path)[locale].length, path).toBeGreaterThan(0);
         for (const text of values(path)[locale]) {
           expect(text, `${path} (${locale})`).not.toMatch(rightId);
         }

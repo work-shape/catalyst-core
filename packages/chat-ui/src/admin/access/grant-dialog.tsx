@@ -47,13 +47,7 @@ import {
   type GrantWriteResult,
   type LoadFailure
 } from "./access-model";
-import {
-  kindLabelKeys,
-  kindWords,
-  rightAllowNoteKeys,
-  rightSentenceKeys,
-  scopeChoice
-} from "./grant-words";
+import { grantKinds, rightAllowNoteKeys, rightSentenceKeys, scopeChoice } from "./grant-words";
 import { grantOptions, type GrantChoices } from "./grant-options";
 import { actionLabel, rightVerb, verbKeys, verbLabel } from "./right-words";
 
@@ -145,7 +139,7 @@ export function GrantDialog({
   const scopeKinds = options.places(kind, requestedVerbs);
   const scopeKind = scopeKinds.find((scope) => scope === form.scopeKind) ?? scopeKinds[0];
   const allowedWorkspaces = options.choices(kind, "workspace", requestedVerbs);
-  const words = kindWords[kind];
+  const words = grantKinds[kind].words;
   // What the asset picker chooses from: the agents or skills, or the assets of a further kind.
   const choices: GrantChoices =
     kindAssets?.[kind] ??
@@ -288,7 +282,7 @@ export function GrantDialog({
           label={t("access.grantKind")}
           options={kinds.map((kind) => ({
             value: kind,
-            label: t(kindLabelKeys[kind])
+            label: t(grantKinds[kind].label)
           }))}
           value={kind}
           // An asset belongs to its kind, and a kind has its own actions and places.

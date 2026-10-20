@@ -48,6 +48,11 @@ export type GrantVerb = VerbOf<GrantableAction>;
  */
 const BUNDLE_KIND = "workspace";
 type KindOf<Action> = Action extends `${infer Kind}.${string}` ? Kind : typeof BUNDLE_KIND;
+
+/** The actions of one kind: `workflow.read` and the others of `workflow`, Builder and Publisher of `workspace`. */
+export type GrantKindAction<Kind extends GrantKind> = {
+  [Action in GrantableAction]: KindOf<Action> extends Kind ? Action : never;
+}[GrantableAction];
 type VerbOf<Action> = Action extends `${string}.${infer Verb}` ? Verb : Action;
 
 /**

@@ -1,5 +1,15 @@
 import { access } from "./access";
-import { accessKinds } from "./access-kinds";
+import { accessAgent } from "./access-agent";
+import { accessApp } from "./access-app";
+import { accessConnection } from "./access-connection";
+import { accessDataStore } from "./access-data-store";
+import { accessFeedback } from "./access-feedback";
+import { accessGuardrail } from "./access-guardrail";
+import { accessKnowledgeBase } from "./access-knowledge-base";
+import { accessMailSender } from "./access-mail-sender";
+import { accessSkill } from "./access-skill";
+import { accessWorkflow } from "./access-workflow";
+import { accessWorkspace } from "./access-workspace";
 import { administration } from "./administration";
 import { agentDraft } from "./agent-draft";
 import { agents } from "./agents";
@@ -49,7 +59,17 @@ import { combineTranslations } from "./translation-area";
  */
 export const translations = combineTranslations(common)
   .and(access)
-  .and(accessKinds)
+  .and(accessAgent)
+  .and(accessApp)
+  .and(accessConnection)
+  .and(accessDataStore)
+  .and(accessFeedback)
+  .and(accessGuardrail)
+  .and(accessKnowledgeBase)
+  .and(accessMailSender)
+  .and(accessSkill)
+  .and(accessWorkflow)
+  .and(accessWorkspace)
   .and(administration)
   .and(agentDraft)
   .and(agents)

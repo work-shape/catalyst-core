@@ -42,7 +42,9 @@ export function duplicateLiteralLists(sources) {
             ));
         canonical =
           ts.isVariableDeclaration(parent) &&
-          /^packages\/asset-schemas\/src\/(?:contract-values|asset-types)\.ts$/u.test(file);
+          /^packages\/asset-schemas\/src\/(?:contract-values(?:\/[^/]+)?|asset-types)\.ts$/u.test(
+            file
+          );
         if (definition)
           values = node.elements.flatMap((element) =>
             ts.isStringLiteral(element) ? [element.text] : []
