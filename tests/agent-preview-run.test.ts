@@ -433,7 +433,7 @@ describe("agent preview turns (TRY-1b2)", () => {
       "draft_skill content"
     );
     expect(await lastTool('/tool read_skill {"name":"live_skill"}')).toContain(
-      "not allowed to read skill 'live_skill'"
+      "This agent does not have this skill and cannot read it here."
     );
   });
 });
