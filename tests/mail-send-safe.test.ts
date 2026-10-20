@@ -260,9 +260,14 @@ describe("outbound.limits (check 136)", () => {
       (sql) => sql<{ deadlineAt: Date }[]>`
         select deadline_at as "deadlineAt" from workflow_runs where id = ${runId}`
     );
-    // The wait ends at the deadline at the latest, not when the window has room.
+    // The wait ends at the deadline, not when the window has room an hour later. The worker
+    // reckons the wait by its clock and the release adds it to the database's, so a step may
+    // wake a moment after the deadline: its claim then ends the run.
+    const clocks = 5_000;
     for (const job of await queuedSteps())
-      expect(job.runAfter.getTime()).toBeLessThanOrEqual(required(deadline).deadlineAt.getTime());
+      expect(job.runAfter.getTime()).toBeLessThanOrEqual(
+        required(deadline).deadlineAt.getTime() + clocks
+      );
     await withTestSql(async (sql) => {
       await sql`update workflow_runs set deadline_at = now() - interval '1 second'
         where id = ${runId}`;
