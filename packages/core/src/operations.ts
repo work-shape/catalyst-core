@@ -136,7 +136,14 @@ export interface OperationUpload {
  */
 export type OperationCallRuntime = Pick<
   RuntimeCallContext,
-  "locale" | "deadline" | "signal" | "runFence" | "subagent" | "unattended" | "workflowAgent" | "agentPreview"
+  | "locale"
+  | "deadline"
+  | "signal"
+  | "runFence"
+  | "subagent"
+  | "unattended"
+  | "workflowAgent"
+  | "agentPreview"
 > & {
   /**
    * Set where the surface could not read the caller's input at all. The call then ends as an

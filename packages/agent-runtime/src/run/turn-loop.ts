@@ -89,14 +89,15 @@ export class TurnLoop {
     // An agent whose definition lists the platform's tools is offered those it lists, the
     // orientation on the platform and the skills the platform ships. The asset tools come from
     // the offer alone, which may hold back one the definition lists.
-    const offer = input.workflowAgent || input.preview
-      ? undefined
-      : await this.options.conversationOffer?.offerOf({
-          clientInstanceId: context.clientInstanceId,
-          conversationId: input.conversationId,
-          agentToolNames: listed.toolNames,
-          user: context.user
-        });
+    const offer =
+      input.workflowAgent || input.preview
+        ? undefined
+        : await this.options.conversationOffer?.offerOf({
+            clientInstanceId: context.clientInstanceId,
+            conversationId: input.conversationId,
+            agentToolNames: listed.toolNames,
+            user: context.user
+          });
     const withheld = new Set(offer?.withheldToolNames ?? []);
     // A subagent starts none of its own, and a Workflow step's agent never gets `run_agent`.
     const agent = {
@@ -106,11 +107,13 @@ export class TurnLoop {
           ...listed.toolNames.filter((toolName) => !toolName.startsWith(SUBJECT_TOOL_PREFIX)),
           ...(offer?.toolNames ?? [])
         ])
-      ].filter(
-        (toolName) =>
-          !withheld.has(toolName) &&
-          !((context.subagent || input.workflowAgent) && isRunAgentCall(toolName))
-      ).filter((toolName) => !input.preview || !forbiddenPreviewTool(toolName))
+      ]
+        .filter(
+          (toolName) =>
+            !withheld.has(toolName) &&
+            !((context.subagent || input.workflowAgent) && isRunAgentCall(toolName))
+        )
+        .filter((toolName) => !input.preview || !forbiddenPreviewTool(toolName))
     };
     const modelSelection = this.modelInput.getModelSelectionForAgent(
       agent,

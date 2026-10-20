@@ -386,6 +386,85 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     }
   );
 
+  it.each([true, false])(
+    "keeps Try's no-live-once rule and the principal bound in a child agent (principal granted: %s)",
+    async (principalUses) => {
+      const f = await fixture("test", false, "user-1", {
+        principalUses,
+        beforeJobs: async ({ app, clientInstanceId, runId }) => {
+          const run = required(
+            await app.stores.workflowRuns.readRun({ clientInstanceId, id: runId })
+          );
+          const asset = required(
+            await app.stores.configAssets.getConfigAsset({
+              clientInstanceId,
+              kind: "workflow",
+              name: run.workflow
+            })
+          );
+          // The test target's start carries Try provenance, as workflows.test from Try does.
+          await withTestSql(async (sql) => {
+            const origin = {
+              kind: "agent",
+              agentName: "test_agent",
+              agentRunId: "preview-run",
+              conversationId: "preview-conversation",
+              toolCallId: "preview-start",
+              toolName: `workflow.${run.workflow}.start`,
+              draft: {
+                kind: "agent_preview",
+                asset: { kind: "agent", id: "preview-agent", name: "test_agent" },
+                revisionId: "draft:1",
+                part: "preview-conversation"
+              }
+            };
+            await sql`update operation_runs set origin = ${JSON.stringify(origin)}::jsonb
+              where id = ${required(run.operationRunId)}`;
+          });
+          await app.stores.liveOnceSwitches.switchOn({
+            clientInstanceId,
+            switch: {
+              asset: { kind: "workflow", id: asset.id, name: run.workflow },
+              revisionId: run.definitionRevisionId,
+              part: "analyse",
+              switchedBy: { id: run.startedBy.id, label: run.startedBy.label },
+              switchedAt: new Date().toISOString()
+            }
+          });
+        }
+      });
+      await f.ended("done");
+      const call = required(
+        (await f.app.stores.operationRuns.list({ clientInstanceId: f.clientInstanceId })).find(
+          (call) => call.operation === toolName
+        )
+      );
+      expect(call.origin).toMatchObject({
+        kind: "agent",
+        boundBy: { id: f.principal.id },
+        draft: { kind: "agent_preview", part: "analyse" }
+      });
+      expect(call.status).toBe(principalUses ? "done" : "denied");
+      expect(call.target).toBe("dry_run");
+      expect(changed).toEqual([]);
+      const asset = required(
+        await f.app.stores.configAssets.getConfigAsset({
+          clientInstanceId: f.clientInstanceId,
+          kind: "workflow",
+          name: "agent-check"
+        })
+      );
+      const switches = await f.app.stores.liveOnceSwitches.list({
+        clientInstanceId: f.clientInstanceId,
+        assetId: asset.id,
+        switchedBy: call.actor.id
+      });
+      expect(switches).toEqual([expect.objectContaining({ part: "analyse" })]);
+      expect(switches[0]).not.toHaveProperty("usedAt");
+      expect(switches[0]).not.toHaveProperty("usedByRunId");
+    }
+  );
+
   it("refuses a draft test the call its tester may make and its Workflow's account may not", async () => {
     const f = await fixture("test", false, "user-1", { principalUses: false });
     await f.ended("done");
