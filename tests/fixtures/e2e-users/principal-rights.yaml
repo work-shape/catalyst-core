@@ -1,0 +1,12 @@
+# This manager belongs to principal-rights.spec.ts and may not administer people.
+- email: e2e-principal-manager@example.test
+  displayLabel: E2E Principal Manager
+  passwordEnvName: E2E_PRINCIPAL_MANAGER_PASSWORD
+  developmentPassword: e2e-principal-manager-password
+  roles:
+    - user
+    - admin
+  permissions:
+    - "!users.manage"
+  permissionRefs:
+    - demo-tools

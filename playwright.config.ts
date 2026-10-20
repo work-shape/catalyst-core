@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
+import { writeE2eConfig } from "./scripts/e2e-config.mjs";
 
 const e2eHost = process.env.E2E_HOST ?? "127.0.0.1";
 const e2eApiPort = process.env.E2E_API_PORT ?? "4210";
@@ -8,7 +9,9 @@ const e2ePostgresPort = process.env.E2E_POSTGRES_PORT ?? "55433";
 const e2eComposeProject = process.env.E2E_COMPOSE_PROJECT ?? "agent-chat-e2e";
 const e2eApiUrl = process.env.E2E_API_URL ?? `http://${e2eHost}:${e2eApiPort}`;
 const e2eUiUrl = process.env.E2E_UI_URL ?? `http://${e2eHost}:${e2eUiPort}`;
-const e2eConfigPath = process.env.E2E_CONFIG_PATH ?? "tests/fixtures/e2e-app.yaml";
+// scripts/run-chat-e2e.mjs names the config it wrote; a direct run composes the fixture itself.
+const e2eConfigPath = process.env.E2E_CONFIG_PATH ?? writeE2eConfig();
+process.env.E2E_CONFIG_PATH = e2eConfigPath;
 const e2eDatabaseUrl =
   process.env.E2E_DATABASE_URL ??
   `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`;

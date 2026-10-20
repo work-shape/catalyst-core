@@ -19,7 +19,7 @@ import { apiOrigin, uiOrigin } from "./view-fixtures";
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
 
-/** The two people of this spec, from `tests/fixtures/e2e-app.yaml`. */
+/** The two people of this spec, from `tests/fixtures/e2e-users/app-actions-view.yaml`. */
 const builder = {
   email: "e2e-app-actions-view@example.test",
   password: "e2e-app-actions-view-password"

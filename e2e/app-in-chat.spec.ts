@@ -19,7 +19,7 @@ import { apiOrigin, uiOrigin } from "./view-fixtures";
 // a reload the dock keeps the conversation and its saves still write the App. Fails without
 // OPEN-1: neither workspace.open nor app.save existed (apps-and-pages checks 53 and 55).
 
-/** The person of this spec, from `tests/fixtures/e2e-app.yaml`. */
+/** The person of this spec, from `tests/fixtures/e2e-users/app-in-chat.yaml`. */
 const person = { email: "e2e-app-in-chat@example.test", password: "e2e-app-in-chat-password" };
 
 const pageFolder = "revenue";

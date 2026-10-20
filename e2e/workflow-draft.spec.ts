@@ -16,8 +16,9 @@ import { expect, test, type PageErrorWatch } from "./test";
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 /**
- * The member who reads the Workflow, from `tests/fixtures/e2e-app.yaml`. The Workflow rights
- * spec gives this member rights too; both hold `accessState`, so one runs after the other.
+ * The member who reads the Workflow, from `tests/fixtures/e2e-users/workflow-rights.yaml`. The
+ * Workflow rights spec gives this member rights too; both hold `accessState`, so one runs after
+ * the other.
  */
 const member = {
   email: "e2e-workflow-rights@example.test",

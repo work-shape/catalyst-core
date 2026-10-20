@@ -1,0 +1,20 @@
+# The builder of the empty lists spec, who may build Apps, Workflows and Data Stores and
+# whose Personal workspace holds none. No other spec uses this person.
+- email: e2e-empty-lists-builder@example.test
+  displayLabel: E2E Zz Empty Lists Builder
+  passwordEnvName: E2E_EMPTY_LISTS_BUILDER_PASSWORD
+  developmentPassword: e2e-empty-lists-builder-password
+  roles:
+    - user
+    - admin
+  permissionRefs:
+    - demo-tools
+# The member of the empty lists spec, who may build nothing. No other spec uses this member.
+- email: e2e-empty-lists-member@example.test
+  displayLabel: E2E Zz Empty Lists Member
+  passwordEnvName: E2E_EMPTY_LISTS_MEMBER_PASSWORD
+  developmentPassword: e2e-empty-lists-member-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

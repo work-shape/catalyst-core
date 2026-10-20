@@ -1,0 +1,10 @@
+# The member of the day markers spec, whose conversation spans several days. No other
+# spec uses this member.
+- email: e2e-day-markers@example.test
+  displayLabel: E2E Zz Day Markers
+  passwordEnvName: E2E_DAY_MARKERS_PASSWORD
+  developmentPassword: e2e-day-markers-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

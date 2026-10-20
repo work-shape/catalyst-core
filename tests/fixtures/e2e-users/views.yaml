@@ -1,0 +1,11 @@
+# A member for each spec file that fills that member's conversation list or Inbox. Spec
+# files run side by side on this one instance, so a file that shared its member with
+# another pushed the other's rows out of the rail's cap.
+- email: e2e-views@example.test
+  displayLabel: E2E Views
+  passwordEnvName: E2E_VIEWS_PASSWORD
+  developmentPassword: e2e-views-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

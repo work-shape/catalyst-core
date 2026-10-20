@@ -28,7 +28,7 @@ const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
 
-/** The three people of this spec, from `tests/fixtures/e2e-app.yaml`. */
+/** The three people of this spec, from `tests/fixtures/e2e-users/apps.yaml`. */
 const admin = { email: "e2e-apps@example.test", password: "e2e-apps-password" };
 const member = { email: "e2e-apps-member@example.test", password: "e2e-apps-member-password" };
 const builder = { email: "e2e-apps-builder@example.test", password: "e2e-apps-builder-password" };

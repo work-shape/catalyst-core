@@ -1,0 +1,9 @@
+# The member the Connections spec grants a right to. No other spec uses this member.
+- email: e2e-connections@example.test
+  displayLabel: E2E Connections
+  passwordEnvName: E2E_CONNECTIONS_PASSWORD
+  developmentPassword: e2e-connections-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

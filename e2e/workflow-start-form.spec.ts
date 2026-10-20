@@ -16,7 +16,7 @@ const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
-/** The member who starts the Workflow, from `tests/fixtures/e2e-app.yaml`. No other spec uses it. */
+/** The member who starts the Workflow, from `tests/fixtures/e2e-users/workflow-start-form.yaml`. No other spec uses it. */
 const member = {
   email: "e2e-workflow-start@example.test",
   password: "e2e-workflow-start-password"

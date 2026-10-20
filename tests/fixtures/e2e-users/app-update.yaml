@@ -1,0 +1,11 @@
+# The person of the Update app spec. No other spec uses them: the spec saves an App, and
+# an App's id is taken once for the whole instance.
+- email: e2e-app-update@example.test
+  displayLabel: Zz E2E App Update
+  passwordEnvName: E2E_APP_UPDATE_PASSWORD
+  developmentPassword: e2e-app-update-password
+  roles:
+    - user
+    - admin
+  permissionRefs:
+    - demo-tools

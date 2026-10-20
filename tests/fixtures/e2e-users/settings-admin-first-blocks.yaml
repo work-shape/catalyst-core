@@ -1,0 +1,9 @@
+# The owner of the admin first blocks spec's workspace, used by no other spec.
+- email: e2e-first-blocks@example.test
+  displayLabel: E2E Zz First Blocks
+  passwordEnvName: E2E_FIRST_BLOCKS_PASSWORD
+  developmentPassword: e2e-first-blocks-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

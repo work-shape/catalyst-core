@@ -1,0 +1,10 @@
+# The member of the sidebar sections spec, who holds nothing on Apps or Workflows until
+# the spec gives them a Workflow to read. No other spec uses this member.
+- email: e2e-sidebar-sections@example.test
+  displayLabel: E2E Zz Sidebar Sections
+  passwordEnvName: E2E_SIDEBAR_SECTIONS_PASSWORD
+  developmentPassword: e2e-sidebar-sections-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

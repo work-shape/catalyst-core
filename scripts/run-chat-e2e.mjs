@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { composeE2eConfig } from "./e2e-config.mjs";
 import { balanceTests, reportTests } from "./e2e-duration-shards.mjs";
 import {
   TEST_POSTGRES_DATA_DIRECTORY,
@@ -233,8 +234,7 @@ async function prepareConfig() {
     );
   }
   await mkdir(dirname(e2eConfigPath), { recursive: true });
-  const fixturePath = resolve(repoRoot, "tests/fixtures/e2e-app.yaml");
-  const fixture = await readFile(fixturePath, "utf8");
+  const fixture = composeE2eConfig();
   const generated = fixture
     .replaceAll("http://127.0.0.1:4210", e2eApiUrl)
     .replaceAll("http://127.0.0.1:5273", e2eUiUrl)

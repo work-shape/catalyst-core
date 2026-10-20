@@ -18,12 +18,12 @@ import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
-/** May change agents and not publish them, from `tests/fixtures/e2e-app.yaml`. */
+/** May change agents and not publish them, from `tests/fixtures/e2e-users/agent-draft.yaml`. */
 const writer = {
   email: "e2e-agent-draft-writer@example.test",
   password: "e2e-agent-draft-writer-password"
 };
-/** May read the one agent of the spec and not change it, from `tests/fixtures/e2e-app.yaml`. */
+/** May read the one agent of the spec and not change it, from `tests/fixtures/e2e-users/agent-draft.yaml`. */
 const reader = {
   email: "e2e-agent-draft-reader@example.test",
   password: "e2e-agent-draft-reader-password"

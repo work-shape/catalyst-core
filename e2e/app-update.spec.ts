@@ -33,7 +33,7 @@ const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
 
-/** The person of this spec, from `tests/fixtures/e2e-app.yaml`. */
+/** The person of this spec, from `tests/fixtures/e2e-users/app-update.yaml`. */
 const admin = { email: "e2e-app-update@example.test", password: "e2e-app-update-password" };
 
 const WORKSPACE = "Offers team";

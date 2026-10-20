@@ -1,0 +1,8 @@
+- email: e2e-pages@example.test
+  displayLabel: E2E Pages
+  passwordEnvName: E2E_PAGES_PASSWORD
+  developmentPassword: e2e-pages-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

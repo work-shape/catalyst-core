@@ -5,7 +5,7 @@ import { apiOrigin, uiOrigin } from "./view-fixtures";
 // What the specs about a Page beside the conversation share: the member who builds Pages, the
 // messages the test model reads as tool calls, and the source of the Page they build.
 
-/** The member of these specs, from `tests/fixtures/e2e-app.yaml`. */
+/** The member of these specs, from `tests/fixtures/e2e-users/page-surface.yaml`. */
 const pageBuilder = {
   email: "e2e-pages@example.test",
   password: "e2e-pages-password"

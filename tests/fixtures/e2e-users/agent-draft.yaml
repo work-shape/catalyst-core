@@ -1,0 +1,23 @@
+# The reader of the agent draft spec, who may read one agent and not change it. No other
+# spec uses this member.
+- email: e2e-agent-draft-reader@example.test
+  displayLabel: E2E Zz Agent Draft Reader
+  passwordEnvName: E2E_AGENT_DRAFT_READER_PASSWORD
+  developmentPassword: e2e-agent-draft-reader-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+# The writer of the agent draft spec, who may change agents and not publish them. No other
+# spec uses this member.
+- email: e2e-agent-draft-writer@example.test
+  displayLabel: E2E Zz Agent Draft Writer
+  passwordEnvName: E2E_AGENT_DRAFT_WRITER_PASSWORD
+  developmentPassword: e2e-agent-draft-writer-password
+  roles:
+    - user
+  permissions:
+    - config_assets.read
+    - config_assets.write
+  permissionRefs:
+    - demo-tools

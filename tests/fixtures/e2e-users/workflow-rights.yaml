@@ -1,0 +1,10 @@
+# The member the Workflow rights spec and the Workflow draft spec give rights to, one
+# after the other. No other spec uses this member.
+- email: e2e-workflow-rights@example.test
+  displayLabel: E2E Zz Workflow Rights
+  passwordEnvName: E2E_WORKFLOW_RIGHTS_PASSWORD
+  developmentPassword: e2e-workflow-rights-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

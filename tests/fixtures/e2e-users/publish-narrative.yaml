@@ -1,0 +1,21 @@
+# The two people of the publish question spec (PUBQ-1), used by no other spec: the
+# admin opens each publish question and reads the held publish in the Inbox, in the
+# language the spec sets on their own account; the member's publish is the one held.
+# Their labels sort after every other for the reason in e2e-app.yaml.
+- email: e2e-publish-narrative@example.test
+  displayLabel: E2E Zz Publish Narrative
+  passwordEnvName: E2E_PUBLISH_NARRATIVE_PASSWORD
+  developmentPassword: e2e-publish-narrative-password
+  roles:
+    - user
+    - admin
+  permissionRefs:
+    - demo-tools
+- email: e2e-publish-narrative-member@example.test
+  displayLabel: E2E Zz Publish Narrative Member
+  passwordEnvName: E2E_PUBLISH_NARRATIVE_MEMBER_PASSWORD
+  developmentPassword: e2e-publish-narrative-member-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

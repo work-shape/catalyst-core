@@ -1,0 +1,8 @@
+- email: e2e-navigation@example.test
+  displayLabel: E2E Navigation
+  passwordEnvName: E2E_NAVIGATION_PASSWORD
+  developmentPassword: e2e-navigation-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

@@ -19,11 +19,12 @@ import {
   expectSecondRunChangedNothing,
   useSeededInstance
 } from "./support/demo-seed";
+import { e2eConfigFile } from "./support/e2e-config";
 
 // `pnpm demo:seed` against the instance of the browser suite: its fixture config, the real
 // sign-in, the real config CLI, Postgres. Every test here fails without the seed.
 
-const fixtureConfig = resolve("tests/fixtures/e2e-app.yaml");
+const fixtureConfig = e2eConfigFile();
 
 /** The fixture config enables this tool; the suite's own server brings it. */
 const recordNote = defineTool({

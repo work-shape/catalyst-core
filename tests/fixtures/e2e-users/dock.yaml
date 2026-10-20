@@ -1,0 +1,10 @@
+# The member of the dock spec, whose conversations ride in the dock. No other spec uses
+# this member.
+- email: e2e-dock@example.test
+  displayLabel: E2E Zz Dock
+  passwordEnvName: E2E_DOCK_PASSWORD
+  developmentPassword: e2e-dock-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

@@ -1,10 +1,11 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { AUTH_MOUNT_PATH } from "@work-shape/catalyst-api-client";
 import { runLocalKeyCli } from "@work-shape/catalyst-client-assembly";
 import { afterEach, describe, expect, it } from "vitest";
 import { testOperations } from "./support/operations";
+import { e2eConfigFile } from "./support/e2e-config";
 
 const temporaryDirectories: string[] = [];
 
@@ -21,7 +22,7 @@ afterEach(async () => {
 // against a running instance; these tests hold the rules around it.
 
 const localSecret = "cat_test_local-secret-never-print-this";
-const appConfig = resolve("tests/fixtures/e2e-app.yaml");
+const appConfig = e2eConfigFile();
 const principal = {
   id: "sp_local",
   clientInstanceId: "demo-e2e",
