@@ -57,7 +57,6 @@ test("shared lint inputs select all packages, including unrelated ones", () => {
     "packages/quality-config/new-rule.mjs",
     "packages/model-provider/src/adapters/new-provider.ts",
     "tsconfig.lint.json",
-    "quality-baseline.json",
     "packages/deleted/src/index.ts"
   ]) {
     assert.equal(isGlobalChange(file, workspace), true, file);
@@ -67,6 +66,12 @@ test("shared lint inputs select all packages, including unrelated ones", () => {
       file
     );
   }
+});
+test("baseline counts do not widen the package or test selection", () => {
+  const changed = ["quality-baseline.json"];
+  assert.equal(isGlobalChange(changed[0], packages), false);
+  assert.deepEqual(affectedPackages(graph, packages, changed), []);
+  assert.deepEqual(affectedTests(["tests/a.test.ts"], new Map(), [], changed), []);
 });
 test("root tests select no packages and only tests reaching the edited file", () => {
   const tests = ["tests/a.test.ts", "tests/b.test.ts"];
@@ -97,9 +102,13 @@ test("runner keeps root-test checks narrow, typechecks package consumers and exp
       dependencies: { a: "workspace:*" }
     })
   );
-  write("packages/a/index.ts", "export const value = 1;\n");
+  write("packages/a/index.ts", "export const value = 1; // docs mention packages/dependent\n");
+  write("packages/dependent/index.ts", "export const other = 1;\n");
   write("tests/a.test.ts", 'import { value } from "../packages/a/index";\nvoid value;\n');
-  write("tests/b.test.ts", "export {};\n");
+  write(
+    "tests/b.test.ts",
+    'import { readFileSync } from "node:fs";\nreadFileSync("packages/dependent/index.ts");\n'
+  );
   write("tsconfig.tests.json", JSON.stringify({ include: ["tests/**/*.ts"] }));
   // The tooling self-check is separate from the package/test commands under observation.
   write("scripts/check-affected.test.mjs", "");
@@ -154,11 +163,26 @@ appendFileSync(process.env.CALLS_FILE, JSON.stringify(process.argv.slice(2)) + "
   writeFileSync(callsFile, "");
   result = run();
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /2 packages, 1 test files/);
+  assert.match(result.stdout, /2 packages, 2 test files/);
   assert.ok(calls().some((args) => args[0] === "typecheck:tests"));
   assert.ok(calls().some((args) => args.includes("dependent...")));
   assert.ok(calls().some((args) => args[2] === "lint" && args[3]?.startsWith("--scope-file=")));
   git("restore", "packages/a/index.ts");
+  // The fs reader keeps its dependency; a package's prose mention adds no edge.
+  write("packages/dependent/index.ts", "export const other = 2;\n");
+  writeFileSync(callsFile, "");
+  result = run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /1 packages, 1 test files/);
+  assert.deepEqual(calls().at(-1), ["exec", "vitest", "run", "tests/b.test.ts"]);
+  git("restore", "packages/dependent/index.ts");
+  write("quality-baseline.json", '{"version":1,"entries":[]}\n');
+  writeFileSync(callsFile, "");
+  result = run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /0 packages, 0 test files/);
+  assert.equal(readFileSync(callsFile, "utf8"), "");
+  rmSync(join(root, "quality-baseline.json"));
   // Untracked logs must not enter the changed-file selection.
   rmSync(callsFile);
   write("packages/quality-config/new-rule.mjs", "export {};\n");

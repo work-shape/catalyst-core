@@ -2,6 +2,7 @@ import { dirname } from "node:path";
 
 /** Shared tooling and its out-of-package inputs affect every quality scope. */
 export function isGlobalChange(file, packages) {
+  if (file === "quality-baseline.json") return false;
   if (
     file.startsWith("packages/quality-config/") ||
     file.startsWith("packages/model-provider/src/adapters/")

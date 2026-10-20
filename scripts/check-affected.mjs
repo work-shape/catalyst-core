@@ -107,9 +107,10 @@ const visit = (file) => {
     return path.startsWith("../") || path.includes("node_modules/") ? [] : [path];
   });
   // Some contract tests read scripts/assets with fs or spawn a CLI instead of importing it.
-  // Package paths in their source are conservative dependency edges too.
-  for (const match of source.matchAll(/\b(?:packages|clients)\/[A-Za-z0-9._-]+/gu))
-    if (packages.some((pkg) => pkg.dir === match[0])) edges.push(`${match[0]}/`);
+  // Only test sources add these edges; product text and generated docs are not imports.
+  if (file.startsWith("tests/"))
+    for (const match of source.matchAll(/\b(?:packages|clients)\/[A-Za-z0-9._-]+/gu))
+      if (packages.some((pkg) => pkg.dir === match[0])) edges.push(`${match[0]}/`);
   dependencies.set(file, edges);
   for (const edge of edges) visit(edge);
 };
