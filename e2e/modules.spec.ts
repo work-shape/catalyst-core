@@ -284,6 +284,8 @@ test.describe("with the resources module off", () => {
   let offApi: ChildProcess | undefined;
 
   test.beforeAll(async ({}, testInfo) => {
+    // A hook keeps the default timeout; waiting for the turn and starting the API need more.
+    testInfo.setTimeout(120_000);
     // An API that starts makes the release Connections of the shared database equal to its
     // config. It starts when no test holds a Connection it planted there.
     const started = await takeTurn("release-connections", testInfo.project.use.baseURL);
