@@ -500,6 +500,15 @@ test("a Connection's page shows its definition, its state in every case and the 
           }
         });
       });
+      // Per-asset rights also describe this reader; the signed-in admin's real asset answer
+      // must not keep advertising write while the context above describes a read-only reader.
+      const readAsset = (url: URL) =>
+        url.pathname === `/api/v1/assets/connection/${reachable.name}`;
+      await page.route(readAsset, async (route) => {
+        const response = await route.fetch();
+        const body: unknown = await response.json();
+        await route.fulfill({ response, json: { ...Object(body), allowed: ["read"] } });
+      });
       await open(reachable);
       await expect(health).toHaveAttribute("data-connection-health", "ready");
       await expect(testButton).toHaveCount(0);
@@ -510,6 +519,7 @@ test("a Connection's page shows its definition, its state in every case and the 
         )
       ).toBeVisible();
       await shoot("read-not-test", reachable);
+      await page.unroute(readAsset);
       await page.unroute("**/api/v1/context");
     });
 
