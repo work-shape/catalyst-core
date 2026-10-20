@@ -118,8 +118,9 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
       await world.platform`select row_to_json(r) as data from operation_runs r where operation='knowledge.sync-test.extract_fields'`;
     const audit = await world.platform`select row_to_json(a) as data from audit_events a`;
     const retained = JSON.stringify({ logs: world.logs, runs, audit, error: failed.json() });
-    for (const secret of [marker, "12.500 EUR", "120,5 m²", "12500"])
-      expect(retained).not.toContain(secret);
+    for (const secret of [marker, "12.500 EUR", "120,5 m²"]) expect(retained).not.toContain(secret);
+    // The bare amount, but not as part of a random hex id such as an Operation Run's.
+    expect(retained).not.toMatch(/(?<![0-9a-f])12500(?![0-9a-f])/u);
     const [budget] = await world.sql`select spent::float8 as spent from catalyst_kb.field_budgets`;
     expect(required(budget).spent).toBe(1.5);
   });
