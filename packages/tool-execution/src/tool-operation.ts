@@ -1,15 +1,10 @@
 import { SCHEDULED_START_TOOL_NAMES } from "./scheduled-start-tools";
-import { previewDraft, previewToolDeps, previewToolResult } from "./agent-preview";
+import { previewDraft, previewToolDeps } from "./agent-preview";
 import { denialText, type ToolCallNames } from "./tool-refusal-text";
 import {
-  AGENTS_RUN_OPERATION,
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
   ConfirmationUnattendedError,
-  INTERRUPTED_RUN_ERROR,
-  KNOWLEDGE_OPERATION_PREFIX,
-  KNOWLEDGE_QUERY_TOOL_NAME,
-  KNOWLEDGE_SEARCH_TOOL_NAME,
   OPERATION_DENIAL_REASONS,
   OPERATION_EFFECTS,
   PERMISSION_REF_ACTION_PREFIX,
@@ -19,7 +14,6 @@ import {
   forbiddenPreviewTool,
   isAuthenticatedServicePrincipal,
   isDataToolName,
-  knowledgeToolCall,
   operationCallFromToolRequest,
   toErrorEnvelope,
   toolRequestFromOperationCall,
@@ -36,31 +30,31 @@ import {
   type PolicyValue,
   type ToolExecutionContext,
   type ToolExecutionRequest,
-  type ToolExecutionResult,
   type ToolHandlerFailureResult,
   type ToolOperationRunner,
   type ToolPermissionMode
 } from "@work-shape/catalyst-core";
 import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import { ZodError, z } from "zod";
-import { createKnowledgeRefCounter, runKnowledgeSearch } from "./knowledge-search-tool";
-import {
-  isUseRightAction,
-  type OperationOutcome,
-  type RunOperationDeps
-} from "./operation-execution";
+import { createKnowledgeRefCounter } from "./knowledge-search-tool";
+import { isUseRightAction, type RunOperationDeps } from "./operation-execution";
 import { runOperation } from "./run-operation";
 import { toolFailureLogRecord } from "./tool-failure-log";
 import type { ToolRegistry } from "./tool-registry";
 import { failed } from "./tool-results";
+import {
+  internalFailure,
+  privateConversationRecovery,
+  toolResultFromOperationResult
+} from "./operation-tool-result";
+import { projectedOperationEffect, projectionOf, TOOL_PROJECTIONS } from "./tool-projections";
+import type { ProjectedCall } from "./tool-projections/projection";
+
+export { toolResultFromOperationResult } from "./operation-tool-result";
 import { APP_PUBLISH_TOOL_NAME } from "./app-publish-tool";
 import { MAIL_SEND_TOOL_NAME } from "./mail-send-tool";
 import { WORKFLOW_TEST_TOOL_NAMES } from "./workflow-test-tools";
-import {
-  KNOWLEDGE_ADD_FILES_TOOL_NAME,
-  runKnowledgeAddFiles,
-  isKnowledgeAddFilesOperation
-} from "./knowledge-add-files-tool";
+import { KNOWLEDGE_ADD_FILES_TOOL_NAME } from "./knowledge-add-files-tool";
 
 /**
  * After how long a tool call that is still `running` counts as interrupted. No tool runs
@@ -292,73 +286,6 @@ function thrownHandlerFailure(
   return internalFailure(context.correlationId);
 }
 
-/** Only this fixed recovery reaches the host; arbitrary server reasons stay private. */
-function privateConversationRecovery(details: unknown): Pick<ToolHandlerFailureResult, "recovery"> {
-  const parsed = z.object({ reason: z.literal("subject_conversation_shared") }).safeParse(details);
-  return parsed.success ? { recovery: "private_conversation" } : {};
-}
-
-function internalFailure(correlationId: string): ToolHandlerFailureResult {
-  return failed(
-    "handler_failed",
-    `The tool failed with an internal error. Reference: ${correlationId}`,
-    { correlationId }
-  );
-}
-
-/**
- * Projects what a call came to back to the agent that made it as a tool call. A tool that ran
- * answers its own result unchanged. A call that was refused, held or cut off before the tool
- * ran answers in the words an agent has always read for it.
- */
-export function toolResultFromOperationResult(
-  outcome: Pick<OperationOutcome, "result" | "toolResult">,
-  names: ToolCallNames
-): ToolExecutionResult {
-  if (outcome.toolResult) return outcome.toolResult;
-  const { result } = outcome;
-  switch (result.status) {
-    case "done":
-      return {
-        status: "success",
-        output: result.output,
-        ...(result.display ? { display: result.display } : {}),
-        ...(result.structuredResult ? { structuredResult: result.structuredResult } : {}),
-        ...(result.artifacts ? { artifacts: result.artifacts } : {})
-      };
-    case "running":
-      // The operation's work goes on after the call; its run says when it ended.
-      return { status: "success", output: { status: "running", operationRunId: result.runId } };
-    case "denied":
-      if (names.useRightRefusal) return failed("permission_missing", names.useRightRefusal);
-      return result.reason.kind === "policy" && result.reason.reason === "confirmation_required"
-        ? failed("confirmation_required", denialText(result.reason, names), {
-            operation: result.reason.operation
-          })
-        : failed("not_allowed", denialText(result.reason, names));
-    case "failed":
-      return result.error.code === "INTERNAL"
-        ? internalFailure(names.correlationId)
-        : // The message is all the model reads. A fixed reason stays in the run and in the
-          // details of the result, and is not handed on: a model repeats a code to the person.
-          {
-            ...failed(
-              "handler_failed",
-              result.error.code === INTERRUPTED_RUN_ERROR.code
-                ? `${INTERRUPTED_RUN_ERROR.message}. Its outcome is not known; check before calling again.`
-                : result.error.message
-            ),
-            ...privateConversationRecovery(result.error.details)
-          };
-    case "expired":
-    case "pending_confirmation":
-    case "pending_approval":
-      return internalFailure(names.correlationId);
-    case "dry_run":
-      return previewToolResult(result, names.locale);
-  }
-}
-
 const forbiddenDetailsSchema = z.object({
   action: z.string().optional(),
   reason: z.enum(OPERATION_DENIAL_REASONS)
@@ -471,23 +398,20 @@ export function createToolOperationRunner(
     const deps = previewToolDeps(baseDeps, context);
     if (context.agentPreview && forbiddenPreviewTool(toolRequest.toolName))
       return failed("not_allowed", "This tool is not available in Preview");
-    // One call of each Knowledge Base's search, merged: each call takes this runner's path.
-    if (toolRequest.toolName === KNOWLEDGE_SEARCH_TOOL_NAME) {
-      return runKnowledgeSearch(toolRequest, context, options, deps, runner, takeKnowledgeRefs);
+    // A tool that is not itself the operation it runs is projected onto it first.
+    const projected: ProjectedCall = (await projectionOf(toolRequest.toolName)?.project(
+      toolRequest,
+      {
+        context,
+        options,
+        deps,
+        runner,
+        takeKnowledgeRefs
+      }
+    )) ?? { request: toolRequest };
+    if ("answer" in projected) {
+      return projected.answer;
     }
-    if (toolRequest.toolName === KNOWLEDGE_ADD_FILES_TOOL_NAME) {
-      const listed =
-        (await deps.agentToolNames?.(toolRequest.agentName, toolRequest.conversationId)) ?? [];
-      return runKnowledgeAddFiles(toolRequest, context, options, listed, runner);
-    }
-    const projected:
-      | { request: ToolExecutionRequest; idempotencyKey?: string }
-      | { refusal: ToolHandlerFailureResult } =
-      toolRequest.toolName === KNOWLEDGE_QUERY_TOOL_NAME
-        ? await knowledgeQueryRequest(toolRequest, deps)
-        : toolRequest.toolName === RUN_AGENT_TOOL_NAME
-          ? await runAgentRequest(toolRequest, context, deps)
-          : { request: toolRequest };
     if ("refusal" in projected) {
       return projected.refusal;
     }
@@ -573,13 +497,10 @@ export function createToolOperationRunner(
           );
         else names.adminName = await deps.instanceAdminName?.();
       }
-      const answered = toolResultFromOperationResult(outcome, names);
-      // The runtime keeps the started subagent's call with the run it waits on.
-      return request.toolName === AGENTS_RUN_OPERATION &&
-        answered.status === "success" &&
-        result.status === "done"
-        ? { ...answered, privateOutput: { operationRunId: result.runId } }
-        : answered;
+      return TOOL_PROJECTIONS.reduce(
+        (answered, projection) => projection.answered?.(request, answered, result) ?? answered,
+        toolResultFromOperationResult(outcome, names)
+      );
     } catch (error) {
       if (isAppError(error) && error.code === "FORBIDDEN")
         names.adminName = await deps.instanceAdminName?.();
@@ -589,72 +510,6 @@ export function createToolOperationRunner(
     }
   };
   return runner;
-}
-
-/**
- * A call of `run_agent` as the call of `agents.run` (CR-1). The agent's own list is asked
- * first, as for the knowledge tool. A subagent is never offered `run_agent`, and one whose
- * model calls it all the same is refused here. The call's key is its run and its tool call,
- * so a retried call answers the subagent it started.
- */
-async function runAgentRequest(
-  request: ToolExecutionRequest,
-  context: { subagent?: true },
-  deps: RunOperationDeps
-): Promise<
-  { request: ToolExecutionRequest; idempotencyKey: string } | { refusal: ToolHandlerFailureResult }
-> {
-  if (context.subagent) {
-    return { refusal: failed("not_allowed", "A subagent cannot start subagents of its own.") };
-  }
-  const listed = (await deps.agentToolNames?.(request.agentName, request.conversationId)) ?? [];
-  if (!listed.includes(AGENTS_RUN_OPERATION)) {
-    const action = `${AGENT_TOOL_ACTION_PREFIX}${RUN_AGENT_TOOL_NAME}`;
-    return {
-      refusal: failed(
-        "not_allowed",
-        `Agent '${request.agentName}' is not allowed to use '${RUN_AGENT_TOOL_NAME}'`,
-        { action }
-      )
-    };
-  }
-  return {
-    request: { ...request, toolName: AGENTS_RUN_OPERATION },
-    idempotencyKey: `${request.agentRunId}:${request.toolCallId}`
-  };
-}
-
-/**
- * A call of the one knowledge tool as the call of the operation it stands for: the query of
- * the Knowledge Base its input names, with the rest of its input. The agent's own list is
- * asked first, so an agent reaches no Knowledge Base it does not list, whatever its model
- * sends. The operation then answers like any other: the person's `knowledge_base.use` is asked
- * of each call, and each call is one run.
- */
-async function knowledgeQueryRequest(
-  request: ToolExecutionRequest,
-  deps: RunOperationDeps
-): Promise<{ request: ToolExecutionRequest } | { refusal: ToolHandlerFailureResult }> {
-  const call = knowledgeToolCall(request.input);
-  if (!call) {
-    return {
-      refusal: failed(
-        "validation_failed",
-        'Name the Knowledge Base to read under "knowledgeBase", by one of the ids the tool lists.'
-      )
-    };
-  }
-  const listed = (await deps.agentToolNames?.(request.agentName, request.conversationId)) ?? [];
-  if (!listed.includes(call.operation)) {
-    return {
-      refusal: failed(
-        "not_allowed",
-        `The Knowledge Base '${call.knowledgeBase}' is not assigned to this agent. Read one of the Knowledge Bases the tool lists.`,
-        { reason: "knowledge_base_not_assigned", knowledgeBase: call.knowledgeBase }
-      )
-    };
-  }
-  return { request: { ...request, toolName: call.operation, input: call.input } };
 }
 
 /**
@@ -686,18 +541,11 @@ async function calledTool(
       }
     };
   }
-  // The operation of a Knowledge Base the agent lists, as its knowledge tool projected it.
-  if (toolName.startsWith(KNOWLEDGE_OPERATION_PREFIX)) {
-    return {
-      tool: {
-        name: toolName,
-        effect: isKnowledgeAddFilesOperation(toolName) ? "changing" : "reading"
-      }
-    };
-  }
-  // The start of a subagent, as `run_agent` projected it.
-  if (toolName === AGENTS_RUN_OPERATION) {
-    return { tool: { name: toolName, effect: "changing" } };
+  // An operation a tool's projection calls, such as the query of a Knowledge Base the agent
+  // lists or the start of a subagent.
+  const projectedEffect = projectedOperationEffect(toolName);
+  if (projectedEffect !== undefined) {
+    return { tool: { name: toolName, effect: projectedEffect } };
   }
   if (!dataTools || !isDataToolName(toolName)) {
     return { refusal: failed("not_allowed", `Tool '${toolName}' is not registered`) };
