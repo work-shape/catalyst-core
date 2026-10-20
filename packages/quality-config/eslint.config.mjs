@@ -315,6 +315,9 @@ const registeredPath = (call, method) => {
 };
 
 /** @type {import("eslint").ESLint.Plugin} */
+/** Barrels that hold one re-export per statement in sorted order (`catalyst/sorted-barrel`). */
+const SORTED_BARRELS = ["packages/core/src/index.ts"];
+
 const plugin = {
   rules: {
     // ESLint's no-restricted-globals and no-restricted-properties would cover these three,
@@ -749,6 +752,42 @@ const plugin = {
       }
     ),
     ...assetBoundaryRules({ rule, keyName, staticReads }),
+    // Feature PRs that each append an export at the end of a barrel collide on its last line.
+    // A sorted barrel with one export per statement spreads their inserts over the file.
+    "sorted-barrel": rule(
+      "This barrel holds one re-export per statement, sorted by module and then by name",
+      (filename) => SORTED_BARRELS.includes(relative(root, filename).replaceAll("\\", "/")),
+      (context, report) => ({
+        Program: () => {
+          let previous = "";
+          for (const statement of context.sourceCode.ast.body) {
+            const single =
+              statement.type === "ExportAllDeclaration" ||
+              (statement.type === "ExportNamedDeclaration" &&
+                statement.source !== null &&
+                statement.declaration === null &&
+                statement.specifiers.length === 1);
+            if (!single) {
+              report(statement);
+              continue;
+            }
+            const exported =
+              statement.type === "ExportAllDeclaration"
+                ? statement.exported
+                : statement.specifiers[0]?.exported;
+            const name =
+              exported === null || exported === undefined
+                ? "*"
+                : exported.type === "Identifier"
+                  ? exported.name
+                  : String(exported.value);
+            const key = `${String(statement.source?.value)}\u0000${name}`.toLowerCase();
+            if (key < previous) report(statement);
+            previous = key;
+          }
+        }
+      })
+    ),
     "retired-terms": retiredTermsRule
   }
 };
