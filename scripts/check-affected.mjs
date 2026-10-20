@@ -108,9 +108,12 @@ const visit = (file) => {
   });
   // Some contract tests read scripts/assets with fs or spawn a CLI instead of importing it.
   // Only test sources add these edges; product text and generated docs are not imports.
-  if (file.startsWith("tests/"))
+  if (file.startsWith("tests/")) {
     for (const match of source.matchAll(/\b(?:packages|clients)\/[A-Za-z0-9._-]+/gu))
       if (packages.some((pkg) => pkg.dir === match[0])) edges.push(`${match[0]}/`);
+    // A baseline edit still affects contracts that read it, without widening package checks.
+    if (source.includes("quality-baseline.json")) edges.push("quality-baseline.json");
+  }
   dependencies.set(file, edges);
   for (const edge of edges) visit(edge);
 };

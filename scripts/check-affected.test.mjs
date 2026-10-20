@@ -67,11 +67,19 @@ test("shared lint inputs select all packages, including unrelated ones", () => {
     );
   }
 });
-test("baseline counts do not widen the package or test selection", () => {
+test("baseline counts select only their readers, without widening package checks", () => {
   const changed = ["quality-baseline.json"];
   assert.equal(isGlobalChange(changed[0], packages), false);
   assert.deepEqual(affectedPackages(graph, packages, changed), []);
-  assert.deepEqual(affectedTests(["tests/a.test.ts"], new Map(), [], changed), []);
+  assert.deepEqual(
+    affectedTests(
+      ["tests/a.test.ts", "tests/b.test.ts"],
+      new Map([["tests/a.test.ts", ["quality-baseline.json"]]]),
+      [],
+      changed
+    ),
+    ["tests/a.test.ts"]
+  );
 });
 test("root tests select no packages and only tests reaching the edited file", () => {
   const tests = ["tests/a.test.ts", "tests/b.test.ts"];
@@ -108,6 +116,10 @@ test("runner keeps root-test checks narrow, typechecks package consumers and exp
   write(
     "tests/b.test.ts",
     'import { readFileSync } from "node:fs";\nreadFileSync("packages/dependent/index.ts");\n'
+  );
+  write(
+    "tests/baseline.test.ts",
+    'import { readFileSync } from "node:fs";\nreadFileSync("quality-baseline.json");\n'
   );
   write("tsconfig.tests.json", JSON.stringify({ include: ["tests/**/*.ts"] }));
   // The tooling self-check is separate from the package/test commands under observation.
@@ -180,15 +192,18 @@ appendFileSync(process.env.CALLS_FILE, JSON.stringify(process.argv.slice(2)) + "
   writeFileSync(callsFile, "");
   result = run();
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /0 packages, 0 test files/);
-  assert.equal(readFileSync(callsFile, "utf8"), "");
+  assert.match(result.stdout, /0 packages, 1 test files/);
+  assert.deepEqual(calls(), [
+    ["typecheck:tests"],
+    ["exec", "vitest", "run", "tests/baseline.test.ts"]
+  ]);
   rmSync(join(root, "quality-baseline.json"));
   // Untracked logs must not enter the changed-file selection.
   rmSync(callsFile);
   write("packages/quality-config/new-rule.mjs", "export {};\n");
   result = run();
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /3 packages, 2 test files/);
+  assert.match(result.stdout, /3 packages, 3 test files/);
   assert.ok(
     calls().some(
       (args) => JSON.stringify(args) === JSON.stringify(["exec", "catalyst-quality", "lint"])
