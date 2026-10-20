@@ -23,31 +23,19 @@ const CONSUMER_SET = [
 // Installed next to them for its bin only; it has no module entry to import.
 const DEPLOYMENT_KIT = "deployment-kit";
 const MAX_TARBALL_BYTES = 300_000; // check-limit
-// ui ships src/ next to dist/ for Tailwind scanning; chat-ui scans dist/ and ships only its
-// unbuilt stylesheet and Vite helpers beside it. server ships the pinned
-// view runtime it serves, about 230 kB packed, its own code, about 150 kB packed, and every
-// released App Kit version, about 385 kB packed each, most of it the chart engine; 1.3.0 is about
-// 450 kB, because the library it bundles gained the flow canvas, and 1.4.0, which drops the
-// kit's `connections.call`, about 485 kB. Five versions are released; the limit moved for the
-// fifth and has room for none more. A version repeats the chart engine and
-// React byte for byte, about 258 kB packed, so sharing those between versions is the way to
-// stop the growth before the limit moves again.
-// chat-ui dropped its duplicate TypeScript source on 2026-10-15; Tailwind scans the compiled
-// components in published packages and the original source during workspace development. It
-// packs to about 540 kB since; its limit went back to 650 kB on 2026-10-15 (Felix approved).
 const MAX_TARBALL_BYTES_BY_DIR = {
-  // First capability publication: 32 standalone helper command bundles plus shipped skills
-  // pack to 5.9 MB (2026-10-16). Keep that existing build shape within a measured budget.
+  // Standalone helper bundles and shipped skills.
   "artifact-helpers": 6_500_000, // check-limit
+  // Compiled components, stylesheet and Vite helpers.
   "chat-ui": 650_000, // check-limit
-  // Packed site was 1.55 MB.
+  // Built documentation site.
   docs: 2_000_000, // check-limit
-  ui: 500_000, // check-limit
-  // Raised on 2026-10-14 for App Kit 1.4.0 and the guardrail assets of EW-6a. Follow-up
-  // KIT-SHARE-1: vendored App Kit versions share React and the chart engine; then lower the
-  // limit again.
+  // Migrations and their snapshot history.
+  "postgres-store": 850_000, // check-limit
+  // Pinned view runtime and released App Kit versions.
   server: 2_700_000, // check-limit
-  "postgres-store": 850_000 // check-limit
+  // Source and compiled components for Tailwind scanning.
+  ui: 500_000 // check-limit
 };
 const FORBIDDEN_FILES = [
   [/\.map$/u, "source map"],
