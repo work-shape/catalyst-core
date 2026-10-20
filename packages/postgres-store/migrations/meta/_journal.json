@@ -918,6 +918,27 @@
       "when": 1792507167719,
       "tag": "0130_workflow_agent_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1792510594930,
+      "tag": "0131_retire_namespaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1792510595982,
+      "tag": "0132_permission_grants_scope_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1792510597022,
+      "tag": "0133_drop_grant_namespace",
+      "breakpoints": true
     }
   ]
 }

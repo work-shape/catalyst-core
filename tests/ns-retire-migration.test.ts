@@ -178,7 +178,7 @@ describe("NS-RETIRE migration", () => {
 
     const audit = await sql<{ type: string; subject: string; metadata: Record<string, unknown> }[]>`
       select type, subject, metadata from audit_events
-      where correlation_id = 'migration:0129_retire_namespaces' and reason = 'namespace_retired'
+      where correlation_id = 'migration:0131_retire_namespaces' and reason = 'namespace_retired'
         and actor is null
       order by type, subject`;
     const granted = rows.filter((row) => !["grant_own_read", "grant_tax_deny"].includes(row.id));
