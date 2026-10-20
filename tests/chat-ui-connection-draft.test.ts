@@ -33,7 +33,7 @@ const answer = {
       title: "Exampledata",
       baseUrl: "https://api.exampledata.com",
       headerNames: ["x-client-instance-id", 7],
-      testPath: "/api/monitoring/health",
+      testPath: "/monitoring/health",
       headers: { "x-client-instance-id": SECRET },
       apiKey: SECRET
     },
@@ -70,7 +70,7 @@ describe("the draft the card reads", () => {
       title: "Exampledata",
       baseUrl: "https://api.exampledata.com",
       headerNames: ["x-client-instance-id"],
-      testPath: "/api/monitoring/health"
+      testPath: "/monitoring/health"
     });
     expect(read.operations.map((operation) => operation.title)).toEqual([
       "Mandanten auflisten",
@@ -411,7 +411,7 @@ describe("the New connection dialog opened from a card", () => {
     expect(markup).toContain('value="https://api.exampledata.com"');
     expect(markup).toContain('value="x-client-instance-id"');
     // The test reads the drafted path, so a Verbinden that passes proves the key.
-    expect(markup).toContain('value="/api/monitoring/health"');
+    expect(markup).toContain('value="/monitoring/health"');
     expect(markup).not.toContain(SECRET);
     // Nothing is written before Verbinden, and the tools wait for the approval after it.
     expect(writes).toEqual([]);
@@ -423,6 +423,6 @@ describe("the New connection dialog opened from a card", () => {
       ...opened,
       connection: { ...opened.connection, headerNames: [] }
     });
-    expect(markup).toContain('value="/api/monitoring/health"');
+    expect(markup).toContain('value="/monitoring/health"');
   });
 });

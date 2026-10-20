@@ -187,11 +187,11 @@ describe("the agent's draft of REST API tools", () => {
   });
 
   it("carries a test path the save accepts, and refuses one with a query or a dot segment", async () => {
-    const result = await run(draft({ testPath: "/api/monitoring/health" }));
+    const result = await run(draft({ testPath: "/monitoring/health" }));
     expect(result.status).toBe("success");
     if (result.status !== "success") throw new Error("Expected a checked draft");
     expect(result.output).toMatchObject({
-      connection: { name: "exampledata", testPath: "/api/monitoring/health" }
+      connection: { name: "exampledata", testPath: "/monitoring/health" }
     });
     for (const testPath of ["health", "/health?key=1", "/../admin"]) {
       expect(await refusedPaths(draft({ testPath }))).toContain("testPath");
