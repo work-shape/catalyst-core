@@ -106,7 +106,7 @@ test("navigation items, list rows and detail headers keep their measures", async
 
   const navItems = root.locator('[data-gallery-entry="NavItem"]');
   const resting = navItems.getByRole("button", { name: "Chat", exact: true });
-  const selected = navItems.getByRole("button", { name: "Apps" });
+  const selected = navItems.getByRole("button", { name: "Apps", exact: true });
   expect((await resting.boundingBox())?.height).toBe(32);
   expect(await style(resting, "font-weight")).toBe("400");
   expect(await style(resting, "border-radius")).toBe("8px");

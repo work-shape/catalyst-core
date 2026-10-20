@@ -2,6 +2,7 @@ import {
   AppWindow,
   ChevronRight,
   Clock,
+  Folder,
   Ellipsis,
   Hammer,
   Inbox,
@@ -198,7 +199,7 @@ function SidebarSampleFooter({ text }: { text: GalleryText }) {
 }
 
 function NavItemSamples({ text }: { text: GalleryText }) {
-  const [appsOpen, setAppsOpen] = useState(true);
+  const [projectsOpen, setProjectsOpen] = useState(true);
   return (
     <div className="grid gap-6 sm:grid-cols-2">
       <div className="grid w-full max-w-(--layout-sidebar) content-start gap-4">
@@ -269,30 +270,28 @@ function NavItemSamples({ text }: { text: GalleryText }) {
         <NavGroup label={text.navRowFolds}>
           {/* The row opens its page; the caret it always shows folds its items. */}
           <NavItem
-            icon={<AppWindow aria-hidden="true" />}
+            icon={<Folder aria-hidden="true" />}
             trailingShown
             trailing={
               <IconButton
                 size="sm"
-                label={appsOpen ? text.navRowFoldsHide : text.navRowFoldsShow}
-                aria-expanded={appsOpen}
-                onClick={() => setAppsOpen(!appsOpen)}
+                label={projectsOpen ? text.navRowFoldsHide : text.navRowFoldsShow}
+                aria-expanded={projectsOpen}
+                onClick={() => setProjectsOpen(!projectsOpen)}
               >
-                <ChevronRight aria-hidden="true" className={appsOpen ? "rotate-90" : undefined} />
+                <ChevronRight
+                  aria-hidden="true"
+                  className={projectsOpen ? "rotate-90" : undefined}
+                />
               </IconButton>
             }
           >
-            {text.navApps}
+            {text.navRowFoldsRow}
           </NavItem>
-          {appsOpen
-            ? [text.navConversationTax, text.navConversationLease].map((title, index) => (
-                <NavItem
-                  key={title}
-                  className="pl-8"
-                  selected={index === 0}
-                  icon={<Avatar kind="app" size="xs" name={title} />}
-                  title={title}
-                >
+          {projectsOpen
+            ? [text.navConversationTax, text.navConversationLease].map((title) => (
+                // The items start where the row's label starts.
+                <NavItem key={title} className="pl-8" title={title}>
                   {title}
                 </NavItem>
               ))
