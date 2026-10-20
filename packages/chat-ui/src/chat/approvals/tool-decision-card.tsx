@@ -293,7 +293,8 @@ export function ToolDecisionCardView({
   const agent = agentSaveSummary(decision, locale);
   // A mail shows as it will go out, rendered by the server: its input is a technical detail.
   const mail = mailSendDecisionPreview(decision);
-  const inputsInDetails = ask !== undefined || agent !== undefined || mail !== undefined || summary !== undefined;
+  const inputsInDetails =
+    ask !== undefined || agent !== undefined || mail !== undefined || summary !== undefined;
 
   function deny(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();

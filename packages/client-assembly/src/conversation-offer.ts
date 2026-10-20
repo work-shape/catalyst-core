@@ -198,7 +198,9 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
                 ...SCHEDULED_START_TOOL_NAMES
               ]
             : []),
-          ...(holds || subject?.kind === "connection" ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME] : []),
+          ...(holds || subject?.kind === "connection"
+            ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]
+            : []),
           ...appToolNames(input.hasTool),
           ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
         ]

@@ -795,25 +795,25 @@ function ChatWorkspaceContent({
                                 )
                               ) : undefined
                             }
-                          scheduledArea={
-                            scheduledRoute ? (
-                              <ScheduledPage
-                                key={scheduledRoute.collaborationWorkspaceId}
-                                workspaceId={scheduledRoute.collaborationWorkspaceId}
-                                agents={model.config.config.agents}
-                                defaultAgentName={model.config.config.defaultAgentName}
-                                {...(model.controlPlane.canViewBuild
-                                  ? {
-                                      connectionsRoute: {
-                                        kind: "build-kind",
-                                        assetKind: CONNECTIONS_BUILD_PATH
+                            scheduledArea={
+                              scheduledRoute ? (
+                                <ScheduledPage
+                                  key={scheduledRoute.collaborationWorkspaceId}
+                                  workspaceId={scheduledRoute.collaborationWorkspaceId}
+                                  agents={model.config.config.agents}
+                                  defaultAgentName={model.config.config.defaultAgentName}
+                                  {...(model.controlPlane.canViewBuild
+                                    ? {
+                                        connectionsRoute: {
+                                          kind: "build-kind",
+                                          assetKind: CONNECTIONS_BUILD_PATH
+                                        }
                                       }
-                                    }
-                                  : {})}
-                                onOpenRoute={model.route.showRoute}
-                              />
-                            ) : undefined
-                          }
+                                    : {})}
+                                  onOpenRoute={model.route.showRoute}
+                                />
+                              ) : undefined
+                            }
                             inboxArea={
                               inboxRoute ? (
                                 <InboxArea
