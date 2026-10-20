@@ -3363,8 +3363,11 @@ test("superadmin config follows the German locale", async ({ page }) => {
   ).toBeVisible();
 });
 
+// The agent page's tool section lists every Connection and reads each one, so the test takes
+// the Connection writers' turn: a Connection another spec deletes meanwhile would answer 404.
 test("superadmin manages config assets with validation and conflict protection", async ({
-  page
+  page,
+  releaseConnections: _releaseConnections
 }) => {
   test.setTimeout(60_000);
   await signInViaApi(page, superadminUser);
