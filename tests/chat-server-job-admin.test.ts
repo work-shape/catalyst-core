@@ -545,6 +545,11 @@ describe("Instance > Jobs: the summary on a large queue", () => {
   it("is answered from the claim index without reading the table of 500,000 jobs, and so is the list", async () => {
     const server = await createServer();
     await withSql(async (sql) => {
+      // Vacuum marks a page all-visible only once the commit of its rows is on disk. A test
+      // server that commits asynchronously (synchronous_commit = off, as on the Mac mini) has
+      // not written it yet when the vacuum below runs, so it would leave every page unmarked,
+      // and the planner then counts from the table. The rows are committed synchronously here.
+      await sql`set synchronous_commit = on`;
       // Mostly succeeded jobs, as after a week of work, over ten kinds.
       await sql`
         insert into platform_jobs (
@@ -560,6 +565,13 @@ describe("Instance > Jobs: the summary on a large queue", () => {
           timestamptz '2024-01-01' + make_interval(secs => n)
         from generate_series(1, 500000) n`;
       await sql`vacuum analyze platform_jobs`;
+      // The queue the summary is built for: vacuumed, every page all-visible, so the index
+      // answers alone. A plan from the table below then means the summary, not the arranging.
+      const [table] = await sql<{ pages: number; visible: number }[]>`
+        select relpages as pages, relallvisible as visible from pg_class
+        where oid = 'platform_jobs'::regclass`;
+      expect(table?.pages).toBeGreaterThan(12_000);
+      expect(table?.visible).toBe(table?.pages);
     });
 
     const summary = await server.stores.jobs.summarizeByKind({ clientInstanceId });
