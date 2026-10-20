@@ -19,6 +19,7 @@ import {
   type ClientInstanceId,
   type JobWorker,
   type Logger,
+  type OperationRegistry,
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import { workflowAgentActor, workflowAgentCall, workflowAgentInput } from "./workflow-agent-actor";
@@ -45,6 +46,7 @@ interface AgentRunExecutionAssembly {
   store: PlatformStores;
   env: ClientInstanceEnv;
   localAgentRuntimeOptions: WorkerLocalAgentRuntimeOptions;
+  operationCalls: { registry: Pick<OperationRegistry, "resolveMany"> };
 }
 
 /** The job kinds that execute Agent Runs, for the process that serves them. */
@@ -56,10 +58,11 @@ export function createClientInstanceAgentRunJobs(
     clientInstanceId: execution.clientInstanceId,
     stores: execution.store,
     slots: readAgentRunWorkerConcurrency(execution.env) ?? DEFAULT_AGENT_RUN_WORKER_SLOTS,
-    loadCurrentUser: (run) => loadCurrentUser(execution.store, run),
+    loadCurrentUser: (run) =>
+      loadCurrentUser(execution.store, execution.operationCalls.registry, run),
     loadWorkflowAgent: (run) => workflowAgentInput(execution.store, run),
     loadWorkflowAgentDraft: async (run) => {
-      const call = await workflowAgentCall(execution.store, run);
+      const call = await workflowAgentCall(execution.store, execution.operationCalls.registry, run);
       return call && "draft" in call ? call.draft : undefined;
     },
     execute: createLocalAgentRunExecutor(execution.localAgentRuntimeOptions),
@@ -104,9 +107,13 @@ export function readAgentRunWorkerConcurrency(env: ClientInstanceEnv): number | 
   return value;
 }
 
-async function loadCurrentUser(store: PlatformStores, run: AgentRun): Promise<AuthenticatedUser> {
+async function loadCurrentUser(
+  store: PlatformStores,
+  registry: Pick<OperationRegistry, "resolveMany">,
+  run: AgentRun
+): Promise<AuthenticatedUser> {
   if (run.workflowStepRunId) {
-    const actor = await workflowAgentActor(store, run);
+    const actor = await workflowAgentActor(store, registry, run);
     if (!actor)
       throw new AppError("FORBIDDEN", "Workflow principal is unavailable or disabled", {
         reason: "run_as_disabled"

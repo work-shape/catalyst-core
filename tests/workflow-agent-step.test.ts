@@ -55,6 +55,8 @@ type Mode =
 interface FixtureOptions {
   /** The Workflow's account may use the connection; a test of the bound withholds it. */
   principalUses?: boolean;
+  /** The Workflow runs as its own account: its definition names no `runAs`. */
+  ownAccount?: boolean;
   /** Runs after the Workflow run started and before a job claims it. */
   beforeJobs?: (started: {
     app: TestInstance;
@@ -270,6 +272,7 @@ async function fixture(
       }
     ]
   };
+  if (options.ownAccount) delete manifest.runAs;
   if (mode === "plain")
     manifest.steps = [
       { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
@@ -384,6 +387,33 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     );
     expect(call.actor.kind).toBe("user");
     expect(call.status).toBe("denied");
+    expect(changed).toEqual([]);
+  });
+
+  it("tests an agent step of a Workflow-owned account as its tester, bounded by the rights its definition needs", async () => {
+    const f = await fixture("test", false, "user-1", { ownAccount: true, principalUses: false });
+    const step = await f.ended("done");
+    const run = required(
+      await f.app.stores.workflowRuns.readRun({ clientInstanceId: f.clientInstanceId, id: f.runId })
+    );
+    const child = required(
+      await f.app.stores.childAgentRuns.readWorkflowAgentRun({
+        clientInstanceId: f.clientInstanceId,
+        stepRunId: step.id
+      })
+    );
+    const person = await f.app.call("me.get");
+    expect(child.ownerUserId).toBe(person.json<{ id: string }>().id);
+    const call = required(
+      (await f.app.stores.operationRuns.list({ clientInstanceId: f.clientInstanceId })).find(
+        (call) => call.operation === toolName
+      )
+    );
+    expect(call.actor.id).toBe(child.ownerUserId);
+    expect(call.status).toBe("done");
+    // The test run's own account is the bound; it exists in no store (ADR-0031).
+    expect(run.principal.id).not.toBe(f.principal.id);
+    expect(call.origin).toMatchObject({ kind: "agent", boundBy: { id: run.principal.id } });
     expect(changed).toEqual([]);
   });
 

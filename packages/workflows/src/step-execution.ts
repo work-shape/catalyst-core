@@ -680,16 +680,25 @@ export function createStepExecutor(options: StepExecutorOptions) {
             "input_invalid",
             "The input does not fit the agent step"
           );
-          const actor = await workflowRunActor(stores.apiAccess, run);
-          if (!actor)
+          // A test run's agent acts as its tester, bounded by the principal the test run names,
+          // a Workflow-owned account among them; a published run's acts as its principal.
+          const call =
+            run.mode === "test"
+              ? await testRunCall(stores, run, stepRun, attempt.definition, operationCalls.registry)
+              : undefined;
+          const actor = call ? call.draft.boundBy : await workflowRunActor(stores.apiAccess, run);
+          if (!actor || !("workflowRunId" in actor))
             throw new WorkflowStepFailure(
               "run_as_disabled",
               "The Workflow principal is unavailable",
               { systemic: true }
             );
-          const tester =
-            run.mode === "test" ? (await testRunCall(stores, run, stepRun)).actor : undefined;
-          return { kind: "agent", input, principal: actor, ...(tester ? { tester } : {}) };
+          return {
+            kind: "agent",
+            input,
+            principal: actor,
+            ...(call ? { tester: call.actor } : {})
+          };
         }
         case "code":
           return await stageCode(attempt, step);

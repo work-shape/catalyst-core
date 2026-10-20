@@ -101,7 +101,7 @@ export function createInstanceOperationCalls(
     },
     async workflowAgentActor(runId) {
       const run = await store.agentRuns.getAgentRun({ clientInstanceId, runId });
-      return run ? workflowAgentActor(store, run) : undefined;
+      return run ? workflowAgentActor(store, operationCalls.registry, run) : undefined;
     },
     async agentToolNames(agentName, conversationId) {
       // A Workflow agent step's thread holds its one run, whatever its status: its tools are

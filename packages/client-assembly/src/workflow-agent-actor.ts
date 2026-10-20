@@ -2,6 +2,7 @@ import { indexWorkflowSteps, testRunCall, workflowRunActor } from "@work-shape/c
 import {
   AppError,
   type AgentRun,
+  type OperationRegistry,
   type PlatformStores,
   type StartAgentRunInput,
   type WorkflowStep,
@@ -53,8 +54,15 @@ export async function workflowAgentInput(
   };
 }
 
+/** Where a draft test's agent step resolves the rights a Workflow-owned account is bounded by. */
+type OperationResolver = Pick<OperationRegistry, "resolveMany">;
+
 /** Revalidates the pinned principal and, in draft tests, the tester on every claim/resume. */
-export async function workflowAgentCall(stores: PlatformStores, run: AgentRun) {
+export async function workflowAgentCall(
+  stores: PlatformStores,
+  registry: OperationResolver,
+  run: AgentRun
+) {
   if (!run.workflowStepRunId) return undefined;
   const clientInstanceId = run.clientInstanceId;
   const step = await stores.workflowRuns.getStepRun({
@@ -63,20 +71,25 @@ export async function workflowAgentCall(stores: PlatformStores, run: AgentRun) {
   });
   const workflow =
     step && (await stores.workflowRuns.readRun({ clientInstanceId, id: step.runId }));
-  const principal = workflow && (await workflowRunActor(stores.apiAccess, workflow));
-  if (
-    !workflow ||
-    !step ||
-    !principal ||
-    (workflow.mode !== "test" && principal.id !== run.principalId)
-  )
-    return undefined;
+  if (!workflow || !step) return undefined;
   if (workflow.mode === "test") {
-    const call = await testRunCall(stores, workflow, step);
+    // A draft test runs as its tester, bounded by the principal its run names; a Workflow-owned
+    // account is bounded by the rights its definition needs, as its steps are (ADR-0031).
+    const definition = await stores.workflowRuns.readRunDefinition({
+      clientInstanceId,
+      id: workflow.id
+    });
+    if (!definition) return undefined;
+    const call = await testRunCall(stores, workflow, step, definition, registry);
     return call.actor.id === run.ownerUserId ? call : undefined;
   }
-  return { actor: principal };
+  const principal = await workflowRunActor(stores.apiAccess, workflow);
+  return principal && principal.id === run.principalId ? { actor: principal } : undefined;
 }
-export async function workflowAgentActor(stores: PlatformStores, run: AgentRun) {
-  return (await workflowAgentCall(stores, run))?.actor;
+export async function workflowAgentActor(
+  stores: PlatformStores,
+  registry: OperationResolver,
+  run: AgentRun
+) {
+  return (await workflowAgentCall(stores, registry, run))?.actor;
 }
