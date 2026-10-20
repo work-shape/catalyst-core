@@ -80,7 +80,7 @@ SELECT
 	NULL,
 	"id",
 	'namespace_retired',
-	'migration:0129_retire_namespaces',
+	'migration:0131_retire_namespaces',
 	now(),
 	jsonb_build_object(
 		'grantId', "id",
@@ -109,7 +109,7 @@ SELECT
 	NULL,
 	"id",
 	'namespace_retired',
-	'migration:0129_retire_namespaces',
+	'migration:0131_retire_namespaces',
 	now(),
 	jsonb_build_object(
 		'grantId', "id",
@@ -139,7 +139,7 @@ SELECT
 	NULL,
 	"prefix",
 	'namespace_retired',
-	'migration:0129_retire_namespaces',
+	'migration:0131_retire_namespaces',
 	now(),
 	jsonb_build_object(
 		'prefix', "prefix",
@@ -192,7 +192,7 @@ SELECT
 	NULL,
 	"id",
 	'namespace_retired',
-	'migration:0129_retire_namespaces',
+	'migration:0131_retire_namespaces',
 	now(),
 	jsonb_build_object(
 		'keyId', "id",
