@@ -1,9 +1,0 @@
----
-section: Added
----
-
-- **Workflows:** Workflow `agent` steps now execute as durable Child Agent Runs named `workflow.<workflow>.<step>`, under the run's acting principal, with the Workflow's tools and the instance's default model; an agent asset of the same name is never consulted. JSON output is validated, with one repair turn that may call no tools; a second-check failure names the field. A confirmation fails the step with `confirmation_unattended`, naming the operation; an approval pauses and resumes the same run. Cancelling the Workflow run cancels its step's Agent Run. A step's agent is never offered `run_agent`, and a Workflow with an agent step whose tools start subagents is refused at save. Model usage of a published run is attributed to `workflow_step` and its Workflow Run.
-
-- **Workflows:** Draft tests belong to the tester, intersect the tester's and principal's rights, name the bounding principal in each Operation Run's origin (for a Workflow that runs as its own account, the rights its definition needs bound the test), count model usage to the tester, and simulate changing calls through the existing draft policy. A draft test whose agent calls a `confirm` operation fails as the published run would.
-
-- **Workflows:** The step panel shows instructions, tools and usage and, for holders of `workflow.read_run_data`, the validated output and the transcript, which it loads on open from the new `workflows.get_step_transcript` (`GET /api/v1/workflow-runs/:runId/steps/:stepRunId/transcript`), bounded to 100 messages with long texts cut. `workflows.list_step_runs` carries no transcript. Run and step result previews in Workflows containing agent steps require that right too, including values forwarded into later steps; App starters retain access to their explicit result. Workflow run threads are unavailable on conversation routes, and their data follows Workflow run-data retention.
