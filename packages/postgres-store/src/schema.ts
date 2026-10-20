@@ -1,156 +1,107 @@
-import {
-  noticeMail,
-  workflowRevisionPublishers,
-  workflowFailureNotices
-} from "./schema/noticeMail";
-export { noticeMail, workflowRevisionPublishers, workflowFailureNotices };
-export * from "./schema/followUps";
-export * from "./schema/scheduledStarts";
-export * from "./schema/users";
-export * from "./schema/workspaces";
-export * from "./schema/apiAccess";
-export * from "./schema/conversations";
-export * from "./schema/conversationCreatedAssets";
-export * from "./schema/agentRuns";
-export * from "./schema/executionWorkspaces";
-export * from "./schema/files";
-export * from "./schema/structuredData";
-export * from "./schema/audit";
-export * from "./schema/usage";
-export * from "./schema/configAssets";
-export * from "./schema/agentProposals";
-export * from "./schema/agentTryConversations";
-export * from "./schema/assetRepos";
-export * from "./schema/approvals";
-export * from "./schema/jobs";
-export * from "./schema/operationRuns";
-export * from "./schema/liveOnceSwitches";
+// The tables of the store, one file per area under `schema/`. A new file is one more line in
+// each list below; drizzle-kit reads the tables from the re-exports, and `schema` gives the
+// query builder every table of every file.
+
+import * as accessTables from "./schema/access";
+import * as agentProposalsTables from "./schema/agentProposals";
+import * as agentRunsTables from "./schema/agentRuns";
+import * as agentTryConversationsTables from "./schema/agentTryConversations";
+import * as apiAccessTables from "./schema/apiAccess";
+import * as approvalsTables from "./schema/approvals";
+import * as assetReposTables from "./schema/assetRepos";
+import * as auditTables from "./schema/audit";
+import * as configAssetsTables from "./schema/configAssets";
+import * as connectionsTables from "./schema/connections";
+import * as conversationCreatedAssetsTables from "./schema/conversationCreatedAssets";
+import * as conversationsTables from "./schema/conversations";
+import * as dataScopesTables from "./schema/dataScopes";
+import * as dataStoresTables from "./schema/dataStores";
+import * as executionWorkspacesTables from "./schema/executionWorkspaces";
+import * as feedbackTables from "./schema/feedback";
+import * as filesTables from "./schema/files";
+import * as followUpsTables from "./schema/followUps";
+import * as guardrailsTables from "./schema/guardrails";
+import * as infrastructureTables from "./schema/infrastructure";
+import * as jobsTables from "./schema/jobs";
+import * as knowledgeBasesTables from "./schema/knowledgeBases";
+import * as liveOnceSwitchesTables from "./schema/liveOnceSwitches";
+import * as noticeMailTables from "./schema/noticeMail";
+import * as operationRunsTables from "./schema/operationRuns";
+import * as pagesTables from "./schema/pages";
+import * as scheduledStartsTables from "./schema/scheduledStarts";
+import * as structuredDataTables from "./schema/structuredData";
+import * as usageTables from "./schema/usage";
+import * as usersTables from "./schema/users";
+import * as workflowDatasetsTables from "./schema/workflowDatasets";
+import * as workflowRunsTables from "./schema/workflowRuns";
+import * as workspacesTables from "./schema/workspaces";
+
 export * from "./schema/access";
-export * from "./schema/dataScopes";
-export * from "./schema/infrastructure";
-export * from "./schema/pages";
+export * from "./schema/agentProposals";
+export * from "./schema/agentRuns";
+export * from "./schema/agentTryConversations";
+export * from "./schema/apiAccess";
+export * from "./schema/approvals";
+export * from "./schema/assetRepos";
+export * from "./schema/audit";
+export * from "./schema/configAssets";
 export * from "./schema/connections";
-export * from "./schema/workflowRuns";
+export * from "./schema/conversationCreatedAssets";
+export * from "./schema/conversations";
+export * from "./schema/dataScopes";
 export * from "./schema/dataStores";
-export * from "./schema/guardrails";
-export * from "./schema/knowledgeBases";
+export * from "./schema/executionWorkspaces";
 export * from "./schema/feedback";
-import { productUsers, userIdentities } from "./schema/users";
-import { servicePrincipals, apiCredentials, apiConnectCodes } from "./schema/apiAccess";
-import { conversations, messages, modelProviderContinuations } from "./schema/conversations";
-import { agentRuns, agentRunObservations, runStartCommands } from "./schema/agentRuns";
-import {
-  executionWorkspaces,
-  workspaceCommands,
-  executionWorkspaceFiles
-} from "./schema/executionWorkspaces";
-import {
-  managedFiles,
-  managedArtifacts,
-  artifactPreviewJobs,
-  artifactPreviewManifests,
-  conversationAttachments
-} from "./schema/files";
-import { structuredDataResources } from "./schema/structuredData";
-import { auditEvents } from "./schema/audit";
-import { modelUsageEvents } from "./schema/usage";
-import { configAssetState, configAssets, configAssetRevisions } from "./schema/configAssets";
-import { agentProposals, agentProposalRevisions } from "./schema/agentProposals";
-import { conversationCreatedAssets } from "./schema/conversationCreatedAssets";
-import { agentTryConversations } from "./schema/agentTryConversations";
-import { assetCheckouts, assetRepoBundles } from "./schema/assetRepos";
-import { approvalRequests } from "./schema/approvals";
-import { platformJobs } from "./schema/jobs";
-import { operationRuns } from "./schema/operationRuns";
-import { liveOnceRuns, liveOnceSwitches } from "./schema/liveOnceSwitches";
-import { scopeAssignments } from "./schema/dataScopes";
-import { permissionGrants, roles } from "./schema/access";
-import { infrastructureCheckState } from "./schema/infrastructure";
-import { pages, fileSets, pageBuilds, appUserStorage } from "./schema/pages";
-import {
-  secrets,
-  connectionState,
-  connectionBindings,
-  connectionSetupSessions
-} from "./schema/connections";
-import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
-import { dataStores } from "./schema/dataStores";
-import { guardrailHits } from "./schema/guardrails";
-import { knowledgeBaseStates } from "./schema/knowledgeBases";
-import { feedback } from "./schema/feedback";
-
-import { conversationFollowUps } from "./schema/followUps";
-import { scheduledStarts, scheduledStartRuns } from "./schema/scheduledStarts";
-
-import {
-  workflowRunDatasets,
-  workflowDatasetUsage,
-  workflowDatasetReaders
-} from "./schema/workflowDatasets";
+export * from "./schema/files";
+export * from "./schema/followUps";
+export * from "./schema/guardrails";
+export * from "./schema/infrastructure";
+export * from "./schema/jobs";
+export * from "./schema/knowledgeBases";
+export * from "./schema/liveOnceSwitches";
+export * from "./schema/noticeMail";
+export * from "./schema/operationRuns";
+export * from "./schema/pages";
+export * from "./schema/scheduledStarts";
+export * from "./schema/structuredData";
+export * from "./schema/usage";
+export * from "./schema/users";
+export * from "./schema/workflowDatasets";
+export * from "./schema/workflowRuns";
+export * from "./schema/workspaces";
 
 export const schema = {
-  noticeMail,
-  workflowRevisionPublishers,
-  workflowFailureNotices,
-  workflowRunDatasets,
-  workflowDatasetUsage,
-  workflowDatasetReaders,
-  conversationFollowUps,
-  scheduledStarts,
-  scheduledStartRuns,
-  approvalRequests,
-  productUsers,
-  userIdentities,
-  servicePrincipals,
-  apiCredentials,
-  apiConnectCodes,
-  conversations,
-  messages,
-  modelProviderContinuations,
-  agentRuns,
-  agentRunObservations,
-  runStartCommands,
-  executionWorkspaces,
-  workspaceCommands,
-  executionWorkspaceFiles,
-  managedFiles,
-  managedArtifacts,
-  artifactPreviewJobs,
-  artifactPreviewManifests,
-  conversationAttachments,
-  structuredDataResources,
-  auditEvents,
-  modelUsageEvents,
-  configAssetState,
-  configAssets,
-  configAssetRevisions,
-  agentProposals,
-  agentProposalRevisions,
-  conversationCreatedAssets,
-  agentTryConversations,
-  assetRepoBundles,
-  assetCheckouts,
-  platformJobs,
-  operationRuns,
-  liveOnceSwitches,
-  liveOnceRuns,
-  permissionGrants,
-  scopeAssignments,
-  roles,
-  infrastructureCheckState,
-  pages,
-  fileSets,
-  pageBuilds,
-  appUserStorage,
-  secrets,
-  connectionState,
-  connectionBindings,
-  connectionSetupSessions,
-  workflowRuns,
-  workflowStepRuns,
-  dataStores,
-  knowledgeBaseStates,
-  guardrailHits,
-  feedback
+  ...accessTables,
+  ...agentProposalsTables,
+  ...agentRunsTables,
+  ...agentTryConversationsTables,
+  ...apiAccessTables,
+  ...approvalsTables,
+  ...assetReposTables,
+  ...auditTables,
+  ...configAssetsTables,
+  ...connectionsTables,
+  ...conversationCreatedAssetsTables,
+  ...conversationsTables,
+  ...dataScopesTables,
+  ...dataStoresTables,
+  ...executionWorkspacesTables,
+  ...feedbackTables,
+  ...filesTables,
+  ...followUpsTables,
+  ...guardrailsTables,
+  ...infrastructureTables,
+  ...jobsTables,
+  ...knowledgeBasesTables,
+  ...liveOnceSwitchesTables,
+  ...noticeMailTables,
+  ...operationRunsTables,
+  ...pagesTables,
+  ...scheduledStartsTables,
+  ...structuredDataTables,
+  ...usageTables,
+  ...usersTables,
+  ...workflowDatasetsTables,
+  ...workflowRunsTables,
+  ...workspacesTables
 };
-export * from "./schema/workflowDatasets";
