@@ -4,7 +4,11 @@ import {
   connectionConfigSchema,
   releaseConnectionConfigSchema
 } from "@work-shape/catalyst-config-schema";
-import { createConnectorTypeRegistry, type OperationLimits } from "@work-shape/catalyst-core";
+import {
+  createConnectorTypeRegistry,
+  type JsonObject,
+  type OperationLimits
+} from "@work-shape/catalyst-core";
 import {
   ConnectionCallSlots,
   createDocumentSourceOpener,
@@ -63,11 +67,12 @@ describe("Connection source limits (CS-6 acceptance 61)", () => {
         limits
       }).limits
     ).toEqual(limits);
-    for (const invalid of [
+    const invalidLimits: JsonObject[] = [
       { concurrency: 0 },
       { perPeriod: { calls: -1, seconds: 1 } },
       { perPeriod: { calls: 1, seconds: 0 } }
-    ]) {
+    ];
+    for (const invalid of invalidLimits) {
       expect(
         connectionConfigSchema.safeParse(connection("source", { limits: invalid })).success
       ).toBe(false);
