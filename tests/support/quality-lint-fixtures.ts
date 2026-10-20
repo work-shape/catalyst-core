@@ -153,14 +153,19 @@ export const extraLintFiles: Record<string, string> = {
     "export const header = <PageHeader description={asset.id} />;\n",
   "packages/tool-execution/src/workspace-tools/handle.ts":
     "export const id = context.toolRequest.conversationId;\n",
-  [`${source}/retired-probe.ts`]: 'export const namespaceId = "example";\n'
+  [`${source}/retired-probe.ts`]: 'export const namespaceId = "example";\n',
+  "packages/core/package.json": JSON.stringify({ name: "@fixture/core" }),
+  "packages/core/src/a.ts": "export const a = 1;\n",
+  "packages/core/src/b.ts": "export const b = 2;\n",
+  "packages/core/src/index.ts": 'export * from "./b";\nexport * from "./a";\n'
 };
 expected.push(
   `catalyst/run-operation-boundary ${source}/run-operation.ts`,
   "catalyst/chart-engine-import packages/ui/src/data/other.ts",
   "catalyst/asset-head-description packages/chat-ui/src/header.tsx",
   "catalyst/workspace-handle-boundary packages/tool-execution/src/workspace-tools/handle.ts",
-  `catalyst/retired-terms ${source}/retired-probe.ts`
+  `catalyst/retired-terms ${source}/retired-probe.ts`,
+  "catalyst/sorted-barrel packages/core/src/index.ts"
 );
 
 const byRule = new Map<string, string[]>();
