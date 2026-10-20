@@ -3582,7 +3582,8 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
     "Jobs",
     "Operations",
     "Modules",
-    "Infrastructure"
+    "Infrastructure",
+    "Workspaces"
   ]);
   await expect(rail.getByRole("button", { name: "Users", exact: true })).toHaveAttribute(
     "aria-current",
