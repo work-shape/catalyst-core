@@ -555,9 +555,11 @@ export function useWorkspaceChatModel({
     showRoute: routeState.showRoute,
     onAccountDeleted: leaveSignedOutSession,
     onCollaborationWorkspaceDeleted: collaborationWorkspace.collaborationWorkspaceDeleted,
-    ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
-    ...(editWithAgent === undefined ? {} : { editWithAgent }),
-    startDockedChat
+    agentActions: {
+      ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
+      ...(editWithAgent === undefined ? {} : { editWithAgent }),
+      startDockedChat
+    }
   });
   const canViewAdministration = controlPlane.canViewAdministration;
   const approvalPendingCountQuery = useApprovalPendingCountQuery({

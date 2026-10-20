@@ -37,7 +37,10 @@ import type {
 } from "../../shared/page-definition";
 import { usePlatformContextQuery } from "../../shared/api/workspace-queries";
 import { workspaceRoutePath } from "../../shared/routes";
-import type { SettingsPageContextValue } from "../../shared/settings-page-context";
+import type {
+  SettingsAgentActions,
+  SettingsPageContextValue
+} from "../../shared/settings-page-context";
 import type { ThemeModePreference } from "../../shared/theme";
 import type {
   WorkspaceRoute,
@@ -75,15 +78,8 @@ export interface ControlPlaneModelInput {
   showRoute(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
   onAccountDeleted(): void;
   onCollaborationWorkspaceDeleted(collaborationWorkspaceId: string): void;
-  /** See `buildWithAgent` of the settings page's context. */
-  buildWithAgent?(prompt: string): void;
-  /** See `editWithAgent` of the settings page's context. */
-  editWithAgent?(
-    subject: { kind: string; name: string },
-    workspaceId: string | undefined
-  ): Promise<void>;
-  /** Opens the dock beside the open page with a new conversation and this text to send. */
-  startDockedChat?: (prompt: string) => void;
+  /** The agent and the dock, handed to the Settings and Build pages as they are. */
+  agentActions: SettingsAgentActions;
 }
 
 export interface ControlPlaneModel {
@@ -170,9 +166,7 @@ export function useControlPlaneModel({
   showRoute,
   onAccountDeleted,
   onCollaborationWorkspaceDeleted,
-  buildWithAgent,
-  editWithAgent,
-  startDockedChat
+  agentActions
 }: ControlPlaneModelInput): ControlPlaneModel {
   const catalog = useMemo(() => settingsCatalog(administration), [administration]);
   const platformQuery = usePlatformContextQuery({
@@ -248,9 +242,7 @@ export function useControlPlaneModel({
           onAccountDeleted,
           onWorkspaceLeft: () => goToDefaultChat(),
           onWorkspaceDeleted: onCollaborationWorkspaceDeleted,
-          ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
-          ...(editWithAgent === undefined ? {} : { editWithAgent }),
-          ...(startDockedChat ? { startDockedChat } : {})
+          ...agentActions
         }
       : undefined;
 

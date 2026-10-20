@@ -216,9 +216,9 @@ export function AssetEditorShell({
           title={title}
           description={description || undefined}
           state={
-            frame.draftState ? (
+            frame.draft?.state ? (
               <>
-                {frame.draftState}
+                {frame.draft?.state}
                 {badges}
               </>
             ) : (

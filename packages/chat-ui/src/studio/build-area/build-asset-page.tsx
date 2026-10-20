@@ -606,21 +606,21 @@ function LoadedAssetPage({
         readOnlyReason={canWrite ? undefined : readOnlyReason}
         saveBlocked={conflict !== undefined}
         instanceWrite={source.rights.instanceWrite}
-        canPublish={!shipped && mayOnAsset(source.rights, "publish", stored)}
-        onDraftRead={(revision) => {
-          agentDraftRead.current = revision;
-        }}
-        {...(owner === undefined ? {} : { owner })}
-        onUnsavedChange={heardUnsaved}
-        draftState={
-          draftAhead ? (
+        draft={{
+          canPublish: !shipped && mayOnAsset(source.rights, "publish", stored),
+          onRead: (revision) => {
+            agentDraftRead.current = revision;
+          },
+          state: draftAhead ? (
             <Badge tone="warning" data-build-draft-state="">
               {t(
                 stored.publishedRevision === undefined ? "build.neverPublished" : "build.draftAhead"
               )}
             </Badge>
           ) : undefined
-        }
+        }}
+        {...(owner === undefined ? {} : { owner })}
+        onUnsavedChange={heardUnsaved}
         actions={{
           primaryAction: canPublish ? (
             <span className="flex items-center gap-2">

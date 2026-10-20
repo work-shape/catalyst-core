@@ -9,32 +9,11 @@ import type {
 import type { ThemeModePreference } from "./theme";
 
 /**
- * What the shell hands every Settings page and the Build page: the session, the instance
- * configuration, the person's own preferences and the workspace the Workspace group is
- * switched to. A page loads its own data with these.
+ * The agent and the dock as the shell offers them to the Settings and Build pages. The shell
+ * hands them on as one object, so a further action is a member here and changes no model in
+ * between.
  */
-export interface SettingsPageContextValue {
-  apiBaseUrl: string;
-  authScope: string;
-  client: ApiClient;
-  user: ApiUser;
-  config: SafeConfig;
-  locales: LocaleCode[];
-  locale: LocaleCode;
-  selectLocale(locale: LocaleCode): void;
-  showContextIndicator: boolean;
-  setShowContextIndicator(visible: boolean): void;
-  themePreference: ThemeModePreference;
-  selectThemePreference(preference: ThemeModePreference): void;
-  /** The shared workspace the Workspace pages change; absent on every other page. */
-  workspace: CollaborationWorkspaceWithRole | undefined;
-  /** The workspace the person works in, personal or shared: where a new agent starts. */
-  activeWorkspace: CollaborationWorkspaceWithRole | undefined;
-  /** The person deleted their account: the session is over. */
-  onAccountDeleted(): void;
-  /** The person left the workspace they were changing. */
-  onWorkspaceLeft(): void;
-  onWorkspaceDeleted(collaborationWorkspaceId: string): void;
+export interface SettingsAgentActions {
   /**
    * Opens the dock on this page with a new conversation with an agent that holds the platform's
    * asset tools, `prompt` in its composer: a New button's way where such an agent is offered.
@@ -57,6 +36,35 @@ export interface SettingsPageContextValue {
    * composer, for the person to send. Absent where the shell has no dock.
    */
   startDockedChat?: (prompt: string) => void;
+}
+
+/**
+ * What the shell hands every Settings page and the Build page: the session, the instance
+ * configuration, the person's own preferences and the workspace the Workspace group is
+ * switched to. A page loads its own data with these.
+ */
+export interface SettingsPageContextValue extends SettingsAgentActions {
+  apiBaseUrl: string;
+  authScope: string;
+  client: ApiClient;
+  user: ApiUser;
+  config: SafeConfig;
+  locales: LocaleCode[];
+  locale: LocaleCode;
+  selectLocale(locale: LocaleCode): void;
+  showContextIndicator: boolean;
+  setShowContextIndicator(visible: boolean): void;
+  themePreference: ThemeModePreference;
+  selectThemePreference(preference: ThemeModePreference): void;
+  /** The shared workspace the Workspace pages change; absent on every other page. */
+  workspace: CollaborationWorkspaceWithRole | undefined;
+  /** The workspace the person works in, personal or shared: where a new agent starts. */
+  activeWorkspace: CollaborationWorkspaceWithRole | undefined;
+  /** The person deleted their account: the session is over. */
+  onAccountDeleted(): void;
+  /** The person left the workspace they were changing. */
+  onWorkspaceLeft(): void;
+  onWorkspaceDeleted(collaborationWorkspaceId: string): void;
 }
 
 const SettingsPageContext = createContext<SettingsPageContextValue | undefined>(undefined);

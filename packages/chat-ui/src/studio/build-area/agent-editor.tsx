@@ -231,7 +231,7 @@ export function AgentEditor({
     amend(() => agentConfigToForm(latest.config));
     setHeld(latest);
   }, [amend, busy, differs, dirty, held, latest, reload, saving]);
-  const { onDraftRead } = frame;
+  const onDraftRead = frame.draft?.onRead;
   useEffect(() => {
     onDraftRead?.(held?.revision ?? null);
   }, [held, onDraftRead]);
@@ -604,10 +604,12 @@ export function AgentEditor({
         draft !== undefined && held !== null && !stale ? (
           <Button
             data-agent-publish=""
-            disabled={!frame.canPublish || dirty || busy !== undefined || behind !== undefined}
-            aria-describedby={frame.canPublish ? undefined : publishReasonId}
+            disabled={
+              !frame.draft?.canPublish || dirty || busy !== undefined || behind !== undefined
+            }
+            aria-describedby={frame.draft?.canPublish ? undefined : publishReasonId}
             title={
-              frame.canPublish
+              frame.draft?.canPublish
                 ? dirty
                   ? t("build.publishSaveFirst")
                   : undefined
@@ -646,7 +648,7 @@ export function AgentEditor({
               draft={held}
               behind={behind}
               name={liveTitle}
-              publishRight={frame.canPublish ? undefined : actionLabel("agent.publish", t)}
+              publishRight={frame.draft?.canPublish ? undefined : actionLabel("agent.publish", t)}
               publishReasonId={publishReasonId}
               answer={answer}
               onLoad={() => {

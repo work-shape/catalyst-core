@@ -71,7 +71,7 @@ function frame(overrides: Partial<BuildAssetEditorProps> = {}): BuildAssetEditor
     },
     start: undefined,
     canWrite: true,
-    canPublish: true,
+    draft: { canPublish: true },
     instanceWrite: true,
     back: null,
     actions: {},

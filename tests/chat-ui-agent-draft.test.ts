@@ -57,7 +57,7 @@ function frame(overrides: Partial<BuildAssetEditorProps> = {}): BuildAssetEditor
     },
     start: undefined,
     canWrite: true,
-    canPublish: true,
+    draft: { canPublish: true },
     instanceWrite: false,
     back: null,
     actions: {},
@@ -213,7 +213,7 @@ describe("the agent page with a draft", () => {
   });
 
   it("shows Publish disabled to a writer without agent.publish, with the right named", () => {
-    const markup = agentPage(source(draftOf(drafted)), { frame: { canPublish: false } });
+    const markup = agentPage(source(draftOf(drafted)), { frame: { draft: { canPublish: false } } });
     const publish = publishButton(markup) ?? "";
     expect(publish).toContain('disabled=""');
     const reason = /<p id="([^"]+)">Publishing needs the right “Publish agents”\.<\/p>/u.exec(
@@ -222,7 +222,7 @@ describe("the agent page with a draft", () => {
     expect(reason).not.toBeNull();
     expect(publish).toContain(`aria-describedby="${reason?.[1] ?? "none"}"`);
     expect(
-      agentPage(source(draftOf(drafted)), { locale: "de", frame: { canPublish: false } })
+      agentPage(source(draftOf(drafted)), { locale: "de", frame: { draft: { canPublish: false } } })
     ).toContain("Veröffentlichen braucht das Recht „Agenten veröffentlichen“.");
   });
 
@@ -273,7 +273,9 @@ describe("the agent page without a draft", () => {
   });
 
   it("shows a reader nothing of a draft", () => {
-    const markup = agentPage(undefined, { frame: { canWrite: false, canPublish: false } });
+    const markup = agentPage(undefined, {
+      frame: { canWrite: false, draft: { canPublish: false } }
+    });
     expect(markup).not.toContain("data-agent-draft");
     expect(publishButton(markup)).toBeUndefined();
   });
