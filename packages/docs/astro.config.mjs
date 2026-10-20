@@ -128,7 +128,8 @@ export default defineConfig({
                 "configure/release-config",
                 "configure/modules",
                 "configure/config-assets",
-                "configure/cli"
+                "configure/cli",
+                { label: "CLI commands", items: [{ autogenerate: { directory: "configure/cli" } }] }
               ]
             },
             {
