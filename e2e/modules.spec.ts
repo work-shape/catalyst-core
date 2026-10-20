@@ -244,8 +244,17 @@ test("a queued job of a module that is off says what it waits for", async ({ pag
     await page.route(
       ({ pathname }) => pathname === "/api/v1/instance/jobs",
       async (route) => {
-        const response = await route.fetch();
-        const body: { items: { id: string }[] } = await response.json();
+        // A list still in flight when the page reloads or the test ends has no answer to rewrite.
+        const response = await route.fetch().catch(() => undefined);
+        if (!response) {
+          return;
+        }
+        const body: { items: { id: string }[] } | undefined = await response
+          .json()
+          .catch(() => undefined);
+        if (body === undefined) {
+          return;
+        }
         await route.fulfill({
           response,
           json: {
