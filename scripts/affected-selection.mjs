@@ -32,11 +32,24 @@ export function affectedPackages(graph, packages, changed) {
   return [...selected].sort();
 }
 
-/** Walk test imports, including test support and re-exports, to the affected package roots. */
+/**
+ * The tests that reach a changed file through imports, test support and re-exports. `scopes`
+ * are the selected package directories, changed packages and their dependents; they select a
+ * test only through a whole-package edge (`packages/<x>/`, a test that reads a package with fs
+ * or runs its CLI). A changed file no test imports, such as SQL, a template or a worker started
+ * by its path, stands for its own package: every test that reaches a file of that package.
+ */
 export function affectedTests(tests, dependencies, scopes, changed) {
   const changedSet = new Set(changed);
+  const wholePackages = changed
+    .filter((file) => !dependencies.has(file))
+    .flatMap((file) => scopes.filter((scope) => file.startsWith(`${scope}/`)));
+  const selects = (file) =>
+    changedSet.has(file) ||
+    (file.endsWith("/") && scopes.some((scope) => file === `${scope}/`)) ||
+    wholePackages.some((scope) => file.startsWith(`${scope}/`));
   const reaches = (file, seen) => {
-    if (changedSet.has(file) || scopes.some((scope) => file.startsWith(`${scope}/`))) return true;
+    if (selects(file)) return true;
     if (seen.has(file)) return false;
     seen.add(file);
     return (dependencies.get(file) ?? []).some((next) => reaches(next, seen));

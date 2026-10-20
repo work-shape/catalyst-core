@@ -40,13 +40,57 @@ test("test selection follows support/re-exports and terminates on cycles", () =>
     ["tests/cycle.ts", ["tests/b.test.ts"]]
   ]);
   assert.deepEqual(
-    affectedTests(["tests/a.test.ts", "tests/b.test.ts"], deps, ["packages/b"], []),
+    affectedTests(
+      ["tests/a.test.ts", "tests/b.test.ts"],
+      deps,
+      ["packages/b"],
+      ["packages/b/src/index.ts"]
+    ),
     ["tests/a.test.ts"]
   );
   assert.deepEqual(
     affectedTests(["tests/a.test.ts", "tests/b.test.ts"], deps, [], ["tests/cycle.ts"]),
     ["tests/b.test.ts"]
   );
+});
+
+test("tests are selected by the file graph, not by widened packages", () => {
+  const tests = [
+    "tests/a.test.ts",
+    "tests/c.test.ts",
+    "tests/d.test.ts",
+    "tests/e.test.ts",
+    "tests/f.test.ts"
+  ];
+  const deps = new Map([
+    ["tests/a.test.ts", ["packages/b/src/x.ts"]],
+    ["tests/c.test.ts", ["packages/b/src/y.ts"]],
+    // A test that reads package b with fs, and one that runs the dependent client c.
+    ["tests/d.test.ts", ["packages/b/"]],
+    ["tests/f.test.ts", ["clients/c/"]],
+    ["tests/e.test.ts", ["clients/c/src/z.ts"]],
+    ["clients/c/src/z.ts", []],
+    ["packages/b/src/x.ts", []],
+    ["packages/b/src/y.ts", []]
+  ]);
+  const scopes = qualityScopes(
+    packages,
+    affectedPackages(graph, packages, ["packages/b/src/x.ts"])
+  );
+  assert.deepEqual(scopes, ["packages/b", "clients/c"]);
+  // Another file of b, or of its dependent c, is no reason to run a test.
+  assert.deepEqual(affectedTests(tests, deps, scopes, ["packages/b/src/x.ts"]), [
+    "tests/a.test.ts",
+    "tests/d.test.ts",
+    "tests/f.test.ts"
+  ]);
+  // A file no test imports stands for its whole package, not for its dependents.
+  assert.deepEqual(affectedTests(tests, deps, scopes, ["packages/b/migrations/0001_x.sql"]), [
+    "tests/a.test.ts",
+    "tests/c.test.ts",
+    "tests/d.test.ts",
+    "tests/f.test.ts"
+  ]);
 });
 
 test("shared lint inputs select all packages, including unrelated ones", () => {
