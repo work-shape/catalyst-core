@@ -432,7 +432,7 @@
       "target": "lint",
       "rule": "catalyst/duplicate-literal-list",
       "scope": "packages/chat-ui",
-      "count": 38,
+      "count": 37,
       "owner": "D5-after-freeze"
     },
     {
