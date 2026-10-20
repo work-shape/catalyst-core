@@ -5,6 +5,31 @@ import { z } from "zod";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
+import { REQUEST_FAILED } from "./allowed-page-errors";
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: [
+    {
+      name: "planted-send-now-failure",
+      reason:
+        "Chromium's own log line for the Send now request the picture test aborts on purpose, to " +
+        "show the queue's error line.",
+      matches: REQUEST_FAILED,
+      path: /^\/api\/v1\/conversations\/[^/]+\/follow-ups\/dispatch$/u,
+      tests: ["pictures of the queue's passing states"]
+    },
+    {
+      name: "planted-phone-send-failure",
+      reason:
+        "The phone layout regression deliberately aborts a send to show its pinned run notice above a paused queue.",
+      matches: REQUEST_FAILED,
+      path: /^\/api\/v1\/conversations\/[^/]+\/runs$/u,
+      tests: [
+        "pinned chat bands cover the transcript and the return button clears the whole footer"
+      ]
+    }
+  ]
+});
 
 // A message sent while a run goes waits in the conversation's queue above the composer and
 // starts as the next turn. Fails without the queue: the send is refused while the run goes, and

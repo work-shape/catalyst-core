@@ -6,6 +6,23 @@ import { z } from "zod";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
+import { requestAnswered } from "./allowed-page-errors";
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: [
+    {
+      name: "app-workflow-action-refused-for-a-missing-right",
+      reason:
+        "Chromium's own log line: a member without the use right on the Workflow presses the " +
+        "App's button, the call is answered with 403, and the test asserts that the App names the right.",
+      matches: requestAnswered(403),
+      path: /^\/api\/v1\/app-content-sessions\/[^/]+\/actions\/log-visit$/u,
+      tests: [
+        "an App button starts a published Workflow and shows its output; the draft and a member without the right start nothing"
+      ]
+    }
+  ]
+});
 
 // A button of a published App starts a published Workflow through a named action: the frame
 // asks the interface, the instance starts the Workflow as whoever looks, and the App follows

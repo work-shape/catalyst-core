@@ -6,6 +6,24 @@ import { z } from "zod";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { shootEverywhere } from "./surface-shots";
 import { expect, test } from "./test";
+import { requestAnswered } from "./allowed-page-errors";
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: [
+    {
+      name: "agent-draft-saved-over-a-newer-draft",
+      reason:
+        "Chromium's own log line: the test saves the agent's draft with the API while a writer " +
+        "edits it on the page, the writer's save is answered with 412, and the test asserts that " +
+        "the page names who saved the newer draft and offers to load it.",
+      matches: requestAnswered(412),
+      path: /^\/api\/v1\/assets\/agent\/[^/]+$/u,
+      tests: [
+        "a writer without agent.publish, a draft written meanwhile, a reader, and a publish grant on the agent"
+      ]
+    }
+  ]
+});
 
 // AD-4, Navigation check 44 (browser half): the agent page edits the agent's one draft. Save
 // draft writes it and leaves the live agent as it is, and saves again on the draft it wrote;

@@ -37,6 +37,65 @@ import {
   viewFrame,
   viewTitle
 } from "./view-fixtures";
+import { requestAnswered } from "./allowed-page-errors";
+import { REPLACED_BUILT_INS_LINK } from "./page-exits";
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+exitTest.use({
+  allowedPageErrors: [
+    {
+      name: "planted-view-exit",
+      reason:
+        "Chromium's own log line for a frame it did not let move to another address. These tests " +
+        "plant the move in a generated view and assert that nothing reached the other host.",
+      matches:
+        /^Framing '[^']*' violates the following Content Security Policy directive: "frame-src 'none'"\. The request has been blocked\.\s*$/u,
+      tests: [
+        "a view cannot leave its frame through location.href",
+        "a view cannot leave its frame through location.assign",
+        "a view cannot leave its frame through location.replace",
+        "a view cannot leave its frame through a meta refresh in its document",
+        "a view cannot leave its frame through a meta refresh a script adds",
+        "a view cannot leave its frame through a link a script clicks outside its document",
+        "a view cannot leave its frame through a download link a script clicks outside its document",
+        "a view cannot move its frame to an address of the instance either"
+      ]
+    },
+    {
+      name: "page-file-that-is-not-there",
+      reason:
+        "Chromium's own log line: the Page of this test names a base address, the policy " +
+        "refuses it, and the image beside it is then asked of the Page's own file set, which " +
+        "holds no such file.",
+      matches: requestAnswered(404),
+      path: /^\/app-content\//u,
+      tests: [
+        pageExitTitle(
+          pageLoadExits.find((exit) => exit.name === "a base address") ?? { name: "a base address" }
+        )
+      ]
+    },
+    {
+      name: "page-that-replaced-the-built-in-methods",
+      reason:
+        "Thrown by the test runner, not by the product: the Page of this test replaces the " +
+        "built-in methods of its document on purpose, and the recorder of a trace, which the " +
+        "runner puts into the same document, reads the page with them on every step.",
+      matches: /^Cannot read properties of undefined \(reading '0'\)$/u,
+      tests: tabOpeningClicks.map((click) =>
+        pageLinkTitle({ name: REPLACED_BUILT_INS_LINK }, click)
+      )
+    },
+    {
+      name: "page-address-in-a-tab",
+      reason:
+        "Chromium's own log line: the test opens the address of a Page in a tab of its own, " +
+        "the instance answers 403 because only a frame is given a Page, which the test asserts.",
+      matches: requestAnswered(403),
+      path: /^\/app-content\//u,
+      tests: [pageTestTitles.ownTab]
+    }
+  ]
+});
 
 // A view cannot move its own frame to another host. Each test plants one way of trying in a
 // view, with data in the address, and shows it in the interface. Nothing is refused by the

@@ -18,6 +18,31 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 import { chooseWorkspaceAudience } from "./app-audience";
+import { requestAnswered } from "./allowed-page-errors";
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: [
+    {
+      name: "save-as-app-under-a-taken-id",
+      reason:
+        "Chromium's own log line: the test saves a Page under the id of an App that exists, the " +
+        "save is answered with 409, and the test asserts that the dialog offers to update that App.",
+      matches: requestAnswered(409),
+      path: /^\/api\/v1\/apps$/u,
+      tests: ["a Page is put into an App that was saved before Apps remembered their Page"]
+    },
+    {
+      name: "app-update-over-a-draft-that-moved",
+      reason:
+        "Chromium's own log line: the test writes the draft of an App with the API while the " +
+        "update of it is asked for, the update is answered with 412, and the test asserts that " +
+        "the dialog says so and offers to replace the draft.",
+      matches: requestAnswered(412),
+      path: /^\/api\/v1\/apps\/[^/]+\/update-from-page$/u,
+      tests: ["a Page saved as an App updates the draft of that App, and nothing that is published"]
+    }
+  ]
+});
 
 /** The address of the draft of the App at `appPath`, outside the App's own addresses. */
 const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/");

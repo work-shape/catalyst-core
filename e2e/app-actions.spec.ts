@@ -7,6 +7,23 @@ import { z } from "zod";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
+import { requestAnswered } from "./allowed-page-errors";
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: [
+    {
+      name: "app-action-refused-for-a-missing-right",
+      reason:
+        "Chromium's own log line: a member without the right on the Connection opens the App, " +
+        "the call of its tile is answered with 403, and the test asserts that the tile names the right.",
+      matches: requestAnswered(403),
+      path: /^\/api\/v1\/app-content-sessions\/[^/]+\/actions\/load-rows$/u,
+      tests: [
+        "a tile of a published App reads rows through a named action with the viewer's rights"
+      ]
+    }
+  ]
+});
 
 // A tile of a published App reads rows through a named action: the frame asks the interface,
 // the interface calls the instance with the session of whoever looks, and the instance runs

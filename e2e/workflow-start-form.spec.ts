@@ -5,6 +5,24 @@ import { type Browser, type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test, type PageErrorWatch } from "./test";
+import { requestAnswered } from "./allowed-page-errors";
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: [
+    {
+      name: "start-input-refused",
+      reason:
+        "Chromium's own log line: the test publishes a Workflow again with a smaller limit while " +
+        "its start form is open, the instance answers the start with 422, and the form puts the " +
+        "refusal under the field, which the test asserts.",
+      matches: requestAnswered(422),
+      path: /^\/api\/v1\/workflows\/start-form-[0-9a-f]{8}\/runs$/u,
+      tests: [
+        "a member starts a Workflow with inputs from its form and sees the run end; a reader sees no start"
+      ]
+    }
+  ]
+});
 
 // A Workflow that declares inputs is started from a form made from them: a member who may
 // start it fills the form from the card of the list, is refused in the form what the inputs

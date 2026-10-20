@@ -15,6 +15,32 @@ import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Response } from "@playwright/test";
 import { z } from "zod";
 import { expect, test } from "./test";
+import { requestAnswered } from "./allowed-page-errors";
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: [
+    {
+      name: "request-that-is-gone",
+      reason:
+        "Chromium's own log line: the test opens the address of an Inbox item that does not " +
+        "exist, the instance answers 404 and the page says so, which it asserts.",
+      matches: requestAnswered(404),
+      path: /^\/api\/v1\/approval-requests\/apr_not_a_request$/u,
+      tests: [
+        "a member's proposal waits in the reviewer's Inbox, is rejected there and comes back decided"
+      ]
+    },
+    {
+      name: "decision-that-came-too-late",
+      reason:
+        "Chromium's own log line: the test decides a request the instance has already decided, " +
+        "the instance answers 409 and the page says who decided, which it asserts.",
+      matches: requestAnswered(409),
+      path: /^\/api\/v1\/approval-requests\/[^/]+\/decide$/u,
+      tests: ["a decision on a request that was decided meanwhile is refused in a sentence"]
+    }
+  ]
+});
 
 /**
  * Holds no right to decide anything. The member of this file alone: its first test needs one

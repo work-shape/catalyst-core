@@ -3,6 +3,23 @@ import type { Page } from "@playwright/test";
 import { z } from "zod";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
+import { requestAnswered } from "./allowed-page-errors";
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: [
+    {
+      name: "page-of-conversations-that-fails",
+      reason:
+        "Chromium's own log line: the test answers one request for an older page of the " +
+        "sidebar's conversations with 503 and asserts that the sidebar says so and tries again.",
+      matches: requestAnswered(503),
+      path: /^\/api\/v1\/conversations$/u,
+      tests: [
+        "the rail is the list of conversations: it loads a page at a time, the search finds what no loaded page holds, and an older open conversation is the first row"
+      ]
+    }
+  ]
+});
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 /** The member of this file alone: its tests fill and count that member's conversations. */

@@ -15,6 +15,26 @@ import {
   viewTitle
 } from "./view-fixtures";
 
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: [
+    {
+      name: "planted-policy-refusal",
+      reason:
+        "Chromium's own log line for a load the policy of a generated view refused. These tests " +
+        "plant the loads and assert that none of them left the browser.",
+      matches:
+        /^(?:Loading the script|Connecting to) '\S+' violates the following Content Security Policy directive: |^Fetch API cannot load \S+ Refused to connect because it violates the document's Content Security Policy\.$/u,
+      tests: [
+        "and no script of the API's origin outside the runtime directory",
+        "and nothing of another host for a script placed before the document",
+        "and no script of another host that borrows the hash of an inline script (html.rendered)",
+        "and no script of another host that borrows the hash of an inline script (private_hydrated_view)"
+      ]
+    }
+  ]
+});
+
 // A generated view loads its runtime, Tailwind and Lucide, from the instance and nothing from
 // anywhere else. Every test here refuses each request to a host other than the instance and
 // then asks that none was attempted.

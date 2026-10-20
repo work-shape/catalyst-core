@@ -5,6 +5,23 @@ import type { Locator, Page } from "@playwright/test";
 import { z } from "zod";
 import { expect, test } from "./test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
+import { requestAnswered } from "./allowed-page-errors";
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: [
+    {
+      name: "refused-skill-file",
+      reason:
+        "Chromium's own log line: the test saves a skill with a compiled program under scripts/ and " +
+        "one with a Git LFS pointer, and asserts what the page shows for each 422.",
+      matches: requestAnswered(422),
+      path: /^\/api\/v1\/assets\/skill\/e2e_skill_files$/u,
+      tests: [
+        "a skill's files are uploaded, written, replaced and deleted, and a refused one is named"
+      ]
+    }
+  ]
+});
 
 // The skill editor's folder in Studio: a file is uploaded into a folder, a new script is
 // written in place, a file is replaced and one deleted, and a file the instance refuses, a
