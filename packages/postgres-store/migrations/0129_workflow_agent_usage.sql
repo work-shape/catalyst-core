@@ -1,0 +1,1 @@
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "model_usage_events_agent_run_idx" ON "model_usage_events" USING btree ("client_instance_id","agent_run_id") WHERE "model_usage_events"."agent_run_id" is not null;

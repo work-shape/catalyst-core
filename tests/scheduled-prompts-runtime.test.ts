@@ -265,7 +265,7 @@ describe("scheduled prompts use the shared executor and the owner's unattended r
     expect(
       await f.app.stores.scheduledStarts.list({
         clientInstanceId: f.clientInstanceId,
-        ownerUserId: accepted.ownerUserId,
+        ownerUserId: required(accepted.ownerUserId),
         page: { limit: 10 }
       })
     ).toEqual([]);
@@ -279,7 +279,7 @@ describe("scheduled prompts use the shared executor and the owner's unattended r
         (
           await f.app.stores.scheduledStarts.list({
             clientInstanceId: f.clientInstanceId,
-            ownerUserId: accepted.ownerUserId,
+            ownerUserId: required(accepted.ownerUserId),
             page: { limit: 10 }
           })
         ).length === 1,
