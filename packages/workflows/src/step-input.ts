@@ -1,11 +1,15 @@
+import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   workflowValuePreview,
   type JsonValue,
+  type JsonObject,
   type PlatformStores,
   type OperationRegistry,
   type WorkflowManifest,
   type WorkflowStepRun
 } from "@work-shape/catalyst-core";
+import { valuePosition } from "./json";
+import { WorkflowStepFailure } from "./step-failure";
 import { workflowStepSchemas } from "./dataset-contracts";
 import type { WorkflowDefinitionSource } from "./definition-source";
 import type { ReferenceScope, TextSchemas } from "./references";
@@ -41,4 +45,17 @@ export function stepTextSchemas(
         reference: (reference) => schemas.reference(step, reference)
       };
     };
+}
+
+/** Fails a step whose value does not fit a schema its definition declares. */
+export function fitsSchema(schema: JsonObject, value: JsonValue, code: string, what: string): void {
+  const compiled = compileJsonSchema(schema);
+  const [issue] = compiled.ok ? compiled.validate(value) : [];
+  if (compiled.ok && !issue) return;
+  throw new WorkflowStepFailure(
+    code,
+    issue
+      ? `${what}${valuePosition(value, issue.path)}: ${issue.message}`
+      : `${what}: the schema cannot be checked`
+  );
 }

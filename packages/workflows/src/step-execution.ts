@@ -1,4 +1,4 @@
-import { recordStepInput, stepTextSchemas } from "./step-input";
+import { fitsSchema, recordStepInput, stepTextSchemas } from "./step-input";
 import { agentStepOutcome } from "./agent-step";
 import { valuePosition } from "./json";
 import { checkpointFrame } from "./continuation-checkpoint";
@@ -149,19 +149,6 @@ export interface StepAttempt {
 export function createStepExecutor(options: StepExecutorOptions) {
   const { clientInstanceId, stores, operationCalls, definitions, now } = options;
   const limits = options.limits.defaults ?? WORKFLOW_RUN_LIMITS;
-
-  /** Fails a step whose value does not fit a schema its definition declares. */
-  function fitsSchema(schema: JsonObject, value: JsonValue, code: string, what: string): void {
-    const compiled = compileJsonSchema(schema);
-    const [issue] = compiled.ok ? compiled.validate(value) : [];
-    if (compiled.ok && !issue) return;
-    throw new WorkflowStepFailure(
-      code,
-      issue
-        ? `${what}${valuePosition(value, issue.path)}: ${issue.message}`
-        : `${what}: the schema cannot be checked`
-    );
-  }
 
   const textSchemasOf = stepTextSchemas(definitions, operationCalls.registry);
 
