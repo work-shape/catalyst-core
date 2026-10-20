@@ -23,8 +23,7 @@ import {
   type WorkflowBlockIssue,
   type WorkflowManifest,
   type WorkflowReference,
-  type WorkflowStep,
-  type WorkflowStepType
+  type WorkflowStep
 } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import { z } from "zod";
