@@ -119,6 +119,7 @@
 {"name":"role.reconciled","legacy":true,"audited":true,"phases":["after"]}
 {"name":"role.reset","legacy":true,"audited":true,"phases":["after"]}
 {"name":"role.updated","legacy":true,"audited":true,"phases":["after"]}
+{"name":"scheduled_start.fired","legacy":false,"audited":true,"phases":["after"]}
 {"name":"scope_assignment.changed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"storage.orphaned_file_cleanup_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"storage.orphaned_files_deleted","legacy":true,"audited":true,"phases":["after"]}
